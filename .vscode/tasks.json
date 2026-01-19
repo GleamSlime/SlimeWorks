@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-rust",
+      "type": "shell",
+      "command": "cargo build --release",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo-watch",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["watch", "-x", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/rust"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+  ]
+}

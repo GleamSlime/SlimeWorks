@@ -1,0 +1,16 @@
+#  `史莱姆工坊` SlimeWorks
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Windows|macOS|Linux|iOS|Android-blue?style=flat-square" alt="多平台支持">
+  <img src="https://img.shields.io/badge/Status-开发中-yellow?style=flat-square" alt="开发状态">
+  <img src="https://img.shields.io/badge/Version-v0.1.0_preview-orange?style=flat-square" alt="版本">
+  <p align="center"> <strong>✨ 工坊 ✨</strong>
+</p>
+
+## 开发
+
+### 可用指令
+
+```shell
+ $ cd rust && cargo watch -s "cargo build && flutter run -d macos" # rust开发阶段：监听rs并启动ui，修改rs时杀死进程重启
+```
