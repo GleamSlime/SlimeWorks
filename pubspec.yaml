@@ -37,6 +37,7 @@ dependencies:
   rust_lib_slime_works:
     path: rust_builder
   flutter_rust_bridge: 2.11.1
+  window_manager: ^0.5.1 # 窗口管理
 
 dev_dependencies:
   flutter_test:

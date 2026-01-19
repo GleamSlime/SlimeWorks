@@ -2,12 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Flutter-Rust Debug",
+      "name": "Flutter-Rust MacOs",
       "type": "dart",
       "request": "launch",
       "program": "lib/main.dart",
       "args": ["-d", "macos"],
-      "preLaunchTask": "watch-rust"
+      "preLaunchTask": ""
+    },
+    {
+      "name": "Flutter-Rust Windows",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": ["-d", "windows"],
+      "preLaunchTask": ""
     }
   ]
 }
