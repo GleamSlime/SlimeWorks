@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "slime_works" "\0"
+            VALUE "CompanyName", "史莱姆工坊" "\0"
+            VALUE "FileDescription", "史莱姆工坊 启动文件" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "slime_works" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "slime_works.exe" "\0"
-            VALUE "ProductName", "slime_works" "\0"
+            VALUE "InternalName", "史莱姆工坊" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 gleamslime.com. All rights reserved." "\0"
+            VALUE "OriginalFilename", "史莱姆工坊.exe" "\0"
+            VALUE "ProductName", "史莱姆工坊" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

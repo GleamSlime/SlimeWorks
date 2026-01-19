@@ -8,7 +8,7 @@
 PRODUCT_NAME = slime_works
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.slimeWorks
+PRODUCT_BUNDLE_IDENTIFIER = com.gleamslime.work
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.

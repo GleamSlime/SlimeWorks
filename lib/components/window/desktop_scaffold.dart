@@ -18,6 +18,7 @@ class DesktopScaffold extends StatelessWidget {
       center: true,
       backgroundColor: Colors.transparent,
       titleBarStyle: TitleBarStyle.hidden,
+      title: '史莱姆工坊',
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {

@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="slime_works"
+        android:label="史莱姆工坊"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
