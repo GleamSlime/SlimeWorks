@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["cfgs", "unmaximize"]
+  "cSpell.words": [
+    "cfgs",
+    "unmaximize"
+  ],
+  "conventionalCommits.scopes": [
+    "Assets",
+    "MacOS"
+  ]
 }

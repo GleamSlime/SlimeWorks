@@ -18,6 +18,7 @@ class DesktopScaffold extends StatelessWidget {
       center: true,
       backgroundColor: Colors.transparent,
       titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
       title: '史莱姆工坊',
     );
 
