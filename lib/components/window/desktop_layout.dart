@@ -31,7 +31,7 @@ class DesktopLayout extends StatelessWidget {
       SidebarGroup(
         items: [
           SidebarMenuItem(icon: Icons.dashboard_outlined, label: '概览', route: '/dashboard'),
-          SidebarMenuItem(icon: Icons.account_tree_outlined, label: '数据捕获', route: '/datasource'),
+          SidebarMenuItem(icon: Icons.account_tree_outlined, label: '数据捕获', route: '/capture'),
           SidebarMenuItem(icon: Icons.water_drop_outlined, label: '流水账', route: '/clearwater'),
           SidebarMenuItem(
             icon: Icons.cloud_outlined,
