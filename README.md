@@ -1,4 +1,4 @@
-#  `史莱姆工坊` SlimeWorks
+# `史莱姆工坊` SlimeWorks
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Windows|macOS|Linux|iOS|Android-blue?style=flat-square" alt="多平台支持">
@@ -12,5 +12,6 @@
 ### 可用指令
 
 ```shell
+ $ flutter_rust_bridge_codegen generate # 生成FRB
  $ cd rust && cargo watch -s "cargo build && flutter run -d macos" # rust开发阶段：监听rs并启动ui，修改rs时杀死进程重启
 ```
