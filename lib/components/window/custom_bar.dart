@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:window_manager/window_manager.dart';
 
 class CustomTitleBar extends StatelessWidget {
@@ -20,12 +20,12 @@ class CustomTitleBar extends StatelessWidget {
       onDoubleTap: handleDoubleTap,
       onPanStart: (_) => windowManager.startDragging(),
       child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 48.h,
+        padding: EdgeInsets.symmetric(horizontal: 12.w),
         child: Row(
           children: [
             const _MacWindowButtons(),
-            const SizedBox(width: 12),
+            SizedBox(width: 12.w),
             // const Text('My App', style: TextStyle(fontWeight: FontWeight.w500)),
             const Spacer(),
           ],

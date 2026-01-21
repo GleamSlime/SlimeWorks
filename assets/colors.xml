@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 亮色主题颜色定义 -->
+    
+    <!-- 黑色系列 -->
+    <color name="light_black_100">#FF000000</color>
+    <color name="light_black_80">#CC000000</color>
+    <color name="light_black_40">#66000000</color>
+    <color name="light_black_20">#33000000</color>
+    <color name="light_black_10">#1A000000</color>
+    
+    <!-- 白色系列 -->
+    <color name="light_white_100">#FFFFFFFF</color>
+    <color name="light_white_80">#CCFFFFFF</color>
+    <color name="light_white_40">#66FFFFFF</color>
+    
+    <!-- 主色调 -->
+    <color name="light_primary">#FFA89FEE</color>
+    
+    <!-- 次要颜色 -->
+    <color name="light_purple">#FFBBA8F6</color>
+    <color name="light_indigo">#FFA8B8F6</color>
+    <color name="light_blue">#FF6FB8E8</color>
+    <color name="light_cyan">#FF9AC8DD</color>
+    <color name="light_mint">#FF82D7BB</color>
+    <color name="light_green">#FF7EDB7E</color>
+    <color name="light_yellow">#FFFFCB3A</color>
+    <color name="light_orange">#FFF5A569</color>
+    <color name="light_red">#FFFF6C74</color>
+    
+    <!-- 背景色 -->
+    <color name="light_background_1">#FFFFFFFF</color>
+    <color name="light_background_2">#FFF5F5F5</color>
+    <color name="light_background_3">#FFEEEEEE</color>
+    <color name="light_background_4">#FFE8E5F8</color>
+    <color name="light_background_5">#FFE5F3FB</color>
+    <color name="light_background_6">#FF424242</color>
+    
+    <!-- 暗色主题颜色定义 -->
+    
+    <!-- 白色系列 (暗色主题) -->
+    <color name="dark_white_100">#FFFFFFFF</color>
+    <color name="dark_white_80">#CCFFFFFF</color>
+    <color name="dark_white_40">#66FFFFFF</color>
+    <color name="dark_white_20">#33FFFFFF</color>
+    <color name="dark_white_15">#26FFFFFF</color>
+    <color name="dark_white_10">#1AFFFFFF</color>
+    
+    <!-- 黑色系列 (暗色主题) -->
+    <color name="dark_black_100">#FF000000</color>
+    <color name="dark_black_80">#CC000000</color>
+    <color name="dark_black_40">#66000000</color>
+    <color name="dark_black_20">#33000000</color>
+    <color name="dark_black_10">#1A000000</color>
+    <color name="dark_black_4">#0A000000</color>
+    
+    <!-- 主色调 (暗色主题) -->
+    <color name="dark_primary">#FFA89FEE</color>
+    
+    <!-- 次要颜色 (暗色主题) -->
+    <color name="dark_purple">#FFBBA8F6</color>
+    <color name="dark_indigo">#FFA8B8F6</color>
+    <color name="dark_blue">#FF6FB8E8</color>
+    <color name="dark_cyan">#FF9AC8DD</color>
+    <color name="dark_mint">#FF82D7BB</color>
+    <color name="dark_green">#FF7EDB7E</color>
+    <color name="dark_yellow">#FFFFCB3A</color>
+    <color name="dark_orange">#FFF5A569</color>
+    <color name="dark_red">#FFFF6C74</color>
+    
+    <!-- 背景色 (暗色主题) -->
+    <color name="dark_background_1">#FF424242</color>
+    <color name="dark_background_2">#FF383838</color>
+    <color name="dark_background_3">#FF2E2E2E</color>
+    <color name="dark_background_4">#FF524A66</color>
+    <color name="dark_background_5">#FF2B4A5E</color>
+    <color name="dark_background_6">#FFFFFFFF</color>
+</resources>

@@ -1,0 +1,30 @@
+# FlutterGen 配置文件
+# 用于自动生成资源文件的 Dart 代码
+
+# 生成器配置
+flutter_gen:
+  output: lib/gen/ # 生成文件输出目录
+  line_length: 80 # 生成代码的行长度
+
+  # 集成设置
+  integrations:
+    flutter_svg: true # 启用 flutter_svg 集成
+    flare_flutter: false
+    rive: false
+    lottie: false
+
+  # 颜色配置
+  colors:
+    inputs:
+      - assets/colors.xml # 颜色定义文件路径
+    outputs:
+      class_name: AppColors # 生成的颜色类名
+      style: camel-case # 命名风格
+
+  # 资源配置
+  assets:
+    outputs:
+      class_name: Assets # 生成的资源类名
+      style: camel-case # 命名风格
+    exclude:
+      - assets/colors.xml # 排除颜色文件

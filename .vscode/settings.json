@@ -6,5 +6,7 @@
   "conventionalCommits.scopes": [
     "Assets",
     "MacOS"
-  ]
+  ],
+  "editor.wordWrapColumn": 150,
+  "dart.lineLength": 150
 }
