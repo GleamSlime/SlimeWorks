@@ -32,6 +32,7 @@ class AppThemeCommon {
       brightness: Brightness.light,
       primaryColor: LightColors.primary,
       scaffoldBackgroundColor: LightColors.background1,
+      fontFamily: 'FZLanTingYuanS-EB-GB',
 
       // 颜色方案
       colorScheme: ColorScheme.light(
@@ -78,7 +79,6 @@ class AppThemeCommon {
         labelMedium: AppTextStyles.caption(color: LightColors.black40),
         labelSmall: AppTextStyles.overline(color: LightColors.black40),
       ),
-
       // 按钮主题
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -132,6 +132,7 @@ class AppThemeCommon {
       brightness: Brightness.dark,
       primaryColor: DarkColors.primary,
       scaffoldBackgroundColor: DarkColors.background1,
+      fontFamily: 'FZLanTingYuanS-EB-GB',
 
       // 颜色方案
       colorScheme: ColorScheme.dark(
@@ -178,7 +179,6 @@ class AppThemeCommon {
         labelMedium: AppTextStyles.caption(color: DarkColors.white40),
         labelSmall: AppTextStyles.overline(color: DarkColors.white40),
       ),
-
       // 按钮主题
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

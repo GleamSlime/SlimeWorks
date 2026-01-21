@@ -42,18 +42,9 @@ class _MacWindowButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _MacButton(
-          color: const Color(0xFFFF5F57),
-          onTap: () => windowManager.close(),
-        ),
-        _MacButton(
-          color: const Color(0xFFFFBD2E),
-          onTap: () => windowManager.minimize(),
-        ),
-        _MacButton(
-          color: const Color(0xFF28C840),
-          onTap: () => windowManager.maximize(),
-        ),
+        _MacButton(color: const Color(0xFFFF5F57), onTap: () => windowManager.close()),
+        _MacButton(color: const Color(0xFFFFBD2E), onTap: () => windowManager.minimize()),
+        _MacButton(color: const Color(0xFF28C840), onTap: () => windowManager.maximize()),
       ],
     );
   }

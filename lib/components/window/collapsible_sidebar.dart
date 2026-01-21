@@ -19,7 +19,7 @@ class SidebarMenuItem {
 
 /// 侧边栏分组
 class SidebarGroup {
-  final String? title; // 分组标题，null表示无标题
+  final String? title;
   final List<SidebarMenuItem> items;
 
   const SidebarGroup({this.title, required this.items});
@@ -70,7 +70,7 @@ class CollapsibleSidebar extends StatelessWidget {
     super.key,
     required this.groups,
     this.expandedWidth = 240.0,
-    this.collapsedWidth = 60.0,
+    this.collapsedWidth = 85.0,
     this.animationDuration = const Duration(milliseconds: 300),
   });
 
@@ -122,17 +122,6 @@ class CollapsibleSidebar extends StatelessWidget {
       child: isExpanded
           ? Row(
               children: [
-                // macOS 交通灯按钮占位
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildTrafficLight(Colors.red.shade400),
-                    SizedBox(width: 6.w),
-                    _buildTrafficLight(Colors.amber.shade400),
-                    SizedBox(width: 6.w),
-                    _buildTrafficLight(Colors.green.shade400),
-                  ],
-                ),
                 const Spacer(),
                 // 收起按钮
                 IconButton(
@@ -153,15 +142,6 @@ class CollapsibleSidebar extends StatelessWidget {
                 constraints: BoxConstraints(minWidth: 40.w, minHeight: 40.h),
               ),
             ),
-    );
-  }
-
-  /// 构建交通灯按钮
-  Widget _buildTrafficLight(Color color) {
-    return Container(
-      width: 12.w,
-      height: 12.h,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 

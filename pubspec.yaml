@@ -38,6 +38,7 @@ dependencies:
     path: rust_builder
   flutter_rust_bridge: 2.11.1
   window_manager: ^0.5.1 # 窗口管理
+  flutter_dotenv: ^6.0.0 # DOTENV配置
 
   # 状态管理
   get: ^4.7.3 # 轻量级状态管理和路由库
@@ -100,6 +101,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - .env
     - assets/colors.xml
     - assets/image/
 
@@ -128,6 +130,20 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  fonts:
+    - family: FZLanTingYuanS-EB-GB
+      fonts:
+        - asset: assets/fonts/FZLanTingYuanS-R-GB.ttf
+          weight: 300
+        - asset: assets/fonts/FZLanTingYuanS-EB-GB.ttf
+          weight: 400
+        - asset: assets/fonts/FZLanTingYuanS-EB-GB.ttf
+          weight: 500
+        - asset: assets/fonts/FZLanTingYuanS-EB-GB.ttf
+          weight: 600
+        - asset: assets/fonts/FZLanTingYuanS-EB-GB.ttf
+          weight: 700
 
 # FlutterGen configuration
 # dart run build_runner build --delete-conflicting-outputs

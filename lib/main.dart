@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -13,8 +15,11 @@ Future<void> main() async {
   // 确保 Flutter 绑定初始化
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 加载环境变量
+  await dotenv.load(fileName: '.env');
+
   // 初始化桌面窗口管理器
-  DesktopScaffold.initManager();
+  await DesktopScaffold.initManager();
 
   // 初始化 Rust 库
   await RustLib.init();

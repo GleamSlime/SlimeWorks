@@ -37,6 +37,9 @@ class DesktopScaffold extends StatefulWidget {
       await windowManager.show();
       await windowManager.focus();
     });
+
+    // 初始化并注册窗口位置服务
+    await Get.putAsync(() => WindowPositionService().init());
   }
 
   @override
@@ -73,19 +76,6 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border.all(color: Colors.red, width: 1),
-      ),
-      child: Column(
-        children: [
-          const CustomTitleBar(),
-          Expanded(child: widget.child),
-        ],
-      ),
-    );
+    return Stack(children: [widget.child, const CustomTitleBar()]);
   }
 }
