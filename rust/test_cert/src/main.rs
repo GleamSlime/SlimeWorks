@@ -35,28 +35,7 @@ fn main() {
     let key_pair = rcgen::KeyPair::from_pem(&key_pem).expect("解析私钥失败");
 
     use rcgen::{BasicConstraints as RcgenBC, *};
-    let mut params = CertificateParams::new(vec!["Skill Capture Client Root CA".to_string()]);
-
-    let mut dn = DistinguishedName::new();
-    dn.push(DnType::CountryName, "CN");
-    dn.push(DnType::StateOrProvinceName, "Zhejiang");
-    dn.push(DnType::LocalityName, "Hangzhou");
-    dn.push(DnType::OrganizationName, "www.everyselect.com");
-    dn.push(DnType::OrganizationalUnitName, "Skill Client");
-    dn.push(DnType::CommonName, "Skill Capture Client Root CA");
-    params.distinguished_name = dn;
-
-    params.is_ca = IsCa::Ca(RcgenBC::Constrained(0));
-    params.key_usages = vec![
-        KeyUsagePurpose::DigitalSignature,
-        KeyUsagePurpose::KeyEncipherment,
-        KeyUsagePurpose::KeyCertSign,
-        KeyUsagePurpose::CrlSign,
-    ];
-    params.extended_key_usages = vec![
-        ExtendedKeyUsagePurpose::ServerAuth,
-        ExtendedKeyUsagePurpose::ClientAuth,
-    ];
+    let mut params = get_ca_cert_config();
 
     // 设置序列号
     let serial_u64 = {

@@ -79,7 +79,6 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
             // 检查失败，假设未安装
             certInstalled = false;
           }
-
           // 如果证书未安装，提示输入密码进行安装
           if (!certInstalled) {
             final password = await _showPasswordDialog();
@@ -99,6 +98,17 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
             // 证书已安装，无需输入密码
             print('[证书] CA证书已安装，跳过密码输入');
           }
+        }
+
+        if (Platform.isWindows) {
+          // Windows 平台提示用户以管理员身份运行应用
+          final isAdmin = isRunningAsAdministrator();
+          if (!isAdmin) {
+            _showMessage('请以管理员身份重新启动应用以捕获HTTPS流量。', isError: true);
+            return;
+          }
+
+          installCaCertificate(password: '');
         }
 
         // 启动代理

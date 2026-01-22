@@ -12,5 +12,8 @@ lazy_static = "1.4"
 capture_proxy = { path = "capture_proxy" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["processthreadsapi", "securitybaseapi", "winnt", "handleapi", "minwindef"] }
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

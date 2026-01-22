@@ -56,6 +56,10 @@ String installCaCertificate({required String password}) => RustLib.instance.api
 bool isCaCertificateInstalled() =>
     RustLib.instance.api.crateApiCaptureIsCaCertificateInstalled();
 
+/// 检查当前进程是否以管理员权限运行（仅Windows）
+bool isRunningAsAdministrator() =>
+    RustLib.instance.api.crateApiCaptureIsRunningAsAdministrator();
+
 /// 捕获统计数据
 class CaptureStats {
   final int total;

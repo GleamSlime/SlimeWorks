@@ -993,6 +993,7 @@ dependencies = [
  "flutter_rust_bridge",
  "lazy_static",
  "tokio",
+ "winapi",
 ]
 
 [[package]]

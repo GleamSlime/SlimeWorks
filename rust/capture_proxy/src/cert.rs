@@ -9,6 +9,7 @@ use rustls::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 /// 证书解析器 - 动态生成和缓存服务器证书
@@ -49,7 +50,6 @@ impl CertResolver {
 
         // 调试：输出CA证书指纹
         let ca_der_hash = {
-            use std::io::Write;
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             std::hash::Hash::hash_slice(&ca_cert_der, &mut hasher);
             std::hash::Hasher::finish(&hasher)
@@ -62,29 +62,7 @@ impl CertResolver {
 
         // 使用保存的私钥重建CA证书（仅用于签名）
         let key_pair = rcgen::KeyPair::from_pem(&key_pem)?;
-
-        let mut params = CertificateParams::new(vec!["Skill Capture Client Root CA".to_string()]);
-
-        let mut dn = DistinguishedName::new();
-        dn.push(DnType::CountryName, "CN");
-        dn.push(DnType::StateOrProvinceName, "Zhejiang");
-        dn.push(DnType::LocalityName, "Hangzhou");
-        dn.push(DnType::OrganizationName, "www.everyselect.com");
-        dn.push(DnType::OrganizationalUnitName, "Skill Client");
-        dn.push(DnType::CommonName, "Skill Capture Client Root CA");
-        params.distinguished_name = dn;
-
-        params.is_ca = IsCa::Ca(RcgenBasicConstraints::Constrained(0));
-        params.key_usages = vec![
-            KeyUsagePurpose::DigitalSignature,
-            KeyUsagePurpose::KeyEncipherment,
-            KeyUsagePurpose::KeyCertSign,
-            KeyUsagePurpose::CrlSign,
-        ];
-        params.extended_key_usages = vec![
-            rcgen::ExtendedKeyUsagePurpose::ServerAuth,
-            rcgen::ExtendedKeyUsagePurpose::ClientAuth,
-        ];
+        let mut params = get_ca_cert_config();
 
         // 设置固定的序列号（与磁盘CA证书保持一致）
         // 从磁盘CA证书中提取序列号
@@ -162,6 +140,33 @@ impl ResolvesServerCert for CertResolver {
     }
 }
 
+pub fn get_ca_cert_config() -> CertificateParams {
+    let mut params = CertificateParams::new(vec!["GleamSlime Capture Client Root CA".to_string()]);
+
+    let mut dn = DistinguishedName::new();
+    dn.push(DnType::CountryName, "CN");
+    dn.push(DnType::StateOrProvinceName, "Zhejiang");
+    dn.push(DnType::LocalityName, "Hangzhou");
+    dn.push(DnType::OrganizationName, "gleamslime.com");
+    dn.push(DnType::OrganizationalUnitName, "GleamSlime Client");
+    dn.push(DnType::CommonName, "GleamSlime Capture Client Root CA");
+    params.distinguished_name = dn;
+
+    params.is_ca = IsCa::Ca(RcgenBasicConstraints::Constrained(0));
+    params.key_usages = vec![
+        KeyUsagePurpose::DigitalSignature,
+        KeyUsagePurpose::KeyEncipherment,
+        KeyUsagePurpose::KeyCertSign,
+        KeyUsagePurpose::CrlSign,
+    ];
+    params.extended_key_usages = vec![
+        rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+        rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+    ];
+
+    params
+}
+
 /// 获取CA证书路径（使用绝对路径）
 pub fn get_ca_cert_path() -> PathBuf {
     // 使用用户主目录下的固定位置
@@ -200,28 +205,7 @@ pub fn ensure_ca_certificate_exists() -> Result<PathBuf, String> {
 
     println!("[证书] 生成新的CA证书...");
 
-    let mut params = CertificateParams::new(vec!["Skill Capture Client Root CA".to_string()]);
-
-    let mut dn = DistinguishedName::new();
-    dn.push(DnType::CountryName, "CN");
-    dn.push(DnType::StateOrProvinceName, "Zhejiang");
-    dn.push(DnType::LocalityName, "Hangzhou");
-    dn.push(DnType::OrganizationName, "www.everyselect.com");
-    dn.push(DnType::OrganizationalUnitName, "Skill Client");
-    dn.push(DnType::CommonName, "Skill Capture Client Root CA");
-    params.distinguished_name = dn;
-
-    params.is_ca = IsCa::Ca(RcgenBasicConstraints::Constrained(0));
-    params.key_usages = vec![
-        KeyUsagePurpose::DigitalSignature,
-        KeyUsagePurpose::KeyEncipherment,
-        KeyUsagePurpose::KeyCertSign,
-        KeyUsagePurpose::CrlSign,
-    ];
-    params.extended_key_usages = vec![
-        rcgen::ExtendedKeyUsagePurpose::ServerAuth,
-        rcgen::ExtendedKeyUsagePurpose::ClientAuth,
-    ];
+    let mut params = get_ca_cert_config();
 
     // 设置固定的序列号（确保每次生成的CA证书序列号相同）
     // 使用一个固定的值作为序列号
@@ -395,8 +379,6 @@ pub fn is_ca_certificate_installed() -> Result<bool, String> {
 
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-
         // 执行命令检查证书是否存在
         match Command::new("security")
             .args(&[
@@ -423,8 +405,6 @@ pub fn is_ca_certificate_installed() -> Result<bool, String> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-
         // Windows: 使用 certutil 命令查询证书
         match Command::new("certutil")
             .args(&["-verifystore", "Root", cert_name])
