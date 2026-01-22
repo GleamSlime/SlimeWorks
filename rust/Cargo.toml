@@ -27,5 +27,8 @@ codegen-units = 1 # 更好的优化，但编译慢
 panic = "abort"   # 减小panic处理代码
 strip = true      # 移除调试符号
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["processthreadsapi", "securitybaseapi", "winnt", "handleapi", "minwindef"] }
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

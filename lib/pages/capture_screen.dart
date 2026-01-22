@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
@@ -68,7 +69,49 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         _refreshTimer?.cancel();
         _refreshTimer = null;
       } else {
-        // 开始捕获
+        // 开始捕获 - macOS 需要先安装证书
+        if (Platform.isMacOS) {
+          // 先检查证书是否已安装
+          bool certInstalled = false;
+          try {
+            certInstalled = isCaCertificateInstalled();
+          } catch (e) {
+            // 检查失败，假设未安装
+            certInstalled = false;
+          }
+          // 如果证书未安装，提示输入密码进行安装
+          if (!certInstalled) {
+            final password = await _showPasswordDialog();
+            if (password == null || password.isEmpty) {
+              _showMessage('已取消', isError: true);
+              return;
+            }
+
+            try {
+              final certResult = installCaCertificate(password: password);
+              _showMessage(certResult);
+            } catch (e) {
+              _showMessage('证书安装失败: $e', isError: true);
+              return;
+            }
+          } else {
+            // 证书已安装，无需输入密码
+            print('[证书] CA证书已安装，跳过密码输入');
+          }
+        }
+
+        if (Platform.isWindows) {
+          // Windows 平台提示用户以管理员身份运行应用
+          final isAdmin = isRunningAsAdministrator();
+          if (!isAdmin) {
+            _showMessage('请以管理员身份重新启动应用以捕获HTTPS流量。', isError: true);
+            return;
+          }
+
+          installCaCertificate(password: '');
+        }
+
+        // 启动代理
         final result = startCaptureProxy(port: _selectedPort);
         _showMessage(result);
 
@@ -83,6 +126,39 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
     } catch (e) {
       _showMessage('操作失败: $e', isError: true);
     }
+  }
+
+  /// 显示密码输入对话框
+  Future<String?> _showPasswordDialog() async {
+    final passwordController = TextEditingController(text: '');
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(children: [Icon(Icons.security, size: 24), SizedBox(width: 8), Text('安装CA证书')]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('需要管理员密码来安装CA证书到系统钥匙串。'),
+            const SizedBox(height: 8),
+            const Text('这是HTTPS流量捕获所必需的步骤。', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '管理员密码', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
+              onSubmitted: (value) => Navigator.pop(context, value),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(context, passwordController.text), child: const Text('确定')),
+        ],
+      ),
+    );
   }
 
   /// 显示消息

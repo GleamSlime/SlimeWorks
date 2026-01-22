@@ -1,12 +1,14 @@
 {
   "cSpell.words": [
+    "certutil",
     "cfgs",
-    "unmaximize"
+    "processthreadsapi",
+    "unmaximize",
+    "USERPROFILE",
+    "verifystore",
+    "winapi"
   ],
-  "conventionalCommits.scopes": [
-    "Assets",
-    "MacOS"
-  ],
+  "conventionalCommits.scopes": ["Assets", "MacOS"],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150
 }

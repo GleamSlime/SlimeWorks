@@ -44,6 +44,22 @@ void clearCapturedData() =>
 CaptureStats getCaptureStats() =>
     RustLib.instance.api.crateApiCaptureGetCaptureStats();
 
+/// 获取CA证书路径
+String getCaCertificatePath() =>
+    RustLib.instance.api.crateApiCaptureGetCaCertificatePath();
+
+/// 使用管理员密码安装CA证书（macOS需要密码）
+String installCaCertificate({required String password}) => RustLib.instance.api
+    .crateApiCaptureInstallCaCertificate(password: password);
+
+/// 检查CA证书是否已安装到系统
+bool isCaCertificateInstalled() =>
+    RustLib.instance.api.crateApiCaptureIsCaCertificateInstalled();
+
+/// 检查当前进程是否以管理员权限运行（仅Windows）
+bool isRunningAsAdministrator() =>
+    RustLib.instance.api.crateApiCaptureIsRunningAsAdministrator();
+
 /// 捕获统计数据
 class CaptureStats {
   final int total;
