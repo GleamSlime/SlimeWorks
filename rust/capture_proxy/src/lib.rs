@@ -9,7 +9,10 @@ pub mod system_proxy2;
 pub use capture::{
     add_captured_item, clear_captured_items, get_captured_items, init_capture_storage, CapturedItem,
 };
-pub use cert::CertResolver;
+pub use cert::{
+    ensure_ca_certificate_exists, get_ca_cert_path, install_ca_certificate_with_password,
+    is_ca_certificate_installed, CertResolver,
+};
 
 use hyper::Server;
 use rustls::Certificate as RustlsCert;

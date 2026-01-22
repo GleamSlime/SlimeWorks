@@ -137,3 +137,23 @@ pub fn get_capture_stats() -> CaptureStats {
         javascript: items.iter().filter(|item| item.content_type == "javascript").count() as i32,
     }
 }
+
+/// 获取CA证书路径
+#[frb(sync)]
+pub fn get_ca_certificate_path() -> String {
+    capture_proxy::get_ca_cert_path()
+        .to_string_lossy()
+        .to_string()
+}
+
+/// 使用管理员密码安装CA证书（macOS需要密码）
+#[frb(sync)]
+pub fn install_ca_certificate(password: String) -> Result<String, String> {
+    capture_proxy::install_ca_certificate_with_password(&password)
+}
+
+/// 检查CA证书是否已安装到系统
+#[frb(sync)]
+pub fn is_ca_certificate_installed() -> Result<bool, String> {
+    capture_proxy::is_ca_certificate_installed()
+}
