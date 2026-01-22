@@ -1,0 +1,21 @@
+[package]
+name = "ffmpeg_lib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ffmpeg_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ffmpeg_lib"
+path = "src/main.rs"
+
+[dependencies]
+ffmpeg-sys-next = { version = "8.0.1", features = ["build"] }
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = "0.4"
+libc = "0.2"
+
+[build-dependencies]
