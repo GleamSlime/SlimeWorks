@@ -10,7 +10,22 @@ crate-type = ["cdylib", "staticlib"]
 flutter_rust_bridge = "=2.11.1"
 lazy_static = "1.4"
 capture_proxy = { path = "capture_proxy" }
-tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+# ffmpeg_lib = { path = "ffmpeg_lib", optional = true }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "sync",
+], default-features = false }
+
+[features]
+default = []
+# ffmpeg = ["ffmpeg_lib"]
+
+[profile.release]
+opt-level = "z"   # 优化体积而非速度
+lto = true        # 启用链接时优化
+codegen-units = 1 # 更好的优化，但编译慢
+panic = "abort"   # 减小panic处理代码
+strip = true      # 移除调试符号
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
