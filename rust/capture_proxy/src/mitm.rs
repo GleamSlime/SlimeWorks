@@ -1,5 +1,7 @@
 /// MITM (中间人) 处理模块 - 拦截和分析HTTPS流量
 use crate::capture::add_captured_item;
+use hyper_util::rt::TokioIo;
+use rustls::pki_types::ServerName;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -12,6 +14,9 @@ pub async fn handle_connect_mitm(
     acceptor: Arc<TlsAcceptor>,
     connector: Arc<TlsConnector>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // 将 Upgraded 转换为 TokioIo
+    let upgraded = TokioIo::new(upgraded);
+    
     // 与客户端建立TLS连接
     let client_tls = acceptor.accept(upgraded).await?;
 
@@ -25,7 +30,9 @@ pub async fn handle_connect_mitm(
 
     // 连接上游服务器
     let upstream_tcp = TcpStream::connect((host.as_str(), port)).await?;
-    let dnsname = rustls::ServerName::try_from(host.as_str()).map_err(|_| "无效的DNS名称")?;
+    let dnsname = ServerName::try_from(host.as_str())
+        .map_err(|_| "无效的DNS名称")?
+        .to_owned();
     let upstream_tls = connector.connect(dnsname, upstream_tcp).await?;
 
     // 分离读写流

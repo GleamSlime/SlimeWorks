@@ -8,7 +8,7 @@
     "verifystore",
     "winapi"
   ],
-  "conventionalCommits.scopes": ["Assets", "MacOS"],
+  "conventionalCommits.scopes": ["Assets", "MacOS", "Capture"],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150
 }

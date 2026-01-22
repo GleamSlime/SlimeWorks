@@ -7,10 +7,6 @@ edition = "2021"
 name = "capture_proxy"
 path = "src/lib.rs"
 
-[[bin]]
-name = "capture_proxy"
-path = "src/main.rs"
-
 [dependencies]
 # 只启用必需的tokio features
 tokio = { version = "1.49.0", features = [
@@ -23,28 +19,21 @@ tokio = { version = "1.49.0", features = [
   "process",
   "fs",
 ], default-features = false }
-# 只启用必需的hyper features
-hyper = { version = "0.14.32", features = [
-  "server",
-  "client",
-  "http1",
-  "http2",
-  "tcp",
-  "stream",
-], default-features = false }
+# hyper 1.x - 移除了 tcp/stream features
+hyper = { version = "1.8.1", features = ["server", "client", "http1", "http2"], default-features = false }
+hyper-util = { version = "0.1", features = ["server", "server-auto", "tokio", "http1", "http2"] }
+http-body-util = "0.1"
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
 regex = "1.12.2"
 encoding_rs = "0.8.35"
-tokio-rustls = { version = "0.23", default-features = false }
-rustls = { version = "0.20", default-features = false, features = [
-  "dangerous_configuration",
-] }
-rcgen = { version = "0.11.3", default-features = false, features = ["pem"] }
-rustls-native-certs = "0.6"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+rcgen = { version = "0.12", features = ["pem", "ring"] }
+rustls-native-certs = "0.8"
 base64 = "0.22.1"
 rustls-pemfile = "2.2.0"
-x509-parser = "0.18.0"
+x509-parser = "0.16"
 
 [profile.release]
 opt-level = "z"

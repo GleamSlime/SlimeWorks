@@ -101,14 +101,15 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         }
 
         if (Platform.isWindows) {
-          // Windows 平台提示用户以管理员身份运行应用
-          final isAdmin = isRunningAsAdministrator();
-          if (!isAdmin) {
-            _showMessage('请以管理员身份重新启动应用以捕获HTTPS流量。', isError: true);
+          // Windows 平台：直接尝试安装证书（使用当前用户存储，不需要管理员权限）
+          try {
+            final certResult = installCaCertificate(password: '');
+            _showMessage(certResult);
+          } catch (e) {
+            // 如果自动安装失败，显示详细的手动安装说明
+            _showMessage('$e', isError: true);
             return;
           }
-
-          installCaCertificate(password: '');
         }
 
         // 启动代理

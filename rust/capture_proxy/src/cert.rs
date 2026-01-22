@@ -1,12 +1,7 @@
 /// 证书管理模块 - 处理CA证书生成、安装和动态证书解析
-use rcgen::{
-    BasicConstraints as RcgenBasicConstraints, Certificate as RcgenCert, CertificateParams,
-    DistinguishedName, DnType, IsCa, KeyUsagePurpose,
-};
-use rustls::{
-    server::ClientHello, server::ResolvesServerCert, sign::CertifiedKey, Certificate as RustlsCert,
-    PrivateKey,
-};
+use rcgen::{Certificate as RcgenCert, CertificateParams, KeyPair};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{server::ClientHello, server::ResolvesServerCert, sign::CertifiedKey};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
@@ -17,6 +12,15 @@ pub struct CertResolver {
     ca_rcgen: RcgenCert,
     ca_cert_der: Vec<u8>, // 保存实际的CA证书DER格式
     cache: RwLock<HashMap<String, Arc<CertifiedKey>>>,
+}
+
+impl std::fmt::Debug for CertResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CertResolver")
+            .field("ca_cert_der", &"<certificate>")
+            .field("cache", &"<cache>")
+            .finish()
+    }
 }
 
 impl CertResolver {
@@ -61,15 +65,15 @@ impl CertResolver {
         );
 
         // 使用保存的私钥重建CA证书（仅用于签名）
-        let key_pair = rcgen::KeyPair::from_pem(&key_pem)?;
-        let mut params = get_ca_cert_config();
+        let key_pair = KeyPair::from_pem(&key_pem)?;
+        let mut params = get_ca_cert_config()?;
 
         // 设置固定的序列号（与磁盘CA证书保持一致）
         // 从磁盘CA证书中提取序列号
         use x509_parser::prelude::*;
         let (_rem, x509) = X509Certificate::from_der(&ca_cert_der)
             .map_err(|e| format!("解析CA证书失败: {}", e))?;
-        // rcgen 0.9的serial_number是u64类型，转换序列号
+        // rcgen 0.13的serial_number是SerialNumber类型，转换序列号
         let serial_u64 = {
             let serial_bytes = x509.serial.to_bytes_be();
             // 取最后8个字节转换为u64（如果序列号超过8字节，只取低位）
@@ -79,11 +83,10 @@ impl CertResolver {
             bytes[8 - (len - start)..].copy_from_slice(&serial_bytes[start..]);
             u64::from_be_bytes(bytes)
         };
-        params.serial_number = Some(serial_u64.into());
+        params.serial_number = Some(rcgen::SerialNumber::from(serial_u64));
 
         // 使用加载的密钥对而不是生成新的
         params.key_pair = Some(key_pair);
-
         let ca_rcgen = RcgenCert::from_params(params)?;
 
         println!("[证书] CA证书加载成功");
@@ -99,26 +102,32 @@ impl CertResolver {
         // Subject Alternative Name是必须的，传入构造函数
         let mut params = CertificateParams::new(vec![name.to_string()]);
 
-        // 设置叶子证书的 Distinguished Name
-        let mut dn = DistinguishedName::new();
-        dn.push(DnType::CommonName, name);
-        params.distinguished_name = dn;
-
-        // 叶子证书不是CA证书
+        // 叶子证书配置 - 用于服务器认证
         params.key_usages = vec![
-            KeyUsagePurpose::DigitalSignature,
-            KeyUsagePurpose::KeyEncipherment,
+            rcgen::KeyUsagePurpose::DigitalSignature,
+            rcgen::KeyUsagePurpose::KeyEncipherment,
         ];
         params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
 
+        // 设置叶子证书有效期（2年）
+        use rcgen::date_time_ymd;
+        params.not_before = date_time_ymd(2024, 1, 1);
+        params.not_after = date_time_ymd(2026, 12, 31);
+
+        let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).ok()?;
+        params.key_pair = Some(key_pair);
         let leaf = RcgenCert::from_params(params).ok()?;
         let leaf_der = leaf.serialize_der_with_signer(&self.ca_rcgen).ok()?;
         let leaf_priv = leaf.serialize_private_key_der();
-        let signing_key = rustls::sign::any_supported_type(&PrivateKey(leaf_priv)).ok()?;
-        let signing_key = Arc::from(signing_key);
+
+        let private_key = PrivateKeyDer::try_from(leaf_priv).ok()?;
+        let signing_key = rustls::crypto::ring::sign::any_supported_type(&private_key).ok()?;
 
         // 构建证书链：叶子证书 + CA证书
-        let chain = vec![RustlsCert(leaf_der), RustlsCert(self.ca_cert_der.clone())];
+        let chain = vec![
+            CertificateDer::from(leaf_der),
+            CertificateDer::from(self.ca_cert_der.clone()),
+        ];
 
         let ck = CertifiedKey::new(chain, signing_key);
         Some(Arc::new(ck))
@@ -129,6 +138,7 @@ impl ResolvesServerCert for CertResolver {
     fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
         let sni = client_hello.server_name()?;
         let name = sni.to_string();
+        println!("[证书] 为域名生成证书: {}", name);
         if let Some(c) = self.cache.read().unwrap().get(&name) {
             return Some(c.clone());
         }
@@ -140,7 +150,11 @@ impl ResolvesServerCert for CertResolver {
     }
 }
 
-pub fn get_ca_cert_config() -> CertificateParams {
+pub fn get_ca_cert_config() -> Result<CertificateParams, rcgen::Error> {
+    use rcgen::{
+        BasicConstraints as RcgenBasicConstraints, DistinguishedName, DnType, IsCa, KeyUsagePurpose,
+    };
+
     let mut params = CertificateParams::new(vec!["GleamSlime Capture Client Root CA".to_string()]);
 
     let mut dn = DistinguishedName::new();
@@ -164,7 +178,12 @@ pub fn get_ca_cert_config() -> CertificateParams {
         rcgen::ExtendedKeyUsagePurpose::ClientAuth,
     ];
 
-    params
+    // 设置有效期（10年）
+    use rcgen::date_time_ymd;
+    params.not_before = date_time_ymd(2024, 1, 1);
+    params.not_after = date_time_ymd(2034, 12, 31);
+
+    Ok(params)
 }
 
 /// 获取CA证书路径（使用绝对路径）
@@ -205,20 +224,16 @@ pub fn ensure_ca_certificate_exists() -> Result<PathBuf, String> {
 
     println!("[证书] 生成新的CA证书...");
 
-    let mut params = get_ca_cert_config();
+    let mut params = get_ca_cert_config().map_err(|e| format!("配置证书参数失败: {}", e))?;
 
-    // 设置固定的序列号（确保每次生成的CA证书序列号相同）
-    // 使用一个固定的值作为序列号
-    params.serial_number = Some(0x4B19A1FA6838A559u64.into());
-
-    // rcgen 0.9 默认使用ECC，这里直接使用默认即可
-    // RSA和ECC在现代浏览器中都应该支持
+    let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)
+        .map_err(|e| format!("生成密钥对失败: {}", e))?;
+    params.key_pair = Some(key_pair);
 
     let ca_rcgen = RcgenCert::from_params(params).map_err(|e| format!("生成证书失败: {}", e))?;
     let ca_cert_pem = ca_rcgen
         .serialize_pem()
         .map_err(|e| format!("序列化证书失败: {}", e))?;
-
     let ca_key_pem = ca_rcgen.serialize_private_key_pem();
 
     // 创建目录并保存证书和私钥
@@ -242,33 +257,36 @@ pub fn install_ca_certificate_with_password(_password: &str) -> Result<String, S
 
     #[cfg(target_os = "windows")]
     {
-        // Windows: 使用 certutil 命令（需要管理员权限）
+        // Windows: 先尝试当前用户存储（不需要管理员权限），失败则提示使用企业存储
         use std::process::Command;
 
-        println!("[证书] 尝试安装CA证书到Windows系统（需要管理员权限）...");
+        println!("[证书] 尝试安装CA证书到Windows当前用户的根证书存储...");
+
+        // 首先尝试添加到当前用户存储（不需要管理员权限）
         let output = Command::new("certutil")
-            .args(&["-enterprise", "-f", "-AddStore", "Root", &cert_path_str])
+            .args(&["-addstore", "-user", "Root", &cert_path_str])
             .output()
             .map_err(|e| format!("执行certutil失败: {}", e))?;
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            Ok(format!("CA证书安装成功\n{}", stdout))
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // 检查是否是权限问题
-            if stderr.contains("需要管理员权限")
-                || stderr.contains("拒绝访问")
-                || stderr.contains("ERROR_ACCESS_DENIED")
-            {
-                Err(format!(
-                    "需要管理员权限。请以管理员身份运行以下命令安装CA证书:\ncertutil -enterprise -f -AddStore Root \"{}\"\n\n或者手动双击证书文件安装到\"受信任的根证书颁发机构\"",
-                    cert_path_str
-                ))
-            } else {
-                Err(format!("certutil执行失败: {}", stderr))
-            }
+            println!("[证书] 证书已安装到当前用户的根证书存储");
+            return Ok(format!("CA证书安装成功（当前用户）\n{}", stdout));
         }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[证书] 用户级安装失败: {}", stderr);
+
+        // 如果用户级失败，提示安装方法
+        Err(format!(
+            "证书安装失败。请选择以下方式之一手动安装:\n\n\
+            1. 双击打开证书文件: {}\n\
+               选择\"安装证书\" -> \"当前用户\" -> \"将所有的证书放入下列存储\" -> 浏览选择\"受信任的根证书颁发机构\"\n\n\
+            2. 或以管理员身份在PowerShell中运行:\n\
+               certutil -addstore -enterprise -f Root \"{}\"\n\n\
+            错误详情: {}",
+            cert_path_str, cert_path_str, stderr
+        ))
     }
 
     #[cfg(target_os = "macos")]
