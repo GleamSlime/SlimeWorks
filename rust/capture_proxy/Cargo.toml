@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 # 只启用必需的tokio features
-tokio = { version = "1", features = [
+tokio = { version = "1.49.0", features = [
   "rt-multi-thread",
   "net",
   "io-util",
@@ -24,7 +24,7 @@ tokio = { version = "1", features = [
   "fs",
 ], default-features = false }
 # 只启用必需的hyper features
-hyper = { version = "0.14", features = [
+hyper = { version = "0.14.32", features = [
   "server",
   "client",
   "http1",
@@ -32,19 +32,19 @@ hyper = { version = "0.14", features = [
   "tcp",
   "stream",
 ], default-features = false }
-serde = { version = "1.0", features = ["derive"], default-features = false }
-serde_json = { version = "1.0", default-features = false, features = ["std"] }
-regex = "1.7"
-encoding_rs = "0.8"
+serde = { version = "1.0.228", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
+regex = "1.12.2"
+encoding_rs = "0.8.35"
 tokio-rustls = { version = "0.23", default-features = false }
 rustls = { version = "0.20", default-features = false, features = [
   "dangerous_configuration",
 ] }
-rcgen = { version = "0.9", default-features = false, features = ["pem"] }
+rcgen = { version = "0.11.3", default-features = false, features = ["pem"] }
 rustls-native-certs = "0.6"
-base64 = "0.21"
-rustls-pemfile = "1.0"
-x509-parser = "0.14"
+base64 = "0.22.1"
+rustls-pemfile = "2.2.0"
+x509-parser = "0.18.0"
 
 [profile.release]
 opt-level = "z"

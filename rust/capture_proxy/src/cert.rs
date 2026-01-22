@@ -79,7 +79,7 @@ impl CertResolver {
             bytes[8 - (len - start)..].copy_from_slice(&serial_bytes[start..]);
             u64::from_be_bytes(bytes)
         };
-        params.serial_number = Some(serial_u64);
+        params.serial_number = Some(serial_u64.into());
 
         // 使用加载的密钥对而不是生成新的
         params.key_pair = Some(key_pair);
@@ -90,7 +90,7 @@ impl CertResolver {
 
         Ok(Self {
             ca_rcgen,
-            ca_cert_der, // 保存实际的CA证书DER
+            ca_cert_der: ca_cert_der.to_vec(), // 保存实际的CA证书DER
             cache: RwLock::new(HashMap::new()),
         })
     }
@@ -209,7 +209,7 @@ pub fn ensure_ca_certificate_exists() -> Result<PathBuf, String> {
 
     // 设置固定的序列号（确保每次生成的CA证书序列号相同）
     // 使用一个固定的值作为序列号
-    params.serial_number = Some(0x4B19A1FA6838A559u64);
+    params.serial_number = Some(0x4B19A1FA6838A559u64.into());
 
     // rcgen 0.9 默认使用ECC，这里直接使用默认即可
     // RSA和ECC在现代浏览器中都应该支持
@@ -235,7 +235,7 @@ pub fn ensure_ca_certificate_exists() -> Result<PathBuf, String> {
 }
 
 /// 安装CA证书到系统信任存储（需要管理员密码）
-pub fn install_ca_certificate_with_password(password: &str) -> Result<String, String> {
+pub fn install_ca_certificate_with_password(_password: &str) -> Result<String, String> {
     // 先确保证书存在
     let cert_path = ensure_ca_certificate_exists()?;
     let cert_path_str = cert_path.to_string_lossy().to_string();
@@ -293,7 +293,7 @@ pub fn install_ca_certificate_with_password(password: &str) -> Result<String, St
         // 使用完整路径避免 PATH 问题，并使用 sh 而不是 bash（更通用）
         let command = format!(
             "echo '{}' | /usr/bin/sudo -S /usr/bin/security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '{}'",
-            password, cert_path_str
+            _password, cert_path_str
         );
 
         // 使用 sh -c 执行命令

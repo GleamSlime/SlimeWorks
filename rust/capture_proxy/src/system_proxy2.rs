@@ -99,8 +99,6 @@ pub async fn set_proxy(host: &str, port: u16, _network: Option<&str>) -> io::Res
         }
         return Ok(());
     }
-
-    Ok(())
 }
 
 pub async fn close_proxy() -> io::Result<()> {
@@ -139,8 +137,6 @@ pub async fn close_proxy() -> io::Result<()> {
             .status()?;
         return Ok(());
     }
-
-    Ok(())
 }
 
 #[cfg(target_os = "macos")]

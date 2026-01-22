@@ -8,10 +8,10 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
-lazy_static = "1.4"
+lazy_static = "1.5.0"
 capture_proxy = { path = "capture_proxy" }
 # ffmpeg_lib = { path = "ffmpeg_lib", optional = true }
-tokio = { version = "1", features = [
+tokio = { version = "1.49.0", features = [
   "rt-multi-thread",
   "sync",
 ], default-features = false }
@@ -21,14 +21,14 @@ default = []
 # ffmpeg = ["ffmpeg_lib"]
 
 [profile.release]
-opt-level = "z"   # 优化体积而非速度
-lto = true        # 启用链接时优化
-codegen-units = 1 # 更好的优化，但编译慢
-panic = "abort"   # 减小panic处理代码
-strip = true      # 移除调试符号
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["processthreadsapi", "securitybaseapi", "winnt", "handleapi", "minwindef"] }
+winapi = { version = "0.3.9", features = ["processthreadsapi", "securitybaseapi", "winnt", "handleapi", "minwindef"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

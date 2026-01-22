@@ -1,10 +1,8 @@
 /// HTTP代理服务器模块 - 处理HTTP请求和CONNECT隧道
-use crate::cert::CertResolver;
 use crate::mitm::handle_connect_mitm;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::convert::Infallible;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
