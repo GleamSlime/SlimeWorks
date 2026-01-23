@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
@@ -11,7 +13,9 @@ class DesktopScaffold extends StatefulWidget {
   const DesktopScaffold({super.key, required this.child});
 
   static Future<void> initManager() async {
-    WidgetsFlutterBinding.ensureInitialized();
+    if (Platform.isIOS || Platform.isAndroid) {
+      return;
+    }
 
     await windowManager.ensureInitialized();
 

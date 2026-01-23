@@ -9,7 +9,6 @@ use rustls::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 /// 证书解析器 - 动态生成和缓存服务器证书
@@ -375,16 +374,17 @@ pub fn install_ca_certificate_with_password(_password: &str) -> Result<String, S
 
 /// 检查CA证书是否已安装到系统
 pub fn is_ca_certificate_installed() -> Result<bool, String> {
-    let cert_name = "Skill Capture Client Root CA";
+    let _cert_name = "Skill Capture Client Root CA";
 
     #[cfg(target_os = "macos")]
     {
         // 执行命令检查证书是否存在
+        use std::process::Command;
         match Command::new("security")
             .args(&[
                 "find-certificate",
                 "-c",
-                cert_name,
+                _cert_name,
                 "/Library/Keychains/System.keychain",
             ])
             .output()
@@ -394,7 +394,7 @@ pub fn is_ca_certificate_installed() -> Result<bool, String> {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     // 检查输出中是否包含证书名称
-                    Ok(stdout.contains(cert_name))
+                    Ok(stdout.contains(_cert_name))
                 } else {
                     Ok(false)
                 }
@@ -406,14 +406,15 @@ pub fn is_ca_certificate_installed() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         // Windows: 使用 certutil 命令查询证书
+        use std::process::Command;
         match Command::new("certutil")
-            .args(&["-verifystore", "Root", cert_name])
+            .args(&["-verifystore", "Root", _cert_name])
             .output()
         {
             Ok(output) => {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    Ok(stdout.contains(cert_name))
+                    Ok(stdout.contains(_cert_name))
                 } else {
                     Ok(false)
                 }

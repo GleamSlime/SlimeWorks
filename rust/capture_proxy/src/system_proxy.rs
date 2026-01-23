@@ -1,4 +1,6 @@
 use std::io;
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -99,6 +101,12 @@ pub async fn set_proxy(host: &str, port: u16, _network: Option<&str>) -> io::Res
         }
         return Ok(());
     }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        println!("[系统代理] 当前平台不支持系统代理设置: {}:{}", host, port);
+        Ok(())
+    }
 }
 
 pub async fn close_proxy() -> io::Result<()> {
@@ -136,6 +144,12 @@ pub async fn close_proxy() -> io::Result<()> {
             ])
             .status()?;
         return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        println!("[系统代理] 当前平台不支持关闭系统代理");
+        Ok(())
     }
 }
 
