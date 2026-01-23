@@ -62,7 +62,7 @@ pub fn stop_capture_proxy() -> Result<String, String> {
     // 清除系统代理
     let rt = Runtime::new().map_err(|e| format!("创建运行时失败: {}", e))?;
     rt.block_on(async {
-        let _ = capture_proxy::system_proxy2::close_proxy().await;
+        let _ = capture_proxy::system_proxy::close_proxy().await;
     });
 
     // 清理运行时

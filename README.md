@@ -46,4 +46,12 @@ $ flutter_rust_bridge_codegen generate
  
 # rust开发阶段：监听rs并启动ui，修改rs时杀死进程重启
 $ cd rust && cargo watch -s "cargo build && flutter run -d macos"
+
+# FlutterGen
+$ flutter pub run build_runner build
+$ flutter pub run build_runner watch
+$ flutter pub run build_runner clean && flutter pub run build_runner build --delete-conflicting-outputs # 清理缓存并生成
+
+# 序列化
+$ flutter packages pub run build_runner build --delete-conflicting-outputs
 ```

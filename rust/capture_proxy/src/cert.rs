@@ -278,17 +278,6 @@ pub fn install_ca_certificate_with_password(_password: &str) -> Result<String, S
 
         println!("[证书] 正在安装CA证书到macOS钥匙串...");
 
-        // 先尝试删除旧证书（如果存在）
-        // println!("[证书] 检查并删除旧证书...");
-        // let delete_command = format!(
-        //     "echo '{}' | /usr/bin/sudo -S /usr/bin/security delete-certificate -c 'Skill Capture Client Root CA' /Library/Keychains/System.keychain 2>/dev/null || true",
-        //     password
-        // );
-        // let _ = Command::new("/bin/sh")
-        //     .arg("-c")
-        //     .arg(&delete_command)
-        //     .output();
-
         // 使用完整路径避免 PATH 问题，并使用 sh 而不是 bash（更通用）
         let command = format!(
             "echo '{}' | /usr/bin/sudo -S /usr/bin/security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '{}'",
@@ -374,7 +363,7 @@ pub fn install_ca_certificate_with_password(_password: &str) -> Result<String, S
 
 /// 检查CA证书是否已安装到系统
 pub fn is_ca_certificate_installed() -> Result<bool, String> {
-    let _cert_name = "Skill Capture Client Root CA";
+    let _cert_name = "GleamSlime Capture Client Root CA";
 
     #[cfg(target_os = "macos")]
     {

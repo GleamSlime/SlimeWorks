@@ -3,7 +3,7 @@ mod capture;
 mod cert;
 mod mitm;
 mod server;
-pub mod system_proxy2;
+pub mod system_proxy;
 
 // 重新导出公共API
 pub use capture::{
@@ -77,7 +77,7 @@ pub async fn start_proxy_server(port: u16) -> Result<(), Box<dyn std::error::Err
     println!("代理服务运行在端口 {}...", port);
 
     // 设置系统代理
-    if let Err(e) = system_proxy2::set_proxy("127.0.0.1", port, None).await {
+    if let Err(e) = system_proxy::set_proxy("127.0.0.1", port, None).await {
         eprintln!("设置系统代理错误: {}", e);
     } else {
         println!("系统代理已设置为 127.0.0.1:{}", port);

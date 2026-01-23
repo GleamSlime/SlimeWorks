@@ -23,6 +23,8 @@ flutter_gen:
 
   # 资源配置
   assets:
+    inputs:
+      - assets/ # 指定资源目录
     outputs:
       class_name: Assets # 生成的资源类名
       style: camel-case # 命名风格

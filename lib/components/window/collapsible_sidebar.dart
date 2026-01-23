@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
+
+import 'package:slime_works/components/buttons/animated_button.dart';
+import 'package:slime_works/components/buttons/svg_button.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/gen/assets.gen.dart';
 
 /// 侧边栏菜单项
 class SidebarMenuItem {
@@ -40,6 +45,8 @@ class SidebarController extends GetxController {
   void toggleSidebar() {
     isExpanded.value = !isExpanded.value;
   }
+
+  final RxBool isTest = false.obs;
 
   /// 选择菜单项
   void selectItem(String? route) {
@@ -123,23 +130,25 @@ class CollapsibleSidebar extends StatelessWidget {
           ? Row(
               children: [
                 const Spacer(),
-                // 收起按钮
-                IconButton(
-                  icon: Icon(Icons.menu_open, size: 18.sp),
-                  onPressed: () => controller.toggleSidebar(),
-                  tooltip: '收起侧边栏',
-                  padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(minWidth: 28.w, minHeight: 28.h),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: HoverSvgButton(
+                    svg: controller.isTest.value ? Assets.image.svg.sidebarOpen : Assets.image.svg.sidebarClose,
+                    // hoverSvg: Assets.image.svg.sidebarClose,
+                    // onTap: controller.toggleSidebar,
+                    // label: controller.isTest.value ? '测试中' : '测试',
+                    onTap: () => {controller.isTest.value = !controller.isTest.value},
+                  ),
                 ),
               ],
             )
           : Center(
-              child: IconButton(
-                icon: Icon(Icons.menu, size: 20.sp),
-                onPressed: () => controller.toggleSidebar(),
-                tooltip: '展开侧边栏',
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints(minWidth: 40.w, minHeight: 40.h),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: controller.toggleSidebar,
+                  child: SvgPicture.asset(Assets.image.svg.sidebarOpen, width: AppThemeCommon.fontSize24),
+                ),
               ),
             ),
     );
