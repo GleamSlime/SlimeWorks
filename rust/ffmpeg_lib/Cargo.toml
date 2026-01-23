@@ -12,7 +12,7 @@ name = "ffmpeg_lib"
 path = "src/main.rs"
 
 [dependencies]
-ffmpeg-sys-next = { version = "8.0.1", features = ["build"] }
+ffmpeg-sys-next = { version = "8.0.1", default-features = false, features = ["build"] }
 anyhow = "1.0"
 thiserror = "1.0"
 chrono = "0.4"
