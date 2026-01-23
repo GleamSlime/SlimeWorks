@@ -4,13 +4,21 @@
   <img src="https://img.shields.io/badge/Platform-Windows|macOS|Linux|iOS|Android-blue?style=flat-square" alt="多平台支持">
   <img src="https://img.shields.io/badge/Status-开发中-yellow?style=flat-square" alt="开发状态">
   <img src="https://img.shields.io/badge/Version-v0.1.0_preview-orange?style=flat-square" alt="版本">
-  <p align="center"> 
-    <img src="https://raw.githubusercontent.com/shi-lai-mu/SlimeWorks/refs/heads/main/assets/logo.svg?token=GHSAT0AAAAAADTQ2T3TNXRA2L5NMYJFSU442LS3VBA" alt="icon">
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/shi-lai-mu/SlimeWorks/refs/heads/main/assets/logo.svg?token=GHSAT0AAAAAADTQ2T3TNXRA2L5NMYJFSU442LS3VBA" alt="icon" width="200">
+  </p>
+  <p align="center">
     <strong>✨ 工坊 ✨</strong>
   </p>
 </p>
 
 ## 开发
+
+- rustc 1.92.0 (ded5c06cf 2025-12-08)
+- Flutter version 3.41.0-0.0.pre
+- Dart version 3.11.0
+
+- MacOS 26.2 25C56 darwin-arm64
 
 ## 打包
 
