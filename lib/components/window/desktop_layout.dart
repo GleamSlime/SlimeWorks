@@ -1,8 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/svg.dart';
+
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_scaffold.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/gen/assets.gen.dart';
 
 /// 平台检测工具类
 class PlatformUtil {
@@ -30,26 +34,26 @@ class DesktopLayout extends StatelessWidget {
       // 第一组：主要功能（无标题）
       SidebarGroup(
         items: [
-          SidebarMenuItem(icon: Icons.dashboard_outlined, label: '概览', route: '/dashboard'),
-          SidebarMenuItem(icon: Icons.account_tree_outlined, label: '数据捕获', route: '/capture'),
-          SidebarMenuItem(icon: Icons.water_drop_outlined, label: '流水账', route: '/clearwater'),
+          SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '概览', route: '/dashboard'),
+          SidebarMenuItem(icon: Assets.image.svg.menuCapture, label: '数据捕获', route: '/capture'),
+          SidebarMenuItem(icon: Assets.image.svg.menuBill, label: '流水账', route: '/clearwater'),
           SidebarMenuItem(
-            icon: Icons.cloud_outlined,
+            icon: Assets.image.svg.menuAli,
             label: '阿里云',
             children: [
-              SidebarMenuItem(icon: Icons.storage_outlined, label: 'OSS存储', route: '/aliyun/oss'),
-              SidebarMenuItem(icon: Icons.dns_outlined, label: 'DNS管理', route: '/aliyun/dns'),
+              SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: 'OSS存储', route: '/aliyun/oss'),
+              SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: 'DNS管理', route: '/aliyun/dns'),
             ],
           ),
           SidebarMenuItem(
-            icon: Icons.build_circle_outlined,
+            icon: Assets.image.svg.menuTools,
             label: '工具箱',
             children: [
-              SidebarMenuItem(icon: Icons.video_library_outlined, label: '视频工具', route: '/tools/video'),
-              SidebarMenuItem(icon: Icons.image_outlined, label: '图片工具', route: '/tools/image'),
+              SidebarMenuItem(icon: Assets.image.svg.menuToolsVideo, label: '视频工具', route: '/tools/video'),
+              SidebarMenuItem(icon: Assets.image.svg.menuToolsPictures, label: '图片工具', route: '/tools/image'),
             ],
           ),
-          SidebarMenuItem(icon: Icons.video_library_outlined, label: '媒体库', route: '/media-library'),
+          SidebarMenuItem(icon: Assets.image.svg.menuMediaLibrary, label: '媒体库', route: '/media-library'),
         ],
       ),
 
@@ -57,10 +61,10 @@ class DesktopLayout extends StatelessWidget {
       SidebarGroup(
         title: '收藏',
         items: [
-          SidebarMenuItem(icon: Icons.note_outlined, label: '笔记', route: '/favorites/notes', badge: 61),
-          SidebarMenuItem(icon: Icons.fingerprint_outlined, label: '账密', route: '/favorites/accounts', badge: 37),
-          SidebarMenuItem(icon: Icons.folder_outlined, label: '文件', route: '/favorites/files'),
-          SidebarMenuItem(icon: Icons.image_outlined, label: '图片', route: '/favorites/images'),
+          SidebarMenuItem(icon: Assets.image.svg.menuCollectNote, label: '笔记', route: '/favorites/notes', badge: 61),
+          SidebarMenuItem(icon: Assets.image.svg.menuCollectCredentials, label: '账密', route: '/favorites/accounts', badge: 37),
+          SidebarMenuItem(icon: Assets.image.svg.menuCollectFile, label: '文件', route: '/favorites/files'),
+          SidebarMenuItem(icon: Assets.image.svg.menuCollectPictures, label: '图片', route: '/favorites/images'),
         ],
       ),
 
@@ -68,16 +72,17 @@ class DesktopLayout extends StatelessWidget {
       SidebarGroup(
         title: '插件',
         items: [
-          SidebarMenuItem(icon: Icons.cloud_queue_outlined, label: '云访问', route: '/plugins/cloud-access'),
-          SidebarMenuItem(icon: Icons.share_outlined, label: '分布式', route: '/plugins/distributed'),
+          SidebarMenuItem(icon: Assets.image.svg.menuCloudAccess, label: '云访问', route: '/plugins/cloud-access'),
+          SidebarMenuItem(icon: Assets.image.svg.menuDistributed, label: '分布式', route: '/plugins/distributed'),
+          SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '主题测试', route: '/theme-preview'),
         ],
       ),
 
       // 第四组：设置（无标题）
       SidebarGroup(
         items: [
-          SidebarMenuItem(icon: Icons.info_outline, label: '关于', route: '/about'),
-          SidebarMenuItem(icon: Icons.settings_outlined, label: '设置', route: '/settings'),
+          SidebarMenuItem(icon: Assets.image.svg.menuAbout, label: '关于', route: '/about'),
+          SidebarMenuItem(icon: Assets.image.svg.menuSetting, label: '设置', route: '/settings'),
         ],
       ),
     ];
@@ -90,37 +95,29 @@ class DesktopLayout extends StatelessWidget {
       return child;
     }
 
-    final theme = Theme.of(context);
     final groups = sidebarGroups ?? getDefaultSidebarGroups();
 
     return Scaffold(
       body: DesktopScaffold(
         child: Row(
           children: [
-            // 左侧：可收起的侧边栏
             CollapsibleSidebar(groups: groups),
-
-            // 右侧：主内容区域
             Expanded(
               child: Column(
                 children: [
-                  // 顶部应用栏 (可选)
                   if (showAppBar)
-                    Container(
-                      height: 56.h,
-                      decoration: BoxDecoration(color: theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface),
+                    SizedBox(
+                      height: scaleH(80),
                       child: Row(
                         children: [
-                          const SizedBox(width: 16),
-                          Text(title, style: theme.textTheme.titleLarge),
+                          SizedBox(width: AppThemeCommon.kSpace16),
+                          Text(title, style: TextStyle(fontSize: AppThemeCommon.fontSize18)),
                           const Spacer(),
                           if (appBarActions != null) appBarActions!,
                           const SizedBox(width: 16),
                         ],
                       ),
                     ),
-
-                  // 主内容
                   Expanded(child: child),
                 ],
               ),

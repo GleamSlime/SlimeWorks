@@ -221,7 +221,7 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
                 if (_hasAnimated && _prevLabel != null)
                   AnimatedBuilder(
                     animation: _controller,
-                    builder: (_, __) {
+                    builder: (_, _) {
                       return Transform.translate(
                         offset: Offset(0, _outOffset.value),
                         child: Opacity(
@@ -245,7 +245,7 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
                 if (_hasAnimated)
                   AnimatedBuilder(
                     animation: _controller,
-                    builder: (_, __) {
+                    builder: (_, _) {
                       return Transform.translate(
                         offset: Offset(0, _inOffset.value),
                         child: Opacity(

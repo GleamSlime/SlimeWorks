@@ -3,7 +3,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
-import 'package:slime_works/components/buttons/animated_button.dart';
 import 'package:slime_works/components/buttons/svg_button.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -11,7 +10,7 @@ import 'package:slime_works/gen/assets.gen.dart';
 
 /// 侧边栏菜单项
 class SidebarMenuItem {
-  final IconData icon;
+  final String icon;
   final String label;
   final String? route;
   final int? badge; // 徽章数字
@@ -35,6 +34,9 @@ class SidebarController extends GetxController {
   // 侧边栏是否展开
   final RxBool isExpanded = true.obs;
 
+  // 侧边栏扩展内容是否显示
+  final RxBool showExtends = true.obs;
+
   // 当前选中的菜单路由
   final RxString selectedRoute = ''.obs;
 
@@ -42,8 +44,15 @@ class SidebarController extends GetxController {
   final RxMap<String, bool> expandedItems = <String, bool>{}.obs;
 
   /// 切换侧边栏展开/收起状态
-  void toggleSidebar() {
+  void toggleSidebar() async {
     isExpanded.value = !isExpanded.value;
+
+    if (isExpanded.value) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      showExtends.value = true;
+    } else {
+      showExtends.value = false;
+    }
   }
 
   final RxBool isTest = false.obs;
@@ -88,13 +97,15 @@ class CollapsibleSidebar extends StatelessWidget {
 
     return Obx(() {
       final isExpanded = controller.isExpanded.value;
-      final targetWidth = isExpanded ? expandedWidth.w : collapsedWidth.w;
+      final showExtends = controller.showExtends.value;
+      final targetWidth = scaleW(isExpanded ? expandedWidth : collapsedWidth);
 
-      return AnimatedContainer(
-        duration: animationDuration,
-        curve: Curves.easeInOut,
-        width: targetWidth,
-        child: Container(
+      return Container(
+        margin: EdgeInsets.all(AppThemeCommon.kSpace12),
+        child: AnimatedContainer(
+          duration: animationDuration,
+          curve: Curves.easeInOut,
+          width: targetWidth,
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             // color: Colors.red,
@@ -103,17 +114,16 @@ class CollapsibleSidebar extends StatelessWidget {
             gradient: AppTheme.sideBarTheme(context),
             border: BoxBorder.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
-          margin: EdgeInsets.all(AppThemeCommon.kSpace12),
           child: Column(
             children: [
               // 侧边栏头部
               _buildHeader(context, controller, isExpanded),
 
               // 菜单列表（可滚动）
-              Expanded(child: _buildScrollableMenuList(context, controller, isExpanded)),
+              Expanded(child: _buildScrollableMenuList(context, controller, isExpanded, showExtends)),
 
               // 底部固定菜单
-              _buildBottomMenu(context, controller, isExpanded),
+              _buildBottomMenu(context, controller, isExpanded, showExtends),
             ],
           ),
         ),
@@ -123,59 +133,40 @@ class CollapsibleSidebar extends StatelessWidget {
 
   /// 构建侧边栏头部
   Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
-    return Container(
-      height: 64.h,
-      padding: EdgeInsets.symmetric(horizontal: isExpanded ? 12.w : 0, vertical: 12.h),
-      child: isExpanded
-          ? Row(
-              children: [
-                const Spacer(),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: HoverSvgButton(
-                    svg: controller.isTest.value ? Assets.image.svg.sidebarOpen : Assets.image.svg.sidebarClose,
-                    // hoverSvg: Assets.image.svg.sidebarClose,
-                    // onTap: controller.toggleSidebar,
-                    // label: controller.isTest.value ? '测试中' : '测试',
-                    onTap: () => {controller.isTest.value = !controller.isTest.value},
-                  ),
-                ),
-              ],
-            )
-          : Center(
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: controller.toggleSidebar,
-                  child: SvgPicture.asset(Assets.image.svg.sidebarOpen, width: AppThemeCommon.fontSize24),
-                ),
-              ),
-            ),
+    return AnimatedContainer(
+      duration: animationDuration,
+      curve: Curves.easeInOut,
+      height: controller.isExpanded.value ? scaleH(40) : scaleH(64),
+      padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8),
+      alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
+      child: HoverSvgButton(
+        size: AppThemeCommon.fontSize24,
+        svg: controller.isExpanded.value ? Assets.image.svg.sidebarOpen : Assets.image.svg.sidebarClose,
+        onTap: controller.toggleSidebar,
+        color: Theme.of(context).iconTheme.color,
+      ),
     );
   }
 
-  /// 构建可滚动的菜单列表（不包括底部固定菜单）
-  Widget _buildScrollableMenuList(BuildContext context, SidebarController controller, bool isExpanded) {
-    // 过滤出非底部菜单的分组
+  /// 构建可滚动的菜单列表
+  Widget _buildScrollableMenuList(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
     final scrollableGroups = groups.take(groups.length - 1).toList();
 
     return ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(
-        scrollbars: false, // 隐藏滚动条
-      ),
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8),
         itemCount: scrollableGroups.length,
         itemBuilder: (context, groupIndex) {
           final group = scrollableGroups[groupIndex];
-          return _buildGroup(context, controller, group, isExpanded);
+          return _buildGroup(context, controller, group, isExpanded, showExtends);
         },
       ),
     );
   }
 
   /// 构建底部固定菜单
-  Widget _buildBottomMenu(BuildContext context, SidebarController controller, bool isExpanded) {
+  Widget _buildBottomMenu(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
     if (groups.isEmpty) return const SizedBox.shrink();
 
     final bottomGroup = groups.last;
@@ -183,12 +174,12 @@ class CollapsibleSidebar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Divider(height: 1, thickness: 1, color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        Divider(height: 1, thickness: 1, color: Theme.of(context).dividerColor.withAlpha(25)),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: bottomGroup.items.map((item) => _buildMenuItem(context, controller, item, isExpanded, 0)).toList(),
+            children: bottomGroup.items.map((item) => _buildMenuItem(context, controller, item, isExpanded, showExtends, 0)).toList(),
           ),
         ),
       ],
@@ -196,7 +187,7 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建分组
-  Widget _buildGroup(BuildContext context, SidebarController controller, SidebarGroup group, bool isExpanded) {
+  Widget _buildGroup(BuildContext context, SidebarController controller, SidebarGroup group, bool isExpanded, bool showExtends) {
     final theme = Theme.of(context);
 
     return Column(
@@ -205,19 +196,14 @@ class CollapsibleSidebar extends StatelessWidget {
         // 分组标题
         if (group.title != null && isExpanded)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: EdgeInsets.fromLTRB(AppThemeCommon.kSpace12, AppThemeCommon.kSpace4, AppThemeCommon.kSpace12, AppThemeCommon.kSpace4),
             child: Text(
               group.title!,
-              style: TextStyle(fontSize: 12, color: theme.hintColor, fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: AppThemeCommon.fontSize14, color: theme.hintColor, fontWeight: FontWeight.w500),
             ),
           ),
 
-        // 分组标题 - 收起状态显示分割线
-        if (group.title != null && !isExpanded)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Divider(height: 1, color: theme.dividerColor.withOpacity(0.3)),
-          ),
+        if (group.title != null && !isExpanded) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Divider()),
 
         // 菜单项列表
         ...group.items.map(
@@ -226,6 +212,7 @@ class CollapsibleSidebar extends StatelessWidget {
             controller,
             item,
             isExpanded,
+            showExtends,
             0, // 层级
           ),
         ),
@@ -239,6 +226,7 @@ class CollapsibleSidebar extends StatelessWidget {
     SidebarController controller,
     SidebarMenuItem item,
     bool isExpanded,
+    bool showExtends,
     int level, // 菜单层级，0为顶级
   ) {
     return Obx(() {
@@ -246,104 +234,113 @@ class CollapsibleSidebar extends StatelessWidget {
       final isItemExpanded = controller.isItemExpanded(item.label);
       final theme = Theme.of(context);
 
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 菜单项本身
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: isExpanded ? 8.w : 0, vertical: 2.h),
-            child: Material(
-              color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
-              borderRadius: BorderRadius.circular(8.r),
-              child: InkWell(
-                onTap: () {
-                  if (item.hasChildren) {
-                    controller.toggleItemExpanded(item.label);
-                  } else if (item.route != null) {
-                    controller.selectItem(item.route);
-                    Get.toNamed(item.route!);
-                  }
-                },
-                splashFactory: NoSplash.splashFactory,
-                highlightColor: Colors.transparent,
-                hoverColor: theme.colorScheme.primary.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8.r),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  height: 44.h,
-                  padding: EdgeInsets.only(left: isExpanded ? (12 + (level * 16.0)).w : 12.w, right: isExpanded ? 4.w : 12.w),
-                  child: ClipRect(
-                    child: Row(
+      return Container(
+        decoration: isExpanded
+            ? null
+            : BoxDecoration(
+                color: isItemExpanded ? theme.dividerColor.withAlpha(5) : Colors.transparent,
+                border: isItemExpanded ? Border.all(width: 1.w, color: theme.dividerColor.withAlpha(10)) : null,
+              ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 菜单项本身
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isExpanded ? AppThemeCommon.kSpace10 : AppThemeCommon.kSpace16,
+                vertical: AppThemeCommon.kSpace2,
+              ),
+              child: Material(
+                color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
+                borderRadius: AppThemeCommon.radius12,
+                child: InkWell(
+                  mouseCursor: SystemMouseCursors.click,
+                  onTap: () {
+                    if (item.hasChildren) {
+                      controller.toggleItemExpanded(item.label);
+                    } else if (item.route != null) {
+                      controller.selectItem(item.route);
+                      Get.toNamed(item.route!);
+                    }
+                  },
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.transparent,
+                  borderRadius: AppThemeCommon.radius12,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    height: scaleH(44),
+                    padding: EdgeInsets.only(left: isExpanded ? scaleW(8 + 20) + (level * scaleW(8 + 20)) : 0, right: isExpanded ? scaleW(8) : 0),
+                    alignment: isExpanded ? Alignment.centerLeft : Alignment.center,
+                    child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
-                        // 图标 - 收起时放大动画
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          child: Icon(
-                            item.icon,
-                            size: isExpanded ? 20.sp : 24.sp,
-                            color: isSelected ? theme.colorScheme.primary : theme.iconTheme.color?.withOpacity(0.7),
-                          ),
-                        ),
-                        // 标签 - 使用Opacity动画而不是直接隐藏
-                        AnimatedOpacity(
-                          duration: const Duration(milliseconds: 200),
-                          opacity: isExpanded ? 1.0 : 0.0,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                            width: isExpanded ? null : 0,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(width: isExpanded ? 12.w : 0),
-                                // 标签文字
-                                if (isExpanded)
-                                  Flexible(
-                                    child: Text(
-                                      item.label,
-                                      style: TextStyle(
-                                        fontSize: 14.sp,
-                                        color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color,
-                                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-                                      ),
-                                      overflow: TextOverflow.clip,
-                                      softWrap: false,
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                // 徽章
-                                if (item.badge != null && isExpanded) ...[
-                                  SizedBox(width: 4.w),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
-                                    constraints: BoxConstraints(minWidth: 18.w, maxWidth: 36.w),
-                                    decoration: BoxDecoration(color: theme.hintColor.withOpacity(0.15), borderRadius: BorderRadius.circular(9.r)),
-                                    child: Text(
-                                      '${item.badge}',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 10.sp, color: theme.hintColor),
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                ],
-                                // 展开图标
-                                if (item.hasChildren && isExpanded) ...[
-                                  SizedBox(width: 2.w),
-                                  SizedBox(
-                                    width: 16.w,
-                                    height: 16.h,
-                                    child: AnimatedRotation(
-                                      duration: const Duration(milliseconds: 200),
-                                      turns: isItemExpanded ? 0.25 : 0,
-                                      child: Icon(Icons.chevron_right, size: 14.sp, color: theme.iconTheme.color?.withOpacity(0.5)),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                        if (isExpanded && item.hasChildren)
+                          Positioned(
+                            left: -scaleW(20),
+                            top: scaleH(5),
+                            child: Padding(
+                              padding: EdgeInsets.only(right: AppThemeCommon.kSpace4),
+                              child: AnimatedRotation(
+                                duration: const Duration(milliseconds: 200),
+                                turns: isItemExpanded ? 1 : 0.75,
+                                child: SvgPicture.asset(
+                                  Assets.image.svg.arrowRight,
+                                  width: AppThemeCommon.fontSize14,
+                                  colorFilter: ColorFilter.mode(theme.textTheme.bodySmall?.color ?? Colors.black.withAlpha(51), BlendMode.srcIn),
+                                ),
+                              ),
                             ),
                           ),
+                        Row(
+                          mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                          children: [
+                            SvgPicture.asset(
+                              item.icon,
+                              width: isExpanded ? AppThemeCommon.fontSize20 : AppThemeCommon.fontSize24,
+                              colorFilter: isSelected
+                                  ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
+                                  : ColorFilter.mode(theme.iconTheme.color?.withAlpha(179) ?? Colors.black, BlendMode.srcIn),
+                            ),
+                            if (isExpanded && showExtends)
+                              Expanded(
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 200),
+                                  opacity: isExpanded ? 1.0 : 0.0,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(width: AppThemeCommon.kSpace8),
+                                      Expanded(
+                                        child: Text(
+                                          item.label,
+                                          style: TextStyle(
+                                            fontSize: AppThemeCommon.fontSize14,
+                                            color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          softWrap: false,
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                      if (item.badge != null)
+                                        Container(
+                                          padding: EdgeInsets.symmetric(horizontal: scaleW(5), vertical: scaleH(1)),
+                                          constraints: BoxConstraints(minWidth: scaleW(18)),
+                                          decoration: BoxDecoration(color: theme.hintColor.withAlpha(38), borderRadius: AppThemeCommon.radius8),
+                                          child: Text(
+                                            item.badge.toString(),
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(fontSize: AppThemeCommon.fontSize8, color: theme.hintColor),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -351,27 +348,28 @@ class CollapsibleSidebar extends StatelessWidget {
                 ),
               ),
             ),
-          ),
 
-          // 子菜单 - 在收起状态下也可展开，使用Tooltip显示
-          if (item.hasChildren)
-            AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              child: isItemExpanded
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: item.children!
-                          .map(
+            if (item.hasChildren)
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: isItemExpanded
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: AppThemeCommon.kSpace4,
+                        children: [
+                          ...item.children!.map(
                             (child) => isExpanded
-                                ? _buildMenuItem(context, controller, child, isExpanded, level + 1)
+                                ? _buildMenuItem(context, controller, child, isExpanded, showExtends, level + 1)
                                 : _buildCollapsedChildItem(context, controller, child),
-                          )
-                          .toList(),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-        ],
+                          ),
+                          SizedBox(height: AppThemeCommon.kSpace4),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+          ],
+        ),
       );
     });
   }
@@ -382,28 +380,37 @@ class CollapsibleSidebar extends StatelessWidget {
       final isSelected = controller.selectedRoute.value == item.route;
       final theme = Theme.of(context);
 
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-        child: Tooltip(
-          message: item.label,
-          child: Material(
-            color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8.r),
-            child: InkWell(
-              onTap: () {
-                if (item.route != null) {
-                  controller.selectItem(item.route);
-                  Get.toNamed(item.route!);
-                }
-              },
-              splashFactory: NoSplash.splashFactory,
-              highlightColor: Colors.transparent,
-              hoverColor: theme.colorScheme.primary.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(8.r),
-              child: Container(
-                height: 38.h,
-                alignment: Alignment.center,
-                child: Icon(item.icon, size: 20.sp, color: isSelected ? theme.colorScheme.primary : theme.iconTheme.color?.withOpacity(0.6)),
+      return Material(
+        color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
+        borderRadius: AppThemeCommon.radius12,
+        child: InkWell(
+          onTap: () {
+            if (item.route != null) {
+              controller.selectItem(item.route);
+              Get.toNamed(item.route!);
+            }
+          },
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: Colors.transparent,
+          borderRadius: AppThemeCommon.radius12,
+          hoverColor: theme.colorScheme.onSurface.withAlpha(13),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: scaleW(14), vertical: scaleH(10)),
+            decoration: BoxDecoration(
+              borderRadius: AppThemeCommon.radius12,
+              color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
+            ),
+            child: Tooltip(
+              message: item.label,
+              child: HoverSvgButton(
+                svg: item.icon,
+                color: isSelected ? theme.colorScheme.primary : null,
+                onTap: () {
+                  if (item.route != null) {
+                    controller.selectItem(item.route);
+                    Get.toNamed(item.route!);
+                  }
+                },
               ),
             ),
           ),

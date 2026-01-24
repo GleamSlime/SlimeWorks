@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -26,13 +27,17 @@ class DesktopScaffold extends StatefulWidget {
       return service;
     });
 
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(1520, 1050),
-      center: false, // 不自动居中，使用保存的位置
+    String windowTitle = dotenv.env['APP_NAME'] ?? "";
+    double windowWidth = double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520");
+    double windowHeight = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050");
+
+    WindowOptions windowOptions = WindowOptions(
+      size: Size(windowWidth, windowHeight),
+      center: false,
       titleBarStyle: TitleBarStyle.hidden,
       backgroundColor: Colors.transparent,
       windowButtonVisibility: false,
-      title: '史莱姆工坊',
+      title: windowTitle,
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {

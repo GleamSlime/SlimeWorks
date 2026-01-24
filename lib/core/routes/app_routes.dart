@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
-import 'package:slime_works/components/window/theme_preview_screen.dart';
+import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/dashboard_screen.dart';
 import 'package:slime_works/pages/capture_screen.dart';
 

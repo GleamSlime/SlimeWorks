@@ -6,8 +6,10 @@ class HoverSvgButton extends StatefulWidget {
   final String? hoverSvg;
   final VoidCallback onTap;
   final double size;
+  final bool? isScaleAnimated;
+  final Color? color;
 
-  const HoverSvgButton({super.key, required this.svg, this.hoverSvg, required this.onTap, this.size = 24});
+  const HoverSvgButton({super.key, required this.svg, this.hoverSvg, required this.onTap, this.size = 24, this.isScaleAnimated = false, this.color});
 
   @override
   State<HoverSvgButton> createState() => _HoverSvgButtonState();
@@ -15,12 +17,12 @@ class HoverSvgButton extends StatefulWidget {
 
 class _HoverSvgButtonState extends State<HoverSvgButton> {
   bool _hovering = false;
+  bool _pressed = false;
 
   @override
   void didUpdateWidget(HoverSvgButton oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // 检测 svg 或 label 是否发生变化
     if (oldWidget.svg != widget.svg) {
       _triggerAnimation();
     }
@@ -39,15 +41,22 @@ class _HoverSvgButtonState extends State<HoverSvgButton> {
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
         onTap: widget.onTap,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 150),
-          transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedScale(
+          scale: (widget.isScaleAnimated ?? false) ? (_pressed ? 1.1 : 1.0) : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
           child: SvgPicture.asset(
             _hovering && widget.hoverSvg != null ? widget.hoverSvg! : widget.svg,
-            key: ValueKey(_hovering),
             width: widget.size,
             height: widget.size,
+            colorFilter: widget.color != null
+                ? ColorFilter.mode(widget.color!, BlendMode.srcIn)
+                : (Theme.of(context).iconTheme.color != null ? ColorFilter.mode(Theme.of(context).iconTheme.color!, BlendMode.srcIn) : null),
           ),
         ),
       ),

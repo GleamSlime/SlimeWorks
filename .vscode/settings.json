@@ -1,14 +1,22 @@
 {
   "cSpell.words": [
+    "accum",
     "certutil",
     "cfgs",
+    "pemfile",
     "processthreadsapi",
+    "rcgen",
+    "rustls",
     "unmaximize",
     "USERPROFILE",
     "verifystore",
     "winapi"
   ],
-  "conventionalCommits.scopes": ["Assets", "MacOS"],
+  "conventionalCommits.scopes": [
+    "Assets",
+    "MacOS",
+    "Desktop"
+  ],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150
 }

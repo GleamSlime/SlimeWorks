@@ -14,7 +14,7 @@ class AppTheme extends AppThemeCommon {
 
   static LinearGradient sideBarTheme(BuildContext context) {
     return LinearGradient(
-      colors: isLight(context) ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)] : [const Color(0xFF20201E), const Color(0xFF181818)],
+      colors: isLight(context) ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)] : [const Color(0xFF20201E), const Color(0xFF1F1F1D)],
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
     );
@@ -122,6 +122,8 @@ class AppThemeCommon {
 
       // 分割线主题
       dividerTheme: DividerThemeData(color: LightColors.black10, thickness: 1, space: 1),
+
+      hintColor: LightColors.black40,
     );
   }
 
@@ -222,38 +224,43 @@ class AppThemeCommon {
 
       // 分割线主题
       dividerTheme: DividerThemeData(color: DarkColors.white10, thickness: 1, space: 1),
+
+      hintColor: DarkColors.white40,
     );
   }
 
-  static BorderRadius radius4 = BorderRadius.all(Radius.circular(scaleW(4.r)));
-  static BorderRadius radius8 = BorderRadius.all(Radius.circular(scaleW(8.r)));
-  static BorderRadius radius12 = BorderRadius.all(Radius.circular(scaleW(12.r)));
-  static BorderRadius radius16 = BorderRadius.all(Radius.circular(scaleW(16.r)));
-  static BorderRadius radius24 = BorderRadius.all(Radius.circular(scaleW(24.r)));
-  static BorderRadius radius32 = BorderRadius.all(Radius.circular(scaleW(32.r)));
+  static BorderRadius get radius4 => BorderRadius.all(Radius.circular(scaleW(4.r)));
+  static BorderRadius get radius8 => BorderRadius.all(Radius.circular(scaleW(8.r)));
+  static BorderRadius get radius12 => BorderRadius.all(Radius.circular(scaleW(12.r)));
+  static BorderRadius get radius16 => BorderRadius.all(Radius.circular(scaleW(16.r)));
+  static BorderRadius get radius24 => BorderRadius.all(Radius.circular(scaleW(24.r)));
+  static BorderRadius get radius32 => BorderRadius.all(Radius.circular(scaleW(32.r)));
 
-  static double fontSize10 = scaleS(10);
-  static double fontSize12 = scaleS(12);
-  static double fontSize14 = scaleS(14);
-  static double fontSize16 = scaleS(16);
-  static double fontSize18 = scaleS(18);
-  static double fontSize20 = scaleS(20);
-  static double fontSize24 = scaleS(24);
-  static double fontSize34 = scaleS(34);
-  static double fontSize48 = scaleS(48);
-  static double fontSize60 = scaleS(60);
-  static double fontSize96 = scaleS(96);
+  static double get fontSize6 => scaleS(6);
+  static double get fontSize8 => scaleS(8);
+  static double get fontSize10 => scaleS(10);
+  static double get fontSize12 => scaleS(12);
+  static double get fontSize14 => scaleS(14);
+  static double get fontSize16 => scaleS(16);
+  static double get fontSize18 => scaleS(18);
+  static double get fontSize20 => scaleS(20);
+  static double get fontSize24 => scaleS(24);
+  static double get fontSize34 => scaleS(34);
+  static double get fontSize48 => scaleS(48);
+  static double get fontSize60 => scaleS(60);
+  static double get fontSize96 => scaleS(96);
 
-  static double kSpace2 = scaleH(2);
-  static double kSpace4 = scaleH(4);
-  static double kSpace8 = scaleH(8);
-  static double kSpace12 = scaleH(12);
-  static double kSpace16 = scaleH(16);
-  static double kSpace20 = scaleH(20);
-  static double kSpace24 = scaleH(24);
-  static double kSpace32 = scaleH(32);
-  static double kSpace40 = scaleH(40);
-  static double kSpace48 = scaleH(48);
+  static double get kSpace2 => scaleW(2);
+  static double get kSpace4 => scaleW(4);
+  static double get kSpace8 => scaleW(8);
+  static double get kSpace10 => scaleW(10);
+  static double get kSpace12 => scaleW(12);
+  static double get kSpace16 => scaleW(16);
+  static double get kSpace20 => scaleW(20);
+  static double get kSpace24 => scaleW(24);
+  static double get kSpace32 => scaleW(32);
+  static double get kSpace40 => scaleW(40);
+  static double get kSpace48 => scaleW(48);
 
   static BoxShadow boxShadow10 = BoxShadow(
     color: Theme.of(navigatorKey.currentContext!).brightness == Brightness.dark ? DarkColors.black10 : LightColors.black10,

@@ -20,12 +20,17 @@ class ThemePreviewScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 标题
-            Text(
-              '主题与排版系统',
-              style: AppTextStyles.h3(
-                color: isDark ? DarkColors.white100 : LightColors.black100,
-              ),
+            // 切换系统主题
+            SwitchListTile(
+              title: Text('切换系统主题', style: AppTextStyles.body1(color: isDark ? DarkColors.white100 : LightColors.black100)),
+              value: Get.isDarkMode,
+              onChanged: (value) {
+                if (value) {
+                  Get.changeThemeMode(ThemeMode.dark);
+                } else {
+                  Get.changeThemeMode(ThemeMode.light);
+                }
+              },
             ),
             const SizedBox(height: 32),
 
@@ -54,10 +59,7 @@ class ThemePreviewScreen extends StatelessWidget {
       children: [
         Text(
           '排版系统',
-          style: AppTextStyles.h5(
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: AppFontWeights.semiBold,
-          ),
+          style: AppTextStyles.h5(color: isDark ? DarkColors.white100 : LightColors.black100, fontWeight: AppFontWeights.semiBold),
         ),
         const SizedBox(height: 16),
 
@@ -72,18 +74,8 @@ class ThemePreviewScreen extends StatelessWidget {
         const Divider(height: 32),
 
         // Subtitle & Body
-        _buildTextStyleItem(
-          'Subtitle1',
-          AppTextStyles.subtitle1(),
-          '16px',
-          isDark,
-        ),
-        _buildTextStyleItem(
-          'Subtitle2',
-          AppTextStyles.subtitle2(),
-          '14px',
-          isDark,
-        ),
+        _buildTextStyleItem('Subtitle1', AppTextStyles.subtitle1(), '16px', isDark),
+        _buildTextStyleItem('Subtitle2', AppTextStyles.subtitle2(), '14px', isDark),
         _buildTextStyleItem('Body1', AppTextStyles.body1(), '16px', isDark),
         _buildTextStyleItem('Body2', AppTextStyles.body2(), '14px', isDark),
         _buildTextStyleItem('Body3', AppTextStyles.body3(), '12px', isDark),
@@ -92,41 +84,21 @@ class ThemePreviewScreen extends StatelessWidget {
   }
 
   /// 构建单个文本样式展示项
-  Widget _buildTextStyleItem(
-    String name,
-    TextStyle style,
-    String size,
-    bool isDark,
-  ) {
+  Widget _buildTextStyleItem(String name, TextStyle style, String size, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           SizedBox(
             width: 120,
-            child: Text(
-              name,
-              style: AppTextStyles.body2(
-                color: isDark ? DarkColors.white80 : LightColors.black80,
-              ),
-            ),
+            child: Text(name, style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80)),
           ),
           SizedBox(
             width: 80,
-            child: Text(
-              size,
-              style: AppTextStyles.body2(
-                color: isDark ? DarkColors.white40 : LightColors.black40,
-              ),
-            ),
+            child: Text(size, style: AppTextStyles.body2(color: isDark ? DarkColors.white40 : LightColors.black40)),
           ),
           Expanded(
-            child: Text(
-              'Typography 排版示例',
-              style: style.copyWith(
-                color: isDark ? DarkColors.white100 : LightColors.black100,
-              ),
-            ),
+            child: Text('Typography 排版示例', style: style.copyWith(color: isDark ? DarkColors.white100 : LightColors.black100)),
           ),
         ],
       ),
@@ -140,20 +112,12 @@ class ThemePreviewScreen extends StatelessWidget {
       children: [
         Text(
           '颜色系统',
-          style: AppTextStyles.h5(
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: AppFontWeights.semiBold,
-          ),
+          style: AppTextStyles.h5(color: isDark ? DarkColors.white100 : LightColors.black100, fontWeight: AppFontWeights.semiBold),
         ),
         const SizedBox(height: 16),
 
         // 黑白色系
-        Text(
-          '黑白色系',
-          style: AppTextStyles.subtitle1(
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-          ),
-        ),
+        Text('黑白色系', style: AppTextStyles.subtitle1(color: isDark ? DarkColors.white100 : LightColors.black100)),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
@@ -179,44 +143,21 @@ class ThemePreviewScreen extends StatelessWidget {
         const SizedBox(height: 24),
 
         // 主色和次要颜色
-        Text(
-          '主色与次要颜色',
-          style: AppTextStyles.subtitle1(
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-          ),
-        ),
+        Text('主色与次要颜色', style: AppTextStyles.subtitle1(color: isDark ? DarkColors.white100 : LightColors.black100)),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            _buildColorBox(
-              'Primary',
-              isDark ? DarkColors.primary : LightColors.primary,
-            ),
-            _buildColorBox(
-              'Purple',
-              isDark ? DarkColors.purple : LightColors.purple,
-            ),
-            _buildColorBox(
-              'Indigo',
-              isDark ? DarkColors.indigo : LightColors.indigo,
-            ),
+            _buildColorBox('Primary', isDark ? DarkColors.primary : LightColors.primary),
+            _buildColorBox('Purple', isDark ? DarkColors.purple : LightColors.purple),
+            _buildColorBox('Indigo', isDark ? DarkColors.indigo : LightColors.indigo),
             _buildColorBox('Blue', isDark ? DarkColors.blue : LightColors.blue),
             _buildColorBox('Cyan', isDark ? DarkColors.cyan : LightColors.cyan),
             _buildColorBox('Mint', isDark ? DarkColors.mint : LightColors.mint),
-            _buildColorBox(
-              'Green',
-              isDark ? DarkColors.green : LightColors.green,
-            ),
-            _buildColorBox(
-              'Yellow',
-              isDark ? DarkColors.yellow : LightColors.yellow,
-            ),
-            _buildColorBox(
-              'Orange',
-              isDark ? DarkColors.orange : LightColors.orange,
-            ),
+            _buildColorBox('Green', isDark ? DarkColors.green : LightColors.green),
+            _buildColorBox('Yellow', isDark ? DarkColors.yellow : LightColors.yellow),
+            _buildColorBox('Orange', isDark ? DarkColors.orange : LightColors.orange),
             _buildColorBox('Red', isDark ? DarkColors.red : LightColors.red),
           ],
         ),
@@ -224,41 +165,18 @@ class ThemePreviewScreen extends StatelessWidget {
         const SizedBox(height: 24),
 
         // 背景色
-        Text(
-          '背景色',
-          style: AppTextStyles.subtitle1(
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-          ),
-        ),
+        Text('背景色', style: AppTextStyles.subtitle1(color: isDark ? DarkColors.white100 : LightColors.black100)),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            _buildColorBox(
-              'Background 1',
-              isDark ? DarkColors.background1 : LightColors.background1,
-            ),
-            _buildColorBox(
-              'Background 2',
-              isDark ? DarkColors.background2 : LightColors.background2,
-            ),
-            _buildColorBox(
-              'Background 3',
-              isDark ? DarkColors.background3 : LightColors.background3,
-            ),
-            _buildColorBox(
-              'Background 4',
-              isDark ? DarkColors.background4 : LightColors.background4,
-            ),
-            _buildColorBox(
-              'Background 5',
-              isDark ? DarkColors.background5 : LightColors.background5,
-            ),
-            _buildColorBox(
-              'Background 6',
-              isDark ? DarkColors.background6 : LightColors.background6,
-            ),
+            _buildColorBox('Background 1', isDark ? DarkColors.background1 : LightColors.background1),
+            _buildColorBox('Background 2', isDark ? DarkColors.background2 : LightColors.background2),
+            _buildColorBox('Background 3', isDark ? DarkColors.background3 : LightColors.background3),
+            _buildColorBox('Background 4', isDark ? DarkColors.background4 : LightColors.background4),
+            _buildColorBox('Background 5', isDark ? DarkColors.background5 : LightColors.background5),
+            _buildColorBox('Background 6', isDark ? DarkColors.background6 : LightColors.background6),
           ],
         ),
       ],
@@ -278,10 +196,7 @@ class ThemePreviewScreen extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         name,
-        style: AppTextStyles.caption(
-          color: _getContrastColor(color),
-          fontWeight: AppFontWeights.medium,
-        ),
+        style: AppTextStyles.caption(color: _getContrastColor(color), fontWeight: AppFontWeights.medium),
       ),
     );
   }
@@ -299,10 +214,7 @@ class ThemePreviewScreen extends StatelessWidget {
       children: [
         Text(
           '组件示例',
-          style: AppTextStyles.h5(
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: AppFontWeights.semiBold,
-          ),
+          style: AppTextStyles.h5(color: isDark ? DarkColors.white100 : LightColors.black100, fontWeight: AppFontWeights.semiBold),
         ),
         const SizedBox(height: 16),
 
@@ -323,11 +235,7 @@ class ThemePreviewScreen extends StatelessWidget {
         SizedBox(
           width: 300,
           child: TextField(
-            decoration: InputDecoration(
-              labelText: '标签',
-              hintText: '请输入内容...',
-              prefixIcon: const Icon(Icons.search),
-            ),
+            decoration: InputDecoration(labelText: '标签', hintText: '请输入内容...', prefixIcon: const Icon(Icons.search)),
           ),
         ),
 
@@ -340,19 +248,9 @@ class ThemePreviewScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '卡片标题',
-                  style: AppTextStyles.h6(
-                    color: isDark ? DarkColors.white100 : LightColors.black100,
-                  ),
-                ),
+                Text('卡片标题', style: AppTextStyles.h6(color: isDark ? DarkColors.white100 : LightColors.black100)),
                 const SizedBox(height: 8),
-                Text(
-                  '这是一个示例卡片，展示了卡片的样式效果。',
-                  style: AppTextStyles.body2(
-                    color: isDark ? DarkColors.white80 : LightColors.black80,
-                  ),
-                ),
+                Text('这是一个示例卡片，展示了卡片的样式效果。', style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80)),
               ],
             ),
           ),

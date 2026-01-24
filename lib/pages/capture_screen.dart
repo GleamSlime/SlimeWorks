@@ -255,7 +255,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
             SizedBox(
               width: 100,
               child: DropdownButtonFormField<int>(
-                value: _selectedPort,
+                initialValue: _selectedPort,
                 decoration: const InputDecoration(
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
