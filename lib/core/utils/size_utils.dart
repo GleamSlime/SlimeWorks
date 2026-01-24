@@ -15,6 +15,9 @@ double scaleW(double w, {bool large = false}) {
   if (isPhone && large) {
     w = w * 1.2;
   }
+  if (ScreenUtil().screenWidth >= 1920) {
+    w = w * 0.7;
+  }
   return ScreenUtil().setWidth(w);
 }
 
@@ -22,12 +25,18 @@ double scaleH(double w, {bool large = false}) {
   if (isPhone && large) {
     w = w * 1.2;
   }
+  if (ScreenUtil().screenWidth >= 1920) {
+    w = w * 0.7;
+  }
   return ScreenUtil().setHeight(w);
 }
 
 double scaleS(double fontSize, {bool large = false}) {
   if (isPhone && large) {
     fontSize = fontSize * 1.2;
+  }
+  if (ScreenUtil().screenWidth >= 1920) {
+    fontSize = fontSize * 0.7;
   }
   return ScreenUtil().setSp(fontSize) + (ScreenUtil().screenWidth / SizeUtils.appWidth);
 }

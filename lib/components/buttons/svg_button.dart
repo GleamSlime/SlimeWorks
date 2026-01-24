@@ -4,12 +4,12 @@ import 'package:flutter_svg/svg.dart';
 class HoverSvgButton extends StatefulWidget {
   final String svg;
   final String? hoverSvg;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final double size;
   final bool? isScaleAnimated;
   final Color? color;
 
-  const HoverSvgButton({super.key, required this.svg, this.hoverSvg, required this.onTap, this.size = 24, this.isScaleAnimated = false, this.color});
+  const HoverSvgButton({super.key, required this.svg, this.hoverSvg, this.onTap, this.size = 24, this.isScaleAnimated = false, this.color});
 
   @override
   State<HoverSvgButton> createState() => _HoverSvgButtonState();

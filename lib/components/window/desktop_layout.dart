@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
+import 'package:slime_works/components/window/custom_bar.dart';
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -114,7 +115,8 @@ class DesktopLayout extends StatelessWidget {
                           Text(title, style: TextStyle(fontSize: AppThemeCommon.fontSize18)),
                           const Spacer(),
                           if (appBarActions != null) appBarActions!,
-                          const SizedBox(width: 16),
+                          SizedBox(width: AppThemeCommon.kSpace16),
+                          if (Platform.isWindows) ...[WindowsWindowButtons(), SizedBox(width: AppThemeCommon.kSpace16)],
                         ],
                       ),
                     ),

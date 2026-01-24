@@ -359,7 +359,7 @@ class CollapsibleSidebar extends StatelessWidget {
                         spacing: AppThemeCommon.kSpace4,
                         children: [
                           ...item.children!.map(
-                            (child) => isExpanded
+                            (child) => isExpanded && showExtends
                                 ? _buildMenuItem(context, controller, child, isExpanded, showExtends, level + 1)
                                 : _buildCollapsedChildItem(context, controller, child),
                           ),
@@ -382,7 +382,6 @@ class CollapsibleSidebar extends StatelessWidget {
 
       return Material(
         color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
-        borderRadius: AppThemeCommon.radius12,
         child: InkWell(
           onTap: () {
             if (item.route != null) {
