@@ -13,6 +13,68 @@ class ThemePreviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Get.isDarkMode;
 
+    /// 构建排版系统展示
+    Widget _buildTypographySection(bool isDark) {
+      ThemeData theme = Theme.of(context);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '排版系统',
+            style: AppTextStyles.h5(color: isDark ? DarkColors.white100 : LightColors.black100, fontWeight: AppFontWeights.semiBold),
+          ),
+          const SizedBox(height: 16),
+
+          // H1 - H6
+          _buildTextStyleItem('H1', AppTextStyles.h1(), '96px', isDark),
+          _buildTextStyleItem('H2', AppTextStyles.h2(), '60px', isDark),
+          _buildTextStyleItem('H3', AppTextStyles.h3(), '48px', isDark),
+          _buildTextStyleItem('H4', AppTextStyles.h4(), '34px', isDark),
+          _buildTextStyleItem('H5', AppTextStyles.h5(), '24px', isDark),
+          _buildTextStyleItem('H6', AppTextStyles.h6(), '20px', isDark),
+
+          const Divider(height: 32),
+
+          // Subtitle & Body
+          _buildTextStyleItem('Subtitle1', AppTextStyles.subtitle1(), '16px', isDark),
+          _buildTextStyleItem('Subtitle2', AppTextStyles.subtitle2(), '14px', isDark),
+          _buildTextStyleItem('Body1', AppTextStyles.body1(), '16px', isDark),
+          _buildTextStyleItem('Body2', AppTextStyles.body2(), '14px', isDark),
+          _buildTextStyleItem('Body3', AppTextStyles.body3(), '12px', isDark),
+
+          const Divider(height: 32),
+
+          _buildTextStyleItem('HeadlineLarge', theme.textTheme.headlineLarge, '${theme.textTheme.headlineLarge?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('headlineMedium', theme.textTheme.headlineMedium, '${theme.textTheme.headlineMedium?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('headlineSmall', theme.textTheme.headlineSmall, '${theme.textTheme.headlineSmall?.fontSize ?? 0}px', isDark),
+
+          const Divider(height: 32),
+
+          _buildTextStyleItem('labelLarge', theme.textTheme.labelLarge, '${theme.textTheme.labelLarge?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('labelMedium', theme.textTheme.labelMedium, '${theme.textTheme.labelMedium?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('labelSmall', theme.textTheme.labelSmall, '${theme.textTheme.labelSmall?.fontSize ?? 0}px', isDark),
+
+          const Divider(height: 32),
+
+          _buildTextStyleItem('bodyLarge', theme.textTheme.bodyLarge, '${theme.textTheme.bodyLarge?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('bodyMedium', theme.textTheme.bodyMedium, '${theme.textTheme.bodyMedium?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('bodySmall', theme.textTheme.bodySmall, '${theme.textTheme.bodySmall?.fontSize ?? 0}px', isDark),
+
+          const Divider(height: 32),
+
+          _buildTextStyleItem('titleLarge', theme.textTheme.titleLarge, '${theme.textTheme.titleLarge?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('titleMedium', theme.textTheme.titleMedium, '${theme.textTheme.titleMedium?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('titleSmall', theme.textTheme.titleSmall, '${theme.textTheme.titleSmall?.fontSize ?? 0}px', isDark),
+
+          const Divider(height: 32),
+
+          _buildTextStyleItem('displayLarge', theme.textTheme.displayLarge, '${theme.textTheme.displayLarge?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('displayMedium', theme.textTheme.displayMedium, '${theme.textTheme.displayMedium?.fontSize ?? 0}px', isDark),
+          _buildTextStyleItem('displaySmall', theme.textTheme.displaySmall, '${theme.textTheme.displaySmall?.fontSize ?? 0}px', isDark),
+        ],
+      );
+    }
+
     return DesktopLayout(
       title: '主题预览',
       child: SingleChildScrollView(
@@ -52,39 +114,8 @@ class ThemePreviewScreen extends StatelessWidget {
     );
   }
 
-  /// 构建排版系统展示
-  Widget _buildTypographySection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '排版系统',
-          style: AppTextStyles.h5(color: isDark ? DarkColors.white100 : LightColors.black100, fontWeight: AppFontWeights.semiBold),
-        ),
-        const SizedBox(height: 16),
-
-        // H1 - H6
-        _buildTextStyleItem('H1', AppTextStyles.h1(), '96px', isDark),
-        _buildTextStyleItem('H2', AppTextStyles.h2(), '60px', isDark),
-        _buildTextStyleItem('H3', AppTextStyles.h3(), '48px', isDark),
-        _buildTextStyleItem('H4', AppTextStyles.h4(), '34px', isDark),
-        _buildTextStyleItem('H5', AppTextStyles.h5(), '24px', isDark),
-        _buildTextStyleItem('H6', AppTextStyles.h6(), '20px', isDark),
-
-        const Divider(height: 32),
-
-        // Subtitle & Body
-        _buildTextStyleItem('Subtitle1', AppTextStyles.subtitle1(), '16px', isDark),
-        _buildTextStyleItem('Subtitle2', AppTextStyles.subtitle2(), '14px', isDark),
-        _buildTextStyleItem('Body1', AppTextStyles.body1(), '16px', isDark),
-        _buildTextStyleItem('Body2', AppTextStyles.body2(), '14px', isDark),
-        _buildTextStyleItem('Body3', AppTextStyles.body3(), '12px', isDark),
-      ],
-    );
-  }
-
   /// 构建单个文本样式展示项
-  Widget _buildTextStyleItem(String name, TextStyle style, String size, bool isDark) {
+  Widget _buildTextStyleItem(String name, TextStyle? style, String size, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -98,7 +129,7 @@ class ThemePreviewScreen extends StatelessWidget {
             child: Text(size, style: AppTextStyles.body2(color: isDark ? DarkColors.white40 : LightColors.black40)),
           ),
           Expanded(
-            child: Text('Typography 排版示例', style: style.copyWith(color: isDark ? DarkColors.white100 : LightColors.black100)),
+            child: Text('Typography 排版示例', style: style?.copyWith(color: isDark ? DarkColors.white100 : LightColors.black100)),
           ),
         ],
       ),

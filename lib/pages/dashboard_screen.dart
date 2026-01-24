@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 
 /// 概览页面
 class DashboardScreen extends StatelessWidget {
@@ -15,10 +18,10 @@ class DashboardScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 欢迎标题
-            Text('欢迎使用工坊', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
+            Text('欢迎使用${dotenv.env["APP_NAME"]}', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold)),
+            SizedBox(height: AppThemeCommon.kSpace16),
             Text('这是一个功能强大的 macOS 和 Windows 桌面应用', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor)),
-            const SizedBox(height: 48),
+            SizedBox(height: AppThemeCommon.kSpace48),
 
             // 功能卡片网格
             Expanded(
@@ -64,26 +67,26 @@ class DashboardScreen extends StatelessWidget {
             children: [
               // 图标
               Container(
-                width: 48,
-                height: 48,
+                width: scaleW(48),
+                height: scaleW(48),
                 decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, size: 24, color: color),
+                child: Icon(icon, size: scaleW(24), color: color),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppThemeCommon.kSpace16),
 
               // 标题
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: AppThemeCommon.kSpace4),
 
               // 描述
               Text(
                 description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
