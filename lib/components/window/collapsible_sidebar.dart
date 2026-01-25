@@ -94,12 +94,58 @@ class CollapsibleSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.put(SidebarController());
     final theme = Theme.of(context);
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Obx(() {
       final isExpanded = controller.isExpanded.value;
       final showExtends = controller.showExtends.value;
       final targetWidth = scaleW(isExpanded ? expandedWidth : collapsedWidth);
 
+      // 移动端使用抽屉式侧边栏
+      if (isMobile) {
+        return AnimatedPositioned(
+          duration: animationDuration,
+          curve: Curves.easeInOut,
+          left: isExpanded ? 0 : -targetWidth,
+          top: 0,
+          bottom: 0,
+          width: targetWidth,
+          child: GestureDetector(
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity != null) {
+                if (details.primaryVelocity! < -300) {
+                  // 向左滑动，关闭侧边栏
+                  controller.toggleSidebar();
+                }
+              }
+            },
+            child: Stack(
+              children: [
+                // 背景遮罩
+                if (isExpanded)
+                  Positioned.fill(
+                    left: targetWidth,
+                    child: GestureDetector(
+                      onTap: controller.toggleSidebar,
+                      child: Container(color: Colors.black.withOpacity(0.5)),
+                    ),
+                  ),
+                // 侧边栏
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))],
+                    gradient: AppTheme.sideBarTheme(context),
+                  ),
+                  child: _buildSidebarContent(context, controller, isExpanded, showExtends),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // 桌面端使用原有布局
       return Container(
         margin: EdgeInsets.all(AppThemeCommon.kSpace12),
         child: AnimatedContainer(
@@ -108,27 +154,31 @@ class CollapsibleSidebar extends StatelessWidget {
           width: targetWidth,
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            // color: Colors.red,
             borderRadius: AppThemeCommon.radius16,
             boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))],
             gradient: AppTheme.sideBarTheme(context),
             border: BoxBorder.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
-          child: Column(
-            children: [
-              // 侧边栏头部
-              _buildHeader(context, controller, isExpanded),
-
-              // 菜单列表（可滚动）
-              Expanded(child: _buildScrollableMenuList(context, controller, isExpanded, showExtends)),
-
-              // 底部固定菜单
-              _buildBottomMenu(context, controller, isExpanded, showExtends),
-            ],
-          ),
+          child: _buildSidebarContent(context, controller, isExpanded, showExtends),
         ),
       );
     });
+  }
+
+  /// 构建侧边栏内容
+  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+    return Column(
+      children: [
+        // 侧边栏头部
+        _buildHeader(context, controller, isExpanded),
+
+        // 菜单列表（可滚动）
+        Expanded(child: _buildScrollableMenuList(context, controller, isExpanded, showExtends)),
+
+        // 底部固定菜单
+        _buildBottomMenu(context, controller, isExpanded, showExtends),
+      ],
+    );
   }
 
   /// 构建侧边栏头部

@@ -49,14 +49,19 @@ dependencies:
 
   # 网络请求
   dio: ^5.9.0 # HTTP客户端
+  http: ^1.2.0 # HTTP客户端
 
   # 本地存储
   flutter_secure_storage: ^10.0.0 # 安全存储敏感数据
   shared_preferences: ^2.3.4 # 简单键值对存储
+  path_provider: ^2.1.5 # 获取应用路径
 
   # 图片相关
   cached_network_image: ^3.4.1 # 网络图片缓存
   flutter_svg: ^2.2.3 # SVG图片支持
+
+  # 文件处理
+  archive: ^4.0.7 # 压缩文件处理
 
   # UI组件
   flutter_easyloading: ^3.0.5 # 简单的加载提示

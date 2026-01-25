@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/capture.dart';
+import 'api/ffmpeg.dart';
 import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -67,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1818139643;
+  int get rustContentHash => 204281425;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,7 +79,31 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<String> crateApiFfmpegFFmpegManagerGenerateThumbnail({
+    required FFmpegManager that,
+    required String videoUrl,
+    required String outputPath,
+  });
+
+  Future<VideoMetadata> crateApiFfmpegFFmpegManagerGetMetadata({
+    required FFmpegManager that,
+    required String videoPath,
+  });
+
+  Future<void> crateApiFfmpegFFmpegManagerInitialize({
+    required FFmpegManager that,
+  });
+
+  Future<FFmpegManager> crateApiFfmpegFFmpegManagerNew({
+    required FFmpegConfig config,
+  });
+
   void crateApiCaptureClearCapturedData();
+
+  Future<String> crateApiFfmpegGenerateVideoThumbnail({
+    required String videoUrl,
+    required String cacheDir,
+  });
 
   String crateApiCaptureGetCaCertificatePath();
 
@@ -92,13 +117,27 @@ abstract class RustLibApi extends BaseApi {
 
   List<String> crateApiCaptureGetCapturedVideos();
 
+  Future<String> crateApiFfmpegGetFfmpegVersion({required String installDir});
+
+  Future<VideoMetadata> crateApiFfmpegGetVideoMetadata({
+    required String videoPath,
+  });
+
   String crateApiSimpleGreet({required String name});
 
   Future<void> crateApiSimpleInitApp();
 
+  Future<String> crateApiFfmpegInitializeFfmpeg({
+    required String windowsUrl,
+    required String macosUrl,
+    required String installDir,
+  });
+
   String crateApiCaptureInstallCaCertificate({required String password});
 
   bool crateApiCaptureIsCaCertificateInstalled();
+
+  Future<bool> crateApiFfmpegIsFfmpegInstalled({required String installDir});
 
   bool crateApiCaptureIsProxyRunning();
 
@@ -107,6 +146,15 @@ abstract class RustLibApi extends BaseApi {
   String crateApiCaptureStartCaptureProxy({required int port});
 
   String crateApiCaptureStopCaptureProxy();
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_FFmpegManager;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_FFmpegManager;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_FFmpegManagerPtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -118,12 +166,157 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<String> crateApiFfmpegFFmpegManagerGenerateThumbnail({
+    required FFmpegManager that,
+    required String videoUrl,
+    required String outputPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+            that,
+            serializer,
+          );
+          sse_encode_String(videoUrl, serializer);
+          sse_encode_String(outputPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegFFmpegManagerGenerateThumbnailConstMeta,
+        argValues: [that, videoUrl, outputPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegFFmpegManagerGenerateThumbnailConstMeta =>
+      const TaskConstMeta(
+        debugName: "FFmpegManager_generate_thumbnail",
+        argNames: ["that", "videoUrl", "outputPath"],
+      );
+
+  @override
+  Future<VideoMetadata> crateApiFfmpegFFmpegManagerGetMetadata({
+    required FFmpegManager that,
+    required String videoPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+            that,
+            serializer,
+          );
+          sse_encode_String(videoPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_video_metadata,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegFFmpegManagerGetMetadataConstMeta,
+        argValues: [that, videoPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegFFmpegManagerGetMetadataConstMeta =>
+      const TaskConstMeta(
+        debugName: "FFmpegManager_get_metadata",
+        argNames: ["that", "videoPath"],
+      );
+
+  @override
+  Future<void> crateApiFfmpegFFmpegManagerInitialize({
+    required FFmpegManager that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegFFmpegManagerInitializeConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegFFmpegManagerInitializeConstMeta =>
+      const TaskConstMeta(
+        debugName: "FFmpegManager_initialize",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<FFmpegManager> crateApiFfmpegFFmpegManagerNew({
+    required FFmpegConfig config,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_f_fmpeg_config(config, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiFfmpegFFmpegManagerNewConstMeta,
+        argValues: [config],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegFFmpegManagerNewConstMeta =>
+      const TaskConstMeta(debugName: "FFmpegManager_new", argNames: ["config"]);
+
+  @override
   void crateApiCaptureClearCapturedData() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -140,12 +333,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "clear_captured_data", argNames: []);
 
   @override
+  Future<String> crateApiFfmpegGenerateVideoThumbnail({
+    required String videoUrl,
+    required String cacheDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(videoUrl, serializer);
+          sse_encode_String(cacheDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegGenerateVideoThumbnailConstMeta,
+        argValues: [videoUrl, cacheDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegGenerateVideoThumbnailConstMeta =>
+      const TaskConstMeta(
+        debugName: "generate_video_thumbnail",
+        argNames: ["videoUrl", "cacheDir"],
+      );
+
+  @override
   String crateApiCaptureGetCaCertificatePath() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -167,7 +395,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_capture_stats,
@@ -189,7 +417,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -211,7 +439,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -233,7 +461,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -255,7 +483,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -272,13 +500,77 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_captured_videos", argNames: []);
 
   @override
+  Future<String> crateApiFfmpegGetFfmpegVersion({required String installDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegGetFfmpegVersionConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegGetFfmpegVersionConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_ffmpeg_version",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<VideoMetadata> crateApiFfmpegGetVideoMetadata({
+    required String videoPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(videoPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_video_metadata,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegGetVideoMetadataConstMeta,
+        argValues: [videoPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegGetVideoMetadataConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_video_metadata",
+        argNames: ["videoPath"],
+      );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -303,7 +595,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 16,
             port: port_,
           );
         },
@@ -322,13 +614,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
+  Future<String> crateApiFfmpegInitializeFfmpeg({
+    required String windowsUrl,
+    required String macosUrl,
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(windowsUrl, serializer);
+          sse_encode_String(macosUrl, serializer);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiFfmpegInitializeFfmpegConstMeta,
+        argValues: [windowsUrl, macosUrl, installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegInitializeFfmpegConstMeta =>
+      const TaskConstMeta(
+        debugName: "initialize_ffmpeg",
+        argNames: ["windowsUrl", "macosUrl", "installDir"],
+      );
+
+  @override
   String crateApiCaptureInstallCaCertificate({required String password}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(password, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -353,7 +682,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -373,12 +702,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateApiFfmpegIsFfmpegInstalled({required String installDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiFfmpegIsFfmpegInstalledConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiFfmpegIsFfmpegInstalledConstMeta =>
+      const TaskConstMeta(
+        debugName: "is_ffmpeg_installed",
+        argNames: ["installDir"],
+      );
+
+  @override
   bool crateApiCaptureIsProxyRunning() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -400,7 +760,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -426,7 +786,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_16(port, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -448,7 +808,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -464,6 +824,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCaptureStopCaptureProxyConstMeta =>
       const TaskConstMeta(debugName: "stop_capture_proxy", argNames: []);
 
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_FFmpegManager => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_FFmpegManager => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager;
+
+  @protected
+  FFmpegManager
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  FFmpegManager
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  FFmpegManager
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  FFmpegManager
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -474,6 +878,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  FFmpegConfig dco_decode_box_autoadd_f_fmpeg_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_f_fmpeg_config(raw);
   }
 
   @protected
@@ -488,6 +898,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       images: dco_decode_i_32(arr[2]),
       json: dco_decode_i_32(arr[3]),
       javascript: dco_decode_i_32(arr[4]),
+    );
+  }
+
+  @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  FFmpegConfig dco_decode_f_fmpeg_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return FFmpegConfig(
+      windowsUrl: dco_decode_String(arr[0]),
+      macosUrl: dco_decode_String(arr[1]),
+      installDir: dco_decode_String(arr[2]),
     );
   }
 
@@ -516,6 +945,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
   int dco_decode_u_8(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -525,6 +966,77 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void dco_decode_unit(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return;
+  }
+
+  @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  VideoMetadata dco_decode_video_metadata(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return VideoMetadata(
+      duration: dco_decode_f_64(arr[0]),
+      width: dco_decode_u_32(arr[1]),
+      height: dco_decode_u_32(arr[2]),
+      frameRate: dco_decode_f_64(arr[3]),
+      bitRate: dco_decode_u_64(arr[4]),
+      codec: dco_decode_String(arr[5]),
+      fileSize: dco_decode_u_64(arr[6]),
+    );
+  }
+
+  @protected
+  FFmpegManager
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  FFmpegManager
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  FFmpegManager
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  FFmpegManager
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return FFmpegManagerImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
   }
 
   @protected
@@ -541,6 +1053,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FFmpegConfig sse_decode_box_autoadd_f_fmpeg_config(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_fmpeg_config(deserializer));
+  }
+
+  @protected
   CaptureStats sse_decode_capture_stats(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_total = sse_decode_i_32(deserializer);
@@ -554,6 +1074,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       images: var_images,
       json: var_json,
       javascript: var_javascript,
+    );
+  }
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  FFmpegConfig sse_decode_f_fmpeg_config(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_windowsUrl = sse_decode_String(deserializer);
+    var var_macosUrl = sse_decode_String(deserializer);
+    var var_installDir = sse_decode_String(deserializer);
+    return FFmpegConfig(
+      windowsUrl: var_windowsUrl,
+      macosUrl: var_macosUrl,
+      installDir: var_installDir,
     );
   }
 
@@ -589,6 +1128,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8();
@@ -597,6 +1148,85 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_decode_unit(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
+  VideoMetadata sse_decode_video_metadata(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_duration = sse_decode_f_64(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_frameRate = sse_decode_f_64(deserializer);
+    var var_bitRate = sse_decode_u_64(deserializer);
+    var var_codec = sse_decode_String(deserializer);
+    var var_fileSize = sse_decode_u_64(deserializer);
+    return VideoMetadata(
+      duration: var_duration,
+      width: var_width,
+      height: var_height,
+      frameRate: var_frameRate,
+      bitRate: var_bitRate,
+      codec: var_codec,
+      fileSize: var_fileSize,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    FFmpegManager self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as FFmpegManagerImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    FFmpegManager self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as FFmpegManagerImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    FFmpegManager self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as FFmpegManagerImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerFFmpegManager(
+    FFmpegManager self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as FFmpegManagerImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
   }
 
   @protected
@@ -612,6 +1242,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_f_fmpeg_config(
+    FFmpegConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_fmpeg_config(self, serializer);
+  }
+
+  @protected
   void sse_encode_capture_stats(CaptureStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.total, serializer);
@@ -619,6 +1258,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.images, serializer);
     sse_encode_i_32(self.json, serializer);
     sse_encode_i_32(self.javascript, serializer);
+  }
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_f_fmpeg_config(FFmpegConfig self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.windowsUrl, serializer);
+    sse_encode_String(self.macosUrl, serializer);
+    sse_encode_String(self.installDir, serializer);
   }
 
   @protected
@@ -653,6 +1306,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
   void sse_encode_u_8(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self);
@@ -662,4 +1327,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
   }
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_video_metadata(VideoMetadata self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.duration, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_f_64(self.frameRate, serializer);
+    sse_encode_u_64(self.bitRate, serializer);
+    sse_encode_String(self.codec, serializer);
+    sse_encode_u_64(self.fileSize, serializer);
+  }
+}
+
+@sealed
+class FFmpegManagerImpl extends RustOpaque implements FFmpegManager {
+  // Not to be used by end users
+  FFmpegManagerImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  FFmpegManagerImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_FFmpegManager,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_FFmpegManager,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_FFmpegManagerPtr,
+  );
+
+  /// 生成视频缩略图（第一帧）
+  Future<String> generateThumbnail({
+    required String videoUrl,
+    required String outputPath,
+  }) => RustLib.instance.api.crateApiFfmpegFFmpegManagerGenerateThumbnail(
+    that: this,
+    videoUrl: videoUrl,
+    outputPath: outputPath,
+  );
+
+  /// 获取视频元数据
+  Future<VideoMetadata> getMetadata({required String videoPath}) => RustLib
+      .instance
+      .api
+      .crateApiFfmpegFFmpegManagerGetMetadata(that: this, videoPath: videoPath);
+
+  /// 初始化 FFmpeg（如果需要则下载）
+  Future<void> initialize() =>
+      RustLib.instance.api.crateApiFfmpegFFmpegManagerInitialize(that: this);
 }
