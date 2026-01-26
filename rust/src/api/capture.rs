@@ -1,7 +1,7 @@
 use flutter_rust_bridge::frb;
 
+use super::logger::{cleanup_old_logs, get_log_dir, init_logger, log_error, log_info};
 use super::module_loader::CaptureProxyModule;
-use super::logger::{init_logger, log_info, log_error, get_log_dir, cleanup_old_logs};
 
 /// 捕获的数据类型
 #[derive(Debug, Clone)]
@@ -42,15 +42,18 @@ fn get_install_dir() -> Result<String, String> {
 #[frb(sync)]
 pub fn start_capture_proxy(port: u16, install_dir: Option<String>) -> Result<String, String> {
     let dir = install_dir.unwrap_or_else(|| get_install_dir().unwrap());
-    
+
     // 初始化日志系统
     match init_logger(&dir) {
         Ok(msg) => log_info(&format!("Logger initialized: {}", msg)),
         Err(e) => log_error(&format!("Failed to init logger: {}", e)),
     }
-    
-    log_info(&format!("Starting capture proxy on port {} with install_dir: {}", port, dir));
-    
+
+    log_info(&format!(
+        "Starting capture proxy on port {} with install_dir: {}",
+        port, dir
+    ));
+
     match CaptureProxyModule::start(port, &dir) {
         Ok(msg) => {
             log_info(&format!("Proxy started: {}", msg));
