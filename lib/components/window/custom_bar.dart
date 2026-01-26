@@ -1,14 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/gen/assets.gen.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
 class CustomTitleBar extends StatelessWidget {
@@ -35,9 +33,9 @@ class CustomTitleBar extends StatelessWidget {
       onPanStart: (_) => windowManager.startDragging(),
       child: Container(
         height: scaleH(60),
-        margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),
+        // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),
         width: MediaQuery.of(context).size.width - scaleW(250 + 400),
-        padding: EdgeInsets.symmetric(horizontal: 12.w),
+        padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace4),
         // color: Colors.red,
         child: Platform.isMacOS ? const _MacWindowButtons() : null,
       ),

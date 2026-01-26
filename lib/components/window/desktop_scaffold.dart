@@ -85,6 +85,11 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(children: [widget.child, const CustomTitleBar()]);
+    return Stack(
+      children: [
+        widget.child,
+        Positioned(left: 0, top: 0, child: const CustomTitleBar()),
+      ],
+    );
   }
 }

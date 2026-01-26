@@ -54,9 +54,7 @@ class _HoverSvgButtonState extends State<HoverSvgButton> {
             _hovering && widget.hoverSvg != null ? widget.hoverSvg! : widget.svg,
             width: widget.size,
             height: widget.size,
-            colorFilter: widget.color != null
-                ? ColorFilter.mode(widget.color!, BlendMode.srcIn)
-                : (Theme.of(context).iconTheme.color != null ? ColorFilter.mode(Theme.of(context).iconTheme.color!, BlendMode.srcIn) : null),
+            colorFilter: widget.color != null ? ColorFilter.mode(widget.color!, BlendMode.srcIn) : null,
           ),
         ),
       ),
