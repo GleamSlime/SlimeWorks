@@ -34,6 +34,34 @@ impl ModuleDownloader {
         self.install_dir.join("modules").join(module_name)
     }
 
+    /// 获取模块库文件路径 (DLL/dylib/so)
+    pub fn get_library_path(&self, module_name: &str, lib_name: &str) -> PathBuf {
+        let mut path = self.get_module_path(module_name).join(lib_name);
+
+        #[cfg(target_os = "windows")]
+        {
+            if !lib_name.ends_with(".dll") {
+                path.set_extension("dll");
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            if !lib_name.ends_with(".dylib") {
+                path.set_extension("dylib");
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            if !lib_name.ends_with(".so") {
+                path.set_extension("so");
+            }
+        }
+
+        path
+    }
+
     /// 获取可执行文件路径
     pub fn get_executable_path(&self, module_name: &str, executable_name: &str) -> PathBuf {
         let mut path = self.get_module_path(module_name).join(executable_name);
@@ -144,6 +172,28 @@ impl ModuleDownloader {
                 .map_err(|e| format!("Failed to remove module: {}", e))?;
         }
         Ok(())
+    }
+
+    /// 获取模块本地版本（从 version.txt 文件）
+    pub fn get_local_module_version(&self, module_name: &str) -> Option<String> {
+        let version_file = self.get_module_path(module_name).join("version.txt");
+        if version_file.exists() {
+            fs::read_to_string(version_file).ok()
+        } else {
+            None
+        }
+    }
+
+    /// 保存模块版本信息
+    fn save_module_version(&self, module_name: &str, version: &str) -> Result<(), String> {
+        let version_file = self.get_module_path(module_name).join("version.txt");
+        fs::write(version_file, version).map_err(|e| format!("Failed to save version: {}", e))
+    }
+
+    /// 检查模块是否已安装（包含库文件）
+    pub fn is_library_installed(&self, module_name: &str, lib_name: &str) -> bool {
+        let lib_path = self.get_library_path(module_name, lib_name);
+        lib_path.exists()
     }
 
     /// 获取模块版本（通过执行 --version 命令）

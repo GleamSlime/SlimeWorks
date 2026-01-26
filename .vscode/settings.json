@@ -15,7 +15,8 @@
   "conventionalCommits.scopes": [
     "Assets",
     "MacOS",
-    "Desktop"
+    "Desktop",
+    "Windows"
   ],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150

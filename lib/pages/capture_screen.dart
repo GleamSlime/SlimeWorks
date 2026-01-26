@@ -46,7 +46,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    _loadCapturedData();
+    _loadCapturedData().catchError((e) => print('Load data error: $e'));
     _checkProxyStatus();
     _checkCertificateStatus();
     _loadAvailableVideos();
@@ -54,7 +54,9 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
 
   /// 从捕获的数据加载视频列表（使用 Rust FFmpeg）
   Future<void> _loadAvailableVideos() async {
-    final capturedVideos = getCapturedVideos();
+    // 获取应用目录
+    final appDir = await getApplicationSupportDirectory();
+    final capturedVideos = getCapturedVideos(installDir: appDir.path);
     if (capturedVideos.isEmpty) {
       setState(() {
         _availableVideos = [];
@@ -154,13 +156,15 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   }
 
   /// 加载捕获的数据
-  void _loadCapturedData() {
+  Future<void> _loadCapturedData() async {
+    // 获取应用目录
+    final appDir = await getApplicationSupportDirectory();
     setState(() {
-      _videos = getCapturedVideos();
-      _images = getCapturedImages();
-      _jsonData = getCapturedJson();
-      _javascript = getCapturedJavascript();
-      _stats = getCaptureStats();
+      _videos = getCapturedVideos(installDir: appDir.path);
+      _images = getCapturedImages(installDir: appDir.path);
+      _jsonData = getCapturedJson(installDir: appDir.path);
+      _javascript = getCapturedJavascript(installDir: appDir.path);
+      _stats = getCaptureStats(installDir: appDir.path);
     });
   }
 
@@ -222,7 +226,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         // 启动定时刷新（每2秒刷新一次数据）
         _refreshTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
           if (mounted) {
-            _loadCapturedData();
+            _loadCapturedData().catchError((e) => print('Refresh error: $e'));
           }
         });
       }
@@ -244,7 +248,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
     final confirmed = await showClearDataDialog(context);
     if (confirmed == true) {
       clearCapturedData();
-      _loadCapturedData();
+      await _loadCapturedData();
       _showMessage('数据已清除');
     }
   }
@@ -470,8 +474,8 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                   // 刷新按钮
                   IconButton.outlined(
                     icon: const Icon(Icons.refresh),
-                    onPressed: () {
-                      _loadCapturedData();
+                    onPressed: () async {
+                      await _loadCapturedData();
                       _checkCertificateStatus();
                     },
                     tooltip: '刷新数据',

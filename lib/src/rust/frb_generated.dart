@@ -5,6 +5,10 @@
 
 import 'api/capture.dart';
 import 'api/ffmpeg.dart';
+import 'api/logger.dart';
+import 'api/module_api.dart';
+import 'api/module_loader.dart';
+import 'api/module_manager.dart';
 import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -68,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 204281425;
+  int get rustContentHash => 1212724051;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -98,26 +102,124 @@ abstract class RustLibApi extends BaseApi {
     required FFmpegConfig config,
   });
 
-  void crateApiCaptureClearCapturedData();
+  Future<void> crateApiModuleLoaderCaptureProxyModuleClearData({
+    required String installDir,
+  });
+
+  Future<List<String>> crateApiModuleLoaderCaptureProxyModuleGetVideos({
+    required String installDir,
+  });
+
+  Future<void> crateApiModuleLoaderCaptureProxyModuleInstallCertificate({
+    required String password,
+    required String installDir,
+  });
+
+  Future<bool> crateApiModuleLoaderCaptureProxyModuleIsCertificateInstalled({
+    required String installDir,
+  });
+
+  Future<bool> crateApiModuleLoaderCaptureProxyModuleIsRunning({
+    required String installDir,
+  });
+
+  Future<String> crateApiModuleLoaderCaptureProxyModuleStart({
+    required int port,
+    required String installDir,
+  });
+
+  Future<String> crateApiModuleLoaderCaptureProxyModuleStop({
+    required String installDir,
+  });
+
+  Future<List<ModuleStatus>> crateApiModuleApiCheckAllModulesStatus({
+    required String installDir,
+    required String captureProxyVersion,
+    required String captureProxyWindowsUrl,
+    required String captureProxyMacosUrl,
+    required String ffmpegVersion,
+    required String ffmpegWindowsUrl,
+    required String ffmpegMacosUrl,
+  });
+
+  bool crateApiModuleApiCheckModuleNeedsUpdate({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String currentVersion,
+    required String windowsUrl,
+    required String macosUrl,
+    required String fileName,
+  });
+
+  int crateApiCaptureCleanupLoggerOldFiles({required int daysToKeep});
+
+  Future<BigInt> crateApiLoggerCleanupOldLogs({required int daysToKeep});
+
+  void crateApiCaptureClearCapturedData({String? installDir});
+
+  Future<String> crateApiModuleApiDownloadCaptureProxyModule({
+    required String installDir,
+    required String version,
+    required String windowsUrl,
+    required String macosUrl,
+  });
+
+  Future<String> crateApiModuleLoaderDownloadCaptureProxyModule({
+    required String windowsUrl,
+    required String macosUrl,
+    required String installDir,
+  });
+
+  Future<String> crateApiModuleApiDownloadFfmpegModule({
+    required String installDir,
+    required String version,
+    required String windowsUrl,
+    required String macosUrl,
+  });
+
+  Future<String> crateApiModuleApiDownloadModule({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String version,
+    required String windowsUrl,
+    required String macosUrl,
+    required String fileName,
+  });
 
   Future<String> crateApiFfmpegGenerateVideoThumbnail({
     required String videoUrl,
     required String cacheDir,
   });
 
-  String crateApiCaptureGetCaCertificatePath();
+  CaptureStats? crateApiCaptureGetCaptureStats({String? installDir});
 
-  CaptureStats crateApiCaptureGetCaptureStats();
+  List<String> crateApiCaptureGetCapturedImages({String? installDir});
 
-  List<String> crateApiCaptureGetCapturedImages();
+  List<String> crateApiCaptureGetCapturedJavascript({String? installDir});
 
-  List<String> crateApiCaptureGetCapturedJavascript();
+  List<String> crateApiCaptureGetCapturedJson({String? installDir});
 
-  List<String> crateApiCaptureGetCapturedJson();
-
-  List<String> crateApiCaptureGetCapturedVideos();
+  List<String> crateApiCaptureGetCapturedVideos({String? installDir});
 
   Future<String> crateApiFfmpegGetFfmpegVersion({required String installDir});
+
+  String? crateApiModuleApiGetInstalledModuleVersion({
+    required String installDir,
+    required String moduleName,
+  });
+
+  Future<String?> crateApiLoggerGetLogDir();
+
+  String? crateApiCaptureGetLoggerDirectory();
+
+  String crateApiModuleApiGetModuleFilePath({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String fileName,
+  });
 
   Future<VideoMetadata> crateApiFfmpegGetVideoMetadata({
     required String videoPath,
@@ -127,25 +229,58 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiSimpleInitApp();
 
+  Future<String> crateApiLoggerInitLogger({required String installDir});
+
   Future<String> crateApiFfmpegInitializeFfmpeg({
     required String windowsUrl,
     required String macosUrl,
     required String installDir,
   });
 
-  String crateApiCaptureInstallCaCertificate({required String password});
+  String crateApiCaptureInitializeLogger({String? installDir});
 
-  bool crateApiCaptureIsCaCertificateInstalled();
+  String crateApiCaptureInstallCaCertificate({
+    required String password,
+    String? installDir,
+  });
+
+  bool crateApiCaptureIsCaCertificateInstalled({String? installDir});
+
+  Future<bool> crateApiModuleLoaderIsCaptureProxyDownloaded({
+    required String installDir,
+  });
 
   Future<bool> crateApiFfmpegIsFfmpegInstalled({required String installDir});
 
-  bool crateApiCaptureIsProxyRunning();
+  bool crateApiModuleApiIsModuleInstalled({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String fileName,
+  });
+
+  bool crateApiCaptureIsProxyRunning({String? installDir});
 
   bool crateApiCaptureIsRunningAsAdministrator();
 
-  String crateApiCaptureStartCaptureProxy({required int port});
+  Future<void> crateApiLoggerLogDebug({required String message});
 
-  String crateApiCaptureStopCaptureProxy();
+  Future<void> crateApiLoggerLogError({required String message});
+
+  Future<void> crateApiLoggerLogInfo({required String message});
+
+  Future<void> crateApiLoggerLogWarn({required String message});
+
+  String crateApiCaptureStartCaptureProxy({
+    required int port,
+    String? installDir,
+  });
+
+  String crateApiCaptureStopCaptureProxy({String? installDir});
+
+  void crateApiCaptureWriteLogError({required String message});
+
+  void crateApiCaptureWriteLogInfo({required String message});
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_FFmpegManager;
@@ -311,26 +446,619 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "FFmpegManager_new", argNames: ["config"]);
 
   @override
-  void crateApiCaptureClearCapturedData() {
+  Future<void> crateApiModuleLoaderCaptureProxyModuleClearData({
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleLoaderCaptureProxyModuleClearDataConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderCaptureProxyModuleClearDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_clear_data",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<List<String>> crateApiModuleLoaderCaptureProxyModuleGetVideos({
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleLoaderCaptureProxyModuleGetVideosConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderCaptureProxyModuleGetVideosConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_get_videos",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<void> crateApiModuleLoaderCaptureProxyModuleInstallCertificate({
+    required String password,
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(password, serializer);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta:
+            kCrateApiModuleLoaderCaptureProxyModuleInstallCertificateConstMeta,
+        argValues: [password, installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiModuleLoaderCaptureProxyModuleInstallCertificateConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_install_certificate",
+        argNames: ["password", "installDir"],
+      );
+
+  @override
+  Future<bool> crateApiModuleLoaderCaptureProxyModuleIsCertificateInstalled({
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta:
+            kCrateApiModuleLoaderCaptureProxyModuleIsCertificateInstalledConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiModuleLoaderCaptureProxyModuleIsCertificateInstalledConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_is_certificate_installed",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<bool> crateApiModuleLoaderCaptureProxyModuleIsRunning({
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleLoaderCaptureProxyModuleIsRunningConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderCaptureProxyModuleIsRunningConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_is_running",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<String> crateApiModuleLoaderCaptureProxyModuleStart({
+    required int port,
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_16(port, serializer);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleLoaderCaptureProxyModuleStartConstMeta,
+        argValues: [port, installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderCaptureProxyModuleStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_start",
+        argNames: ["port", "installDir"],
+      );
+
+  @override
+  Future<String> crateApiModuleLoaderCaptureProxyModuleStop({
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleLoaderCaptureProxyModuleStopConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderCaptureProxyModuleStopConstMeta =>
+      const TaskConstMeta(
+        debugName: "capture_proxy_module_stop",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<List<ModuleStatus>> crateApiModuleApiCheckAllModulesStatus({
+    required String installDir,
+    required String captureProxyVersion,
+    required String captureProxyWindowsUrl,
+    required String captureProxyMacosUrl,
+    required String ffmpegVersion,
+    required String ffmpegWindowsUrl,
+    required String ffmpegMacosUrl,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(captureProxyVersion, serializer);
+          sse_encode_String(captureProxyWindowsUrl, serializer);
+          sse_encode_String(captureProxyMacosUrl, serializer);
+          sse_encode_String(ffmpegVersion, serializer);
+          sse_encode_String(ffmpegWindowsUrl, serializer);
+          sse_encode_String(ffmpegMacosUrl, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_module_status,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiModuleApiCheckAllModulesStatusConstMeta,
+        argValues: [
+          installDir,
+          captureProxyVersion,
+          captureProxyWindowsUrl,
+          captureProxyMacosUrl,
+          ffmpegVersion,
+          ffmpegWindowsUrl,
+          ffmpegMacosUrl,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiCheckAllModulesStatusConstMeta =>
+      const TaskConstMeta(
+        debugName: "check_all_modules_status",
+        argNames: [
+          "installDir",
+          "captureProxyVersion",
+          "captureProxyWindowsUrl",
+          "captureProxyMacosUrl",
+          "ffmpegVersion",
+          "ffmpegWindowsUrl",
+          "ffmpegMacosUrl",
+        ],
+      );
+
+  @override
+  bool crateApiModuleApiCheckModuleNeedsUpdate({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String currentVersion,
+    required String windowsUrl,
+    required String macosUrl,
+    required String fileName,
+  }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(moduleName, serializer);
+          sse_encode_module_type(moduleType, serializer);
+          sse_encode_String(currentVersion, serializer);
+          sse_encode_String(windowsUrl, serializer);
+          sse_encode_String(macosUrl, serializer);
+          sse_encode_String(fileName, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiModuleApiCheckModuleNeedsUpdateConstMeta,
+        argValues: [
+          installDir,
+          moduleName,
+          moduleType,
+          currentVersion,
+          windowsUrl,
+          macosUrl,
+          fileName,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiCheckModuleNeedsUpdateConstMeta =>
+      const TaskConstMeta(
+        debugName: "check_module_needs_update",
+        argNames: [
+          "installDir",
+          "moduleName",
+          "moduleType",
+          "currentVersion",
+          "windowsUrl",
+          "macosUrl",
+          "fileName",
+        ],
+      );
+
+  @override
+  int crateApiCaptureCleanupLoggerOldFiles({required int daysToKeep}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(daysToKeep, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCaptureCleanupLoggerOldFilesConstMeta,
+        argValues: [daysToKeep],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCaptureCleanupLoggerOldFilesConstMeta =>
+      const TaskConstMeta(
+        debugName: "cleanup_logger_old_files",
+        argNames: ["daysToKeep"],
+      );
+
+  @override
+  Future<BigInt> crateApiLoggerCleanupOldLogs({required int daysToKeep}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(daysToKeep, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_usize,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLoggerCleanupOldLogsConstMeta,
+        argValues: [daysToKeep],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerCleanupOldLogsConstMeta =>
+      const TaskConstMeta(
+        debugName: "cleanup_old_logs",
+        argNames: ["daysToKeep"],
+      );
+
+  @override
+  void crateApiCaptureClearCapturedData({String? installDir}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
+          decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCaptureClearCapturedDataConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureClearCapturedDataConstMeta =>
-      const TaskConstMeta(debugName: "clear_captured_data", argNames: []);
+      const TaskConstMeta(
+        debugName: "clear_captured_data",
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<String> crateApiModuleApiDownloadCaptureProxyModule({
+    required String installDir,
+    required String version,
+    required String windowsUrl,
+    required String macosUrl,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(version, serializer);
+          sse_encode_String(windowsUrl, serializer);
+          sse_encode_String(macosUrl, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleApiDownloadCaptureProxyModuleConstMeta,
+        argValues: [installDir, version, windowsUrl, macosUrl],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiDownloadCaptureProxyModuleConstMeta =>
+      const TaskConstMeta(
+        debugName: "download_capture_proxy_module",
+        argNames: ["installDir", "version", "windowsUrl", "macosUrl"],
+      );
+
+  @override
+  Future<String> crateApiModuleLoaderDownloadCaptureProxyModule({
+    required String windowsUrl,
+    required String macosUrl,
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(windowsUrl, serializer);
+          sse_encode_String(macosUrl, serializer);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleLoaderDownloadCaptureProxyModuleConstMeta,
+        argValues: [windowsUrl, macosUrl, installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderDownloadCaptureProxyModuleConstMeta =>
+      const TaskConstMeta(
+        debugName: "download_capture_proxy_module",
+        argNames: ["windowsUrl", "macosUrl", "installDir"],
+      );
+
+  @override
+  Future<String> crateApiModuleApiDownloadFfmpegModule({
+    required String installDir,
+    required String version,
+    required String windowsUrl,
+    required String macosUrl,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(version, serializer);
+          sse_encode_String(windowsUrl, serializer);
+          sse_encode_String(macosUrl, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleApiDownloadFfmpegModuleConstMeta,
+        argValues: [installDir, version, windowsUrl, macosUrl],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiDownloadFfmpegModuleConstMeta =>
+      const TaskConstMeta(
+        debugName: "download_ffmpeg_module",
+        argNames: ["installDir", "version", "windowsUrl", "macosUrl"],
+      );
+
+  @override
+  Future<String> crateApiModuleApiDownloadModule({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String version,
+    required String windowsUrl,
+    required String macosUrl,
+    required String fileName,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(moduleName, serializer);
+          sse_encode_module_type(moduleType, serializer);
+          sse_encode_String(version, serializer);
+          sse_encode_String(windowsUrl, serializer);
+          sse_encode_String(macosUrl, serializer);
+          sse_encode_String(fileName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiModuleApiDownloadModuleConstMeta,
+        argValues: [
+          installDir,
+          moduleName,
+          moduleType,
+          version,
+          windowsUrl,
+          macosUrl,
+          fileName,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiDownloadModuleConstMeta =>
+      const TaskConstMeta(
+        debugName: "download_module",
+        argNames: [
+          "installDir",
+          "moduleName",
+          "moduleType",
+          "version",
+          "windowsUrl",
+          "macosUrl",
+          "fileName",
+        ],
+      );
 
   @override
   Future<String> crateApiFfmpegGenerateVideoThumbnail({
@@ -346,7 +1074,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 21,
             port: port_,
           );
         },
@@ -368,136 +1096,134 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiCaptureGetCaCertificatePath() {
+  CaptureStats? crateApiCaptureGetCaptureStats({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiCaptureGetCaCertificatePathConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCaptureGetCaCertificatePathConstMeta =>
-      const TaskConstMeta(debugName: "get_ca_certificate_path", argNames: []);
-
-  @override
-  CaptureStats crateApiCaptureGetCaptureStats() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_capture_stats,
+          decodeSuccessData: sse_decode_opt_box_autoadd_capture_stats,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureGetCaptureStatsConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureGetCaptureStatsConstMeta =>
-      const TaskConstMeta(debugName: "get_capture_stats", argNames: []);
+      const TaskConstMeta(
+        debugName: "get_capture_stats",
+        argNames: ["installDir"],
+      );
 
   @override
-  List<String> crateApiCaptureGetCapturedImages() {
+  List<String> crateApiCaptureGetCapturedImages({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureGetCapturedImagesConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureGetCapturedImagesConstMeta =>
-      const TaskConstMeta(debugName: "get_captured_images", argNames: []);
+      const TaskConstMeta(
+        debugName: "get_captured_images",
+        argNames: ["installDir"],
+      );
 
   @override
-  List<String> crateApiCaptureGetCapturedJavascript() {
+  List<String> crateApiCaptureGetCapturedJavascript({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureGetCapturedJavascriptConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureGetCapturedJavascriptConstMeta =>
-      const TaskConstMeta(debugName: "get_captured_javascript", argNames: []);
+      const TaskConstMeta(
+        debugName: "get_captured_javascript",
+        argNames: ["installDir"],
+      );
 
   @override
-  List<String> crateApiCaptureGetCapturedJson() {
+  List<String> crateApiCaptureGetCapturedJson({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureGetCapturedJsonConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureGetCapturedJsonConstMeta =>
-      const TaskConstMeta(debugName: "get_captured_json", argNames: []);
+      const TaskConstMeta(
+        debugName: "get_captured_json",
+        argNames: ["installDir"],
+      );
 
   @override
-  List<String> crateApiCaptureGetCapturedVideos() {
+  List<String> crateApiCaptureGetCapturedVideos({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureGetCapturedVideosConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureGetCapturedVideosConstMeta =>
-      const TaskConstMeta(debugName: "get_captured_videos", argNames: []);
+      const TaskConstMeta(
+        debugName: "get_captured_videos",
+        argNames: ["installDir"],
+      );
 
   @override
   Future<String> crateApiFfmpegGetFfmpegVersion({required String installDir}) {
@@ -509,7 +1235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 27,
             port: port_,
           );
         },
@@ -531,6 +1257,119 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String? crateApiModuleApiGetInstalledModuleVersion({
+    required String installDir,
+    required String moduleName,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(moduleName, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiModuleApiGetInstalledModuleVersionConstMeta,
+        argValues: [installDir, moduleName],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiGetInstalledModuleVersionConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_installed_module_version",
+        argNames: ["installDir", "moduleName"],
+      );
+
+  @override
+  Future<String?> crateApiLoggerGetLogDir() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLoggerGetLogDirConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerGetLogDirConstMeta =>
+      const TaskConstMeta(debugName: "get_log_dir", argNames: []);
+
+  @override
+  String? crateApiCaptureGetLoggerDirectory() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCaptureGetLoggerDirectoryConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCaptureGetLoggerDirectoryConstMeta =>
+      const TaskConstMeta(debugName: "get_logger_directory", argNames: []);
+
+  @override
+  String crateApiModuleApiGetModuleFilePath({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String fileName,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(moduleName, serializer);
+          sse_encode_module_type(moduleType, serializer);
+          sse_encode_String(fileName, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiModuleApiGetModuleFilePathConstMeta,
+        argValues: [installDir, moduleName, moduleType, fileName],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiGetModuleFilePathConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_module_file_path",
+        argNames: ["installDir", "moduleName", "moduleType", "fileName"],
+      );
+
+  @override
   Future<VideoMetadata> crateApiFfmpegGetVideoMetadata({
     required String videoPath,
   }) {
@@ -542,7 +1381,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 32,
             port: port_,
           );
         },
@@ -570,7 +1409,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -595,7 +1434,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 34,
             port: port_,
           );
         },
@@ -614,6 +1453,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
+  Future<String> crateApiLoggerInitLogger({required String installDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 35,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLoggerInitLoggerConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerInitLoggerConstMeta =>
+      const TaskConstMeta(debugName: "init_logger", argNames: ["installDir"]);
+
+  @override
   Future<String> crateApiFfmpegInitializeFfmpeg({
     required String windowsUrl,
     required String macosUrl,
@@ -629,7 +1496,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 36,
             port: port_,
           );
         },
@@ -651,20 +1518,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiCaptureInstallCaCertificate({required String password}) {
+  String crateApiCaptureInitializeLogger({String? installDir}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCaptureInitializeLoggerConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCaptureInitializeLoggerConstMeta =>
+      const TaskConstMeta(
+        debugName: "initialize_logger",
+        argNames: ["installDir"],
+      );
+
+  @override
+  String crateApiCaptureInstallCaCertificate({
+    required String password,
+    String? installDir,
+  }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(password, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCaptureInstallCaCertificateConstMeta,
-        argValues: [password],
+        argValues: [password, installDir],
         apiImpl: this,
       ),
     );
@@ -673,23 +1570,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCaptureInstallCaCertificateConstMeta =>
       const TaskConstMeta(
         debugName: "install_ca_certificate",
-        argNames: ["password"],
+        argNames: ["password", "installDir"],
       );
 
   @override
-  bool crateApiCaptureIsCaCertificateInstalled() {
+  bool crateApiCaptureIsCaCertificateInstalled({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureIsCaCertificateInstalledConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
@@ -698,7 +1596,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCaptureIsCaCertificateInstalledConstMeta =>
       const TaskConstMeta(
         debugName: "is_ca_certificate_installed",
-        argNames: [],
+        argNames: ["installDir"],
+      );
+
+  @override
+  Future<bool> crateApiModuleLoaderIsCaptureProxyDownloaded({
+    required String installDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(installDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiModuleLoaderIsCaptureProxyDownloadedConstMeta,
+        argValues: [installDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleLoaderIsCaptureProxyDownloadedConstMeta =>
+      const TaskConstMeta(
+        debugName: "is_capture_proxy_downloaded",
+        argNames: ["installDir"],
       );
 
   @override
@@ -711,7 +1642,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 41,
             port: port_,
           );
         },
@@ -733,26 +1664,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiCaptureIsProxyRunning() {
+  bool crateApiModuleApiIsModuleInstalled({
+    required String installDir,
+    required String moduleName,
+    required ModuleType moduleType,
+    required String fileName,
+  }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+          sse_encode_String(installDir, serializer);
+          sse_encode_String(moduleName, serializer);
+          sse_encode_module_type(moduleType, serializer);
+          sse_encode_String(fileName, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiModuleApiIsModuleInstalledConstMeta,
+        argValues: [installDir, moduleName, moduleType, fileName],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiModuleApiIsModuleInstalledConstMeta =>
+      const TaskConstMeta(
+        debugName: "is_module_installed",
+        argNames: ["installDir", "moduleName", "moduleType", "fileName"],
+      );
+
+  @override
+  bool crateApiCaptureIsProxyRunning({String? installDir}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiCaptureIsProxyRunningConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureIsProxyRunningConstMeta =>
-      const TaskConstMeta(debugName: "is_proxy_running", argNames: []);
+      const TaskConstMeta(
+        debugName: "is_proxy_running",
+        argNames: ["installDir"],
+      );
 
   @override
   bool crateApiCaptureIsRunningAsAdministrator() {
@@ -760,7 +1729,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -780,49 +1749,218 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiCaptureStartCaptureProxy({required int port}) {
+  Future<void> crateApiLoggerLogDebug({required String message}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(message, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 45,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLoggerLogDebugConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerLogDebugConstMeta =>
+      const TaskConstMeta(debugName: "log_debug", argNames: ["message"]);
+
+  @override
+  Future<void> crateApiLoggerLogError({required String message}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(message, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 46,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLoggerLogErrorConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerLogErrorConstMeta =>
+      const TaskConstMeta(debugName: "log_error", argNames: ["message"]);
+
+  @override
+  Future<void> crateApiLoggerLogInfo({required String message}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(message, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLoggerLogInfoConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerLogInfoConstMeta =>
+      const TaskConstMeta(debugName: "log_info", argNames: ["message"]);
+
+  @override
+  Future<void> crateApiLoggerLogWarn({required String message}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(message, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 48,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLoggerLogWarnConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerLogWarnConstMeta =>
+      const TaskConstMeta(debugName: "log_warn", argNames: ["message"]);
+
+  @override
+  String crateApiCaptureStartCaptureProxy({
+    required int port,
+    String? installDir,
+  }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_16(port, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCaptureStartCaptureProxyConstMeta,
-        argValues: [port],
+        argValues: [port, installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureStartCaptureProxyConstMeta =>
-      const TaskConstMeta(debugName: "start_capture_proxy", argNames: ["port"]);
+      const TaskConstMeta(
+        debugName: "start_capture_proxy",
+        argNames: ["port", "installDir"],
+      );
 
   @override
-  String crateApiCaptureStopCaptureProxy() {
+  String crateApiCaptureStopCaptureProxy({String? installDir}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          sse_encode_opt_String(installDir, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCaptureStopCaptureProxyConstMeta,
-        argValues: [],
+        argValues: [installDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiCaptureStopCaptureProxyConstMeta =>
-      const TaskConstMeta(debugName: "stop_capture_proxy", argNames: []);
+      const TaskConstMeta(
+        debugName: "stop_capture_proxy",
+        argNames: ["installDir"],
+      );
+
+  @override
+  void crateApiCaptureWriteLogError({required String message}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(message, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCaptureWriteLogErrorConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCaptureWriteLogErrorConstMeta =>
+      const TaskConstMeta(debugName: "write_log_error", argNames: ["message"]);
+
+  @override
+  void crateApiCaptureWriteLogInfo({required String message}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(message, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCaptureWriteLogInfoConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCaptureWriteLogInfoConstMeta =>
+      const TaskConstMeta(debugName: "write_log_info", argNames: ["message"]);
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_FFmpegManager => wire
@@ -881,9 +2019,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CaptureStats dco_decode_box_autoadd_capture_stats(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_capture_stats(raw);
+  }
+
+  @protected
   FFmpegConfig dco_decode_box_autoadd_f_fmpeg_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_f_fmpeg_config(raw);
+  }
+
+  @protected
+  CaptureProxyModule dco_decode_capture_proxy_module(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.isNotEmpty)
+      throw Exception('unexpected arr length: expect 0 but see ${arr.length}');
+    return CaptureProxyModule();
   }
 
   @protected
@@ -933,9 +2086,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ModuleStatus> dco_decode_list_module_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_module_status).toList();
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  ModuleStatus dco_decode_module_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return ModuleStatus(
+      name: dco_decode_String(arr[0]),
+      installed: dco_decode_bool(arr[1]),
+      currentVersion: dco_decode_opt_String(arr[2]),
+      needsUpdate: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  ModuleType dco_decode_module_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ModuleType.values[raw as int];
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  CaptureStats? dco_decode_opt_box_autoadd_capture_stats(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_capture_stats(raw);
   }
 
   @protected
@@ -1053,11 +2244,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CaptureStats sse_decode_box_autoadd_capture_stats(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_capture_stats(deserializer));
+  }
+
+  @protected
   FFmpegConfig sse_decode_box_autoadd_f_fmpeg_config(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_f_fmpeg_config(deserializer));
+  }
+
+  @protected
+  CaptureProxyModule sse_decode_capture_proxy_module(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return CaptureProxyModule();
   }
 
   @protected
@@ -1115,10 +2322,70 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ModuleStatus> sse_decode_list_module_status(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ModuleStatus>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_module_status(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  ModuleStatus sse_decode_module_status(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_installed = sse_decode_bool(deserializer);
+    var var_currentVersion = sse_decode_opt_String(deserializer);
+    var var_needsUpdate = sse_decode_bool(deserializer);
+    return ModuleStatus(
+      name: var_name,
+      installed: var_installed,
+      currentVersion: var_currentVersion,
+      needsUpdate: var_needsUpdate,
+    );
+  }
+
+  @protected
+  ModuleType sse_decode_module_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return ModuleType.values[inner];
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  CaptureStats? sse_decode_opt_box_autoadd_capture_stats(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_capture_stats(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -1242,12 +2509,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_capture_stats(
+    CaptureStats self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_capture_stats(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_f_fmpeg_config(
     FFmpegConfig self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_fmpeg_config(self, serializer);
+  }
+
+  @protected
+  void sse_encode_capture_proxy_module(
+    CaptureProxyModule self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
   }
 
   @protected
@@ -1290,6 +2574,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_module_status(
+    List<ModuleStatus> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_module_status(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -1297,6 +2593,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_module_status(ModuleStatus self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_bool(self.installed, serializer);
+    sse_encode_opt_String(self.currentVersion, serializer);
+    sse_encode_bool(self.needsUpdate, serializer);
+  }
+
+  @protected
+  void sse_encode_module_type(ModuleType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_capture_stats(
+    CaptureStats? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_capture_stats(self, serializer);
+    }
   }
 
   @protected

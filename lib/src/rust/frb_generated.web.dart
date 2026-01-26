@@ -8,6 +8,10 @@
 
 import 'api/capture.dart';
 import 'api/ffmpeg.dart';
+import 'api/logger.dart';
+import 'api/module_api.dart';
+import 'api/module_loader.dart';
+import 'api/module_manager.dart';
 import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -57,7 +61,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  CaptureStats dco_decode_box_autoadd_capture_stats(dynamic raw);
+
+  @protected
   FFmpegConfig dco_decode_box_autoadd_f_fmpeg_config(dynamic raw);
+
+  @protected
+  CaptureProxyModule dco_decode_capture_proxy_module(dynamic raw);
 
   @protected
   CaptureStats dco_decode_capture_stats(dynamic raw);
@@ -75,7 +85,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<ModuleStatus> dco_decode_list_module_status(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  ModuleStatus dco_decode_module_status(dynamic raw);
+
+  @protected
+  ModuleType dco_decode_module_type(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  CaptureStats? dco_decode_opt_box_autoadd_capture_stats(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -129,7 +154,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  CaptureStats sse_decode_box_autoadd_capture_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   FFmpegConfig sse_decode_box_autoadd_f_fmpeg_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CaptureProxyModule sse_decode_capture_proxy_module(
     SseDeserializer deserializer,
   );
 
@@ -149,7 +184,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<ModuleStatus> sse_decode_list_module_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  ModuleStatus sse_decode_module_status(SseDeserializer deserializer);
+
+  @protected
+  ModuleType sse_decode_module_type(SseDeserializer deserializer);
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  CaptureStats? sse_decode_opt_box_autoadd_capture_stats(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -207,8 +261,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_capture_stats(
+    CaptureStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_f_fmpeg_config(
     FFmpegConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_capture_proxy_module(
+    CaptureProxyModule self,
     SseSerializer serializer,
   );
 
@@ -228,8 +294,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_module_status(
+    List<ModuleStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_module_status(ModuleStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_module_type(ModuleType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_capture_stats(
+    CaptureStats? self,
     SseSerializer serializer,
   );
 
