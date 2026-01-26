@@ -3,6 +3,8 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import 'package:slime_works/src/rust/lib.dart';
+
 import '../frb_generated.dart';
 import 'ffmpeg.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -16,32 +18,21 @@ abstract class ModuleDownloader implements RustOpaqueInterface {
   Future<PathBuf> downloadModule({required ModuleConfig config});
 
   /// 获取可执行文件路径
-  Future<PathBuf> getExecutablePath({
-    required String moduleName,
-    required String executableName,
-  });
+  Future<PathBuf> getExecutablePath({required String moduleName, required String executableName});
 
   /// 获取模块安装路径
   Future<PathBuf> getModulePath({required String moduleName});
 
   /// 获取模块版本（通过执行 --version 命令）
-  Future<String> getModuleVersion({
-    required String moduleName,
-    required String executableName,
-  });
+  Future<String> getModuleVersion({required String moduleName, required String executableName});
 
   /// 检查模块是否已安装
-  Future<bool> isModuleInstalled({
-    required String moduleName,
-    required String executableName,
-  });
+  Future<bool> isModuleInstalled({required String moduleName, required String executableName});
 
   // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
   /// 创建模块下载器
   static Future<ModuleDownloader> newInstance({required PathBuf installDir}) =>
-      RustLib.instance.api.crateApiModuleDownloaderModuleDownloaderNew(
-        installDir: installDir,
-      );
+      RustLib.instance.api.crateApiModuleDownloaderModuleDownloaderNew(installDir: installDir);
 
   /// 删除模块
   Future<void> removeModule({required String moduleName});
@@ -54,19 +45,10 @@ class ModuleConfig {
   final String macosUrl;
   final String executableName;
 
-  const ModuleConfig({
-    required this.name,
-    required this.windowsUrl,
-    required this.macosUrl,
-    required this.executableName,
-  });
+  const ModuleConfig({required this.name, required this.windowsUrl, required this.macosUrl, required this.executableName});
 
   @override
-  int get hashCode =>
-      name.hashCode ^
-      windowsUrl.hashCode ^
-      macosUrl.hashCode ^
-      executableName.hashCode;
+  int get hashCode => name.hashCode ^ windowsUrl.hashCode ^ macosUrl.hashCode ^ executableName.hashCode;
 
   @override
   bool operator ==(Object other) =>

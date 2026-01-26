@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 /// 数据捕获模块 - 管理捕获的数据项存储
 use std::sync::Mutex;
 
 /// 捕获的数据项
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapturedItem {
     pub url: String,
     pub content_type: String,

@@ -1,9 +1,10 @@
 /// Capture Proxy 库 - HTTP/HTTPS 代理服务器，支持流量捕获和MITM拦截
 mod capture;
 mod cert;
+pub mod ffi;
 mod mitm;
 mod server;
-pub mod system_proxy;
+pub mod system_proxy; // C ABI 导出接口
 
 // 重新导出公共API
 pub use capture::{
