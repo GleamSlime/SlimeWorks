@@ -68,7 +68,7 @@ impl ModuleDownloader {
 
         #[cfg(target_os = "windows")]
         {
-            if !executable_name.ends_with(".exe") {
+            if std::path::Path::new(executable_name).extension().is_none() {
                 path.set_extension("exe");
             }
         }

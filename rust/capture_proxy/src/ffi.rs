@@ -2,9 +2,7 @@
 ///
 /// 这些函数通过 C ABI 导出，供主应用动态加载调用
 use std::ffi::{CStr, CString};
-use std::fs::OpenOptions;
 use std::os::raw::{c_char, c_int};
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 lazy_static::lazy_static! {
@@ -171,11 +169,19 @@ pub extern "C" fn proxy_get_video_count() -> c_int {
 pub extern "C" fn proxy_get_videos_json() -> *mut c_char {
     println!("[capture_proxy::ffi] proxy_get_videos_json() entry");
     let items = crate::get_captured_items();
+    println!(
+        "[capture_proxy::ffi] proxy_get_videos_json() got {} total items",
+        items.len()
+    );
     let videos: Vec<&str> = items
         .iter()
         .filter(|item| item.content_type.to_lowercase().starts_with("video"))
         .map(|item| item.url.as_str())
         .collect();
+    println!(
+        "[capture_proxy::ffi] proxy_get_videos_json() filtered {} video items",
+        videos.len()
+    );
 
     match serde_json::to_string(&videos) {
         Ok(json) => match CString::new(json) {
