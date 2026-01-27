@@ -1,5 +1,6 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:slime_works/components/window/desktop_layout.dart';
 
 class SizeUtils {
   static const navigationBarHeight = 128.0;
@@ -10,8 +11,8 @@ class SizeUtils {
 }
 
 double scaleW(double w, {bool large = false}) {
-  if (isPhone && large) {
-    w = w * 1.2;
+  if (isPhone) {
+    w = w * 3.2;
   }
   if (ScreenUtil().screenWidth >= 1920) {
     w = w * 0.7;
@@ -20,8 +21,8 @@ double scaleW(double w, {bool large = false}) {
 }
 
 double scaleH(double w, {bool large = false}) {
-  if (isPhone && large) {
-    w = w * 1.2;
+  if (isPhone) {
+    w = w * 3.2;
   }
   if (ScreenUtil().screenWidth >= 1920) {
     w = w * 0.7;
@@ -30,15 +31,21 @@ double scaleH(double w, {bool large = false}) {
 }
 
 double scaleS(double fontSize, {bool large = false}) {
-  if (isPhone && large) {
-    fontSize = fontSize * 1.2;
+  if (isPhone) {
+    fontSize = fontSize * 3.2;
   }
   if (ScreenUtil().screenWidth >= 1920) {
     fontSize = fontSize * 0.7;
   }
-  return ScreenUtil().setSp(fontSize) + (ScreenUtil().screenWidth / SizeUtils.appWidth);
+  double baseSize = ScreenUtil().setSp(fontSize);
+
+  if (PlatformUtil.isDesktop || ScreenUtil().screenWidth > 600) {
+    baseSize += (ScreenUtil().screenWidth / SizeUtils.appWidth);
+  }
+
+  return baseSize;
 }
 
-bool get isPhone => ScreenUtil().screenHeight < 600;
+bool get isPhone => ScreenUtil().screenHeight < 600 || ScreenUtil().screenWidth < 600;
 
 bool get isFold => ScreenUtil().screenHeight / ScreenUtil().screenWidth < 1.2;

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/custom_bar.dart';
@@ -91,13 +91,43 @@ class DesktopLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 如果不是桌面平台，直接返回子组件
+    final groups = sidebarGroups ?? getDefaultSidebarGroups();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
+    // 如果不是桌面平台，返回移动端布局
     if (!PlatformUtil.isDesktop) {
-      return child;
+      return Scaffold(
+        appBar: showAppBar
+            ? AppBar(
+                title: Text(title),
+                leading: IconButton(
+                  icon: Icon(Icons.menu),
+                  onPressed: () {
+                    final controller = Get.find<SidebarController>();
+                    controller.openSidebar();
+                  },
+                ),
+                // actions: appBarActions != null ? [appBarActions!] : null,
+              )
+            : null,
+        body: Stack(
+          children: [
+            child,
+            CollapsibleSidebar(groups: groups),
+          ],
+        ),
+      );
     }
 
-    final groups = sidebarGroups ?? getDefaultSidebarGroups();
+    // 桌面端：检查是否是小窗口模式（需要移动端布局）
+    if (isMobile) {
+      return Scaffold(
+        body: _MobileLayout(showAppBar: showAppBar, title: title, appBarActions: appBarActions, child: child, groups: groups),
+      );
+    }
 
+    // 桌面端正常布局
     return Scaffold(
       body: DesktopScaffold(
         child: Row(
@@ -127,6 +157,65 @@ class DesktopLayout extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 移动端/小窗口布局组件
+class _MobileLayout extends StatelessWidget {
+  final bool showAppBar;
+  final String title;
+  final Widget? appBarActions;
+  final Widget child;
+  final List<SidebarGroup> groups;
+
+  const _MobileLayout({required this.showAppBar, required this.title, this.appBarActions, required this.child, required this.groups});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 主内容区域
+        Column(
+          children: [
+            if (showAppBar)
+              Stack(
+                children: [
+                  if (Platform.isMacOS)
+                    Padding(
+                      padding: EdgeInsets.only(top: AppThemeCommon.kSpace10),
+                      child: Transform.scale(scale: 0.8, alignment: Alignment.centerLeft, child: const MacWindowButtons()),
+                    ),
+                  Container(
+                    height: scaleW(60),
+                    padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace12),
+                    alignment: Alignment.bottomLeft,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.menu, size: AppThemeCommon.fontSize24),
+                          onPressed: () {
+                            final controller = Get.find<SidebarController>();
+                            controller.openSidebar();
+                          },
+                        ),
+                        SizedBox(width: AppThemeCommon.kSpace8),
+                        Text(title, style: TextStyle(fontSize: AppThemeCommon.fontSize18)),
+                        const Spacer(),
+                        if (appBarActions != null) appBarActions!,
+                        if (Platform.isWindows) ...[WindowsWindowButtons(), SizedBox(width: AppThemeCommon.kSpace16)],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            Expanded(child: child),
+          ],
+        ),
+
+        // 侧边栏（放在最顶层以确保手势优先级）
+        CollapsibleSidebar(groups: groups),
+      ],
     );
   }
 }
