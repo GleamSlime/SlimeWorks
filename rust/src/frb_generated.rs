@@ -1820,6 +1820,7 @@ fn wire__crate__api__capture__start_capture_proxy_impl(
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
+            println!("[frb_generated] wire__crate__api__capture__start_capture_proxy_impl entered");
             let message = unsafe {
                 flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
                     ptr_,
@@ -1831,6 +1832,10 @@ fn wire__crate__api__capture__start_capture_proxy_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_port = <u16>::sse_decode(&mut deserializer);
             let api_install_dir = <Option<String>>::sse_decode(&mut deserializer);
+            println!(
+                "[frb_generated] deserialized start_capture_proxy: port={}, install_dir={:?}",
+                api_port, api_install_dir
+            );
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok =

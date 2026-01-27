@@ -9,12 +9,11 @@
 /// - 跨平台支持（Windows/macOS）
 /// - 自动下载和更新
 /// - 本地缓存和验证
-
 use flutter_rust_bridge::frb;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 use super::logger::log_info;
 
@@ -78,7 +77,27 @@ impl ModuleManager {
     /// 获取模块文件路径（根据类型和平台自动添加扩展名）
     pub fn get_module_file_path(&self, config: &ModuleConfig) -> PathBuf {
         let module_dir = self.get_module_dir(&config.name);
-        let mut path = module_dir.join(&config.file_name);
+        // On macOS/Linux library files typically have a `lib` prefix.
+        // If caller didn't include it, add it here for library module types.
+        let file_name = match config.module_type {
+            ModuleType::Library => {
+                #[cfg(any(target_os = "macos", target_os = "linux"))]
+                {
+                    if config.file_name.starts_with("lib") {
+                        config.file_name.clone()
+                    } else {
+                        format!("lib{}", config.file_name)
+                    }
+                }
+                #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+                {
+                    config.file_name.clone()
+                }
+            }
+            ModuleType::Executable => config.file_name.clone(),
+        };
+
+        let mut path = module_dir.join(file_name);
 
         match config.module_type {
             ModuleType::Library => {
@@ -179,7 +198,10 @@ impl ModuleManager {
         #[cfg(target_os = "windows")]
         {
             if config.windows_url.is_empty() {
-                return Err(format!("Windows URL not configured for module: {}", config.name));
+                return Err(format!(
+                    "Windows URL not configured for module: {}",
+                    config.name
+                ));
             }
             Ok(config.windows_url.clone())
         }
@@ -187,7 +209,10 @@ impl ModuleManager {
         #[cfg(target_os = "macos")]
         {
             if config.macos_url.is_empty() {
-                return Err(format!("macOS URL not configured for module: {}", config.name));
+                return Err(format!(
+                    "macOS URL not configured for module: {}",
+                    config.name
+                ));
             }
             Ok(config.macos_url.clone())
         }
@@ -201,7 +226,7 @@ impl ModuleManager {
     /// 下载模块
     pub async fn download_module(&self, config: &ModuleConfig) -> Result<(), String> {
         let url = self.get_download_url(config)?;
-        
+
         log_info(&format!("Downloading module {} from {}", config.name, url));
 
         // 创建模块目录
@@ -215,7 +240,10 @@ impl ModuleManager {
             .map_err(|e| format!("Failed to download: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!("Download failed with status: {}", response.status()));
+            return Err(format!(
+                "Download failed with status: {}",
+                response.status()
+            ));
         }
 
         let content = response
@@ -225,8 +253,7 @@ impl ModuleManager {
 
         // 保存文件
         let file_path = self.get_module_file_path(config);
-        fs::write(&file_path, &content)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        fs::write(&file_path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
 
         // 保存元数据
         self.save_module_metadata(&config.name, &config.version, content.len() as u64)?;
@@ -256,8 +283,7 @@ impl ModuleManager {
 
     /// 获取已安装的模块版本
     pub fn get_installed_version(&self, module_name: &str) -> Option<String> {
-        self.get_module_metadata(module_name)
-            .map(|m| m.version)
+        self.get_module_metadata(module_name).map(|m| m.version)
     }
 }
 
