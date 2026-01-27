@@ -32,19 +32,19 @@ class CustomTitleBar extends StatelessWidget {
       onDoubleTap: handleDoubleTap,
       onPanStart: (_) => windowManager.startDragging(),
       child: Container(
-        height: scaleH(60),
+        height: scaleW(70),
         // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),
         width: MediaQuery.of(context).size.width - scaleW(250 + 400),
         padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace4),
         // color: Colors.red,
-        child: Platform.isMacOS ? const _MacWindowButtons() : null,
+        child: Platform.isMacOS ? const MacWindowButtons() : null,
       ),
     );
   }
 }
 
-class _MacWindowButtons extends StatelessWidget {
-  const _MacWindowButtons();
+class MacWindowButtons extends StatelessWidget {
+  const MacWindowButtons({super.key});
 
   @override
   Widget build(BuildContext context) {

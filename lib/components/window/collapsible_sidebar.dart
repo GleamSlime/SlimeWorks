@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
@@ -43,6 +45,9 @@ class SidebarController extends GetxController {
   // 各个菜单项的展开状态 (使用label作为key)
   final RxMap<String, bool> expandedItems = <String, bool>{}.obs;
 
+  // 是否已初始化为移动端模式
+  bool _initializedMobile = false;
+
   /// 切换侧边栏展开/收起状态
   void toggleSidebar() async {
     isExpanded.value = !isExpanded.value;
@@ -51,6 +56,32 @@ class SidebarController extends GetxController {
       await Future.delayed(const Duration(milliseconds: 100));
       showExtends.value = true;
     } else {
+      showExtends.value = false;
+    }
+  }
+
+  /// 打开侧边栏（移动端使用）
+  void openSidebar() async {
+    if (!isExpanded.value) {
+      isExpanded.value = true;
+      await Future.delayed(const Duration(milliseconds: 100));
+      showExtends.value = true;
+    }
+  }
+
+  /// 关闭侧边栏（移动端使用）
+  void closeSidebar() {
+    if (isExpanded.value) {
+      showExtends.value = false;
+      isExpanded.value = false;
+    }
+  }
+
+  /// 初始化为移动端模式（默认收起）
+  void initMobileMode() {
+    if (!_initializedMobile) {
+      _initializedMobile = true;
+      isExpanded.value = false;
       showExtends.value = false;
     }
   }
@@ -94,7 +125,8 @@ class CollapsibleSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.put(SidebarController());
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
 
     return Obx(() {
       final isExpanded = controller.isExpanded.value;
@@ -103,45 +135,23 @@ class CollapsibleSidebar extends StatelessWidget {
 
       // 移动端使用抽屉式侧边栏
       if (isMobile) {
-        return AnimatedPositioned(
-          duration: animationDuration,
-          curve: Curves.easeInOut,
-          left: isExpanded ? 0 : -targetWidth,
-          top: 0,
-          bottom: 0,
-          width: targetWidth,
-          child: GestureDetector(
-            onHorizontalDragEnd: (details) {
-              if (details.primaryVelocity != null) {
-                if (details.primaryVelocity! < -300) {
-                  // 向左滑动，关闭侧边栏
-                  controller.toggleSidebar();
-                }
-              }
-            },
-            child: Stack(
-              children: [
-                // 背景遮罩
-                if (isExpanded)
-                  Positioned.fill(
-                    left: targetWidth,
-                    child: GestureDetector(
-                      onTap: controller.toggleSidebar,
-                      child: Container(color: Colors.black.withOpacity(0.5)),
-                    ),
-                  ),
-                // 侧边栏
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))],
-                    gradient: AppTheme.sideBarTheme(context),
-                  ),
-                  child: _buildSidebarContent(context, controller, isExpanded, showExtends),
-                ),
-              ],
-            ),
-          ),
+        // 移动端默认收起（仅在首次）
+        if (!controller._initializedMobile) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            controller.initMobileMode();
+          });
+        }
+
+        final targetWidth = MediaQuery.of(context).size.width / 2;
+
+        return _MobileSidebar(
+          controller: controller,
+          theme: theme,
+          targetWidth: targetWidth,
+          animationDuration: animationDuration,
+          isExpanded: isExpanded,
+          showExtends: showExtends,
+          buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends, isMobile: isMobile),
         );
       }
 
@@ -157,7 +167,7 @@ class CollapsibleSidebar extends StatelessWidget {
             borderRadius: AppThemeCommon.radius16,
             boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))],
             gradient: AppTheme.sideBarTheme(context),
-            border: BoxBorder.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
+            border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
           child: _buildSidebarContent(context, controller, isExpanded, showExtends),
         ),
@@ -166,11 +176,11 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏内容
-  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends, {bool? isMobile}) {
     return Column(
       children: [
         // 侧边栏头部
-        _buildHeader(context, controller, isExpanded),
+        _buildHeader(context, controller, isExpanded, isMobile: isMobile),
 
         // 菜单列表（可滚动）
         Expanded(child: _buildScrollableMenuList(context, controller, isExpanded, showExtends)),
@@ -182,11 +192,15 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏头部
-  Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
+  Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded, {bool? isMobile}) {
+    if (isMobile == true) {
+      return SizedBox.shrink();
+    }
+
     return AnimatedContainer(
       duration: animationDuration,
       curve: Curves.easeInOut,
-      height: controller.isExpanded.value ? scaleH(40) : scaleH(64),
+      height: controller.isExpanded.value ? scaleW(40) : scaleW(64),
       padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8),
       alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
       child: HoverSvgButton(
@@ -319,7 +333,7 @@ class CollapsibleSidebar extends StatelessWidget {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeInOut,
-                    height: scaleH(44),
+                    height: scaleW(44),
                     padding: EdgeInsets.only(left: isExpanded ? scaleW(8 + 20) + (level * scaleW(8 + 20)) : 0, right: isExpanded ? scaleW(8) : 0),
                     alignment: isExpanded ? Alignment.centerLeft : Alignment.center,
                     child: Stack(
@@ -466,5 +480,177 @@ class CollapsibleSidebar extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+/// 移动端侧边栏组件（支持手势滑动）
+class _MobileSidebar extends StatefulWidget {
+  final SidebarController controller;
+  final ThemeData theme;
+  final double targetWidth;
+  final Duration animationDuration;
+  final bool isExpanded;
+  final bool showExtends;
+  final Widget Function(BuildContext) buildContent;
+
+  const _MobileSidebar({
+    required this.controller,
+    required this.theme,
+    required this.targetWidth,
+    required this.animationDuration,
+    required this.isExpanded,
+    required this.showExtends,
+    required this.buildContent,
+  });
+
+  @override
+  State<_MobileSidebar> createState() => _MobileSidebarState();
+}
+
+class _MobileSidebarState extends State<_MobileSidebar> {
+  double _dragOffset = 0.0;
+  bool _isDragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // 计算侧边栏位置
+    double sidebarLeft;
+    if (_isDragging) {
+      // 拖动中：跟随手指
+      sidebarLeft = -widget.targetWidth + _dragOffset;
+    } else if (widget.isExpanded) {
+      // 展开状态
+      sidebarLeft = 0;
+    } else {
+      // 收起状态
+      sidebarLeft = -widget.targetWidth;
+    }
+
+    // 计算遮罩不透明度
+    double maskOpacity = 0.0;
+    if (_isDragging) {
+      maskOpacity = (_dragOffset / widget.targetWidth).clamp(0.0, 1.0);
+    } else if (widget.isExpanded) {
+      maskOpacity = 1;
+    }
+
+    return Stack(
+      children: [
+        // 左侧边缘检测区域（用于开始拖动）
+        if (!widget.isExpanded)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 30, // 边缘检测区域宽度
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragStart: (details) {
+                setState(() {
+                  _isDragging = true;
+                  _dragOffset = 0;
+                });
+              },
+              onHorizontalDragUpdate: (details) {
+                if (_isDragging) {
+                  setState(() {
+                    _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                  });
+                }
+              },
+              onHorizontalDragEnd: (details) {
+                if (_isDragging) {
+                  setState(() {
+                    _isDragging = false;
+                  });
+
+                  // 根据拖动距离和速度决定打开或关闭
+                  final velocity = details.primaryVelocity ?? 0;
+                  if (velocity > 300 || _dragOffset > widget.targetWidth * 0.3) {
+                    widget.controller.openSidebar();
+                  }
+
+                  setState(() {
+                    _dragOffset = 0;
+                  });
+                }
+              },
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+
+        // 背景遮罩层
+        if (widget.isExpanded || _isDragging)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (widget.isExpanded && !_isDragging) {
+                  widget.controller.closeSidebar();
+                }
+              },
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
+                child: Container(
+                  alignment: Alignment.topRight,
+                  decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt())),
+                  child: Text(maskOpacity.toString()),
+                ),
+              ),
+            ),
+          ),
+
+        // 侧边栏主体
+        AnimatedPositioned(
+          duration: _isDragging ? Duration.zero : widget.animationDuration,
+          curve: Curves.easeInOut,
+          left: sidebarLeft,
+          top: 0,
+          bottom: 0,
+          width: widget.targetWidth,
+          child: GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              if (widget.isExpanded || _isDragging) {
+                setState(() {
+                  if (!_isDragging) {
+                    _isDragging = true;
+                    _dragOffset = widget.targetWidth;
+                  }
+                  _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                });
+              }
+            },
+            onHorizontalDragEnd: (details) {
+              if (_isDragging) {
+                final velocity = details.primaryVelocity ?? 0;
+
+                setState(() {
+                  _isDragging = false;
+                });
+
+                // 根据速度和位置判断
+                if (velocity < -300 || _dragOffset < widget.targetWidth * 0.5) {
+                  widget.controller.closeSidebar();
+                } else if (velocity > 300 || _dragOffset > widget.targetWidth * 0.5) {
+                  widget.controller.openSidebar();
+                }
+
+                setState(() {
+                  _dragOffset = 0;
+                });
+              }
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: widget.theme.colorScheme.surface,
+                boxShadow: [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))],
+                gradient: AppTheme.sideBarTheme(context),
+              ),
+              child: widget.buildContent(context),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
