@@ -4,6 +4,7 @@ import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/dashboard_screen.dart';
 import 'package:slime_works/pages/capture_screen.dart';
+import 'package:slime_works/pages/module_management_screen.dart';
 
 /// 应用路由配置
 class AppRoutes {
@@ -12,6 +13,7 @@ class AppRoutes {
   // 路由名称常量
   static const String dashboard = '/dashboard';
   static const String capture = '/capture';
+  static const String moduleManagement = '/module-management';
   static const String datasource = '/datasource';
   static const String clearwater = '/clearwater';
   static const String aliyun = '/aliyun';
@@ -29,6 +31,7 @@ class AppRoutes {
     return [
       GetPage(name: dashboard, page: () => const DashboardScreen(), transition: Transition.fadeIn),
       GetPage(name: capture, page: () => const CaptureScreen(), transition: Transition.fadeIn),
+      GetPage(name: moduleManagement, page: () => const ModuleManagementScreen(), transition: Transition.fadeIn),
       GetPage(name: themePreview, page: () => const ThemePreviewScreen(), transition: Transition.fadeIn),
       GetPage(name: datasource, page: () => _buildPlaceholderPage('数据源'), transition: Transition.fadeIn),
       GetPage(name: clearwater, page: () => _buildPlaceholderPage('清水账'), transition: Transition.fadeIn),

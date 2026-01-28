@@ -190,11 +190,11 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         _showMessage('证书安装失败: $e', isError: true);
       }
     } else if (Platform.isWindows) {
-      final isAdmin = isRunningAsAdministrator();
-      if (!isAdmin) {
-        _showMessage('请以管理员身份重新启动应用以安装证书', isError: true);
-        return;
-      }
+      // final isAdmin = isRunningAsAdministrator();
+      // if (!isAdmin) {
+      //   _showMessage('请以管理员身份重新启动应用以安装证书', isError: true);
+      //   return;
+      // }
 
       try {
         installCaCertificate(password: '');

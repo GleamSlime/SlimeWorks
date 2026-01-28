@@ -1,318 +1,246 @@
-/// 统一模块管理系统
+/// Flutter Rust Bridge API - 模块管理系统
 ///
-/// 支持两种模块类型：
-/// 1. 动态库模块（DLL/dylib/so）- 如 capture_proxy
-/// 2. 可执行程序模块（exe）- 如 ffmpeg
-///
-/// 功能：
-/// - 统一的版本管理
-/// - 跨平台支持（Windows/macOS）
-/// - 自动下载和更新
-/// - 本地缓存和验证
+/// 这个文件只负责将 module_manager crate 的功能暴露给 Flutter
+/// 所有业务逻辑都在独立的 module_manager crate 中
+use crate::constants::env::Env;
 use flutter_rust_bridge::frb;
-use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 
-use super::logger::log_info;
+// 重新导出类型供 FRB 生成的代码使用
+pub use libloading::Library;
+pub use module_manager::{ModuleLoader, ModuleManager};
 
+// FRB 需要的类型定义（直接定义以支持序列化）
 /// 模块类型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ModuleType {
-    /// 动态库模块（.dll / .dylib / .so）
-    Library,
-    /// 可执行程序模块（.exe / 无扩展名）
+    /// 动态链接库（Windows .dll）
+    DynamicLibrary,
+    /// 可执行文件（Windows .exe / Linux-macOS binary）
     Executable,
 }
 
-/// 模块配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleConfig {
-    /// 模块名称（如 "capture_proxy", "ffmpeg"）
-    pub name: String,
+/// 已安装的模块信息
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InstalledModule {
+    /// 模块名
+    pub module_name: String,
+    /// 版本号
+    pub version: String,
+    /// 是否锁定版本
+    pub is_locked: bool,
+    /// 文件路径
+    pub file_path: String,
     /// 模块类型
     pub module_type: ModuleType,
-    /// 当前版本
+    /// 文件大小
+    pub file_size: u64,
+    /// 安装时间
+    pub installed_at: String,
+}
+
+/// 可用的模块信息
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AvailableModuleInfo {
+    /// 模块名
+    pub name: String,
+    /// 最新版本
     pub version: String,
-    /// Windows 下载地址
-    pub windows_url: String,
-    /// macOS 下载地址
-    pub macos_url: String,
-    /// 文件名（不含扩展名，扩展名根据平台自动添加）
-    pub file_name: String,
+    /// 模块类型
+    pub module_type: ModuleType,
+    /// 描述
+    pub description: String,
 }
 
-/// 模块元数据（本地存储）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct ModuleMetadata {
-    version: String,
-    installed_at: String,
-    file_size: u64,
-}
-
-/// 模块管理器
-#[frb(opaque)]
-pub struct ModuleManager {
-    install_dir: PathBuf,
-}
-
-#[frb(ignore)]
-impl ModuleManager {
-    /// 创建模块管理器
-    pub fn new(install_dir: PathBuf) -> Self {
-        Self { install_dir }
-    }
-
-    /// 获取模块根目录
-    pub fn get_modules_dir(&self) -> PathBuf {
-        self.install_dir.join("modules")
-    }
-
-    /// 获取模块目录
-    pub fn get_module_dir(&self, module_name: &str) -> PathBuf {
-        self.get_modules_dir().join(module_name)
-    }
-
-    /// 获取模块文件路径（根据类型和平台自动添加扩展名）
-    pub fn get_module_file_path(&self, config: &ModuleConfig) -> PathBuf {
-        let module_dir = self.get_module_dir(&config.name);
-        // On macOS/Linux library files typically have a `lib` prefix.
-        // If caller didn't include it, add it here for library module types.
-        let file_name = match config.module_type {
-            ModuleType::Library => {
-                #[cfg(any(target_os = "macos", target_os = "linux"))]
-                {
-                    if config.file_name.starts_with("lib") {
-                        config.file_name.clone()
-                    } else {
-                        format!("lib{}", config.file_name)
-                    }
-                }
-                #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-                {
-                    config.file_name.clone()
-                }
-            }
-            ModuleType::Executable => config.file_name.clone(),
-        };
-
-        let mut path = module_dir.join(file_name);
-
-        match config.module_type {
-            ModuleType::Library => {
-                #[cfg(target_os = "windows")]
-                {
-                    if !config.file_name.ends_with(".dll") {
-                        path.set_extension("dll");
-                    }
-                }
-
-                #[cfg(target_os = "macos")]
-                {
-                    if !config.file_name.ends_with(".dylib") {
-                        path.set_extension("dylib");
-                    }
-                }
-
-                #[cfg(target_os = "linux")]
-                {
-                    if !config.file_name.ends_with(".so") {
-                        path.set_extension("so");
-                    }
-                }
-            }
-            ModuleType::Executable => {
-                #[cfg(target_os = "windows")]
-                {
-                    if !config.file_name.ends_with(".exe") {
-                        path.set_extension("exe");
-                    }
-                }
-                // macOS/Linux 可执行文件通常无扩展名
-            }
-        }
-
-        path
-    }
-
-    /// 获取模块元数据文件路径
-    fn get_metadata_path(&self, module_name: &str) -> PathBuf {
-        self.get_module_dir(module_name).join("metadata.json")
-    }
-
-    /// 读取模块元数据
-    pub fn get_module_metadata(&self, module_name: &str) -> Option<ModuleMetadata> {
-        let metadata_path = self.get_metadata_path(module_name);
-        if !metadata_path.exists() {
-            return None;
-        }
-
-        let content = fs::read_to_string(&metadata_path).ok()?;
-        serde_json::from_str(&content).ok()
-    }
-
-    /// 保存模块元数据
-    fn save_module_metadata(
-        &self,
-        module_name: &str,
-        version: &str,
-        file_size: u64,
-    ) -> Result<(), String> {
-        let metadata = ModuleMetadata {
-            version: version.to_string(),
-            installed_at: chrono::Local::now().to_rfc3339(),
-            file_size,
-        };
-
-        let metadata_path = self.get_metadata_path(module_name);
-        let content = serde_json::to_string_pretty(&metadata)
-            .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
-
-        fs::write(&metadata_path, content)
-            .map_err(|e| format!("Failed to write metadata: {}", e))?;
-
-        Ok(())
-    }
-
-    /// 检查模块是否已安装
-    pub fn is_module_installed(&self, config: &ModuleConfig) -> bool {
-        let file_path = self.get_module_file_path(config);
-        file_path.exists()
-    }
-
-    /// 检查模块是否需要更新
-    pub fn needs_update(&self, config: &ModuleConfig) -> bool {
-        if !self.is_module_installed(config) {
-            return true;
-        }
-
-        match self.get_module_metadata(&config.name) {
-            Some(metadata) => metadata.version != config.version,
-            None => true, // 没有元数据，需要更新
-        }
-    }
-
-    /// 获取模块下载 URL（根据当前平台）
-    pub fn get_download_url(&self, config: &ModuleConfig) -> Result<String, String> {
-        #[cfg(target_os = "windows")]
-        {
-            if config.windows_url.is_empty() {
-                return Err(format!(
-                    "Windows URL not configured for module: {}",
-                    config.name
-                ));
-            }
-            Ok(config.windows_url.clone())
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            if config.macos_url.is_empty() {
-                return Err(format!(
-                    "macOS URL not configured for module: {}",
-                    config.name
-                ));
-            }
-            Ok(config.macos_url.clone())
-        }
-
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-        {
-            Err("Unsupported platform".to_string())
-        }
-    }
-
-    /// 下载模块
-    pub async fn download_module(&self, config: &ModuleConfig) -> Result<(), String> {
-        let url = self.get_download_url(config)?;
-
-        log_info(&format!("Downloading module {} from {}", config.name, url));
-
-        // 创建模块目录
-        let module_dir = self.get_module_dir(&config.name);
-        fs::create_dir_all(&module_dir)
-            .map_err(|e| format!("Failed to create module directory: {}", e))?;
-
-        // 下载文件
-        let response = reqwest::get(&url)
-            .await
-            .map_err(|e| format!("Failed to download: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Download failed with status: {}",
-                response.status()
-            ));
-        }
-
-        let content = response
-            .bytes()
-            .await
-            .map_err(|e| format!("Failed to read response: {}", e))?;
-
-        // 保存文件
-        let file_path = self.get_module_file_path(config);
-        fs::write(&file_path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
-
-        // 保存元数据
-        self.save_module_metadata(&config.name, &config.version, content.len() as u64)?;
-
-        log_info(&format!(
-            "Module {} downloaded successfully: {} bytes",
-            config.name,
-            content.len()
-        ));
-
-        // 在 Unix 系统上设置可执行权限
-        #[cfg(unix)]
-        {
-            if config.module_type == ModuleType::Executable {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&file_path)
-                    .map_err(|e| format!("Failed to get file metadata: {}", e))?
-                    .permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&file_path, perms)
-                    .map_err(|e| format!("Failed to set executable permission: {}", e))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// 获取已安装的模块版本
-    pub fn get_installed_version(&self, module_name: &str) -> Option<String> {
-        self.get_module_metadata(module_name).map(|m| m.version)
+// 内部转换辅助函数
+fn convert_module(m: module_manager::InstalledModule) -> InstalledModule {
+    InstalledModule {
+        module_name: m.module_name,
+        version: m.version,
+        is_locked: m.is_locked,
+        file_path: m.file_path,
+        module_type: match m.module_type {
+            #[allow(deprecated)]
+            module_manager::ModuleType::Library => ModuleType::DynamicLibrary,
+            module_manager::ModuleType::DynamicLibrary => ModuleType::DynamicLibrary,
+            module_manager::ModuleType::Executable => ModuleType::Executable,
+        },
+        file_size: m.file_size,
+        installed_at: m.installed_at,
     }
 }
 
-/// 预定义的模块配置
-#[frb(ignore)]
-pub struct ModuleConfigs;
-
-#[frb(ignore)]
-impl ModuleConfigs {
-    /// Capture Proxy 模块配置
-    pub fn capture_proxy(version: &str, windows_url: &str, macos_url: &str) -> ModuleConfig {
-        ModuleConfig {
-            name: "capture_proxy".to_string(),
-            module_type: ModuleType::Library,
-            version: version.to_string(),
-            windows_url: windows_url.to_string(),
-            macos_url: macos_url.to_string(),
-            file_name: "capture_proxy".to_string(),
-        }
+fn convert_module_info(m: module_manager::ModuleInfo) -> AvailableModuleInfo {
+    AvailableModuleInfo {
+        name: m.name,
+        version: m.version,
+        module_type: match m.module_type {
+            #[allow(deprecated)]
+            module_manager::ModuleType::Library => ModuleType::DynamicLibrary,
+            module_manager::ModuleType::DynamicLibrary => ModuleType::DynamicLibrary,
+            module_manager::ModuleType::Executable => ModuleType::Executable,
+        },
+        description: m.description,
     }
+}
 
-    /// FFmpeg 模块配置
-    pub fn ffmpeg(version: &str, windows_url: &str, macos_url: &str) -> ModuleConfig {
-        ModuleConfig {
-            name: "ffmpeg".to_string(),
-            module_type: ModuleType::Executable,
-            version: version.to_string(),
-            windows_url: windows_url.to_string(),
-            macos_url: macos_url.to_string(),
-            file_name: "ffmpeg".to_string(),
-        }
-    }
+// ============================================================================
+// 模块管理器 API
+// ============================================================================
+
+/// 创建模块管理器
+///
+/// # 参数
+/// - install_dir: 安装目录（会创建 dll/ 和 bin/ 子目录）
+///
+/// 配置 URL 使用 Env::MODULE_CONFIG
+#[frb(sync)]
+pub fn create_module_manager(install_dir: String) -> ModuleManager {
+    ModuleManager::new(PathBuf::from(install_dir), Env::MODULE_CONFIG.to_string())
+}
+
+/// 获取可用的模块列表（从配置）
+///
+/// 返回所有可以安装的模块信息
+pub async fn module_get_available(
+    manager: &ModuleManager,
+) -> Result<Vec<AvailableModuleInfo>, String> {
+    manager
+        .get_available_modules()
+        .await
+        .map(|modules| modules.into_iter().map(convert_module_info).collect())
+}
+
+/// 检查模块是否有更新
+///
+/// 返回：Some(version) 表示有新版本，None 表示已是最新或锁定版本
+pub async fn module_check_update(
+    manager: &ModuleManager,
+    module_name: String,
+) -> Result<Option<String>, String> {
+    manager.check_for_update(&module_name).await
+}
+
+/// 安装模块
+///
+/// # 参数
+/// - manager: 模块管理器
+/// - module_name: 模块名（如 "capture_proxy", "ffmpeg"）
+/// - version: 指定版本（None 为最新版，如 "1.2.0+23"）
+/// - lock_version: 是否锁定版本（文件名会带 _lock 后缀）
+/// - auto_load: 是否自动加载（仅对动态库有效）
+///
+/// 返回：安装后的文件路径
+pub async fn module_install(
+    manager: &ModuleManager,
+    module_name: String,
+    version: Option<String>,
+    lock_version: bool,
+    auto_load: bool,
+) -> Result<String, String> {
+    manager
+        .install_module(&module_name, version, lock_version, auto_load)
+        .await
+}
+
+/// 卸载模块
+///
+/// # 参数
+/// - module_name: 模块名
+/// - version: 指定版本（None 为卸载所有版本）
+///
+/// 返回：删除的文件数量
+pub fn module_uninstall(
+    manager: &ModuleManager,
+    module_name: String,
+    version: Option<String>,
+) -> Result<usize, String> {
+    manager.uninstall_module(&module_name, version)
+}
+
+/// 重新安装模块
+///
+/// # 参数
+/// - module_name: 模块名
+/// - version: 指定版本（None 为最新版）
+/// - lock_version: 是否锁定版本
+/// - auto_load: 是否自动加载（仅对动态库有效）
+pub async fn module_reinstall(
+    manager: &ModuleManager,
+    module_name: String,
+    version: Option<String>,
+    lock_version: bool,
+    auto_load: bool,
+) -> Result<String, String> {
+    manager
+        .reinstall_module(&module_name, version, lock_version, auto_load)
+        .await
+}
+
+/// 列出模块的已安装版本
+///
+/// 返回按版本号降序排列的版本列表
+pub fn module_list_versions(
+    manager: &ModuleManager,
+    module_name: String,
+) -> Result<Vec<InstalledModule>, String> {
+    manager
+        .list_installed_versions(&module_name)
+        .map(|modules| modules.into_iter().map(convert_module).collect())
+}
+
+/// 列出所有已安装的模块
+pub fn module_list_all(manager: &ModuleManager) -> Result<Vec<InstalledModule>, String> {
+    manager
+        .list_all_modules()
+        .map(|modules| modules.into_iter().map(convert_module).collect())
+}
+
+// ============================================================================
+// 模块加载器 API（仅用于动态库）
+// ============================================================================
+
+/// 创建模块加载器
+#[frb(sync)]
+pub fn create_module_loader(install_dir: String) -> ModuleLoader {
+    ModuleLoader::new(PathBuf::from(install_dir))
+}
+
+/// 加载动态库模块
+///
+/// # 参数
+/// - module_name: 模块名
+/// - version: 指定版本（None 为自动选择最新版本）
+pub fn module_load(
+    loader: &ModuleLoader,
+    module_name: String,
+    version: Option<String>,
+) -> Result<(), String> {
+    loader.load_module(&module_name, version)
+}
+
+/// 卸载动态库模块
+pub fn module_unload(loader: &ModuleLoader, module_name: String) -> Result<(), String> {
+    loader.unload_module(&module_name)
+}
+
+/// 重新加载模块
+pub fn module_reload(
+    loader: &ModuleLoader,
+    module_name: String,
+    version: Option<String>,
+) -> Result<(), String> {
+    loader.reload_module(&module_name, version)
+}
+
+/// 检查模块是否已加载
+#[frb(sync)]
+pub fn module_is_loaded(loader: &ModuleLoader, module_name: String) -> bool {
+    loader.is_loaded(&module_name)
+}
+
+/// 列出所有已加载的模块
+#[frb(sync)]
+pub fn module_list_loaded(loader: &ModuleLoader) -> Vec<String> {
+    loader.list_loaded_modules()
 }

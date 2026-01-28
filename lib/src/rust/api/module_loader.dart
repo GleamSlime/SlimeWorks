@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ensure_loaded_async`, `ensure_loaded`, `get_module`, `load_module`, `new`, `unload_module`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CModuleInfo`, `MODULE_MANAGER`, `ModuleInfo`, `ModuleManager`
+// These functions are ignored because they are not marked as `pub`: `ensure_loaded_async`, `ensure_loaded`, `get_module`, `load_module`, `new`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CModuleInfo`, `LegacyModuleManager`, `MODULE_MANAGER`, `ModuleInfo`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `deref`, `fmt`, `initialize`
 
 /// 下载并加载 capture_proxy 模块
@@ -28,6 +28,7 @@ Future<bool> isCaptureProxyDownloaded({required String installDir}) => RustLib
     .crateApiModuleLoaderIsCaptureProxyDownloaded(installDir: installDir);
 
 /// Capture Proxy 模块包装器（不对外暴露给 Dart）
+/// 注意: 移动端(iOS/Android)不支持动态加载,需要静态编译
 class CaptureProxyModule {
   const CaptureProxyModule();
 

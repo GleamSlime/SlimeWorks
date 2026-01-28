@@ -6,16 +6,278 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `get_metadata_path`, `save_module_metadata`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ModuleConfigs`, `ModuleMetadata`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `capture_proxy`, `download_module`, `ffmpeg`, `get_download_url`, `get_installed_version`, `get_module_dir`, `get_module_file_path`, `get_module_metadata`, `get_modules_dir`, `is_module_installed`, `needs_update`
+// These functions are ignored because they are not marked as `pub`: `convert_module_info`, `convert_module`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
+
+/// 创建模块管理器
+///
+/// # 参数
+/// - install_dir: 安装目录（会创建 dll/ 和 bin/ 子目录）
+///
+/// 配置 URL 使用 Env::MODULE_CONFIG
+ModuleManager createModuleManager({required String installDir}) => RustLib
+    .instance
+    .api
+    .crateApiModuleManagerCreateModuleManager(installDir: installDir);
+
+/// 获取可用的模块列表（从配置）
+///
+/// 返回所有可以安装的模块信息
+Future<List<AvailableModuleInfo>> moduleGetAvailable({
+  required ModuleManager manager,
+}) => RustLib.instance.api.crateApiModuleManagerModuleGetAvailable(
+  manager: manager,
+);
+
+/// 检查模块是否有更新
+///
+/// 返回：Some(version) 表示有新版本，None 表示已是最新或锁定版本
+Future<String?> moduleCheckUpdate({
+  required ModuleManager manager,
+  required String moduleName,
+}) => RustLib.instance.api.crateApiModuleManagerModuleCheckUpdate(
+  manager: manager,
+  moduleName: moduleName,
+);
+
+/// 安装模块
+///
+/// # 参数
+/// - manager: 模块管理器
+/// - module_name: 模块名（如 "capture_proxy", "ffmpeg"）
+/// - version: 指定版本（None 为最新版，如 "1.2.0+23"）
+/// - lock_version: 是否锁定版本（文件名会带 _lock 后缀）
+/// - auto_load: 是否自动加载（仅对动态库有效）
+///
+/// 返回：安装后的文件路径
+Future<String> moduleInstall({
+  required ModuleManager manager,
+  required String moduleName,
+  String? version,
+  required bool lockVersion,
+  required bool autoLoad,
+}) => RustLib.instance.api.crateApiModuleManagerModuleInstall(
+  manager: manager,
+  moduleName: moduleName,
+  version: version,
+  lockVersion: lockVersion,
+  autoLoad: autoLoad,
+);
+
+/// 卸载模块
+///
+/// # 参数
+/// - module_name: 模块名
+/// - version: 指定版本（None 为卸载所有版本）
+///
+/// 返回：删除的文件数量
+Future<BigInt> moduleUninstall({
+  required ModuleManager manager,
+  required String moduleName,
+  String? version,
+}) => RustLib.instance.api.crateApiModuleManagerModuleUninstall(
+  manager: manager,
+  moduleName: moduleName,
+  version: version,
+);
+
+/// 重新安装模块
+///
+/// # 参数
+/// - module_name: 模块名
+/// - version: 指定版本（None 为最新版）
+/// - lock_version: 是否锁定版本
+/// - auto_load: 是否自动加载（仅对动态库有效）
+Future<String> moduleReinstall({
+  required ModuleManager manager,
+  required String moduleName,
+  String? version,
+  required bool lockVersion,
+  required bool autoLoad,
+}) => RustLib.instance.api.crateApiModuleManagerModuleReinstall(
+  manager: manager,
+  moduleName: moduleName,
+  version: version,
+  lockVersion: lockVersion,
+  autoLoad: autoLoad,
+);
+
+/// 列出模块的已安装版本
+///
+/// 返回按版本号降序排列的版本列表
+Future<List<InstalledModule>> moduleListVersions({
+  required ModuleManager manager,
+  required String moduleName,
+}) => RustLib.instance.api.crateApiModuleManagerModuleListVersions(
+  manager: manager,
+  moduleName: moduleName,
+);
+
+/// 列出所有已安装的模块
+Future<List<InstalledModule>> moduleListAll({required ModuleManager manager}) =>
+    RustLib.instance.api.crateApiModuleManagerModuleListAll(manager: manager);
+
+/// 创建模块加载器
+ModuleLoader createModuleLoader({required String installDir}) => RustLib
+    .instance
+    .api
+    .crateApiModuleManagerCreateModuleLoader(installDir: installDir);
+
+/// 加载动态库模块
+///
+/// # 参数
+/// - module_name: 模块名
+/// - version: 指定版本（None 为自动选择最新版本）
+Future<void> moduleLoad({
+  required ModuleLoader loader,
+  required String moduleName,
+  String? version,
+}) => RustLib.instance.api.crateApiModuleManagerModuleLoad(
+  loader: loader,
+  moduleName: moduleName,
+  version: version,
+);
+
+/// 卸载动态库模块
+Future<void> moduleUnload({
+  required ModuleLoader loader,
+  required String moduleName,
+}) => RustLib.instance.api.crateApiModuleManagerModuleUnload(
+  loader: loader,
+  moduleName: moduleName,
+);
+
+/// 重新加载模块
+Future<void> moduleReload({
+  required ModuleLoader loader,
+  required String moduleName,
+  String? version,
+}) => RustLib.instance.api.crateApiModuleManagerModuleReload(
+  loader: loader,
+  moduleName: moduleName,
+  version: version,
+);
+
+/// 检查模块是否已加载
+bool moduleIsLoaded({
+  required ModuleLoader loader,
+  required String moduleName,
+}) => RustLib.instance.api.crateApiModuleManagerModuleIsLoaded(
+  loader: loader,
+  moduleName: moduleName,
+);
+
+/// 列出所有已加载的模块
+List<String> moduleListLoaded({required ModuleLoader loader}) =>
+    RustLib.instance.api.crateApiModuleManagerModuleListLoaded(loader: loader);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ModuleLoader>>
+abstract class ModuleLoader implements RustOpaqueInterface {}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ModuleManager>>
+abstract class ModuleManager implements RustOpaqueInterface {}
+
+/// 可用的模块信息
+class AvailableModuleInfo {
+  /// 模块名
+  final String name;
+
+  /// 最新版本
+  final String version;
+
+  /// 模块类型
+  final ModuleType moduleType;
+
+  /// 描述
+  final String description;
+
+  const AvailableModuleInfo({
+    required this.name,
+    required this.version,
+    required this.moduleType,
+    required this.description,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      version.hashCode ^
+      moduleType.hashCode ^
+      description.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AvailableModuleInfo &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          version == other.version &&
+          moduleType == other.moduleType &&
+          description == other.description;
+}
+
+/// 已安装的模块信息
+class InstalledModule {
+  /// 模块名
+  final String moduleName;
+
+  /// 版本号
+  final String version;
+
+  /// 是否锁定版本
+  final bool isLocked;
+
+  /// 文件路径
+  final String filePath;
+
+  /// 模块类型
+  final ModuleType moduleType;
+
+  /// 文件大小
+  final BigInt fileSize;
+
+  /// 安装时间
+  final String installedAt;
+
+  const InstalledModule({
+    required this.moduleName,
+    required this.version,
+    required this.isLocked,
+    required this.filePath,
+    required this.moduleType,
+    required this.fileSize,
+    required this.installedAt,
+  });
+
+  @override
+  int get hashCode =>
+      moduleName.hashCode ^
+      version.hashCode ^
+      isLocked.hashCode ^
+      filePath.hashCode ^
+      moduleType.hashCode ^
+      fileSize.hashCode ^
+      installedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InstalledModule &&
+          runtimeType == other.runtimeType &&
+          moduleName == other.moduleName &&
+          version == other.version &&
+          isLocked == other.isLocked &&
+          filePath == other.filePath &&
+          moduleType == other.moduleType &&
+          fileSize == other.fileSize &&
+          installedAt == other.installedAt;
+}
 
 /// 模块类型
 enum ModuleType {
-  /// 动态库模块（.dll / .dylib / .so）
-  library_,
+  /// 动态链接库（Windows .dll）
+  dynamicLibrary,
 
-  /// 可执行程序模块（.exe / 无扩展名）
+  /// 可执行文件（Windows .exe / Linux-macOS binary）
   executable,
 }

@@ -12,7 +12,7 @@ use super::logger::log_info;
 use super::module_downloader::ModuleDownloader;
 
 lazy_static::lazy_static! {
-    static ref MODULE_MANAGER: Mutex<ModuleManager> = Mutex::new(ModuleManager::new());
+    static ref MODULE_MANAGER: Mutex<LegacyModuleManager> = Mutex::new(LegacyModuleManager::new());
 }
 
 /// 模块信息
@@ -31,12 +31,12 @@ struct CModuleInfo {
     api_version: u32,
 }
 
-/// 模块管理器
-struct ModuleManager {
+/// 旧的模块管理器（仅用于CaptureProxy）
+pub(crate) struct LegacyModuleManager {
     loaded_modules: std::collections::HashMap<String, Library>,
 }
 
-impl ModuleManager {
+impl LegacyModuleManager {
     fn new() -> Self {
         Self {
             loaded_modules: std::collections::HashMap::new(),
@@ -132,113 +132,53 @@ impl ModuleManager {
 pub struct CaptureProxyModule {}
 
 impl CaptureProxyModule {
-    /// 确保模块已加载（自动下载如果不存在）
+    /// 确保模块已加载（使用新的module_manager系统）
     async fn ensure_loaded_async(install_dir: &str) -> Result<(), String> {
-        let manager = MODULE_MANAGER.lock().unwrap();
+        let manager_lock = MODULE_MANAGER.lock().unwrap();
 
         // 如果已加载，直接返回
-        if manager.loaded_modules.contains_key("capture_proxy") {
-            drop(manager); // 释放锁
+        if manager_lock.loaded_modules.contains_key("capture_proxy") {
+            drop(manager_lock);
             return Ok(());
         }
 
-        drop(manager); // 释放锁，允许下载操作
+        drop(manager_lock); // 释放锁
 
-        // 获取模块路径
-        let downloader = ModuleDownloader::new(PathBuf::from(install_dir));
+        // 使用新的 module_manager 系统
+        use crate::constants::env::Env;
+        let module_mgr = module_manager::ModuleManager::new(
+            PathBuf::from(install_dir),
+            Env::MODULE_CONFIG.to_string(),
+        );
 
-        #[cfg(target_os = "windows")]
-        let (lib_ext, lib_prefix) = ("dll", "");
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        let (lib_ext, lib_prefix) = ("dylib", "lib");
-        #[cfg(target_os = "linux")]
-        let (lib_ext, lib_prefix) = ("so", "lib");
+        // 检查是否已安装
+        let installed = module_mgr.list_installed_versions("capture_proxy")?;
 
-        // 优先使用带前缀的库名（macOS/Linux 使用 lib 前缀）
-        let lib_filename_with_prefix = format!("{}capture_proxy.{}", lib_prefix, lib_ext);
-        let lib_path = downloader.get_library_path("capture_proxy", &lib_filename_with_prefix);
-
-        // 如果不存在，尝试下载
-        if !lib_path.exists() {
-            println!("Capture proxy module not found, attempting to download...");
-
-            // 从环境变量或配置获取下载 URL
-            let mut windows_url = std::env::var("CAPTURE_PROXY_WINDOWS_URL").unwrap_or_default();
-            let mut macos_url = std::env::var("CAPTURE_PROXY_MACOS_URL").unwrap_or_default();
-
-            println!("[module_loader] after try_load_env_files: CAPTURE_PROXY_WINDOWS_URL='{}' CAPTURE_PROXY_MACOS_URL='{}'", windows_url, macos_url);
-            log_info(&format!("after try_load_env_files: CAPTURE_PROXY_WINDOWS_URL='{}' CAPTURE_PROXY_MACOS_URL='{}'", windows_url, macos_url));
-
-            // 如果环境变量未配置，尝试从 install_dir/.env 或 当前工作目录的 .env 中读取
-            if windows_url.is_empty() && macos_url.is_empty() {
-                let candidates = vec![
-                    PathBuf::from(install_dir).join(".env"),
-                    PathBuf::from(".env"),
-                ];
-                for cand in candidates {
-                    if cand.exists() {
-                        if let Ok(content) = std::fs::read_to_string(&cand) {
-                            for line in content.lines() {
-                                let line = line.trim();
-                                if line.is_empty() || line.starts_with('#') {
-                                    continue;
-                                }
-                                if let Some((k, v)) = line.split_once('=') {
-                                    let key = k.trim();
-                                    let mut val = v.trim().to_string();
-                                    if val.starts_with('"') && val.ends_with('"') && val.len() >= 2
-                                    {
-                                        val = val[1..val.len() - 1].to_string();
-                                    }
-                                    if key == "CAPTURE_PROXY_MACOS_URL" && macos_url.is_empty() {
-                                        macos_url = val.clone();
-                                    }
-                                    if key == "CAPTURE_PROXY_WINDOWS_URL" && windows_url.is_empty()
-                                    {
-                                        windows_url = val.clone();
-                                    }
-                                }
-                            }
-                        }
-                        // stop if we found any
-                        if !windows_url.is_empty() || !macos_url.is_empty() {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if windows_url.is_empty() && macos_url.is_empty() {
-                return Err(format!(
-                    "Capture proxy module not found at: {} and no download URL configured({})",
-                    lib_path.display(),
-                    macos_url
-                ));
-            }
-
-            // #[cfg(target_os = "windows")]
-            // let ext = "dll";
-            // #[cfg(target_os = "macos")]
-            // let ext = "dylib";
-            // #[cfg(target_os = "linux")]
-            // let ext = "so";
-
-            // 下载时使用带前缀的库名（macOS/Linux 使用 lib 前缀）
-            let lib_name = lib_filename_with_prefix.clone();
-            let module_config = super::module_downloader::ModuleConfig {
-                name: "capture_proxy".to_string(),
-                windows_url,
-                macos_url,
-                executable_name: lib_name,
-            };
-
-            downloader.download_module(&module_config).await?;
+        if installed.is_empty() {
+            // 未安装，先安装最新版本
+            log_info("capture_proxy not installed, installing...");
+            module_mgr
+                .install_module("capture_proxy", None, false, true)
+                .await?;
         }
 
-        // 重新获取锁并加载模块
-        let mut manager = MODULE_MANAGER.lock().unwrap();
-        manager.load_module("capture_proxy", lib_path.to_str().unwrap())?;
-        drop(manager); // 立即释放锁
+        // 重新获取已安装的版本
+        let installed = module_mgr.list_installed_versions("capture_proxy")?;
+        if installed.is_empty() {
+            return Err("Failed to install capture_proxy".to_string());
+        }
+
+        // 获取最新版本的路径
+        let latest = installed.first().unwrap();
+        let lib_path = &latest.file_path;
+
+        log_info(&format!("Loading capture_proxy from: {}", lib_path));
+
+        // 加载模块到旧的管理器（保持向后兼容）
+        let mut manager_lock = MODULE_MANAGER.lock().unwrap();
+        manager_lock.load_module("capture_proxy", lib_path)?;
+        drop(manager_lock);
+
         Ok(())
     }
 
@@ -710,7 +650,7 @@ mod tests {
 
     #[test]
     fn test_module_manager() {
-        let mut manager = ModuleManager::new();
+        let mut manager = LegacyModuleManager::new();
         assert_eq!(manager.loaded_modules.len(), 0);
     }
 }

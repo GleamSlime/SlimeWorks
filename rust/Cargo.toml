@@ -17,6 +17,7 @@ libloading = "0.8"                                      # 动态库加载
 log = "0.4"
 env_logger = "0.11"
 chrono = "0.4"
+md5 = "0.7"                                             # MD5 校验
 # ffmpeg_lib = { path = "ffmpeg_lib", optional = true }
 tokio = { version = "1.49.0", features = [
   "rt-multi-thread",
@@ -24,6 +25,9 @@ tokio = { version = "1.49.0", features = [
 ], default-features = false }
 
 dotenv = "0.15.0"
+
+# 模块管理系统（独立 crate）
+module_manager = { path = "module_manager" }
 
 [features]
 default = []
