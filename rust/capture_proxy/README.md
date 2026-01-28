@@ -125,6 +125,7 @@ let items = get_captured_items();
 ```bash
 # 编译
 cargo build --release
+cargo build --release --lib
 
 # 运行（默认端口8433）
 cargo run

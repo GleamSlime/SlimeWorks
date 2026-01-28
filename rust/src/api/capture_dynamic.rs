@@ -1,6 +1,6 @@
 use flutter_rust_bridge::frb;
+use path_provider::path_provider;
 
-use super::logger::{cleanup_old_logs, get_log_dir, init_logger, log_error, log_info};
 use super::module_loader::CaptureProxyModule;
 
 /// 捕获的数据类型
@@ -31,7 +31,7 @@ fn get_install_dir() -> Result<String, String> {
         let appdata = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\ProgramData".to_string());
         Ok(format!("{}\\SlimeWorks", appdata))
     }
-
+    
     #[cfg(not(target_os = "windows"))]
     {
         Ok("/tmp/slimeworks".to_string())
@@ -42,28 +42,7 @@ fn get_install_dir() -> Result<String, String> {
 #[frb(sync)]
 pub fn start_capture_proxy(port: u16, install_dir: Option<String>) -> Result<String, String> {
     let dir = install_dir.unwrap_or_else(|| get_install_dir().unwrap());
-
-    // 初始化日志系统
-    match init_logger(&dir) {
-        Ok(msg) => log_info(&format!("Logger initialized: {}", msg)),
-        Err(e) => log_error(&format!("Failed to init logger: {}", e)),
-    }
-
-    log_info(&format!(
-        "Starting capture proxy on port {} with install_dir: {}",
-        port, dir
-    ));
-
-    match CaptureProxyModule::start(port, &dir) {
-        Ok(msg) => {
-            log_info(&format!("Proxy started: {}", msg));
-            Ok(msg)
-        }
-        Err(e) => {
-            log_error(&format!("Failed to start proxy: {}", e));
-            Err(e)
-        }
-    }
+    CaptureProxyModule::start(port, &dir)
 }
 
 /// 停止代理服务器
@@ -89,21 +68,21 @@ pub fn get_captured_videos(install_dir: Option<String>) -> Vec<String> {
 
 /// 获取所有捕获的图片链接
 #[frb(sync)]
-pub fn get_captured_images(_install_dir: Option<String>) -> Vec<String> {
+pub fn get_captured_images(install_dir: Option<String>) -> Vec<String> {
     // TODO: 需要在 C ABI 中添加对应函数
     Vec::new()
 }
 
 /// 获取所有捕获的JSON数据
 #[frb(sync)]
-pub fn get_captured_json(_install_dir: Option<String>) -> Vec<String> {
+pub fn get_captured_json(install_dir: Option<String>) -> Vec<String> {
     // TODO: 需要在 C ABI 中添加对应函数
     Vec::new()
 }
 
 /// 获取所有捕获的JavaScript文件
 #[frb(sync)]
-pub fn get_captured_javascript(_install_dir: Option<String>) -> Vec<String> {
+pub fn get_captured_javascript(install_dir: Option<String>) -> Vec<String> {
     // TODO: 需要在 C ABI 中添加对应函数
     Vec::new()
 }
@@ -117,7 +96,7 @@ pub fn clear_captured_data(install_dir: Option<String>) -> Result<(), String> {
 
 /// 获取捕获统计
 #[frb(sync)]
-pub fn get_capture_stats(_install_dir: Option<String>) -> Option<CaptureStats> {
+pub fn get_capture_stats(install_dir: Option<String>) -> Option<CaptureStats> {
     // TODO: 需要在 C ABI 中添加对应函数
     Some(CaptureStats {
         total: 0,
@@ -130,10 +109,7 @@ pub fn get_capture_stats(_install_dir: Option<String>) -> Option<CaptureStats> {
 
 /// 安装CA证书
 #[frb(sync)]
-pub fn install_ca_certificate(
-    password: String,
-    install_dir: Option<String>,
-) -> Result<String, String> {
+pub fn install_ca_certificate(password: String, install_dir: Option<String>) -> Result<String, String> {
     let dir = install_dir.unwrap_or_else(|| get_install_dir().unwrap());
     CaptureProxyModule::install_certificate(&password, &dir)?;
     Ok("证书安装成功".to_string())
@@ -181,35 +157,4 @@ pub fn is_running_as_administrator() -> bool {
 #[cfg(not(target_os = "windows"))]
 pub fn is_running_as_administrator() -> bool {
     false
-}
-
-/// 初始化日志系统
-#[frb(sync)]
-pub fn initialize_logger(install_dir: Option<String>) -> Result<String, String> {
-    let dir = install_dir.unwrap_or_else(|| get_install_dir().unwrap());
-    init_logger(&dir)
-}
-
-/// 获取日志目录
-#[frb(sync)]
-pub fn get_logger_directory() -> Option<String> {
-    get_log_dir()
-}
-
-/// 清理旧日志文件（保留最近 N 天）
-#[frb(sync)]
-pub fn cleanup_logger_old_files(days_to_keep: u32) -> Result<i32, String> {
-    cleanup_old_logs(days_to_keep).map(|count| count as i32)
-}
-
-/// 写入信息日志
-#[frb(sync)]
-pub fn write_log_info(message: String) {
-    log_info(&message);
-}
-
-/// 写入错误日志
-#[frb(sync)]
-pub fn write_log_error(message: String) {
-    log_error(&message);
 }

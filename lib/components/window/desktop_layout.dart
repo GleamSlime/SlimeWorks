@@ -79,6 +79,15 @@ class DesktopLayout extends StatelessWidget {
         ],
       ),
 
+      // 第四组：系统
+      SidebarGroup(
+        title: '系统',
+        items: [
+          SidebarMenuItem(icon: Assets.image.svg.menuTools, label: '模块管理', route: '/module-management'),
+          SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '设置', route: '/settings'),
+        ],
+      ),
+
       // 第四组：设置（无标题）
       SidebarGroup(
         items: [

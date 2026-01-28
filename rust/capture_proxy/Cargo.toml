@@ -6,10 +6,8 @@ edition = "2021"
 [lib]
 name = "capture_proxy"
 path = "src/lib.rs"
-
-[[bin]]
-name = "capture_proxy"
-path = "src/main.rs"
+# 改为动态库，用于动态加载
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # 只启用必需的tokio features
@@ -33,7 +31,9 @@ hyper = { version = "0.14.32", features = [
   "stream",
 ], default-features = false }
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
+serde_json = { version = "1.0.149", default-features = false, features = [
+  "std",
+] }
 regex = "1.12.2"
 encoding_rs = "0.8.35"
 tokio-rustls = { version = "0.23", default-features = false }
@@ -45,6 +45,14 @@ rustls-native-certs = "0.6"
 base64 = "0.22.1"
 rustls-pemfile = "2.2.0"
 x509-parser = "0.18.0"
+lazy_static = "1.5.0" # C ABI 需要
+libloading = "0.8" # 测试用
+libc = "0.2"
+
+
+[[example]]
+name = "test_dll"
+path = "test_dll.rs"
 
 [profile.release]
 opt-level = "z"

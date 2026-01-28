@@ -3,6 +3,7 @@
     "accum",
     "certutil",
     "cfgs",
+    "dotenv",
     "pemfile",
     "processthreadsapi",
     "rcgen",
@@ -15,7 +16,8 @@
   "conventionalCommits.scopes": [
     "Assets",
     "MacOS",
-    "Desktop"
+    "Desktop",
+    "Windows"
   ],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150

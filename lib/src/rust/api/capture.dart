@@ -6,59 +6,81 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CaptureType`, `IS_RUNNING`, `RUNTIME`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `deref`, `deref`, `fmt`, `fmt`, `initialize`, `initialize`
+// These functions are ignored because they are not marked as `pub`: `get_install_dir`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CaptureType`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
-/// 启动代理服务器
-String startCaptureProxy({required int port}) =>
-    RustLib.instance.api.crateApiCaptureStartCaptureProxy(port: port);
+/// 启动代理服务器（通过动态模块）
+String startCaptureProxy({required int port, String? installDir}) => RustLib
+    .instance
+    .api
+    .crateApiCaptureStartCaptureProxy(port: port, installDir: installDir);
 
 /// 停止代理服务器
-String stopCaptureProxy() =>
-    RustLib.instance.api.crateApiCaptureStopCaptureProxy();
+String stopCaptureProxy({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureStopCaptureProxy(installDir: installDir);
 
 /// 获取捕获状态
-bool isProxyRunning() => RustLib.instance.api.crateApiCaptureIsProxyRunning();
+bool isProxyRunning({String? installDir}) =>
+    RustLib.instance.api.crateApiCaptureIsProxyRunning(installDir: installDir);
 
 /// 获取所有捕获的视频链接
-List<String> getCapturedVideos() =>
-    RustLib.instance.api.crateApiCaptureGetCapturedVideos();
+List<String> getCapturedVideos({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureGetCapturedVideos(installDir: installDir);
 
 /// 获取所有捕获的图片链接
-List<String> getCapturedImages() =>
-    RustLib.instance.api.crateApiCaptureGetCapturedImages();
+List<String> getCapturedImages({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureGetCapturedImages(installDir: installDir);
 
 /// 获取所有捕获的JSON数据
-List<String> getCapturedJson() =>
-    RustLib.instance.api.crateApiCaptureGetCapturedJson();
+List<String> getCapturedJson({String? installDir}) =>
+    RustLib.instance.api.crateApiCaptureGetCapturedJson(installDir: installDir);
 
-/// 获取所有捕获的JavaScript链接
-List<String> getCapturedJavascript() =>
-    RustLib.instance.api.crateApiCaptureGetCapturedJavascript();
+/// 获取所有捕获的JavaScript文件
+List<String> getCapturedJavascript({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureGetCapturedJavascript(installDir: installDir);
 
 /// 清除所有捕获的数据
-void clearCapturedData() =>
-    RustLib.instance.api.crateApiCaptureClearCapturedData();
+void clearCapturedData({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureClearCapturedData(installDir: installDir);
 
-/// 获取捕获数据的数量统计
-CaptureStats getCaptureStats() =>
-    RustLib.instance.api.crateApiCaptureGetCaptureStats();
+/// 获取捕获统计
+CaptureStats? getCaptureStats({String? installDir}) =>
+    RustLib.instance.api.crateApiCaptureGetCaptureStats(installDir: installDir);
 
-/// 获取CA证书路径
-String getCaCertificatePath() =>
-    RustLib.instance.api.crateApiCaptureGetCaCertificatePath();
+/// 安装CA证书
+String installCaCertificate({required String password, String? installDir}) =>
+    RustLib.instance.api.crateApiCaptureInstallCaCertificate(
+      password: password,
+      installDir: installDir,
+    );
 
-/// 使用管理员密码安装CA证书（macOS需要密码）
-String installCaCertificate({required String password}) => RustLib.instance.api
-    .crateApiCaptureInstallCaCertificate(password: password);
+/// 检查CA证书是否已安装
+bool isCaCertificateInstalled({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureIsCaCertificateInstalled(installDir: installDir);
 
-/// 检查CA证书是否已安装到系统
-bool isCaCertificateInstalled() =>
-    RustLib.instance.api.crateApiCaptureIsCaCertificateInstalled();
-
-/// 检查当前进程是否以管理员权限运行（仅Windows）
-bool isRunningAsAdministrator() =>
+Future<bool> isRunningAsAdministrator() =>
     RustLib.instance.api.crateApiCaptureIsRunningAsAdministrator();
+
+/// 初始化日志系统
+String initializeLogger({String? installDir}) => RustLib.instance.api
+    .crateApiCaptureInitializeLogger(installDir: installDir);
+
+/// 获取日志目录
+String? getLoggerDirectory() =>
+    RustLib.instance.api.crateApiCaptureGetLoggerDirectory();
+
+/// 清理旧日志文件（保留最近 N 天）
+int cleanupLoggerOldFiles({required int daysToKeep}) => RustLib.instance.api
+    .crateApiCaptureCleanupLoggerOldFiles(daysToKeep: daysToKeep);
+
+/// 写入信息日志
+void writeLogInfo({required String message}) =>
+    RustLib.instance.api.crateApiCaptureWriteLogInfo(message: message);
+
+/// 写入错误日志
+void writeLogError({required String message}) =>
+    RustLib.instance.api.crateApiCaptureWriteLogError(message: message);
 
 /// 捕获统计数据
 class CaptureStats {
