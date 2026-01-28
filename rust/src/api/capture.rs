@@ -89,21 +89,21 @@ pub fn get_captured_videos(install_dir: Option<String>) -> Vec<String> {
 
 /// 获取所有捕获的图片链接
 #[frb(sync)]
-pub fn get_captured_images(install_dir: Option<String>) -> Vec<String> {
+pub fn get_captured_images(_install_dir: Option<String>) -> Vec<String> {
     // TODO: 需要在 C ABI 中添加对应函数
     Vec::new()
 }
 
 /// 获取所有捕获的JSON数据
 #[frb(sync)]
-pub fn get_captured_json(install_dir: Option<String>) -> Vec<String> {
+pub fn get_captured_json(_install_dir: Option<String>) -> Vec<String> {
     // TODO: 需要在 C ABI 中添加对应函数
     Vec::new()
 }
 
 /// 获取所有捕获的JavaScript文件
 #[frb(sync)]
-pub fn get_captured_javascript(install_dir: Option<String>) -> Vec<String> {
+pub fn get_captured_javascript(_install_dir: Option<String>) -> Vec<String> {
     // TODO: 需要在 C ABI 中添加对应函数
     Vec::new()
 }
@@ -117,7 +117,7 @@ pub fn clear_captured_data(install_dir: Option<String>) -> Result<(), String> {
 
 /// 获取捕获统计
 #[frb(sync)]
-pub fn get_capture_stats(install_dir: Option<String>) -> Option<CaptureStats> {
+pub fn get_capture_stats(_install_dir: Option<String>) -> Option<CaptureStats> {
     // TODO: 需要在 C ABI 中添加对应函数
     Some(CaptureStats {
         total: 0,

@@ -2,6 +2,7 @@
 ///
 /// 这些函数通过 C ABI 导出，供主应用动态加载调用
 use std::ffi::{CStr, CString};
+use std::fs::OpenOptions;
 use std::os::raw::{c_char, c_int};
 use std::sync::Mutex;
 
@@ -33,6 +34,8 @@ pub extern "C" fn module_init() -> *const ModuleInfo {
         let mut guard = CAPTURE_PROXY_LOG_FILE.lock().unwrap();
         if guard.is_none() {
             // Ensure logs directory exists
+
+            use std::path::PathBuf;
             let log_dir = PathBuf::from("/tmp/slimeworks/logs");
             let _ = std::fs::create_dir_all(&log_dir);
             let log_path = log_dir.join("capture_proxy.log");

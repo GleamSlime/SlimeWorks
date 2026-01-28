@@ -2,7 +2,7 @@
 ///
 /// 负责加载和管理动态链接库（.dll / .dylib / .so）
 use libloading::{Library, Symbol};
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::path::PathBuf;
@@ -10,7 +10,6 @@ use std::sync::Mutex;
 
 use super::logger::log_info;
 use super::module_downloader::ModuleDownloader;
-use std::path::Path;
 
 lazy_static::lazy_static! {
     static ref MODULE_MANAGER: Mutex<ModuleManager> = Mutex::new(ModuleManager::new());
@@ -113,12 +112,12 @@ impl ModuleManager {
     }
 
     /// 卸载模块
-    fn unload_module(&mut self, name: &str) -> Result<(), String> {
-        self.loaded_modules
-            .remove(name)
-            .ok_or_else(|| format!("Module {} not loaded", name))?;
-        Ok(())
-    }
+    // fn unload_module(&mut self, name: &str) -> Result<(), String> {
+    //     self.loaded_modules
+    //         .remove(name)
+    //         .ok_or_else(|| format!("Module {} not loaded", name))?;
+    //     Ok(())
+    // }
 
     /// 获取模块
     fn get_module(&self, name: &str) -> Result<&Library, String> {
@@ -133,66 +132,6 @@ impl ModuleManager {
 pub struct CaptureProxyModule {}
 
 impl CaptureProxyModule {
-    /// 尝试从若干候选 `.env` 文件加载到进程环境中（使用 `dotenvy`，更可靠）
-    fn try_load_env_files(install_dir: &str) {
-        // 候选路径：install_dir/.env、当前可执行文件目录的上溯路径、当前工作目录的上溯路径
-        let mut candidates = vec![Path::new(install_dir).join(".env")];
-
-        // 可执行文件目录
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(dir) = exe.parent() {
-                // 向上查找几个层级
-                let mut p = dir.to_path_buf();
-                for _ in 0..4 {
-                    candidates.push(p.join(".env"));
-                    if !p.pop() {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 当前工作目录向上查找
-        if let Ok(mut cwd) = std::env::current_dir() {
-            for _ in 0..6 {
-                candidates.push(cwd.join(".env"));
-                if !cwd.pop() {
-                    break;
-                }
-            }
-        }
-
-        // 去重并尝试加载第一个存在的 .env
-        use std::collections::HashSet;
-        let mut seen = HashSet::new();
-        for cand in candidates {
-            let path = cand;
-            if let Some(s) = path.to_str() {
-                if seen.contains(s) {
-                    continue;
-                }
-                seen.insert(s.to_string());
-            }
-            if path.exists() {
-                match dotenvy::from_path_iter(&path) {
-                    Ok(iter) => {
-                        for item in iter {
-                            if let Ok((k, v)) = item {
-                                if std::env::var(&k).is_err() {
-                                    std::env::set_var(&k, v);
-                                }
-                            }
-                        }
-                        log_info(&format!("Loaded environment from {}", path.display()));
-                        return;
-                    }
-                    Err(e) => {
-                        log_info(&format!("Failed to parse .env {}: {}", path.display(), e));
-                    }
-                }
-            }
-        }
-    }
     /// 确保模块已加载（自动下载如果不存在）
     async fn ensure_loaded_async(install_dir: &str) -> Result<(), String> {
         let manager = MODULE_MANAGER.lock().unwrap();
@@ -222,8 +161,6 @@ impl CaptureProxyModule {
         // 如果不存在，尝试下载
         if !lib_path.exists() {
             println!("Capture proxy module not found, attempting to download...");
-
-            Self::try_load_env_files(install_dir);
 
             // 从环境变量或配置获取下载 URL
             let mut windows_url = std::env::var("CAPTURE_PROXY_WINDOWS_URL").unwrap_or_default();
@@ -279,12 +216,12 @@ impl CaptureProxyModule {
                 ));
             }
 
-            #[cfg(target_os = "windows")]
-            let ext = "dll";
-            #[cfg(target_os = "macos")]
-            let ext = "dylib";
-            #[cfg(target_os = "linux")]
-            let ext = "so";
+            // #[cfg(target_os = "windows")]
+            // let ext = "dll";
+            // #[cfg(target_os = "macos")]
+            // let ext = "dylib";
+            // #[cfg(target_os = "linux")]
+            // let ext = "so";
 
             // 下载时使用带前缀的库名（macOS/Linux 使用 lib 前缀）
             let lib_name = lib_filename_with_prefix.clone();

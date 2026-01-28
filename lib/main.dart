@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 import 'package:slime_works/src/rust/api/ffmpeg.dart';
 
@@ -25,6 +26,8 @@ Future<void> main() async {
 
   // 初始化 Rust 库
   await RustLib.init();
+
+  initializeLogger();
 
   // 初始化 FFmpeg
   await _initFFmpeg();

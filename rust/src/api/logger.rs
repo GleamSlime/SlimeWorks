@@ -15,6 +15,7 @@ lazy_static::lazy_static! {
 /// 初始化日志系统
 pub fn init_logger(install_dir: &str) -> Result<String, String> {
     let log_dir = PathBuf::from(install_dir).join("logs");
+    println!("Initializing logger at: {}", log_dir.display());
 
     // 创建 logs 目录
     create_dir_all(&log_dir).map_err(|e| format!("Failed to create logs directory: {}", e))?;

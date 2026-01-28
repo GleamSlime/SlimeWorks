@@ -64,7 +64,7 @@ impl ModuleDownloader {
 
     /// 获取可执行文件路径
     pub fn get_executable_path(&self, module_name: &str, executable_name: &str) -> PathBuf {
-        let mut path = self.get_module_path(module_name).join(executable_name);
+        let path = self.get_module_path(module_name).join(executable_name);
 
         #[cfg(target_os = "windows")]
         {
@@ -185,10 +185,10 @@ impl ModuleDownloader {
     }
 
     /// 保存模块版本信息
-    fn save_module_version(&self, module_name: &str, version: &str) -> Result<(), String> {
-        let version_file = self.get_module_path(module_name).join("version.txt");
-        fs::write(version_file, version).map_err(|e| format!("Failed to save version: {}", e))
-    }
+    // fn save_module_version(&self, module_name: &str, version: &str) -> Result<(), String> {
+    //     let version_file = self.get_module_path(module_name).join("version.txt");
+    //     fs::write(version_file, version).map_err(|e| format!("Failed to save version: {}", e))
+    // }
 
     /// 检查模块是否已安装（包含库文件）
     pub fn is_library_installed(&self, module_name: &str, lib_name: &str) -> bool {
