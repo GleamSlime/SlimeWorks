@@ -30,6 +30,8 @@ flutter build macos --release
 ```shell
 flutter build ipa
 cargo build --target aarch64-apple-ios-sim
+
+open build/ios/archive/Runner.xcarchive
 ```
 
 ### Android

@@ -18,6 +18,7 @@ log = "0.4"
 env_logger = "0.11"
 chrono = "0.4"
 md5 = "0.7"                                             # MD5 校验
+anyhow = "1.0"                                          # 错误处理
 # ffmpeg_lib = { path = "ffmpeg_lib", optional = true }
 tokio = { version = "1.49.0", features = [
   "rt-multi-thread",
@@ -28,6 +29,9 @@ dotenv = "0.15.0"
 
 # 模块管理系统（独立 crate）
 module_manager = { path = "module_manager" }
+
+# WebSocket 模块（独立 crate）
+ws_module = { path = "ws_module" }
 
 [features]
 default = []

@@ -5,6 +5,7 @@ import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/dashboard_screen.dart';
 import 'package:slime_works/pages/capture_screen.dart';
 import 'package:slime_works/pages/module_management_screen.dart';
+import 'package:slime_works/pages/websocket_test_page.dart';
 
 /// 应用路由配置
 class AppRoutes {
@@ -25,6 +26,7 @@ class AppRoutes {
   static const String requestHost = '/request-host';
   static const String settings = '/settings';
   static const String themePreview = '/theme-preview';
+  static const String webSocketTest = '/websocket-test';
 
   /// 获取所有路由
   static List<GetPage> getPages() {
@@ -33,6 +35,7 @@ class AppRoutes {
       GetPage(name: capture, page: () => const CaptureScreen(), transition: Transition.fadeIn),
       GetPage(name: moduleManagement, page: () => const ModuleManagementScreen(), transition: Transition.fadeIn),
       GetPage(name: themePreview, page: () => const ThemePreviewScreen(), transition: Transition.fadeIn),
+      GetPage(name: webSocketTest, page: () => const WebSocketTestPage(), transition: Transition.fadeIn),
       GetPage(name: datasource, page: () => _buildPlaceholderPage('数据源'), transition: Transition.fadeIn),
       GetPage(name: clearwater, page: () => _buildPlaceholderPage('清水账'), transition: Transition.fadeIn),
       GetPage(name: aliyun, page: () => _buildPlaceholderPage('阿里云'), transition: Transition.fadeIn),
