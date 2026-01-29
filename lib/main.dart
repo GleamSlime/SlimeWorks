@@ -24,6 +24,9 @@ Future<void> main() async {
   // 初始化桌面窗口管理器
   await DesktopScaffold.initManager();
 
+  // 运行应用
+  runApp(const MyApp());
+
   // 初始化 Rust 库
   await RustLib.init();
 
@@ -31,9 +34,6 @@ Future<void> main() async {
 
   // 初始化 FFmpeg
   await _initFFmpeg();
-
-  // 运行应用
-  runApp(const MyApp());
 
   // 配置 EasyLoading
   configLoading();

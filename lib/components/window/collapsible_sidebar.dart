@@ -144,13 +144,14 @@ class CollapsibleSidebar extends StatelessWidget {
 
         final targetWidth = MediaQuery.of(context).size.width / 2;
 
-        return _MobileSidebar(
+        return MobileSidebar(
           controller: controller,
           theme: theme,
           targetWidth: targetWidth,
           animationDuration: animationDuration,
           isExpanded: isExpanded,
           showExtends: showExtends,
+          isMobile: isMobile,
           buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends, isMobile: isMobile),
         );
       }
@@ -165,7 +166,7 @@ class CollapsibleSidebar extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: AppThemeCommon.radius16,
-            boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))],
+            boxShadow: !isMobile ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))] : null,
             gradient: AppTheme.sideBarTheme(context),
             border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
@@ -177,6 +178,11 @@ class CollapsibleSidebar extends StatelessWidget {
 
   /// 构建侧边栏内容
   Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends, {bool? isMobile}) {
+    if (isMobile == true) {
+      isExpanded = true;
+      showExtends = true;
+    }
+
     return Column(
       children: [
         // 侧边栏头部
@@ -484,7 +490,7 @@ class CollapsibleSidebar extends StatelessWidget {
 }
 
 /// 移动端侧边栏组件（支持手势滑动）
-class _MobileSidebar extends StatefulWidget {
+class MobileSidebar extends StatefulWidget {
   final SidebarController controller;
   final ThemeData theme;
   final double targetWidth;
@@ -492,8 +498,10 @@ class _MobileSidebar extends StatefulWidget {
   final bool isExpanded;
   final bool showExtends;
   final Widget Function(BuildContext) buildContent;
+  final bool? isMobile;
 
-  const _MobileSidebar({
+  const MobileSidebar({
+    super.key,
     required this.controller,
     required this.theme,
     required this.targetWidth,
@@ -501,13 +509,14 @@ class _MobileSidebar extends StatefulWidget {
     required this.isExpanded,
     required this.showExtends,
     required this.buildContent,
+    this.isMobile,
   });
 
   @override
-  State<_MobileSidebar> createState() => _MobileSidebarState();
+  State<MobileSidebar> createState() => MobileSidebarState();
 }
 
-class _MobileSidebarState extends State<_MobileSidebar> {
+class MobileSidebarState extends State<MobileSidebar> {
   double _dragOffset = 0.0;
   bool _isDragging = false;
 
@@ -591,11 +600,7 @@ class _MobileSidebarState extends State<_MobileSidebar> {
               },
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
-                child: Container(
-                  alignment: Alignment.topRight,
-                  decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt())),
-                  child: Text(maskOpacity.toString()),
-                ),
+                child: Container(decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()))),
               ),
             ),
           ),
@@ -643,7 +648,9 @@ class _MobileSidebarState extends State<_MobileSidebar> {
             child: Container(
               decoration: BoxDecoration(
                 color: widget.theme.colorScheme.surface,
-                boxShadow: [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))],
+                boxShadow: widget.isMobile != true
+                    ? [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))]
+                    : null,
                 gradient: AppTheme.sideBarTheme(context),
               ),
               child: widget.buildContent(context),

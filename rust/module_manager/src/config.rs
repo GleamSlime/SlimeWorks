@@ -5,19 +5,25 @@ use std::path::PathBuf;
 /// 获取当前平台的标识符
 /// 例如：darwin-aarch64, windows-x86_64
 pub fn get_platform_key() -> String {
-    #[cfg(target_os = "macos")]
-    let os = "darwin";
-    #[cfg(target_os = "windows")]
-    let os = "windows";
-    #[cfg(target_os = "linux")]
-    let os = "linux";
+    let os = if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        std::env::consts::OS
+    };
 
-    #[cfg(target_arch = "x86_64")]
-    let arch = "x86_64";
-    #[cfg(target_arch = "aarch64")]
-    let arch = "aarch64";
-    #[cfg(target_arch = "x86")]
-    let arch = "x86";
+    let arch = if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else if cfg!(target_arch = "x86") {
+        "x86"
+    } else {
+        std::env::consts::ARCH
+    };
 
     format!("{}-{}", os, arch)
 }
@@ -71,17 +77,15 @@ pub fn build_filename(version_info: &VersionInfo, module_type: &ModuleType) -> S
 
     match module_type {
         ModuleType::DynamicLibrary | ModuleType::Library => {
-            #[cfg(target_os = "windows")]
-            {
+            if cfg!(target_os = "windows") {
                 format!("{}.dll", base)
-            }
-            #[cfg(target_os = "macos")]
-            {
+            } else if cfg!(target_os = "macos") {
                 format!("{}.dylib", base)
-            }
-            #[cfg(target_os = "linux")]
-            {
+            } else if cfg!(target_os = "linux") {
                 format!("{}.so", base)
+            } else {
+                // Fallback: no extension
+                base
             }
         }
         ModuleType::Executable => {

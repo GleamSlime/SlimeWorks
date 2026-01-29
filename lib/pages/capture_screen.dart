@@ -469,47 +469,49 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
               ),
 
               // 右侧控制按钮
-              Row(
-                children: [
-                  // 刷新按钮
-                  IconButton.outlined(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: () async {
-                      await _loadCapturedData();
-                      _checkCertificateStatus();
-                    },
-                    tooltip: '刷新数据',
-                  ),
+              Flexible(
+                child: Row(
+                  children: [
+                    // 刷新按钮
+                    IconButton.outlined(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () async {
+                        await _loadCapturedData();
+                        _checkCertificateStatus();
+                      },
+                      tooltip: '刷新数据',
+                    ),
 
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
 
-                  // 清除按钮
-                  IconButton.outlined(icon: const Icon(Icons.delete_outline), onPressed: _clearData, tooltip: '清除所有数据'),
+                    // 清除按钮
+                    IconButton.outlined(icon: const Icon(Icons.delete_outline), onPressed: _clearData, tooltip: '清除所有数据'),
 
-                  const SizedBox(width: 16),
+                    const SizedBox(width: 16),
 
-                  // 证书安装按钮
-                  if (!_isCertInstalled)
+                    // 证书安装按钮
+                    if (!_isCertInstalled)
+                      FilledButton.tonalIcon(
+                        onPressed: _installCertificate,
+                        icon: const Icon(Icons.security),
+                        label: const Text('安装CA证书'),
+                        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)),
+                      ),
+
+                    if (!_isCertInstalled) const SizedBox(width: 12),
+
+                    // 开始/停止按钮
                     FilledButton.tonalIcon(
-                      onPressed: _installCertificate,
-                      icon: const Icon(Icons.security),
-                      label: const Text('安装CA证书'),
-                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)),
+                      onPressed: _toggleCapture,
+                      icon: Icon(_isCapturing ? Icons.stop : Icons.play_arrow),
+                      label: Text(_isCapturing ? '停止捕获' : '开始捕获'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _isCapturing ? Colors.red : Colors.green,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      ),
                     ),
-
-                  if (!_isCertInstalled) const SizedBox(width: 12),
-
-                  // 开始/停止按钮
-                  FilledButton.tonalIcon(
-                    onPressed: _toggleCapture,
-                    icon: Icon(_isCapturing ? Icons.stop : Icons.play_arrow),
-                    label: Text(_isCapturing ? '停止捕获' : '开始捕获'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _isCapturing ? Colors.red : Colors.green,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

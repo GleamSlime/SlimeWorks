@@ -12,7 +12,10 @@ class SizeUtils {
 
 double scaleW(double w, {bool large = false}) {
   if (isPhone) {
-    w = w * 3.2;
+    w = w * 2.2;
+  }
+  if (isPad) {
+    w *= 1.7;
   }
   if (ScreenUtil().screenWidth >= 1920) {
     w = w * 0.7;
@@ -22,7 +25,10 @@ double scaleW(double w, {bool large = false}) {
 
 double scaleH(double w, {bool large = false}) {
   if (isPhone) {
-    w = w * 3.2;
+    w = w * 2.2;
+  }
+  if (isPad) {
+    w *= 1.7;
   }
   if (ScreenUtil().screenWidth >= 1920) {
     w = w * 0.7;
@@ -32,7 +38,10 @@ double scaleH(double w, {bool large = false}) {
 
 double scaleS(double fontSize, {bool large = false}) {
   if (isPhone) {
-    fontSize = fontSize * 3.2;
+    fontSize = fontSize * 2.2;
+  }
+  if (isPad) {
+    fontSize *= 1.7;
   }
   if (ScreenUtil().screenWidth >= 1920) {
     fontSize = fontSize * 0.7;
@@ -47,5 +56,6 @@ double scaleS(double fontSize, {bool large = false}) {
 }
 
 bool get isPhone => ScreenUtil().screenHeight < 600 || ScreenUtil().screenWidth < 600;
+bool get isPad => !isPhone && ScreenUtil().screenHeight < 900 || ScreenUtil().screenWidth < 900;
 
 bool get isFold => ScreenUtil().screenHeight / ScreenUtil().screenWidth < 1.2;
