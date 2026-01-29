@@ -14,6 +14,8 @@ pub enum WsMessageType {
     Pong,
     /// 关闭连接
     Close,
+    /// 鉴权消息
+    Auth,
 }
 
 /// WebSocket 消息
@@ -122,5 +124,54 @@ impl Default for WsClientConfig {
             reconnect_interval_ms: 3000,
             max_reconnect_attempts: 0,
         }
+    }
+}
+
+/// 客户端连接信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientInfo {
+    /// 客户端唯一标识
+    pub id: String,
+    /// 连接时间（时间戳，秒）
+    pub connected_at: i64,
+    /// 最后一次心跳时间（时间戳，秒）
+    pub last_heartbeat: i64,
+    /// 是否已鉴权
+    pub authenticated: bool,
+    /// 客户端地址
+    pub address: String,
+}
+
+impl ClientInfo {
+    /// 创建新的客户端信息
+    pub fn new(id: String, address: String) -> Self {
+        let now = chrono::Utc::now().timestamp();
+        Self {
+            id,
+            connected_at: now,
+            last_heartbeat: now,
+            authenticated: false,
+            address,
+        }
+    }
+
+    /// 更新心跳时间
+    pub fn update_heartbeat(&mut self) {
+        self.last_heartbeat = chrono::Utc::now().timestamp();
+    }
+
+    /// 检查心跳是否超时（秒）
+    pub fn is_heartbeat_timeout(&self, timeout_secs: i64) -> bool {
+        let now = chrono::Utc::now().timestamp();
+        now - self.last_heartbeat > timeout_secs
+    }
+
+    /// 检查鉴权是否超时（秒）
+    pub fn is_auth_timeout(&self, timeout_secs: i64) -> bool {
+        if self.authenticated {
+            return false;
+        }
+        let now = chrono::Utc::now().timestamp();
+        now - self.connected_at > timeout_secs
     }
 }

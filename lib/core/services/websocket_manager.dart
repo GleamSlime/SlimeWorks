@@ -4,8 +4,30 @@ library;
 /// PC 端：提供服务器和客户端功能
 /// 移动端：仅提供客户端功能
 
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
+
+/// Dart-side representation of `ClientInfo` from Rust (via JSON)
+class ClientInfo {
+  final String id;
+  final int connectedAt;
+  final int lastHeartbeat;
+  final bool authenticated;
+  final String address;
+
+  ClientInfo({required this.id, required this.connectedAt, required this.lastHeartbeat, required this.authenticated, required this.address});
+
+  factory ClientInfo.fromJson(Map<String, dynamic> json) {
+    return ClientInfo(
+      id: json['id'] as String,
+      connectedAt: (json['connected_at'] as num).toInt(),
+      lastHeartbeat: (json['last_heartbeat'] as num).toInt(),
+      authenticated: json['authenticated'] as bool,
+      address: json['address'] as String,
+    );
+  }
+}
 
 class WebSocketManager {
   WebSocketManager._();
@@ -44,10 +66,37 @@ class WebSocketManager {
     await wsServerBroadcast(server: server, message: message);
   }
 
+  /// 发送消息到指定客户端
+  Future<void> sendToClient(WsServer server, String clientId, String message) async {
+    // Use broadcast with a routing prefix so server can route to single client
+    final routed = 'TO:$clientId:$message';
+    await wsServerBroadcast(server: server, message: routed);
+  }
+
+  /// 断开指定客户端连接
+  Future<void> disconnectClient(WsServer server, String clientId) async {
+    // Send a control broadcast instructing server to disconnect a specific client
+    final cmd = 'DISCONNECT:$clientId';
+    await wsServerBroadcast(server: server, message: cmd);
+  }
+
   /// 获取当前连接的客户端数量
   Future<int> getClientCount(WsServer server) async {
     final count = await wsServerGetClientCount(server: server);
     return count.toInt();
+  }
+
+  /// 获取所有连接的客户端信息列表
+  /// 注意：这会发送 GET_CLIENTS 请求，真实数据需要通过 WebSocket 消息接收
+  Future<List<ClientInfo>> getClients(WsServer server) async {
+    // 发送 GET_CLIENTS 请求，服务器会广播 CLIENTS_LIST:json 响应
+    try {
+      await wsServerBroadcast(server: server, message: 'GET_CLIENTS');
+      // 返回空列表，实际数据由 UI 通过接收消息更新
+      return <ClientInfo>[];
+    } catch (_) {
+      return <ClientInfo>[];
+    }
   }
 
   // =============== 客户端 API (所有平台) ===============

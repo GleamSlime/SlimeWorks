@@ -7,6 +7,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/services/websocket_manager.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:convert';
 
 class WebSocketTestPage extends StatefulWidget {
   const WebSocketTestPage({super.key});
@@ -22,19 +25,26 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
   WsServer? _server;
   bool _isServerRunning = false;
   int _clientCount = 0;
+  List<ClientInfo> _clients = [];
+  Timer? _clientUpdateTimer;
+  WsClient? _serverMonitorClient; // 用于接收服务器的广播响应
 
   // 客户端相关
   WsClient? _client;
   bool _isClientConnected = false;
+  Timer? _heartbeatTimer;
 
   // UI 相关
   final _hostController = TextEditingController(text: '127.0.0.1');
   final _portController = TextEditingController(text: '8765');
   final _messageController = TextEditingController();
   final List<String> _logs = [];
+  String? _selectedClientId;
 
   @override
   void dispose() {
+    _clientUpdateTimer?.cancel();
+    _heartbeatTimer?.cancel();
     _hostController.dispose();
     _portController.dispose();
     _messageController.dispose();
@@ -67,7 +77,17 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
       await _wsManager.startServer(_server!);
       setState(() => _isServerRunning = true);
       _addLog('服务器已启动');
-      _startClientCountTimer();
+
+      // 创建监听客户端来接收服务器广播的响应
+      final url = 'ws://${_hostController.text}:${_portController.text}';
+      _serverMonitorClient = _wsManager.createClient(url: url);
+      await _wsManager.connect(_serverMonitorClient!);
+      // 发送鉴权消息
+      await _wsManager.sendText(_serverMonitorClient!, 'AUTH:monitor');
+      _addLog('[监听客户端] 已连接并鉴权');
+      _startServerMonitorReceiver();
+
+      _startClientUpdateTimer();
     } catch (e) {
       _addLog('启动服务器失败: $e');
     }
@@ -76,10 +96,16 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
   Future<void> _stopServer() async {
     if (_server == null) return;
     try {
+      _clientUpdateTimer?.cancel();
+      if (_serverMonitorClient != null) {
+        await _wsManager.disconnect(_serverMonitorClient!);
+        _serverMonitorClient = null;
+      }
       await _wsManager.stopServer(_server!);
       setState(() {
         _isServerRunning = false;
         _clientCount = 0;
+        _clients = [];
       });
       _addLog('服务器已停止');
     } catch (e) {
@@ -101,19 +127,88 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
     }
   }
 
-  void _startClientCountTimer() {
-    if (!_isServerRunning) return;
-    Future.delayed(const Duration(seconds: 1), () async {
-      if (_server != null && _isServerRunning) {
+  Future<void> _sendToClient() async {
+    if (_server == null || !_isServerRunning || _selectedClientId == null) return;
+    final message = _messageController.text.trim();
+    if (message.isEmpty) return;
+
+    try {
+      await _wsManager.sendToClient(_server!, _selectedClientId!, message);
+      _addLog('[发送给 $_selectedClientId] $message');
+      _messageController.clear();
+    } catch (e) {
+      _addLog('发送失败: $e');
+    }
+  }
+
+  Future<void> _disconnectClientById(String clientId) async {
+    if (_server == null || !_isServerRunning) return;
+    try {
+      await _wsManager.disconnectClient(_server!, clientId);
+      _addLog('已断开客户端: $clientId');
+      _updateClients();
+    } catch (e) {
+      _addLog('断开失败: $e');
+    }
+  }
+
+  void _startClientUpdateTimer() {
+    _clientUpdateTimer?.cancel();
+    _clientUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_server != null && _isServerRunning && mounted) {
+        _updateClients();
+      }
+    });
+  }
+
+  Future<void> _updateClients() async {
+    if (_server == null || !_isServerRunning) return;
+    try {
+      final count = await _wsManager.getClientCount(_server!);
+      // 请求客户端列表（实际数据通过 _startServerMonitorReceiver 接收）
+      _addLog('[请求] GET_CLIENTS');
+      await _wsManager.getClients(_server!);
+      if (mounted) {
+        setState(() {
+          _clientCount = count;
+          // _clients 会在接收到 CLIENTS_LIST 响应时更新
+        });
+      }
+    } catch (e) {
+      // 忽略错误
+    }
+  }
+
+  // 监听服务器广播的响应消息
+  void _startServerMonitorReceiver() {
+    if (!_isServerRunning || _serverMonitorClient == null) return;
+
+    Future.delayed(const Duration(milliseconds: 50), () async {
+      if (_serverMonitorClient != null && _isServerRunning && mounted) {
         try {
-          final count = await _wsManager.getClientCount(_server!);
-          if (mounted) {
-            setState(() => _clientCount = count);
-            _startClientCountTimer();
+          final message = await _wsManager.receiveMessage(_serverMonitorClient!);
+          if (message != null) {
+            final data = wsMessageGetData(message: message);
+            if (data.startsWith('CLIENTS_LIST:')) {
+              final jsonStr = data.substring('CLIENTS_LIST:'.length);
+              try {
+                final List<dynamic> jsonList = json.decode(jsonStr);
+                final clients = jsonList.map((item) => ClientInfo.fromJson(item as Map<String, dynamic>)).toList();
+                if (mounted) {
+                  setState(() {
+                    _clients = clients;
+                  });
+                  _addLog('[客户端列表更新] ${clients.length} 个客户端');
+                }
+              } catch (e) {
+                _addLog('[解析客户端列表失败] $e');
+              }
+            }
           }
         } catch (e) {
           // 忽略错误
         }
+        _startServerMonitorReceiver();
       }
     });
   }
@@ -135,9 +230,14 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
     if (_client == null) return;
     try {
       await _wsManager.connect(_client!);
+
+      // 发送鉴权消息
+      await _wsManager.sendText(_client!, 'AUTH:test_token');
+
       setState(() => _isClientConnected = true);
-      _addLog('客户端已连接');
+      _addLog('客户端已连接并发送鉴权');
       _startMessageReceiver();
+      _startHeartbeat();
     } catch (e) {
       _addLog('连接失败: $e');
     }
@@ -146,6 +246,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
   Future<void> _disconnectClient() async {
     if (_client == null) return;
     try {
+      _heartbeatTimer?.cancel();
       await _wsManager.disconnect(_client!);
       setState(() => _isClientConnected = false);
       _addLog('客户端已断开');
@@ -155,7 +256,16 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
   }
 
   Future<void> _sendMessage() async {
-    if (_client == null || !_isClientConnected) return;
+    if (_client == null) {
+      _addLog('[错误] 客户端未创建');
+      return;
+    }
+
+    if (!_isClientConnected) {
+      _addLog('[错误] 客户端未连接，无法发送消息');
+      return;
+    }
+
     final message = _messageController.text.trim();
     if (message.isEmpty) return;
 
@@ -166,6 +276,20 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
     } catch (e) {
       _addLog('发送失败: $e');
     }
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (_client != null && _isClientConnected && mounted) {
+        try {
+          await _wsManager.sendText(_client!, 'PING');
+          _addLog('[心跳] PING');
+        } catch (e) {
+          _addLog('[心跳失败] $e');
+        }
+      }
+    });
   }
 
   // =============== 消息接收 ===============
@@ -238,11 +362,58 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                           ElevatedButton(onPressed: _server != null && _isServerRunning ? _stopServer : null, child: const Text('停止')),
                         ],
                       ),
-                      if (_isServerRunning)
+                      if (_isServerRunning) ...[
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
-                          child: Text('连接数: $_clientCount', style: Theme.of(context).textTheme.bodyMedium),
+                          child: Row(
+                            children: [
+                              Text('在线客户端: $_clientCount', style: Theme.of(context).textTheme.bodyMedium),
+                              const SizedBox(width: 8),
+                              IconButton(icon: const Icon(Icons.refresh, size: 16), onPressed: _updateClients, tooltip: '刷新列表'),
+                            ],
+                          ),
                         ),
+                        const SizedBox(height: 8),
+                        const Text('客户端列表:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 150,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: _clients.isEmpty
+                              ? const Center(
+                                  child: Text('暂无客户端连接', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                )
+                              : ListView.builder(
+                                  itemCount: _clients.length,
+                                  itemBuilder: (context, index) {
+                                    final client = _clients[index];
+                                    final connectedTime = DateTime.fromMillisecondsSinceEpoch(client.connectedAt * 1000);
+                                    final duration = DateTime.now().difference(connectedTime);
+                                    final isSelected = _selectedClientId == client.id;
+
+                                    return ListTile(
+                                      dense: true,
+                                      selected: isSelected,
+                                      title: Text('${client.address} ${client.authenticated ? "✓" : "✗"}', style: const TextStyle(fontSize: 12)),
+                                      subtitle: Text('连接时长: ${duration.inMinutes}分${duration.inSeconds % 60}秒', style: const TextStyle(fontSize: 10)),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.close, size: 16),
+                                        onPressed: () => _disconnectClientById(client.id),
+                                        tooltip: '断开连接',
+                                      ),
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedClientId = isSelected ? null : client.id;
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

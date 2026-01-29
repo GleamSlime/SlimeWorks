@@ -206,7 +206,7 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiCaptureIsProxyRunning({String? installDir});
 
-  Future<bool> crateApiCaptureIsRunningAsAdministrator();
+  bool crateApiCaptureIsRunningAsAdministrator();
 
   Future<void> crateApiLoggerLogDebug({required String message});
 
@@ -1543,17 +1543,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<bool> crateApiCaptureIsRunningAsAdministrator() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
+  bool crateApiCaptureIsRunningAsAdministrator() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 38,
-            port: port_,
-          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,

@@ -1352,16 +1352,15 @@ fn wire__crate__api__capture__is_proxy_running_impl(
     )
 }
 fn wire__crate__api__capture__is_running_as_administrator_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "is_running_as_administrator",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -1374,13 +1373,11 @@ fn wire__crate__api__capture__is_running_as_administrator_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::capture::is_running_as_administrator())?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::capture::is_running_as_administrator())?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -3802,12 +3799,6 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         36 => wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__capture__is_running_as_administrator_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         39 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
         40 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
         41 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
@@ -3937,6 +3928,9 @@ fn pde_ffi_dispatcher_sync_impl(
             wire__crate__api__capture__is_ca_certificate_installed_impl(ptr, rust_vec_len, data_len)
         }
         37 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
+        38 => {
+            wire__crate__api__capture__is_running_as_administrator_impl(ptr, rust_vec_len, data_len)
+        }
         46 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
         48 => {
             wire__crate__api__module_manager__module_list_loaded_impl(ptr, rust_vec_len, data_len)
