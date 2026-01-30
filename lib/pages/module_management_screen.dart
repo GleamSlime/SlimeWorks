@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/src/rust/api/module_manager.dart';
 
 import 'dart:io';
@@ -143,77 +142,70 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DesktopLayout(
-      title: '模块管理',
-      child: Column(
-        children: [
-          // 顶部操作栏
+    return Column(
+      children: [
+        // 顶部操作栏
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
+          ),
+          child: Row(
+            children: [
+              Text('已安装模块: ${_modules.length}', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              ElevatedButton.icon(onPressed: _isLoading ? null : _refreshModules, icon: const Icon(Icons.refresh), label: const Text('刷新')),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(onPressed: _isLoading ? null : () => _showInstallDialog(), icon: const Icon(Icons.add), label: const Text('安装模块')),
+            ],
+          ),
+        ),
+
+        // 错误提示
+        if (_error != null)
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
-            ),
+            color: Colors.red.shade100,
             child: Row(
               children: [
-                Text('已安装模块: ${_modules.length}', style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                ElevatedButton.icon(onPressed: _isLoading ? null : _refreshModules, icon: const Icon(Icons.refresh), label: const Text('刷新')),
+                const Icon(Icons.error, color: Colors.red),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : () => _showInstallDialog(),
-                  icon: const Icon(Icons.add),
-                  label: const Text('安装模块'),
+                Expanded(
+                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
                 ),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _error = null)),
               ],
             ),
           ),
 
-          // 错误提示
-          if (_error != null)
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.red.shade100,
-              child: Row(
-                children: [
-                  const Icon(Icons.error, color: Colors.red),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(_error!, style: const TextStyle(color: Colors.red)),
+        // 模块列表
+        Expanded(
+          child: _isLoading && _modules.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : _modules.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inbox, size: 64, color: Theme.of(context).disabledColor),
+                      const SizedBox(height: 16),
+                      Text('暂无已安装的模块', style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(onPressed: () => _showInstallDialog(), icon: const Icon(Icons.add), label: const Text('安装模块')),
+                    ],
                   ),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _error = null)),
-                ],
-              ),
-            ),
-
-          // 模块列表
-          Expanded(
-            child: _isLoading && _modules.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : _modules.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.inbox, size: 64, color: Theme.of(context).disabledColor),
-                        const SizedBox(height: 16),
-                        Text('暂无已安装的模块', style: Theme.of(context).textTheme.bodyLarge),
-                        const SizedBox(height: 8),
-                        ElevatedButton.icon(onPressed: () => _showInstallDialog(), icon: const Icon(Icons.add), label: const Text('安装模块')),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _modules.length,
-                    itemBuilder: (context, index) {
-                      final module = _modules[index];
-                      return _buildModuleCard(module);
-                    },
-                  ),
-          ),
-        ],
-      ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _modules.length,
+                  itemBuilder: (context, index) {
+                    final module = _modules[index];
+                    return _buildModuleCard(module);
+                  },
+                ),
+        ),
+      ],
     );
   }
 

@@ -55,6 +55,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0 # 安全存储敏感数据
   shared_preferences: ^2.3.4 # 简单键值对存储
   path_provider: ^2.1.5 # 获取应用路径
+  file_picker: ^8.1.6 # 文件选择器
 
   # 图片相关
   cached_network_image: ^3.4.1 # 网络图片缓存

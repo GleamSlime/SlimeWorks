@@ -17,9 +17,8 @@ mod server;
 mod client;
 
 pub use api::*;
+pub use client::*;
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-pub use server::*;
-
-pub use client::*;
+pub use server::{WsServerHandle};

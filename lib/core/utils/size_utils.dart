@@ -1,6 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 
 class SizeUtils {
   static const navigationBarHeight = 128.0;
@@ -8,6 +9,15 @@ class SizeUtils {
   static const homeNavigationBarHeight = 115.0;
 
   static int appWidth = int.parse(dotenv.env['APP_SIZE_WIDTH'] ?? '1520');
+}
+
+/// 平台检测工具类
+class PlatformUtil {
+  /// 是否是桌面平台 (macOS 或 Windows)
+  static bool get isDesktop => Platform.isMacOS || Platform.isWindows;
+
+  /// 是否是移动平台 (iOS 或 Android)
+  static bool get isMobile => Platform.isIOS || Platform.isAndroid;
 }
 
 double scaleW(double w, {bool large = false}) {
@@ -55,7 +65,7 @@ double scaleS(double fontSize, {bool large = false}) {
   return baseSize;
 }
 
-bool get isPhone => ScreenUtil().screenHeight < 600 || ScreenUtil().screenWidth < 600;
+bool get isPhone => ScreenUtil().screenWidth < 600;
 bool get isPad => !isPhone && ScreenUtil().screenHeight < 900 || ScreenUtil().screenWidth < 900;
 
 bool get isFold => ScreenUtil().screenHeight / ScreenUtil().screenWidth < 1.2;

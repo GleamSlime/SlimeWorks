@@ -3,12 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/ffmpeg.dart';
-import 'package:slime_works/pages/capture_screen/models/recording_task.dart';
-import 'package:slime_works/pages/capture_screen/widgets/dialogs.dart';
-import 'package:slime_works/pages/capture_screen/widgets/list_builders.dart';
+import 'package:slime_works/pages/backup/capture_screen/models/recording_task.dart';
+import 'package:slime_works/pages/backup/capture_screen/widgets/dialogs.dart';
+import 'package:slime_works/pages/backup/capture_screen/widgets/list_builders.dart';
 
 /// 数据捕获页面
 class CaptureScreen extends StatefulWidget {
@@ -378,27 +377,24 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    return DesktopLayout(
-      title: '数据捕获',
-      child: Column(
-        children: [
-          // 控制面板
-          _buildControlPanel(),
+    return Column(
+      children: [
+        // 控制面板
+        _buildControlPanel(),
 
-          const Divider(height: 1),
+        const Divider(height: 1),
 
-          // Tabs
-          _buildTabBar(),
+        // Tabs
+        _buildTabBar(),
 
-          // Tab内容
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [_buildCaptureTab(), _buildRecordingTab(), _buildVideoList(), _buildImageList(), _buildScriptList()],
-            ),
+        // Tab内容
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [_buildCaptureTab(), _buildRecordingTab(), _buildVideoList(), _buildImageList(), _buildScriptList()],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

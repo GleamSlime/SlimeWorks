@@ -17,41 +17,6 @@ lazy_static! {
     static ref SERVER_INSTANCE: Arc<RwLock<Option<WsServerHandle>>> = Arc::new(RwLock::new(None));
 }
 
-// Top-level FRB wrappers so flutter_rust_bridge generates Dart bindings
-#[frb]
-pub async fn ws_server_send_to_client(
-    server: &WsServer,
-    client_id: String,
-    message: String,
-) -> Result<(), String> {
-    server.send_to_client(client_id, message).await
-}
-
-#[frb]
-pub async fn ws_server_disconnect_client(
-    server: &WsServer,
-    client_id: String,
-) -> Result<(), String> {
-    server.disconnect_client(client_id).await
-}
-
-#[frb]
-pub async fn ws_server_get_clients_json(server: &WsServer) -> Result<Vec<String>, String> {
-    match server.get_clients().await {
-        Ok(list) => {
-            let mut out = Vec::with_capacity(list.len());
-            for info in list {
-                match serde_json::to_string(&info) {
-                    Ok(s) => out.push(s),
-                    Err(e) => return Err(format!("Serialize error: {}", e)),
-                }
-            }
-            Ok(out)
-        }
-        Err(e) => Err(e),
-    }
-}
-
 /// 心跳超时时间（秒）
 const HEARTBEAT_TIMEOUT_SECS: i64 = 30;
 /// 鉴权超时时间（秒）
@@ -67,6 +32,7 @@ struct ClientHandle {
 
 /// WebSocket 服务器句柄
 pub struct WsServerHandle {
+    #[allow(dead_code)]
     config: WsServerConfig,
     shutdown_tx: mpsc::Sender<()>,
     clients: Arc<Mutex<HashMap<String, ClientHandle>>>,

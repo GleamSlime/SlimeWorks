@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_text_styles.dart';
 
@@ -75,9 +74,9 @@ class ThemePreviewScreen extends StatelessWidget {
       );
     }
 
-    return DesktopLayout(
-      title: '主题预览',
-      child: SingleChildScrollView(
+    return Scaffold(
+      appBar: AppBar(title: const Text('主题预览')),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

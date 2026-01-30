@@ -1,0 +1,47 @@
+[package]
+name = "novel_reader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Flutter Rust Bridge
+flutter_rust_bridge = "=2.11.1"
+
+# 数据库模块
+db_module = { path = "../db_module" }
+
+# 异步运行时
+tokio = { version = "1.49.0", features = [
+  "rt-multi-thread",
+  "sync",
+  "fs",
+], default-features = false }
+
+# epub 解析
+epub = "2.0"
+
+# zip 用于从 epub（zip）中提取封面图像
+# 禁用默认特性以避免引入 bzip2 本地依赖（macOS 链接报错）
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+# 文件遍历
+walkdir = "2.5"
+
+# 字符编码检测和转换
+encoding_rs = "0.8"
+chardetng = "0.1"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+md5 = "0.7"
+
+# 工具
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+[lib]
+crate-type = ["staticlib", "rlib"]

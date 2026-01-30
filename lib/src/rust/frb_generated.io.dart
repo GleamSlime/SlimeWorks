@@ -8,6 +8,7 @@ import 'api/ffmpeg.dart';
 import 'api/logger.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
+import 'api/novel_reader.dart';
 import 'api/simple.dart';
 import 'api/websocket.dart';
 import 'dart:async';
@@ -203,10 +204,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FFmpegConfig dco_decode_box_autoadd_f_fmpeg_config(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
   CaptureProxyModule dco_decode_capture_proxy_module(dynamic raw);
 
   @protected
   CaptureStats dco_decode_capture_stats(dynamic raw);
+
+  @protected
+  double dco_decode_f_32(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -233,13 +240,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<InstalledModule> dco_decode_list_installed_module(dynamic raw);
 
   @protected
+  List<NovelChapter> dco_decode_list_novel_chapter(dynamic raw);
+
+  @protected
+  List<NovelMetadata> dco_decode_list_novel_metadata(dynamic raw);
+
+  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<SearchMatch> dco_decode_list_search_match(dynamic raw);
+
+  @protected
   ModuleType dco_decode_module_type(dynamic raw);
+
+  @protected
+  NovelChapter dco_decode_novel_chapter(dynamic raw);
+
+  @protected
+  NovelContent dco_decode_novel_content(dynamic raw);
+
+  @protected
+  NovelFormat dco_decode_novel_format(dynamic raw);
+
+  @protected
+  NovelMetadata dco_decode_novel_metadata(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -252,6 +280,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CaptureStats? dco_decode_opt_box_autoadd_capture_stats(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  SearchMatch dco_decode_search_match(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -431,12 +465,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   CaptureProxyModule sse_decode_capture_proxy_module(
     SseDeserializer deserializer,
   );
 
   @protected
   CaptureStats sse_decode_capture_stats(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -467,13 +507,38 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<NovelChapter> sse_decode_list_novel_chapter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<NovelMetadata> sse_decode_list_novel_metadata(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<SearchMatch> sse_decode_list_search_match(SseDeserializer deserializer);
+
+  @protected
   ModuleType sse_decode_module_type(SseDeserializer deserializer);
+
+  @protected
+  NovelChapter sse_decode_novel_chapter(SseDeserializer deserializer);
+
+  @protected
+  NovelContent sse_decode_novel_content(SseDeserializer deserializer);
+
+  @protected
+  NovelFormat sse_decode_novel_format(SseDeserializer deserializer);
+
+  @protected
+  NovelMetadata sse_decode_novel_metadata(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -488,6 +553,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats? sse_decode_opt_box_autoadd_capture_stats(
     SseDeserializer deserializer,
   );
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  SearchMatch sse_decode_search_match(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -695,6 +766,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_i_64(
+    PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_capture_proxy_module(
     CaptureProxyModule self,
     SseSerializer serializer,
@@ -702,6 +779,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_capture_stats(CaptureStats self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
@@ -737,6 +817,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_novel_chapter(
+    List<NovelChapter> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_novel_metadata(
+    List<NovelMetadata> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
@@ -746,7 +838,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_search_match(
+    List<SearchMatch> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_module_type(ModuleType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_chapter(NovelChapter self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_content(NovelContent self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_format(NovelFormat self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_metadata(NovelMetadata self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
@@ -763,6 +873,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     CaptureStats? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+    PlatformInt64? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_search_match(SearchMatch self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_16(int self, SseSerializer serializer);

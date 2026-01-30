@@ -34,7 +34,7 @@ class CustomTitleBar extends StatelessWidget {
       child: Container(
         height: scaleW(70),
         // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),
-        width: MediaQuery.of(context).size.width - scaleW(250 + 400),
+        width: MediaQuery.of(context).size.width - scaleW(400),
         padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace4),
         // color: Colors.red,
         child: Platform.isMacOS ? const MacWindowButtons() : null,

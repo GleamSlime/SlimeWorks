@@ -35,7 +35,7 @@ class DesktopScaffold extends StatefulWidget {
       size: Size(windowWidth, windowHeight),
       center: false,
       titleBarStyle: TitleBarStyle.hidden,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       windowButtonVisibility: false,
       title: windowTitle,
     );
@@ -85,11 +85,14 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        widget.child,
-        Positioned(left: 0, top: 0, child: const CustomTitleBar()),
-      ],
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned(left: 0, top: 0, child: const CustomTitleBar()),
+        ],
+      ),
     );
   }
 }

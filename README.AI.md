@@ -1,0 +1,9 @@
+- 此项目基于FRB(Flutter 3.41.0、Dart 3.11.0、rustc 1.92.0)
+- 项目支持 桌面端/服务端(MacOS、Windows)，客户端/移动端(IOS、Android)
+- 应用包含模块管理系统，所以RUST中分为动态加载(仅桌面端)和静态链接
+- 如果需求有创建新的模块参考目录如下
+  - 静态链接模块参考： rust/ws_module 文件夹
+  - 动态载入模块参考： rust/capture_proxy 文件夹
+- 应用主要是一套Flutter兼容移动和桌面端，当RUST功能无法再移动端完全实现时，则会通过HTTP请求客户端方式让客户端执行完逻辑后返回数据
+- 完成代码调整后需 flutter run 以校验是否有编译错误，如果只有Rust调整应当cargo build
+- 完成代码后不需要输出README

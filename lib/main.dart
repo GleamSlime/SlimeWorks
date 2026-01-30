@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
+import 'package:slime_works/components/window/desktop_shell.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
@@ -105,8 +106,8 @@ class MyApp extends StatelessWidget {
           locale: const Locale('zh', 'CN'),
           fallbackLocale: const Locale('zh', 'CN'),
 
-          // EasyLoading 配置
-          builder: EasyLoading.init(),
+          // 使用 DesktopShell 包裹所有页面
+          builder: (context, child) => DesktopShell(child: EasyLoading.init()(context, child)),
         );
       },
     );

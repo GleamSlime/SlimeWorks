@@ -9,15 +9,6 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
-/// 平台检测工具类
-class PlatformUtil {
-  /// 是否是桌面平台 (macOS 或 Windows)
-  static bool get isDesktop => Platform.isMacOS || Platform.isWindows;
-
-  /// 是否是移动平台 (iOS 或 Android)
-  static bool get isMobile => Platform.isIOS || Platform.isAndroid;
-}
-
 /// 桌面布局页面
 /// 仅用于 macOS 和 Windows 平台
 class DesktopLayout extends StatelessWidget {
@@ -55,6 +46,7 @@ class DesktopLayout extends StatelessWidget {
             ],
           ),
           SidebarMenuItem(icon: Assets.image.svg.menuMediaLibrary, label: '媒体库', route: '/media-library'),
+          SidebarMenuItem(icon: Assets.image.svg.menuCollectFile, label: '小说库', route: '/novel-library'),
         ],
       ),
 

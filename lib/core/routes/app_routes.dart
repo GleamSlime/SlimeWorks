@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/dashboard_screen.dart';
-import 'package:slime_works/pages/capture_screen.dart';
+import 'package:slime_works/pages/backup/capture_screen.dart';
 import 'package:slime_works/pages/module_management_screen.dart';
 import 'package:slime_works/pages/websocket_test_page.dart';
+import 'package:slime_works/pages/novel_library_page.dart';
+import 'package:slime_works/pages/novel_reader_page.dart';
 
 /// 应用路由配置
 class AppRoutes {
@@ -27,6 +28,8 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String themePreview = '/theme-preview';
   static const String webSocketTest = '/websocket-test';
+  static const String novelLibrary = '/novel-library';
+  static const String novelReader = '/novel-reader';
 
   /// 获取所有路由
   static List<GetPage> getPages() {
@@ -34,6 +37,8 @@ class AppRoutes {
       GetPage(name: dashboard, page: () => const DashboardScreen(), transition: Transition.fadeIn),
       GetPage(name: capture, page: () => const CaptureScreen(), transition: Transition.fadeIn),
       GetPage(name: moduleManagement, page: () => const ModuleManagementScreen(), transition: Transition.fadeIn),
+      GetPage(name: novelLibrary, page: () => const NovelLibraryPage(), transition: Transition.fadeIn),
+      GetPage(name: novelReader, page: () => const NovelReaderPage(), transition: Transition.fadeIn),
       GetPage(name: themePreview, page: () => const ThemePreviewScreen(), transition: Transition.fadeIn),
       GetPage(name: webSocketTest, page: () => const WebSocketTestPage(), transition: Transition.fadeIn),
       GetPage(name: datasource, page: () => _buildPlaceholderPage('数据源'), transition: Transition.fadeIn),
@@ -50,10 +55,7 @@ class AppRoutes {
   }
 
   /// 构建占位页面
-  static DesktopLayout _buildPlaceholderPage(String title) {
-    return DesktopLayout(
-      title: title,
-      child: Center(child: Text('$title 页面开发中...', style: Get.textTheme.headlineSmall)),
-    );
+  static Widget _buildPlaceholderPage(String title) {
+    return Center(child: Text('$title 页面开发中...', style: Get.textTheme.headlineSmall));
   }
 }

@@ -33,6 +33,12 @@ module_manager = { path = "module_manager" }
 # WebSocket 模块（独立 crate）
 ws_module = { path = "ws_module" }
 
+# 数据库模块（独立 crate）
+db_module = { path = "db_module" }
+
+# Novel Reader 模块（独立 crate）
+novel_reader = { path = "novel_reader" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]
@@ -47,6 +53,8 @@ strip = true
 [workspace]
 members = [
   "capture_proxy",
+  "novel_reader",
+  "db_module",
   # "ffmpeg_lib",
 ]
 

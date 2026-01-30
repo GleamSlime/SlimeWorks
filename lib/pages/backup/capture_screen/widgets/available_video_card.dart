@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:slime_works/pages/capture_screen/models/recording_task.dart';
-import 'package:slime_works/pages/capture_screen/widgets/stat_widgets.dart';
+import 'package:slime_works/pages/backup/capture_screen/models/recording_task.dart';
+import 'package:slime_works/pages/backup/capture_screen/widgets/stat_widgets.dart';
 
 /// 可录制视频卡片
 class AvailableVideoCard extends StatelessWidget {
