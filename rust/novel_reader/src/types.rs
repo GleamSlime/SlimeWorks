@@ -50,6 +50,10 @@ pub struct NovelMetadata {
     pub last_read_at: Option<DateTime<Utc>>,
     /// 封面图片路径（如果有）
     pub cover_path: Option<String>,
+    /// 所属文件夹ID（用于分组）
+    pub folder_id: Option<String>,
+    /// 自定义排序位置（数字越小越靠前）
+    pub custom_order: Option<i32>,
 }
 
 /// 小说章节信息（主要用于 epub）
@@ -98,4 +102,17 @@ pub struct ScanProgress {
     pub found: usize,
     /// 当前正在处理的文件
     pub current_file: Option<String>,
+}
+
+/// 小说文件夹
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NovelFolder {
+    /// 文件夹ID
+    pub id: String,
+    /// 文件夹名称
+    pub name: String,
+    /// 创建时间
+    pub created_at: DateTime<Utc>,
+    /// 排序位置
+    pub order: i32,
 }

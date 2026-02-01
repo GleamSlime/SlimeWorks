@@ -5,6 +5,7 @@
 /// - 使用 db_module 存储小说元数据
 /// - 解析和渲染 txt、epub 内容
 pub mod api;
+pub mod http_bridge_register;
 pub mod parser;
 pub mod scanner;
 pub mod search;

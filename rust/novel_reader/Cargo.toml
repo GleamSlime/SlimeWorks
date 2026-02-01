@@ -10,6 +10,9 @@ flutter_rust_bridge = "=2.11.1"
 # 数据库模块
 db_module = { path = "../db_module" }
 
+# HTTP Bridge模块
+http_bridge = { path = "../http_bridge" }
+
 # 异步运行时
 tokio = { version = "1.49.0", features = [
   "rt-multi-thread",
@@ -42,6 +45,7 @@ thiserror = "1.0"
 log = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
+regex = "1.12.2"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

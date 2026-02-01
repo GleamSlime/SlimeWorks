@@ -1010,6 +1010,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "http_bridge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper 0.14.32",
+ "lazy_static",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1480,8 +1493,10 @@ dependencies = [
  "encoding_rs",
  "epub",
  "flutter_rust_bridge",
+ "http_bridge",
  "log",
  "md5",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -1961,6 +1976,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "flutter_rust_bridge",
+ "http_bridge",
  "lazy_static",
  "libloading",
  "log",

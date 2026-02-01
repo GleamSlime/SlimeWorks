@@ -68,6 +68,7 @@ class DesktopShell extends StatelessWidget {
           items: [
             SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '主题测试', route: '/theme-preview'),
             SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: 'WS测试', route: '/websocket-test'),
+            SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: 'HTTP测试', route: '/http-bridge-test'),
             SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '小说库测试', route: '/novel-library'),
           ],
         ),

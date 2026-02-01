@@ -1,16 +1,31 @@
+use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::parser::NovelParser;
 use crate::scanner::DirectoryScanner;
-use crate::types::{NovelChapter, NovelContent, NovelFormat, NovelMetadata, ScanProgress};
+use crate::types::{
+    NovelChapter, NovelContent, NovelFolder, NovelFormat, NovelMetadata, ScanProgress,
+};
 use db_module;
 use serde_json; // 使用工作区内的 db_module 来持久化元数据
 
 // 全局存储的小说库
 static NOVEL_LIBRARY: OnceLock<Arc<Mutex<Vec<NovelMetadata>>>> = OnceLock::new();
+
+// 全局存储的文件夹列表
+static FOLDER_LIST: OnceLock<Arc<Mutex<Vec<NovelFolder>>>> = OnceLock::new();
+
+// 内容缓存：存储已解析的小说内容，避免重复解析
+type ContentCache = Arc<Mutex<HashMap<String, (NovelContent, DateTime<Utc>)>>>;
+static CONTENT_CACHE: OnceLock<ContentCache> = OnceLock::new();
+
+fn get_content_cache() -> &'static ContentCache {
+    CONTENT_CACHE.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
 
 fn get_library() -> &'static Arc<Mutex<Vec<NovelMetadata>>> {
     NOVEL_LIBRARY.get_or_init(|| {
@@ -47,6 +62,26 @@ fn get_library() -> &'static Arc<Mutex<Vec<NovelMetadata>>> {
         }
 
         library
+    })
+}
+
+fn get_folder_list() -> &'static Arc<Mutex<Vec<NovelFolder>>> {
+    FOLDER_LIST.get_or_init(|| {
+        let folders = Arc::new(Mutex::new(Vec::new()));
+
+        let _ = db_module::db_register_table("novel_folders".to_string());
+
+        if let Ok(records) = db_module::db_list_all("novel_folders".to_string()) {
+            if let Ok(mut list) = folders.lock() {
+                for rec in records {
+                    if let Ok(folder) = serde_json::from_str::<NovelFolder>(&rec.value) {
+                        list.push(folder);
+                    }
+                }
+            }
+        }
+
+        folders
     })
 }
 
@@ -115,42 +150,181 @@ pub fn remove_novel(novel_id: String) -> Result<bool, String> {
     Ok(removed)
 }
 
-/// 获取小说内容
+/// 删除小说及其文件
 #[frb(sync)]
+pub fn remove_novel_with_file(novel_id: String) -> Result<bool, String> {
+    // 先获取文件路径
+    let file_path = {
+        let library = get_library().lock().map_err(|e| e.to_string())?;
+        library
+            .iter()
+            .find(|n| n.id == novel_id)
+            .map(|n| n.file_path.clone())
+    };
+
+    // 删除数据库记录
+    let removed = remove_novel(novel_id)?;
+
+    // 删除文件
+    if removed {
+        if let Some(path) = file_path {
+            match std::fs::remove_file(&path) {
+                Ok(_) => log::info!("[Novel] Deleted file: {}", path),
+                Err(e) => log::warn!("[Novel] Failed to delete file {}: {}", path, e),
+            }
+        }
+    }
+
+    Ok(removed)
+}
+
+/// 清空所有小说
+#[frb(sync)]
+pub fn clear_all_novels() -> Result<(), String> {
+    let mut library = get_library().lock().map_err(|e| e.to_string())?;
+
+    // 删除数据库中的所有记录
+    for novel in library.iter() {
+        let _ = db_module::db_delete("novels".to_string(), novel.id.clone());
+    }
+
+    // 清空内存库
+    library.clear();
+
+    Ok(())
+}
+
+/// 获取小说内容（带缓存）
 pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
+    use std::fs;
+    use std::time::Instant;
+
+    let start_time = Instant::now();
+    log::info!("[Novel] Starting to load novel: {}", file_path);
+
     let path = PathBuf::from(&file_path);
+
+    // 检查文件修改时间
+    log::debug!("[Novel] Checking file metadata...");
+    let metadata = fs::metadata(&path).map_err(|e| {
+        log::error!("[Novel] Failed to read file metadata: {}", e);
+        format!("Failed to read file metadata: {}", e)
+    })?;
+    let modified = metadata
+        .modified()
+        .map_err(|e| format!("Failed to get file modified time: {}", e))?;
+    let modified_time: DateTime<Utc> = modified.into();
+    let file_size = metadata.len();
+    log::info!(
+        "[Novel] File size: {} bytes, modified: {:?}",
+        file_size,
+        modified_time
+    );
+
+    // 检查缓存
+    {
+        log::debug!("[Novel] Checking cache...");
+        let cache = get_content_cache().lock().map_err(|e| e.to_string())?;
+        if let Some((cached_content, cached_time)) = cache.get(&file_path) {
+            // 如果文件没有被修改，返回缓存内容
+            if cached_time >= &modified_time {
+                let elapsed = start_time.elapsed();
+                log::info!(
+                    "[Novel] Cache hit! Returned in {:?}, chapters: {}",
+                    elapsed,
+                    cached_content.chapters.len()
+                );
+                return Ok(cached_content.clone());
+            } else {
+                log::info!("[Novel] Cache expired (file modified), will re-parse");
+            }
+        } else {
+            log::info!("[Novel] Cache miss, will parse file");
+        }
+    }
+
+    // 解析文件
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .ok_or_else(|| "Invalid file extension".to_string())?;
 
-    match ext.to_lowercase().as_str() {
+    log::info!("[Novel] Parsing {} file...", ext);
+    let parse_start = Instant::now();
+    let content = match ext.to_lowercase().as_str() {
         "txt" => {
-            let content = crate::parser::TxtParser::parse(&path).map_err(|e| e.to_string())?;
-            Ok(content)
+            let result = crate::parser::TxtParser::parse(&path).map_err(|e| {
+                log::error!("[Novel] TXT parse failed: {}", e);
+                e.to_string()
+            })?;
+            log::info!(
+                "[Novel] TXT parsed in {:?}, chapters: {}",
+                parse_start.elapsed(),
+                result.chapters.len()
+            );
+            result
         }
         "epub" => {
-            let content = crate::parser::EpubParser::parse(&path).map_err(|e| e.to_string())?;
-            Ok(content)
+            let result = crate::parser::EpubParser::parse(&path).map_err(|e| {
+                log::error!("[Novel] EPUB parse failed: {}", e);
+                e.to_string()
+            })?;
+            log::info!(
+                "[Novel] EPUB parsed in {:?}, chapters: {}",
+                parse_start.elapsed(),
+                result.chapters.len()
+            );
+            result
         }
-        _ => Err(format!("Unsupported file format: {}", ext)),
+        _ => return Err(format!("Unsupported file format: {}", ext)),
+    };
+
+    // 更新缓存
+    {
+        log::debug!("[Novel] Updating cache...");
+        let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
+        cache.insert(file_path.clone(), (content.clone(), modified_time));
+        log::info!(
+            "[Novel] Cache updated, total cached novels: {}",
+            cache.len()
+        );
     }
+
+    let total_elapsed = start_time.elapsed();
+    log::info!("[Novel] Total load time: {:?}", total_elapsed);
+    Ok(content)
 }
 
-/// 获取小说章节内容
-#[frb(sync)]
+/// 获取小说章节内容（使用缓存）
 pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<String, String> {
+    log::info!(
+        "[Novel] Getting chapter {} from {}",
+        chapter_index,
+        file_path
+    );
     let content = get_novel_content(file_path)?;
 
-    content
+    let result = content
         .chapters
         .get(chapter_index)
         .and_then(|ch| ch.content.clone())
-        .ok_or_else(|| format!("Chapter {} not found or has no content", chapter_index))
+        .ok_or_else(|| {
+            log::error!(
+                "[Novel] Chapter {} not found or has no content",
+                chapter_index
+            );
+            format!("Chapter {} not found or has no content", chapter_index)
+        })?;
+
+    log::info!(
+        "[Novel] Chapter {} loaded, length: {} chars",
+        chapter_index,
+        result.len()
+    );
+    Ok(result)
 }
 
-/// 搜索小说内容中的关键词
-#[frb(sync)]
+/// 搜索小说内容中的关键词（使用缓存）
 pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchMatch>, String> {
     let content = get_novel_content(file_path)?;
     let mut matches = Vec::new();
@@ -196,6 +370,12 @@ pub fn update_reading_progress(novel_id: String, progress: f32) -> Result<bool, 
     if let Some(novel) = library.iter_mut().find(|n| n.id == novel_id) {
         novel.progress = progress.clamp(0.0, 1.0);
         novel.last_read_at = Some(chrono::Utc::now());
+
+        // 持久化到数据库
+        if let Ok(json) = serde_json::to_string(&novel) {
+            let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+        }
+
         Ok(true)
     } else {
         Ok(false)
@@ -209,4 +389,118 @@ pub struct SearchMatch {
     pub chapter_title: String,
     pub position: usize,
     pub snippet: String,
+}
+
+/// 创建文件夹
+#[frb(sync)]
+pub fn create_folder(name: String) -> Result<NovelFolder, String> {
+    let mut folders = get_folder_list().lock().map_err(|e| e.to_string())?;
+
+    let folder = NovelFolder {
+        id: format!("folder_{}", uuid::Uuid::new_v4()),
+        name,
+        created_at: chrono::Utc::now(),
+        order: folders.len() as i32,
+    };
+
+    folders.push(folder.clone());
+
+    // 持久化
+    if let Ok(json) = serde_json::to_string(&folder) {
+        let _ = db_module::db_set("novel_folders".to_string(), folder.id.clone(), json);
+    }
+
+    Ok(folder)
+}
+
+/// 获取所有文件夹
+#[frb(sync)]
+pub fn get_all_folders() -> Result<Vec<NovelFolder>, String> {
+    let folders = get_folder_list().lock().map_err(|e| e.to_string())?;
+    let mut result = folders.clone();
+    result.sort_by_key(|f| f.order);
+    Ok(result)
+}
+
+/// 删除文件夹
+#[frb(sync)]
+pub fn delete_folder(folder_id: String) -> Result<bool, String> {
+    let mut folders = get_folder_list().lock().map_err(|e| e.to_string())?;
+    let initial_len = folders.len();
+    folders.retain(|f| f.id != folder_id);
+    let removed = folders.len() < initial_len;
+
+    if removed {
+        let _ = db_module::db_delete("novel_folders".to_string(), folder_id.clone());
+
+        // 将该文件夹下的小说移到根目录
+        let mut library = get_library().lock().map_err(|e| e.to_string())?;
+        for novel in library.iter_mut() {
+            if novel.folder_id.as_ref() == Some(&folder_id) {
+                novel.folder_id = None;
+                if let Ok(json) = serde_json::to_string(&novel) {
+                    let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+                }
+            }
+        }
+    }
+
+    Ok(removed)
+}
+
+/// 移动小说到文件夹
+#[frb(sync)]
+pub fn move_novel_to_folder(novel_id: String, folder_id: Option<String>) -> Result<bool, String> {
+    let mut library = get_library().lock().map_err(|e| e.to_string())?;
+
+    if let Some(novel) = library.iter_mut().find(|n| n.id == novel_id) {
+        novel.folder_id = folder_id;
+
+        // 持久化
+        if let Ok(json) = serde_json::to_string(&novel) {
+            let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+        }
+
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// 更新小说排序
+#[frb(sync)]
+pub fn update_novel_order(novel_id: String, order: i32) -> Result<bool, String> {
+    let mut library = get_library().lock().map_err(|e| e.to_string())?;
+
+    if let Some(novel) = library.iter_mut().find(|n| n.id == novel_id) {
+        novel.custom_order = Some(order);
+
+        // 持久化
+        if let Ok(json) = serde_json::to_string(&novel) {
+            let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+        }
+
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// 批量更新小说排序
+#[frb(sync)]
+pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> Result<(), String> {
+    let mut library = get_library().lock().map_err(|e| e.to_string())?;
+
+    for (index, novel_id) in novel_ids.iter().enumerate() {
+        if let Some(novel) = library.iter_mut().find(|n| n.id == *novel_id) {
+            novel.custom_order = Some(index as i32);
+
+            // 持久化
+            if let Ok(json) = serde_json::to_string(&novel) {
+                let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+            }
+        }
+    }
+
+    Ok(())
 }

@@ -190,7 +190,11 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
           if (message != null) {
             final data = wsMessageGetData(message: message);
             if (data.startsWith('CLIENTS_LIST:')) {
-              final jsonStr = data.substring('CLIENTS_LIST:'.length);
+              final jsonStr = data.substring('CLIENTS_LIST:'.length).trim();
+              if (jsonStr.isEmpty) {
+                _addLog('[客户端列表为空]');
+                return;
+              }
               try {
                 final List<dynamic> jsonList = json.decode(jsonStr);
                 final clients = jsonList.map((item) => ClientInfo.fromJson(item as Map<String, dynamic>)).toList();

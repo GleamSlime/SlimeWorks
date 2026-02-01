@@ -39,6 +39,9 @@ db_module = { path = "db_module" }
 # Novel Reader 模块（独立 crate）
 novel_reader = { path = "novel_reader" }
 
+# HTTP Bridge 模块（独立 crate）
+http_bridge = { path = "http_bridge" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]

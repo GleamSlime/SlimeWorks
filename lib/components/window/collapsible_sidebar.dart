@@ -543,121 +543,125 @@ class MobileSidebarState extends State<MobileSidebar> {
       maskOpacity = 1;
     }
 
-    return Stack(
-      children: [
-        // 左侧边缘检测区域（用于开始拖动）
-        if (!widget.isExpanded)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 30, // 边缘检测区域宽度
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragStart: (details) {
-                setState(() {
-                  _isDragging = true;
-                  _dragOffset = 0;
-                });
-              },
-              onHorizontalDragUpdate: (details) {
-                if (_isDragging) {
-                  setState(() {
-                    _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
-                  });
-                }
-              },
-              onHorizontalDragEnd: (details) {
-                if (_isDragging) {
-                  setState(() {
-                    _isDragging = false;
-                  });
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          children: [
+            // 左侧边缘检测区域（用于开始拖动）
+            if (!widget.isExpanded)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 30, // 边缘检测区域宽度
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: (details) {
+                    setState(() {
+                      _isDragging = true;
+                      _dragOffset = 0;
+                    });
+                  },
+                  onHorizontalDragUpdate: (details) {
+                    if (_isDragging) {
+                      setState(() {
+                        _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                      });
+                    }
+                  },
+                  onHorizontalDragEnd: (details) {
+                    if (_isDragging) {
+                      setState(() {
+                        _isDragging = false;
+                      });
 
-                  // 根据拖动距离和速度决定打开或关闭
-                  final velocity = details.primaryVelocity ?? 0;
-                  if (velocity > 300 || _dragOffset > widget.targetWidth * 0.3) {
-                    widget.controller.openSidebar();
+                      // 根据拖动距离和速度决定打开或关闭
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity > 300 || _dragOffset > widget.targetWidth * 0.3) {
+                        widget.controller.openSidebar();
+                      }
+
+                      setState(() {
+                        _dragOffset = 0;
+                      });
+                    }
+                  },
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+
+            // 背景遮罩层
+            if (widget.isExpanded || _isDragging)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (widget.isExpanded && !_isDragging) {
+                      widget.controller.closeSidebar();
+                    }
+                  },
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
+                    child: Container(decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()))),
+                  ),
+                ),
+              ),
+
+            // 侧边栏主体
+            AnimatedPositioned(
+              duration: _isDragging ? Duration.zero : widget.animationDuration,
+              curve: Curves.easeInOut,
+              left: sidebarLeft,
+              top: 0,
+              bottom: 0,
+              width: widget.targetWidth,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  if (widget.isExpanded || _isDragging) {
+                    setState(() {
+                      if (!_isDragging) {
+                        _isDragging = true;
+                        _dragOffset = widget.targetWidth;
+                      }
+                      _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                    });
                   }
+                },
+                onHorizontalDragEnd: (details) {
+                  if (_isDragging) {
+                    final velocity = details.primaryVelocity ?? 0;
 
-                  setState(() {
-                    _dragOffset = 0;
-                  });
-                }
-              },
-              child: Container(color: Colors.transparent),
-            ),
-          ),
+                    setState(() {
+                      _isDragging = false;
+                    });
 
-        // 背景遮罩层
-        if (widget.isExpanded || _isDragging)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (widget.isExpanded && !_isDragging) {
-                  widget.controller.closeSidebar();
-                }
-              },
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
-                child: Container(decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()))),
+                    // 根据速度和位置判断
+                    if (velocity < -300 || _dragOffset < widget.targetWidth * 0.5) {
+                      widget.controller.closeSidebar();
+                    } else if (velocity > 300 || _dragOffset > widget.targetWidth * 0.5) {
+                      widget.controller.openSidebar();
+                    }
+
+                    setState(() {
+                      _dragOffset = 0;
+                    });
+                  }
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: widget.theme.colorScheme.surface,
+                    boxShadow: widget.isMobile != true
+                        ? [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))]
+                        : null,
+                    gradient: AppTheme.sideBarTheme(context),
+                  ),
+                  child: widget.buildContent(context),
+                ),
               ),
             ),
-          ),
-
-        // 侧边栏主体
-        AnimatedPositioned(
-          duration: _isDragging ? Duration.zero : widget.animationDuration,
-          curve: Curves.easeInOut,
-          left: sidebarLeft,
-          top: 0,
-          bottom: 0,
-          width: widget.targetWidth,
-          child: GestureDetector(
-            onHorizontalDragUpdate: (details) {
-              if (widget.isExpanded || _isDragging) {
-                setState(() {
-                  if (!_isDragging) {
-                    _isDragging = true;
-                    _dragOffset = widget.targetWidth;
-                  }
-                  _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
-                });
-              }
-            },
-            onHorizontalDragEnd: (details) {
-              if (_isDragging) {
-                final velocity = details.primaryVelocity ?? 0;
-
-                setState(() {
-                  _isDragging = false;
-                });
-
-                // 根据速度和位置判断
-                if (velocity < -300 || _dragOffset < widget.targetWidth * 0.5) {
-                  widget.controller.closeSidebar();
-                } else if (velocity > 300 || _dragOffset > widget.targetWidth * 0.5) {
-                  widget.controller.openSidebar();
-                }
-
-                setState(() {
-                  _dragOffset = 0;
-                });
-              }
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: widget.theme.colorScheme.surface,
-                boxShadow: widget.isMobile != true
-                    ? [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))]
-                    : null,
-                gradient: AppTheme.sideBarTheme(context),
-              ),
-              child: widget.buildContent(context),
-            ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

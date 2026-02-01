@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 
 // Dart 友好的类型定义（使用 i64 timestamp 代替 DateTime）
@@ -15,6 +14,8 @@ pub struct NovelMetadata {
     pub progress: f32,
     pub last_read_at: Option<i64>, // Unix timestamp (seconds)
     pub cover_path: Option<String>,
+    pub folder_id: Option<String>,
+    pub custom_order: Option<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +63,8 @@ fn convert_metadata(meta: novel_reader::types::NovelMetadata) -> NovelMetadata {
         progress: meta.progress,
         last_read_at: meta.last_read_at.map(|dt| dt.timestamp()),
         cover_path: meta.cover_path,
+        folder_id: meta.folder_id,
+        custom_order: meta.custom_order,
     }
 }
 
@@ -118,6 +121,20 @@ pub fn remove_novel(novel_id: String) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// 从库中移除小说及其文件
+#[frb(sync)]
+pub fn remove_novel_with_file(novel_id: String) -> anyhow::Result<()> {
+    novel_reader::remove_novel_with_file(novel_id).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 清空所有小说
+#[frb(sync)]
+pub fn clear_all_novels() -> anyhow::Result<()> {
+    novel_reader::clear_all_novels().map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
 /// 获取小说的完整内容（包含所有章节）
 pub fn get_novel_content(file_path: String) -> anyhow::Result<NovelContent> {
     let content = novel_reader::get_novel_content(file_path).map_err(|e| anyhow::anyhow!(e))?;
@@ -140,5 +157,66 @@ pub fn search_in_novel(file_path: String, keyword: String) -> anyhow::Result<Vec
 #[frb(sync)]
 pub fn update_reading_progress(novel_id: String, progress: f32) -> anyhow::Result<()> {
     novel_reader::update_reading_progress(novel_id, progress).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+// Folder management
+
+#[derive(Debug, Clone)]
+pub struct NovelFolder {
+    pub id: String,
+    pub name: String,
+    pub created_at: i64,
+    pub order: i32,
+}
+
+fn convert_folder(folder: novel_reader::types::NovelFolder) -> NovelFolder {
+    NovelFolder {
+        id: folder.id,
+        name: folder.name,
+        created_at: folder.created_at.timestamp(),
+        order: folder.order,
+    }
+}
+
+/// 创建文件夹
+#[frb(sync)]
+pub fn create_folder(name: String) -> anyhow::Result<NovelFolder> {
+    let folder = novel_reader::create_folder(name).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(convert_folder(folder))
+}
+
+/// 获取所有文件夹
+#[frb(sync)]
+pub fn get_all_folders() -> anyhow::Result<Vec<NovelFolder>> {
+    let folders = novel_reader::get_all_folders().map_err(|e| anyhow::anyhow!(e))?;
+    Ok(folders.into_iter().map(convert_folder).collect())
+}
+
+/// 删除文件夹
+#[frb(sync)]
+pub fn delete_folder(folder_id: String) -> anyhow::Result<()> {
+    novel_reader::delete_folder(folder_id).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 移动小说到文件夹
+#[frb(sync)]
+pub fn move_novel_to_folder(novel_id: String, folder_id: Option<String>) -> anyhow::Result<()> {
+    novel_reader::move_novel_to_folder(novel_id, folder_id).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 更新小说排序
+#[frb(sync)]
+pub fn update_novel_order(novel_id: String, order: i32) -> anyhow::Result<()> {
+    novel_reader::update_novel_order(novel_id, order).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 批量更新小说排序
+#[frb(sync)]
+pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> anyhow::Result<()> {
+    novel_reader::batch_update_novel_orders(novel_ids).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }

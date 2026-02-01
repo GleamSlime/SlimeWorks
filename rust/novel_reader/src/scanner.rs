@@ -55,14 +55,21 @@ impl DirectoryScanner {
                 progress.current_file = Some(entry.path().to_string_lossy().to_string());
             }
 
-            // 只处理文件
-            if !entry.file_type().is_file() {
+            let path = entry.path();
+            let file_type = entry.file_type();
+
+            // 支持 Windows 下的 .epub 文件夹（包含 mimetype 文件）
+            let is_valid_epub_dir = file_type.is_dir()
+                && path.extension().and_then(|s| s.to_str()) == Some("epub")
+                && path.join("mimetype").exists();
+
+            // 只处理文件或有效的 epub 文件夹
+            if !file_type.is_file() && !is_valid_epub_dir {
                 continue;
             }
 
             // 检查文件扩展名
-            let path = entry.path();
-            if !Self::is_supported_file(path) {
+            if !Self::is_supported_file(path) && !is_valid_epub_dir {
                 continue;
             }
 
@@ -136,11 +143,19 @@ impl DirectoryScanner {
             return Err(anyhow::anyhow!("File does not exist: {:?}", file_path));
         }
 
-        if !file_path.is_file() {
-            return Err(anyhow::anyhow!("Path is not a file: {:?}", file_path));
+        // 支持 Windows 下的 .epub 文件夹（包含 mimetype 文件）
+        let is_valid_epub_dir = file_path.is_dir()
+            && file_path.extension().and_then(|s| s.to_str()) == Some("epub")
+            && file_path.join("mimetype").exists();
+
+        if !file_path.is_file() && !is_valid_epub_dir {
+            return Err(anyhow::anyhow!(
+                "Path is not a file or valid epub directory: {:?}",
+                file_path
+            ));
         }
 
-        if !Self::is_supported_file(file_path) {
+        if !Self::is_supported_file(file_path) && !is_valid_epub_dir {
             return Err(anyhow::anyhow!("Unsupported file format: {:?}", file_path));
         }
 

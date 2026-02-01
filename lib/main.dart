@@ -26,10 +26,11 @@ Future<void> main() async {
   await DesktopScaffold.initManager();
 
   // 运行应用
-  runApp(const MyApp());
-
-  // 初始化 Rust 库
+  // 初始化 Rust 库（必须在 widget 构建前完成）
   await RustLib.init();
+
+  // 运行应用
+  runApp(const MyApp());
 
   initializeLogger();
 
@@ -106,8 +107,13 @@ class MyApp extends StatelessWidget {
           locale: const Locale('zh', 'CN'),
           fallbackLocale: const Locale('zh', 'CN'),
 
-          // 使用 DesktopShell 包裹所有页面
-          builder: (context, child) => DesktopShell(child: EasyLoading.init()(context, child)),
+          // 使用 builder 包裹页面
+          builder: (context, child) {
+            // 应用 EasyLoading
+            final Widget result = EasyLoading.init()(context, child) ?? const SizedBox.shrink();
+            // 应用 DesktopShell
+            return DesktopShell(child: result);
+          },
         );
       },
     );

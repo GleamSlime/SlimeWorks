@@ -1,5 +1,6 @@
 pub mod capture;
 pub mod ffmpeg;
+pub mod http_bridge;
 pub mod logger;
 // pub mod module_api;         // 已删除 - 依赖旧module_manager结构
 pub mod module_downloader;

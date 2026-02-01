@@ -5,8 +5,9 @@ import 'package:slime_works/pages/dashboard_screen.dart';
 import 'package:slime_works/pages/backup/capture_screen.dart';
 import 'package:slime_works/pages/module_management_screen.dart';
 import 'package:slime_works/pages/websocket_test_page.dart';
-import 'package:slime_works/pages/novel_library_page.dart';
-import 'package:slime_works/pages/novel_reader_page.dart';
+import 'package:slime_works/pages/novel_library/novel_library_page.dart';
+import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
+import 'package:slime_works/pages/http_bridge_test_page.dart';
 
 /// 应用路由配置
 class AppRoutes {
@@ -28,6 +29,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String themePreview = '/theme-preview';
   static const String webSocketTest = '/websocket-test';
+  static const String httpBridgeTest = '/http-bridge-test';
   static const String novelLibrary = '/novel-library';
   static const String novelReader = '/novel-reader';
 
@@ -40,6 +42,7 @@ class AppRoutes {
       GetPage(name: novelLibrary, page: () => const NovelLibraryPage(), transition: Transition.fadeIn),
       GetPage(name: novelReader, page: () => const NovelReaderPage(), transition: Transition.fadeIn),
       GetPage(name: themePreview, page: () => const ThemePreviewScreen(), transition: Transition.fadeIn),
+      GetPage(name: httpBridgeTest, page: () => const HttpBridgeTestPage(), transition: Transition.fadeIn),
       GetPage(name: webSocketTest, page: () => const WebSocketTestPage(), transition: Transition.fadeIn),
       GetPage(name: datasource, page: () => _buildPlaceholderPage('数据源'), transition: Transition.fadeIn),
       GetPage(name: clearwater, page: () => _buildPlaceholderPage('清水账'), transition: Transition.fadeIn),

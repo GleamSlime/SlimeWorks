@@ -8,6 +8,7 @@
 
 import 'api/capture.dart';
 import 'api/ffmpeg.dart';
+import 'api/http_bridge.dart';
 import 'api/logger.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
@@ -206,6 +207,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FFmpegConfig dco_decode_box_autoadd_f_fmpeg_config(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
@@ -245,6 +249,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NovelChapter> dco_decode_list_novel_chapter(dynamic raw);
 
   @protected
+  List<NovelFolder> dco_decode_list_novel_folder(dynamic raw);
+
+  @protected
   List<NovelMetadata> dco_decode_list_novel_metadata(dynamic raw);
 
   @protected
@@ -252,6 +259,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
   List<SearchMatch> dco_decode_list_search_match(dynamic raw);
@@ -264,6 +274,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NovelContent dco_decode_novel_content(dynamic raw);
+
+  @protected
+  NovelFolder dco_decode_novel_folder(dynamic raw);
 
   @protected
   NovelFormat dco_decode_novel_format(dynamic raw);
@@ -284,7 +297,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats? dco_decode_opt_box_autoadd_capture_stats(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
   SearchMatch dco_decode_search_match(dynamic raw);
@@ -467,6 +486,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
@@ -514,6 +536,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<NovelFolder> sse_decode_list_novel_folder(SseDeserializer deserializer);
+
+  @protected
   List<NovelMetadata> sse_decode_list_novel_metadata(
     SseDeserializer deserializer,
   );
@@ -523,6 +548,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<SearchMatch> sse_decode_list_search_match(SseDeserializer deserializer);
@@ -535,6 +565,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NovelContent sse_decode_novel_content(SseDeserializer deserializer);
+
+  @protected
+  NovelFolder sse_decode_novel_folder(SseDeserializer deserializer);
 
   @protected
   NovelFormat sse_decode_novel_format(SseDeserializer deserializer);
@@ -557,7 +590,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchMatch sse_decode_search_match(SseDeserializer deserializer);
@@ -768,6 +809,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -825,6 +869,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_novel_folder(
+    List<NovelFolder> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_novel_metadata(
     List<NovelMetadata> self,
     SseSerializer serializer,
@@ -836,6 +886,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_string_string(
+    List<(String, String)> self,
     SseSerializer serializer,
   );
 
@@ -853,6 +909,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_novel_content(NovelContent self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_folder(NovelFolder self, SseSerializer serializer);
 
   @protected
   void sse_encode_novel_format(NovelFormat self, SseSerializer serializer);
@@ -877,8 +936,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_string_string(
+    (String, String) self,
     SseSerializer serializer,
   );
 

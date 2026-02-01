@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_metadata`, `convert_search_match`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_metadata`, `convert_search_match`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 扫描文件夹获取小说列表
 List<NovelMetadata> scanNovelsFolder({required String folderPath}) => RustLib
@@ -26,6 +26,14 @@ NovelMetadata addNovel({required String filePath}) =>
 /// 从库中移除小说
 void removeNovel({required String novelId}) =>
     RustLib.instance.api.crateApiNovelReaderRemoveNovel(novelId: novelId);
+
+/// 从库中移除小说及其文件
+void removeNovelWithFile({required String novelId}) => RustLib.instance.api
+    .crateApiNovelReaderRemoveNovelWithFile(novelId: novelId);
+
+/// 清空所有小说
+void clearAllNovels() =>
+    RustLib.instance.api.crateApiNovelReaderClearAllNovels();
 
 /// 获取小说的完整内容（包含所有章节）
 Future<NovelContent> getNovelContent({required String filePath}) =>
@@ -57,6 +65,36 @@ void updateReadingProgress({
   novelId: novelId,
   progress: progress,
 );
+
+/// 创建文件夹
+NovelFolder createFolder({required String name}) =>
+    RustLib.instance.api.crateApiNovelReaderCreateFolder(name: name);
+
+/// 获取所有文件夹
+List<NovelFolder> getAllFolders() =>
+    RustLib.instance.api.crateApiNovelReaderGetAllFolders();
+
+/// 删除文件夹
+void deleteFolder({required String folderId}) =>
+    RustLib.instance.api.crateApiNovelReaderDeleteFolder(folderId: folderId);
+
+/// 移动小说到文件夹
+void moveNovelToFolder({required String novelId, String? folderId}) => RustLib
+    .instance
+    .api
+    .crateApiNovelReaderMoveNovelToFolder(novelId: novelId, folderId: folderId);
+
+/// 更新小说排序
+void updateNovelOrder({required String novelId, required int order}) => RustLib
+    .instance
+    .api
+    .crateApiNovelReaderUpdateNovelOrder(novelId: novelId, order: order);
+
+/// 批量更新小说排序
+void batchUpdateNovelOrders({required List<String> novelIds}) => RustLib
+    .instance
+    .api
+    .crateApiNovelReaderBatchUpdateNovelOrders(novelIds: novelIds);
 
 class NovelChapter {
   final String id;
@@ -104,6 +142,34 @@ class NovelContent {
           chapters == other.chapters;
 }
 
+class NovelFolder {
+  final String id;
+  final String name;
+  final PlatformInt64 createdAt;
+  final int order;
+
+  const NovelFolder({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.order,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ createdAt.hashCode ^ order.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NovelFolder &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          createdAt == other.createdAt &&
+          order == other.order;
+}
+
 enum NovelFormat { txt, epub }
 
 class NovelMetadata {
@@ -118,6 +184,8 @@ class NovelMetadata {
   final double progress;
   final PlatformInt64? lastReadAt;
   final String? coverPath;
+  final String? folderId;
+  final int? customOrder;
 
   const NovelMetadata({
     required this.id,
@@ -131,6 +199,8 @@ class NovelMetadata {
     required this.progress,
     this.lastReadAt,
     this.coverPath,
+    this.folderId,
+    this.customOrder,
   });
 
   @override
@@ -145,7 +215,9 @@ class NovelMetadata {
       addedAt.hashCode ^
       progress.hashCode ^
       lastReadAt.hashCode ^
-      coverPath.hashCode;
+      coverPath.hashCode ^
+      folderId.hashCode ^
+      customOrder.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -162,7 +234,9 @@ class NovelMetadata {
           addedAt == other.addedAt &&
           progress == other.progress &&
           lastReadAt == other.lastReadAt &&
-          coverPath == other.coverPath;
+          coverPath == other.coverPath &&
+          folderId == other.folderId &&
+          customOrder == other.customOrder;
 }
 
 class SearchMatch {
