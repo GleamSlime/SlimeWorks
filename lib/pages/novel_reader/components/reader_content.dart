@@ -146,8 +146,26 @@ class _ReaderContentState extends State<ReaderContent> {
 
       debugPrint('[Novel UI] Building content view, length: ${currentContent.length} chars');
 
-      // 是否包含图片（用于决定默认使用 HTML 渲染或允许切换为纯文本）
+      // 调试日志：输出 content 中是否包含 class 与 img 引用，便于定位样式和图片问题
+      try {
+        final previewLen = currentContent.length > 300 ? 300 : currentContent.length;
+        debugPrint('[Novel UI] content preview: ${currentContent.substring(0, previewLen)}');
+        if (currentContent.contains('class="') || currentContent.contains("class='")) {
+          debugPrint('[Novel UI] content contains class attributes');
+        }
+        final imgReg = RegExp(r'''<img[^>]*src=["']([^"']+)["']''', caseSensitive: false);
+        final imgs = imgReg.allMatches(currentContent).map((m) => m.group(1)).whereType<String>().toList();
+        if (imgs.isNotEmpty) {
+          debugPrint('[Novel UI] Found image srcs: ${imgs.join(', ')}');
+        }
+      } catch (e) {
+        debugPrint('[Novel UI] content debug error: $e');
+      }
+
+      // 是否包含 HTML 标签或图片（用于决定默认使用 HTML 渲染或允许切换为纯文本）
+      final containsHtmlTags = RegExp(r'<\s*(p|br|div|span|img|style|h[1-6])\b', caseSensitive: false).hasMatch(currentContent);
       final hasImages = currentContent.contains('<img');
+      final shouldRenderHtml = containsHtmlTags || hasImages;
 
       // 仅在章节变化时滚动到顶部（避免每次 rebuild 都滚动）
       final currentIndex = controller.currentChapterIndex.value;
@@ -268,9 +286,9 @@ class _ReaderContentState extends State<ReaderContent> {
                   // 检查是否包含图片标签（epub内容）
                   // final hasImages 已在外部计算
 
-                  // 如果有图片，使用 HTML 渲染（优先级最高）
-                  if (hasImages) {
-                    debugPrint('[Reader] Rendering HTML content with images');
+                  // 如果内容包含 HTML（或图片），使用 HTML 渲染（优先级最高）
+                  if (shouldRenderHtml) {
+                    debugPrint('[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)');
 
                     // 检查是否有缓存的已处理HTML
                     final currentChapterIdx = controller.currentChapterIndex.value;
@@ -415,6 +433,30 @@ class _ReaderContentState extends State<ReaderContent> {
                     return SelectionArea(
                       child: Html(
                         data: embeddedHtml,
+                        onLinkTap: (url, _, __) {
+                          if (url == null) return;
+                          try {
+                            final uri = Uri.tryParse(url);
+                            final path = uri?.path ?? url;
+                            final basename = path.split('/').where((s) => s.isNotEmpty).toList().isNotEmpty ? path.split('/').last : path;
+                            final target = controller.chapters.indexWhere(
+                              (c) => c.id.endsWith(basename) || c.id.contains(basename) || c.title.contains(basename),
+                            );
+                            if (target != -1) {
+                              if (target == controller.currentChapterIndex.value) {
+                                // If it's the same chapter, do nothing (or could scroll to anchor if implemented)
+                                debugPrint('[Reader] Link tapped points to current chapter: $basename');
+                              } else {
+                                debugPrint('[Reader] Link tapped, navigating to chapter index $target (basename=$basename)');
+                                controller.goToChapter(target);
+                              }
+                            } else {
+                              Get.snackbar('提示', '未找到目标章节: $url');
+                            }
+                          } catch (e) {
+                            debugPrint('[Reader] onLinkTap error: $e');
+                          }
+                        },
                         style: {
                           'body': Style(
                             fontSize: FontSize(controller.fontSize.value),
@@ -423,6 +465,12 @@ class _ReaderContentState extends State<ReaderContent> {
                           ),
                           'p': Style(display: Display.block, lineHeight: LineHeight(2.8), padding: HtmlPaddings.only(bottom: 16)),
                           'div': Style(display: Display.block, lineHeight: LineHeight(1.8), padding: HtmlPaddings.only(bottom: 16)),
+                          'span': Style(display: Display.inline),
+                          'strong': Style(fontWeight: FontWeight.bold),
+                          'b': Style(fontWeight: FontWeight.bold),
+                          'em': Style(fontStyle: FontStyle.italic),
+                          'i': Style(fontStyle: FontStyle.italic),
+                          'u': Style(textDecoration: TextDecoration.underline),
                           'mark': Style(backgroundColor: Colors.yellow.withOpacity(0.5), color: Colors.orange.shade900, fontWeight: FontWeight.bold),
                           'mark_selected': Style(
                             backgroundColor: Colors.orange.withOpacity(0.5),

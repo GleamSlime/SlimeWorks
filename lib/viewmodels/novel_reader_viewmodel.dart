@@ -57,6 +57,17 @@ class NovelReaderViewModel extends GetxController {
       debugPrint('[Novel UI] Failed to clear epub image cache: $e');
     }
 
+    // 退出阅读器时保存当前阅读位置
+    try {
+      if (chapters.isNotEmpty) {
+        final progress = (currentChapterIndex.value + 1) / (chapters.length);
+        updateReadingProgress(novelId: novel.id, progress: progress);
+        debugPrint('[Novel UI] Saved progress $progress for novel ${novel.id} on close');
+      }
+    } catch (e) {
+      debugPrint('[Novel UI] Failed to save progress on close: $e');
+    }
+
     super.onClose();
   }
 
@@ -100,8 +111,24 @@ class NovelReaderViewModel extends GetxController {
       debugPrint('[Novel UI] Loaded ${chapters.length} chapters');
 
       if (chapters.isNotEmpty) {
-        debugPrint('[Novel UI] Loading first chapter...');
-        await loadChapterContent(0);
+        // 根据上次阅读进度恢复到对应章节
+        final len = chapters.length;
+        int startIndex = 0;
+        try {
+          final p = novel.progress;
+          if (p > 0) {
+            startIndex = (p * len).ceil() - 1;
+            if (startIndex < 0) startIndex = 0;
+            if (startIndex >= len) startIndex = len - 1;
+          }
+        } catch (_) {
+          startIndex = 0;
+        }
+        debugPrint('[Novel UI] Restoring chapter index $startIndex from progress=${novel.progress}');
+        // 先设置索引以更新 UI 选中状态，再加载章节内容
+        currentChapterIndex.value = startIndex;
+        debugPrint('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
+        await loadChapterContent(startIndex);
       }
 
       final totalDuration = DateTime.now().difference(startTime);
@@ -414,6 +441,30 @@ class NovelReaderViewModel extends GetxController {
         ],
       ),
     );
+  }
+
+  /// 在系统文件管理器中显示当前小说文件并选中（若支持）
+  Future<void> revealFileInFolder() async {
+    try {
+      final path = novel.filePath;
+      if (path.isEmpty) {
+        _showSnack('错误', '未找到文件路径');
+        return;
+      }
+
+      if (Platform.isWindows) {
+        await Process.run('explorer', ['/select,', path]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', ['-R', path]);
+      } else {
+        // Linux / other: 打开父目录
+        final dir = File(path).parent.path;
+        await Process.run('xdg-open', [dir]);
+      }
+    } catch (e) {
+      debugPrint('[Novel VM] revealFileInFolder failed: $e');
+      _showSnack('错误', '无法打开所在文件夹: $e');
+    }
   }
 
   /// 删除小说

@@ -63,9 +63,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
 
   void _applyTheme() {
     final brightness = _resolveBrightness();
-    final baseTheme = brightness == Brightness.dark
-        ? AppThemeCommon.darkTheme
-        : AppThemeCommon.lightTheme;
+    final baseTheme = brightness == Brightness.dark ? AppThemeCommon.darkTheme : AppThemeCommon.lightTheme;
     final updatedTheme = _buildCustomTheme(baseTheme, _accentColor, _fontScale);
     Get.changeTheme(updatedTheme);
   }
@@ -83,10 +81,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
 
   ThemeData _buildCustomTheme(ThemeData base, Color accentColor, double scale) {
     final scaledTextTheme = _scaleTextTheme(base.textTheme, scale);
-    final scaledPrimaryTextTheme = _scaleTextTheme(
-      base.primaryTextTheme,
-      scale,
-    );
+    final scaledPrimaryTextTheme = _scaleTextTheme(base.primaryTextTheme, scale);
     final colorScheme = base.colorScheme.copyWith(
       primary: accentColor,
       secondary: accentColor,
@@ -96,28 +91,18 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     return base.copyWith(
       colorScheme: colorScheme,
       primaryColor: accentColor,
-      appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: colorScheme.surface,
-      ),
+      appBarTheme: base.appBarTheme.copyWith(backgroundColor: colorScheme.surface),
       tabBarTheme: base.tabBarTheme.copyWith(
-        indicator: UnderlineTabIndicator(
-          borderSide: BorderSide(color: accentColor, width: 3),
-        ),
+        indicator: UnderlineTabIndicator(borderSide: BorderSide(color: accentColor, width: 3)),
         labelColor: colorScheme.onSurface,
         unselectedLabelColor: colorScheme.onSurface.withAlpha(140),
       ),
       textTheme: scaledTextTheme,
       primaryTextTheme: scaledPrimaryTextTheme,
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: _getContrastColor(accentColor),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: _getContrastColor(accentColor)),
       ),
-      sliderTheme: base.sliderTheme.copyWith(
-        thumbColor: accentColor,
-        activeTrackColor: accentColor,
-      ),
+      sliderTheme: base.sliderTheme.copyWith(thumbColor: accentColor, activeTrackColor: accentColor),
     );
   }
 
@@ -170,16 +155,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   Widget _buildModeChip(ThemeMode mode) {
     final theme = Theme.of(context);
     return ChoiceChip(
-      label: Text(
-        _themeModeLabel(mode),
-        style: AppTextStyles.body2(color: theme.colorScheme.onSurface),
-      ),
+      label: Text(_themeModeLabel(mode), style: AppTextStyles.body2(color: theme.colorScheme.onSurface)),
       selected: _themeMode == mode,
-      side: BorderSide(
-        color: _themeMode == mode
-            ? theme.colorScheme.primary
-            : theme.dividerColor,
-      ),
+      side: BorderSide(color: _themeMode == mode ? theme.colorScheme.primary : theme.dividerColor),
       selectedColor: theme.colorScheme.primary.withOpacity(0.15),
       onSelected: (_) => _onThemeModeChanged(mode),
     );
@@ -197,22 +175,10 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: color,
-          border: Border.all(
-            color: isSelected ? Colors.black87 : Colors.transparent,
-            width: isSelected ? 3 : 1,
-          ),
-          boxShadow: [
-            if (isSelected)
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-          ],
+          border: Border.all(color: isSelected ? Colors.black87 : Colors.transparent, width: isSelected ? 3 : 1),
+          boxShadow: [if (isSelected) BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 3))],
         ),
-        child: isSelected
-            ? Icon(Icons.check, color: _getContrastColor(color), size: 28)
-            : null,
+        child: isSelected ? Icon(Icons.check, color: _getContrastColor(color), size: 28) : null,
       ),
     );
   }
@@ -227,66 +193,35 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         children: [
           Text(
             '主题模式',
-            style: AppTextStyles.h5(
-              color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
-            ),
+            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            children: ThemeMode.values.map(_buildModeChip).toList(),
-          ),
+          Wrap(spacing: 12, children: ThemeMode.values.map(_buildModeChip).toList()),
           const SizedBox(height: 24),
           Text(
             '主题配色',
-            style: AppTextStyles.h5(
-              color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
-            ),
+            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _accentPalette.map(_buildAccentSwatch).toList(),
-          ),
+          Wrap(spacing: 12, runSpacing: 12, children: _accentPalette.map(_buildAccentSwatch).toList()),
           const SizedBox(height: 24),
           Text(
             '字号大小',
-            style: AppTextStyles.h5(
-              color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
-            ),
+            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
           ),
           const SizedBox(height: 12),
-          Slider(
-            value: _fontScale,
-            min: 0.8,
-            max: 1.3,
-            divisions: 10,
-            label: '${(_fontScale * 100).round()}%',
-            onChanged: _onFontScaleChanged,
-          ),
+          Slider(value: _fontScale, min: 0.8, max: 1.3, divisions: 10, label: '${(_fontScale * 100).round()}%', onChanged: _onFontScaleChanged),
           const SizedBox(height: 4),
-          Text(
-            '当前缩放：${(_fontScale * 100).round()}%',
-            style: AppTextStyles.body2(color: theme.colorScheme.onSurface),
-          ),
+          Text('当前缩放：${(_fontScale * 100).round()}%', style: AppTextStyles.body2(color: theme.colorScheme.onSurface)),
           const SizedBox(height: 32),
           Text(
             '预览样式',
-            style: AppTextStyles.h5(
-              color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
-            ),
+            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
           ),
           const SizedBox(height: 12),
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -294,10 +229,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
                 children: [
                   Text('标题文本', style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 8),
-                  Text(
-                    '正文示例：当前主题配色和字号大小将影响全局文本。',
-                    style: theme.textTheme.bodyMedium,
-                  ),
+                  Text('正文示例：当前主题配色和字号大小将影响全局文本。', style: theme.textTheme.bodyMedium),
                   const SizedBox(height: 12),
                   ElevatedButton(onPressed: () {}, child: const Text('操作按钮')),
                 ],

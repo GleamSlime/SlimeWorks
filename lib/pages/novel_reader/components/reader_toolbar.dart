@@ -82,11 +82,21 @@ class ReaderToolbar extends StatelessWidget {
                 IconButton(icon: const Icon(Icons.list, size: 20), tooltip: '结果列表', onPressed: controller.openSearchResultsList),
                 IconButton(icon: const Icon(Icons.arrow_downward, size: 20), tooltip: '下一个结果', onPressed: controller.nextSearchResult),
                 IconButton(icon: const Icon(Icons.close, size: 20), tooltip: '清除搜索', onPressed: controller.clearSearch),
+                const SizedBox(width: 4),
+                IconButton(icon: const Icon(Icons.folder_open, size: 20), tooltip: '在文件管理器中显示', onPressed: controller.revealFileInFolder),
                 const SizedBox(width: 8),
               ],
             );
           }
-          return IconButton(icon: const Icon(Icons.search), tooltip: '搜索', onPressed: controller.showSearchDialog);
+
+          // 默认：显示搜索按钮与“在文件管理器中显示”按钮
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(icon: const Icon(Icons.search), tooltip: '搜索', onPressed: controller.showSearchDialog),
+              IconButton(icon: const Icon(Icons.folder_open), tooltip: '在文件管理器中显示', onPressed: controller.revealFileInFolder),
+            ],
+          );
         }),
 
         // 字体大小调节
@@ -163,6 +173,7 @@ class ReaderToolbar extends StatelessWidget {
               ),
             ),
             IconButton(icon: const Icon(Icons.search), tooltip: '搜索', onPressed: controller.showSearchDialog, iconSize: 20),
+            IconButton(icon: const Icon(Icons.folder_open), tooltip: '在文件管理器中显示', onPressed: controller.revealFileInFolder, iconSize: 20),
           ],
         ),
 

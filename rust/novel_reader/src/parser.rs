@@ -264,10 +264,69 @@ impl EpubParser {
         let _ = fs::create_dir_all(&image_dir);
         log::info!("EpubParser: Image directory: {:?}", image_dir);
 
-        // 提取所有图片资源
-        match Self::extract_images(path, &image_dir) {
-            Ok(_) => log::info!("EpubParser: Images extracted successfully"),
-            Err(e) => log::warn!("EpubParser: Failed to extract images: {:?}", e),
+        // 检查是否需要重新提取图片：比较epub内图片数量与缓存目录中文件数量
+        let archive_image_count = (|| -> Result<usize> {
+            let f = File::open(path)?;
+            let mut archive = ZipArchive::new(f)?;
+            let mut cnt: usize = 0;
+            for i in 0..archive.len() {
+                if let Ok(mut file) = archive.by_index(i) {
+                    let name = file.name().to_lowercase();
+                    if name.ends_with(".jpg")
+                        || name.ends_with(".jpeg")
+                        || name.ends_with(".png")
+                        || name.ends_with(".gif")
+                        || name.ends_with(".svg")
+                        || name.ends_with(".webp")
+                    {
+                        cnt += 1;
+                    }
+                }
+            }
+            Ok(cnt)
+        })()
+        .unwrap_or(0);
+
+        // 统计缓存目录中文件数量
+        let existing_count = Self::count_files_in_dir(&image_dir).unwrap_or(0);
+
+        let need_extract = existing_count == 0 || archive_image_count > existing_count;
+
+        log::info!(
+            "EpubParser: archive_images={} cached_images={} image_dir={:?}",
+            archive_image_count,
+            existing_count,
+            image_dir
+        );
+
+        if need_extract {
+            log::info!("EpubParser: Image directory missing/partial, extracting images...");
+            // 提取所有图片资源
+            match Self::extract_images(path, &image_dir) {
+                Ok(_) => log::info!("EpubParser: Images extracted successfully"),
+                Err(e) => log::warn!("EpubParser: Failed to extract images: {:?}", e),
+            };
+        } else {
+            log::info!("EpubParser: Using existing images from cache");
+        }
+
+        // 创建CSS目录并提取CSS文件
+        let css_dir = std::env::temp_dir()
+            .join("slimeworks")
+            .join("epub_css")
+            .join(&novel_id);
+        let _ = fs::create_dir_all(&css_dir);
+
+        // 提取CSS文件
+        let css_content = match Self::extract_css(path, &css_dir) {
+            Ok(css) => {
+                log::info!("EpubParser: CSS extracted, {} bytes", css.len());
+                css
+            }
+            Err(e) => {
+                log::warn!("EpubParser: Failed to extract CSS: {:?}", e);
+                String::new()
+            }
         };
 
         let mut chapters = Vec::new();
@@ -301,7 +360,12 @@ impl EpubParser {
                 }
 
                 // 转换图片路径为本地文件路径
-                let content = Self::convert_image_paths(&content, &image_dir);
+                let mut content = Self::convert_image_paths(&content, &image_dir);
+
+                // 内联CSS样式
+                if !css_content.is_empty() {
+                    content = Self::inline_css_styles(&content, &css_content);
+                }
 
                 // 处理HTML标签（保留img标签）
                 let text = Self::strip_html_tags(&content);
@@ -310,13 +374,20 @@ impl EpubParser {
                     // 尝试从内容中提取真实标题（如"第x章 xxx"、"简介"、"彩页"等）
                     let extracted_title = Self::extract_title_from_content(&text);
 
+                    // 尝试获取当前资源 id（例如 Text/chapter1.xhtml），并将其附加到章节 id 中，便于前端根据 href 匹配
+                    let resource_id = doc
+                        .get_current_id()
+                        .map(|s| s.to_string())
+                        .unwrap_or_default();
                     let chapter = NovelChapter {
-                        id: format!("{}_{}", novel_id, index),
+                        id: format!("{}_{}::res::{}", novel_id, index, resource_id),
                         title: extracted_title.unwrap_or_else(|| {
-                            // 如果没有提取到标题，使用文件ID或默认名称
-                            doc.get_current_id()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| format!("Chapter {}", index + 1))
+                            // 如果没有提取到标题，使用资源 id 或默认名称
+                            if !resource_id.is_empty() {
+                                resource_id.clone()
+                            } else {
+                                format!("Chapter {}", index + 1)
+                            }
                         }),
                         index,
                         content: Some(text),
@@ -336,7 +407,7 @@ impl EpubParser {
 
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
-            let name = file.name();
+            let name = file.name().to_string();
 
             // 检查是否是图片文件
             if name.ends_with(".jpg")
@@ -347,7 +418,7 @@ impl EpubParser {
                 || name.ends_with(".webp")
             {
                 // 保持原有目录结构
-                let file_path = output_dir.join(name);
+                let file_path = output_dir.join(&name);
 
                 // 创建父目录
                 if let Some(parent) = file_path.parent() {
@@ -356,11 +427,145 @@ impl EpubParser {
 
                 // 写入文件
                 let mut out_file = File::create(&file_path)?;
-                std::io::copy(&mut file, &mut out_file)?;
+                let copied = std::io::copy(&mut file, &mut out_file)?;
+                if copied > 0 {
+                    log::info!(
+                        "EpubParser: Extracted image: {} ({} bytes)",
+                        file_path.display(),
+                        copied
+                    );
+                } else {
+                    log::warn!(
+                        "EpubParser: Extracted image {} but size is 0",
+                        file_path.display()
+                    );
+                    let _ = std::fs::remove_file(&file_path);
+                }
             }
         }
 
         Ok(())
+    }
+
+    /// 递归统计目录中文件数量
+    fn count_files_in_dir(dir: &Path) -> Option<usize> {
+        let mut cnt: usize = 0;
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(sub) = Self::count_files_in_dir(&path) {
+                        cnt += sub;
+                    }
+                } else {
+                    cnt += 1;
+                }
+            }
+            return Some(cnt);
+        }
+        None
+    }
+    /// 从EPUB中提取所有CSS文件并合并
+    fn extract_css<P: AsRef<Path>>(epub_path: P, output_dir: &Path) -> Result<String> {
+        let file = File::open(epub_path)?;
+        let mut archive = ZipArchive::new(file)?;
+        let mut all_css = String::new();
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let name = file.name().to_string(); // 先转换为String避免借用冲突
+
+            // 检查是否是CSS文件
+            if name.ends_with(".css") {
+                let mut content = String::new();
+                std::io::Read::read_to_string(&mut file, &mut content)?;
+
+                // 保存CSS文件到输出目录
+                let file_path = output_dir.join(&name);
+                if let Some(parent) = file_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&file_path, &content)?;
+
+                // 合并CSS内容
+                all_css.push_str(&content);
+                all_css.push('\n');
+
+                log::info!("EpubParser: Extracted CSS: {}", name);
+            }
+        }
+
+        Ok(all_css)
+    }
+
+    /// 将CSS样式内联到HTML元素中
+    fn inline_css_styles(html: &str, css: &str) -> String {
+        use regex::Regex;
+        use std::collections::HashMap;
+
+        // 简单的CSS解析器，提取class选择器和样式
+        let mut class_styles: HashMap<String, String> = HashMap::new();
+
+        // 匹配 .classname { properties } 格式的CSS规则
+        let css_rule_regex = Regex::new(r"\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}").unwrap();
+
+        for caps in css_rule_regex.captures_iter(css) {
+            let class_name = caps[1].to_string();
+            let properties = caps[2].trim().to_string();
+            class_styles.insert(class_name, properties);
+        }
+
+        log::info!("EpubParser: Parsed {} CSS class rules", class_styles.len());
+
+        if class_styles.is_empty() {
+            log::debug!("EpubParser: No CSS class rules found to inline");
+            return html.to_string();
+        }
+
+        // 匹配带有class属性的HTML标签
+        let tag_regex =
+            Regex::new(r#"<([a-zA-Z0-9]+)([^>]*?)class\s*=\s*["']([^"']+)["']([^>]*?)>"#).unwrap();
+
+        let result = tag_regex.replace_all(html, |caps: &regex::Captures| {
+            let tag_name = &caps[1];
+            let before_class = &caps[2];
+            let class_names = &caps[3];
+            let after_class = &caps[4];
+
+            // 收集所有匹配的class样式
+            let mut combined_styles = Vec::new();
+            for class_name in class_names.split_whitespace() {
+                if let Some(style) = class_styles.get(class_name) {
+                    combined_styles.push(style.clone());
+                }
+            }
+
+            if combined_styles.is_empty() {
+                // 没有找到样式，保持原样
+                return caps[0].to_string();
+            }
+
+            let inline_style = combined_styles.join(" ");
+
+            // 检查是否已有style属性
+            if after_class.contains("style=") || before_class.contains("style=") {
+                // 已有style属性，追加新样式
+                let style_regex = Regex::new(r#"style\s*=\s*["']([^"']*)["']"#).unwrap();
+                let full_attrs = format!("{}{}", before_class, after_class);
+                let updated = style_regex.replace(&full_attrs, |s_caps: &regex::Captures| {
+                    format!("style=\"{} {}\"", &s_caps[1], inline_style)
+                });
+                format!("<{} class=\"{}\"{}>", tag_name, class_names, updated)
+            } else {
+                // 没有style属性，添加新的
+                format!(
+                    "<{}{} class=\"{}\" style=\"{}\"{}>",
+                    tag_name, before_class, class_names, inline_style, after_class
+                )
+            }
+        });
+
+        result.to_string()
     }
 
     /// 转换HTML中的图片路径为本地文件路径
@@ -376,8 +581,34 @@ impl EpubParser {
             // 清理路径（移除开头的 ../ 或 ./）
             let cleaned_src = src.trim_start_matches("../").trim_start_matches("./");
 
-            // 构建本地文件路径
-            let local_path = image_dir.join(cleaned_src);
+            // 首先尝试直接路径
+            let mut local_path = image_dir.join(cleaned_src);
+
+            // 如果直接路径不存在，尝试递归查找文件名（不区分大小写）
+            if !local_path.exists() {
+                if let Some(file_name) = cleaned_src
+                    .split('/')
+                    .last()
+                    .or_else(|| cleaned_src.split('\\').last())
+                {
+                    if let Some(found) = Self::find_image_recursive(image_dir, file_name) {
+                        local_path = found;
+                        log::debug!(
+                            "EpubParser: Found image via recursive search: {}",
+                            local_path.display()
+                        );
+                    }
+                }
+            }
+
+            // 如果仍然不存在本地文件，保留原始src并输出警告（避免生成指向不存在文件的file:// URL）
+            if !local_path.exists() {
+                log::warn!(
+                    "EpubParser: Image referenced not found after search: {}",
+                    src
+                );
+                return caps[0].to_string();
+            }
 
             // 将路径转换为 file:// URL（Windows路径需要特殊处理）
             #[cfg(target_os = "windows")]
@@ -396,6 +627,28 @@ impl EpubParser {
         });
 
         result.to_string()
+    }
+
+    /// 递归查找图片文件（不区分大小写）
+    fn find_image_recursive(dir: &Path, file_name: &str) -> Option<std::path::PathBuf> {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(found) = Self::find_image_recursive(&path, file_name) {
+                        return Some(found);
+                    }
+                } else if path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.eq_ignore_ascii_case(file_name))
+                    .unwrap_or(false)
+                {
+                    return Some(path);
+                }
+            }
+        }
+        None
     }
 
     /// 提取 epub 文件的元数据
@@ -520,38 +773,41 @@ impl EpubParser {
         })
     }
 
-    /// 简单的 HTML 标签移除（保留 img 标签用于图片显示）
+    /// 简单的 HTML 标签移除（保留 img, style 标签及常用格式化标签）
     fn strip_html_tags(html: &str) -> String {
         use regex::Regex;
 
-        // 先保存 img 标签
-        let img_regex = Regex::new(r"<img[^>]*>").unwrap();
-        let mut img_tags = Vec::new();
+        // 保存需要保留的标签（img, style, p, div, br, span 等）
+        // Rust 的 regex 不支持后向引用，因此列举常见的开始/结束标签与自闭合标签的替代式进行匹配
+        let preserve_pattern = r"(?s)(<style\b[^>]*>.*?</style>)|(<p\b[^>]*>.*?</p>)|(<div\b[^>]*>.*?</div>)|(<span\b[^>]*>.*?</span>)|(<a\b[^>]*>.*?</a>)|(<strong\b[^>]*>.*?</strong>)|(<em\b[^>]*>.*?</em>)|(<b\b[^>]*>.*?</b>)|(<i\b[^>]*>.*?</i>)|(<u\b[^>]*>.*?</u>)|(<h[1-6]\b[^>]*>.*?</h[1-6]>)|(<img\b[^>]*\/?>)|(<br\b[^>]*\/?>)|(<hr\b[^>]*\/?>)";
+        let preserve_regex = match Regex::new(&preserve_pattern) {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("EpubParser: Failed to compile preserve_regex: {}", e);
+                // 回退为只匹配自闭合常见标签，避免 panic
+                Regex::new(r"(<img\b[^>]*\/?>)|(<br\b[^>]*\/?>)|(<hr\b[^>]*\/?>)").unwrap()
+            }
+        };
+
+        let mut preserved_tags = Vec::new();
         let mut html_with_placeholders = html.to_string();
 
-        for (i, cap) in img_regex.captures_iter(html).enumerate() {
-            let img_tag = cap.get(0).unwrap().as_str();
-            img_tags.push(img_tag.to_string());
+        for (i, mat) in preserve_regex.find_iter(html).enumerate() {
+            let tag = mat.as_str();
+            preserved_tags.push(tag.to_string());
             html_with_placeholders =
-                html_with_placeholders.replacen(img_tag, &format!("__IMG_PLACEHOLDER_{}__", i), 1);
+                html_with_placeholders.replacen(tag, &format!("__PRESERVE_TAG_{}__", i), 1);
         }
 
-        // 移除其他 HTML 标签
-        let mut result = String::new();
-        let mut in_tag = false;
+        // 移除其他 HTML 标签（但保留占位符）
+        let tag_regex = Regex::new(r"<[^>]+>").unwrap();
+        let mut result = tag_regex
+            .replace_all(&html_with_placeholders, "")
+            .to_string();
 
-        for ch in html_with_placeholders.chars() {
-            match ch {
-                '<' => in_tag = true,
-                '>' => in_tag = false,
-                _ if !in_tag => result.push(ch),
-                _ => {}
-            }
-        }
-
-        // 还原 img 标签
-        for (i, img_tag) in img_tags.iter().enumerate() {
-            result = result.replace(&format!("__IMG_PLACEHOLDER_{}__", i), img_tag);
+        // 还原保留的标签
+        for (i, tag) in preserved_tags.iter().enumerate() {
+            result = result.replace(&format!("__PRESERVE_TAG_{}__", i), tag);
         }
 
         result
