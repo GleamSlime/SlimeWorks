@@ -8,6 +8,7 @@ import 'package:slime_works/pages/websocket_test_page.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/pages/http_bridge_test_page.dart';
+import 'package:slime_works/pages/settings/settings_page.dart';
 
 /// 应用路由配置
 class AppRoutes {
@@ -53,7 +54,7 @@ class AppRoutes {
       GetPage(name: cloudWord, page: () => _buildPlaceholderPage('云词间'), transition: Transition.fadeIn),
       GetPage(name: distributed, page: () => _buildPlaceholderPage('分布式算'), transition: Transition.fadeIn),
       GetPage(name: requestHost, page: () => _buildPlaceholderPage('请求托管'), transition: Transition.fadeIn),
-      GetPage(name: settings, page: () => _buildPlaceholderPage('设置'), transition: Transition.fadeIn),
+      GetPage(name: settings, page: () => const SettingsPage(), transition: Transition.fadeIn),
     ];
   }
 
