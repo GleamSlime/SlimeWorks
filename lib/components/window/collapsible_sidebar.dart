@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -191,10 +192,12 @@ class CollapsibleSidebar extends StatelessWidget {
         Obx(
           () => getIt<DesktopScreenProvider>().isMobile.value
               ? SizedBox.shrink()
-              : Padding(
+              : Platform.isMacOS
+              ? Padding(
                   padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8, horizontal: isExpanded ? 0 : AppThemeCommon.kSpace10),
                   child: const MacWindowButtons(),
-                ),
+                )
+              : SizedBox(height: scaleW(10)),
         ),
 
         // 侧边栏头部

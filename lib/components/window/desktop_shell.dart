@@ -106,8 +106,8 @@ class DesktopShell extends StatelessWidget {
         () => getIt<DesktopScreenProvider>().isMobile.value
             ? Stack(
                 children: [
+                  child,
                   CollapsibleSidebar(groups: getDefaultSidebarGroups()),
-                  Expanded(child: child),
                 ],
               )
             : Row(
@@ -116,11 +116,11 @@ class DesktopShell extends StatelessWidget {
                   Expanded(
                     child: Column(
                       children: [
-                        // FIXME: 先注释掉窗口按钮，避免和自定义标题栏冲突
-                        // Container(
-                        //   height: scaleW(60),
-                        //   child: Row(children: [const WindowsWindowButtons()]),
-                        // ),
+                        Container(
+                          padding: EdgeInsets.only(right: scaleW(20), top: scaleW(5)),
+                          height: scaleW(60),
+                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [if (Platform.isWindows) const WindowsWindowButtons()]),
+                        ),
                         Expanded(child: child),
                       ],
                     ),

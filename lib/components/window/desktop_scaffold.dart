@@ -116,7 +116,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: Stack(
         children: [
