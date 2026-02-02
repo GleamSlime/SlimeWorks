@@ -125,3 +125,43 @@ pub async fn ws_server_get_client_count(server: &WsServer) -> Result<usize> {
         .await
         .map_err(|e| anyhow::anyhow!(e))
 }
+
+// 移动平台（iOS/Android）上提供 WsServer 的占位符定义，
+// 使得由 `flutter_rust_bridge` 生成的绑定在移动端也能编译。
+// 这些实现都是不可用的（返回错误或空实现），仅用于满足编译。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub struct WsServer;
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+#[frb(sync)]
+pub fn ws_server_new(_host: String, _port: u16) -> WsServer {
+    WsServer
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub async fn ws_server_start(_server: &WsServer) -> Result<()> {
+    Err(anyhow::anyhow!(
+        "ws_server is not supported on mobile platforms"
+    ))
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub async fn ws_server_stop(_server: &WsServer) -> Result<()> {
+    Err(anyhow::anyhow!(
+        "ws_server is not supported on mobile platforms"
+    ))
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub async fn ws_server_broadcast(_server: &WsServer, _message: String) -> Result<()> {
+    Err(anyhow::anyhow!(
+        "ws_server is not supported on mobile platforms"
+    ))
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub async fn ws_server_get_client_count(_server: &WsServer) -> Result<usize> {
+    Err(anyhow::anyhow!(
+        "ws_server is not supported on mobile platforms"
+    ))
+}

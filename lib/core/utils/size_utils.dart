@@ -21,41 +21,35 @@ class PlatformUtil {
 }
 
 double scaleW(double w, {bool large = false}) {
-  if (isPhone) {
-    w = w * 2.2;
-  }
-  if (isPad) {
-    w *= 1.7;
-  }
-  if (ScreenUtil().screenWidth >= 1920) {
-    w = w * 0.7;
-  }
+  // if (isPhone) {
+  //   w = w * 2;
+  // } else if (isPad) {
+  //   w *= 1.7;
+  // } else if (ScreenUtil().screenWidth >= 1920) {
+  //   w = w * 0.7;
+  // }
   return ScreenUtil().setWidth(w);
 }
 
 double scaleH(double w, {bool large = false}) {
-  if (isPhone) {
-    w = w * 2.2;
-  }
-  if (isPad) {
-    w *= 1.7;
-  }
-  if (ScreenUtil().screenWidth >= 1920) {
-    w = w * 0.7;
-  }
+  // if (isPhone) {
+  //   w = w * 1.9;
+  // } else if (isPad) {
+  //   w *= 1.7;
+  // } else if (ScreenUtil().screenWidth >= 1920) {
+  //   w = w * 0.7;
+  // }
   return ScreenUtil().setHeight(w);
 }
 
 double scaleS(double fontSize, {bool large = false}) {
-  if (isPhone) {
-    fontSize = fontSize * 2.2;
-  }
-  if (isPad) {
-    fontSize *= 1.7;
-  }
-  if (ScreenUtil().screenWidth >= 1920) {
-    fontSize = fontSize * 0.7;
-  }
+  // if (isPhone) {
+  //   fontSize = fontSize * 2.2;
+  // } else if (isPad) {
+  //   fontSize *= 1.7;
+  // } else if (ScreenUtil().screenWidth >= 1920) {
+  //   fontSize = fontSize * 0.7;
+  // }
   double baseSize = ScreenUtil().setSp(fontSize);
 
   if (PlatformUtil.isDesktop || ScreenUtil().screenWidth > 600) {

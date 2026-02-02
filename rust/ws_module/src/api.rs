@@ -50,4 +50,10 @@ mod frb_exports {
         }
     }
 }
+
+// 只在桌面平台导出 frb 生成的绑定，移动端（iOS/Android）不会包含该模块
+#[cfg(all(
+    any(target_os = "windows", target_os = "macos", target_os = "linux"),
+    not(any(target_os = "ios", target_os = "android"))
+))]
 pub use frb_exports::*;

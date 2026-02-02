@@ -6,6 +6,9 @@ import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
+import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
@@ -34,7 +37,7 @@ class SidebarGroup {
 /// 侧边栏控制器
 class SidebarController extends GetxController {
   // 侧边栏是否展开
-  final RxBool isExpanded = true.obs;
+  final RxBool isExpanded = isDesktop ? true.obs : false.obs;
 
   // 侧边栏扩展内容是否显示
   final RxBool showExtends = true.obs;
@@ -113,6 +116,8 @@ class CollapsibleSidebar extends StatelessWidget {
   final double collapsedWidth;
   final Duration animationDuration;
 
+  DesktopScreenProvider get desktopScreen => getIt.get<DesktopScreenProvider>();
+
   const CollapsibleSidebar({
     super.key,
     required this.groups,
@@ -125,8 +130,6 @@ class CollapsibleSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.put(SidebarController());
     final theme = Theme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
 
     return Obx(() {
       final isExpanded = controller.isExpanded.value;
@@ -134,7 +137,7 @@ class CollapsibleSidebar extends StatelessWidget {
       final targetWidth = scaleW(isExpanded ? expandedWidth : collapsedWidth);
 
       // 移动端使用抽屉式侧边栏
-      if (isMobile) {
+      if (desktopScreen.isMobile.value) {
         // 移动端默认收起（仅在首次）
         if (!controller._initializedMobile) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -151,8 +154,8 @@ class CollapsibleSidebar extends StatelessWidget {
           animationDuration: animationDuration,
           isExpanded: isExpanded,
           showExtends: showExtends,
-          isMobile: isMobile,
-          buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends, isMobile: isMobile),
+          isMobile: desktopScreen.isMobile.value,
+          buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends),
         );
       }
 
@@ -166,7 +169,7 @@ class CollapsibleSidebar extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: AppThemeCommon.radius16,
-            boxShadow: !isMobile ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))] : null,
+            boxShadow: desktopScreen.isDesktop.value ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))] : null,
             gradient: AppTheme.sideBarTheme(context),
             border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
@@ -177,16 +180,25 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏内容
-  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends, {bool? isMobile}) {
-    if (isMobile == true) {
+  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+    if (desktopScreen.isMobile.value) {
       isExpanded = true;
       showExtends = true;
     }
 
     return Column(
       children: [
+        Obx(
+          () => getIt<DesktopScreenProvider>().isMobile.value
+              ? SizedBox.shrink()
+              : Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8, horizontal: isExpanded ? 0 : AppThemeCommon.kSpace10),
+                  child: const MacWindowButtons(),
+                ),
+        ),
+
         // 侧边栏头部
-        _buildHeader(context, controller, isExpanded, isMobile: isMobile),
+        _buildHeader(context, controller, isExpanded),
 
         // 菜单列表（可滚动）
         Expanded(child: _buildScrollableMenuList(context, controller, isExpanded, showExtends)),
@@ -198,16 +210,15 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏头部
-  Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded, {bool? isMobile}) {
-    if (isMobile == true) {
+  Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
+    if (desktopScreen.isMobile.value) {
       return SizedBox.shrink();
     }
 
     return AnimatedContainer(
       duration: animationDuration,
       curve: Curves.easeInOut,
-      height: controller.isExpanded.value ? scaleW(40) : scaleW(64),
-      padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8),
+      padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8, vertical: AppThemeCommon.kSpace4),
       alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
       child: HoverSvgButton(
         size: AppThemeCommon.fontSize24,
@@ -266,10 +277,15 @@ class CollapsibleSidebar extends StatelessWidget {
         // 分组标题
         if (group.title != null && isExpanded)
           Padding(
-            padding: EdgeInsets.fromLTRB(AppThemeCommon.kSpace12, AppThemeCommon.kSpace4, AppThemeCommon.kSpace12, AppThemeCommon.kSpace4),
+            padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace12, vertical: AppThemeCommon.kSpace4),
             child: Text(
               group.title!,
-              style: TextStyle(fontSize: AppThemeCommon.fontSize14, color: theme.hintColor, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: AppThemeCommon.fontSize14,
+                color: theme.hintColor,
+                fontWeight: FontWeight.w500,
+                decoration: TextDecoration.none,
+              ),
             ),
           ),
 
@@ -553,7 +569,7 @@ class MobileSidebarState extends State<MobileSidebar> {
                 left: 0,
                 top: 0,
                 bottom: 0,
-                width: 30, // 边缘检测区域宽度
+                width: scaleW(40), // 边缘检测区域宽度
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onHorizontalDragStart: (details) {

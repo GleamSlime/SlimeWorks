@@ -1,7 +1,11 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 
 /// 窗口位置存储服务
 class WindowPositionService extends GetxService {
@@ -14,13 +18,27 @@ class WindowPositionService extends GetxService {
 
   late SharedPreferences? _pref;
 
+  double get windowWidth {
+    return _pref?.getDouble(_keyWidth) ?? getIt.get<DesktopScreenProvider>().width.value;
+  }
+
+  double get windowHeight {
+    return _pref?.getDouble(_keyHeight) ?? getIt.get<DesktopScreenProvider>().height.value;
+  }
+
+  double get windowX {
+    return _pref?.getDouble(_keyX) ?? 0;
+  }
+
+  double get windowY {
+    return _pref?.getDouble(_keyY) ?? 0;
+  }
+
   /// 初始化服务
   Future<WindowPositionService> init() async {
     try {
       _pref = await SharedPreferences.getInstance();
     } catch (e) {
-      print('初始化 SharedPreferences 失败: $e');
-      print('窗口位置记忆功能将被禁用');
       _pref = null;
     }
     return this;
@@ -30,23 +48,27 @@ class WindowPositionService extends GetxService {
   Future<void> savePosition() async {
     if (_pref == null) return;
 
-    try {
-      final position = await windowManager.getPosition();
-      final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    final size = await windowManager.getSize();
 
-      await _pref!.setDouble(_keyX, position.dx);
-      await _pref!.setDouble(_keyY, position.dy);
-      await _pref!.setDouble(_keyWidth, size.width);
-      await _pref!.setDouble(_keyHeight, size.height);
+    await _pref!.setDouble(_keyX, position.dx);
+    await _pref!.setDouble(_keyY, position.dy);
+    await _pref!.setDouble(_keyWidth, size.width);
+    await _pref!.setDouble(_keyHeight, size.height);
 
-      // 保存屏幕位置信息（用于多屏幕场景）
-      final bounds = await _getScreenBounds();
-      if (bounds != null) {
-        await _pref!.setDouble(_keyScreenLeft, bounds.left);
-        await _pref!.setDouble(_keyScreenTop, bounds.top);
-      }
-    } catch (e) {
-      print('保存窗口位置失败: $e');
+    DesktopScreenProvider desktopScreen = getIt.get<DesktopScreenProvider>();
+    desktopScreen.setWidth(size.width);
+    desktopScreen.setHeight(size.height);
+
+    final bounds = await _getScreenBounds();
+
+    if (bounds != null) {
+      await _pref!.setDouble(_keyScreenLeft, bounds.left);
+      await _pref!.setDouble(_keyScreenTop, bounds.top);
+    }
+
+    if (kDebugMode) {
+      print('保存窗口位置: x=${position.dx}, y=${position.dy}, width=${size.width}, height=${size.height}');
     }
   }
 
@@ -58,24 +80,23 @@ class WindowPositionService extends GetxService {
       return;
     }
 
-    try {
-      final x = _pref!.getDouble(_keyX);
-      final y = _pref!.getDouble(_keyY);
-      final width = _pref!.getDouble(_keyWidth);
-      final height = _pref!.getDouble(_keyHeight);
-
-      if (x != null && y != null && width != null && height != null) {
-        // 检查保存的位置是否仍然有效（屏幕可能已改变）
-        if (await _isPositionValid(x, y, width, height)) {
-          await windowManager.setPosition(Offset(x, y));
-          await windowManager.setSize(Size(width, height));
-        } else {
-          // 如果位置无效，使用默认居中位置
-          await windowManager.center();
-        }
+    final x = _pref!.getDouble(_keyX);
+    final y = _pref!.getDouble(_keyY);
+    final width = _pref!.getDouble(_keyWidth);
+    final height = _pref!.getDouble(_keyHeight);
+    if (x != null && y != null && width != null && height != null) {
+      // 检查保存的位置是否仍然有效（屏幕可能已改变）
+      if (await _isPositionValid(x, y, width, height)) {
+        await windowManager.setPosition(Offset(x, y));
+        await windowManager.setSize(Size(width, height));
+      } else {
+        // 如果位置无效，使用默认居中位置
+        await windowManager.center();
       }
-    } catch (e) {
-      print('恢复窗口位置失败: $e');
+    }
+
+    if (kDebugMode) {
+      print('恢复窗口位置: x=$x, y=$y, width=$width, height=$height');
     }
   }
 
@@ -89,12 +110,7 @@ class WindowPositionService extends GetxService {
       final physicalSize = view.physicalSize;
       final devicePixelRatio = view.devicePixelRatio;
 
-      return Rect.fromLTWH(
-        0,
-        0,
-        physicalSize.width / devicePixelRatio,
-        physicalSize.height / devicePixelRatio,
-      );
+      return Rect.fromLTWH(0, 0, physicalSize.width / devicePixelRatio, physicalSize.height / devicePixelRatio);
     } catch (e) {
       print('获取屏幕边界失败: $e');
       return null;
@@ -102,12 +118,7 @@ class WindowPositionService extends GetxService {
   }
 
   /// 检查位置是否有效（是否在任何屏幕范围内）
-  Future<bool> _isPositionValid(
-    double x,
-    double y,
-    double width,
-    double height,
-  ) async {
+  Future<bool> _isPositionValid(double x, double y, double width, double height) async {
     try {
       final screenBounds = await _getScreenBounds();
       if (screenBounds == null) return false;

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/provider/main.dart';
+
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_text_styles.dart';
 
@@ -7,6 +10,8 @@ import 'package:slime_works/core/theme/app_text_styles.dart';
 /// 展示所有字体大小和颜色的效果
 class ThemePreviewScreen extends StatelessWidget {
   const ThemePreviewScreen({super.key});
+
+  DesktopScreenProvider get desktopScreen => getIt.get<DesktopScreenProvider>();
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +27,15 @@ class ThemePreviewScreen extends StatelessWidget {
             '排版系统',
             style: AppTextStyles.h5(color: isDark ? DarkColors.white100 : LightColors.black100, fontWeight: AppFontWeights.semiBold),
           ),
+
+          const SizedBox(height: 16),
+          Obx(
+            () => Text(
+              "桌面尺寸: ${desktopScreen.width.value.toStringAsFixed(0)} x ${desktopScreen.height.value.toStringAsFixed(0)} (是否为移动端: ${desktopScreen.isMobile.value})",
+              style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80),
+            ),
+          ),
+
           const SizedBox(height: 16),
 
           // H1 - H6

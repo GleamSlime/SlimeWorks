@@ -1,9 +1,14 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_scaffold.dart';
+import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
 class DesktopShell extends StatelessWidget {
@@ -87,22 +92,41 @@ class DesktopShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 只在桌面平台显示完整布局
-    if (!Platform.isMacOS && !Platform.isWindows) {
-      return child;
+    if ((!Platform.isMacOS && !Platform.isWindows)) {
+      return Stack(
+        children: [
+          child,
+          CollapsibleSidebar(groups: getDefaultSidebarGroups()),
+        ],
+      );
     }
 
-    // 使用 Material 包裹整个布局，确保 showDialog 等 overlay 能覆盖整个区域
-    return Material(
-      child: DesktopScaffold(
-        child: Row(
-          children: [
-            // 左侧：可折叠侧边栏（固定不变）
-            CollapsibleSidebar(groups: getDefaultSidebarGroups()),
-
-            // 右侧：内容区域（通过 Navigator 切换，只刷新这部分）
-            Expanded(child: child),
-          ],
-        ),
+    return DesktopScaffold(
+      child: Obx(
+        () => getIt<DesktopScreenProvider>().isMobile.value
+            ? Stack(
+                children: [
+                  CollapsibleSidebar(groups: getDefaultSidebarGroups()),
+                  Expanded(child: child),
+                ],
+              )
+            : Row(
+                children: [
+                  CollapsibleSidebar(groups: getDefaultSidebarGroups()),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // FIXME: 先注释掉窗口按钮，避免和自定义标题栏冲突
+                        // Container(
+                        //   height: scaleW(60),
+                        //   child: Row(children: [const WindowsWindowButtons()]),
+                        // ),
+                        Expanded(child: child),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
