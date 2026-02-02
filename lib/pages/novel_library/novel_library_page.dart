@@ -101,6 +101,31 @@ class NovelLibraryPage extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
 
+            // 清空小说进度提示
+            Obx(
+              () => controller.isClearingNovels.value
+                  ? Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.orange)),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            '正在清空所有小说...',
+                            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+
             // 搜索进度条
             Obx(
               () => controller.isSearching.value
@@ -125,18 +150,25 @@ class NovelLibraryPage extends StatelessWidget {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  '正在搜索小说内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%',
+                                  '正在搜索小说内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%（${controller.searchCompleted.value} / ${controller.searchTotal.value}）',
                                   style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
                                 ),
                               ),
-                              TextButton.icon(
-                                onPressed: () => controller.cancelSearch(),
-                                icon: const Icon(Icons.cancel, size: 18),
-                                label: const Text('取消'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
+                              Obx(
+                                () => controller.isCancelling.value
+                                    ? const Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                      )
+                                    : TextButton.icon(
+                                        onPressed: () => controller.cancelSearch(),
+                                        icon: const Icon(Icons.cancel, size: 18),
+                                        label: const Text('取消'),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        ),
+                                      ),
                               ),
                             ],
                           ),

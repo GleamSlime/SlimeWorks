@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/src/rust/api/novel_reader.dart' hide cancelSearch;
+import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 
 /// 小说库 ViewModel
 class NovelLibraryViewModel extends GetxController {
@@ -10,8 +11,12 @@ class NovelLibraryViewModel extends GetxController {
   final searchQuery = ''.obs;
   final searchByContent = false.obs; // false=按名字搜索, true=按内容搜索
   final isSearching = false.obs;
+  final isCancelling = false.obs; // 取消搜索中
   final searchProgress = 0.0.obs;
+  final searchTotal = 0.obs;
+  final searchCompleted = 0.obs;
   final contentSearchResults = <NovelMetadata>[].obs;
+  final isClearingNovels = false.obs; // 正在清空所有小说
 
   // 搜索取消标志
   bool _searchCancelled = false;
@@ -99,7 +104,7 @@ class NovelLibraryViewModel extends GetxController {
     }
   }
 
-  /// 扫描文件夹
+  /// 扫描文件夹（优化版，支持大量小说）
   Future<void> scanFolder() async {
     try {
       final result = await FilePicker.platform.getDirectoryPath();
@@ -107,12 +112,26 @@ class NovelLibraryViewModel extends GetxController {
 
       isScanning.value = true;
 
-      final scannedNovels = scanNovelsFolder(folderPath: result);
+      // 使用批量扫描，每批处理100本小说，避免阻塞
+      final batches = await scanNovelsFolderBatched(folderPath: result, batchSize: BigInt.from(100));
+
+      int totalFound = 0;
+      for (final batch in batches) {
+        totalFound += batch.novels.length;
+
+        // 每批扫描完成后，立即重新加载显示
+        await loadNovels();
+
+        // 显示进度
+        if (!batch.isFinished) {
+          _showSnack('扫描中', '已扫描 ${batch.completed}/${batch.total} 个文件，找到 $totalFound 本小说', duration: const Duration(seconds: 1));
+        }
+      }
 
       // 重新加载所有小说（包括已存在的和新扫描的）
       await loadNovels();
 
-      _showSnack('成功', '扫描完成，找到 ${scannedNovels.length} 本新小说');
+      _showSnack('成功', '扫描完成，共找到 $totalFound 本新小说');
     } catch (e) {
       _showSnack('错误', '扫描失败: $e');
     } finally {
@@ -171,16 +190,24 @@ class NovelLibraryViewModel extends GetxController {
     if (confirmed != true) return;
 
     try {
+      isClearingNovels.value = true;
+
       // 调用后端绑定的清空方法
       clearAllNovels();
+
+      // 等待一小段时间让操作完成
+      await Future.delayed(const Duration(milliseconds: 100));
       await loadNovels();
+
       _showSnack('成功', '已清空所有小说');
     } catch (e) {
       _showSnack('错误', '清空失败: $e');
+    } finally {
+      isClearingNovels.value = false;
     }
   }
 
-  /// 在内容中搜索（并发+可取消）
+  /// 在内容中搜索（优化版，在 Rust 端完成批量搜索，支持进度和取消）
   Future<void> searchInContent(String keyword) async {
     if (keyword.isEmpty) {
       contentSearchResults.clear();
@@ -190,54 +217,43 @@ class NovelLibraryViewModel extends GetxController {
     try {
       _searchCancelled = false;
       isSearching.value = true;
+      isCancelling.value = false;
       searchProgress.value = 0.0;
+      searchCompleted.value = 0;
+      searchTotal.value = novels.length; // 先设置总数
       contentSearchResults.clear();
 
-      final totalNovels = novels.length;
-      final results = <NovelMetadata>[];
-      int completed = 0;
+      final allResults = <NovelMetadata>[];
 
-      // 并发搜索，每批次处理 5 本小说
-      const batchSize = 5;
-      for (int batchStart = 0; batchStart < totalNovels; batchStart += batchSize) {
+      // 调用 Rust 端的批量搜索接口，每批处理5本小说，获取实时进度
+      final batches = await searchInAllNovelsBatched(keyword: keyword, batchSize: BigInt.from(5));
+
+      for (final batch in batches) {
+        // 检查是否取消
         if (_searchCancelled) {
           _showSnack('搜索', '已取消搜索');
           break;
         }
 
-        final batchEnd = (batchStart + batchSize).clamp(0, totalNovels);
-        final batch = novels.sublist(batchStart, batchEnd);
+        // 添加本批次的搜索结果
+        allResults.addAll(batch.results.map((r) => r.novel));
 
-        // 并发搜索当前批次
-        final futures = batch.map((novel) async {
-          try {
-            final matches = await searchInNovel(filePath: novel.filePath, keyword: keyword);
-            return matches.isNotEmpty ? novel : null;
-          } catch (e) {
-            return null;
-          }
-        });
+        // 更新进度（BigInt 转 int）
+        final completed = batch.completed.toInt();
+        final total = batch.total.toInt();
+        searchCompleted.value = completed;
+        searchTotal.value = total;
+        searchProgress.value = total > 0 ? completed / total : 0.0;
 
-        final batchResults = await Future.wait(futures);
-
-        // 添加找到的结果
-        for (final novel in batchResults) {
-          if (novel != null) {
-            results.add(novel);
-          }
-        }
-
-        completed += batch.length;
-        searchProgress.value = completed / totalNovels;
+        // 实时更新搜索结果
+        contentSearchResults.value = allResults.toList();
       }
 
       if (!_searchCancelled) {
-        contentSearchResults.value = results;
-
-        if (results.isEmpty) {
+        if (allResults.isEmpty) {
           _showSnack('搜索结果', '没有找到包含"$keyword"的小说');
         } else {
-          _showSnack('搜索结果', '找到 ${results.length} 本包含关键词的小说');
+          _showSnack('搜索结果', '找到 ${allResults.length} 本包含关键词的小说');
         }
       }
     } catch (e) {
@@ -249,8 +265,22 @@ class NovelLibraryViewModel extends GetxController {
   }
 
   /// 取消搜索
-  void cancelSearch() {
+  Future<void> cancelSearch() async {
+    if (isCancelling.value) return; // 防止重复点击
+
+    isCancelling.value = true;
     _searchCancelled = true;
+
+    // 通知 Rust 层取消搜索
+    try {
+      rust_api.cancelSearch();
+      // 等待一小段时间让 Rust 层响应取消
+      await Future.delayed(const Duration(milliseconds: 100));
+    } catch (e) {
+      print('取消搜索失败: $e');
+    } finally {
+      isCancelling.value = false;
+    }
   }
 
   /// 重新排序小说

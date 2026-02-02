@@ -255,6 +255,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NovelMetadata> dco_decode_list_novel_metadata(dynamic raw);
 
   @protected
+  List<NovelSearchResult> dco_decode_list_novel_search_result(dynamic raw);
+
+  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
@@ -262,6 +265,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
+  List<ScanBatchResult> dco_decode_list_scan_batch_result(dynamic raw);
+
+  @protected
+  List<SearchBatchResult> dco_decode_list_search_batch_result(dynamic raw);
 
   @protected
   List<SearchMatch> dco_decode_list_search_match(dynamic raw);
@@ -285,6 +294,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NovelMetadata dco_decode_novel_metadata(dynamic raw);
 
   @protected
+  NovelSearchResult dco_decode_novel_search_result(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -304,6 +316,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
+  ScanBatchResult dco_decode_scan_batch_result(dynamic raw);
+
+  @protected
+  SearchBatchResult dco_decode_search_batch_result(dynamic raw);
 
   @protected
   SearchMatch dco_decode_search_match(dynamic raw);
@@ -544,6 +562,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<NovelSearchResult> sse_decode_list_novel_search_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
@@ -551,6 +574,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ScanBatchResult> sse_decode_list_scan_batch_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<SearchBatchResult> sse_decode_list_search_batch_result(
     SseDeserializer deserializer,
   );
 
@@ -576,6 +609,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NovelMetadata sse_decode_novel_metadata(SseDeserializer deserializer);
 
   @protected
+  NovelSearchResult sse_decode_novel_search_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -597,6 +635,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ScanBatchResult sse_decode_scan_batch_result(SseDeserializer deserializer);
+
+  @protected
+  SearchBatchResult sse_decode_search_batch_result(
     SseDeserializer deserializer,
   );
 
@@ -881,6 +927,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_novel_search_result(
+    List<NovelSearchResult> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
@@ -892,6 +944,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_string_string(
     List<(String, String)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_scan_batch_result(
+    List<ScanBatchResult> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_search_batch_result(
+    List<SearchBatchResult> self,
     SseSerializer serializer,
   );
 
@@ -918,6 +982,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_novel_metadata(NovelMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_search_result(
+    NovelSearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
@@ -947,6 +1017,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_string_string(
     (String, String) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_scan_batch_result(
+    ScanBatchResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_search_batch_result(
+    SearchBatchResult self,
     SseSerializer serializer,
   );
 

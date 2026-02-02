@@ -135,6 +135,53 @@ impl DirectoryScanner {
             .is_some()
     }
 
+    /// 快速扫描获取所有支持的文件路径（不解析内容）
+    /// 用于批量扫描时先获取文件列表
+    pub fn scan_paths<P: AsRef<Path>>(&self, directory: P) -> Result<Vec<String>> {
+        let directory = directory.as_ref();
+
+        if !directory.exists() {
+            return Err(anyhow::anyhow!("Directory does not exist: {:?}", directory));
+        }
+
+        if !directory.is_dir() {
+            return Err(anyhow::anyhow!("Path is not a directory: {:?}", directory));
+        }
+
+        let mut paths = Vec::new();
+        let walker = WalkDir::new(directory).follow_links(true);
+
+        for entry in walker {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    log::warn!("Failed to read directory entry: {}", e);
+                    continue;
+                }
+            };
+
+            let path = entry.path();
+            let file_type = entry.file_type();
+
+            // 支持 Windows 下的 .epub 文件夹（包含 mimetype 文件）
+            let is_valid_epub_dir = file_type.is_dir()
+                && path.extension().and_then(|s| s.to_str()) == Some("epub")
+                && path.join("mimetype").exists();
+
+            // 只处理文件或有效的 epub 文件夹
+            if !file_type.is_file() && !is_valid_epub_dir {
+                continue;
+            }
+
+            // 检查文件扩展名
+            if Self::is_supported_file(path) || is_valid_epub_dir {
+                paths.push(path.to_string_lossy().to_string());
+            }
+        }
+
+        Ok(paths)
+    }
+
     /// 扫描单个文件
     pub fn scan_file<P: AsRef<Path>>(&self, file_path: P) -> Result<NovelMetadata> {
         let file_path = file_path.as_ref();

@@ -30,6 +30,9 @@ zip = { version = "0.6", default-features = false, features = ["deflate"] }
 # 文件遍历
 walkdir = "2.5"
 
+# 并行处理
+rayon = "1.10"
+
 # 字符编码检测和转换
 encoding_rs = "0.8"
 chardetng = "0.1"

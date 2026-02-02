@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_metadata`, `convert_search_match`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_metadata`, `convert_scan_batch_result`, `convert_search_batch_result`, `convert_search_match`, `convert_search_result`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 扫描文件夹获取小说列表
 List<NovelMetadata> scanNovelsFolder({required String folderPath}) => RustLib
@@ -95,6 +95,31 @@ void batchUpdateNovelOrders({required List<String> novelIds}) => RustLib
     .instance
     .api
     .crateApiNovelReaderBatchUpdateNovelOrders(novelIds: novelIds);
+
+/// 取消搜索
+void cancelSearch() => RustLib.instance.api.crateApiNovelReaderCancelSearch();
+
+/// 在所有小说中搜索关键词（批量搜索，支持进度反馈和取消）
+Future<List<SearchBatchResult>> searchInAllNovelsBatched({
+  required String keyword,
+  required BigInt batchSize,
+}) => RustLib.instance.api.crateApiNovelReaderSearchInAllNovelsBatched(
+  keyword: keyword,
+  batchSize: batchSize,
+);
+
+/// 在所有小说中搜索关键词（批量搜索，性能优化）
+Future<List<NovelSearchResult>> searchInAllNovels({required String keyword}) =>
+    RustLib.instance.api.crateApiNovelReaderSearchInAllNovels(keyword: keyword);
+
+/// 批量扫描文件夹（分批返回结果，避免阻塞）
+Future<List<ScanBatchResult>> scanNovelsFolderBatched({
+  required String folderPath,
+  required BigInt batchSize,
+}) => RustLib.instance.api.crateApiNovelReaderScanNovelsFolderBatched(
+  folderPath: folderPath,
+  batchSize: batchSize,
+);
 
 class NovelChapter {
   final String id;
@@ -237,6 +262,89 @@ class NovelMetadata {
           coverPath == other.coverPath &&
           folderId == other.folderId &&
           customOrder == other.customOrder;
+}
+
+/// 小说搜索结果
+class NovelSearchResult {
+  final NovelMetadata novel;
+  final BigInt matchCount;
+
+  const NovelSearchResult({required this.novel, required this.matchCount});
+
+  @override
+  int get hashCode => novel.hashCode ^ matchCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NovelSearchResult &&
+          runtimeType == other.runtimeType &&
+          novel == other.novel &&
+          matchCount == other.matchCount;
+}
+
+/// 扫描批次结果
+class ScanBatchResult {
+  final List<NovelMetadata> novels;
+  final BigInt completed;
+  final BigInt total;
+  final bool isFinished;
+
+  const ScanBatchResult({
+    required this.novels,
+    required this.completed,
+    required this.total,
+    required this.isFinished,
+  });
+
+  @override
+  int get hashCode =>
+      novels.hashCode ^
+      completed.hashCode ^
+      total.hashCode ^
+      isFinished.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ScanBatchResult &&
+          runtimeType == other.runtimeType &&
+          novels == other.novels &&
+          completed == other.completed &&
+          total == other.total &&
+          isFinished == other.isFinished;
+}
+
+/// 搜索批次结果
+class SearchBatchResult {
+  final List<NovelSearchResult> results;
+  final BigInt completed;
+  final BigInt total;
+  final bool isFinished;
+
+  const SearchBatchResult({
+    required this.results,
+    required this.completed,
+    required this.total,
+    required this.isFinished,
+  });
+
+  @override
+  int get hashCode =>
+      results.hashCode ^
+      completed.hashCode ^
+      total.hashCode ^
+      isFinished.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchBatchResult &&
+          runtimeType == other.runtimeType &&
+          results == other.results &&
+          completed == other.completed &&
+          total == other.total &&
+          isFinished == other.isFinished;
 }
 
 class SearchMatch {

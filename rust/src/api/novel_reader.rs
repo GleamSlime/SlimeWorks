@@ -220,3 +220,93 @@ pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> anyhow::Result<()> {
     novel_reader::batch_update_novel_orders(novel_ids).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
+
+/// 小说搜索结果
+#[derive(Debug, Clone)]
+pub struct NovelSearchResult {
+    pub novel: NovelMetadata,
+    pub match_count: usize,
+}
+
+fn convert_search_result(result: novel_reader::api::NovelSearchResult) -> NovelSearchResult {
+    NovelSearchResult {
+        novel: convert_metadata(result.novel),
+        match_count: result.match_count,
+    }
+}
+
+/// 搜索批次结果
+#[derive(Debug, Clone)]
+pub struct SearchBatchResult {
+    pub results: Vec<NovelSearchResult>,
+    pub completed: usize,
+    pub total: usize,
+    pub is_finished: bool,
+}
+
+fn convert_search_batch_result(result: novel_reader::api::SearchBatchResult) -> SearchBatchResult {
+    SearchBatchResult {
+        results: result
+            .results
+            .into_iter()
+            .map(convert_search_result)
+            .collect(),
+        completed: result.completed,
+        total: result.total,
+        is_finished: result.is_finished,
+    }
+}
+
+/// 取消搜索
+#[frb(sync)]
+pub fn cancel_search() -> anyhow::Result<()> {
+    novel_reader::cancel_search().map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 在所有小说中搜索关键词（批量搜索，支持进度反馈和取消）
+pub fn search_in_all_novels_batched(
+    keyword: String,
+    batch_size: usize,
+) -> anyhow::Result<Vec<SearchBatchResult>> {
+    let results = novel_reader::search_in_all_novels_batched(keyword, batch_size)
+        .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(results
+        .into_iter()
+        .map(convert_search_batch_result)
+        .collect())
+}
+
+/// 在所有小说中搜索关键词（批量搜索，性能优化）
+pub fn search_in_all_novels(keyword: String) -> anyhow::Result<Vec<NovelSearchResult>> {
+    let results = novel_reader::search_in_all_novels(keyword).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(results.into_iter().map(convert_search_result).collect())
+}
+
+/// 扫描批次结果
+#[derive(Debug, Clone)]
+pub struct ScanBatchResult {
+    pub novels: Vec<NovelMetadata>,
+    pub completed: usize,
+    pub total: usize,
+    pub is_finished: bool,
+}
+
+fn convert_scan_batch_result(result: novel_reader::api::ScanBatchResult) -> ScanBatchResult {
+    ScanBatchResult {
+        novels: result.novels.into_iter().map(convert_metadata).collect(),
+        completed: result.completed,
+        total: result.total,
+        is_finished: result.is_finished,
+    }
+}
+
+/// 批量扫描文件夹（分批返回结果，避免阻塞）
+pub fn scan_novels_folder_batched(
+    folder_path: String,
+    batch_size: usize,
+) -> anyhow::Result<Vec<ScanBatchResult>> {
+    let results = novel_reader::scan_novels_folder_batched(folder_path, batch_size)
+        .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(results.into_iter().map(convert_scan_batch_result).collect())
+}
