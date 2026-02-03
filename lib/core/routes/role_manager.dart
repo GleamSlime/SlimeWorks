@@ -27,7 +27,7 @@ enum Permission {
 }
 
 class RoleManager {
-  static UserRole currentUserRole = UserRole.guest;
+  static UserRole currentUserRole = UserRole.creator;
 
   static final Map<UserRole, List<Permission>> rolePermissions = {
     UserRole.creator: Permission.values,

@@ -1,13 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/routes/role_manager.dart';
-import 'package:slime_works/pages/novel_library/novel_library_page.dart';
-import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
-import 'package:slime_works/src/rust/api/novel_reader.dart';
+part of '../app_routes.dart';
 
-part 'learn_routes.g.dart';
-
+/// 小说相关路由：NovelLibrary、NovelReader
 @TypedGoRoute<NovelLibraryRoute>(path: '/novel-library')
 class NovelLibraryRoute extends GoRouteData with $NovelLibraryRoute {
   const NovelLibraryRoute();

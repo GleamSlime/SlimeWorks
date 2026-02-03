@@ -19,7 +19,8 @@
     "MacOS",
     "Desktop",
     "Windows",
-    "IOS"
+    "IOS",
+    "ALL"
   ],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150

@@ -410,10 +410,10 @@ class NovelReaderViewModel extends GetxController {
       // 由于 ViewModel 中无法直接访问 context，保持使用 Get.back() 和路由跳转
       Get.back(); // 返回书籍列表
       // 延迟一下再打开新书，确保前一个页面已经销毁
-      Future.delayed(const Duration(milliseconds: 100), () {
-        // TODO: 需要通过回调或其他方式传递 context 来使用 GoRouter
-        Get.toNamed(Routes.novelReader, arguments: targetNovel);
-      });
+      // Future.delayed(const Duration(milliseconds: 100), () {
+      //   // TODO: 需要通过回调或其他方式传递 context 来使用 GoRouter
+      //   Get.toNamed(Routes.novelReader, arguments: targetNovel);
+      // });
     } catch (e) {
       debugPrint('[Novel VM] Failed to switch book: $e');
     }
