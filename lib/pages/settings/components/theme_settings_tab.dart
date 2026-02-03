@@ -63,7 +63,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
 
   void _applyTheme() {
     final brightness = _resolveBrightness();
-    final baseTheme = brightness == Brightness.dark ? AppThemeCommon.darkTheme : AppThemeCommon.lightTheme;
+    final baseTheme = brightness == Brightness.dark ? AppTheme.darkTheme : AppTheme.lightTheme;
     final updatedTheme = _buildCustomTheme(baseTheme, _accentColor, _fontScale);
     Get.changeTheme(updatedTheme);
   }

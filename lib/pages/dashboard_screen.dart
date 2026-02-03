@@ -16,9 +16,9 @@ class DashboardScreen extends StatelessWidget {
         children: [
           // 欢迎标题
           Text('欢迎使用工坊系统', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold)),
-          SizedBox(height: AppThemeCommon.kSpace16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
           Text('这是一个功能强大的 macOS 和 Windows 桌面应用', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor)),
-          SizedBox(height: AppThemeCommon.kSpace48),
+          SizedBox(height: AppTheme.metrics.kSpace48),
 
           // 功能卡片网格
           Expanded(
@@ -64,19 +64,19 @@ class DashboardScreen extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: EdgeInsets.all(scaleW(20)),
+          padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               // 图标
               Container(
-                width: scaleW(48),
-                height: scaleW(48),
+                width: AppTheme.metrics.kSpace48,
+                height: AppTheme.metrics.kSpace48,
                 decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, size: scaleW(24), color: color),
+                child: Icon(icon, size: AppTheme.metrics.kSpace24, color: color),
               ),
-              SizedBox(height: AppThemeCommon.kSpace16),
+              SizedBox(height: AppTheme.metrics.kSpace16),
 
               // 标题
               Text(
@@ -85,7 +85,7 @@ class DashboardScreen extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              SizedBox(height: AppThemeCommon.kSpace4),
+              SizedBox(height: AppTheme.metrics.kSpace4),
 
               // 描述
               Text(

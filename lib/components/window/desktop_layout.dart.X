@@ -143,12 +143,12 @@ class DesktopLayout extends StatelessWidget {
                       height: scaleH(80),
                       child: Row(
                         children: [
-                          SizedBox(width: AppThemeCommon.kSpace16),
-                          Text(title, style: TextStyle(fontSize: AppThemeCommon.fontSize18)),
+                          SizedBox(width: AppTheme.metrics.kSpace16),
+                          Text(title, style: TextStyle(fontSize: AppTheme.metrics.fontSize18)),
                           const Spacer(),
                           if (appBarActions != null) appBarActions!,
-                          SizedBox(width: AppThemeCommon.kSpace16),
-                          if (Platform.isWindows) ...[WindowsWindowButtons(), SizedBox(width: AppThemeCommon.kSpace16)],
+                          SizedBox(width: AppTheme.metrics.kSpace16),
+                          if (Platform.isWindows) ...[WindowsWindowButtons(), SizedBox(width: AppTheme.metrics.kSpace16)],
                         ],
                       ),
                     ),
@@ -185,27 +185,27 @@ class _MobileLayout extends StatelessWidget {
                 children: [
                   if (Platform.isMacOS)
                     Padding(
-                      padding: EdgeInsets.only(top: AppThemeCommon.kSpace10),
+                      padding: EdgeInsets.only(top: AppTheme.metrics.kSpace10),
                       child: Transform.scale(scale: 0.8, alignment: Alignment.centerLeft, child: const MacWindowButtons()),
                     ),
                   Container(
                     height: scaleW(60),
-                    padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace12),
+                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12),
                     alignment: Alignment.bottomLeft,
                     child: Row(
                       children: [
                         IconButton(
-                          icon: Icon(Icons.menu, size: AppThemeCommon.fontSize24),
+                          icon: Icon(Icons.menu, size: AppTheme.metrics.fontSize24),
                           onPressed: () {
                             final controller = Get.find<SidebarController>();
                             controller.openSidebar();
                           },
                         ),
-                        SizedBox(width: AppThemeCommon.kSpace8),
-                        Text(title, style: TextStyle(fontSize: AppThemeCommon.fontSize18)),
+                        SizedBox(width: AppTheme.metrics.kSpace8),
+                        Text(title, style: TextStyle(fontSize: AppTheme.metrics.fontSize18)),
                         const Spacer(),
                         if (appBarActions != null) appBarActions!,
-                        if (Platform.isWindows) ...[WindowsWindowButtons(), SizedBox(width: AppThemeCommon.kSpace16)],
+                        if (Platform.isWindows) ...[WindowsWindowButtons(), SizedBox(width: AppTheme.metrics.kSpace16)],
                       ],
                     ),
                   ),

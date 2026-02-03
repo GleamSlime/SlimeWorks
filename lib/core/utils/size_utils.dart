@@ -21,6 +21,7 @@ class PlatformUtil {
 }
 
 double scaleW(double w, {bool large = false}) {
+  print({'w': w});
   // if (isPhone) {
   //   w = w * 2;
   // } else if (isPad) {
@@ -31,7 +32,8 @@ double scaleW(double w, {bool large = false}) {
   return ScreenUtil().setWidth(w);
 }
 
-double scaleH(double w, {bool large = false}) {
+double scaleH(double h, {bool large = false}) {
+  print({'h': h});
   // if (isPhone) {
   //   w = w * 1.9;
   // } else if (isPad) {
@@ -39,7 +41,7 @@ double scaleH(double w, {bool large = false}) {
   // } else if (ScreenUtil().screenWidth >= 1920) {
   //   w = w * 0.7;
   // }
-  return ScreenUtil().setHeight(w);
+  return ScreenUtil().setHeight(h);
 }
 
 double scaleS(double fontSize, {bool large = false}) {

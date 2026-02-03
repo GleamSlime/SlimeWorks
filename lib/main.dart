@@ -81,29 +81,33 @@ class MyApp extends StatelessWidget {
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (context, child) {
-        return GetMaterialApp(
-          title: desktopScreen.title.value,
-          debugShowCheckedModeBanner: false,
-          navigatorKey: navigatorKey,
+        return Obx(() {
+          // 观察 AppTheme.metricsVersion，确保在重置度量后重建应用树
+          final _ = AppTheme.metricsVersion.value;
+          return GetMaterialApp(
+            title: desktopScreen.title.value,
+            debugShowCheckedModeBanner: false,
+            navigatorKey: navigatorKey,
 
-          // 主题配置
-          theme: AppThemeCommon.lightTheme,
-          darkTheme: AppThemeCommon.darkTheme,
-          themeMode: AppThemeCommon.themeMode,
+            // 主题配置
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: AppTheme.themeMode,
 
-          // 路由配置
-          initialRoute: AppRoutes.dashboard,
-          getPages: AppRoutes.getPages(),
+            // 路由配置
+            initialRoute: AppRoutes.dashboard,
+            getPages: AppRoutes.getPages(),
 
-          // 国际化配置
-          locale: const Locale('zh', 'CN'),
-          fallbackLocale: const Locale('zh', 'CN'),
+            // 国际化配置
+            locale: const Locale('zh', 'CN'),
+            fallbackLocale: const Locale('zh', 'CN'),
 
-          builder: (context, child) {
-            final Widget result = EasyLoading.init()(context, child);
-            return DesktopShell(child: result);
-          },
-        );
+            builder: (context, child) {
+              final Widget result = EasyLoading.init()(context, child);
+              return DesktopShell(child: result);
+            },
+          );
+        });
       },
     );
   }

@@ -162,14 +162,14 @@ class CollapsibleSidebar extends StatelessWidget {
 
       // 桌面端使用原有布局
       return Container(
-        margin: EdgeInsets.all(AppThemeCommon.kSpace12),
+        margin: EdgeInsets.all(AppTheme.metrics.kSpace12),
         child: AnimatedContainer(
           duration: animationDuration,
           curve: Curves.easeInOut,
           width: targetWidth,
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: AppThemeCommon.radius16,
+            borderRadius: AppTheme.metrics.radius10,
             boxShadow: desktopScreen.isDesktop.value ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))] : null,
             gradient: AppTheme.sideBarTheme(context),
             border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
@@ -194,7 +194,7 @@ class CollapsibleSidebar extends StatelessWidget {
               ? SizedBox.shrink()
               : Platform.isMacOS
               ? Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8, horizontal: isExpanded ? 0 : AppThemeCommon.kSpace10),
+                  padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8, horizontal: isExpanded ? 0 : AppTheme.metrics.kSpace10),
                   child: const MacWindowButtons(),
                 )
               : SizedBox(height: scaleW(10)),
@@ -221,10 +221,10 @@ class CollapsibleSidebar extends StatelessWidget {
     return AnimatedContainer(
       duration: animationDuration,
       curve: Curves.easeInOut,
-      padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8, vertical: AppThemeCommon.kSpace4),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
       alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
       child: HoverSvgButton(
-        size: AppThemeCommon.fontSize24,
+        size: AppTheme.metrics.fontSize24,
         svg: controller.isExpanded.value ? Assets.image.svg.sidebarOpen : Assets.image.svg.sidebarClose,
         onTap: controller.toggleSidebar,
         color: Theme.of(context).iconTheme.color,
@@ -239,7 +239,7 @@ class CollapsibleSidebar extends StatelessWidget {
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView.builder(
-        padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8),
+        padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
         itemCount: scrollableGroups.length,
         itemBuilder: (context, groupIndex) {
           final group = scrollableGroups[groupIndex];
@@ -260,7 +260,7 @@ class CollapsibleSidebar extends StatelessWidget {
       children: [
         Divider(height: 1, thickness: 1, color: Theme.of(context).dividerColor.withAlpha(25)),
         Padding(
-          padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8),
+          padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: bottomGroup.items.map((item) => _buildMenuItem(context, controller, item, isExpanded, showExtends, 0)).toList(),
@@ -280,11 +280,11 @@ class CollapsibleSidebar extends StatelessWidget {
         // 分组标题
         if (group.title != null && isExpanded)
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace12, vertical: AppThemeCommon.kSpace4),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace4),
             child: Text(
               group.title!,
               style: TextStyle(
-                fontSize: AppThemeCommon.fontSize14,
+                fontSize: AppTheme.metrics.fontSize14,
                 color: theme.hintColor,
                 fontWeight: FontWeight.w500,
                 decoration: TextDecoration.none,
@@ -336,12 +336,12 @@ class CollapsibleSidebar extends StatelessWidget {
             // 菜单项本身
             Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: isExpanded ? AppThemeCommon.kSpace10 : AppThemeCommon.kSpace16,
-                vertical: AppThemeCommon.kSpace2,
+                horizontal: isExpanded ? AppTheme.metrics.kSpace10 : AppTheme.metrics.kSpace16,
+                vertical: AppTheme.metrics.kSpace2,
               ),
               child: Material(
                 color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
-                borderRadius: AppThemeCommon.radius12,
+                borderRadius: AppTheme.metrics.radius12,
                 child: InkWell(
                   mouseCursor: SystemMouseCursors.click,
                   onTap: () {
@@ -354,28 +354,31 @@ class CollapsibleSidebar extends StatelessWidget {
                   },
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.transparent,
-                  borderRadius: AppThemeCommon.radius12,
+                  borderRadius: AppTheme.metrics.radius12,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeInOut,
-                    height: scaleW(44),
-                    padding: EdgeInsets.only(left: isExpanded ? scaleW(8 + 20) + (level * scaleW(8 + 20)) : 0, right: isExpanded ? scaleW(8) : 0),
+                    height: AppTheme.metrics.kSpace44,
+                    padding: EdgeInsets.only(
+                      left: isExpanded ? AppTheme.metrics.kSpace24 + (level * AppTheme.metrics.kSpace24) : 0,
+                      right: isExpanded ? AppTheme.metrics.kSpace8 : 0,
+                    ),
                     alignment: isExpanded ? Alignment.centerLeft : Alignment.center,
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
                         if (isExpanded && item.hasChildren)
                           Positioned(
-                            left: -scaleW(20),
-                            top: scaleH(5),
+                            left: -AppTheme.metrics.kSpace20,
+                            top: AppTheme.metrics.kSpace4,
                             child: Padding(
-                              padding: EdgeInsets.only(right: AppThemeCommon.kSpace4),
+                              padding: EdgeInsets.only(right: AppTheme.metrics.kSpace4),
                               child: AnimatedRotation(
                                 duration: const Duration(milliseconds: 200),
                                 turns: isItemExpanded ? 1 : 0.75,
                                 child: SvgPicture.asset(
                                   Assets.image.svg.arrowRight,
-                                  width: AppThemeCommon.fontSize14,
+                                  width: AppTheme.metrics.fontSize14,
                                   colorFilter: ColorFilter.mode(theme.textTheme.bodySmall?.color ?? Colors.black.withAlpha(51), BlendMode.srcIn),
                                 ),
                               ),
@@ -386,7 +389,7 @@ class CollapsibleSidebar extends StatelessWidget {
                           children: [
                             SvgPicture.asset(
                               item.icon,
-                              width: isExpanded ? AppThemeCommon.fontSize20 : AppThemeCommon.fontSize24,
+                              width: isExpanded ? AppTheme.metrics.fontSize20 : AppTheme.metrics.fontSize24,
                               colorFilter: isSelected
                                   ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
                                   : ColorFilter.mode(theme.iconTheme.color?.withAlpha(179) ?? Colors.black, BlendMode.srcIn),
@@ -400,12 +403,12 @@ class CollapsibleSidebar extends StatelessWidget {
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      SizedBox(width: AppThemeCommon.kSpace8),
+                                      SizedBox(width: AppTheme.metrics.kSpace8),
                                       Expanded(
                                         child: Text(
                                           item.label,
                                           style: TextStyle(
-                                            fontSize: AppThemeCommon.fontSize14,
+                                            fontSize: AppTheme.metrics.fontSize14,
                                             color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color,
                                           ),
                                           overflow: TextOverflow.ellipsis,
@@ -415,13 +418,13 @@ class CollapsibleSidebar extends StatelessWidget {
                                       ),
                                       if (item.badge != null)
                                         Container(
-                                          padding: EdgeInsets.symmetric(horizontal: scaleW(5), vertical: scaleH(1)),
-                                          constraints: BoxConstraints(minWidth: scaleW(18)),
-                                          decoration: BoxDecoration(color: theme.hintColor.withAlpha(38), borderRadius: AppThemeCommon.radius8),
+                                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4, vertical: AppTheme.metrics.kSpace2),
+                                          constraints: BoxConstraints(minWidth: AppTheme.metrics.kSpace16),
+                                          decoration: BoxDecoration(color: theme.hintColor.withAlpha(38), borderRadius: AppTheme.metrics.radius8),
                                           child: Text(
                                             item.badge.toString(),
                                             textAlign: TextAlign.center,
-                                            style: TextStyle(fontSize: AppThemeCommon.fontSize8, color: theme.hintColor),
+                                            style: TextStyle(fontSize: AppTheme.metrics.fontSize8, color: theme.hintColor),
                                             maxLines: 1,
                                           ),
                                         ),
@@ -445,14 +448,14 @@ class CollapsibleSidebar extends StatelessWidget {
                 child: isItemExpanded
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
-                        spacing: AppThemeCommon.kSpace4,
+                        spacing: AppTheme.metrics.kSpace4,
                         children: [
                           ...item.children!.map(
                             (child) => isExpanded && showExtends
                                 ? _buildMenuItem(context, controller, child, isExpanded, showExtends, level + 1)
                                 : _buildCollapsedChildItem(context, controller, child),
                           ),
-                          SizedBox(height: AppThemeCommon.kSpace4),
+                          SizedBox(height: AppTheme.metrics.kSpace4),
                         ],
                       )
                     : const SizedBox.shrink(),
@@ -480,12 +483,12 @@ class CollapsibleSidebar extends StatelessWidget {
           },
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
-          borderRadius: AppThemeCommon.radius12,
+          borderRadius: AppTheme.metrics.radius12,
           hoverColor: theme.colorScheme.onSurface.withAlpha(13),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: scaleW(14), vertical: scaleH(10)),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace10),
             decoration: BoxDecoration(
-              borderRadius: AppThemeCommon.radius12,
+              borderRadius: AppTheme.metrics.radius12,
               color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
             ),
             child: Tooltip(
@@ -670,7 +673,13 @@ class MobileSidebarState extends State<MobileSidebar> {
                   decoration: BoxDecoration(
                     color: widget.theme.colorScheme.surface,
                     boxShadow: widget.isMobile != true
-                        ? [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))]
+                        ? [
+                            BoxShadow(
+                              color: widget.theme.shadowColor.withAlpha(50),
+                              blurRadius: AppTheme.metrics.kSpace20,
+                              offset: Offset(AppTheme.metrics.kSpace2, 0),
+                            ),
+                          ]
                         : null,
                     gradient: AppTheme.sideBarTheme(context),
                   ),

@@ -8,6 +8,7 @@ import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
@@ -117,7 +118,7 @@ class DesktopShell extends StatelessWidget {
                     child: Column(
                       children: [
                         Container(
-                          padding: EdgeInsets.only(right: scaleW(20), top: scaleW(5)),
+                          padding: EdgeInsets.only(right: AppTheme.metrics.kSpace20, top: AppTheme.metrics.kSpace4),
                           height: scaleW(60),
                           child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [if (Platform.isWindows) const WindowsWindowButtons()]),
                         ),

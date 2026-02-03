@@ -39,7 +39,7 @@ class ScreenTopBar extends StatelessWidget {
         // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),
         // width: MediaQuery.of(context).size.width - scaleW(400),
         width: MediaQuery.of(context).size.width,
-        padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace4),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
         // color: Colors.red,
         child: Platform.isMacOS ? Obx(() => getIt<DesktopScreenProvider>().isMobile.value ? const MacWindowButtons() : SizedBox.shrink()) : null,
       ),
@@ -53,9 +53,9 @@ class MacWindowButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      spacing: AppThemeCommon.kSpace4,
+      spacing: AppTheme.metrics.kSpace4,
       children: [
-        SizedBox(width: AppThemeCommon.kSpace4),
+        SizedBox(width: AppTheme.metrics.kSpace4),
         HoverSvgButton(svg: Assets.image.svg.macToolsCloseNoHover, hoverSvg: Assets.image.svg.macToolsClose, onTap: windowManager.close, size: 13),
         HoverSvgButton(
           svg: Assets.image.svg.macToolsUnfoldNoHover,
@@ -82,10 +82,10 @@ class WindowsWindowButtons extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Row(
-      spacing: AppThemeCommon.kSpace10,
+      spacing: AppTheme.metrics.kSpace10,
       children: [
         InkWell(
-          borderRadius: AppThemeCommon.radius32,
+          borderRadius: AppTheme.metrics.radius32,
           hoverColor: theme.colorScheme.onSurface.withAlpha(13),
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
@@ -94,11 +94,11 @@ class WindowsWindowButtons extends StatelessWidget {
           child: SizedBox(
             width: scaleW(40),
             height: scaleW(40),
-            child: Center(child: SvgPicture.asset(Assets.image.svg.windowsToolsUnfold, width: AppThemeCommon.fontSize16)),
+            child: Center(child: SvgPicture.asset(Assets.image.svg.windowsToolsUnfold, width: AppTheme.metrics.fontSize16)),
           ),
         ),
         InkWell(
-          borderRadius: AppThemeCommon.radius32,
+          borderRadius: AppTheme.metrics.radius32,
           hoverColor: theme.colorScheme.onSurface.withAlpha(13),
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
@@ -110,13 +110,13 @@ class WindowsWindowButtons extends StatelessWidget {
             child: Center(
               child: SvgPicture.asset(
                 ScreenTopBar.isMaximized ? Assets.image.svg.windowsToolsMax : Assets.image.svg.windowsToolsMin,
-                width: AppThemeCommon.fontSize16,
+                width: AppTheme.metrics.fontSize16,
               ),
             ),
           ),
         ),
         InkWell(
-          borderRadius: AppThemeCommon.radius32,
+          borderRadius: AppTheme.metrics.radius32,
           hoverColor: theme.colorScheme.onSurface.withAlpha(13),
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
@@ -125,7 +125,7 @@ class WindowsWindowButtons extends StatelessWidget {
           child: SizedBox(
             width: scaleW(40),
             height: scaleW(40),
-            child: Center(child: SvgPicture.asset(Assets.image.svg.windowsToolsClose, width: AppThemeCommon.fontSize16)),
+            child: Center(child: SvgPicture.asset(Assets.image.svg.windowsToolsClose, width: AppTheme.metrics.fontSize16)),
           ),
         ),
       ],

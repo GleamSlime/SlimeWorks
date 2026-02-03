@@ -1,31 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/main.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
-class AppTheme extends AppThemeCommon {
-  AppTheme._() : super._();
-
-  static bool isLight(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light;
-  }
-
-  static LinearGradient sideBarTheme(BuildContext context) {
-    return LinearGradient(
-      colors: isLight(context) ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)] : [const Color(0xFF20201E), const Color(0xFF1F1F1D)],
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-    );
-  }
-}
-
-/// 应用主题配置
-class AppThemeCommon {
-  AppThemeCommon._();
+class AppTheme {
+  AppTheme._();
 
   static ThemeMode themeMode = ThemeMode.system;
+
+  static ThemeMetrics metrics = ThemeMetrics();
+  static RxInt metricsVersion = 0.obs;
 
   /// 亮色主题
   static ThemeData get lightTheme {
@@ -231,42 +218,104 @@ class AppThemeCommon {
     );
   }
 
-  static BorderRadius get radius4 => BorderRadius.all(Radius.circular(scaleW(4.r)));
-  static BorderRadius get radius8 => BorderRadius.all(Radius.circular(scaleW(8.r)));
-  static BorderRadius get radius12 => BorderRadius.all(Radius.circular(scaleW(12.r)));
-  static BorderRadius get radius16 => BorderRadius.all(Radius.circular(scaleW(16.r)));
-  static BorderRadius get radius24 => BorderRadius.all(Radius.circular(scaleW(24.r)));
-  static BorderRadius get radius32 => BorderRadius.all(Radius.circular(scaleW(32.r)));
+  static bool isLight(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.light;
+  }
 
-  static double get fontSize6 => scaleS(6);
-  static double get fontSize8 => scaleS(8);
-  static double get fontSize10 => scaleS(10);
-  static double get fontSize12 => scaleS(12);
-  static double get fontSize14 => scaleS(14);
-  static double get fontSize16 => scaleS(16);
-  static double get fontSize18 => scaleS(18);
-  static double get fontSize20 => scaleS(20);
-  static double get fontSize24 => scaleS(24);
-  static double get fontSize34 => scaleS(34);
-  static double get fontSize48 => scaleS(48);
-  static double get fontSize60 => scaleS(60);
-  static double get fontSize96 => scaleS(96);
+  static LinearGradient sideBarTheme(BuildContext context) {
+    return LinearGradient(
+      colors: isLight(context) ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)] : [const Color(0xFF20201E), const Color(0xFF1F1F1D)],
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+    );
+  }
 
-  static double get kSpace2 => scaleW(2);
-  static double get kSpace4 => scaleW(4);
-  static double get kSpace8 => scaleW(8);
-  static double get kSpace10 => scaleW(10);
-  static double get kSpace12 => scaleW(12);
-  static double get kSpace16 => scaleW(16);
-  static double get kSpace20 => scaleW(20);
-  static double get kSpace24 => scaleW(24);
-  static double get kSpace32 => scaleW(32);
-  static double get kSpace40 => scaleW(40);
-  static double get kSpace48 => scaleW(48);
+  static void resetMetrics() {
+    print("重新计算界面尺寸中...");
+    metrics = ThemeMetrics();
+    metricsVersion.value++;
+  }
+}
 
-  static BoxShadow boxShadow10 = BoxShadow(
-    color: Theme.of(navigatorKey.currentContext!).brightness == Brightness.dark ? DarkColors.black10 : LightColors.black10,
-    blurRadius: scaleW(8),
-    offset: Offset(0, scaleH(4)),
-  );
+class ThemeMetrics {
+  final BorderRadius radius4;
+  final BorderRadius radius8;
+  final BorderRadius radius10;
+  final BorderRadius radius12;
+  final BorderRadius radius16;
+  final BorderRadius radius18;
+  final BorderRadius radius24;
+  final BorderRadius radius32;
+
+  final double fontSize6;
+  final double fontSize8;
+  final double fontSize10;
+  final double fontSize12;
+  final double fontSize14;
+  final double fontSize16;
+  final double fontSize18;
+  final double fontSize20;
+  final double fontSize24;
+  final double fontSize34;
+  final double fontSize48;
+  final double fontSize60;
+  final double fontSize96;
+
+  final double kSpace2;
+  final double kSpace4;
+  final double kSpace8;
+  final double kSpace10;
+  final double kSpace12;
+  final double kSpace16;
+  final double kSpace20;
+  final double kSpace24;
+  final double kSpace32;
+  final double kSpace40;
+  final double kSpace44;
+  final double kSpace48;
+
+  final BoxShadow boxShadow10;
+
+  ThemeMetrics()
+    : radius4 = BorderRadius.all(Radius.circular(scaleW(4.r))),
+      radius8 = BorderRadius.all(Radius.circular(scaleW(8.r))),
+      radius10 = BorderRadius.all(Radius.circular(scaleW(10.r))),
+      radius12 = BorderRadius.all(Radius.circular(scaleW(12.r))),
+      radius16 = BorderRadius.all(Radius.circular(scaleW(16.r))),
+      radius18 = BorderRadius.all(Radius.circular(scaleW(18.r))),
+      radius24 = BorderRadius.all(Radius.circular(scaleW(24.r))),
+      radius32 = BorderRadius.all(Radius.circular(scaleW(32.r))),
+
+      fontSize6 = scaleS(6),
+      fontSize8 = scaleS(8),
+      fontSize10 = scaleS(10),
+      fontSize12 = scaleS(12),
+      fontSize14 = scaleS(14),
+      fontSize16 = scaleS(16),
+      fontSize18 = scaleS(18),
+      fontSize20 = scaleS(20),
+      fontSize24 = scaleS(24),
+      fontSize34 = scaleS(34),
+      fontSize48 = scaleS(48),
+      fontSize60 = scaleS(60),
+      fontSize96 = scaleS(96),
+
+      kSpace2 = scaleW(2),
+      kSpace4 = scaleW(4),
+      kSpace8 = scaleW(8),
+      kSpace10 = scaleW(10),
+      kSpace12 = scaleW(12),
+      kSpace16 = scaleW(16),
+      kSpace20 = scaleW(20),
+      kSpace24 = scaleW(24),
+      kSpace32 = scaleW(32),
+      kSpace40 = scaleW(40),
+      kSpace44 = scaleW(44),
+      kSpace48 = scaleW(48),
+
+      boxShadow10 = (() {
+        final ctx = navigatorKey.currentContext;
+        final isDark = ctx != null && Theme.of(ctx).brightness == Brightness.dark;
+        return BoxShadow(color: isDark ? DarkColors.black10 : LightColors.black10, blurRadius: scaleW(8), offset: Offset(0, scaleH(4)));
+      })();
 }
