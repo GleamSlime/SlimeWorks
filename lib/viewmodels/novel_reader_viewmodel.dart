@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:get/get.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
 /// 小说阅读器 ViewModel
@@ -405,10 +406,13 @@ class NovelReaderViewModel extends GetxController {
 
       // 跳转到目标书籍
       final targetNovel = allNovels[targetIndex];
+      // 使用 GoRouter 导航 - 需要从上下文获取，这里暂时保留原逻辑
+      // 由于 ViewModel 中无法直接访问 context，保持使用 Get.back() 和路由跳转
       Get.back(); // 返回书籍列表
       // 延迟一下再打开新书，确保前一个页面已经销毁
       Future.delayed(const Duration(milliseconds: 100), () {
-        Get.toNamed('/reader', arguments: targetNovel);
+        // TODO: 需要通过回调或其他方式传递 context 来使用 GoRouter
+        Get.toNamed(AppRoutes.novelReader, arguments: targetNovel);
       });
     } catch (e) {
       debugPrint('[Novel VM] Failed to switch book: $e');

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
+import 'package:slime_works/core/widgets/binding_widget.dart';
 import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/dashboard_screen.dart';
 import 'package:slime_works/pages/backup/capture_screen.dart';
@@ -9,6 +10,91 @@ import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/pages/http_bridge_test_page.dart';
 import 'package:slime_works/pages/settings/settings_page.dart';
+import 'package:slime_works/src/rust/api/novel_reader.dart';
+
+final goRouter = GoRouter(
+  initialLocation: AppRoutes.dashboard,
+  routes: [
+    GoRoute(path: AppRoutes.dashboard, name: 'dashboard', pageBuilder: (context, state) => AppRoutes.page(context, state, const DashboardScreen())),
+    GoRoute(path: AppRoutes.capture, name: 'capture', pageBuilder: (context, state) => AppRoutes.page(context, state, const CaptureScreen())),
+    GoRoute(
+      path: AppRoutes.moduleManagement,
+      name: 'module-management',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, const ModuleManagementScreen()),
+    ),
+    GoRoute(
+      path: AppRoutes.novelLibrary,
+      name: 'novel-library',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, const NovelLibraryPage()),
+    ),
+    GoRoute(
+      path: AppRoutes.novelReader,
+      name: 'novel-reader',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, NovelReaderPage(novel: state.extra as NovelMetadata?)),
+    ),
+    GoRoute(
+      path: AppRoutes.themePreview,
+      name: 'theme-preview',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, const ThemePreviewScreen()),
+    ),
+    GoRoute(
+      path: AppRoutes.httpBridgeTest,
+      name: 'http-bridge-test',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, const HttpBridgeTestPage()),
+    ),
+    GoRoute(
+      path: AppRoutes.webSocketTest,
+      name: 'websocket-test',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, const WebSocketTestPage()),
+    ),
+    GoRoute(
+      path: AppRoutes.datasource,
+      name: 'datasource',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('数据源')),
+    ),
+    GoRoute(
+      path: AppRoutes.clearwater,
+      name: 'clearwater',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('清水账')),
+    ),
+    GoRoute(
+      path: AppRoutes.aliyun,
+      name: 'aliyun',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('阿里云')),
+    ),
+    GoRoute(
+      path: AppRoutes.imageTools,
+      name: 'image-tools',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('图片工具')),
+    ),
+    GoRoute(
+      path: AppRoutes.imageToolbox,
+      name: 'image-toolbox',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('图片工具盒')),
+    ),
+    GoRoute(
+      path: AppRoutes.mediaLibrary,
+      name: 'media-library',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('媒体库')),
+    ),
+    GoRoute(
+      path: AppRoutes.cloudWord,
+      name: 'cloud-word',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('云词间')),
+    ),
+    GoRoute(
+      path: AppRoutes.distributed,
+      name: 'distributed',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('分布式算')),
+    ),
+    GoRoute(
+      path: AppRoutes.requestHost,
+      name: 'request-host',
+      pageBuilder: (context, state) => AppRoutes.page(context, state, AppRoutes.placeholderPage('请求托管')),
+    ),
+    GoRoute(path: AppRoutes.settings, name: 'settings', pageBuilder: (context, state) => AppRoutes.page(context, state, const SettingsPage())),
+  ],
+);
 
 /// 应用路由配置
 class AppRoutes {
@@ -34,32 +120,36 @@ class AppRoutes {
   static const String novelLibrary = '/novel-library';
   static const String novelReader = '/novel-reader';
 
-  /// 获取所有路由
-  static List<GetPage> getPages() {
-    return [
-      GetPage(name: dashboard, page: () => const DashboardScreen(), transition: Transition.fadeIn),
-      GetPage(name: capture, page: () => const CaptureScreen(), transition: Transition.fadeIn),
-      GetPage(name: moduleManagement, page: () => const ModuleManagementScreen(), transition: Transition.fadeIn),
-      GetPage(name: novelLibrary, page: () => const NovelLibraryPage(), transition: Transition.fadeIn),
-      GetPage(name: novelReader, page: () => const NovelReaderPage(), transition: Transition.fadeIn),
-      GetPage(name: themePreview, page: () => const ThemePreviewScreen(), transition: Transition.fadeIn),
-      GetPage(name: httpBridgeTest, page: () => const HttpBridgeTestPage(), transition: Transition.fadeIn),
-      GetPage(name: webSocketTest, page: () => const WebSocketTestPage(), transition: Transition.fadeIn),
-      GetPage(name: datasource, page: () => _buildPlaceholderPage('数据源'), transition: Transition.fadeIn),
-      GetPage(name: clearwater, page: () => _buildPlaceholderPage('清水账'), transition: Transition.fadeIn),
-      GetPage(name: aliyun, page: () => _buildPlaceholderPage('阿里云'), transition: Transition.fadeIn),
-      GetPage(name: imageTools, page: () => _buildPlaceholderPage('图片工具'), transition: Transition.fadeIn),
-      GetPage(name: imageToolbox, page: () => _buildPlaceholderPage('图片工具盒'), transition: Transition.fadeIn),
-      GetPage(name: mediaLibrary, page: () => _buildPlaceholderPage('媒体库'), transition: Transition.fadeIn),
-      GetPage(name: cloudWord, page: () => _buildPlaceholderPage('云词间'), transition: Transition.fadeIn),
-      GetPage(name: distributed, page: () => _buildPlaceholderPage('分布式算'), transition: Transition.fadeIn),
-      GetPage(name: requestHost, page: () => _buildPlaceholderPage('请求托管'), transition: Transition.fadeIn),
-      GetPage(name: settings, page: () => const SettingsPage(), transition: Transition.fadeIn),
-    ];
+  // 全局 router 实例，供无法访问 context 的地方使用
+  static GoRouter? router;
+
+  /// 构建带过渡动画的页面
+  static Page<dynamic> page(BuildContext context, GoRouterState state, Widget child) {
+    return CustomTransitionPage(
+      key: state.pageKey,
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 180),
+      child: BindingWidget(child: child),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+
+        final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
+
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: scale,
+            child: Container(color: Theme.of(context).scaffoldBackgroundColor, child: child),
+          ),
+        );
+      },
+    );
   }
 
   /// 构建占位页面
-  static Widget _buildPlaceholderPage(String title) {
-    return Center(child: Text('$title 页面开发中...', style: Get.textTheme.headlineSmall));
+  static Widget placeholderPage(String title) {
+    return Scaffold(
+      body: Center(child: Text('$title 页面开发中...', style: const TextStyle(fontSize: 24))),
+    );
   }
 }

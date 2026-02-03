@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -84,23 +85,26 @@ class MyApp extends StatelessWidget {
         return Obx(() {
           // 观察 AppTheme.metricsVersion，确保在重置度量后重建应用树
           final _ = AppTheme.metricsVersion.value;
-          return GetMaterialApp(
+          return MaterialApp.router(
             title: desktopScreen.title.value,
             debugShowCheckedModeBanner: false,
-            navigatorKey: navigatorKey,
+
+            // GoRouter 配置
+            routerConfig: goRouter,
 
             // 主题配置
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: AppTheme.themeMode,
 
-            // 路由配置
-            initialRoute: AppRoutes.dashboard,
-            getPages: AppRoutes.getPages(),
-
             // 国际化配置
             locale: const Locale('zh', 'CN'),
-            fallbackLocale: const Locale('zh', 'CN'),
+            supportedLocales: const [Locale('zh', 'CN')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
 
             builder: (context, child) {
               final Widget result = EasyLoading.init()(context, child);

@@ -9,7 +9,9 @@ import 'package:slime_works/pages/novel_reader/components/reader_content.dart';
 
 /// 小说阅读器页面
 class NovelReaderPage extends StatefulWidget {
-  const NovelReaderPage({super.key});
+  final NovelMetadata? novel;
+
+  const NovelReaderPage({super.key, this.novel});
 
   @override
   State<NovelReaderPage> createState() => _NovelReaderPageState();
@@ -22,7 +24,8 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   @override
   void initState() {
     super.initState();
-    novel = Get.arguments as NovelMetadata;
+    // 优先使用传入的 novel，如果没有则尝试从 Get.arguments 获取（兼容旧代码）
+    novel = widget.novel ?? Get.arguments as NovelMetadata;
     controller = Get.put(NovelReaderViewModel(novel), tag: novel.id);
   }
 

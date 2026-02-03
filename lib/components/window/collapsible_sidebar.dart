@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -318,6 +320,9 @@ class CollapsibleSidebar extends StatelessWidget {
     bool showExtends,
     int level, // 菜单层级，0为顶级
   ) {
+    // final _maybeRouter = GoRouter.of(context);
+    // final _currentPath = _maybeRouter?.state.name ?? '';
+    // print("当前路由 ${_currentPath} , item : ${item.route}, context : ${navigatorKey.currentContext} ");
     return Obx(() {
       final isSelected = controller.selectedRoute.value == item.route;
       final isItemExpanded = controller.isItemExpanded(item.label);
@@ -349,7 +354,7 @@ class CollapsibleSidebar extends StatelessWidget {
                       controller.toggleItemExpanded(item.label);
                     } else if (item.route != null) {
                       controller.selectItem(item.route);
-                      Get.toNamed(item.route!);
+                      goRouter.push(item.route!);
                     }
                   },
                   splashFactory: NoSplash.splashFactory,
@@ -478,7 +483,7 @@ class CollapsibleSidebar extends StatelessWidget {
           onTap: () {
             if (item.route != null) {
               controller.selectItem(item.route);
-              Get.toNamed(item.route!);
+              AppRoutes.router?.go(item.route!);
             }
           },
           splashFactory: NoSplash.splashFactory,
@@ -499,7 +504,7 @@ class CollapsibleSidebar extends StatelessWidget {
                 onTap: () {
                   if (item.route != null) {
                     controller.selectItem(item.route);
-                    Get.toNamed(item.route!);
+                    AppRoutes.router?.go(item.route!);
                   }
                 },
               ),
