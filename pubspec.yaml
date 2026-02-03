@@ -55,6 +55,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0 # 安全存储敏感数据
   shared_preferences: ^2.3.4 # 简单键值对存储
   path_provider: ^2.1.5 # 获取应用路径
+  file_picker: ^10.3.10 # 文件选择器
 
   # 图片相关
   cached_network_image: ^3.4.1 # 网络图片缓存
@@ -65,6 +66,7 @@ dependencies:
   easy_refresh: ^3.4.0 # 下拉刷新上拉加载
   flutter_slidable: ^4.0.3 # 滑动操作组件
   skeletonizer: ^2.1.2 # 骨架屏加载效果
+  flutter_html: ^3.0.0 # HTML渲染器，用于epub图片显示（升级以支持 customRenders API）
 
   # 屏幕适配
   flutter_screenutil: ^5.9.3 # 屏幕适配方案

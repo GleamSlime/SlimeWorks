@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,9 @@ import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
+import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
@@ -34,7 +38,7 @@ class SidebarGroup {
 /// 侧边栏控制器
 class SidebarController extends GetxController {
   // 侧边栏是否展开
-  final RxBool isExpanded = true.obs;
+  final RxBool isExpanded = isDesktop ? true.obs : false.obs;
 
   // 侧边栏扩展内容是否显示
   final RxBool showExtends = true.obs;
@@ -113,6 +117,8 @@ class CollapsibleSidebar extends StatelessWidget {
   final double collapsedWidth;
   final Duration animationDuration;
 
+  DesktopScreenProvider get desktopScreen => getIt.get<DesktopScreenProvider>();
+
   const CollapsibleSidebar({
     super.key,
     required this.groups,
@@ -125,8 +131,6 @@ class CollapsibleSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.put(SidebarController());
     final theme = Theme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
 
     return Obx(() {
       final isExpanded = controller.isExpanded.value;
@@ -134,7 +138,7 @@ class CollapsibleSidebar extends StatelessWidget {
       final targetWidth = scaleW(isExpanded ? expandedWidth : collapsedWidth);
 
       // 移动端使用抽屉式侧边栏
-      if (isMobile) {
+      if (desktopScreen.isMobile.value) {
         // 移动端默认收起（仅在首次）
         if (!controller._initializedMobile) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -144,14 +148,15 @@ class CollapsibleSidebar extends StatelessWidget {
 
         final targetWidth = MediaQuery.of(context).size.width / 2;
 
-        return _MobileSidebar(
+        return MobileSidebar(
           controller: controller,
           theme: theme,
           targetWidth: targetWidth,
           animationDuration: animationDuration,
           isExpanded: isExpanded,
           showExtends: showExtends,
-          buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends, isMobile: isMobile),
+          isMobile: desktopScreen.isMobile.value,
+          buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends),
         );
       }
 
@@ -165,7 +170,7 @@ class CollapsibleSidebar extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: AppThemeCommon.radius16,
-            boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))],
+            boxShadow: desktopScreen.isDesktop.value ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))] : null,
             gradient: AppTheme.sideBarTheme(context),
             border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
@@ -176,11 +181,27 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏内容
-  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends, {bool? isMobile}) {
+  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+    if (desktopScreen.isMobile.value) {
+      isExpanded = true;
+      showExtends = true;
+    }
+
     return Column(
       children: [
+        Obx(
+          () => getIt<DesktopScreenProvider>().isMobile.value
+              ? SizedBox.shrink()
+              : Platform.isMacOS
+              ? Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppThemeCommon.kSpace8, horizontal: isExpanded ? 0 : AppThemeCommon.kSpace10),
+                  child: const MacWindowButtons(),
+                )
+              : SizedBox(height: scaleW(10)),
+        ),
+
         // 侧边栏头部
-        _buildHeader(context, controller, isExpanded, isMobile: isMobile),
+        _buildHeader(context, controller, isExpanded),
 
         // 菜单列表（可滚动）
         Expanded(child: _buildScrollableMenuList(context, controller, isExpanded, showExtends)),
@@ -192,16 +213,15 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏头部
-  Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded, {bool? isMobile}) {
-    if (isMobile == true) {
+  Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
+    if (desktopScreen.isMobile.value) {
       return SizedBox.shrink();
     }
 
     return AnimatedContainer(
       duration: animationDuration,
       curve: Curves.easeInOut,
-      height: controller.isExpanded.value ? scaleW(40) : scaleW(64),
-      padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8),
+      padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace8, vertical: AppThemeCommon.kSpace4),
       alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
       child: HoverSvgButton(
         size: AppThemeCommon.fontSize24,
@@ -260,10 +280,15 @@ class CollapsibleSidebar extends StatelessWidget {
         // 分组标题
         if (group.title != null && isExpanded)
           Padding(
-            padding: EdgeInsets.fromLTRB(AppThemeCommon.kSpace12, AppThemeCommon.kSpace4, AppThemeCommon.kSpace12, AppThemeCommon.kSpace4),
+            padding: EdgeInsets.symmetric(horizontal: AppThemeCommon.kSpace12, vertical: AppThemeCommon.kSpace4),
             child: Text(
               group.title!,
-              style: TextStyle(fontSize: AppThemeCommon.fontSize14, color: theme.hintColor, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: AppThemeCommon.fontSize14,
+                color: theme.hintColor,
+                fontWeight: FontWeight.w500,
+                decoration: TextDecoration.none,
+              ),
             ),
           ),
 
@@ -484,7 +509,7 @@ class CollapsibleSidebar extends StatelessWidget {
 }
 
 /// 移动端侧边栏组件（支持手势滑动）
-class _MobileSidebar extends StatefulWidget {
+class MobileSidebar extends StatefulWidget {
   final SidebarController controller;
   final ThemeData theme;
   final double targetWidth;
@@ -492,8 +517,10 @@ class _MobileSidebar extends StatefulWidget {
   final bool isExpanded;
   final bool showExtends;
   final Widget Function(BuildContext) buildContent;
+  final bool? isMobile;
 
-  const _MobileSidebar({
+  const MobileSidebar({
+    super.key,
     required this.controller,
     required this.theme,
     required this.targetWidth,
@@ -501,13 +528,14 @@ class _MobileSidebar extends StatefulWidget {
     required this.isExpanded,
     required this.showExtends,
     required this.buildContent,
+    this.isMobile,
   });
 
   @override
-  State<_MobileSidebar> createState() => _MobileSidebarState();
+  State<MobileSidebar> createState() => MobileSidebarState();
 }
 
-class _MobileSidebarState extends State<_MobileSidebar> {
+class MobileSidebarState extends State<MobileSidebar> {
   double _dragOffset = 0.0;
   bool _isDragging = false;
 
@@ -534,123 +562,125 @@ class _MobileSidebarState extends State<_MobileSidebar> {
       maskOpacity = 1;
     }
 
-    return Stack(
-      children: [
-        // 左侧边缘检测区域（用于开始拖动）
-        if (!widget.isExpanded)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 30, // 边缘检测区域宽度
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragStart: (details) {
-                setState(() {
-                  _isDragging = true;
-                  _dragOffset = 0;
-                });
-              },
-              onHorizontalDragUpdate: (details) {
-                if (_isDragging) {
-                  setState(() {
-                    _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
-                  });
-                }
-              },
-              onHorizontalDragEnd: (details) {
-                if (_isDragging) {
-                  setState(() {
-                    _isDragging = false;
-                  });
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          children: [
+            // 左侧边缘检测区域（用于开始拖动）
+            if (!widget.isExpanded)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: scaleW(40), // 边缘检测区域宽度
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: (details) {
+                    setState(() {
+                      _isDragging = true;
+                      _dragOffset = 0;
+                    });
+                  },
+                  onHorizontalDragUpdate: (details) {
+                    if (_isDragging) {
+                      setState(() {
+                        _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                      });
+                    }
+                  },
+                  onHorizontalDragEnd: (details) {
+                    if (_isDragging) {
+                      setState(() {
+                        _isDragging = false;
+                      });
 
-                  // 根据拖动距离和速度决定打开或关闭
-                  final velocity = details.primaryVelocity ?? 0;
-                  if (velocity > 300 || _dragOffset > widget.targetWidth * 0.3) {
-                    widget.controller.openSidebar();
+                      // 根据拖动距离和速度决定打开或关闭
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity > 300 || _dragOffset > widget.targetWidth * 0.3) {
+                        widget.controller.openSidebar();
+                      }
+
+                      setState(() {
+                        _dragOffset = 0;
+                      });
+                    }
+                  },
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+
+            // 背景遮罩层
+            if (widget.isExpanded || _isDragging)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (widget.isExpanded && !_isDragging) {
+                      widget.controller.closeSidebar();
+                    }
+                  },
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
+                    child: Container(decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()))),
+                  ),
+                ),
+              ),
+
+            // 侧边栏主体
+            AnimatedPositioned(
+              duration: _isDragging ? Duration.zero : widget.animationDuration,
+              curve: Curves.easeInOut,
+              left: sidebarLeft,
+              top: 0,
+              bottom: 0,
+              width: widget.targetWidth,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  if (widget.isExpanded || _isDragging) {
+                    setState(() {
+                      if (!_isDragging) {
+                        _isDragging = true;
+                        _dragOffset = widget.targetWidth;
+                      }
+                      _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                    });
                   }
+                },
+                onHorizontalDragEnd: (details) {
+                  if (_isDragging) {
+                    final velocity = details.primaryVelocity ?? 0;
 
-                  setState(() {
-                    _dragOffset = 0;
-                  });
-                }
-              },
-              child: Container(color: Colors.transparent),
-            ),
-          ),
+                    setState(() {
+                      _isDragging = false;
+                    });
 
-        // 背景遮罩层
-        if (widget.isExpanded || _isDragging)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (widget.isExpanded && !_isDragging) {
-                  widget.controller.closeSidebar();
-                }
-              },
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
+                    // 根据速度和位置判断
+                    if (velocity < -300 || _dragOffset < widget.targetWidth * 0.5) {
+                      widget.controller.closeSidebar();
+                    } else if (velocity > 300 || _dragOffset > widget.targetWidth * 0.5) {
+                      widget.controller.openSidebar();
+                    }
+
+                    setState(() {
+                      _dragOffset = 0;
+                    });
+                  }
+                },
                 child: Container(
-                  alignment: Alignment.topRight,
-                  decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt())),
-                  child: Text(maskOpacity.toString()),
+                  decoration: BoxDecoration(
+                    color: widget.theme.colorScheme.surface,
+                    boxShadow: widget.isMobile != true
+                        ? [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))]
+                        : null,
+                    gradient: AppTheme.sideBarTheme(context),
+                  ),
+                  child: widget.buildContent(context),
                 ),
               ),
             ),
-          ),
-
-        // 侧边栏主体
-        AnimatedPositioned(
-          duration: _isDragging ? Duration.zero : widget.animationDuration,
-          curve: Curves.easeInOut,
-          left: sidebarLeft,
-          top: 0,
-          bottom: 0,
-          width: widget.targetWidth,
-          child: GestureDetector(
-            onHorizontalDragUpdate: (details) {
-              if (widget.isExpanded || _isDragging) {
-                setState(() {
-                  if (!_isDragging) {
-                    _isDragging = true;
-                    _dragOffset = widget.targetWidth;
-                  }
-                  _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
-                });
-              }
-            },
-            onHorizontalDragEnd: (details) {
-              if (_isDragging) {
-                final velocity = details.primaryVelocity ?? 0;
-
-                setState(() {
-                  _isDragging = false;
-                });
-
-                // 根据速度和位置判断
-                if (velocity < -300 || _dragOffset < widget.targetWidth * 0.5) {
-                  widget.controller.closeSidebar();
-                } else if (velocity > 300 || _dragOffset > widget.targetWidth * 0.5) {
-                  widget.controller.openSidebar();
-                }
-
-                setState(() {
-                  _dragOffset = 0;
-                });
-              }
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: widget.theme.colorScheme.surface,
-                boxShadow: [BoxShadow(color: widget.theme.shadowColor.withAlpha(50), blurRadius: scaleW(20), offset: Offset(scaleW(2), 0))],
-                gradient: AppTheme.sideBarTheme(context),
-              ),
-              child: widget.buildContent(context),
-            ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

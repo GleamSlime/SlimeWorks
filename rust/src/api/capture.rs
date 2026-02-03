@@ -34,7 +34,17 @@ fn get_install_dir() -> Result<String, String> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        Ok("/tmp/slimeworks".to_string())
+        // 首先尝试使用环境变量 TMPDIR（iOS/Android 在 sandbox 中会设置为 app 可写的临时目录）
+        if let Ok(tmpdir) = std::env::var("TMPDIR") {
+            let mut p = std::path::PathBuf::from(tmpdir);
+            p.push("slimeworks");
+            return Ok(p.to_string_lossy().to_string());
+        }
+
+        // 回退到系统临时目录（尽量保证可写），避免在根目录写入
+        let mut tmp = std::env::temp_dir();
+        tmp.push("slimeworks");
+        Ok(tmp.to_string_lossy().to_string())
     }
 }
 

@@ -4,6 +4,7 @@
     "certutil",
     "cfgs",
     "dotenv",
+    "Getx",
     "pemfile",
     "processthreadsapi",
     "rcgen",
@@ -17,7 +18,8 @@
     "Assets",
     "MacOS",
     "Desktop",
-    "Windows"
+    "Windows",
+    "IOS"
   ],
   "editor.wordWrapColumn": 150,
   "dart.lineLength": 150

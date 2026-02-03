@@ -3,40 +3,49 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
+import 'package:slime_works/components/window/desktop_shell.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/services/initialize/main.dart';
+import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
-import 'package:slime_works/src/rust/api/ffmpeg.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
+  TimeConsumptionTest desktopTest = TimeConsumptionTest(tag: "应用初始化")..start();
+
   // 确保 Flutter 绑定初始化
   WidgetsFlutterBinding.ensureInitialized();
 
   // 加载环境变量
   await dotenv.load(fileName: '.env');
 
+  getItInit();
+
   // 初始化桌面窗口管理器
   await DesktopScaffold.initManager();
-
-  // 初始化 Rust 库
-  await RustLib.init();
-
-  initializeLogger();
-
-  // 初始化 FFmpeg
-  await _initFFmpeg();
 
   // 运行应用
   runApp(const MyApp());
 
+  // 运行应用
+  await RustLib.init();
+
+  initializeLogger();
+
+  // 异步加载 Rust 模块
+  RustModules.initializeLazy();
+
   // 配置 EasyLoading
   configLoading();
+
+  desktopTest.end();
 }
 
 /// 配置 EasyLoading
@@ -56,47 +65,32 @@ void configLoading() {
     ..dismissOnTap = false;
 }
 
-/// 初始化 FFmpeg
-Future<void> _initFFmpeg() async {
-  try {
-    final appDir = await getApplicationSupportDirectory();
-    final windowsUrl = dotenv.env['FFMPEG_WINDOWS_URL'] ?? '';
-    final macosUrl = dotenv.env['FFMPEG_MACOS_URL'] ?? '';
-
-    if (windowsUrl.isEmpty || macosUrl.isEmpty) {
-      print('⚠️ FFmpeg URLs not configured in .env');
-      return;
-    }
-
-    await initializeFfmpeg(windowsUrl: windowsUrl, macosUrl: macosUrl, installDir: appDir.path);
-
-    print('✅ FFmpeg initialized successfully');
-  } catch (e) {
-    print('❌ FFmpeg initialization failed: $e');
-    // 不阻止应用启动，FFmpeg 初始化失败只影响视频元数据功能
-  }
-}
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  DesktopScreenProvider get desktopScreen => getIt<DesktopScreenProvider>();
+
   @override
   Widget build(BuildContext context) {
-    // 使用 ScreenUtilInit 进行屏幕适配
     return ScreenUtilInit(
-      designSize: const Size(1520, 1050), // 设计稿尺寸
+      designSize: isDesktop
+          ? desktopScreen.isMobile.value
+                ? Size(375, 815)
+                : Size(1520, 1050)
+          : Size(375, 815),
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (context, child) {
         return GetMaterialApp(
-          title: '史莱姆工坊',
+          title: desktopScreen.title.value,
           debugShowCheckedModeBanner: false,
           navigatorKey: navigatorKey,
 
           // 主题配置
           theme: AppThemeCommon.lightTheme,
           darkTheme: AppThemeCommon.darkTheme,
-          themeMode: ThemeMode.system, // 跟随系统主题
+          themeMode: AppThemeCommon.themeMode,
+
           // 路由配置
           initialRoute: AppRoutes.dashboard,
           getPages: AppRoutes.getPages(),
@@ -105,8 +99,10 @@ class MyApp extends StatelessWidget {
           locale: const Locale('zh', 'CN'),
           fallbackLocale: const Locale('zh', 'CN'),
 
-          // EasyLoading 配置
-          builder: EasyLoading.init(),
+          builder: (context, child) {
+            final Widget result = EasyLoading.init()(context, child);
+            return DesktopShell(child: result);
+          },
         );
       },
     );

@@ -3,10 +3,43 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'package:slime_works/components/window/custom_bar.dart';
+import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/services/window_position_service.dart';
+
+// abstract class DesktopScreen {
+//   static const double minWidth = 1200;
+//   static const double minHeight = 800;
+
+//   static Size get size => Size(width.value, height.value);
+
+//   static String title = dotenv.env['APP_NAME'] ?? "";
+
+//   static RxDouble width = double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520").obs;
+//   static RxDouble height = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050").obs;
+
+//   static RxBool get isDesktop => RxBool(width.value > 600 || Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+//   static RxBool get isMobile => RxBool(width.value <= 600 || Platform.isAndroid || Platform.isIOS);
+
+//   static void setWidth(double width) {
+//     if (width < minWidth) {
+//       DesktopScreen.width.value = minWidth;
+//     } else {
+//       DesktopScreen.width.value = width;
+//     }
+//   }
+
+//   static void setHeight(double height) {
+//     if (height < minHeight) {
+//       DesktopScreen.height.value = minHeight;
+//     } else {
+//       DesktopScreen.height.value = height;
+//     }
+//   }
+// }
 
 class DesktopScaffold extends StatefulWidget {
   final Widget child;
@@ -27,28 +60,26 @@ class DesktopScaffold extends StatefulWidget {
       return service;
     });
 
-    String windowTitle = dotenv.env['APP_NAME'] ?? "";
-    double windowWidth = double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520");
-    double windowHeight = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050");
+    DesktopScreenProvider desktopScreen = getIt.get<DesktopScreenProvider>();
+
+    desktopScreen.setWidth(positionService.windowWidth);
+    desktopScreen.setHeight(positionService.windowHeight);
 
     WindowOptions windowOptions = WindowOptions(
-      size: Size(windowWidth, windowHeight),
+      size: desktopScreen.size.value,
       center: false,
       titleBarStyle: TitleBarStyle.hidden,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       windowButtonVisibility: false,
-      title: windowTitle,
+      title: desktopScreen.title.value,
     );
 
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
       // 恢复上次的窗口位置
       await positionService.restorePosition();
-      await windowManager.show();
-      await windowManager.focus();
+      // await windowManager.show();
+      // await windowManager.focus();
     });
-
-    // 初始化并注册窗口位置服务
-    await Get.putAsync(() => WindowPositionService().init());
   }
 
   @override
@@ -85,11 +116,14 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        widget.child,
-        Positioned(left: 0, top: 0, child: const CustomTitleBar()),
-      ],
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned(left: 0, top: 0, child: const ScreenTopBar()),
+        ],
+      ),
     );
   }
 }

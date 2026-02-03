@@ -25,6 +25,8 @@ class AppTheme extends AppThemeCommon {
 class AppThemeCommon {
   AppThemeCommon._();
 
+  static ThemeMode themeMode = ThemeMode.system;
+
   /// 亮色主题
   static ThemeData get lightTheme {
     return ThemeData(

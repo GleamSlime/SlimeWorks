@@ -105,14 +105,13 @@ impl ModuleLoader {
         ];
 
         for dev_path in dev_paths {
-            #[cfg(target_os = "windows")]
-            let dev_file = dev_path.join(format!("{}.dll", module_name));
-
-            #[cfg(target_os = "macos")]
-            let dev_file = dev_path.join(format!("lib{}.dylib", module_name));
-
-            #[cfg(target_os = "linux")]
-            let dev_file = dev_path.join(format!("lib{}.so", module_name));
+            let dev_file = if cfg!(target_os = "windows") {
+                dev_path.join(format!("{}.dll", module_name))
+            } else if cfg!(target_os = "macos") {
+                dev_path.join(format!("lib{}.dylib", module_name))
+            } else {
+                dev_path.join(format!("lib{}.so", module_name))
+            };
 
             if dev_file.exists() {
                 return Ok(dev_file);
