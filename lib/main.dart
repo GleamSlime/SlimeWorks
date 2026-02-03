@@ -6,7 +6,7 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
-import 'package:slime_works/components/window/desktop_shell.dart';
+import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/initialize/main.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
@@ -73,18 +73,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenUtilInit(
-      designSize: isDesktop
-          ? desktopScreen.isMobile.value
-                ? Size(375, 815)
-                : Size(1520, 1050)
-          : Size(375, 815),
-      minTextAdapt: true,
-      splitScreenMode: true,
-      builder: (context, child) {
-        return Obx(() {
-          // 观察 AppTheme.metricsVersion，确保在重置度量后重建应用树
-          final _ = AppTheme.metricsVersion.value;
+    return Obx(() {
+      // 观察 AppTheme.metricsVersion，确保在重置度量后重建应用树
+      final _ = AppTheme.metricsVersion.value;
+      return ScreenUtilInit(
+        designSize: isDesktop
+            ? desktopScreen.isMobile.value
+                  ? Size(375, 815)
+                  : Size(1520, 1050)
+            : Size(375, 815),
+        minTextAdapt: true,
+        splitScreenMode: true,
+        builder: (context, child) {
           return MaterialApp.router(
             title: desktopScreen.title.value,
             debugShowCheckedModeBanner: false,
@@ -108,11 +108,11 @@ class MyApp extends StatelessWidget {
 
             builder: (context, child) {
               final Widget result = EasyLoading.init()(context, child);
-              return DesktopShell(child: result);
+              return DesktopLayout(child: result);
             },
           );
-        });
-      },
-    );
+        },
+      );
+    });
   }
 }

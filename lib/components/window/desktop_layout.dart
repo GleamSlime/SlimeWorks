@@ -12,10 +12,10 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
-class DesktopShell extends StatelessWidget {
+class DesktopLayout extends StatelessWidget {
   final Widget child;
 
-  const DesktopShell({super.key, required this.child});
+  const DesktopLayout({super.key, required this.child});
 
   /// 获取默认的侧边栏配置
   static List<SidebarGroup> getDefaultSidebarGroups() {
@@ -102,6 +102,8 @@ class DesktopShell extends StatelessWidget {
       );
     }
 
+    ThemeData theme = Theme.of(context);
+
     return DesktopScaffold(
       child: Obx(
         () => getIt<DesktopScreenProvider>().isMobile.value
@@ -120,7 +122,20 @@ class DesktopShell extends StatelessWidget {
                         Container(
                           padding: EdgeInsets.only(right: AppTheme.metrics.kSpace20, top: AppTheme.metrics.kSpace4),
                           height: scaleW(60),
-                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [if (Platform.isWindows) const WindowsWindowButtons()]),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: theme.appBarTheme.backgroundColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))],
+                                ),
+                                child: Obx(() => getIt<DesktopScreenProvider>().screenHeadToolsWidget.value),
+                              ),
+                              if (Platform.isWindows) const WindowsWindowButtons(),
+                            ],
+                          ),
                         ),
                         Expanded(child: child),
                       ],

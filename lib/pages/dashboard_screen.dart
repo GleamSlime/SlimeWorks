@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 

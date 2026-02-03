@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
@@ -172,7 +171,7 @@ class CollapsibleSidebar extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: AppTheme.metrics.radius10,
-            boxShadow: desktopScreen.isDesktop.value ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(30))] : null,
+            boxShadow: desktopScreen.isDesktop.value ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))] : null,
             gradient: AppTheme.sideBarTheme(context),
             border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
           ),
@@ -320,11 +319,8 @@ class CollapsibleSidebar extends StatelessWidget {
     bool showExtends,
     int level, // 菜单层级，0为顶级
   ) {
-    // final _maybeRouter = GoRouter.of(context);
-    // final _currentPath = _maybeRouter?.state.name ?? '';
-    // print("当前路由 ${_currentPath} , item : ${item.route}, context : ${navigatorKey.currentContext} ");
     return Obx(() {
-      final isSelected = controller.selectedRoute.value == item.route;
+      final isSelected = (controller.selectedRoute.value.isEmpty ? goRouter.state.path : controller.selectedRoute.value) == item.route;
       final isItemExpanded = controller.isItemExpanded(item.label);
       final theme = Theme.of(context);
 

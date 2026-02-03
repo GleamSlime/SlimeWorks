@@ -77,7 +77,7 @@ class NovelLibraryPage extends StatelessWidget {
                     coverPath: novel.coverPath,
                     format: novel.format.toString().split('.').last.toUpperCase(),
                     progress: novel.progress,
-                    onTap: () => Get.toNamed(AppRoutes.novelReader, arguments: novel),
+                    onTap: () => Get.toNamed(Routes.novelReader, arguments: novel),
                     onDelete: () => controller.deleteNovel(novel.id),
                   );
                 },

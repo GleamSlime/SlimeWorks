@@ -17,6 +17,17 @@
 
 - MacOS 26.2 25C56 darwin-arm64
 
+## 约束
+
+### 状态管理
+
+- UI/页面状态 使用GetX
+- 业务逻辑Service、Rust FFI桥接层（全局单例）、配置、数据库 使用GetIt
+
+### 路由管理
+
+- 使用 TypedGoRoute 类型安全路由 注册和管理
+
 ## 打包
 
 ### MacOS

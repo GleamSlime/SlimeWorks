@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 
 class DesktopScreenProviderImpl extends DesktopScreenProvider {
@@ -9,5 +10,15 @@ class DesktopScreenProviderImpl extends DesktopScreenProvider {
   @override
   void setHeight(double h) {
     height.value = h;
+  }
+
+  @override
+  void setTitle(String t) {
+    title.value = t;
+  }
+
+  @override
+  void setScreenHeadToolsWidget(Widget widget) {
+    screenHeadToolsWidget.value = widget;
   }
 }

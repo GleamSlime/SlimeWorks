@@ -3,14 +3,6 @@ import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-class SizeUtils {
-  static const navigationBarHeight = 128.0;
-
-  static const homeNavigationBarHeight = 115.0;
-
-  static int appWidth = int.parse(dotenv.env['APP_SIZE_WIDTH'] ?? '1520');
-}
-
 /// 平台检测工具类
 class PlatformUtil {
   /// 是否是桌面平台 (macOS 或 Windows)
@@ -21,7 +13,6 @@ class PlatformUtil {
 }
 
 double scaleW(double w, {bool large = false}) {
-  print({'w': w});
   // if (isPhone) {
   //   w = w * 2;
   // } else if (isPad) {
@@ -33,7 +24,6 @@ double scaleW(double w, {bool large = false}) {
 }
 
 double scaleH(double h, {bool large = false}) {
-  print({'h': h});
   // if (isPhone) {
   //   w = w * 1.9;
   // } else if (isPad) {
@@ -52,13 +42,8 @@ double scaleS(double fontSize, {bool large = false}) {
   // } else if (ScreenUtil().screenWidth >= 1920) {
   //   fontSize = fontSize * 0.7;
   // }
-  double baseSize = ScreenUtil().setSp(fontSize);
 
-  if (PlatformUtil.isDesktop || ScreenUtil().screenWidth > 600) {
-    baseSize += (ScreenUtil().screenWidth / SizeUtils.appWidth);
-  }
-
-  return baseSize;
+  return ScreenUtil().setSp(fontSize);
 }
 
 bool get isPhone => ScreenUtil().screenWidth < 600;

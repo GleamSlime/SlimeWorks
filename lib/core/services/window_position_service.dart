@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/index.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/core/provider/main.dart';
