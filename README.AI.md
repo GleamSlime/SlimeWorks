@@ -11,4 +11,4 @@
 - 页面组件位于 lib/pages/{pageName}/components 中，页面需要细致的拆分为组件，而不是全写在一个文件中
 - 在MacOS/Windows如果缩放窗口为手机比例(窄屏)则会且为移动端模式显示，修改flutter时需考虑响应式
 - 状态管理(UI/页面状态 使用GetX | 业务逻辑Service、Rust FFI桥接层、配置、数据库 使用GetIt)
-- 路由操作使用GoRouter
+- 路由操作使用GoRouter TypedGoRoute

@@ -96,7 +96,7 @@ class SidebarController extends GetxController {
   /// 选择菜单项
   void selectItem(String? route) {
     if (route != null && route.isNotEmpty) {
-      selectedRoute.value = route;
+      // selectedRoute.value = route;
     }
   }
 
@@ -320,7 +320,7 @@ class CollapsibleSidebar extends StatelessWidget {
     int level, // 菜单层级，0为顶级
   ) {
     return Obx(() {
-      final isSelected = (controller.selectedRoute.value.isEmpty ? goRouter.state.path : controller.selectedRoute.value) == item.route;
+      final isSelected = controller.selectedRoute.value == item.route;
       final isItemExpanded = controller.isItemExpanded(item.label);
       final theme = Theme.of(context);
 

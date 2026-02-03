@@ -58,3 +58,5 @@ rust/**/gen/schemas
 *.sqlite
 *.crt
 *.key
+
+*.g.dart
