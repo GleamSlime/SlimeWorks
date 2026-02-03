@@ -379,7 +379,7 @@ class NovelLibraryPage extends StatelessWidget {
                               format: novel.format.toString().split('.').last.toUpperCase(),
                               progress: novel.progress,
                               onTap: () async {
-                              context.push(Routes.novelReader, extra: novel);
+                                context.push(Routes.novelReader, extra: novel);
                                 controller.loadNovels();
                               },
                               onDelete: () => controller.deleteNovel(novel.id),

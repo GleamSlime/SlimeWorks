@@ -127,4 +127,3 @@ class AppRoutes {
 
 // 向后兼容 - 导出一个全局 goRouter 实例
 final goRouter = AppRoutes.createRouter();
-
