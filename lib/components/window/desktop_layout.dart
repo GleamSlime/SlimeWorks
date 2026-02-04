@@ -11,7 +11,6 @@ import 'package:slime_works/core/routes/app_sidebars.dart';
 import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
-import 'package:slime_works/gen/assets.gen.dart';
 
 class DesktopLayout extends StatelessWidget {
   final Widget child;
@@ -21,6 +20,7 @@ class DesktopLayout extends StatelessWidget {
   /// 获取默认的侧边栏配置
   static List<SidebarGroup> getDefaultSidebarGroups() {
     return [
+      coreSidebarGroup,
       collectionSidebarGroup,
       // 第一组：主要功能
       // SidebarGroup(
@@ -82,16 +82,7 @@ class DesktopLayout extends StatelessWidget {
       //   ),
 
       // // 第四组：系统
-      SidebarGroup(
-        id: 'system',
-        title: '系统',
-        icon: 'icons/system.svg',
-        permission: Permission.viewDashboard,
-        items: [
-          // SidebarMenuItem(icon: Assets.image.svg.menuAbout, label: '关于', route: '/about'),
-          // SidebarMenuItem(icon: Assets.image.svg.menuSetting, label: '设置', route: '/settings'),
-        ],
-      ),
+      bottomSidebarGroup,
     ];
   }
 

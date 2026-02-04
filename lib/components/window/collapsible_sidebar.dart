@@ -32,10 +32,10 @@ class SidebarGroup {
   final String? title;
   final List<SidebarMenuItem> items;
   final int? sort;
-  final String icon;
+  final String? icon;
   final Permission? permission;
 
-  const SidebarGroup({required this.id, this.title, required this.items, required this.icon, this.permission, this.sort});
+  const SidebarGroup({required this.id, this.title, required this.items, this.icon, this.permission, this.sort});
 }
 
 /// 侧边栏控制器

@@ -3,8 +3,6 @@ part of '../app_sidebars.dart';
 final SidebarGroup collectionSidebarGroup = SidebarGroup(
   id: 'collection',
   title: '收藏夹',
-  icon: 'icons/collection.svg',
-  sort: 30,
   permission: Permission.accessCollection,
   items: [
     // SidebarMenuItem(icon: Assets.image.svg.menuCollectNote, label: '笔记', route: '/favorites/notes', badge: 61),
