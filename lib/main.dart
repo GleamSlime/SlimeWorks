@@ -108,7 +108,10 @@ class MyApp extends StatelessWidget {
 
             builder: (context, child) {
               final Widget result = EasyLoading.init()(context, child);
-              return DesktopLayout(child: result);
+
+              return Overlay(
+                initialEntries: [OverlayEntry(builder: (_) => DesktopLayout(child: result))],
+              );
             },
           );
         },

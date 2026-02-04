@@ -48,14 +48,16 @@ class ScreenTopBar extends StatelessWidget {
 }
 
 class MacWindowButtons extends StatelessWidget {
-  const MacWindowButtons({super.key});
+  final MainAxisAlignment? mainAxisAlignment;
+
+  const MacWindowButtons({super.key, this.mainAxisAlignment});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      spacing: AppTheme.metrics.kSpace4,
+      spacing: AppTheme.metrics.kSpace8,
+      mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.start,
       children: [
-        SizedBox(width: AppTheme.metrics.kSpace4),
         HoverSvgButton(svg: Assets.image.svg.macToolsCloseNoHover, hoverSvg: Assets.image.svg.macToolsClose, onTap: windowManager.close, size: 13),
         HoverSvgButton(
           svg: Assets.image.svg.macToolsUnfoldNoHover,

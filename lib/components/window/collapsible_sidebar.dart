@@ -191,20 +191,18 @@ class CollapsibleSidebar extends StatelessWidget {
     }
 
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Obx(
           () => getIt<DesktopScreenProvider>().isMobile.value
               ? SizedBox.shrink()
               : Platform.isMacOS
               ? Padding(
-                  padding: EdgeInsets.only(
-                    top: AppTheme.metrics.kSpace8,
-                    left: isExpanded ? 0 : AppTheme.metrics.kSpace10,
-                    right: isExpanded ? 0 : AppTheme.metrics.kSpace10,
-                  ),
-                  child: const MacWindowButtons(),
+                  padding: EdgeInsets.only(top: AppTheme.metrics.kSpace8, left: isExpanded ? AppTheme.metrics.kSpace8 : 0),
+                  child: MacWindowButtons(mainAxisAlignment: showExtends ? MainAxisAlignment.start : MainAxisAlignment.center),
                 )
-              : SizedBox(height: scaleW(10)),
+              : SizedBox.shrink(),
         ),
 
         // 侧边栏头部

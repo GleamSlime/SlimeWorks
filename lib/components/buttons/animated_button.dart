@@ -3,12 +3,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:slime_works/core/index.dart';
 
 class AnimatedButton extends StatefulWidget {
   final String? svg;
   final String? label;
   final String? hoverSvg;
-  final VoidCallback onTap;
+  final void Function()? onTap;
   final bool enableScaleAnimation;
   final Duration animationDuration;
 
@@ -18,7 +19,9 @@ class AnimatedButton extends StatefulWidget {
   final BoxDecoration? decoration;
   final TextStyle? textStyle;
   final double? svgSize;
+  final Color? svgColor;
   final double? spacing;
+  final bool? loading;
 
   const AnimatedButton({
     super.key,
@@ -34,6 +37,8 @@ class AnimatedButton extends StatefulWidget {
     this.textStyle,
     this.svgSize,
     this.spacing,
+    this.svgColor,
+    this.loading = false,
   });
 
   @override
@@ -129,7 +134,11 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
   }
 
   void _handleTap() {
-    widget.onTap();
+    if (widget.loading == true) {
+      return;
+    }
+
+    widget.onTap?.call();
   }
 
   void _handleHoverEnter() {
@@ -187,9 +196,10 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
     final textStyle = widget.textStyle ?? const TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
     final svgSize = widget.svgSize ?? 20;
     final spacing = widget.spacing ?? 10;
+    final svgColor = widget.svgColor ?? Theme.of(context).textTheme.bodyMedium?.color;
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: widget.loading == true ? SystemMouseCursors.noDrop : SystemMouseCursors.click,
       onEnter: (_) => _handleHoverEnter(),
       onExit: (_) => _handleHoverExit(),
       child: GestureDetector(
@@ -207,62 +217,99 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
             clipBehavior: Clip.antiAlias,
             child: Stack(
               clipBehavior: Clip.hardEdge,
-              alignment: Alignment.centerLeft,
               children: [
-                if (!_hasAnimated)
-                  _Content(
+                // 基线（不可见）内容：用于根据当前标签确定按钮的尺寸
+                Opacity(
+                  opacity: 0,
+                  alwaysIncludeSemantics: false,
+                  child: _Content(
                     svg: _currentSvg.isNotEmpty ? _currentSvg : null,
                     label: _currentLabel,
                     textStyle: textStyle,
                     svgSize: svgSize,
+                    svgColor: svgColor,
                     spacing: spacing,
+                    loading: widget.loading,
                   ),
+                ),
 
+                // 已退出（之前）的内容：定位为不影响布局尺寸
                 if (_hasAnimated && _prevLabel != null)
-                  AnimatedBuilder(
-                    animation: _controller,
-                    builder: (_, _) {
-                      return Transform.translate(
-                        offset: Offset(0, _outOffset.value),
-                        child: Opacity(
-                          opacity: 1 - _outOpacity.value,
-                          child: ImageFiltered(
-                            imageFilter: ImageFilter.blur(sigmaX: _outBlur.value, sigmaY: _outBlur.value),
-                            child: _Content(
-                              svg: _prevSvg?.isNotEmpty == true ? _prevSvg : null,
-                              label: _prevLabel!,
-                              textStyle: textStyle,
-                              svgSize: svgSize,
-                              spacing: spacing,
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (_, __) {
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: Transform.translate(
+                            offset: Offset(0, _outOffset.value),
+                            child: Opacity(
+                              opacity: 1 - _outOpacity.value,
+                              child: ImageFiltered(
+                                imageFilter: ImageFilter.blur(sigmaX: _outBlur.value, sigmaY: _outBlur.value),
+                                child: _Content(
+                                  svg: _prevSvg?.isNotEmpty == true ? _prevSvg : null,
+                                  label: _prevLabel!,
+                                  textStyle: textStyle,
+                                  svgSize: svgSize,
+                                  svgColor: svgColor,
+                                  spacing: spacing,
+                                  loading: widget.loading,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
 
-                // 👇 新内容进入（从上）
+                // 进入（当前）的内容：同样定位以不影响布局尺寸
                 if (_hasAnimated)
-                  AnimatedBuilder(
-                    animation: _controller,
-                    builder: (_, _) {
-                      return Transform.translate(
-                        offset: Offset(0, _inOffset.value),
-                        child: Opacity(
-                          opacity: _inOpacity.value,
-                          child: ImageFiltered(
-                            imageFilter: ImageFilter.blur(sigmaX: _inBlur.value, sigmaY: _inBlur.value),
-                            child: _Content(
-                              svg: _currentSvg.isNotEmpty ? _currentSvg : null,
-                              label: _currentLabel,
-                              textStyle: textStyle,
-                              svgSize: svgSize,
-                              spacing: spacing,
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (_, __) {
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: Transform.translate(
+                            offset: Offset(0, _inOffset.value),
+                            child: Opacity(
+                              opacity: _inOpacity.value,
+                              child: ImageFiltered(
+                                imageFilter: ImageFilter.blur(sigmaX: _inBlur.value, sigmaY: _inBlur.value),
+                                child: _Content(
+                                  svg: _currentSvg.isNotEmpty ? _currentSvg : null,
+                                  label: _currentLabel,
+                                  textStyle: textStyle,
+                                  svgSize: svgSize,
+                                  svgColor: svgColor,
+                                  spacing: spacing,
+                                  loading: widget.loading,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
+                  ),
+
+                // 初始非动画状态：显示当前内容
+                if (!_hasAnimated)
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _Content(
+                        svg: _currentSvg.isNotEmpty ? _currentSvg : null,
+                        label: _currentLabel,
+                        textStyle: textStyle,
+                        svgSize: svgSize,
+                        svgColor: svgColor,
+                        spacing: spacing,
+                        loading: widget.loading,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -279,22 +326,59 @@ class _Content extends StatelessWidget {
   final TextStyle textStyle;
   final double svgSize;
   final double spacing;
+  final Color? svgColor;
+  final bool? loading;
 
-  const _Content({required this.svg, required this.label, required this.textStyle, required this.svgSize, required this.spacing});
+  const _Content({
+    required this.svg,
+    required this.label,
+    required this.textStyle,
+    required this.svgSize,
+    required this.svgColor,
+    required this.spacing,
+    this.loading,
+  });
 
   @override
   Widget build(BuildContext context) {
+    TextStyle textStyle = this.textStyle;
+
+    if (loading == true) {
+      textStyle = textStyle.copyWith(color: (textStyle.color ?? Theme.of(context).textTheme.bodyMedium?.color)?.withAlpha(100));
+    }
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (svg != null) SvgPicture.asset(svg!, width: svgSize, height: svgSize),
-        if (label.isNotEmpty) ...[SizedBox(width: spacing), Text(label, style: textStyle)],
+        if (svg != null && loading != true)
+          SvgPicture.asset(
+            svg!,
+            width: svgSize,
+            height: svgSize,
+            colorFilter: svgColor != null ? ColorFilter.mode(svgColor!, BlendMode.srcIn) : null,
+          ),
+        if (loading == true)
+          SizedBox(
+            width: svgSize,
+            height: svgSize,
+            child: CircularProgressIndicator(
+              strokeWidth: scaleW(0.5),
+              valueColor: AlwaysStoppedAnimation<Color>(svgColor ?? Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black),
+            ),
+          ),
+        if (label.isNotEmpty) ...[
+          if (svg != null) SizedBox(width: spacing),
+          Flexible(
+            fit: FlexFit.loose,
+            child: Text(label, style: textStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ],
       ],
     );
   }
 }
 
-/// 自定义 Cubic Bezier 曲线 (0.4, 0, 0.2, 1) - 类似 CSS ease-in-out
+/// 自定义 Cubic Bezier 曲线 (0.4, 0, 0.2, 1) - 类似 CSS 的 ease-in-out
 class _CustomCubicCurve extends Curve {
   const _CustomCubicCurve();
 

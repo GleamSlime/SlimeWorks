@@ -22,8 +22,11 @@ class $AssetsImageSvgGen {
   /// File path: assets/image/svg/arrow_right.svg
   String get arrowRight => 'assets/image/svg/arrow_right.svg';
 
-  /// File path: assets/image/svg/coolect_library_empty.svg
-  String get coolectLibraryEmpty => 'assets/image/svg/coolect_library_empty.svg';
+  /// File path: assets/image/svg/collect_library_empty.svg
+  String get collectLibraryEmpty => 'assets/image/svg/collect_library_empty.svg';
+
+  /// File path: assets/image/svg/library_import.svg
+  String get libraryImport => 'assets/image/svg/library_import.svg';
 
   /// File path: assets/image/svg/mac_tools_blur.svg
   String get macToolsBlur => 'assets/image/svg/mac_tools_blur.svg';
@@ -130,7 +133,8 @@ class $AssetsImageSvgGen {
   /// List of all assets
   List<String> get values => [
     arrowRight,
-    coolectLibraryEmpty,
+    collectLibraryEmpty,
+    libraryImport,
     macToolsBlur,
     macToolsClose,
     macToolsCloseNoHover,

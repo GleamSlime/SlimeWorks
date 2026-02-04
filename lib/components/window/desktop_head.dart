@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 
 class DesktopHead extends StatelessWidget {
   final Widget child;
@@ -28,20 +26,23 @@ class DesktopHeadToolsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     ThemeData theme = Theme.of(context);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(size / 4),
-          color: theme.appBarTheme.backgroundColor,
-          border: Border.all(color: theme.dividerColor.withAlpha(50)),
-          // boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(5))],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(size / 4),
+            color: theme.appBarTheme.backgroundColor,
+            border: Border.all(color: theme.dividerColor.withAlpha(50)),
+            // boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(5))],
+          ),
+          child: child ?? icon,
         ),
-        child: child ?? icon,
       ),
     );
   }
