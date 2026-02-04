@@ -6,7 +6,9 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/gen/assets.gen.dart';
+import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_append.dart';
+import 'package:slime_works/pages/gooey_dropdown_demo_page.dart';
 
 class YourDropdownContent extends StatelessWidget {
   @override
@@ -70,8 +72,6 @@ class _CollectionLibraryScreenState extends State<CollectionLibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(child: SvgPicture.asset(Assets.image.svg.macToolsBlur, width: scaleW(20))),
-    );
+    return GooeyDropdownDemoPage();
   }
 }

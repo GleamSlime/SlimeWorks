@@ -113,6 +113,10 @@ flutter:
     - assets/image/
     - assets/image/svg/
 
+  # Shaders for custom effects
+  shaders:
+    - shaders/gooey.frag
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
