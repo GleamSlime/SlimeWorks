@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
+import 'package:slime_works/gen/assets.gen.dart';
+import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
+import 'package:slime_works/pages/collection/picture/collection_picture_screen.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -24,6 +27,7 @@ part 'routes/business_routes.dart';
 part 'routes/test_routes.dart';
 part 'routes/tools_routes.dart';
 part 'routes/placeholder_routes.dart';
+part 'routes/collection_routes.dart';
 
 // // 导航到 Dashboard
 // DashboardRoute().go(context);
@@ -142,3 +146,31 @@ class AppRoutes {
 
 // 向后兼容 - 导出一个全局 goRouter 实例
 final goRouter = AppRoutes.createRouter();
+
+abstract class AppRouteData extends GoRouteData {
+  const AppRouteData();
+
+  /// 标题
+  String get title;
+
+  /// 侧边栏图标路径
+  String? get sidebarIcon;
+
+  /// 侧边栏标签
+  String get sidebarLabel => title;
+
+  /// 侧边栏提示
+  String? get sidebarTooltip => sidebarLabel;
+
+  /// 侧边栏排序
+  int? get sidebarOrder => null;
+
+  /// 侧边栏徽章数量
+  int? get sidebarBadgeCount => null;
+
+  /// 权限
+  Permission? get permission => AppRouteData.routePermission;
+
+  /// 路由权限
+  static Permission routePermission = Permission.viewDashboard;
+}

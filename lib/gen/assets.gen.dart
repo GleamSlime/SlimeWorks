@@ -22,6 +22,9 @@ class $AssetsImageSvgGen {
   /// File path: assets/image/svg/arrow_right.svg
   String get arrowRight => 'assets/image/svg/arrow_right.svg';
 
+  /// File path: assets/image/svg/coolect_library_empty.svg
+  String get coolectLibraryEmpty => 'assets/image/svg/coolect_library_empty.svg';
+
   /// File path: assets/image/svg/mac_tools_blur.svg
   String get macToolsBlur => 'assets/image/svg/mac_tools_blur.svg';
 
@@ -69,6 +72,9 @@ class $AssetsImageSvgGen {
 
   /// File path: assets/image/svg/menu_collect_file.svg
   String get menuCollectFile => 'assets/image/svg/menu_collect_file.svg';
+
+  /// File path: assets/image/svg/menu_collect_library.svg
+  String get menuCollectLibrary => 'assets/image/svg/menu_collect_library.svg';
 
   /// File path: assets/image/svg/menu_collect_note.svg
   String get menuCollectNote => 'assets/image/svg/menu_collect_note.svg';
@@ -124,6 +130,7 @@ class $AssetsImageSvgGen {
   /// List of all assets
   List<String> get values => [
     arrowRight,
+    coolectLibraryEmpty,
     macToolsBlur,
     macToolsClose,
     macToolsCloseNoHover,
@@ -140,6 +147,7 @@ class $AssetsImageSvgGen {
     menuCloudAccess,
     menuCollectCredentials,
     menuCollectFile,
+    menuCollectLibrary,
     menuCollectNote,
     menuCollectPictures,
     menuDistributed,

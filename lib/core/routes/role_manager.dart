@@ -24,6 +24,7 @@ enum Permission {
   accessThemePreview,
   accessHttpBridgeTest,
   accessWebSocketTest,
+  accessCollection,
 }
 
 class RoleManager {

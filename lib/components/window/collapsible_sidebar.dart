@@ -11,29 +11,31 @@ import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
 /// 侧边栏菜单项
 class SidebarMenuItem {
-  final String icon;
-  final String label;
-  final String? route;
-  final int? badge; // 徽章数字
+  final AppRouteData route;
   final List<SidebarMenuItem>? children; // 子菜单
 
-  const SidebarMenuItem({required this.icon, required this.label, this.route, this.badge, this.children});
+  const SidebarMenuItem({required this.route, this.children});
 
   bool get hasChildren => children != null && children!.isNotEmpty;
 }
 
 /// 侧边栏分组
 class SidebarGroup {
+  final String id;
   final String? title;
   final List<SidebarMenuItem> items;
+  final int? sort;
+  final String icon;
+  final Permission? permission;
 
-  const SidebarGroup({this.title, required this.items});
+  const SidebarGroup({required this.id, this.title, required this.items, required this.icon, this.permission, this.sort});
 }
 
 /// 侧边栏控制器
@@ -259,7 +261,7 @@ class CollapsibleSidebar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Divider(height: 1, thickness: 1, color: Theme.of(context).dividerColor.withAlpha(25)),
+        Divider(height: scaleW(1), thickness: scaleW(0.5), color: Theme.of(context).dividerColor.withAlpha(15)),
         Padding(
           padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
           child: Column(
@@ -293,7 +295,11 @@ class CollapsibleSidebar extends StatelessWidget {
             ),
           ),
 
-        if (group.title != null && !isExpanded) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Divider()),
+        if (group.title != null && !isExpanded)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Divider(height: 1, thickness: scaleW(0.5), color: theme.dividerColor.withAlpha(25)),
+          ),
 
         // 菜单项列表
         ...group.items.map(
@@ -320,8 +326,8 @@ class CollapsibleSidebar extends StatelessWidget {
     int level, // 菜单层级，0为顶级
   ) {
     return Obx(() {
-      final isSelected = controller.selectedRoute.value == item.route;
-      final isItemExpanded = controller.isItemExpanded(item.label);
+      final isSelected = controller.selectedRoute.value == item.route.location;
+      final isItemExpanded = controller.isItemExpanded(item.route.title);
       final theme = Theme.of(context);
 
       return Container(
@@ -347,11 +353,11 @@ class CollapsibleSidebar extends StatelessWidget {
                   mouseCursor: SystemMouseCursors.click,
                   onTap: () {
                     if (item.hasChildren) {
-                      controller.toggleItemExpanded(item.label);
-                    } else if (item.route != null) {
-                      controller.selectItem(item.route);
-                      goRouter.push(item.route!);
+                      return controller.toggleItemExpanded(item.route.title);
                     }
+
+                    controller.selectItem(item.route.location);
+                    goRouter.push(item.route.location);
                   },
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.transparent,
@@ -388,13 +394,14 @@ class CollapsibleSidebar extends StatelessWidget {
                         Row(
                           mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
                           children: [
-                            SvgPicture.asset(
-                              item.icon,
-                              width: isExpanded ? AppTheme.metrics.fontSize20 : AppTheme.metrics.fontSize24,
-                              colorFilter: isSelected
-                                  ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
-                                  : ColorFilter.mode(theme.iconTheme.color?.withAlpha(179) ?? Colors.black, BlendMode.srcIn),
-                            ),
+                            if (item.route.sidebarIcon != null)
+                              SvgPicture.asset(
+                                item.route.sidebarIcon!,
+                                width: isExpanded ? AppTheme.metrics.fontSize20 : AppTheme.metrics.fontSize24,
+                                colorFilter: isSelected
+                                    ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
+                                    : ColorFilter.mode(theme.iconTheme.color?.withAlpha(179) ?? Colors.black, BlendMode.srcIn),
+                              ),
                             if (isExpanded && showExtends)
                               Expanded(
                                 child: AnimatedOpacity(
@@ -407,7 +414,7 @@ class CollapsibleSidebar extends StatelessWidget {
                                       SizedBox(width: AppTheme.metrics.kSpace8),
                                       Expanded(
                                         child: Text(
-                                          item.label,
+                                          item.route.sidebarLabel,
                                           style: TextStyle(
                                             fontSize: AppTheme.metrics.fontSize14,
                                             color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color,
@@ -417,13 +424,13 @@ class CollapsibleSidebar extends StatelessWidget {
                                           maxLines: 1,
                                         ),
                                       ),
-                                      if (item.badge != null)
+                                      if (item.route.sidebarBadgeCount != null)
                                         Container(
                                           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4, vertical: AppTheme.metrics.kSpace2),
                                           constraints: BoxConstraints(minWidth: AppTheme.metrics.kSpace16),
                                           decoration: BoxDecoration(color: theme.hintColor.withAlpha(38), borderRadius: AppTheme.metrics.radius8),
                                           child: Text(
-                                            item.badge.toString(),
+                                            item.route.sidebarBadgeCount.toString(),
                                             textAlign: TextAlign.center,
                                             style: TextStyle(fontSize: AppTheme.metrics.fontSize8, color: theme.hintColor),
                                             maxLines: 1,
@@ -470,17 +477,15 @@ class CollapsibleSidebar extends StatelessWidget {
   /// 构建收起状态下的子菜单项
   Widget _buildCollapsedChildItem(BuildContext context, SidebarController controller, SidebarMenuItem item) {
     return Obx(() {
-      final isSelected = controller.selectedRoute.value == item.route;
+      final isSelected = controller.selectedRoute.value == item.route.location;
       final theme = Theme.of(context);
 
       return Material(
         color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
         child: InkWell(
           onTap: () {
-            if (item.route != null) {
-              controller.selectItem(item.route);
-              AppRoutes.router?.go(item.route!);
-            }
+            controller.selectItem(item.route.location);
+            AppRoutes.router?.go(item.route.location);
           },
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
@@ -493,15 +498,13 @@ class CollapsibleSidebar extends StatelessWidget {
               color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
             ),
             child: Tooltip(
-              message: item.label,
+              message: item.route.sidebarLabel,
               child: HoverSvgButton(
-                svg: item.icon,
+                svg: item.route.sidebarIcon!,
                 color: isSelected ? theme.colorScheme.primary : null,
                 onTap: () {
-                  if (item.route != null) {
-                    controller.selectItem(item.route);
-                    AppRoutes.router?.go(item.route!);
-                  }
+                  controller.selectItem(item.route.location);
+                  AppRoutes.router?.go(item.route.location);
                 },
               ),
             ),

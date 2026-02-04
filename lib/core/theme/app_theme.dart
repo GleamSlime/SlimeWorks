@@ -110,7 +110,7 @@ class AppTheme {
       iconTheme: IconThemeData(color: LightColors.black80, size: 24),
 
       // 分割线主题
-      dividerTheme: DividerThemeData(color: LightColors.black10, thickness: 1, space: 1),
+      dividerTheme: DividerThemeData(color: LightColors.black10, thickness: scaleW(0.5), space: 1),
 
       hintColor: LightColors.black40,
     );

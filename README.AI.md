@@ -8,7 +8,7 @@
 - 完成代码调整后需 flutter run 以校验是否有编译错误，如果只有Rust调整应当cargo build
 - 完成代码后不需要输出README
 - 页面目录位于 lib/pages 下，如果一个页面包含多个子页面则需创建主页面名的文件夹，在里面创建子页面
-- 页面组件位于 lib/pages/{pageName}/components 中，页面需要细致的拆分为组件，而不是全写在一个文件中
+- 页面组件位于 lib/pages/{pageName}/components 中，页面需要细致的拆分为组件，而不是全写在一个文件中，页面以_screen结尾
 - 在MacOS/Windows如果缩放窗口为手机比例(窄屏)则会且为移动端模式显示，修改flutter时需考虑响应式
 - 状态管理(UI/页面状态 使用GetX | 业务逻辑Service、Rust FFI桥接层、配置、数据库 使用GetIt)
 - 路由操作使用GoRouter TypedGoRoute
