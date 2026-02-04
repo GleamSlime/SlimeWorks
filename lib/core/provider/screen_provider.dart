@@ -21,7 +21,13 @@ abstract class DesktopScreenProvider {
   RxString title = (dotenv.env['APP_NAME'] ?? "").obs;
 
   /// 窗口头部工具栏组件
-  Rx<Widget> screenHeadToolsWidget = Rx<Widget>(Container());
+  Rx<Widget?> screenHeadToolsWidget = Rx<Widget?>(null);
+
+  /// 窗口头部工具栏高度
+  RxDouble screenHeadToolHeight = 48.0.obs;
+
+  /// 侧边栏展开比例
+  RxDouble sidebarExpandScale = 1.0.obs;
 
   /// 窗口宽度
   RxDouble width = double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520").obs;
@@ -45,5 +51,5 @@ abstract class DesktopScreenProvider {
   void setTitle(String t);
 
   /// 设置窗口头部工具栏组件
-  void setScreenHeadToolsWidget(Widget widget);
+  void setScreenHeadToolsWidget(Widget? widget);
 }

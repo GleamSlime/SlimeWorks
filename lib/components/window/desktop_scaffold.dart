@@ -91,12 +91,14 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
   Widget build(BuildContext context) {
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: Stack(
-        children: [
-          widget.child,
-          Positioned(left: 0, top: 0, child: const ScreenTopBar()),
-        ],
-      ),
+      child: isMobile
+          ? widget.child
+          : Stack(
+              children: [
+                widget.child,
+                Positioned(left: 0, top: 0, child: const ScreenTopBar()),
+              ],
+            ),
     );
   }
 }

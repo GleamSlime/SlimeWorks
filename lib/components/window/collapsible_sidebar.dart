@@ -126,7 +126,7 @@ class CollapsibleSidebar extends StatelessWidget {
     super.key,
     required this.groups,
     this.expandedWidth = 240.0,
-    this.collapsedWidth = 85.0,
+    this.collapsedWidth = 75.0,
     this.animationDuration = const Duration(milliseconds: 300),
   });
 
@@ -197,7 +197,11 @@ class CollapsibleSidebar extends StatelessWidget {
               ? SizedBox.shrink()
               : Platform.isMacOS
               ? Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8, horizontal: isExpanded ? 0 : AppTheme.metrics.kSpace10),
+                  padding: EdgeInsets.only(
+                    top: AppTheme.metrics.kSpace8,
+                    left: isExpanded ? 0 : AppTheme.metrics.kSpace10,
+                    right: isExpanded ? 0 : AppTheme.metrics.kSpace10,
+                  ),
                   child: const MacWindowButtons(),
                 )
               : SizedBox(height: scaleW(10)),
@@ -343,7 +347,7 @@ class CollapsibleSidebar extends StatelessWidget {
             // 菜单项本身
             Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: isExpanded ? AppTheme.metrics.kSpace10 : AppTheme.metrics.kSpace16,
+                horizontal: isExpanded ? AppTheme.metrics.kSpace10 : AppTheme.metrics.kSpace12,
                 vertical: AppTheme.metrics.kSpace2,
               ),
               child: Material(
@@ -357,7 +361,7 @@ class CollapsibleSidebar extends StatelessWidget {
                     }
 
                     controller.selectItem(item.route.location);
-                    goRouter.push(item.route.location);
+                    goRouter.go(item.route.location);
                   },
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.transparent,
@@ -546,10 +550,13 @@ class MobileSidebarState extends State<MobileSidebar> {
   double _dragOffset = 0.0;
   bool _isDragging = false;
 
+  DesktopScreenProvider get desktopScreen => getIt.get<DesktopScreenProvider>();
+
   @override
   Widget build(BuildContext context) {
     // 计算侧边栏位置
     double sidebarLeft;
+    double sidebarExpandScale = desktopScreen.sidebarExpandScale.value;
     if (_isDragging) {
       // 拖动中：跟随手指
       sidebarLeft = -widget.targetWidth + _dragOffset;
@@ -559,14 +566,28 @@ class MobileSidebarState extends State<MobileSidebar> {
     } else {
       // 收起状态
       sidebarLeft = -widget.targetWidth;
+      sidebarExpandScale = 1;
     }
 
     // 计算遮罩不透明度
     double maskOpacity = 0.0;
     if (_isDragging) {
       maskOpacity = (_dragOffset / widget.targetWidth).clamp(0.0, 1.0);
+      sidebarExpandScale = (1 - maskOpacity).clamp(0.9, 1.0);
     } else if (widget.isExpanded) {
       maskOpacity = 1;
+    }
+
+    if (sidebarExpandScale != desktopScreen.sidebarExpandScale.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        desktopScreen.sidebarExpandScale.value = sidebarExpandScale;
+
+        if (sidebarExpandScale == 1.0) {
+          desktopScreen.screenHeadToolHeight.value = AppTheme.metrics.kSpace48;
+        } else {
+          desktopScreen.screenHeadToolHeight.value = 0;
+        }
+      });
     }
 
     return LayoutBuilder(

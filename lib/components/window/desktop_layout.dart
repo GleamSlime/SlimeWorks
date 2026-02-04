@@ -98,48 +98,63 @@ class DesktopLayout extends StatelessWidget {
       );
     }
 
-    ThemeData theme = Theme.of(context);
-
     return DesktopScaffold(
-      child: Obx(
-        () => getIt<DesktopScreenProvider>().isMobile.value
-            ? Stack(
-                children: [
-                  child,
-                  CollapsibleSidebar(groups: getDefaultSidebarGroups()),
-                ],
-              )
-            : Row(
-                children: [
-                  CollapsibleSidebar(groups: getDefaultSidebarGroups()),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.only(right: AppTheme.metrics.kSpace20, top: AppTheme.metrics.kSpace4),
-                          height: scaleW(60),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: theme.appBarTheme.backgroundColor,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))],
-                                ),
-                                child: Obx(() => getIt<DesktopScreenProvider>().screenHeadToolsWidget.value),
-                              ),
-                              if (Platform.isWindows) const WindowsWindowButtons(),
-                            ],
-                          ),
+      child: Obx(() {
+        final provider = getIt<DesktopScreenProvider>();
+        final isMobile = provider.isMobile.value;
+        final head = provider.screenHeadToolsWidget.value;
+        final title = provider.title.value;
+        final sidebarExpandScale = provider.sidebarExpandScale.value;
+        final toolsHeight = head == null ? 0.0 : provider.screenHeadToolHeight.value;
+
+        if (isMobile) {
+          final double height = kToolbarHeight + (head == null ? 0.0 : scaleW(toolsHeight));
+          return Scaffold(
+            appBar: PreferredSize(
+              preferredSize: Size.fromHeight(height),
+              child: AppBar(
+                title: Center(child: Text(title)),
+                bottom: head == null || toolsHeight == 0
+                    ? null
+                    : PreferredSize(
+                        preferredSize: Size.fromHeight(scaleW(toolsHeight)),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8, horizontal: AppTheme.metrics.kSpace12),
+                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [head]),
                         ),
-                        Expanded(child: child),
-                      ],
+                      ),
+              ),
+            ),
+            body: Stack(
+              children: [
+                AnimatedScale(scale: sidebarExpandScale, duration: const Duration(milliseconds: 120), child: child),
+                CollapsibleSidebar(groups: getDefaultSidebarGroups()),
+              ],
+            ),
+          );
+        }
+
+        return Row(
+          children: [
+            CollapsibleSidebar(groups: getDefaultSidebarGroups()),
+            Expanded(
+              child: Column(
+                children: [
+                  Container(
+                    padding: EdgeInsets.only(right: AppTheme.metrics.kSpace16, top: AppTheme.metrics.kSpace4),
+                    height: scaleW(60),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [head ?? SizedBox.shrink(), if (Platform.isWindows) const WindowsWindowButtons()],
                     ),
                   ),
+                  Expanded(child: child),
                 ],
               ),
-      ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }

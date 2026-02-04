@@ -18,7 +18,7 @@ class DesktopScreenProviderImpl extends DesktopScreenProvider {
   }
 
   @override
-  void setScreenHeadToolsWidget(Widget widget) {
+  void setScreenHeadToolsWidget(Widget? widget) {
     screenHeadToolsWidget.value = widget;
   }
 }
