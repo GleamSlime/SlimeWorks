@@ -46,21 +46,22 @@ void main() {
     // uBlur控制粘连强度，值越大粘连越明显
     float dist = smin(distButton, distCard, uBlur);
     
-    // 非常锐利的边缘，完全消除白色光圈
-    // 只在形状内部（dist < 0）才有颜色
-    float alpha = 1.0 - smoothstep(-1.0, 1.0, dist);
+    // 抗锯齿：使用0.5像素的过渡范围，保持边缘清晰
+    float alpha = 1.0 - smoothstep(-0.5, 0.5, dist);
     
-    // 进一步增强对比度，消除任何半透明边缘
-    alpha = alpha * alpha * alpha;  // 三次方增强
+    // 消除白色光圈：对alpha进行非线性增强，但保留抗锯齿
+    // 使用平方函数增强对比度，同时保持边缘平滑
+    alpha = alpha * alpha;
     
-    // 硬截断，只保留真正不透明的部分
-    if (alpha < 0.5) {
-        discard;  // 完全丢弃半透明像素
+    // 硬截断：只保留真正不透明的像素，消除半透明边缘
+    if (alpha < 0.3) {
+        fragColor = vec4(0.0);
+        return;
     }
     
     // 根据到按钮和卡片的距离混合颜色
     float buttonWeight = smoothstep(uButtonRadius + 30.0, uButtonRadius - 30.0, distButton);
     vec4 color = mix(uCardColor, uButtonColor, buttonWeight);
     
-    fragColor = vec4(color.rgb, color.a);
+    fragColor = vec4(color.rgb, alpha * color.a);
 }

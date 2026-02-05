@@ -8,7 +8,7 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_append.dart';
-import 'package:slime_works/pages/gooey_dropdown_demo_page.dart';
+import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
 
 class YourDropdownContent extends StatelessWidget {
   @override
@@ -49,12 +49,7 @@ class _CollectionLibraryScreenState extends State<CollectionLibraryScreen> {
               },
             ),
             LibraryBookAppendButton(),
-            GooeyDropdown(
-              dropdownWidth: 260,
-              dropdownHeight: 320,
-              dropdown: YourDropdownContent(),
-              child: Icon(Icons.menu), // 👈 只是UI
-            ),
+            GooeyDropdown(dropdownWidth: 260, dropdownHeight: 320, dropdown: YourDropdownContent(), child: Icon(Icons.menu)),
           ],
         ),
       );

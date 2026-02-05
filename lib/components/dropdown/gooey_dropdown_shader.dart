@@ -42,10 +42,16 @@ class GooeyDropdownShader extends StatefulWidget {
   /// 卡片圆角半径，默认 18
   final double? cardRadius;
 
-  /// 动画时长，默认 1200ms
+  /// 卡片阴影
+  final List<BoxShadow>? cardBoxShadow;
+
+  /// 卡片边框
+  final Border? cardBorder;
+
+  /// 动画时长，默认 700ms
   final Duration? duration;
 
-  /// 卡片相对按钮的间隙，默认 10
+  /// 卡片相对按钮的间隙，默认 0（从按钮底部开始）
   final double? gap;
 
   /// 卡片相对按钮的偏移量，默认向下80
@@ -73,6 +79,8 @@ class GooeyDropdownShader extends StatefulWidget {
     this.cardColor,
     this.buttonRadius,
     this.cardRadius,
+    this.cardBoxShadow,
+    this.cardBorder,
     this.duration,
     this.gap,
     this.cardOffset,
@@ -102,6 +110,18 @@ enum DropdownDirection {
 
   /// 向右
   right,
+
+  /// 右上
+  topRight,
+
+  /// 左上
+  topLeft,
+
+  /// 左下
+  bottomLeft,
+
+  /// 右下
+  bottomRight,
 }
 
 class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTickerProviderStateMixin {
@@ -117,11 +137,13 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
   Color get cardColor => widget.cardColor ?? Colors.black;
   double get buttonRadius => widget.buttonRadius ?? (buttonSize.height / 2);
   double get cardRadius => widget.cardRadius ?? 18.0;
-  Duration get duration => widget.duration ?? const Duration(milliseconds: 1200);
-  double get gap => widget.gap ?? 10.0;
+  List<BoxShadow>? get cardBoxShadow => widget.cardBoxShadow;
+  Border? get cardBorder => widget.cardBorder;
+  Duration get duration => widget.duration ?? const Duration(milliseconds: 700);
+  double get gap => widget.gap ?? 0.0;
   double get cardOffset => widget.cardOffset ?? 80.0;
   DropdownDirection get direction => widget.direction ?? DropdownDirection.auto;
-  Curve get curve => widget.curve ?? Curves.easeOut;
+  Curve get curve => widget.curve ?? Curves.easeInOutCubic;
 
   @override
   void initState() {
@@ -169,6 +191,8 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
         cardRadius: cardRadius,
         gap: gap,
         cardOffset: cardOffset,
+        cardBoxShadow: cardBoxShadow,
+        cardBorder: cardBorder,
         direction: actualDirection,
         curve: curve,
         content: widget.content,
@@ -177,7 +201,7 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
       ),
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    Overlay.of(context, rootOverlay: true).insert(_overlayEntry!);
     _controller.forward();
     widget.onOpen?.call();
   }
@@ -193,14 +217,30 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
   DropdownDirection _calculateDirection(Offset buttonPos, Size buttonSize, Size screenSize) {
     if (direction != DropdownDirection.auto) return direction;
 
-    // 自动检测：优先向下，如果空间不够则向上
-    final spaceBelow = screenSize.height - (buttonPos.dy + buttonSize.height);
-    final spaceAbove = buttonPos.dy;
+    // 计算8个方向的可用空间
+    final padding = 20.0;
+    final spaceTop = buttonPos.dy;
+    final spaceBottom = screenSize.height - (buttonPos.dy + buttonSize.height);
+    final spaceLeft = buttonPos.dx;
+    final spaceRight = screenSize.width - (buttonPos.dx + buttonSize.width);
 
-    if (spaceBelow >= cardSize.height + gap + 20) {
+    // 优先级：下 > 上 > 右 > 左 > 对角线方向
+    if (spaceBottom >= cardSize.height + cardOffset + padding) {
       return DropdownDirection.down;
-    } else if (spaceAbove >= cardSize.height + gap + 20) {
+    } else if (spaceTop >= cardSize.height + cardOffset + padding) {
       return DropdownDirection.up;
+    } else if (spaceRight >= cardSize.width + cardOffset + padding) {
+      return DropdownDirection.right;
+    } else if (spaceLeft >= cardSize.width + cardOffset + padding) {
+      return DropdownDirection.left;
+    } else if (spaceBottom >= cardSize.height / 2 && spaceRight >= cardSize.width / 2) {
+      return DropdownDirection.bottomRight;
+    } else if (spaceBottom >= cardSize.height / 2 && spaceLeft >= cardSize.width / 2) {
+      return DropdownDirection.bottomLeft;
+    } else if (spaceTop >= cardSize.height / 2 && spaceRight >= cardSize.width / 2) {
+      return DropdownDirection.topRight;
+    } else if (spaceTop >= cardSize.height / 2 && spaceLeft >= cardSize.width / 2) {
+      return DropdownDirection.topLeft;
     } else {
       return DropdownDirection.down; // 默认向下
     }
@@ -237,11 +277,7 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
                 ),
               ),
               // 按钮内容（始终保持可见）
-              SizedBox(
-                width: buttonSize.width,
-                height: buttonSize.height,
-                child: widget.button,
-              ),
+              SizedBox(width: buttonSize.width, height: buttonSize.height, child: widget.button),
             ],
           );
         },
@@ -261,6 +297,8 @@ class _DropdownOverlay extends StatelessWidget {
   final Color cardColor;
   final double buttonRadius;
   final double cardRadius;
+  final List<BoxShadow>? cardBoxShadow;
+  final Border? cardBorder;
   final double gap;
   final double cardOffset;
   final DropdownDirection direction;
@@ -279,6 +317,8 @@ class _DropdownOverlay extends StatelessWidget {
     required this.cardColor,
     required this.buttonRadius,
     required this.cardRadius,
+    this.cardBoxShadow,
+    this.cardBorder,
     required this.gap,
     required this.cardOffset,
     required this.direction,
@@ -302,51 +342,87 @@ class _DropdownOverlay extends StatelessWidget {
 
             final t = controller.value;
 
-            // 动画曲线：慢慢快 - 前60%慢速（粘连阶段），后40%快速断开
-            // 使用简单的二次曲线避免回弹
-            final sizeProgress = t < 0.6 
-                ? (t / 0.6) * (t / 0.6) * 0.5  // 前60%二次加速到50%
-                : 0.5 + ((t - 0.6) / 0.4) * 0.5;  // 后40%线性到100%
+            // 使用easeInOutCubic曲线，实现丝滑的缓动效果
+            final sizeProgress = curve.transform(t);
 
             final clampedProgress = sizeProgress.clamp(0.0, 1.0);
-            
+
             final width = ui.lerpDouble(buttonSize.width, cardSize.width, clampedProgress)!;
             final height = ui.lerpDouble(buttonSize.height, cardSize.height, clampedProgress)!;
             final radius = ui.lerpDouble(buttonRadius, cardRadius, clampedProgress)!;
             final offset = ui.lerpDouble(0, cardOffset, clampedProgress)!;
 
-            // Gooey强度（前60%强粘连，后面快速减弱）
-            final gooeyStrength = (t < 0.6 ? t / 0.6 : 1 - ((t - 0.6) / 0.2)).clamp(0.0, 1.0);
-            final blurAmount = ui.lerpDouble(50, 150, gooeyStrength)!;  // 提高blur值增强粘连
+            // 粘连效果计算：根据cardOffset动态调整粘连范围
+            // offset越小，粘连消失越快；offset越大，粘连持续更久
+            // 使用更激进的归一化，确保小offset时粘连迅速消失
+            final normalizedOffset = (cardOffset / 100.0).clamp(0.15, 1.0); // 归一化到0.15-1.0
+
+            // 粘连持续时间：offset小时快速结束，offset大时持续更久
+            // cardOffset=10时约0.35，cardOffset=30时约0.45，cardOffset=80时约0.65
+            final gooeyThreshold = 0.3 + (normalizedOffset * 0.35);
+
+            // 消退速度：offset越小消退越快
+            // cardOffset=10时约0.08，cardOffset=30时约0.10，cardOffset=80时约0.20
+            final gooeyFadeRange = 0.06 + (normalizedOffset * 0.14);
+
+            final gooeyStrength = (t < gooeyThreshold ? t / gooeyThreshold : 1 - ((t - gooeyThreshold) / gooeyFadeRange)).clamp(0.0, 1.0);
+
+            // 根据offset调整blur强度，确保小offset使用很小的blur值
+            // cardOffset=10: minBlur≈20, maxBlur≈50
+            // cardOffset=30: minBlur≈25, maxBlur≈70
+            // cardOffset=80: minBlur≈35, maxBlur≈120
+            final minBlur = 15.0 + (normalizedOffset * 20.0);
+            final maxBlur = 40.0 + (normalizedOffset * 80.0);
+            final blurAmount = ui.lerpDouble(minBlur, maxBlur, gooeyStrength)!;
 
             // 按钮中心位置（全局坐标）
             final buttonCenterX = buttonPosition.dx + buttonSize.width / 2;
             final buttonCenterY = buttonPosition.dy + buttonSize.height / 2;
 
-            // 计算卡片位置（根据方向）
+            // 计算卡片位置（根据方向），卡片从按钮位置开始
             late final double cardCenterX;
             late final double cardCenterY;
 
             switch (direction) {
               case DropdownDirection.down:
                 cardCenterX = buttonCenterX;
-                cardCenterY = buttonCenterY + buttonSize.height / 2 + gap + offset + height / 2;
+                cardCenterY = buttonCenterY + gap + offset + height / 2;
                 break;
               case DropdownDirection.up:
                 cardCenterX = buttonCenterX;
-                cardCenterY = buttonCenterY - buttonSize.height / 2 - gap - offset - height / 2;
+                cardCenterY = buttonCenterY - gap - offset - height / 2;
                 break;
               case DropdownDirection.left:
-                cardCenterX = buttonCenterX - buttonSize.width / 2 - gap - offset - width / 2;
+                cardCenterX = buttonCenterX - gap - offset - width / 2;
                 cardCenterY = buttonCenterY;
                 break;
               case DropdownDirection.right:
-                cardCenterX = buttonCenterX + buttonSize.width / 2 + gap + offset + width / 2;
+                cardCenterX = buttonCenterX + gap + offset + width / 2;
                 cardCenterY = buttonCenterY;
+                break;
+              case DropdownDirection.topRight:
+                final diagOffset = offset * 0.707; // 对角线距离
+                cardCenterX = buttonCenterX + gap + diagOffset + width / 2;
+                cardCenterY = buttonCenterY - gap - diagOffset - height / 2;
+                break;
+              case DropdownDirection.topLeft:
+                final diagOffset = offset * 0.707;
+                cardCenterX = buttonCenterX - gap - diagOffset - width / 2;
+                cardCenterY = buttonCenterY - gap - diagOffset - height / 2;
+                break;
+              case DropdownDirection.bottomLeft:
+                final diagOffset = offset * 0.707;
+                cardCenterX = buttonCenterX - gap - diagOffset - width / 2;
+                cardCenterY = buttonCenterY + gap + diagOffset + height / 2;
+                break;
+              case DropdownDirection.bottomRight:
+                final diagOffset = offset * 0.707;
+                cardCenterX = buttonCenterX + gap + diagOffset + width / 2;
+                cardCenterY = buttonCenterY + gap + diagOffset + height / 2;
                 break;
               case DropdownDirection.auto:
                 cardCenterX = buttonCenterX;
-                cardCenterY = buttonCenterY + buttonSize.height / 2 + gap + offset + height / 2;
+                cardCenterY = buttonCenterY + gap + offset + height / 2;
                 break;
             }
 
@@ -371,17 +447,23 @@ class _DropdownOverlay extends StatelessWidget {
                   ),
                 ),
 
-                // 卡片内容
+                // 卡片内容（带边框和阴影）
                 Positioned(
                   top: cardCenterY - height / 2,
                   left: cardCenterX - width / 2,
                   child: IgnorePointer(
                     ignoring: false,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(radius),
-                      child: Container(
-                        width: width,
-                        height: height,
+                    child: Container(
+                      width: width,
+                      height: height,
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(radius),
+                        border: cardBorder,
+                        boxShadow: cardBoxShadow,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(radius),
                         child: _ContentWrapper(progress: t, width: width, height: height, child: content),
                       ),
                     ),
@@ -393,11 +475,7 @@ class _DropdownOverlay extends StatelessWidget {
                   top: buttonCenterY - buttonSize.height / 2,
                   left: buttonCenterX - buttonSize.width / 2,
                   child: IgnorePointer(
-                    child: SizedBox(
-                      width: buttonSize.width,
-                      height: buttonSize.height,
-                      child: buttonWidget,
-                    ),
+                    child: SizedBox(width: buttonSize.width, height: buttonSize.height, child: buttonWidget),
                   ),
                 ),
               ],
@@ -488,23 +566,30 @@ class _ContentWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 内容在卡片出现期间就开始淡入
-    final contentProgress = (progress / 0.5).clamp(0.0, 1.0);
-    final show = Curves.easeOut.transform(contentProgress);
+    // 内容在卡片出现期间淡入：透明度从0到1
+    final contentProgress = progress.clamp(0.0, 1.0);
+    final opacity = Curves.easeInOut.transform(contentProgress);
 
-    // 当卡片太小时（进度<0.3），完全隐藏内容以避免布局溢出警告
-    if (progress < 0.3) {
+    // 当进度非常小时，隐藏内容以避免布局和渲染开销
+    // 进度太小时卡片尺寸不足，会导致内部 Row/Text 布局溢出，使用较高阈值避免此问题
+    if (progress < 0.25) {
       return const SizedBox.shrink();
     }
 
     return Opacity(
-      opacity: show,
+      opacity: opacity,
       child: ClipRect(
-        child: SizedBox(
-          width: width,
-          height: height,
-          // 使用SingleChildScrollView解决溢出问题
-          child: SingleChildScrollView(physics: const BouncingScrollPhysics(), child: child),
+        child: OverflowBox(
+          minWidth: 0,
+          minHeight: 0,
+          maxWidth: width,
+          maxHeight: height,
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), child: child),
+          ),
         ),
       ),
     );

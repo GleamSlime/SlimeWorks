@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/dropdown/gooey_dropdown_shader.dart';
+import 'package:slime_works/core/index.dart';
 
 /// GooeyDropdownShader 使用示例页面
 class GooeyDropdownDemoPage extends StatelessWidget {
@@ -20,6 +21,8 @@ class GooeyDropdownDemoPage extends StatelessWidget {
             // 示例1：默认样式
             GooeyDropdownShader(
               button: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+              cardOffset: 30,
+              direction: DropdownDirection.left,
               content: const _MessageContent(),
               onOpen: () => print('打开了消息卡片'),
               onClose: () => print('关闭了消息卡片'),
@@ -35,10 +38,39 @@ class GooeyDropdownDemoPage extends StatelessWidget {
               cardSize: const Size(280, 240),
               buttonColor: Colors.deepPurple,
               cardRadius: 12,
-              cardOffset: 60,
+              cardOffset: 10,
               duration: const Duration(milliseconds: 1000),
               onOpen: () => print('打开了菜单'),
               onClose: () => print('关闭了菜单'),
+            ),
+            const SizedBox(height: 80),
+
+            // 示例3：默认样式
+            GooeyDropdownShader(
+              button: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.black12),
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+                ),
+                child: Text(
+                  "data",
+                  style: TextStyle(color: Colors.black, fontSize: AppTheme.metrics.fontSize10, decoration: TextDecoration.none),
+                ),
+              ),
+              cardBorder: Border.all(color: Colors.black12),
+              cardBoxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+              buttonColor: Colors.white,
+              cardColor: Colors.white,
+              cardOffset: 30,
+              direction: DropdownDirection.left,
+              content: const _MessageContent(),
+              onOpen: () => print('打开了消息卡片'),
+              onClose: () => print('关闭了消息卡片'),
+              duration: const Duration(milliseconds: 250),
             ),
           ],
         ),
@@ -60,7 +92,7 @@ class _MessageContent extends StatelessWidget {
         children: const [
           Text(
             'Messages',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, decoration: TextDecoration.none),
           ),
           SizedBox(height: 8),
           _MessageRow(avatar: Icons.person, name: 'Alice', message: 'Hey, how are you?'),
@@ -83,32 +115,39 @@ class _MessageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.white24,
-            child: Icon(avatar, size: 18, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  message,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.white24,
+              child: Icon(avatar, size: 18, color: Colors.white),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 200,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500, decoration: TextDecoration.none),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    message,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, decoration: TextDecoration.none),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -146,12 +185,24 @@ class _MenuItem extends StatelessWidget {
       onTap: () => print('点击了 $label'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 16)),
-          ],
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 140,
+                child: Text(
+                  label,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

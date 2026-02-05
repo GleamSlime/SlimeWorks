@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'pages/gooey_dropdown_demo_page.dart';
+import 'pages/demo/gooey_dropdown_demo_page.dart';
 
 void main() {
   runApp(const MyApp());
