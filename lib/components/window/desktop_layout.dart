@@ -8,7 +8,6 @@ import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
-import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
@@ -88,50 +87,25 @@ class DesktopLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 只在桌面平台显示完整布局
+    /// -----------------------------
+    /// 移动端
+    /// -----------------------------
     if ((!Platform.isMacOS && !Platform.isWindows)) {
-      return Stack(
-        children: [
-          child,
-          CollapsibleSidebar(groups: getDefaultSidebarGroups()),
-        ],
-      );
+      return MobileLayout(child: child);
     }
+
+    /// -----------------------------
+    /// 桌面端
+    /// -----------------------------
 
     return DesktopScaffold(
       child: Obx(() {
         final provider = getIt<DesktopScreenProvider>();
         final isMobile = provider.isMobile.value;
         final head = provider.screenHeadToolsWidget.value;
-        final title = provider.title.value;
-        final sidebarExpandScale = provider.sidebarExpandScale.value;
-        final toolsHeight = head == null ? 0.0 : provider.screenHeadToolHeight.value;
 
         if (isMobile) {
-          final double height = kToolbarHeight + (head == null ? 0.0 : scaleW(toolsHeight));
-          return Scaffold(
-            appBar: PreferredSize(
-              preferredSize: Size.fromHeight(height),
-              child: AppBar(
-                title: Center(child: Text(title)),
-                bottom: head == null || toolsHeight == 0
-                    ? null
-                    : PreferredSize(
-                        preferredSize: Size.fromHeight(scaleW(toolsHeight)),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8, horizontal: AppTheme.metrics.kSpace12),
-                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [head]),
-                        ),
-                      ),
-              ),
-            ),
-            body: Stack(
-              children: [
-                AnimatedScale(scale: sidebarExpandScale, duration: const Duration(milliseconds: 120), child: child),
-                CollapsibleSidebar(groups: getDefaultSidebarGroups()),
-              ],
-            ),
-          );
+          return MobileLayout(child: child);
         }
 
         return Row(
@@ -156,5 +130,48 @@ class DesktopLayout extends StatelessWidget {
         );
       }),
     );
+  }
+}
+
+class MobileLayout extends StatelessWidget {
+  final Widget child;
+
+  MobileLayout({super.key, required this.child});
+
+  final DesktopScreenProvider desktopScreen = getIt<DesktopScreenProvider>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final title = desktopScreen.title.value;
+      final sidebarExpandScale = desktopScreen.sidebarExpandScale.value;
+      final head = desktopScreen.screenHeadToolsWidget.value;
+      final toolsHeight = head == null ? 0.0 : desktopScreen.screenHeadToolHeight.value;
+
+      final double height = kToolbarHeight + (head == null ? 0.0 : scaleW(toolsHeight));
+      return Scaffold(
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(height),
+          child: AppBar(
+            title: Center(child: Text(title)),
+            bottom: head == null || toolsHeight == 0
+                ? null
+                : PreferredSize(
+                    preferredSize: Size.fromHeight(scaleW(toolsHeight)),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8, horizontal: AppTheme.metrics.kSpace12),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [head]),
+                    ),
+                  ),
+          ),
+        ),
+        body: Stack(
+          children: [
+            AnimatedScale(scale: sidebarExpandScale, duration: const Duration(milliseconds: 120), child: child),
+            CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),
+          ],
+        ),
+      );
+    });
   }
 }

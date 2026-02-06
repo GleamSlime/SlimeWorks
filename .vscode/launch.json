@@ -6,7 +6,10 @@
       "type": "dart",
       "request": "launch",
       "program": "lib/main.dart",
-      "args": ["-d", "macos"],
+      "args": [
+        "-d",
+        "macos"
+      ],
       "preLaunchTask": ""
     },
     {
@@ -14,7 +17,10 @@
       "type": "dart",
       "request": "launch",
       "program": "lib/main.dart",
-      "args": ["-d", "windows"],
+      "args": [
+        "-d",
+        "windows"
+      ],
       "preLaunchTask": ""
     },
     {
@@ -22,7 +28,21 @@
       "type": "dart",
       "request": "launch",
       "program": "lib/main.dart",
-      "args": ["-d", "193E758D-A95B-4735-BBE1-A14E764C737D"],
+      "args": [
+        "-d",
+        "193E758D-A95B-4735-BBE1-A14E764C737D"
+      ],
+      "preLaunchTask": ""
+    },
+    {
+      "name": "Flutter-Rust Iphone",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "00008110-001954AC267A801E"
+      ],
       "preLaunchTask": ""
     }
   ]

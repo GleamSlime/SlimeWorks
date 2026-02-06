@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/gen/assets.gen.dart';
+import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
 import 'package:slime_works/pages/collection/picture/collection_picture_screen.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
@@ -28,6 +29,7 @@ part 'routes/test_routes.dart';
 part 'routes/tools_routes.dart';
 part 'routes/placeholder_routes.dart';
 part 'routes/collection_routes.dart';
+part 'routes/demo_routes.dart';
 
 // // 导航到 Dashboard
 // DashboardRoute().go(context);

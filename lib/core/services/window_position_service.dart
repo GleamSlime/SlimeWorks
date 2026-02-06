@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:slime_works/core/index.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/core/provider/main.dart';
@@ -113,7 +112,9 @@ class WindowPositionService extends GetxService {
 
       return Rect.fromLTWH(0, 0, physicalSize.width / devicePixelRatio, physicalSize.height / devicePixelRatio);
     } catch (e) {
-      print('获取屏幕边界失败: $e');
+      if (kDebugMode) {
+        print('获取屏幕边界失败: $e');
+      }
       return null;
     }
   }
@@ -137,7 +138,9 @@ class WindowPositionService extends GetxService {
           center.dy >= -height / 2 &&
           center.dy <= screenBounds.bottom + height / 2;
     } catch (e) {
-      print('检查位置有效性失败: $e');
+      if (kDebugMode) {
+        print('检查位置有效性失败: $e');
+      }
       return false;
     }
   }

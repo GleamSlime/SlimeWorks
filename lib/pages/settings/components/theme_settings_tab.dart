@@ -164,7 +164,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   Widget _buildAccentSwatch(Color color) {
-    final isSelected = _accentColor.value == color.value;
+    final isSelected = _accentColor == color;
     return GestureDetector(
       onTap: () => _onAccentColorTap(color),
       child: AnimatedContainer(
@@ -176,7 +176,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           shape: BoxShape.circle,
           color: color,
           border: Border.all(color: isSelected ? Colors.black87 : Colors.transparent, width: isSelected ? 3 : 1),
-          boxShadow: [if (isSelected) BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 3))],
+          boxShadow: [if (isSelected) BoxShadow(color: Colors.black.withAlpha(64), blurRadius: 6, offset: const Offset(0, 3))],
         ),
         child: isSelected ? Icon(Icons.check, color: _getContrastColor(color), size: 28) : null,
       ),

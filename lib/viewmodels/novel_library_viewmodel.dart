@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
@@ -74,7 +75,9 @@ class NovelLibraryViewModel extends GetxController {
       return a.id.compareTo(b.id);
     });
 
-    print('[Library] Sorted ${result.length} novels, first 3: ${result.take(3).map((n) => '${n.title} (lastReadAt: ${n.lastReadAt})').join(', ')}');
+    if (kDebugMode) {
+      print('[Library] Sorted ${result.length} novels, first 3: ${result.take(3).map((n) => '${n.title} (lastReadAt: ${n.lastReadAt})').join(', ')}');
+    }
 
     return result;
   }
@@ -98,7 +101,9 @@ class NovelLibraryViewModel extends GetxController {
     try {
       final result = getAllNovels();
       novels.value = result;
-      print('[Library] Loaded ${result.length} novels, first 3 lastReadAt: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}');
+      if (kDebugMode) {
+        print('[Library] Loaded ${result.length} novels, first 3 lastReadAt: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}');
+      }
     } catch (e) {
       _showSnack('错误', '加载小说列表失败: $e');
     }
@@ -277,7 +282,9 @@ class NovelLibraryViewModel extends GetxController {
       // 等待一小段时间让 Rust 层响应取消
       await Future.delayed(const Duration(milliseconds: 100));
     } catch (e) {
-      print('取消搜索失败: $e');
+      if (kDebugMode) {
+        print('取消搜索失败: $e');
+      }
     } finally {
       isCancelling.value = false;
     }

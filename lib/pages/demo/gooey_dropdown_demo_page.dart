@@ -10,7 +10,6 @@ class GooeyDropdownDemoPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff2f2f2),
-      appBar: AppBar(title: const Text('Gooey Dropdown 演示'), backgroundColor: Colors.black, foregroundColor: Colors.white),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -20,7 +19,16 @@ class GooeyDropdownDemoPage extends StatelessWidget {
 
             // 示例1：默认样式
             GooeyDropdownShader(
-              button: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+              button: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
+                ),
+                child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+              ),
               cardOffset: 30,
               direction: DropdownDirection.left,
               content: const _MessageContent(),

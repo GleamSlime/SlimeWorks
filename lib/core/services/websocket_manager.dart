@@ -4,7 +4,6 @@ library;
 /// PC 端：提供服务器和客户端功能
 /// 移动端：仅提供客户端功能
 
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
 

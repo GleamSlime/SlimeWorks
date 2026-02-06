@@ -65,7 +65,6 @@ class _GooeyDropdownState extends State<GooeyDropdown> with SingleTickerProvider
     _buttonOffset = renderBox.localToGlobal(Offset.zero);
 
     final overlay = Overlay.of(context, rootOverlay: true);
-    if (overlay == null) return;
 
     _overlayEntry = OverlayEntry(builder: _buildOverlay);
 
@@ -130,7 +129,7 @@ class _GooeyDropdownState extends State<GooeyDropdown> with SingleTickerProvider
                               top: Radius.circular(12 * (1 - _expandAnim.value)),
                               bottom: const Radius.circular(16),
                             ),
-                            boxShadow: [BoxShadow(blurRadius: 20 * _expandAnim.value, color: Colors.black.withOpacity(0.15))],
+                            boxShadow: [BoxShadow(blurRadius: 20 * _expandAnim.value, color: Colors.black.withAlpha(38))],
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),

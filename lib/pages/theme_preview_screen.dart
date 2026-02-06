@@ -18,7 +18,7 @@ class ThemePreviewScreen extends StatelessWidget {
     final isDark = Get.isDarkMode;
 
     /// 构建排版系统展示
-    Widget _buildTypographySection(bool isDark) {
+    Widget buildTypographySection(bool isDark) {
       ThemeData theme = Theme.of(context);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +110,7 @@ class ThemePreviewScreen extends StatelessWidget {
             const SizedBox(height: 32),
 
             // 字体大小展示
-            _buildTypographySection(isDark),
+            buildTypographySection(isDark),
 
             const SizedBox(height: 48),
 
@@ -235,7 +235,7 @@ class ThemePreviewScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.withOpacity(0.3), width: 1),
+        border: Border.all(color: Colors.grey.withAlpha(77), width: 1),
       ),
       alignment: Alignment.center,
       child: Text(

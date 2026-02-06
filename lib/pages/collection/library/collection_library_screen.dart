@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:slime_works/components/dropdown/gooey_dropdown.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
@@ -37,19 +38,32 @@ class _CollectionLibraryScreenState extends State<CollectionLibraryScreen> {
   @override
   void initState() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ThemeData theme = Theme.of(context);
+
       desktopScreen.setScreenHeadToolsWidget(
         Row(
           spacing: AppTheme.metrics.fontSize8,
           children: [
-            DesktopHeadToolsButton(
-              icon: const Icon(Icons.refresh),
-              size: AppTheme.metrics.fontSize34,
-              onTap: () {
-                // Implement refresh functionality here
-              },
-            ),
+            // DesktopHeadToolsButton(
+            //   icon: const Icon(Icons.refresh),
+            //   size: AppTheme.metrics.fontSize34,
+            //   onTap: () {
+            //     // Implement refresh functionality here
+            //   },
+            // ),
+            // Container(
+            //   padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+
+            //   decoration: BoxDecoration(
+            //     color: theme.colorScheme.surface,
+            //     borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace32),
+            //     boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))],
+            //     border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
+            //   ),
+            //   child: LibraryBookAppendButton(),
+            // ),
             LibraryBookAppendButton(),
-            GooeyDropdown(dropdownWidth: 260, dropdownHeight: 320, dropdown: YourDropdownContent(), child: Icon(Icons.menu)),
+            // GooeyDropdown(dropdownWidth: 260, dropdownHeight: 320, dropdown: YourDropdownContent(), child: Icon(Icons.menu)),
           ],
         ),
       );

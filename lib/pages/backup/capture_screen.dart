@@ -29,10 +29,10 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   List<String> _images = [];
   List<String> _jsonData = [];
   List<String> _javascript = [];
-  List<RecordingTask> _recordingTasks = [];
+  final List<RecordingTask> _recordingTasks = [];
   List<RecordingTask> _availableVideos = [];
 
-  CaptureStats? _stats;
+  // CaptureStats? _stats;
 
   int get _completedCount => _recordingTasks.where((t) => t.status == RecordingStatus.completed).length;
   int get _errorCount => _recordingTasks.where((t) => t.status == RecordingStatus.error).length;
@@ -163,7 +163,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
       _images = getCapturedImages(installDir: appDir.path);
       _jsonData = getCapturedJson(installDir: appDir.path);
       _javascript = getCapturedJavascript(installDir: appDir.path);
-      _stats = getCaptureStats(installDir: appDir.path);
+      // _stats = getCaptureStats(installDir: appDir.path);
     });
   }
 
@@ -531,7 +531,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                         SizedBox(
                           width: 120,
                           child: DropdownButtonFormField<int>(
-                            value: _selectedPort,
+                            initialValue: _selectedPort,
                             decoration: const InputDecoration(
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -564,7 +564,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                         SizedBox(
                           width: 120,
                           child: DropdownButtonFormField<String>(
-                            value: _selectedFormat,
+                            initialValue: _selectedFormat,
                             decoration: const InputDecoration(
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
