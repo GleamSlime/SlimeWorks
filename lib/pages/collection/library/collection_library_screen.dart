@@ -12,6 +12,8 @@ import 'package:slime_works/pages/collection/library/components/library_book_app
 import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
 
 class YourDropdownContent extends StatelessWidget {
+  const YourDropdownContent({super.key});
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -81,6 +83,13 @@ class _CollectionLibraryScreenState extends State<CollectionLibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GooeyDropdownDemoPage();
+    return Center(
+      child: SvgPicture.string(
+        Assets.image.svg.collectLibraryEmpty,
+        width: 200.w,
+        height: 200.w,
+        colorFilter: ColorFilter.mode(Theme.of(context).colorScheme.onSurface.withOpacity(0.2), BlendMode.srcIn),
+      ),
+    );
   }
 }

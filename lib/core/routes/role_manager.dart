@@ -10,6 +10,9 @@ enum UserRole {
 
   /// 游客/未登录
   guest,
+
+  /// 开发角色
+  developer,
 }
 
 enum Permission {
@@ -25,6 +28,7 @@ enum Permission {
   accessHttpBridgeTest,
   accessWebSocketTest,
   accessCollection,
+  accessDemo,
 }
 
 class RoleManager {
@@ -47,6 +51,7 @@ class RoleManager {
     ],
     UserRole.editor: [Permission.viewDashboard, Permission.editContent, Permission.accessNovelLibrary, Permission.accessNovelReader],
     UserRole.guest: [Permission.viewDashboard],
+    UserRole.developer: Permission.values,
   };
 
   static bool hasPermission(UserRole role, Permission permission) {

@@ -42,8 +42,8 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
       await Directory(_installDir!).create(recursive: true);
 
       // 创建管理器和加载器
-      _manager = await createModuleManager(installDir: _installDir!);
-      _loader = await createModuleLoader(installDir: _installDir!);
+      _manager = createModuleManager(installDir: _installDir!);
+      _loader = createModuleLoader(installDir: _installDir!);
 
       // 加载模块列表
       await _refreshModules();

@@ -33,10 +33,11 @@ class LightColors {
   // 背景色
   static const Color background1 = Color(0xFFFFFFFF);
   static const Color background2 = Color(0xFFF5F5F5);
-  static const Color background3 = Color(0xFFEEEEEE);
-  static const Color background4 = Color(0xFFE8E5F8);
-  static const Color background5 = Color(0xFFE5F3FB);
-  static const Color background6 = Color(0xFF424242);
+  static const Color background3 = Color(0xFFF6F6F6);
+  static const Color background4 = Color(0xFFEEEEEE);
+  static const Color background5 = Color(0xFFE8E5F8);
+  static const Color background6 = Color(0xFFE5F3FB);
+  static const Color background7 = Color(0xFF424242);
 }
 
 /// 暗色主题颜色定义

@@ -212,7 +212,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
 
           // 模块名（下拉选择）
           DropdownButtonFormField<String>(
-            value: _moduleController.text,
+            initialValue: _moduleController.text,
             decoration: const InputDecoration(labelText: '模块名称', border: OutlineInputBorder(), prefixIcon: Icon(Icons.category)),
             items: _registeredModules.map((module) {
               return DropdownMenuItem(value: module, child: Text(module));
@@ -230,7 +230,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _registeredFunctions.contains(_functionController.text) ? _functionController.text : null,
+                  initialValue: _registeredFunctions.contains(_functionController.text) ? _functionController.text : null,
                   decoration: const InputDecoration(labelText: '函数名称', border: OutlineInputBorder(), prefixIcon: Icon(Icons.functions)),
                   items: _registeredFunctions.map((func) {
                     return DropdownMenuItem(value: func, child: Text(func));

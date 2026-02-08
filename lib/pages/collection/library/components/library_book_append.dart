@@ -38,25 +38,26 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
   @override
   Widget build(BuildContext context) {
     return GooeyDropdownShader(
-        width: scaleW(200),
       button: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: DefaultTextStyle.merge(
           style: const TextStyle(decoration: TextDecoration.none),
-          child: Container(
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-            child: StateTransitionAnimation(
-              label: label,
-              textStyle: TextStyle(fontSize: AppTheme.metrics.fontSize14, color: Theme.of(context).textTheme.bodyMedium?.color),
-              svg: Assets.image.svg.libraryImport,
-              svgSize: AppTheme.metrics.fontSize16,
-              loading: loading,
-              height: AppTheme.metrics.fontSize34,
-              decoration: BoxDecoration(
-                borderRadius: AppTheme.metrics.radius8,
-                color: Theme.of(context).appBarTheme.backgroundColor,
-                border: Border.all(color: Theme.of(context).dividerColor.withAlpha(128)),
-              ),
+          child: StateTransitionAnimation(
+            label: label,
+            textStyle: TextStyle(
+              fontSize: AppTheme.metrics.fontSize14,
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+              fontWeight: FontWeight.w500,
+            ),
+            svg: Assets.image.svg.libraryImport,
+            svgSize: AppTheme.metrics.fontSize16,
+            loading: loading,
+            height: AppTheme.metrics.fontSize34 + AppTheme.metrics.kSpace4 * 2,
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12 + AppTheme.metrics.kSpace4),
+            decoration: BoxDecoration(
+              borderRadius: AppTheme.metrics.radius8,
+              color: Theme.of(context).appBarTheme.backgroundColor,
+              border: Border.all(color: Theme.of(context).dividerColor.withAlpha(128)),
             ),
           ),
         ),
@@ -64,7 +65,7 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
       content: const _MessageContent(),
       buttonColor: Colors.white,
       cardColor: Colors.white,
-      cardSize: Size(100, 120),
+      buttonRadius: AppTheme.metrics.kSpace8,
       cardOffset: scaleW(30),
       duration: const Duration(milliseconds: 150),
     );
@@ -81,6 +82,7 @@ class _MessageContent extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
       child: Container(
+        width: scaleW(250),
         padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
         decoration: BoxDecoration(color: theme.inputDecorationTheme.fillColor, borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace8)),
         child: Column(
@@ -130,14 +132,15 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: () {
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) {
           GooeyDropdownScope.of(context)?.close();
           widget.onTap();
         },
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace10),
           decoration: BoxDecoration(
-            color: _isHovered ? Theme.of(context).cardColor : Colors.transparent,
+            color: _isHovered ? Theme.of(context).colorScheme.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace10),
             boxShadow: _isHovered ? [BoxShadow(color: Theme.of(context).shadowColor.withAlpha(25), blurRadius: scaleW(4))] : null,
           ),

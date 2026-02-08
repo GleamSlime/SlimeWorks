@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/viewmodels/novel_reader_viewmodel.dart';
+import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_html/flutter_html.dart';
@@ -347,7 +347,7 @@ class _ReaderContentState extends State<ReaderContent> {
                           t = t.replaceAll(RegExp(r'\r?\n\s*\r?\n+'), '</p><p>');
                           // 将剩余单个换行转为 <br/>
                           t = t.replaceAll(RegExp(r'\r?\n'), '<br/>');
-                          embeddedHtml = '<p>' + t + '</p>';
+                          embeddedHtml = '<p>$t</p>';
                           debugPrint('[Reader][HTMLTransform] converted plain newlines to <p>/<br/>');
                         } catch (e) {
                           debugPrint('[Reader][HTMLTransform] failed: $e');
@@ -433,7 +433,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     return SelectionArea(
                       child: Html(
                         data: embeddedHtml,
-                        onLinkTap: (url, _, __) {
+                        onLinkTap: (url, _, _) {
                           if (url == null) return;
                           try {
                             final uri = Uri.tryParse(url);
@@ -819,7 +819,9 @@ class _ReaderContentState extends State<ReaderContent> {
         }
 
         int q = srcPos + srcKey.length;
-        while (q < out.length && (out[q] == ' ' || out[q] == '\t' || out[q] == '\n' || out[q] == '\r')) q++;
+        while (q < out.length && (out[q] == ' ' || out[q] == '\t' || out[q] == '\n' || out[q] == '\r')) {
+          q++;
+        }
         if (q >= out.length) break;
         final quote = out[q];
         if (quote != '"' && quote != "'") {

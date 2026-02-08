@@ -229,7 +229,7 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
                 Positioned.fill(
                   child: AnimatedBuilder(
                     animation: _controller,
-                    builder: (_, __) {
+                    builder: (_, _) {
                       return Align(
                         alignment: Alignment.centerLeft,
                         child: Transform.translate(
@@ -260,7 +260,7 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
                 Positioned.fill(
                   child: AnimatedBuilder(
                     animation: _controller,
-                    builder: (_, __) {
+                    builder: (_, _) {
                       return Align(
                         alignment: Alignment.centerLeft,
                         child: Transform.translate(

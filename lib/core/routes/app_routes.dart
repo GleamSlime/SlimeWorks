@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/pages/backup/demo.dart';
+import 'package:slime_works/pages/capture_screen_page.dart';
 import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
 import 'package:slime_works/pages/collection/picture/collection_picture_screen.dart';
+import 'package:slime_works/pages/demo/viewmodel_demo_page.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -13,7 +16,6 @@ import 'package:slime_works/core/widgets/binding_widget.dart';
 import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/dashboard_screen.dart';
-import 'package:slime_works/pages/backup/capture_screen.dart';
 import 'package:slime_works/pages/module_management_screen.dart';
 import 'package:slime_works/pages/websocket_test_page.dart';
 import 'package:slime_works/pages/http_bridge_test_page.dart';
@@ -30,6 +32,7 @@ part 'routes/tools_routes.dart';
 part 'routes/placeholder_routes.dart';
 part 'routes/collection_routes.dart';
 part 'routes/demo_routes.dart';
+part 'routes/capture_routers.dart';
 
 // // 导航到 Dashboard
 // DashboardRoute().go(context);
@@ -81,6 +84,9 @@ class AppRoutes {
       const CloudWordRoute(),
       const DistributedRoute(),
       const RequestHostRoute(),
+
+      const GooeyDemoRoute(),
+      const ViewModelDemoRoute(),
     ];
 
     router = GoRouter(

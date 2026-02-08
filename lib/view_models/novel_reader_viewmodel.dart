@@ -391,7 +391,7 @@ class NovelReaderViewModel extends GetxController {
   void switchToAdjacentBook(int direction) async {
     try {
       // 获取所有书籍列表
-      final allNovels = await getAllNovels();
+      final allNovels = getAllNovels();
 
       // 找到当前书籍的索引
       final currentIndex = allNovels.indexWhere((n) => n.id == novel.id);

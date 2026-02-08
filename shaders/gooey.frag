@@ -5,6 +5,8 @@ precision mediump float;
 uniform float uProgress;
 uniform vec2 uButtonPos;
 uniform vec2 uCardPos;
+uniform float uButtonWidth;
+uniform float uButtonHeight;
 uniform float uButtonRadius;
 uniform float uCardWidth;
 uniform float uCardHeight;
@@ -35,8 +37,9 @@ out vec4 fragColor;
 void main() {
     vec2 fragCoord = FlutterFragCoord().xy;
     
-    // 按钮距离场
-    float distButton = sdCircle(fragCoord - uButtonPos, uButtonRadius);
+    // 按钮距离场 - 使用圆角矩形而不是圆形
+    vec2 buttonHalfSize = vec2(uButtonWidth, uButtonHeight) * 0.5;
+    float distButton = sdRoundedRect(fragCoord - uButtonPos, buttonHalfSize, uButtonRadius);
     
     // 卡片距离场
     vec2 cardHalfSize = vec2(uCardWidth, uCardHeight) * 0.5;

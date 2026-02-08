@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/viewmodels/novel_reader_viewmodel.dart';
+import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 
 /// 阅读器工具栏组件
 class ReaderToolbar extends StatelessWidget {

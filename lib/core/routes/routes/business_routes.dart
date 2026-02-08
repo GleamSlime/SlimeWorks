@@ -1,18 +1,6 @@
 part of '../app_routes.dart';
 
-/// 业务功能路由：Capture、ModuleManagement
-@TypedGoRoute<CaptureRoute>(path: '/capture')
-class CaptureRoute extends GoRouteData with $CaptureRoute {
-  const CaptureRoute();
-
-  static const Permission routePermission = Permission.accessCapture;
-  Permission get permission => CaptureRoute.routePermission;
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, const CaptureScreen());
-  }
-}
+/// 业务功能路由：ModuleManagement
 
 @TypedGoRoute<ModuleManagementRoute>(path: '/module-management')
 class ModuleManagementRoute extends GoRouteData with $ModuleManagementRoute {

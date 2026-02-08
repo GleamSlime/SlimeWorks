@@ -1,6 +1,7 @@
 /// 基础页面
 ///
 /// 所有页面应继承此类，提供统一的页面结构和 ViewModel 管理
+library;
 
 import 'package:flutter/material.dart';
 import 'base_viewmodel.dart';

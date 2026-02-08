@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/viewmodels/novel_library_viewmodel.dart';
+import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
 /// 小说库页面
 class NovelLibraryPage extends StatelessWidget {

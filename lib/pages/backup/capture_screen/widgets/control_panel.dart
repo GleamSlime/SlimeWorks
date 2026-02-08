@@ -193,7 +193,7 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<int>(
-                          value: _port,
+                          initialValue: _port,
                           decoration: const InputDecoration(
                             isDense: true,
                             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -220,7 +220,7 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _format,
+                          initialValue: _format,
                           decoration: const InputDecoration(
                             isDense: true,
                             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

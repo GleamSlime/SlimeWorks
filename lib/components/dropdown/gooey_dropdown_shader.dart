@@ -279,7 +279,8 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
     final hasFixedButtonSize = widget.buttonSize != null;
     return GestureDetector(
       key: _buttonKey,
-      onTap: isOpen ? null : open,
+      behavior: HitTestBehavior.opaque,
+      onTapDown: isOpen ? null : (_) => open(),
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
@@ -535,7 +536,9 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                             progress: gooeyStrength,
                             buttonPos: Offset(buttonCenterX, buttonCenterY),
                             cardPos: Offset(cardCenterX, cardCenterY),
-                            buttonRadius: widget.buttonSize.height / 2,
+                            buttonWidth: widget.buttonSize.width,
+                            buttonHeight: widget.buttonSize.height,
+                            buttonRadius: widget.buttonRadius ?? (widget.buttonSize.height / 2),
                             cardWidth: width,
                             cardHeight: height,
                             cardRadius: radius,
@@ -581,6 +584,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                       top: buttonCenterY - widget.buttonSize.height / 2,
                       left: buttonCenterX - widget.buttonSize.width / 2,
                       child: IgnorePointer(
+                        ignoring: t > 0.05,
                         child: SizedBox(
                           width: widget.buttonSize.width,
                           height: widget.buttonSize.height,
@@ -596,13 +600,9 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                               Widget replaceDeep(Widget w) {
                                 if (w is StateTransitionAnimation) {
                                   final original = w;
+                                  // 直接使用原始的 textStyle，不进行合并，只添加 decoration: none
                                   final base = original.textStyle ?? origDefault;
-                                  final fixed = base.copyWith(
-                                    fontFamily: origDefault.fontFamily ?? base.fontFamily,
-                                    fontFamilyFallback: origDefault.fontFamilyFallback ?? base.fontFamilyFallback,
-                                    color: base.color ?? origDefault.color,
-                                    decoration: TextDecoration.none,
-                                  );
+                                  final fixed = base.copyWith(decoration: TextDecoration.none);
 
                                   return StateTransitionAnimation(
                                     svg: original.svg,
@@ -665,12 +665,8 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
 
                               normalized = replaceDeep(built);
 
-                              // 强制使用原始 Theme 和 完全覆盖的 DefaultTextStyle，确保字体/下划线一致
-                              // 额外包裹一层 DefaultTextStyle 确保 decoration.none 生效
-                              return DefaultTextStyle(
-                                style: const TextStyle(decoration: TextDecoration.none),
-                                child: InheritedTheme.captureAll(widget.originContext, normalized),
-                              );
+                              // 使用 InheritedTheme 来继承原始主题，避免用 DefaultTextStyle 覆盖 fontWeight
+                              return InheritedTheme.captureAll(widget.originContext, normalized);
                             },
                           ),
                         ),
@@ -718,6 +714,8 @@ class _GooeyShaderPainter extends CustomPainter {
   final double progress;
   final Offset buttonPos;
   final Offset cardPos;
+  final double buttonWidth;
+  final double buttonHeight;
   final double buttonRadius;
   final double cardWidth;
   final double cardHeight;
@@ -731,6 +729,8 @@ class _GooeyShaderPainter extends CustomPainter {
     required this.progress,
     required this.buttonPos,
     required this.cardPos,
+    required this.buttonWidth,
+    required this.buttonHeight,
     required this.buttonRadius,
     required this.cardWidth,
     required this.cardHeight,
@@ -747,21 +747,23 @@ class _GooeyShaderPainter extends CustomPainter {
     shader.setFloat(2, buttonPos.dy);
     shader.setFloat(3, cardPos.dx);
     shader.setFloat(4, cardPos.dy);
-    shader.setFloat(5, buttonRadius);
-    shader.setFloat(6, cardWidth);
-    shader.setFloat(7, cardHeight);
-    shader.setFloat(8, cardRadius);
-    shader.setFloat(9, blurAmount);
+    shader.setFloat(5, buttonWidth);
+    shader.setFloat(6, buttonHeight);
+    shader.setFloat(7, buttonRadius);
+    shader.setFloat(8, cardWidth);
+    shader.setFloat(9, cardHeight);
+    shader.setFloat(10, cardRadius);
+    shader.setFloat(11, blurAmount);
     // 传递按钮颜色 (RGBA)
-    shader.setFloat(10, buttonColor.red / 255.0);
-    shader.setFloat(11, buttonColor.green / 255.0);
-    shader.setFloat(12, buttonColor.blue / 255.0);
-    shader.setFloat(13, buttonColor.opacity);
+    shader.setFloat(12, (buttonColor.r * 255.0).round().clamp(0, 255) / 255.0);
+    shader.setFloat(13, (buttonColor.g * 255.0).round().clamp(0, 255) / 255.0);
+    shader.setFloat(14, (buttonColor.b * 255.0).round().clamp(0, 255) / 255.0);
+    shader.setFloat(15, buttonColor.a);
     // 传递卡片颜色 (RGBA)
-    shader.setFloat(14, cardColor.red / 255.0);
-    shader.setFloat(15, cardColor.green / 255.0);
-    shader.setFloat(16, cardColor.blue / 255.0);
-    shader.setFloat(17, cardColor.opacity);
+    shader.setFloat(16, (cardColor.r * 255.0).round().clamp(0, 255) / 255.0);
+    shader.setFloat(17, (cardColor.g * 255.0).round().clamp(0, 255) / 255.0);
+    shader.setFloat(18, (cardColor.b * 255.0).round().clamp(0, 255) / 255.0);
+    shader.setFloat(19, cardColor.a);
 
     final paint = Paint()..shader = shader;
     canvas.drawRect(Offset.zero & size, paint);
@@ -775,7 +777,7 @@ class _GooeyShaderPainter extends CustomPainter {
 class GooeyDropdownScope extends InheritedWidget {
   final VoidCallback close;
 
-  const GooeyDropdownScope({required this.close, required Widget child, Key? key}) : super(key: key, child: child);
+  const GooeyDropdownScope({required this.close, required super.child, super.key});
 
   static GooeyDropdownScope? of(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<GooeyDropdownScope>();

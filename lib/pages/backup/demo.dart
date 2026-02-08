@@ -66,7 +66,7 @@ class _GooeyDropdownDemoState extends State<GooeyDropdownDemo> with SingleTicker
                 /// Gooey 效果层（shader绘制按钮和卡片的粘连效果）
                 AnimatedBuilder(
                   animation: _controller,
-                  builder: (_, __) {
+                  builder: (_, _) {
                     if (_controller.value == 0 || _shader == null) {
                       return const SizedBox.shrink();
                     }

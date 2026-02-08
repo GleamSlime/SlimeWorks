@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/viewmodels/novel_reader_viewmodel.dart';
+import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/pages/novel_reader/components/chapter_list.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_toolbar.dart';
@@ -121,7 +121,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                             alignment: Alignment.centerLeft,
                             child: GestureDetector(
                               onTap: () {}, // 防止点击列表关闭
-                              child: Container(
+                              child: SizedBox(
                                 width: MediaQuery.of(context).size.width * 0.75,
                                 child: ChapterList(controller: controller),
                               ),
@@ -143,7 +143,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       body: Row(
         children: [
           // 章节列表侧边栏
-          Obx(() => controller.showChapterList.value ? Container(width: 280, child: ChapterList(controller: controller)) : const SizedBox()),
+          Obx(() => controller.showChapterList.value ? SizedBox(width: 280, child: ChapterList(controller: controller)) : const SizedBox()),
 
           // 主阅读区域
           Expanded(

@@ -1,6 +1,7 @@
 /// 基础 ViewModel
 ///
 /// 所有 ViewModel 应继承此类，提供统一的生命周期管理和状态管理
+library;
 
 import 'package:flutter/foundation.dart';
 

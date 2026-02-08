@@ -1,6 +1,7 @@
 /// Core exports
 ///
 /// 统一导出 core 模块的所有公共 API
+library;
 
 // ViewModel
 export 'viewmodels/base_viewmodel.dart';

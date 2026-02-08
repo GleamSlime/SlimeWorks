@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/viewmodels/novel_reader_viewmodel.dart';
+import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
 /// 小说阅读器页面

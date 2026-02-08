@@ -20,7 +20,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: LightColors.primary,
-      scaffoldBackgroundColor: LightColors.background1,
+      scaffoldBackgroundColor: LightColors.background3,
       fontFamily: 'FZLanTingYuanS-EB-GB',
 
       // 颜色方案

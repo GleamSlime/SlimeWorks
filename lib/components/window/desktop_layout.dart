@@ -79,6 +79,7 @@ class DesktopLayout extends StatelessWidget {
       //       SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '小说库测试', route: '/novel-library'),
       //     ],
       //   ),
+      demoSidebarGroup,
 
       // // 第四组：系统
       bottomSidebarGroup,
@@ -118,6 +119,7 @@ class DesktopLayout extends StatelessWidget {
                     padding: EdgeInsets.only(right: AppTheme.metrics.kSpace16, top: AppTheme.metrics.kSpace4),
                     height: scaleW(60),
                     child: Row(
+                      spacing: AppTheme.metrics.kSpace32,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [head ?? SizedBox.shrink(), if (Platform.isWindows) const WindowsWindowButtons()],
                     ),
