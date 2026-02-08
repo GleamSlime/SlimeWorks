@@ -57,10 +57,10 @@ void configLoading() {
     ..loadingStyle = EasyLoadingStyle.dark
     ..indicatorSize = 45.0
     ..radius = 10.0
-    ..progressColor = Colors.yellow
+    ..progressColor = Colors.red
     ..backgroundColor = Colors.green
-    ..indicatorColor = Colors.yellow
-    ..textColor = Colors.yellow
+    ..indicatorColor = Colors.red
+    ..textColor = Colors.red
     ..maskColor = Colors.blue.withAlpha(255 ~/ 2)
     ..userInteractions = false
     ..dismissOnTap = false;
@@ -80,7 +80,7 @@ class MyApp extends StatelessWidget {
         designSize: isDesktop
             ? desktopScreen.isMobile.value
                   ? Size(375, 815)
-                  : Size(1520, 1050)
+                  : Size(1920, 1080)
             : Size(375, 815),
         minTextAdapt: true,
         splitScreenMode: true,

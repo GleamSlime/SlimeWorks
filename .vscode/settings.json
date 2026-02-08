@@ -25,6 +25,6 @@
     "IOS",
     "ALL"
   ],
-  "editor.wordWrapColumn": 150,
-  "dart.lineLength": 150
+  "editor.wordWrapColumn": 100,
+  "dart.lineLength": 100
 }

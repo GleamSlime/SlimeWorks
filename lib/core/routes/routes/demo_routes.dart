@@ -18,7 +18,7 @@ class GooeyDemoRoute extends AppRouteData with $GooeyDemoRoute {
   @override
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return const MaterialPage(child: GooeyDropdownDemo());
+    return const MaterialPage(child: GooeyDropdownDemoPage());
   }
 }
 

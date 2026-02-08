@@ -8,6 +8,7 @@ import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/capture_screen_page.dart';
 import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
 import 'package:slime_works/pages/collection/picture/collection_picture_screen.dart';
+import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
 import 'package:slime_works/pages/demo/viewmodel_demo_page.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
