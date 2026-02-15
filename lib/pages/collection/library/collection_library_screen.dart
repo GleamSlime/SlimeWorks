@@ -10,31 +10,18 @@ import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_append.dart';
 import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
+import 'package:get/get.dart';
+import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
-class YourDropdownContent extends StatelessWidget {
-  const YourDropdownContent({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: const [
-        ListTile(title: Text("选项 1")),
-        ListTile(title: Text("选项 2")),
-        ListTile(title: Text("选项 3")),
-      ],
-    );
-  }
-}
-
-class CollectionLibraryScreen extends StatefulWidget {
+class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
   const CollectionLibraryScreen({super.key});
 
   @override
   State<CollectionLibraryScreen> createState() => _CollectionLibraryScreenState();
 }
 
-class _CollectionLibraryScreenState extends State<CollectionLibraryScreen> {
+class _CollectionLibraryScreenState
+    extends BasePageState<NovelLibraryViewModel, CollectionLibraryScreen> {
   DesktopScreenProvider desktopScreen = getIt<DesktopScreenProvider>();
 
   @override
@@ -81,15 +68,46 @@ class _CollectionLibraryScreenState extends State<CollectionLibraryScreen> {
     super.dispose();
   }
 
+  // ==================== ViewModel ====================
+  /// 创建页面对应的 ViewModel（页面关闭销毁）
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SvgPicture.string(
-        Assets.image.svg.collectLibraryEmpty,
-        width: 200.w,
-        height: 200.w,
-        colorFilter: ColorFilter.mode(Theme.of(context).colorScheme.onSurface.withOpacity(0.2), BlendMode.srcIn),
-      ),
+  NovelLibraryViewModel createViewModel() => NovelLibraryViewModel();
+
+  /// 长期存在的模型（即便页面关闭也不会销毁）
+  late final NovelLibraryViewModel longLivedViewModel = Get.put(
+    NovelLibraryViewModel(),
+    permanent: true,
+  );
+
+  // ==================== UI 构建 ====================
+  @override
+  Widget buildContent(BuildContext context) {
+    return Column(
+      children: [
+        Text('当前计数：${viewModel.a}', style: TextStyle(fontSize: AppTheme.metrics.fontSize16)),
+        SizedBox(height: AppTheme.metrics.kSpace8),
+        ElevatedButton(
+          onPressed: () {
+            viewModel.add();
+          },
+          child: const Text('增加计数'),
+        ),
+
+        Divider(height: AppTheme.metrics.kSpace32),
+
+        Text(
+          '长期存在的模型计数：${longLivedViewModel.a}',
+          style: TextStyle(fontSize: AppTheme.metrics.fontSize16),
+        ),
+        SizedBox(height: AppTheme.metrics.kSpace8),
+        ElevatedButton(
+          onPressed: () {
+            longLivedViewModel.add();
+            setState(() {}); // 手动刷新 UI
+          },
+          child: const Text('增加长期模型计数'),
+        ),
+      ],
     );
   }
 }

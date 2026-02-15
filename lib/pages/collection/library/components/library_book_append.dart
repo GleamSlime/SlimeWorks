@@ -53,14 +53,17 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
             svgSize: AppTheme.metrics.fontSize16,
             loading: loading,
             height: AppTheme.metrics.kSpace40,
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12),
-            decoration: BoxDecoration(borderRadius: AppTheme.metrics.radius32, color: Theme.of(context).appBarTheme.backgroundColor),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
+            decoration: BoxDecoration(
+              borderRadius: AppTheme.metrics.radius32,
+              color: Theme.of(context).appBarTheme.backgroundColor,
+            ),
           ),
         ),
       ),
+      buttonColor: Theme.of(context).appBarTheme.backgroundColor!,
+      cardColor: Theme.of(context).appBarTheme.backgroundColor!,
       content: const _MessageContent(),
-      buttonColor: Colors.white,
-      cardColor: Colors.white,
       buttonRadius: AppTheme.metrics.kSpace32,
       cardOffset: scaleW(30),
       duration: const Duration(milliseconds: 150),
@@ -80,7 +83,10 @@ class _MessageContent extends StatelessWidget {
       child: Container(
         width: scaleW(250),
         padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
-        decoration: BoxDecoration(color: theme.inputDecorationTheme.fillColor, borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace8)),
+        decoration: BoxDecoration(
+          color: theme.inputDecorationTheme.fillColor,
+          borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace8),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           spacing: AppTheme.metrics.kSpace4,
@@ -88,14 +94,15 @@ class _MessageContent extends StatelessWidget {
           children: [
             _ImportOptionItem(
               icon: Icons.insert_drive_file_outlined,
-              label: '从文件导入',
+              label: '添加单个文件',
               onTap: () {
                 print('从文件导入');
               },
             ),
+            Divider(),
             _ImportOptionItem(
               icon: Icons.folder_outlined,
-              label: '从文件夹导入',
+              label: '扫描文件夹',
               onTap: () {
                 print('从文件夹导入');
               },
@@ -134,15 +141,29 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
           widget.onTap();
         },
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace10),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.metrics.kSpace12,
+            vertical: AppTheme.metrics.kSpace10,
+          ),
           decoration: BoxDecoration(
             color: _isHovered ? Theme.of(context).colorScheme.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace10),
-            boxShadow: _isHovered ? [BoxShadow(color: Theme.of(context).shadowColor.withAlpha(25), blurRadius: scaleW(4))] : null,
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: Theme.of(context).shadowColor.withAlpha(25),
+                      blurRadius: scaleW(4),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
-              Icon(widget.icon, size: AppTheme.metrics.fontSize18, color: Theme.of(context).textTheme.bodyMedium?.color),
+              Icon(
+                widget.icon,
+                size: AppTheme.metrics.fontSize18,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
               SizedBox(width: AppTheme.metrics.kSpace10),
               Expanded(
                 child: Text(

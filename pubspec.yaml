@@ -52,6 +52,7 @@ dependencies:
   # 网络请求
   dio: ^5.9.0 # HTTP客户端
   http: ^1.2.0 # HTTP客户端
+  connectivity_plus: ^6.0.5 # 网络状态监听
 
   # 本地存储
   flutter_secure_storage: ^10.0.0 # 安全存储敏感数据

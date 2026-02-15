@@ -1,12 +1,21 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart' hide cancelSearch;
 import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 
 /// 小说库 ViewModel
-class NovelLibraryViewModel extends GetxController {
+class NovelLibraryViewModel extends BaseViewModel {
+  // demo 计数器字段（页面中引用）
+  int a = 0;
+
+  void add() {
+    a += 1;
+    update();
+  }
+
   final novels = <NovelMetadata>[].obs;
   final isScanning = false.obs;
   final searchQuery = ''.obs;
@@ -76,22 +85,38 @@ class NovelLibraryViewModel extends GetxController {
     });
 
     if (kDebugMode) {
-      print('[Library] Sorted ${result.length} novels, first 3: ${result.take(3).map((n) => '${n.title} (lastReadAt: ${n.lastReadAt})').join(', ')}');
+      print(
+        '[Library] Sorted ${result.length} novels, first 3: ${result.take(3).map((n) => '${n.title} (lastReadAt: ${n.lastReadAt})').join(', ')}',
+      );
     }
 
     return result;
   }
 
   @override
-  void onInit() {
-    super.onInit();
-    loadNovels();
+  Future<void> onInitAsync() async {
+    await super.onInitAsync();
+    await loadNovels();
   }
 
-  void _showSnack(String title, String message, {SnackPosition? position, Color? backgroundColor, Color? colorText, Duration? duration}) {
+  void _showSnack(
+    String title,
+    String message, {
+    SnackPosition? position,
+    Color? backgroundColor,
+    Color? colorText,
+    Duration? duration,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        Get.snackbar(title, message, snackPosition: position, backgroundColor: backgroundColor, colorText: colorText, duration: duration);
+        Get.snackbar(
+          title,
+          message,
+          snackPosition: position,
+          backgroundColor: backgroundColor,
+          colorText: colorText,
+          duration: duration,
+        );
       } catch (_) {}
     });
   }
@@ -102,7 +127,9 @@ class NovelLibraryViewModel extends GetxController {
       final result = getAllNovels();
       novels.value = result;
       if (kDebugMode) {
-        print('[Library] Loaded ${result.length} novels, first 3 lastReadAt: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}');
+        print(
+          '[Library] Loaded ${result.length} novels, first 3 lastReadAt: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}',
+        );
       }
     } catch (e) {
       _showSnack('错误', '加载小说列表失败: $e');
@@ -118,7 +145,10 @@ class NovelLibraryViewModel extends GetxController {
       isScanning.value = true;
 
       // 使用批量扫描，每批处理100本小说，避免阻塞
-      final batches = await scanNovelsFolderBatched(folderPath: result, batchSize: BigInt.from(100));
+      final batches = await scanNovelsFolderBatched(
+        folderPath: result,
+        batchSize: BigInt.from(100),
+      );
 
       int totalFound = 0;
       for (final batch in batches) {
@@ -129,7 +159,11 @@ class NovelLibraryViewModel extends GetxController {
 
         // 显示进度
         if (!batch.isFinished) {
-          _showSnack('扫描中', '已扫描 ${batch.completed}/${batch.total} 个文件，找到 $totalFound 本小说', duration: const Duration(seconds: 1));
+          _showSnack(
+            '扫描中',
+            '已扫描 ${batch.completed}/${batch.total} 个文件，找到 $totalFound 本小说',
+            duration: const Duration(seconds: 1),
+          );
         }
       }
 
@@ -147,7 +181,11 @@ class NovelLibraryViewModel extends GetxController {
   /// 添加单个小说
   Future<void> addSingleNovel() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['txt', 'epub'], allowMultiple: false);
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['txt', 'epub'],
+        allowMultiple: false,
+      );
 
       if (result == null || result.files.isEmpty) return;
 
@@ -294,7 +332,10 @@ class NovelLibraryViewModel extends GetxController {
   Future<void> reorderNovels(int oldIndex, int newIndex) async {
     try {
       final displayNovels = filteredNovels;
-      if (oldIndex < 0 || oldIndex >= displayNovels.length || newIndex < 0 || newIndex >= displayNovels.length) {
+      if (oldIndex < 0 ||
+          oldIndex >= displayNovels.length ||
+          newIndex < 0 ||
+          newIndex >= displayNovels.length) {
         return;
       }
 

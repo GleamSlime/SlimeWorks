@@ -5,23 +5,23 @@ class DemoScreenViewModel extends BaseViewModel {
   int a = 0;
 
   @override
-  Future<void> onInit() async {
+  Future<void> onInitAsync() async {
     if (kDebugMode) {
       print('DemoScreenViewModel initialized');
     }
-    await super.onInit();
+    await super.onInitAsync();
   }
 
   @override
-  void dispose() {
+  void onClose() {
     if (kDebugMode) {
       print('DemoScreenViewModel disposed');
     }
-    super.dispose();
+    super.onClose();
   }
 
   void add() {
     a += 1;
-    notifyListeners();
+    update();
   }
 }

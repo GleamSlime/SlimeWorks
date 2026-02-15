@@ -1,35 +1,45 @@
 /// 基础 ViewModel
 ///
 /// 所有 ViewModel 应继承此类，提供统一的生命周期管理和状态管理
+///
+/// 使用方式：
+/// 1. 随页面销毁：在 createViewModel() 中直接返回实例
+/// 2. 长期存在（即使页面销毁数据仍保留）：使用 Get.put() 并设置 permanent: true
+///
+/// 示例：
+/// ```dart
+/// // 方式1：随页面销毁
+/// @override
+/// MyViewModel createViewModel() => MyViewModel();
+///
+/// // 方式2：长期存在
+/// late final MyViewModel longLivedViewModel = Get.put(
+///   MyViewModel(),
+///   permanent: true,
+/// );
+/// ```
 library;
 
-import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 
-abstract class BaseViewModel extends ChangeNotifier {
-  bool _isDisposed = false;
+/// 基于 GetX 的基础 ViewModel
+///
+/// 所有 ViewModel 应继承此类，提供统一的生命周期管理和状态管理
+abstract class BaseViewModel extends GetxController {
   bool _isInitialized = false;
 
   /// 是否已初始化
   bool get isInitialized => _isInitialized;
 
-  /// 初始化（在 State.initState 中调用）
-  Future<void> onInit() async {
+  /// 异步初始化（供页面在需要时 await）
+  Future<void> onInitAsync() async {
     _isInitialized = true;
   }
 
-  /// 销毁（在 State.dispose 中调用）
+  /// 当控制器被关闭时调用
   @override
-  void dispose() {
-    _isDisposed = true;
-    super.dispose();
-  }
-
-  /// 安全地通知监听器（检查是否已销毁）
-  @override
-  void notifyListeners() {
-    if (!_isDisposed) {
-      super.notifyListeners();
-    }
+  void onClose() {
+    super.onClose();
   }
 
   /// 显示加载状态
@@ -38,7 +48,7 @@ abstract class BaseViewModel extends ChangeNotifier {
 
   void setLoading(bool loading) {
     _isLoading = loading;
-    notifyListeners();
+    update();
   }
 
   /// 错误信息
@@ -47,11 +57,11 @@ abstract class BaseViewModel extends ChangeNotifier {
 
   void setError(String? error) {
     _errorMessage = error;
-    notifyListeners();
+    update();
   }
 
   void clearError() {
     _errorMessage = null;
-    notifyListeners();
+    update();
   }
 }
