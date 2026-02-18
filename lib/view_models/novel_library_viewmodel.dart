@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/services/time_consumption_test.dart';
+import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart' hide cancelSearch;
 import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 
-/// 小说库 ViewModel
+Loggers logger = Loggers(name: '书库');
+
+/// 书籍库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {
   // demo 计数器字段（页面中引用）
   int a = 0;
@@ -26,14 +30,15 @@ class NovelLibraryViewModel extends BaseViewModel {
   final searchTotal = 0.obs;
   final searchCompleted = 0.obs;
   final contentSearchResults = <NovelMetadata>[].obs;
-  final isClearingNovels = false.obs; // 正在清空所有小说
+  final isClearingNovels = false.obs; // 正在清空所有书籍
 
   // 搜索取消标志
   bool _searchCancelled = false;
 
-  /// 获取过滤后的小说列表（已排序：最近阅读 > 自定义排序 > 最近添加）
+  /// 获取过滤后的书籍列表（已排序：最近阅读 > 自定义排序 > 最近添加）
   List<NovelMetadata> get filteredNovels {
     List<NovelMetadata> result;
+    final sortTest = TimeConsumptionTest()..start(log: false);
 
     if (searchQuery.value.isEmpty) {
       result = novels.toList();
@@ -84,11 +89,10 @@ class NovelLibraryViewModel extends BaseViewModel {
       return a.id.compareTo(b.id);
     });
 
-    if (kDebugMode) {
-      print(
-        '[Library] Sorted ${result.length} novels, first 3: ${result.take(3).map((n) => '${n.title} (lastReadAt: ${n.lastReadAt})').join(', ')}',
-      );
-    }
+    logger.log(
+      '排序共 ${result.length} 本书籍，耗时 +${sortTest.end(log: false)}ms，前 3 本最近阅读时间: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}',
+      name: '书库',
+    );
 
     return result;
   }
@@ -121,22 +125,22 @@ class NovelLibraryViewModel extends BaseViewModel {
     });
   }
 
-  /// 加载小说列表
+  /// 加载书籍列表
   Future<void> loadNovels() async {
+    TimeConsumptionTest desktopTest = TimeConsumptionTest()..start(log: false);
     try {
       final result = getAllNovels();
       novels.value = result;
-      if (kDebugMode) {
-        print(
-          '[Library] Loaded ${result.length} novels, first 3 lastReadAt: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}',
-        );
-      }
+      logger.log(
+        '加载共计 ${result.length}(+${desktopTest.end(log: false)}ms) 本书籍，前 3 本最近阅读时间: ${result.take(3).map((n) => '${n.title}: ${n.lastReadAt}').join(', ')}',
+        name: '书库',
+      );
     } catch (e) {
-      _showSnack('错误', '加载小说列表失败: $e');
+      _showSnack('错误', '加载书籍列表失败: $e');
     }
   }
 
-  /// 扫描文件夹（优化版，支持大量小说）
+  /// 扫描文件夹（优化版，支持大量书籍）
   Future<void> scanFolder() async {
     try {
       final result = await FilePicker.platform.getDirectoryPath();
@@ -144,7 +148,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
       isScanning.value = true;
 
-      // 使用批量扫描，每批处理100本小说，避免阻塞
+      // 使用批量扫描，每批处理100本书籍，避免阻塞
       final batches = await scanNovelsFolderBatched(
         folderPath: result,
         batchSize: BigInt.from(100),
@@ -161,16 +165,16 @@ class NovelLibraryViewModel extends BaseViewModel {
         if (!batch.isFinished) {
           _showSnack(
             '扫描中',
-            '已扫描 ${batch.completed}/${batch.total} 个文件，找到 $totalFound 本小说',
+            '已扫描 ${batch.completed}/${batch.total} 个文件，找到 $totalFound 本书籍',
             duration: const Duration(seconds: 1),
           );
         }
       }
 
-      // 重新加载所有小说（包括已存在的和新扫描的）
+      // 重新加载所有书籍（包括已存在的和新扫描的）
       await loadNovels();
 
-      _showSnack('成功', '扫描完成，共找到 $totalFound 本新小说');
+      _showSnack('成功', '扫描完成，共找到 $totalFound 本新书籍');
     } catch (e) {
       _showSnack('错误', '扫描失败: $e');
     } finally {
@@ -178,60 +182,49 @@ class NovelLibraryViewModel extends BaseViewModel {
     }
   }
 
-  /// 添加单个小说
+  /// 添加单个书籍
   Future<void> addSingleNovel() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['txt', 'epub'],
-        allowMultiple: false,
+        allowMultiple: true,
       );
 
       if (result == null || result.files.isEmpty) return;
 
-      final filePath = result.files.first.path;
-      if (filePath == null) return;
+      final filePath = result.files;
+      if (filePath.isEmpty) return;
 
-      final novel = addNovel(filePath: filePath);
+      final _ = addNovel(filePaths: filePath.map((f) => f.path!).toList()).first;
       await loadNovels();
 
-      _showSnack('成功', '已添加《${novel.title}》');
+      _showSnack('成功', '已添加 ${filePath.length} 本书籍');
     } catch (e) {
-      _showSnack('错误', '添加小说失败: $e');
+      _showSnack('错误', '添加书籍失败: $e');
     }
   }
 
-  /// 删除小说
+  /// 删除书籍
   Future<void> deleteNovel(String novelId) async {
     try {
       removeNovel(novelId: novelId);
       novels.removeWhere((n) => n.id == novelId);
-      _showSnack('成功', '已删除小说');
+      _showSnack('成功', '已删除书籍');
     } catch (e) {
       _showSnack('错误', '删除失败: $e');
     }
   }
 
-  /// 清空所有小说（带确认）
+  /// 清空所有书籍（带确认）
   Future<void> confirmClearAllNovels() async {
-    // 确认对话框
-    final confirmed = await Get.dialog<bool>(
-      AlertDialog(
-        title: const Text('确认删除'),
-        content: Text('确定要删除所有 ${novels.length} 本小说吗？此操作不可恢复！'),
-        actions: [
-          TextButton(onPressed: () => Get.back(result: false), child: const Text('取消')),
-          TextButton(
-            onPressed: () => Get.back(result: true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
+    // 现在不在 ViewModel 中显示对话框；UI 层应负责确认弹窗。
+    // 此方法保留为直接触发清空操作的入口（无需 UI 弹窗）。
+    await clearAllNovelsAction();
+  }
 
-    if (confirmed != true) return;
-
+  /// 不弹窗的清空实现，供界面在确认后直接调用
+  Future<void> clearAllNovelsAction() async {
     try {
       isClearingNovels.value = true;
 
@@ -242,11 +235,23 @@ class NovelLibraryViewModel extends BaseViewModel {
       await Future.delayed(const Duration(milliseconds: 100));
       await loadNovels();
 
-      _showSnack('成功', '已清空所有小说');
+      _showSnack('成功', '已清空所有书籍');
     } catch (e) {
       _showSnack('错误', '清空失败: $e');
     } finally {
       isClearingNovels.value = false;
+    }
+  }
+
+  /// 创建新文件夹
+  Future<void> createFolder() async {
+    try {
+      final folderName = '新文件夹 ${DateTime.now().millisecondsSinceEpoch}';
+      createNovelFolder(name: folderName);
+      await loadNovels();
+      _showSnack('成功', '已创建文件夹 "$folderName"');
+    } catch (e) {
+      _showSnack('错误', '创建文件夹失败: $e');
     }
   }
 
@@ -268,7 +273,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
       final allResults = <NovelMetadata>[];
 
-      // 调用 Rust 端的批量搜索接口，每批处理5本小说，获取实时进度
+      // 调用 Rust 端的批量搜索接口，每批处理5本书籍，获取实时进度
       final batches = await searchInAllNovelsBatched(keyword: keyword, batchSize: BigInt.from(5));
 
       for (final batch in batches) {
@@ -294,9 +299,9 @@ class NovelLibraryViewModel extends BaseViewModel {
 
       if (!_searchCancelled) {
         if (allResults.isEmpty) {
-          _showSnack('搜索结果', '没有找到包含"$keyword"的小说');
+          _showSnack('搜索结果', '没有找到包含"$keyword"的书籍');
         } else {
-          _showSnack('搜索结果', '找到 ${allResults.length} 本包含关键词的小说');
+          _showSnack('搜索结果', '找到 ${allResults.length} 本包含关键词的书籍');
         }
       }
     } catch (e) {
@@ -328,7 +333,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     }
   }
 
-  /// 重新排序小说
+  /// 重新排序书籍
   Future<void> reorderNovels(int oldIndex, int newIndex) async {
     try {
       final displayNovels = filteredNovels;

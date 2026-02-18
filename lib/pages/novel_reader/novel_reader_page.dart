@@ -7,7 +7,7 @@ import 'package:slime_works/pages/novel_reader/components/chapter_list.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_toolbar.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_content.dart';
 
-/// 小说阅读器页面
+/// 书籍阅读器页面
 class NovelReaderPage extends StatefulWidget {
   final NovelMetadata? novel;
 
@@ -81,7 +81,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           actions: [
             Obx(
               () => controller.showChapterList.value
-                  ? IconButton(icon: const Icon(Icons.close), onPressed: controller.toggleChapterList)
+                  ? IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: controller.toggleChapterList,
+                    )
                   : const SizedBox.shrink(),
             ),
           ],
@@ -143,7 +146,11 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       body: Row(
         children: [
           // 章节列表侧边栏
-          Obx(() => controller.showChapterList.value ? SizedBox(width: 280, child: ChapterList(controller: controller)) : const SizedBox()),
+          Obx(
+            () => controller.showChapterList.value
+                ? SizedBox(width: 280, child: ChapterList(controller: controller))
+                : const SizedBox(),
+          ),
 
           // 主阅读区域
           Expanded(
@@ -185,7 +192,11 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(onPressed: () => controller.loadNovelContent(), icon: const Icon(Icons.refresh), label: const Text('重试')),
+          ElevatedButton.icon(
+            onPressed: () => controller.loadNovelContent(),
+            icon: const Icon(Icons.refresh),
+            label: const Text('重试'),
+          ),
         ],
       ),
     );

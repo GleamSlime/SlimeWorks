@@ -7,18 +7,21 @@ class TimeConsumptionTest {
 
   int startTime = 0;
 
-  void start() {
-    if (kDebugMode) {
-      print('>>> ${tag ?? ""} 耗时开始计时 <<<');
+  void start({bool? log = true}) {
+    if (kDebugMode && log == true) {
+      debugPrint('>>> ${tag ?? ""} 耗时开始计时 <<<');
     }
     startTime = DateTime.now().millisecondsSinceEpoch;
   }
 
-  void end() {
+  int end({bool? log = true}) {
     final endTime = DateTime.now().millisecondsSinceEpoch;
     final duration = endTime - startTime;
-    if (kDebugMode) {
-      print('>>> ${tag ?? ""} 耗时: $duration ms <<<');
+
+    if (kDebugMode && log == true) {
+      debugPrint('>>> ${tag ?? ""} 耗时: $duration ms <<<');
     }
+
+    return duration;
   }
 }

@@ -47,7 +47,7 @@ impl TxtParser {
             decode_start.elapsed()
         );
 
-        // 从文件名提取小说ID（使用文件路径的 hash）
+        // 从文件名提取书籍ID（使用文件路径的 hash）
         let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
 
         // 尝试自动识别章节
@@ -231,11 +231,14 @@ impl TxtParser {
             file_path: path.to_string_lossy().to_string(),
             format: NovelFormat::Txt,
             file_size: metadata.len(),
+            is_favorite: false,
+            tags: Vec::new(),
             modified_at: chrono::DateTime::from(
                 metadata.modified().unwrap_or(std::time::SystemTime::now()),
             ),
             added_at: chrono::Utc::now(),
             progress: 0.0,
+            current_chapter_id: None,
             last_read_at: None,
             cover_path: None,
             folder_id: None,
@@ -654,7 +657,7 @@ impl EpubParser {
     /// 提取 epub 文件的元数据
     pub fn extract_metadata<P: AsRef<Path>>(path: P) -> Result<NovelMetadata> {
         let path = path.as_ref();
-        let mut doc = epub::doc::EpubDoc::new(path)
+        let doc = epub::doc::EpubDoc::new(path)
             .map_err(|e| anyhow::anyhow!("Failed to open epub: {:?}", e))?;
 
         let metadata_fs = std::fs::metadata(path).context("Failed to read file metadata")?;
@@ -759,6 +762,8 @@ impl EpubParser {
             file_path: path.to_string_lossy().to_string(),
             format: NovelFormat::Epub,
             file_size: metadata_fs.len(),
+            is_favorite: false,
+            tags: Vec::new(),
             modified_at: chrono::DateTime::from(
                 metadata_fs
                     .modified()
@@ -766,6 +771,7 @@ impl EpubParser {
             ),
             added_at: chrono::Utc::now(),
             progress: 0.0,
+            current_chapter_id: None,
             last_read_at: None,
             cover_path,
             folder_id: None,

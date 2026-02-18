@@ -9,97 +9,76 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_metadata`, `convert_scan_batch_result`, `convert_search_batch_result`, `convert_search_match`, `convert_search_result`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-/// 扫描文件夹获取小说列表
-List<NovelMetadata> scanNovelsFolder({required String folderPath}) => RustLib
-    .instance
-    .api
-    .crateApiNovelReaderScanNovelsFolder(folderPath: folderPath);
+/// 扫描文件夹获取书籍列表
+List<NovelMetadata> scanNovelsFolder({required String folderPath}) =>
+    RustLib.instance.api.crateApiNovelReaderScanNovelsFolder(folderPath: folderPath);
 
-/// 获取所有小说列表
-List<NovelMetadata> getAllNovels() =>
-    RustLib.instance.api.crateApiNovelReaderGetAllNovels();
+/// 获取所有书籍列表
+List<NovelMetadata> getAllNovels() => RustLib.instance.api.crateApiNovelReaderGetAllNovels();
 
-/// 添加单个小说
-NovelMetadata addNovel({required String filePath}) =>
-    RustLib.instance.api.crateApiNovelReaderAddNovel(filePath: filePath);
+/// 添加书籍（支持单个路径或多路径）
+List<NovelMetadata> addNovel({required List<String> filePaths}) =>
+    RustLib.instance.api.crateApiNovelReaderAddNovel(filePaths: filePaths);
 
-/// 从库中移除小说
+/// 从库中移除书籍
 void removeNovel({required String novelId}) =>
     RustLib.instance.api.crateApiNovelReaderRemoveNovel(novelId: novelId);
 
-/// 从库中移除小说及其文件
-void removeNovelWithFile({required String novelId}) => RustLib.instance.api
-    .crateApiNovelReaderRemoveNovelWithFile(novelId: novelId);
+/// 从库中移除书籍及其文件
+void removeNovelWithFile({required String novelId}) =>
+    RustLib.instance.api.crateApiNovelReaderRemoveNovelWithFile(novelId: novelId);
 
-/// 清空所有小说
-void clearAllNovels() =>
-    RustLib.instance.api.crateApiNovelReaderClearAllNovels();
+/// 清空所有书籍
+void clearAllNovels() => RustLib.instance.api.crateApiNovelReaderClearAllNovels();
 
-/// 获取小说的完整内容（包含所有章节）
+/// 获取书籍的完整内容（包含所有章节）
 Future<NovelContent> getNovelContent({required String filePath}) =>
     RustLib.instance.api.crateApiNovelReaderGetNovelContent(filePath: filePath);
 
 /// 获取特定章节的内容
-Future<String> getChapterContent({
-  required String filePath,
-  required BigInt chapterIndex,
-}) => RustLib.instance.api.crateApiNovelReaderGetChapterContent(
-  filePath: filePath,
-  chapterIndex: chapterIndex,
-);
+Future<String> getChapterContent({required String filePath, required BigInt chapterIndex}) =>
+    RustLib.instance.api.crateApiNovelReaderGetChapterContent(
+      filePath: filePath,
+      chapterIndex: chapterIndex,
+    );
 
-/// 在小说中搜索关键词
-Future<List<SearchMatch>> searchInNovel({
-  required String filePath,
-  required String keyword,
-}) => RustLib.instance.api.crateApiNovelReaderSearchInNovel(
-  filePath: filePath,
-  keyword: keyword,
-);
+/// 在书籍中搜索关键词
+Future<List<SearchMatch>> searchInNovel({required String filePath, required String keyword}) =>
+    RustLib.instance.api.crateApiNovelReaderSearchInNovel(filePath: filePath, keyword: keyword);
 
 /// 更新阅读进度
-void updateReadingProgress({
-  required String novelId,
-  required double progress,
-}) => RustLib.instance.api.crateApiNovelReaderUpdateReadingProgress(
-  novelId: novelId,
-  progress: progress,
-);
+void updateReadingProgress({required String novelId, required double progress}) => RustLib
+    .instance
+    .api
+    .crateApiNovelReaderUpdateReadingProgress(novelId: novelId, progress: progress);
 
 /// 创建文件夹
-NovelFolder createFolder({required String name}) =>
+NovelFolder createNovelFolder({required String name}) =>
     RustLib.instance.api.crateApiNovelReaderCreateFolder(name: name);
 
 /// 获取所有文件夹
-List<NovelFolder> getAllFolders() =>
-    RustLib.instance.api.crateApiNovelReaderGetAllFolders();
+List<NovelFolder> getAllNovelFolders() => RustLib.instance.api.crateApiNovelReaderGetAllFolders();
 
 /// 删除文件夹
 void deleteFolder({required String folderId}) =>
     RustLib.instance.api.crateApiNovelReaderDeleteFolder(folderId: folderId);
 
-/// 移动小说到文件夹
-void moveNovelToFolder({required String novelId, String? folderId}) => RustLib
-    .instance
-    .api
-    .crateApiNovelReaderMoveNovelToFolder(novelId: novelId, folderId: folderId);
+/// 移动书籍到文件夹
+void moveNovelToFolder({required String novelId, String? folderId}) =>
+    RustLib.instance.api.crateApiNovelReaderMoveNovelToFolder(novelId: novelId, folderId: folderId);
 
-/// 更新小说排序
-void updateNovelOrder({required String novelId, required int order}) => RustLib
-    .instance
-    .api
-    .crateApiNovelReaderUpdateNovelOrder(novelId: novelId, order: order);
+/// 更新书籍排序
+void updateNovelOrder({required String novelId, required int order}) =>
+    RustLib.instance.api.crateApiNovelReaderUpdateNovelOrder(novelId: novelId, order: order);
 
-/// 批量更新小说排序
-void batchUpdateNovelOrders({required List<String> novelIds}) => RustLib
-    .instance
-    .api
-    .crateApiNovelReaderBatchUpdateNovelOrders(novelIds: novelIds);
+/// 批量更新书籍排序
+void batchUpdateNovelOrders({required List<String> novelIds}) =>
+    RustLib.instance.api.crateApiNovelReaderBatchUpdateNovelOrders(novelIds: novelIds);
 
 /// 取消搜索
 void cancelSearch() => RustLib.instance.api.crateApiNovelReaderCancelSearch();
 
-/// 在所有小说中搜索关键词（批量搜索，支持进度反馈和取消）
+/// 在所有书籍中搜索关键词（批量搜索，支持进度反馈和取消）
 Future<List<SearchBatchResult>> searchInAllNovelsBatched({
   required String keyword,
   required BigInt batchSize,
@@ -108,7 +87,7 @@ Future<List<SearchBatchResult>> searchInAllNovelsBatched({
   batchSize: batchSize,
 );
 
-/// 在所有小说中搜索关键词（批量搜索，性能优化）
+/// 在所有书籍中搜索关键词（批量搜索，性能优化）
 Future<List<NovelSearchResult>> searchInAllNovels({required String keyword}) =>
     RustLib.instance.api.crateApiNovelReaderSearchInAllNovels(keyword: keyword);
 
@@ -127,16 +106,10 @@ class NovelChapter {
   final BigInt index;
   final String? content;
 
-  const NovelChapter({
-    required this.id,
-    required this.title,
-    required this.index,
-    this.content,
-  });
+  const NovelChapter({required this.id, required this.title, required this.index, this.content});
 
   @override
-  int get hashCode =>
-      id.hashCode ^ title.hashCode ^ index.hashCode ^ content.hashCode;
+  int get hashCode => id.hashCode ^ title.hashCode ^ index.hashCode ^ content.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -181,8 +154,7 @@ class NovelFolder {
   });
 
   @override
-  int get hashCode =>
-      id.hashCode ^ name.hashCode ^ createdAt.hashCode ^ order.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ createdAt.hashCode ^ order.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -264,7 +236,7 @@ class NovelMetadata {
           customOrder == other.customOrder;
 }
 
-/// 小说搜索结果
+/// 书籍搜索结果
 class NovelSearchResult {
   final NovelMetadata novel;
   final BigInt matchCount;
@@ -298,11 +270,7 @@ class ScanBatchResult {
   });
 
   @override
-  int get hashCode =>
-      novels.hashCode ^
-      completed.hashCode ^
-      total.hashCode ^
-      isFinished.hashCode;
+  int get hashCode => novels.hashCode ^ completed.hashCode ^ total.hashCode ^ isFinished.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -330,11 +298,7 @@ class SearchBatchResult {
   });
 
   @override
-  int get hashCode =>
-      results.hashCode ^
-      completed.hashCode ^
-      total.hashCode ^
-      isFinished.hashCode;
+  int get hashCode => results.hashCode ^ completed.hashCode ^ total.hashCode ^ isFinished.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -362,10 +326,7 @@ class SearchMatch {
 
   @override
   int get hashCode =>
-      chapterIndex.hashCode ^
-      chapterTitle.hashCode ^
-      position.hashCode ^
-      snippet.hashCode;
+      chapterIndex.hashCode ^ chapterTitle.hashCode ^ position.hashCode ^ snippet.hashCode;
 
   @override
   bool operator ==(Object other) =>

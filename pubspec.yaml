@@ -41,6 +41,7 @@ dependencies:
   flutter_rust_bridge: 2.11.1
   window_manager: ^0.5.1 # 窗口管理
   flutter_dotenv: ^6.0.0 # DOTENV配置
+  flustars: ^2.0.1 # Dart常用工具类库
 
   # 状态管理
   get: ^4.7.3 # 轻量级状态管理和路由库
@@ -75,7 +76,7 @@ dependencies:
   flutter_screenutil: ^5.9.3 # 屏幕适配方案
 
   # 设备信息
-  # device_info_plus: ^12.3.0 # 获取设备信息
+  device_info_plus: ^12.3.0 # 获取设备信息
 
 dev_dependencies:
   flutter_test:

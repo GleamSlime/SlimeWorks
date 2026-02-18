@@ -1,6 +1,6 @@
 part of '../app_routes.dart';
 
-/// 小说相关路由：NovelLibrary、NovelReader
+/// 书籍相关路由：NovelLibrary、NovelReader
 @TypedGoRoute<NovelLibraryRoute>(path: '/novel-library')
 class NovelLibraryRoute extends GoRouteData with $NovelLibraryRoute {
   const NovelLibraryRoute();

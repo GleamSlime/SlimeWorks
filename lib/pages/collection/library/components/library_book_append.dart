@@ -4,11 +4,13 @@ import 'package:slime_works/components/animations/state_transition_animation.dar
 import 'package:slime_works/components/dropdown/gooey_dropdown_shader.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/gen/assets.gen.dart';
+import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
 class LibraryBookAppendButton extends StatefulWidget {
   final void Function()? onTap;
+  final NovelLibraryViewModel viewModel;
 
-  const LibraryBookAppendButton({super.key, this.onTap});
+  const LibraryBookAppendButton({super.key, this.onTap, required this.viewModel});
 
   @override
   State<LibraryBookAppendButton> createState() => _LibraryBookAppendButtonState();
@@ -63,7 +65,7 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
       ),
       buttonColor: Theme.of(context).appBarTheme.backgroundColor!,
       cardColor: Theme.of(context).appBarTheme.backgroundColor!,
-      content: const _MessageContent(),
+      content: _MessageContent(viewModel: widget.viewModel),
       buttonRadius: AppTheme.metrics.kSpace32,
       cardOffset: scaleW(30),
       duration: const Duration(milliseconds: 150),
@@ -72,7 +74,9 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
 }
 
 class _MessageContent extends StatelessWidget {
-  const _MessageContent();
+  final NovelLibraryViewModel viewModel;
+
+  const _MessageContent({required this.viewModel});
 
   @override
   Widget build(BuildContext context) {
@@ -95,17 +99,13 @@ class _MessageContent extends StatelessWidget {
             _ImportOptionItem(
               icon: Icons.insert_drive_file_outlined,
               label: '添加单个文件',
-              onTap: () {
-                print('从文件导入');
-              },
+              onTap: viewModel.addSingleNovel,
             ),
             Divider(),
             _ImportOptionItem(
               icon: Icons.folder_outlined,
               label: '扫描文件夹',
-              onTap: () {
-                print('从文件夹导入');
-              },
+              onTap: viewModel.scanFolder,
             ),
           ],
         ),
@@ -167,7 +167,7 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
               SizedBox(width: AppTheme.metrics.kSpace10),
               Expanded(
                 child: Text(
-                  widget.label + (_isHovered ? ' (点击)' : '--'),
+                  widget.label,
                   style: TextStyle(
                     fontSize: AppTheme.metrics.fontSize14,
                     color: Theme.of(context).textTheme.bodyMedium?.color,

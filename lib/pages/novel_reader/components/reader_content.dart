@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'dart:convert';
@@ -45,7 +44,9 @@ class _ReaderContentState extends State<ReaderContent> {
     // 当选中搜索索引变化时强制重建以确保高亮更新（某些 .isNotEmpty 访问可能未触发 Obx 重建）
     ever(widget.controller.selectedSearchIndex, (_) {
       try {
-        debugPrint('[Reader] selectedSearchIndex changed: ${widget.controller.selectedSearchIndex.value}');
+        debugPrint(
+          '[Reader] selectedSearchIndex changed: ${widget.controller.selectedSearchIndex.value}',
+        );
       } catch (e) {}
       if (mounted) setState(() {});
     });
@@ -107,9 +108,16 @@ class _ReaderContentState extends State<ReaderContent> {
     final charsPerLine = (MediaQuery.of(context).size.width - 96) / fontSize;
     final estimatedLine = position / charsPerLine;
     final estimatedOffset = estimatedLine * lineHeight;
-    final targetOffset = (estimatedOffset - lineHeight * 2).clamp(0.0, _scrollController.position.maxScrollExtent);
+    final targetOffset = (estimatedOffset - lineHeight * 2).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
 
-    _scrollController.animateTo(targetOffset, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   // 滚动到当前选中的搜索结果
@@ -154,7 +162,11 @@ class _ReaderContentState extends State<ReaderContent> {
           debugPrint('[Novel UI] content contains class attributes');
         }
         final imgReg = RegExp(r'''<img[^>]*src=["']([^"']+)["']''', caseSensitive: false);
-        final imgs = imgReg.allMatches(currentContent).map((m) => m.group(1)).whereType<String>().toList();
+        final imgs = imgReg
+            .allMatches(currentContent)
+            .map((m) => m.group(1))
+            .whereType<String>()
+            .toList();
         if (imgs.isNotEmpty) {
           debugPrint('[Novel UI] Found image srcs: ${imgs.join(', ')}');
         }
@@ -163,7 +175,10 @@ class _ReaderContentState extends State<ReaderContent> {
       }
 
       // 是否包含 HTML 标签或图片（用于决定默认使用 HTML 渲染或允许切换为纯文本）
-      final containsHtmlTags = RegExp(r'<\s*(p|br|div|span|img|style|h[1-6])\b', caseSensitive: false).hasMatch(currentContent);
+      final containsHtmlTags = RegExp(
+        r'<\s*(p|br|div|span|img|style|h[1-6])\b',
+        caseSensitive: false,
+      ).hasMatch(currentContent);
       final hasImages = currentContent.contains('<img');
       final shouldRenderHtml = containsHtmlTags || hasImages;
 
@@ -189,16 +204,19 @@ class _ReaderContentState extends State<ReaderContent> {
                 Container(
                   padding: const EdgeInsets.only(bottom: 24),
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3))),
+                    border: Border(
+                      bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3)),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         controller.chapters[controller.currentChapterIndex.value].title,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -208,7 +226,10 @@ class _ReaderContentState extends State<ReaderContent> {
                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                           ),
                           const SizedBox(width: 16),
-                          Text('本章 ${currentContent.length} 字', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          Text(
+                            '本章 ${currentContent.length} 字',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          ),
                           const SizedBox(width: 16),
                           Text(
                             '进度 ${((controller.currentChapterIndex.value + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
@@ -255,10 +276,13 @@ class _ReaderContentState extends State<ReaderContent> {
                 builder: (context) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     final duration = DateTime.now().difference(buildStart);
-                    debugPrint('[Novel UI] ReaderContent fully rendered in ${duration.inMilliseconds}ms');
+                    debugPrint(
+                      '[Novel UI] ReaderContent fully rendered in ${duration.inMilliseconds}ms',
+                    );
 
                     // 如果有选中的搜索结果，滚动到该位置
-                    if (controller.selectedSearchIndex.value >= 0 && controller.searchMatches.isNotEmpty) {
+                    if (controller.selectedSearchIndex.value >= 0 &&
+                        controller.searchMatches.isNotEmpty) {
                       final match = controller.searchMatches[controller.selectedSearchIndex.value];
                       if (match.chapterIndex.toInt() == controller.currentChapterIndex.value) {
                         _scrollToSearchResult(match.position.toInt());
@@ -288,7 +312,9 @@ class _ReaderContentState extends State<ReaderContent> {
 
                   // 如果内容包含 HTML（或图片），使用 HTML 渲染（优先级最高）
                   if (shouldRenderHtml) {
-                    debugPrint('[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)');
+                    debugPrint(
+                      '[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)',
+                    );
 
                     // 检查是否有缓存的已处理HTML
                     final currentChapterIdx = controller.currentChapterIndex.value;
@@ -306,18 +332,24 @@ class _ReaderContentState extends State<ReaderContent> {
 
                       if (hasSearch && controller.searchMatches.isNotEmpty) {
                         final chapterMatches = controller.searchMatches
-                            .where((m) => m.chapterIndex.toInt() == controller.currentChapterIndex.value)
+                            .where(
+                              (m) => m.chapterIndex.toInt() == controller.currentChapterIndex.value,
+                            )
                             .toList();
                         if (chapterMatches.isNotEmpty) {
                           // 若当前有选中的搜索结果并且在本章节，计算它是本章节中第几个匹配
                           int? selectedOccurrence;
-                          if (controller.selectedSearchIndex.value >= 0 && controller.selectedSearchIndex.value < controller.searchMatches.length) {
-                            final sel = controller.searchMatches[controller.selectedSearchIndex.value];
+                          if (controller.selectedSearchIndex.value >= 0 &&
+                              controller.selectedSearchIndex.value <
+                                  controller.searchMatches.length) {
+                            final sel =
+                                controller.searchMatches[controller.selectedSearchIndex.value];
                             if (sel.chapterIndex.toInt() == controller.currentChapterIndex.value) {
                               // 计算选中的是本章节的第几个匹配（从0开始）
                               int occurrenceInChapter = 0;
                               for (int i = 0; i < controller.selectedSearchIndex.value; i++) {
-                                if (controller.searchMatches[i].chapterIndex.toInt() == controller.currentChapterIndex.value) {
+                                if (controller.searchMatches[i].chapterIndex.toInt() ==
+                                    controller.currentChapterIndex.value) {
                                   occurrenceInChapter++;
                                 }
                               }
@@ -331,7 +363,11 @@ class _ReaderContentState extends State<ReaderContent> {
                           debugPrint(
                             '[Reader] Preparing HTML highlight: keyword="$keyword" selectedOccurrence=$selectedOccurrence chapterMatches=${chapterMatches.length}',
                           );
-                          htmlData = _highlightHtml(htmlData, keyword, selectedOccurrence: selectedOccurrence);
+                          htmlData = _highlightHtml(
+                            htmlData,
+                            keyword,
+                            selectedOccurrence: selectedOccurrence,
+                          );
                         }
                       }
                       // 将本地 file:// 图片替换为 base64 data URL，以避免依赖 flutter_html 的不同版本自定义图片 API
@@ -339,7 +375,10 @@ class _ReaderContentState extends State<ReaderContent> {
 
                       // 如果 HTML 中没有段落/换行/div 标签，说明内容可能是带换行的纯文本。
                       // 把连续空行转换为段落 (<p>..</p>)，并把单个换行转换为 <br/> ，以便 flutter_html 正确渲染段落。
-                      final hasParagraphLike = RegExp(r'<\s*(p|br|div)\b', caseSensitive: false).hasMatch(embeddedHtml);
+                      final hasParagraphLike = RegExp(
+                        r'<\s*(p|br|div)\b',
+                        caseSensitive: false,
+                      ).hasMatch(embeddedHtml);
                       if (!hasParagraphLike) {
                         try {
                           String t = embeddedHtml.trim();
@@ -348,13 +387,17 @@ class _ReaderContentState extends State<ReaderContent> {
                           // 将剩余单个换行转为 <br/>
                           t = t.replaceAll(RegExp(r'\r?\n'), '<br/>');
                           embeddedHtml = '<p>$t</p>';
-                          debugPrint('[Reader][HTMLTransform] converted plain newlines to <p>/<br/>');
+                          debugPrint(
+                            '[Reader][HTMLTransform] converted plain newlines to <p>/<br/>',
+                          );
                         } catch (e) {
                           debugPrint('[Reader][HTMLTransform] failed: $e');
                         }
                       }
 
-                      final htmlProcessDuration = DateTime.now().difference(htmlProcessStart).inMilliseconds;
+                      final htmlProcessDuration = DateTime.now()
+                          .difference(htmlProcessStart)
+                          .inMilliseconds;
                       debugPrint('[Reader] HTML processing took ${htmlProcessDuration}ms');
 
                       // 缓存处理后的HTML（仅在无搜索时缓存）
@@ -371,8 +414,14 @@ class _ReaderContentState extends State<ReaderContent> {
                       String plain = embeddedHtml;
 
                       // 将常见的块级或换行标签替换为换行符，保留段落分隔
-                      plain = plain.replaceAll(RegExp(r'</p>|<br\s*/?>|</div>|</h[1-6]>', caseSensitive: false), '\n\n');
-                      plain = plain.replaceAll(RegExp(r'<p[^>]*>|<div[^>]*>|<h[1-6][^>]*>', caseSensitive: false), '\n\n');
+                      plain = plain.replaceAll(
+                        RegExp(r'</p>|<br\s*/?>|</div>|</h[1-6]>', caseSensitive: false),
+                        '\n\n',
+                      );
+                      plain = plain.replaceAll(
+                        RegExp(r'<p[^>]*>|<div[^>]*>|<h[1-6][^>]*>', caseSensitive: false),
+                        '\n\n',
+                      );
 
                       // 移除剩余的 HTML 标签
                       plain = plain.replaceAll(RegExp(r'<[^>]+>'), '');
@@ -408,8 +457,12 @@ class _ReaderContentState extends State<ReaderContent> {
 
                       // 调试输出：记录纯文本长度、是否包含换行，以及前 400 字符样例
                       try {
-                        debugPrint('[Reader][PlainDebug] length=${plain.length} containsNewline=${plain.contains('\n')}');
-                        debugPrint('[Reader][PlainDebug] sample=${plain.substring(0, plain.length.clamp(0, 400))}');
+                        debugPrint(
+                          '[Reader][PlainDebug] length=${plain.length} containsNewline=${plain.contains('\n')}',
+                        );
+                        debugPrint(
+                          '[Reader][PlainDebug] sample=${plain.substring(0, plain.length.clamp(0, 400))}',
+                        );
                       } catch (e) {
                         debugPrint('[Reader][PlainDebug] debug print failed: $e');
                       }
@@ -420,12 +473,28 @@ class _ReaderContentState extends State<ReaderContent> {
 
                     // Debug: 统计嵌入 HTML 中的段落/换行标签数量，帮助定位为何没有换行
                     try {
-                      final pOpen = RegExp(r'<p\b', caseSensitive: false).allMatches(embeddedHtml).length;
-                      final pClose = RegExp(r'</p>', caseSensitive: false).allMatches(embeddedHtml).length;
-                      final brs = RegExp(r'<br\b', caseSensitive: false).allMatches(embeddedHtml).length;
-                      final divs = RegExp(r'<div\b', caseSensitive: false).allMatches(embeddedHtml).length;
-                      debugPrint('[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs');
-                      debugPrint('[Reader][HTMLDebug] sample=${embeddedHtml.substring(0, embeddedHtml.length.clamp(0, 800))}');
+                      final pOpen = RegExp(
+                        r'<p\b',
+                        caseSensitive: false,
+                      ).allMatches(embeddedHtml).length;
+                      final pClose = RegExp(
+                        r'</p>',
+                        caseSensitive: false,
+                      ).allMatches(embeddedHtml).length;
+                      final brs = RegExp(
+                        r'<br\b',
+                        caseSensitive: false,
+                      ).allMatches(embeddedHtml).length;
+                      final divs = RegExp(
+                        r'<div\b',
+                        caseSensitive: false,
+                      ).allMatches(embeddedHtml).length;
+                      debugPrint(
+                        '[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs',
+                      );
+                      debugPrint(
+                        '[Reader][HTMLDebug] sample=${embeddedHtml.substring(0, embeddedHtml.length.clamp(0, 800))}',
+                      );
                     } catch (e) {
                       debugPrint('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
                     }
@@ -438,16 +507,26 @@ class _ReaderContentState extends State<ReaderContent> {
                           try {
                             final uri = Uri.tryParse(url);
                             final path = uri?.path ?? url;
-                            final basename = path.split('/').where((s) => s.isNotEmpty).toList().isNotEmpty ? path.split('/').last : path;
+                            final basename =
+                                path.split('/').where((s) => s.isNotEmpty).toList().isNotEmpty
+                                ? path.split('/').last
+                                : path;
                             final target = controller.chapters.indexWhere(
-                              (c) => c.id.endsWith(basename) || c.id.contains(basename) || c.title.contains(basename),
+                              (c) =>
+                                  c.id.endsWith(basename) ||
+                                  c.id.contains(basename) ||
+                                  c.title.contains(basename),
                             );
                             if (target != -1) {
                               if (target == controller.currentChapterIndex.value) {
                                 // If it's the same chapter, do nothing (or could scroll to anchor if implemented)
-                                debugPrint('[Reader] Link tapped points to current chapter: $basename');
+                                debugPrint(
+                                  '[Reader] Link tapped points to current chapter: $basename',
+                                );
                               } else {
-                                debugPrint('[Reader] Link tapped, navigating to chapter index $target (basename=$basename)');
+                                debugPrint(
+                                  '[Reader] Link tapped, navigating to chapter index $target (basename=$basename)',
+                                );
                                 controller.goToChapter(target);
                               }
                             } else {
@@ -463,15 +542,27 @@ class _ReaderContentState extends State<ReaderContent> {
                             lineHeight: LineHeight(1.8),
                             color: Theme.of(context).textTheme.bodyLarge?.color,
                           ),
-                          'p': Style(display: Display.block, lineHeight: LineHeight(2.8), padding: HtmlPaddings.only(bottom: 16)),
-                          'div': Style(display: Display.block, lineHeight: LineHeight(1.8), padding: HtmlPaddings.only(bottom: 16)),
+                          'p': Style(
+                            display: Display.block,
+                            lineHeight: LineHeight(2.8),
+                            padding: HtmlPaddings.only(bottom: 16),
+                          ),
+                          'div': Style(
+                            display: Display.block,
+                            lineHeight: LineHeight(1.8),
+                            padding: HtmlPaddings.only(bottom: 16),
+                          ),
                           'span': Style(display: Display.inline),
                           'strong': Style(fontWeight: FontWeight.bold),
                           'b': Style(fontWeight: FontWeight.bold),
                           'em': Style(fontStyle: FontStyle.italic),
                           'i': Style(fontStyle: FontStyle.italic),
                           'u': Style(textDecoration: TextDecoration.underline),
-                          'mark': Style(backgroundColor: Colors.yellow.withOpacity(0.5), color: Colors.orange.shade900, fontWeight: FontWeight.bold),
+                          'mark': Style(
+                            backgroundColor: Colors.yellow.withOpacity(0.5),
+                            color: Colors.orange.shade900,
+                            fontWeight: FontWeight.bold,
+                          ),
                           'mark_selected': Style(
                             backgroundColor: Colors.orange.withOpacity(0.5),
                             color: Colors.orange.shade900,
@@ -485,11 +576,18 @@ class _ReaderContentState extends State<ReaderContent> {
                               // 给选中的搜索结果添加Key，用于滚动定位
                               return Container(
                                 key: _searchTargetKey,
-                                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.5), borderRadius: BorderRadius.circular(2)),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 child: Text(
                                   extensionContext.innerHtml,
-                                  style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.bold, fontSize: controller.fontSize.value),
+                                  style: TextStyle(
+                                    color: Colors.orange.shade900,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: controller.fontSize.value,
+                                  ),
                                 ),
                               );
                             },
@@ -524,10 +622,19 @@ class _ReaderContentState extends State<ReaderContent> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (controller.hasPreviousChapter())
-                    TextButton.icon(onPressed: controller.previousChapter, icon: const Icon(Icons.chevron_left), label: const Text('上一章')),
-                  if (controller.hasPreviousChapter() && controller.hasNextChapter()) const SizedBox(width: 16),
+                    TextButton.icon(
+                      onPressed: controller.previousChapter,
+                      icon: const Icon(Icons.chevron_left),
+                      label: const Text('上一章'),
+                    ),
+                  if (controller.hasPreviousChapter() && controller.hasNextChapter())
+                    const SizedBox(width: 16),
                   if (controller.hasNextChapter())
-                    TextButton.icon(onPressed: controller.nextChapter, icon: const Icon(Icons.chevron_right), label: const Text('下一章')),
+                    TextButton.icon(
+                      onPressed: controller.nextChapter,
+                      icon: const Icon(Icons.chevron_right),
+                      label: const Text('下一章'),
+                    ),
                 ],
               ),
 
@@ -545,19 +652,28 @@ class _ReaderContentState extends State<ReaderContent> {
     final currentChapterIndex = controller.currentChapterIndex.value;
 
     // 获取当前章节的搜索匹配
-    final chapterMatches = controller.searchMatches.where((m) => m.chapterIndex.toInt() == currentChapterIndex).toList();
+    final chapterMatches = controller.searchMatches
+        .where((m) => m.chapterIndex.toInt() == currentChapterIndex)
+        .toList();
 
     if (chapterMatches.isEmpty) {
       return SelectableText(
         content,
-        style: TextStyle(fontSize: controller.fontSize.value, height: 1.8, letterSpacing: 0.5, color: Theme.of(context).textTheme.bodyLarge?.color),
+        style: TextStyle(
+          fontSize: controller.fontSize.value,
+          height: 1.8,
+          letterSpacing: 0.5,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
       );
     }
 
     // 调试：记录匹配信息与选中索引，帮助定位高亮为何未出现
     try {
       final selIdx = controller.selectedSearchIndex.value;
-      debugPrint('[Reader] _buildHighlightedText: chapterMatches=${chapterMatches.length} selectedSearchIndex=$selIdx');
+      debugPrint(
+        '[Reader] _buildHighlightedText: chapterMatches=${chapterMatches.length} selectedSearchIndex=$selIdx',
+      );
       for (int i = 0; i < chapterMatches.length; i++) {
         final m = chapterMatches[i];
         debugPrint('[Reader] match[$i] pos=${m.position} snippet="${m.snippet}"');
@@ -578,7 +694,9 @@ class _ReaderContentState extends State<ReaderContent> {
     int? currentSelectedInChapter;
     if (selectedIndex >= 0 && selectedIndex < controller.searchMatches.length) {
       final selectedMatch = controller.searchMatches[selectedIndex];
-      currentSelectedInChapter = chapterMatches.indexWhere((m) => m.position == selectedMatch.position);
+      currentSelectedInChapter = chapterMatches.indexWhere(
+        (m) => m.position == selectedMatch.position,
+      );
     }
 
     for (int i = 0; i < chapterMatches.length; i++) {
@@ -642,7 +760,9 @@ class _ReaderContentState extends State<ReaderContent> {
         }
 
         if (!resolved) {
-          debugPrint('[Reader] Warning: could not resolve non-empty highlight for match at pos=${match.position}. Skipping highlight.');
+          debugPrint(
+            '[Reader] Warning: could not resolve non-empty highlight for match at pos=${match.position}. Skipping highlight.',
+          );
           continue;
         }
       }
@@ -664,7 +784,9 @@ class _ReaderContentState extends State<ReaderContent> {
 
       // 添加高亮文本（黄色文字+淡黄色背景）
       final isSelected = i == currentSelectedInChapter;
-      debugPrint('[Reader] building span for match[$i]: start=$matchStart end=$matchEnd isSelected=$isSelected');
+      debugPrint(
+        '[Reader] building span for match[$i]: start=$matchStart end=$matchEnd isSelected=$isSelected',
+      );
       spans.add(
         TextSpan(
           text: content.substring(matchStart, matchEnd),
@@ -672,7 +794,9 @@ class _ReaderContentState extends State<ReaderContent> {
             fontSize: controller.fontSize.value,
             height: 1.8,
             letterSpacing: 0.5,
-            backgroundColor: isSelected ? Colors.orange.withOpacity(0.5) : Colors.yellow.withOpacity(0.3),
+            backgroundColor: isSelected
+                ? Colors.orange.withOpacity(0.5)
+                : Colors.yellow.withOpacity(0.3),
             color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
           ),
@@ -687,7 +811,12 @@ class _ReaderContentState extends State<ReaderContent> {
       spans.add(
         TextSpan(
           text: content.substring(lastEnd),
-          style: TextStyle(fontSize: controller.fontSize.value, height: 1.8, letterSpacing: 0.5, color: Theme.of(context).textTheme.bodyLarge?.color),
+          style: TextStyle(
+            fontSize: controller.fontSize.value,
+            height: 1.8,
+            letterSpacing: 0.5,
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+          ),
         ),
       );
     }
@@ -705,7 +834,9 @@ class _ReaderContentState extends State<ReaderContent> {
     final escaped = RegExp.escape(keyword);
 
     try {
-      debugPrint('[Reader] _highlightHtml start: keyword="$keyword" selectedOccurrence=$selectedOccurrence');
+      debugPrint(
+        '[Reader] _highlightHtml start: keyword="$keyword" selectedOccurrence=$selectedOccurrence',
+      );
 
       // 构建纯文本到 HTML 索引的映射：plainIndex -> htmlIndex
       final plainBuffer = StringBuffer();
@@ -747,7 +878,9 @@ class _ReaderContentState extends State<ReaderContent> {
       // 使用传入的选中序号
       final selectedOccurrenceIndex = selectedOccurrence;
 
-      debugPrint('[Reader] _highlightHtml: plainLen=${plain.length} matches=${allMatches.length} selectedOcc=$selectedOccurrenceIndex');
+      debugPrint(
+        '[Reader] _highlightHtml: plainLen=${plain.length} matches=${allMatches.length} selectedOcc=$selectedOccurrenceIndex',
+      );
 
       // 将纯文本匹配映射回 HTML 索引区间
       final List<Map<String, dynamic>> intervals = [];
@@ -759,7 +892,12 @@ class _ReaderContentState extends State<ReaderContent> {
         final htmlStart = plainToHtml[pStart];
         final htmlEndIndex = plainToHtml[pEnd - 1];
         final htmlEnd = htmlEndIndex + 1; // exclusive
-        intervals.add({'start': htmlStart, 'end': htmlEnd, 'selected': selectedOccurrenceIndex == idx, 'occurrence': idx});
+        intervals.add({
+          'start': htmlStart,
+          'end': htmlEnd,
+          'selected': selectedOccurrenceIndex == idx,
+          'occurrence': idx,
+        });
       }
 
       if (intervals.isEmpty) return html;
@@ -798,7 +936,10 @@ class _ReaderContentState extends State<ReaderContent> {
     } catch (e) {
       debugPrint('[Reader] _highlightHtml error: $e');
       // 兜底：回退到简单替换
-      return html.replaceAllMapped(RegExp('($escaped)', caseSensitive: false), (m) => '<mark>${m[0]}</mark>');
+      return html.replaceAllMapped(
+        RegExp('($escaped)', caseSensitive: false),
+        (m) => '<mark>${m[0]}</mark>',
+      );
     }
   }
 
@@ -819,7 +960,8 @@ class _ReaderContentState extends State<ReaderContent> {
         }
 
         int q = srcPos + srcKey.length;
-        while (q < out.length && (out[q] == ' ' || out[q] == '\t' || out[q] == '\n' || out[q] == '\r')) {
+        while (q < out.length &&
+            (out[q] == ' ' || out[q] == '\t' || out[q] == '\n' || out[q] == '\r')) {
           q++;
         }
         if (q >= out.length) break;
@@ -839,7 +981,9 @@ class _ReaderContentState extends State<ReaderContent> {
 
         try {
           final lower = src.toLowerCase();
-          if (lower.startsWith('data:') || lower.startsWith('http:') || lower.startsWith('https:')) {
+          if (lower.startsWith('data:') ||
+              lower.startsWith('http:') ||
+              lower.startsWith('https:')) {
             idx = endQuote + 1;
             continue;
           }
@@ -872,14 +1016,19 @@ class _ReaderContentState extends State<ReaderContent> {
               final parts = after.split(Platform.pathSeparator);
               if (parts.isNotEmpty) {
                 final novelId = parts[0];
-                final baseDir = Directory('${path.substring(0, markerIdx + marker.length)}$novelId');
+                final baseDir = Directory(
+                  '${path.substring(0, markerIdx + marker.length)}$novelId',
+                );
                 if (baseDir.existsSync()) {
                   final basename = path.split(Platform.pathSeparator).last;
                   try {
                     final found = baseDir
                         .listSync(recursive: true)
                         .whereType<File>()
-                        .firstWhere((f) => f.path.split(Platform.pathSeparator).last == basename, orElse: () => File(''));
+                        .firstWhere(
+                          (f) => f.path.split(Platform.pathSeparator).last == basename,
+                          orElse: () => File(''),
+                        );
                     if (found.path.isNotEmpty && found.existsSync()) {
                       file = found;
                       path = file.path;

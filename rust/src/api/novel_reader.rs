@@ -93,49 +93,49 @@ fn convert_search_match(m: novel_reader::api::SearchMatch) -> SearchMatch {
     }
 }
 
-/// 扫描文件夹获取小说列表
+/// 扫描文件夹获取书籍列表
 #[frb(sync)]
 pub fn scan_novels_folder(folder_path: String) -> anyhow::Result<Vec<NovelMetadata>> {
     let novels = novel_reader::scan_novels_folder(folder_path).map_err(|e| anyhow::anyhow!(e))?;
     Ok(novels.into_iter().map(convert_metadata).collect())
 }
 
-/// 获取所有小说列表
+/// 获取所有书籍列表
 #[frb(sync)]
 pub fn get_all_novels() -> anyhow::Result<Vec<NovelMetadata>> {
     let novels = novel_reader::get_all_novels().map_err(|e| anyhow::anyhow!(e))?;
     Ok(novels.into_iter().map(convert_metadata).collect())
 }
 
-/// 添加单个小说
+/// 添加书籍（支持单个路径或多路径）
 #[frb(sync)]
-pub fn add_novel(file_path: String) -> anyhow::Result<NovelMetadata> {
-    let novel = novel_reader::add_novel(file_path).map_err(|e| anyhow::anyhow!(e))?;
-    Ok(convert_metadata(novel))
+pub fn add_novel(file_paths: Vec<String>) -> anyhow::Result<Vec<NovelMetadata>> {
+    let novels = novel_reader::add_novel(file_paths).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(novels.into_iter().map(convert_metadata).collect())
 }
 
-/// 从库中移除小说
+/// 从库中移除书籍
 #[frb(sync)]
 pub fn remove_novel(novel_id: String) -> anyhow::Result<()> {
     novel_reader::remove_novel(novel_id).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
-/// 从库中移除小说及其文件
+/// 从库中移除书籍及其文件
 #[frb(sync)]
 pub fn remove_novel_with_file(novel_id: String) -> anyhow::Result<()> {
     novel_reader::remove_novel_with_file(novel_id).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
-/// 清空所有小说
+/// 清空所有书籍
 #[frb(sync)]
 pub fn clear_all_novels() -> anyhow::Result<()> {
     novel_reader::clear_all_novels().map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
-/// 获取小说的完整内容（包含所有章节）
+/// 获取书籍的完整内容（包含所有章节）
 pub fn get_novel_content(file_path: String) -> anyhow::Result<NovelContent> {
     let content = novel_reader::get_novel_content(file_path).map_err(|e| anyhow::anyhow!(e))?;
     Ok(convert_content(content))
@@ -146,7 +146,7 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> anyhow::R
     novel_reader::get_chapter_content(file_path, chapter_index).map_err(|e| anyhow::anyhow!(e))
 }
 
-/// 在小说中搜索关键词
+/// 在书籍中搜索关键词
 pub fn search_in_novel(file_path: String, keyword: String) -> anyhow::Result<Vec<SearchMatch>> {
     let matches =
         novel_reader::search_in_novel(file_path, keyword).map_err(|e| anyhow::anyhow!(e))?;
@@ -200,28 +200,28 @@ pub fn delete_folder(folder_id: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 移动小说到文件夹
+/// 移动书籍到文件夹
 #[frb(sync)]
 pub fn move_novel_to_folder(novel_id: String, folder_id: Option<String>) -> anyhow::Result<()> {
     novel_reader::move_novel_to_folder(novel_id, folder_id).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
-/// 更新小说排序
+/// 更新书籍排序
 #[frb(sync)]
 pub fn update_novel_order(novel_id: String, order: i32) -> anyhow::Result<()> {
     novel_reader::update_novel_order(novel_id, order).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
-/// 批量更新小说排序
+/// 批量更新书籍排序
 #[frb(sync)]
 pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> anyhow::Result<()> {
     novel_reader::batch_update_novel_orders(novel_ids).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
-/// 小说搜索结果
+/// 书籍搜索结果
 #[derive(Debug, Clone)]
 pub struct NovelSearchResult {
     pub novel: NovelMetadata,
@@ -264,7 +264,7 @@ pub fn cancel_search() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 在所有小说中搜索关键词（批量搜索，支持进度反馈和取消）
+/// 在所有书籍中搜索关键词（批量搜索，支持进度反馈和取消）
 pub fn search_in_all_novels_batched(
     keyword: String,
     batch_size: usize,
@@ -277,7 +277,7 @@ pub fn search_in_all_novels_batched(
         .collect())
 }
 
-/// 在所有小说中搜索关键词（批量搜索，性能优化）
+/// 在所有书籍中搜索关键词（批量搜索，性能优化）
 pub fn search_in_all_novels(keyword: String) -> anyhow::Result<Vec<NovelSearchResult>> {
     let results = novel_reader::search_in_all_novels(keyword).map_err(|e| anyhow::anyhow!(e))?;
     Ok(results.into_iter().map(convert_search_result).collect())

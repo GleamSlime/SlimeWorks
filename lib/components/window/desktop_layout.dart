@@ -76,7 +76,7 @@ class DesktopLayout extends StatelessWidget {
       //       SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '主题测试', route: '/theme-preview'),
       //       SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: 'WS测试', route: '/websocket-test'),
       //       SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: 'HTTP测试', route: '/http-bridge-test'),
-      //       SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '小说库测试', route: '/novel-library'),
+      //       SidebarMenuItem(icon: Assets.image.svg.menuAggregation, label: '书籍库测试', route: '/novel-library'),
       //     ],
       //   ),
       demoSidebarGroup,
@@ -116,12 +116,18 @@ class DesktopLayout extends StatelessWidget {
               child: Column(
                 children: [
                   Container(
-                    padding: EdgeInsets.only(right: AppTheme.metrics.kSpace16, top: AppTheme.metrics.kSpace4),
+                    padding: EdgeInsets.only(
+                      right: AppTheme.metrics.kSpace16,
+                      top: AppTheme.metrics.kSpace4,
+                    ),
                     height: scaleW(60),
                     child: Row(
                       spacing: AppTheme.metrics.kSpace32,
                       mainAxisAlignment: MainAxisAlignment.end,
-                      children: [head ?? SizedBox.shrink(), if (Platform.isWindows) const WindowsWindowButtons()],
+                      children: [
+                        head ?? SizedBox.shrink(),
+                        if (Platform.isWindows) const WindowsWindowButtons(),
+                      ],
                     ),
                   ),
                   Expanded(child: child),
@@ -161,7 +167,10 @@ class MobileLayout extends StatelessWidget {
                 : PreferredSize(
                     preferredSize: Size.fromHeight(scaleW(toolsHeight)),
                     child: Container(
-                      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8, horizontal: AppTheme.metrics.kSpace12),
+                      padding: EdgeInsets.symmetric(
+                        vertical: AppTheme.metrics.kSpace8,
+                        horizontal: AppTheme.metrics.kSpace12,
+                      ),
                       child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [head]),
                     ),
                   ),
@@ -169,7 +178,11 @@ class MobileLayout extends StatelessWidget {
         ),
         body: Stack(
           children: [
-            AnimatedScale(scale: sidebarExpandScale, duration: const Duration(milliseconds: 120), child: child),
+            AnimatedScale(
+              scale: sidebarExpandScale,
+              duration: const Duration(milliseconds: 120),
+              child: child,
+            ),
             CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),
           ],
         ),

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 /// 注册所有novel_reader的接口到HTTP Bridge
 pub async fn register_all_handlers() -> anyhow::Result<()> {
-    // 获取所有小说
+    // 获取所有书籍
     http_bridge::register_handler(
         "novel_reader".to_string(),
         "get_all_novels".to_string(),
@@ -36,21 +36,43 @@ pub async fn register_all_handlers() -> anyhow::Result<()> {
     )
     .await?;
 
-    // 添加小说
+    // 添加书籍（支持传入单个路径或多个路径数组）
     http_bridge::register_handler(
         "novel_reader".to_string(),
         "add_novel".to_string(),
         Arc::new(|params: Value| {
-            let file_path = params["file_path"]
-                .as_str()
-                .ok_or("Missing file_path parameter")?;
+            // 支持两种参数形式：
+            // - "file_paths": ["/path/a", "/path/b"]
+            // - "file_path": "/path/a" （兼容旧客户端）
+            let mut paths: Vec<String> = Vec::new();
 
-            match crate::api::add_novel(file_path.to_string()) {
-                Ok(novel) => Ok(json!({
-                    "id": novel.id,
-                    "title": novel.title,
-                    "author": novel.author,
-                })),
+            if let Some(arr) = params["file_paths"].as_array() {
+                for v in arr.iter() {
+                    if let Some(s) = v.as_str() {
+                        paths.push(s.to_string());
+                    }
+                }
+            } else if let Some(s) = params["file_path"].as_str() {
+                paths.push(s.to_string());
+            } else {
+                return Err("Missing file_path or file_paths parameter".to_string());
+            }
+
+            match crate::api::add_novel(paths) {
+                Ok(novels) => {
+                    let json_novels = novels
+                        .iter()
+                        .map(|novel| {
+                            json!({
+                                "id": novel.id,
+                                "title": novel.title,
+                                "author": novel.author,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
+                    Ok(json!(json_novels))
+                }
                 Err(e) => Err(e),
             }
         }),
@@ -78,7 +100,7 @@ pub async fn register_all_handlers() -> anyhow::Result<()> {
     )
     .await?;
 
-    // 搜索小说内容
+    // 搜索书籍内容
     http_bridge::register_handler(
         "novel_reader".to_string(),
         "search_in_novel".to_string(),

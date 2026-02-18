@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
-/// 小说库页面
+/// 书籍库页面
 class NovelLibraryPage extends StatelessWidget {
   const NovelLibraryPage({super.key});
 
@@ -20,9 +20,17 @@ class NovelLibraryPage extends StatelessWidget {
           // 操作栏
           Row(
             children: [
-              ElevatedButton.icon(onPressed: () => controller.scanFolder(), icon: const Icon(Icons.folder_open), label: const Text('扫描文件夹')),
+              ElevatedButton.icon(
+                onPressed: () => controller.scanFolder(),
+                icon: const Icon(Icons.folder_open),
+                label: const Text('扫描文件夹'),
+              ),
               const SizedBox(width: 12),
-              ElevatedButton.icon(onPressed: () => controller.addSingleNovel(), icon: const Icon(Icons.add), label: const Text('添加单个文件')),
+              ElevatedButton.icon(
+                onPressed: () => controller.addSingleNovel(),
+                icon: const Icon(Icons.add),
+                label: const Text('添加单个文件'),
+              ),
               const SizedBox(width: 12),
               Obx(
                 () => controller.isScanning.value
@@ -31,7 +39,11 @@ class NovelLibraryPage extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                             SizedBox(width: 8),
                             Text('扫描中...'),
                           ],
@@ -43,7 +55,7 @@ class NovelLibraryPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // 小说列表
+          // 书籍列表
           Expanded(
             child: Obx(() {
               if (controller.novels.isEmpty) {
@@ -53,9 +65,9 @@ class NovelLibraryPage extends StatelessWidget {
                     children: [
                       Icon(Icons.book_outlined, size: 64, color: Colors.grey[400]),
                       const SizedBox(height: 16),
-                      Text('暂无小说', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                      Text('暂无书籍', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
                       const SizedBox(height: 8),
-                      Text('点击上方按钮添加小说', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+                      Text('点击上方按钮添加书籍', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
                     ],
                   ),
                 );
@@ -90,7 +102,7 @@ class NovelLibraryPage extends StatelessWidget {
   }
 }
 
-/// 小说卡片组件
+/// 书籍卡片组件
 class _NovelCard extends StatelessWidget {
   final String title;
   final String author;
@@ -135,7 +147,9 @@ class _NovelCard extends StatelessWidget {
                             return Positioned.fill(child: Image.file(f, fit: BoxFit.cover));
                           }
                         } catch (_) {}
-                        return const Center(child: Icon(Icons.book, size: 48, color: Colors.white70));
+                        return const Center(
+                          child: Icon(Icons.book, size: 48, color: Colors.white70),
+                        );
                       })()
                     else
                       Container(
@@ -146,7 +160,9 @@ class _NovelCard extends StatelessWidget {
                             colors: [Colors.blue.shade300, Colors.purple.shade300],
                           ),
                         ),
-                        child: const Center(child: Icon(Icons.book, size: 48, color: Colors.white70)),
+                        child: const Center(
+                          child: Icon(Icons.book, size: 48, color: Colors.white70),
+                        ),
                       ),
 
                     Positioned(
@@ -154,10 +170,17 @@ class _NovelCard extends StatelessWidget {
                       right: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(4)),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                         child: Text(
                           format,
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),

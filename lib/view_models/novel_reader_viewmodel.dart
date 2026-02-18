@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:get/get.dart';
-import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
-/// 小说阅读器 ViewModel
+/// 书籍阅读器 ViewModel
 class NovelReaderViewModel extends GetxController {
   final NovelMetadata novel;
 
@@ -32,10 +31,24 @@ class NovelReaderViewModel extends GetxController {
     loadNovelContent();
   }
 
-  void _showSnack(String title, String message, {SnackPosition? position, Color? backgroundColor, Color? colorText, Duration? duration}) {
+  void _showSnack(
+    String title,
+    String message, {
+    SnackPosition? position,
+    Color? backgroundColor,
+    Color? colorText,
+    Duration? duration,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        Get.snackbar(title, message, snackPosition: position, backgroundColor: backgroundColor, colorText: colorText, duration: duration);
+        Get.snackbar(
+          title,
+          message,
+          snackPosition: position,
+          backgroundColor: backgroundColor,
+          colorText: colorText,
+          duration: duration,
+        );
       } catch (_) {}
     });
   }
@@ -91,7 +104,7 @@ class NovelReaderViewModel extends GetxController {
     }
   }
 
-  /// 加载小说内容
+  /// 加载书籍内容
   Future<void> loadNovelContent() async {
     final startTime = DateTime.now();
     try {
@@ -125,7 +138,9 @@ class NovelReaderViewModel extends GetxController {
         } catch (_) {
           startIndex = 0;
         }
-        debugPrint('[Novel UI] Restoring chapter index $startIndex from progress=${novel.progress}');
+        debugPrint(
+          '[Novel UI] Restoring chapter index $startIndex from progress=${novel.progress}',
+        );
         // 先设置索引以更新 UI 选中状态，再加载章节内容
         currentChapterIndex.value = startIndex;
         debugPrint('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
@@ -133,7 +148,9 @@ class NovelReaderViewModel extends GetxController {
       }
 
       final totalDuration = DateTime.now().difference(startTime);
-      debugPrint('[Novel UI] ========== Total load time: ${totalDuration.inMilliseconds}ms ==========');
+      debugPrint(
+        '[Novel UI] ========== Total load time: ${totalDuration.inMilliseconds}ms ==========',
+      );
     } catch (e, stackTrace) {
       final duration = DateTime.now().difference(startTime);
       debugPrint('[Novel UI] ERROR after ${duration.inMilliseconds}ms: $e');
@@ -157,10 +174,15 @@ class NovelReaderViewModel extends GetxController {
       debugPrint('[Novel UI] Chapter title: ${chapters[index].title}');
 
       final beforeRust = DateTime.now();
-      final content = await getChapterContent(filePath: novel.filePath, chapterIndex: BigInt.from(index));
+      final content = await getChapterContent(
+        filePath: novel.filePath,
+        chapterIndex: BigInt.from(index),
+      );
       final rustDuration = DateTime.now().difference(beforeRust);
 
-      debugPrint('[Novel UI] Chapter loaded in ${rustDuration.inMilliseconds}ms, length: ${content.length} chars');
+      debugPrint(
+        '[Novel UI] Chapter loaded in ${rustDuration.inMilliseconds}ms, length: ${content.length} chars',
+      );
 
       // currentChapterIndex 已由 goToChapter 设置，此处不再重复设置
       currentContent.value = content;
@@ -168,7 +190,9 @@ class NovelReaderViewModel extends GetxController {
       // 更新阅读进度
       final progress = (index + 1) / chapters.length;
       updateReadingProgress(novelId: novel.id, progress: progress);
-      print('[Reader] Updated progress for ${novel.title} to $progress (chapter ${index + 1}/${chapters.length})');
+      print(
+        '[Reader] Updated progress for ${novel.title} to $progress (chapter ${index + 1}/${chapters.length})',
+      );
 
       final totalDuration = DateTime.now().difference(startTime);
       debugPrint('[Novel UI] --- Chapter display ready in ${totalDuration.inMilliseconds}ms ---');
@@ -281,7 +305,9 @@ class NovelReaderViewModel extends GetxController {
       final matches = await searchInNovel(filePath: novel.filePath, keyword: keyword);
       searchMatches.value = matches;
       selectedSearchIndex.value = matches.isNotEmpty ? 0 : -1;
-      debugPrint('[Novel VM] searchKeyword: matches=${matches.length} selectedIndex=${selectedSearchIndex.value}');
+      debugPrint(
+        '[Novel VM] searchKeyword: matches=${matches.length} selectedIndex=${selectedSearchIndex.value}',
+      );
 
       if (matches.isEmpty) {
         _showSnack('搜索', '未找到匹配内容');
@@ -318,7 +344,9 @@ class NovelReaderViewModel extends GetxController {
                 onTap: () {
                   // 切换到该结果并关闭列表
                   selectedSearchIndex.value = index;
-                  debugPrint('[Novel VM] search result tapped: index=$index chapterIndex=${match.chapterIndex}');
+                  debugPrint(
+                    '[Novel VM] search result tapped: index=$index chapterIndex=${match.chapterIndex}',
+                  );
                   final chapterIndex = match.chapterIndex.toInt();
                   Get.back();
 
@@ -362,7 +390,8 @@ class NovelReaderViewModel extends GetxController {
   /// 切换到上一个搜索结果
   void previousSearchResult() {
     if (searchMatches.isEmpty) return;
-    selectedSearchIndex.value = (selectedSearchIndex.value - 1 + searchMatches.length) % searchMatches.length;
+    selectedSearchIndex.value =
+        (selectedSearchIndex.value - 1 + searchMatches.length) % searchMatches.length;
     final idx = selectedSearchIndex.value;
     final chapterIndex = searchMatches[idx].chapterIndex.toInt();
     if (chapterIndex == currentChapterIndex.value) {
@@ -447,7 +476,7 @@ class NovelReaderViewModel extends GetxController {
     );
   }
 
-  /// 在系统文件管理器中显示当前小说文件并选中（若支持）
+  /// 在系统文件管理器中显示当前书籍文件并选中（若支持）
   Future<void> revealFileInFolder() async {
     try {
       final path = novel.filePath;
@@ -471,15 +500,15 @@ class NovelReaderViewModel extends GetxController {
     }
   }
 
-  /// 删除小说
+  /// 删除书籍
   Future<void> _deleteNovel(bool deleteFile) async {
     try {
       if (deleteFile) {
         removeNovelWithFile(novelId: novel.id);
-        _showSnack('成功', '已删除小说及文件');
+        _showSnack('成功', '已删除书籍及文件');
       } else {
         removeNovel(novelId: novel.id);
-        _showSnack('成功', '已删除小说记录');
+        _showSnack('成功', '已删除书籍记录');
       }
 
       // 返回书籍列表

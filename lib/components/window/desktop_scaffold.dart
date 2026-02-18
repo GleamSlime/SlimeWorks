@@ -1,12 +1,11 @@
 import 'dart:io';
-
+import 'package:window_manager/window_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:window_manager/window_manager.dart';
-
 import 'package:slime_works/components/window/screen_top_bar.dart';
 
 class DesktopScaffold extends StatefulWidget {
@@ -45,6 +44,7 @@ class DesktopScaffold extends StatefulWidget {
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       // 恢复上次的窗口位置
       await positionService.restorePosition();
+      AppTheme.resetMetrics();
       // await windowManager.show();
       // await windowManager.focus();
     });

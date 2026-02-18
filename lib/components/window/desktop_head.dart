@@ -36,9 +36,8 @@ class DesktopHeadToolsButton extends StatelessWidget {
           height: size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(size / 4),
+            borderRadius: BorderRadius.circular(size),
             color: theme.appBarTheme.backgroundColor,
-            border: Border.all(color: theme.dividerColor.withAlpha(50)),
             // boxShadow: [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(5))],
           ),
           child: child ?? icon,

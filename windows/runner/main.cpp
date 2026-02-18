@@ -13,6 +13,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // Try to explicitly enable Per-Monitor V2 DPI awareness at process startup.
+  // The application manifest already requests PerMonitorV2, but some
+  // launch paths (debugger / older hosts) may ignore it. Calling the API
+  // here ensures the process is DPI-aware before any windows are created.
+  HMODULE user32 = ::GetModuleHandleA("user32.dll");
+  if (user32) {
+    typedef BOOL(WINAPI* SetProcessDpiAwarenessContextProc)(HANDLE);
+    auto set_dpi_context = reinterpret_cast<SetProcessDpiAwarenessContextProc>(
+        ::GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+    if (set_dpi_context) {
+      // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 is defined as (DPI_AWARENESS_CONTEXT)-4
+      set_dpi_context(reinterpret_cast<HANDLE>(-4));
+    }
+  }
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

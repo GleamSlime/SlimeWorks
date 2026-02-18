@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
-/// 小说阅读器页面
+/// 书籍阅读器页面
 class NovelReaderPage extends StatefulWidget {
   const NovelReaderPage({super.key});
 
@@ -69,7 +69,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                         children: [
                           const Icon(Icons.error_outline, size: 48, color: Colors.red),
                           const SizedBox(height: 16),
-                          Text(controller.errorMessage.value, style: const TextStyle(color: Colors.red)),
+                          Text(
+                            controller.errorMessage.value,
+                            style: const TextStyle(color: Colors.red),
+                          ),
                         ],
                       ),
                     );
@@ -135,7 +138,11 @@ class _ReaderToolbar extends StatelessWidget {
       child: Row(
         children: [
           // 章节列表切换
-          IconButton(icon: const Icon(Icons.menu_book), tooltip: '章节列表', onPressed: controller.toggleChapterList),
+          IconButton(
+            icon: const Icon(Icons.menu_book),
+            tooltip: '章节列表',
+            onPressed: controller.toggleChapterList,
+          ),
           const SizedBox(width: 8),
 
           // 上一章
@@ -150,7 +157,9 @@ class _ReaderToolbar extends StatelessWidget {
           // 章节信息
           Obx(
             () => Text(
-              controller.chapters.isEmpty ? '' : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
+              controller.chapters.isEmpty
+                  ? ''
+                  : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -171,20 +180,44 @@ class _ReaderToolbar extends StatelessWidget {
             if (controller.searchMatches.isNotEmpty) {
               return Row(
                 children: [
-                  IconButton(icon: const Icon(Icons.arrow_upward), tooltip: '上一个搜索结果', onPressed: controller.previousSearchResult),
-                  IconButton(icon: const Icon(Icons.list), tooltip: '搜索结果列表', onPressed: controller.openSearchResultsList),
-                  IconButton(icon: const Icon(Icons.arrow_downward), tooltip: '下一个搜索结果', onPressed: controller.nextSearchResult),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_upward),
+                    tooltip: '上一个搜索结果',
+                    onPressed: controller.previousSearchResult,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.list),
+                    tooltip: '搜索结果列表',
+                    onPressed: controller.openSearchResultsList,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_downward),
+                    tooltip: '下一个搜索结果',
+                    onPressed: controller.nextSearchResult,
+                  ),
                   const SizedBox(width: 8),
                 ],
               );
             }
-            return IconButton(icon: const Icon(Icons.search), tooltip: '搜索', onPressed: controller.showSearchDialog);
+            return IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: '搜索',
+              onPressed: controller.showSearchDialog,
+            );
           }),
 
           // 字体大小
-          IconButton(icon: const Icon(Icons.text_decrease), tooltip: '减小字体', onPressed: controller.decreaseFontSize),
+          IconButton(
+            icon: const Icon(Icons.text_decrease),
+            tooltip: '减小字体',
+            onPressed: controller.decreaseFontSize,
+          ),
           Obx(() => Text('${controller.fontSize.value.toInt()}')),
-          IconButton(icon: const Icon(Icons.text_increase), tooltip: '增大字体', onPressed: controller.increaseFontSize),
+          IconButton(
+            icon: const Icon(Icons.text_increase),
+            tooltip: '增大字体',
+            onPressed: controller.increaseFontSize,
+          ),
         ],
       ),
     );
@@ -256,12 +289,21 @@ class _ReaderContentState extends State<_ReaderContent> {
                 padding: const EdgeInsets.only(bottom: 24),
                 child: Text(
                   controller.chapters[controller.currentChapterIndex.value].title,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
 
             // 正文内容
-            SelectableText(currentContent, style: TextStyle(fontSize: controller.fontSize.value, height: 1.8, letterSpacing: 0.5)),
+            SelectableText(
+              currentContent,
+              style: TextStyle(
+                fontSize: controller.fontSize.value,
+                height: 1.8,
+                letterSpacing: 0.5,
+              ),
+            ),
           ],
         ),
       );

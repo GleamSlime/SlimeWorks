@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-/// 小说卡片组件
+/// 书籍卡片组件
 class NovelCard extends StatelessWidget {
   final String title;
   final String author;
@@ -51,10 +51,17 @@ class NovelCard extends StatelessWidget {
                       right: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Text(
                           format,
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -70,7 +77,9 @@ class NovelCard extends StatelessWidget {
                           child: LinearProgressIndicator(
                             value: progress,
                             backgroundColor: Colors.white.withOpacity(0.3),
-                            valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).primaryColor,
+                            ),
                           ),
                         ),
                       ),
@@ -91,7 +100,9 @@ class NovelCard extends StatelessWidget {
                     assert(() {
                       // 打印宽高信息
                       // ignore: avoid_print
-                      print('[NovelCard] info area constraints: w=${constraints.maxWidth}, h=${constraints.maxHeight}');
+                      print(
+                        '[NovelCard] info area constraints: w=${constraints.maxWidth}, h=${constraints.maxHeight}',
+                      );
                       return true;
                     }());
 
@@ -141,7 +152,11 @@ class NovelCard extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               '阅读记录  已读 ${(progress * 100).toInt()}%',
-                              style: TextStyle(fontSize: 10, color: Theme.of(context).primaryColor, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Theme.of(context).primaryColor,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ],
@@ -157,7 +172,9 @@ class NovelCard extends StatelessWidget {
               height: 40,
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3))),
+                  border: Border(
+                    top: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3)),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -219,7 +236,10 @@ class NovelCard extends StatelessWidget {
               Get.back();
               onDelete();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('删除'),
           ),
         ],

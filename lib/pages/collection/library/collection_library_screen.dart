@@ -1,16 +1,12 @@
+import 'package:get/get.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:slime_works/components/dropdown/gooey_dropdown.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
+
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:slime_works/gen/assets.gen.dart';
-import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_append.dart';
-import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
-import 'package:get/get.dart';
+import 'package:slime_works/pages/collection/library/components/library_book_card.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
 class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
@@ -27,19 +23,22 @@ class _CollectionLibraryScreenState
   @override
   void initState() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ThemeData theme = Theme.of(context);
-
       desktopScreen.setScreenHeadToolsWidget(
         Row(
           spacing: AppTheme.metrics.fontSize8,
           children: [
-            // DesktopHeadToolsButton(
-            //   icon: const Icon(Icons.refresh),
-            //   size: AppTheme.metrics.fontSize34,
-            //   onTap: () {
-            //     // Implement refresh functionality here
-            //   },
-            // ),
+            // 重置书籍库（清空所有书籍）
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.refresh),
+              size: AppTheme.metrics.kSpace40,
+              onTap: viewModel.confirmClearAllNovels,
+            ),
+            // 新增文件夹
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.create_new_folder),
+              size: AppTheme.metrics.kSpace40,
+              onTap: viewModel.createFolder,
+            ),
             // Container(
             //   padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
 
@@ -51,7 +50,7 @@ class _CollectionLibraryScreenState
             //   ),
             //   child: LibraryBookAppendButton(),
             // ),
-            LibraryBookAppendButton(),
+            LibraryBookAppendButton(viewModel: viewModel),
             // GooeyDropdown(dropdownWidth: 260, dropdownHeight: 320, dropdown: YourDropdownContent(), child: Icon(Icons.menu)),
           ],
         ),
@@ -68,44 +67,35 @@ class _CollectionLibraryScreenState
     super.dispose();
   }
 
-  // ==================== ViewModel ====================
-  /// 创建页面对应的 ViewModel（页面关闭销毁）
   @override
   NovelLibraryViewModel createViewModel() => NovelLibraryViewModel();
 
-  /// 长期存在的模型（即便页面关闭也不会销毁）
   late final NovelLibraryViewModel longLivedViewModel = Get.put(
     NovelLibraryViewModel(),
     permanent: true,
   );
 
-  // ==================== UI 构建 ====================
   @override
   Widget buildContent(BuildContext context) {
     return Column(
       children: [
-        Text('当前计数：${viewModel.a}', style: TextStyle(fontSize: AppTheme.metrics.fontSize16)),
-        SizedBox(height: AppTheme.metrics.kSpace8),
-        ElevatedButton(
-          onPressed: () {
-            viewModel.add();
-          },
-          child: const Text('增加计数'),
-        ),
+        Expanded(
+          child: Obx(() {
+            final displayNovels = viewModel.filteredNovels;
 
-        Divider(height: AppTheme.metrics.kSpace32),
-
-        Text(
-          '长期存在的模型计数：${longLivedViewModel.a}',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize16),
-        ),
-        SizedBox(height: AppTheme.metrics.kSpace8),
-        ElevatedButton(
-          onPressed: () {
-            longLivedViewModel.add();
-            setState(() {}); // 手动刷新 UI
-          },
-          child: const Text('增加长期模型计数'),
+            return GridView.builder(
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: scaleW(200),
+                childAspectRatio: 0.65,
+                mainAxisSpacing: AppTheme.metrics.kSpace12,
+                crossAxisSpacing: AppTheme.metrics.kSpace12,
+              ),
+              itemCount: displayNovels.length,
+              itemBuilder: (context, index) {
+                return LibraryBookCard(metadata: displayNovels[index], viewModel: viewModel);
+              },
+            );
+          }),
         ),
       ],
     );

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/gen/assets.gen.dart';
-import 'package:slime_works/pages/backup/demo.dart';
 import 'package:slime_works/pages/capture_screen_page.dart';
 import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
 import 'package:slime_works/pages/collection/picture/collection_picture_screen.dart';
@@ -38,7 +37,7 @@ part 'routes/capture_routers.dart';
 // // 导航到 Dashboard
 // DashboardRoute().go(context);
 
-// // 导航到小说阅读器（带参数）
+// // 导航到书籍阅读器（带参数）
 // NovelReaderRoute($extra: novelMetadata).go(context);
 
 // // Push 导航

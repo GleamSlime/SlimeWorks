@@ -2,7 +2,7 @@
 ///
 /// 功能：
 /// - 扫描指定目录下的 txt、epub 文件（递归）
-/// - 使用 db_module 存储小说元数据
+/// - 使用 db_module 存储书籍元数据
 /// - 解析和渲染 txt、epub 内容
 pub mod api;
 pub mod http_bridge_register;

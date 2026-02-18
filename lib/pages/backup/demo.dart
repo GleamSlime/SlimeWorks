@@ -1,7 +1,6 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class GooeyDropdownDemo extends StatefulWidget {
   const GooeyDropdownDemo({super.key});
@@ -75,7 +74,9 @@ class _GooeyDropdownDemoState extends State<GooeyDropdownDemo> with SingleTicker
 
                     /// 卡片尺寸插值（从按钮大小 → 最终大小）
                     /// 前60%慢速（粘连阶段），后40%快速
-                    final sizeProgress = t < 0.6 ? Curves.easeOut.transform(t / 0.6) * 0.7 : 0.7 + Curves.easeInOut.transform((t - 0.6) / 0.4) * 0.3;
+                    final sizeProgress = t < 0.6
+                        ? Curves.easeOut.transform(t / 0.6) * 0.7
+                        : 0.7 + Curves.easeInOut.transform((t - 0.6) / 0.4) * 0.3;
                     final width = ui.lerpDouble(buttonSize, cardWidth, sizeProgress)!;
                     final height = ui.lerpDouble(buttonSize, cardHeight, sizeProgress)!;
                     final radius = ui.lerpDouble(buttonSize / 2, 18, sizeProgress)!;
@@ -85,7 +86,8 @@ class _GooeyDropdownDemoState extends State<GooeyDropdownDemo> with SingleTicker
 
                     // 不再使用弹跳效果
                     /// Gooey强度（0.5之后减弱）
-                    final gooeyStrength = (t < 0.5 ? t / 0.5 : 1 - ((t - 0.5) / 0.1).clamp(0, 1)).toDouble();
+                    final gooeyStrength = (t < 0.5 ? t / 0.5 : 1 - ((t - 0.5) / 0.1).clamp(0, 1))
+                        .toDouble();
 
                     /// Blur强度（控制粘连效果的强度）- 增大范围以获得更明显的粘连效果
                     final blurAmount = ui.lerpDouble(20, 80, gooeyStrength)!;

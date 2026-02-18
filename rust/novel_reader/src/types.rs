@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// 小说格式
+/// 书籍格式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NovelFormat {
     Txt,
@@ -25,7 +25,7 @@ impl NovelFormat {
     }
 }
 
-/// 小说元数据
+/// 书籍元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NovelMetadata {
     /// 唯一ID
@@ -42,10 +42,16 @@ pub struct NovelMetadata {
     pub file_size: u64,
     /// 最后修改时间
     pub modified_at: DateTime<Utc>,
+    /// 是否收藏
+    pub is_favorite: bool,
+    /// 书籍标签
+    pub tags: Vec<String>,
     /// 添加到库的时间
     pub added_at: DateTime<Utc>,
     /// 阅读进度（0.0 ~ 1.0）
     pub progress: f32,
+    /// 阅读章节ID（如果有）
+    pub current_chapter_id: Option<String>,
     /// 最后阅读时间
     pub last_read_at: Option<DateTime<Utc>>,
     /// 封面图片路径（如果有）
@@ -56,7 +62,7 @@ pub struct NovelMetadata {
     pub custom_order: Option<i32>,
 }
 
-/// 小说章节信息（主要用于 epub）
+/// 书籍章节信息（主要用于 epub）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NovelChapter {
     /// 章节 ID
@@ -69,10 +75,10 @@ pub struct NovelChapter {
     pub content: Option<String>,
 }
 
-/// 小说内容
+/// 书籍内容
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NovelContent {
-    /// 小说ID
+    /// 书籍ID
     pub novel_id: String,
     /// 章节列表（epub 有章节，txt 只有一个章节）
     pub chapters: Vec<NovelChapter>,
@@ -81,9 +87,9 @@ pub struct NovelContent {
 /// 搜索结果项
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
-    /// 小说ID
+    /// 书籍ID
     pub novel_id: String,
-    /// 小说标题
+    /// 书籍标题
     pub title: String,
     /// 匹配的内容片段（高亮显示）
     pub snippet: String,
@@ -98,13 +104,13 @@ pub struct SearchResult {
 pub struct ScanProgress {
     /// 已扫描的文件数
     pub scanned: usize,
-    /// 找到的小说数
+    /// 找到的书籍数
     pub found: usize,
     /// 当前正在处理的文件
     pub current_file: Option<String>,
 }
 
-/// 小说文件夹
+/// 书籍文件夹
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NovelFolder {
     /// 文件夹ID

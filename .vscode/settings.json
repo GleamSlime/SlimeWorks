@@ -6,6 +6,7 @@
     "cfgs",
     "dotenv",
     "epub",
+    "flustars",
     "Getx",
     "pemfile",
     "processthreadsapi",

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 捕获控制面板
 class CaptureControlPanel extends StatelessWidget {
@@ -30,7 +29,9 @@ class CaptureControlPanel extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: isDark ? [const Color(0xFF2E2E2E), const Color(0xFF1E1E1E)] : [const Color(0xFFF8F9FB), const Color(0xFFFFFFFF)],
+          colors: isDark
+              ? [const Color(0xFF2E2E2E), const Color(0xFF1E1E1E)]
+              : [const Color(0xFFF8F9FB), const Color(0xFFFFFFFF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -44,7 +45,9 @@ class CaptureControlPanel extends StatelessWidget {
 
               return Flex(
                 direction: isNarrow ? Axis.vertical : Axis.horizontal,
-                crossAxisAlignment: isNarrow ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
+                crossAxisAlignment: isNarrow
+                    ? CrossAxisAlignment.stretch
+                    : CrossAxisAlignment.center,
                 children: [
                   // 状态指示器
                   Expanded(
@@ -58,14 +61,24 @@ class CaptureControlPanel extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isCapturing ? Colors.green : Colors.grey,
                             shape: BoxShape.circle,
-                            boxShadow: isCapturing ? [BoxShadow(color: Colors.green.withOpacity(0.5), blurRadius: 12, spreadRadius: 2)] : null,
+                            boxShadow: isCapturing
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.green.withOpacity(0.5),
+                                      blurRadius: 12,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(
                             isCapturing ? '捕获中' : '开启捕获',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
                         if (!isNarrow) const SizedBox(width: 24),
@@ -73,9 +86,15 @@ class CaptureControlPanel extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: isCertInstalled ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                              color: isCertInstalled
+                                  ? Colors.green.withOpacity(0.1)
+                                  : Colors.orange.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: isCertInstalled ? Colors.green.withOpacity(0.3) : Colors.orange.withOpacity(0.3)),
+                              border: Border.all(
+                                color: isCertInstalled
+                                    ? Colors.green.withOpacity(0.3)
+                                    : Colors.orange.withOpacity(0.3),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -88,7 +107,11 @@ class CaptureControlPanel extends StatelessWidget {
                                 const SizedBox(width: 6),
                                 Text(
                                   isCertInstalled ? 'CA证书已安装' : 'CA证书未安装',
-                                  style: TextStyle(fontSize: 12, color: isCertInstalled ? Colors.green : Colors.orange, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isCertInstalled ? Colors.green : Colors.orange,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ],
                             ),
@@ -105,15 +128,29 @@ class CaptureControlPanel extends StatelessWidget {
                     runSpacing: 8,
                     alignment: isNarrow ? WrapAlignment.end : WrapAlignment.end,
                     children: [
-                      IconButton.outlined(icon: const Icon(Icons.settings), onPressed: onSettings, tooltip: '设置'),
-                      IconButton.outlined(icon: const Icon(Icons.refresh), onPressed: onRefresh, tooltip: '刷新数据'),
-                      IconButton.outlined(icon: const Icon(Icons.delete_outline), onPressed: onClearData, tooltip: '清除所有数据'),
+                      IconButton.outlined(
+                        icon: const Icon(Icons.settings),
+                        onPressed: onSettings,
+                        tooltip: '设置',
+                      ),
+                      IconButton.outlined(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: onRefresh,
+                        tooltip: '刷新数据',
+                      ),
+                      IconButton.outlined(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: onClearData,
+                        tooltip: '清除所有数据',
+                      ),
                       if (!isCertInstalled)
                         FilledButton.tonalIcon(
                           onPressed: onInstallCertificate,
                           icon: const Icon(Icons.security),
                           label: const Text('安装CA证书'),
-                          style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          ),
                         ),
                       FilledButton.tonalIcon(
                         onPressed: onToggleCapture,
@@ -178,11 +215,17 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('捕获设置', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              '捕获设置',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: isDark ? const Color(0xFF252525) : const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF252525) : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Column(
                 children: [
                   Row(
@@ -227,7 +270,10 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                             border: OutlineInputBorder(),
                           ),
                           items: ['mp4', 'flv', 'ts', 'mkv'].map((format) {
-                            return DropdownMenuItem(value: format, child: Text(format.toUpperCase()));
+                            return DropdownMenuItem(
+                              value: format,
+                              child: Text(format.toUpperCase()),
+                            );
                           }).toList(),
                           onChanged: (value) {
                             if (value != null) {

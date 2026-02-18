@@ -19,6 +19,8 @@ pub fn db_init(db_path: String) -> DbResult<String> {
     let storage = Arc::new(storage);
     *get_db_instance().lock().unwrap() = Some(storage);
 
+    println!("Database initialized at: {}", db_path);
+
     Ok(format!("Database initialized at: {}", db_path))
 }
 

@@ -6,6 +6,8 @@ import 'package:slime_works/main.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
+ThemeMetrics appMetrics = AppTheme.metrics;
+
 class AppTheme {
   AppTheme._();
 
@@ -41,14 +43,20 @@ class AppTheme {
         foregroundColor: LightColors.black100,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: AppTextStyles.h6(color: LightColors.black100, fontWeight: AppFontWeights.semiBold),
+        titleTextStyle: AppTextStyles.h6(
+          color: LightColors.black100,
+          fontWeight: AppFontWeights.semiBold,
+        ),
       ),
 
       // 卡片主题
       cardTheme: CardThemeData(
         color: LightColors.background1,
         elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: LightColors.white80, width: scaleW(0.5)),
+        ),
       ),
 
       // 文本主题
@@ -59,8 +67,14 @@ class AppTheme {
         headlineLarge: AppTextStyles.h4(color: LightColors.black100, fontWeight: FontWeight.w500),
         headlineMedium: AppTextStyles.h5(color: LightColors.black100, fontWeight: FontWeight.w500),
         headlineSmall: AppTextStyles.h6(color: LightColors.black100, fontWeight: FontWeight.w500),
-        titleLarge: AppTextStyles.subtitle1(color: LightColors.black100, fontWeight: FontWeight.w500),
-        titleMedium: AppTextStyles.subtitle2(color: LightColors.black100, fontWeight: FontWeight.w500),
+        titleLarge: AppTextStyles.subtitle1(
+          color: LightColors.black100,
+          fontWeight: FontWeight.w500,
+        ),
+        titleMedium: AppTextStyles.subtitle2(
+          color: LightColors.black100,
+          fontWeight: FontWeight.w500,
+        ),
         bodyLarge: AppTextStyles.body1(color: LightColors.black80, fontWeight: FontWeight.w500),
         bodyMedium: AppTextStyles.body2(color: LightColors.black80, fontWeight: FontWeight.w500),
         bodySmall: AppTextStyles.body3(color: LightColors.black80, fontWeight: FontWeight.w500),
@@ -93,8 +107,14 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: LightColors.background2,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: LightColors.primary, width: 2),
@@ -143,14 +163,20 @@ class AppTheme {
         foregroundColor: DarkColors.white100,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: AppTextStyles.h6(color: DarkColors.white100, fontWeight: AppFontWeights.semiBold),
+        titleTextStyle: AppTextStyles.h6(
+          color: DarkColors.white100,
+          fontWeight: AppFontWeights.semiBold,
+        ),
       ),
 
       // 卡片主题
       cardTheme: CardThemeData(
         color: DarkColors.background2,
         elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: DarkColors.white80, width: scaleW(0.5)),
+        ),
       ),
 
       // 文本主题
@@ -195,8 +221,14 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: DarkColors.background2,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: DarkColors.primary, width: 2),
@@ -224,7 +256,9 @@ class AppTheme {
 
   static LinearGradient sideBarTheme(BuildContext context) {
     return LinearGradient(
-      colors: isLight(context) ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)] : [const Color(0xFF20201E), const Color(0xFF1F1F1D)],
+      colors: isLight(context)
+          ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)]
+          : [const Color(0xFF20201E), const Color(0xFF1F1F1D)],
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
     );
@@ -316,6 +350,10 @@ class ThemeMetrics {
       boxShadow10 = (() {
         final ctx = navigatorKey.currentContext;
         final isDark = ctx != null && Theme.of(ctx).brightness == Brightness.dark;
-        return BoxShadow(color: isDark ? DarkColors.black10 : LightColors.black10, blurRadius: scaleW(8), offset: Offset(0, scaleH(4)));
+        return BoxShadow(
+          color: isDark ? DarkColors.black10 : LightColors.black10,
+          blurRadius: scaleW(8),
+          offset: Offset(0, scaleH(4)),
+        );
       })();
 }

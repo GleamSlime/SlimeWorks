@@ -13,13 +13,13 @@ use crate::types::{
 use db_module;
 use serde_json; // 使用工作区内的 db_module 来持久化元数据
 
-// 全局存储的小说库
+// 全局存储的书籍库
 static NOVEL_LIBRARY: OnceLock<Arc<Mutex<Vec<NovelMetadata>>>> = OnceLock::new();
 
 // 全局存储的文件夹列表
 static FOLDER_LIST: OnceLock<Arc<Mutex<Vec<NovelFolder>>>> = OnceLock::new();
 
-// 内容缓存：存储已解析的小说内容，避免重复解析
+// 内容缓存：存储已解析的书籍内容，避免重复解析
 type ContentCache = Arc<Mutex<HashMap<String, (NovelContent, DateTime<Utc>)>>>;
 static CONTENT_CACHE: OnceLock<ContentCache> = OnceLock::new();
 
@@ -29,7 +29,7 @@ fn get_content_cache() -> &'static ContentCache {
 
 fn get_library() -> &'static Arc<Mutex<Vec<NovelMetadata>>> {
     NOVEL_LIBRARY.get_or_init(|| {
-        // 尝试初始化数据库并从表中加载已保存的小说元数据
+        // 尝试初始化数据库并从表中加载已保存的书籍元数据
         let library = Arc::new(Mutex::new(Vec::new()));
 
         // 选择一个默认数据库路径（用户 HOME 下的 .slimeworks/db.redb），如果 HOME 不可用则用临时目录
@@ -85,7 +85,7 @@ fn get_folder_list() -> &'static Arc<Mutex<Vec<NovelFolder>>> {
     })
 }
 
-/// 扫描文件夹获取小说列表
+/// 扫描文件夹获取书籍列表
 #[frb(sync)]
 pub fn scan_novels_folder(folder_path: String) -> Result<Vec<NovelMetadata>, String> {
     let scanner = DirectoryScanner::new("novels".to_string());
@@ -109,35 +109,50 @@ pub fn scan_novels_folder(folder_path: String) -> Result<Vec<NovelMetadata>, Str
     Ok(novels)
 }
 
-/// 获取所有小说列表
+/// 获取所有书籍列表
 #[frb(sync)]
 pub fn get_all_novels() -> Result<Vec<NovelMetadata>, String> {
     let library = get_library().lock().map_err(|e| e.to_string())?;
     Ok(library.clone())
 }
 
-/// 添加单个小说
+/// 添加多个书籍（支持多路径）
 #[frb(sync)]
-pub fn add_novel(file_path: String) -> Result<NovelMetadata, String> {
+pub fn add_novel(file_paths: Vec<String>) -> Result<Vec<NovelMetadata>, String> {
     let scanner = DirectoryScanner::new("novels".to_string());
-    let novel = scanner.scan_file(&file_path).map_err(|e| e.to_string())?;
 
+    let mut added = Vec::new();
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
-    if let Some(existing) = library.iter_mut().find(|n| n.id == novel.id) {
-        *existing = novel.clone();
-    } else {
-        library.push(novel.clone());
+
+    for path in file_paths.iter() {
+        match scanner.scan_file(path) {
+            Ok(novel) => {
+                // 更新到全局库
+                if let Some(existing) = library.iter_mut().find(|n| n.id == novel.id) {
+                    *existing = novel.clone();
+                } else {
+                    library.push(novel.clone());
+                }
+
+                // 持久化
+                if let Ok(json) = serde_json::to_string(&novel) {
+                    let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+                }
+
+                added.push(novel);
+            }
+            Err(e) => {
+                log::warn!("[Novel] Failed to add {}: {}", path, e);
+                // 继续处理其他文件，不因单个失败而全部失败
+                continue;
+            }
+        }
     }
 
-    // 持久化
-    if let Ok(json) = serde_json::to_string(&novel) {
-        let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
-    }
-
-    Ok(novel)
+    Ok(added)
 }
 
-/// 删除小说
+/// 删除书籍
 #[frb(sync)]
 pub fn remove_novel(novel_id: String) -> Result<bool, String> {
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
@@ -150,7 +165,7 @@ pub fn remove_novel(novel_id: String) -> Result<bool, String> {
     Ok(removed)
 }
 
-/// 删除小说及其文件
+/// 删除书籍及其文件
 #[frb(sync)]
 pub fn remove_novel_with_file(novel_id: String) -> Result<bool, String> {
     // 先获取文件路径
@@ -178,7 +193,7 @@ pub fn remove_novel_with_file(novel_id: String) -> Result<bool, String> {
     Ok(removed)
 }
 
-/// 清空所有小说
+/// 清空所有书籍
 #[frb(sync)]
 pub fn clear_all_novels() -> Result<(), String> {
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
@@ -194,7 +209,7 @@ pub fn clear_all_novels() -> Result<(), String> {
     Ok(())
 }
 
-/// 获取小说内容（带缓存）
+/// 获取书籍内容（带缓存）
 pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     use std::fs;
     use std::time::Instant;
@@ -295,7 +310,7 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     Ok(content)
 }
 
-/// 获取小说章节内容（使用缓存）
+/// 获取书籍章节内容（使用缓存）
 pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<String, String> {
     log::info!(
         "[Novel] Getting chapter {} from {}",
@@ -343,7 +358,7 @@ fn strip_all_html_tags(html: &str) -> String {
     result.to_string()
 }
 
-/// 搜索小说内容中的关键词（使用缓存）
+/// 搜索书籍内容中的关键词（使用缓存）
 pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchMatch>, String> {
     let content = get_novel_content(file_path)?;
     let mut matches = Vec::new();
@@ -455,7 +470,7 @@ pub fn delete_folder(folder_id: String) -> Result<bool, String> {
     if removed {
         let _ = db_module::db_delete("novel_folders".to_string(), folder_id.clone());
 
-        // 将该文件夹下的小说移到根目录
+        // 将该文件夹下的书籍移到根目录
         let mut library = get_library().lock().map_err(|e| e.to_string())?;
         for novel in library.iter_mut() {
             if novel.folder_id.as_ref() == Some(&folder_id) {
@@ -470,7 +485,7 @@ pub fn delete_folder(folder_id: String) -> Result<bool, String> {
     Ok(removed)
 }
 
-/// 移动小说到文件夹
+/// 移动书籍到文件夹
 #[frb(sync)]
 pub fn move_novel_to_folder(novel_id: String, folder_id: Option<String>) -> Result<bool, String> {
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
@@ -489,7 +504,7 @@ pub fn move_novel_to_folder(novel_id: String, folder_id: Option<String>) -> Resu
     }
 }
 
-/// 更新小说排序
+/// 更新书籍排序
 #[frb(sync)]
 pub fn update_novel_order(novel_id: String, order: i32) -> Result<bool, String> {
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
@@ -508,7 +523,7 @@ pub fn update_novel_order(novel_id: String, order: i32) -> Result<bool, String> 
     }
 }
 
-/// 批量更新小说排序
+/// 批量更新书籍排序
 #[frb(sync)]
 pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> Result<(), String> {
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
@@ -527,7 +542,7 @@ pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-/// 搜索结果：包含小说元数据和匹配计数
+/// 搜索结果：包含书籍元数据和匹配计数
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NovelSearchResult {
     pub novel: NovelMetadata,
@@ -560,8 +575,8 @@ pub fn cancel_search() -> Result<(), String> {
     Ok(())
 }
 
-/// 在所有小说中搜索关键词（批量搜索，支持进度反馈和取消）
-/// 分批返回搜索结果，每批处理若干本小说
+/// 在所有书籍中搜索关键词（批量搜索，支持进度反馈和取消）
+/// 分批返回搜索结果，每批处理若干本书籍
 pub fn search_in_all_novels_batched(
     keyword: String,
     batch_size: usize,
@@ -624,7 +639,7 @@ pub fn search_in_all_novels_batched(
                 }
             }
 
-            // 尝试获取小说内容并搜索
+            // 尝试获取书籍内容并搜索
             match get_novel_content(novel.file_path.clone()) {
                 Ok(content) => {
                     let mut match_count = 0;
@@ -677,8 +692,8 @@ pub fn search_in_all_novels_batched(
     Ok(all_batches)
 }
 
-/// 在所有小说中搜索关键词（批量搜索，性能优化）
-/// 返回包含关键词的小说列表及其匹配数
+/// 在所有书籍中搜索关键词（批量搜索，性能优化）
+/// 返回包含关键词的书籍列表及其匹配数
 /// 注意：此函数不支持取消和进度反馈，建议使用 search_in_all_novels_batched
 pub fn search_in_all_novels(keyword: String) -> Result<Vec<NovelSearchResult>, String> {
     if keyword.is_empty() {
@@ -698,13 +713,13 @@ pub fn search_in_all_novels(keyword: String) -> Result<Vec<NovelSearchResult>, S
 
     let mut results = Vec::new();
 
-    // 并发搜索所有小说
+    // 并发搜索所有书籍
     use rayon::prelude::*;
 
     let search_results: Vec<_> = novels
         .par_iter()
         .filter_map(|novel| {
-            // 尝试获取小说内容并搜索
+            // 尝试获取书籍内容并搜索
             match get_novel_content(novel.file_path.clone()) {
                 Ok(content) => {
                     let mut match_count = 0;
@@ -758,7 +773,7 @@ pub struct ScanBatchResult {
 }
 
 /// 批量扫描文件夹（分批返回结果，避免阻塞）
-/// 每次返回一批扫描的小说，前端可以逐步显示
+/// 每次返回一批扫描的书籍，前端可以逐步显示
 pub fn scan_novels_folder_batched(
     folder_path: String,
     batch_size: usize,

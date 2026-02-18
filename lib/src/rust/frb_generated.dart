@@ -104,7 +104,9 @@ abstract class RustLibApi extends BaseApi {
     required FFmpegConfig config,
   });
 
-  NovelMetadata crateApiNovelReaderAddNovel({required String filePath});
+  List<NovelMetadata> crateApiNovelReaderAddNovel({
+    required List<String> filePaths,
+  });
 
   void crateApiNovelReaderBatchUpdateNovelOrders({
     required List<String> novelIds,
@@ -245,7 +247,7 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiCaptureIsProxyRunning({String? installDir});
 
-  Future<bool> crateApiCaptureIsRunningAsAdministrator();
+  bool crateApiCaptureIsRunningAsAdministrator();
 
   Future<void> crateApiLoggerLogDebug({required String message});
 
@@ -642,27 +644,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "FFmpegManager_new", argNames: ["config"]);
 
   @override
-  NovelMetadata crateApiNovelReaderAddNovel({required String filePath}) {
+  List<NovelMetadata> crateApiNovelReaderAddNovel({
+    required List<String> filePaths,
+  }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(filePath, serializer);
+          sse_encode_list_String(filePaths, serializer);
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_novel_metadata,
+          decodeSuccessData: sse_decode_list_novel_metadata,
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiNovelReaderAddNovelConstMeta,
-        argValues: [filePath],
+        argValues: [filePaths],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiNovelReaderAddNovelConstMeta =>
-      const TaskConstMeta(debugName: "add_novel", argNames: ["filePath"]);
+      const TaskConstMeta(debugName: "add_novel", argNames: ["filePaths"]);
 
   @override
   void crateApiNovelReaderBatchUpdateNovelOrders({
@@ -1953,17 +1957,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<bool> crateApiCaptureIsRunningAsAdministrator() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
+  bool crateApiCaptureIsRunningAsAdministrator() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 51,
-            port: port_,
-          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,

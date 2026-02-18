@@ -6,11 +6,11 @@ import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/pages/novel_library/components/novel_card.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
-/// 小说库页面
+/// 书籍库页面
 class NovelLibraryPage extends StatelessWidget {
   const NovelLibraryPage({super.key});
 
-  /// 显示小说右键菜单
+  /// 显示书籍右键菜单
   void _showNovelContextMenu(BuildContext context, NovelMetadata novel, Offset position) {
     showMenu(
       context: context,
@@ -58,7 +58,7 @@ class NovelLibraryPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('小说库'),
+        title: const Text('书籍库'),
         actions: [
           IconButton(
             icon: const Icon(Icons.folder_open),
@@ -110,7 +110,7 @@ class NovelLibraryPage extends StatelessWidget {
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            '正在扫描小说文件...',
+                            '正在扫描书籍文件...',
                             style: TextStyle(
                               color: Theme.of(context).primaryColor,
                               fontWeight: FontWeight.w500,
@@ -122,7 +122,7 @@ class NovelLibraryPage extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
 
-            // 清空小说进度提示
+            // 清空书籍进度提示
             Obx(
               () => controller.isClearingNovels.value
                   ? Container(
@@ -144,7 +144,7 @@ class NovelLibraryPage extends StatelessWidget {
                           ),
                           const SizedBox(width: 12),
                           const Text(
-                            '正在清空所有小说...',
+                            '正在清空所有书籍...',
                             style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500),
                           ),
                         ],
@@ -180,7 +180,7 @@ class NovelLibraryPage extends StatelessWidget {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  '正在搜索小说内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%（${controller.searchCompleted.value} / ${controller.searchTotal.value}）',
+                                  '正在搜索书籍内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%（${controller.searchCompleted.value} / ${controller.searchTotal.value}）',
                                   style: const TextStyle(
                                     color: Colors.blue,
                                     fontWeight: FontWeight.w500,
@@ -224,7 +224,7 @@ class NovelLibraryPage extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
 
-            // 小说数量统计
+            // 书籍数量统计
             Obx(
               () => controller.novels.isNotEmpty
                   ? Padding(
@@ -232,7 +232,7 @@ class NovelLibraryPage extends StatelessWidget {
                       child: Row(
                         children: [
                           Text(
-                            '共 ${controller.novels.length} 本小说',
+                            '共 ${controller.novels.length} 本书籍',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[600],
@@ -280,8 +280,8 @@ class NovelLibraryPage extends StatelessWidget {
                                   },
                                   decoration: InputDecoration(
                                     hintText: controller.searchByContent.value
-                                        ? '搜索小说内容...'
-                                        : '搜索小说名字...',
+                                        ? '搜索书籍内容...'
+                                        : '搜索书籍名字...',
                                     prefixIcon: const Icon(Icons.search),
                                     suffixIcon: Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -351,7 +351,7 @@ class NovelLibraryPage extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
 
-            // 小说列表
+            // 书籍列表
             Expanded(
               child: Obx(() {
                 final displayNovels = controller.filteredNovels;
@@ -367,7 +367,7 @@ class NovelLibraryPage extends StatelessWidget {
                       children: [
                         Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
                         const SizedBox(height: 16),
-                        Text('没有找到匹配的小说', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                        Text('没有找到匹配的书籍', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
                       ],
                     ),
                   );
@@ -418,7 +418,7 @@ class NovelLibraryPage extends StatelessWidget {
                       child: DragTarget<NovelMetadata>(
                         onWillAccept: (data) => data != null && data.id != novel.id,
                         onAccept: (draggedNovel) {
-                          // 重新排序：将拖拽的小说移动到目标位置
+                          // 重新排序：将拖拽的书籍移动到目标位置
                           final draggedIndex = displayNovels.indexWhere(
                             (n) => n.id == draggedNovel.id,
                           );
@@ -465,7 +465,7 @@ class NovelLibraryPage extends StatelessWidget {
           Icon(Icons.menu_book_outlined, size: isNarrow ? 80 : 120, color: Colors.grey[300]),
           const SizedBox(height: 24),
           Text(
-            '还没有添加小说',
+            '还没有添加书籍',
             style: TextStyle(
               fontSize: isNarrow ? 18 : 20,
               color: Colors.grey[600],
@@ -474,7 +474,7 @@ class NovelLibraryPage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '点击右上角按钮添加小说',
+            '点击右上角按钮添加书籍',
             style: TextStyle(fontSize: isNarrow ? 14 : 16, color: Colors.grey[500]),
           ),
           const SizedBox(height: 32),
