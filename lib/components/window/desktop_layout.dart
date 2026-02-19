@@ -11,7 +11,7 @@ import 'package:slime_works/core/routes/app_sidebars.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
-class DesktopLayout extends StatelessWidget {
+class DesktopLayout extends StatefulWidget {
   final Widget child;
 
   const DesktopLayout({super.key, required this.child});
@@ -87,12 +87,19 @@ class DesktopLayout extends StatelessWidget {
   }
 
   @override
+  State<DesktopLayout> createState() => _DesktopLayoutState();
+}
+
+class _DesktopLayoutState extends State<DesktopLayout> {
+  late final Widget _sidebar = CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups());
+
+  @override
   Widget build(BuildContext context) {
     /// -----------------------------
     /// 移动端
     /// -----------------------------
     if ((!Platform.isMacOS && !Platform.isWindows)) {
-      return MobileLayout(child: child);
+      return MobileLayout(child: widget.child);
     }
 
     /// -----------------------------
@@ -106,12 +113,12 @@ class DesktopLayout extends StatelessWidget {
         final head = provider.screenHeadToolsWidget.value;
 
         if (isMobile) {
-          return MobileLayout(child: child);
+          return MobileLayout(child: widget.child);
         }
 
         return Row(
           children: [
-            CollapsibleSidebar(groups: getDefaultSidebarGroups()),
+            _sidebar,
             Expanded(
               child: Column(
                 children: [
@@ -125,12 +132,12 @@ class DesktopLayout extends StatelessWidget {
                       spacing: AppTheme.metrics.kSpace32,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        head ?? SizedBox.shrink(),
+                        head ?? const SizedBox.shrink(),
                         if (Platform.isWindows) const WindowsWindowButtons(),
                       ],
                     ),
                   ),
-                  Expanded(child: child),
+                  Expanded(child: widget.child),
                 ],
               ),
             ),

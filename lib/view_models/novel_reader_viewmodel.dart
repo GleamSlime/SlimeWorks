@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:get/get.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
 /// 书籍阅读器 ViewModel
@@ -13,6 +14,7 @@ class NovelReaderViewModel extends GetxController {
   final isLoading = false.obs;
   final errorMessage = ''.obs;
   final showChapterList = true.obs;
+  final chapterListWidth = 280.0.obs; // 章节列表侧边栏宽度
   final fontSize = 16.0.obs;
   // 搜索结果状态
   final searchMatches = <SearchMatch>[].obs;
@@ -22,6 +24,10 @@ class NovelReaderViewModel extends GetxController {
 
   // HTML内容缓存，避免重复转换（key: chapterIndex）
   final Map<int, String> _processedHtmlCache = {};
+
+  /// 由 Page build 时注入，用于弹窗（MaterialApp.router 不支持 Get.dialog）
+  BuildContext? _pageContext;
+  void setContext(BuildContext ctx) => _pageContext = ctx;
 
   NovelReaderViewModel(this.novel);
 
@@ -41,14 +47,25 @@ class NovelReaderViewModel extends GetxController {
   }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        Get.snackbar(
-          title,
-          message,
-          snackPosition: position,
-          backgroundColor: backgroundColor,
-          colorText: colorText,
-          duration: duration,
-        );
+        final context = _pageContext ?? navigatorKey.currentContext;
+        if (context == null) return;
+
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        if (messenger == null) return;
+
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                '$title：$message',
+                style: colorText == null ? null : TextStyle(color: colorText),
+              ),
+              duration: duration ?? const Duration(seconds: 2),
+              backgroundColor: backgroundColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
       } catch (_) {}
     });
   }
@@ -57,6 +74,14 @@ class NovelReaderViewModel extends GetxController {
   void onClose() {
     // 清空HTML缓存
     _processedHtmlCache.clear();
+
+    // 先清除 Rust 内容解析缓存，确保下次打开重新解压图片
+    try {
+      clearNovelCache(filePath: novel.filePath);
+      debugPrint('[Novel UI] Cleared Rust content cache for: ${novel.filePath}');
+    } catch (e) {
+      debugPrint('[Novel UI] Failed to clear Rust content cache: $e');
+    }
 
     // 尝试删除基于 novel.id 的临时目录（如果存在）
     try {
@@ -107,22 +132,28 @@ class NovelReaderViewModel extends GetxController {
   /// 加载书籍内容
   Future<void> loadNovelContent() async {
     final startTime = DateTime.now();
+    final startMs = startTime.millisecondsSinceEpoch;
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
       debugPrint('[Novel UI] ========== Loading novel ==========');
+      debugPrint('[Novel UI] Title: ${novel.title}');
       debugPrint('[Novel UI] File: ${novel.filePath}');
+      final fileSize = File(novel.filePath).existsSync() ? File(novel.filePath).lengthSync() : 0;
+      final fileSizeMB = (fileSize / 1024 / 1024).toStringAsFixed(2);
+      debugPrint('[Novel UI] File size: ${fileSizeMB}MB');
       debugPrint('[Novel UI] Start time: $startTime');
 
       debugPrint('[Novel UI] Calling Rust getNovelContent...');
       final beforeRust = DateTime.now();
       final content = await getNovelContent(filePath: novel.filePath);
       final rustDuration = DateTime.now().difference(beforeRust);
-      debugPrint('[Novel UI] Rust call completed in ${rustDuration.inMilliseconds}ms');
+      debugPrint('[Novel UI] Rust getNovelContent completed in ${rustDuration.inMilliseconds}ms');
 
       chapters.value = content.chapters;
-      debugPrint('[Novel UI] Loaded ${chapters.length} chapters');
+      final chaptersLen = chapters.length;
+      debugPrint('[Novel UI] Loaded $chaptersLen chapters');
 
       if (chapters.isNotEmpty) {
         // 根据上次阅读进度恢复到对应章节
@@ -139,21 +170,25 @@ class NovelReaderViewModel extends GetxController {
           startIndex = 0;
         }
         debugPrint(
-          '[Novel UI] Restoring chapter index $startIndex from progress=${novel.progress}',
+          '[Novel UI] Restoring chapter index $startIndex (progress=${(novel.progress * 100).toStringAsFixed(1)}%)',
         );
         // 先设置索引以更新 UI 选中状态，再加载章节内容
         currentChapterIndex.value = startIndex;
         debugPrint('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
+
+        final beforeChapter = DateTime.now();
         await loadChapterContent(startIndex);
+        final chapterLoadMs = DateTime.now().difference(beforeChapter).inMilliseconds;
+        debugPrint('[Novel UI] Initial chapter load took ${chapterLoadMs}ms');
       }
 
-      final totalDuration = DateTime.now().difference(startTime);
-      debugPrint(
-        '[Novel UI] ========== Total load time: ${totalDuration.inMilliseconds}ms ==========',
-      );
+      final now = DateTime.now();
+      final totalDuration = now.millisecondsSinceEpoch - startMs;
+      debugPrint('[Novel UI] ========== Total load time: ${totalDuration}ms ==========');
     } catch (e, stackTrace) {
-      final duration = DateTime.now().difference(startTime);
-      debugPrint('[Novel UI] ERROR after ${duration.inMilliseconds}ms: $e');
+      final now = DateTime.now();
+      final duration = now.millisecondsSinceEpoch - startMs;
+      debugPrint('[Novel UI] *** ERROR after ${duration}ms: $e ***');
       debugPrint('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载失败: $e';
     } finally {
@@ -166,12 +201,14 @@ class NovelReaderViewModel extends GetxController {
     if (index < 0 || index >= chapters.length) return;
 
     final startTime = DateTime.now();
+    final startMs = startTime.millisecondsSinceEpoch;
     try {
       isLoading.value = true;
       errorMessage.value = '';
 
       debugPrint('[Novel UI] --- Loading chapter $index ---');
-      debugPrint('[Novel UI] Chapter title: ${chapters[index].title}');
+      final chTitle = chapters[index].title;
+      debugPrint('[Novel UI] Chapter title: $chTitle');
 
       final beforeRust = DateTime.now();
       final content = await getChapterContent(
@@ -179,26 +216,30 @@ class NovelReaderViewModel extends GetxController {
         chapterIndex: BigInt.from(index),
       );
       final rustDuration = DateTime.now().difference(beforeRust);
+      final contentLenKB = (content.length / 1024).toStringAsFixed(1);
 
       debugPrint(
-        '[Novel UI] Chapter loaded in ${rustDuration.inMilliseconds}ms, length: ${content.length} chars',
+        '[Novel UI] Chapter loaded in ${rustDuration.inMilliseconds}ms, length: ${content.length} chars (${contentLenKB}KB)',
       );
 
       // currentChapterIndex 已由 goToChapter 设置，此处不再重复设置
       currentContent.value = content;
+      debugPrint('[Novel UI] Updated currentContent.value');
 
       // 更新阅读进度
       final progress = (index + 1) / chapters.length;
       updateReadingProgress(novelId: novel.id, progress: progress);
       print(
-        '[Reader] Updated progress for ${novel.title} to $progress (chapter ${index + 1}/${chapters.length})',
+        '[Reader] Updated progress for ${novel.title} to ${(progress * 100).toStringAsFixed(1)}% (chapter ${index + 1}/${chapters.length})',
       );
 
-      final totalDuration = DateTime.now().difference(startTime);
-      debugPrint('[Novel UI] --- Chapter display ready in ${totalDuration.inMilliseconds}ms ---');
+      final now = DateTime.now();
+      final totalDuration = now.millisecondsSinceEpoch - startMs;
+      debugPrint('[Novel UI] --- Chapter display ready in ${totalDuration}ms ---');
     } catch (e, stackTrace) {
-      final duration = DateTime.now().difference(startTime);
-      debugPrint('[Novel UI] ERROR loading chapter after ${duration.inMilliseconds}ms: $e');
+      final now = DateTime.now();
+      final duration = now.millisecondsSinceEpoch - startMs;
+      debugPrint('[Novel UI] *** ERROR loading chapter after ${duration}ms: $e ***');
       debugPrint('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载章节失败: $e';
     } finally {
@@ -264,31 +305,30 @@ class NovelReaderViewModel extends GetxController {
 
   /// 显示搜索对话框
   void showSearchDialog() {
+    final ctx = _pageContext;
+    if (ctx == null || !ctx.mounted) return;
     final controller = TextEditingController();
 
-    Get.dialog(
-      AlertDialog(
+    showDialog(
+      context: ctx,
+      builder: (dlgCtx) => AlertDialog(
         title: const Text('搜索内容'),
         content: TextField(
           autofocus: true,
           controller: controller,
           decoration: const InputDecoration(hintText: '输入关键词', border: OutlineInputBorder()),
           onSubmitted: (value) {
-            Get.back();
-            if (value.isNotEmpty) {
-              searchKeyword(value);
-            }
+            Navigator.of(dlgCtx).pop();
+            if (value.isNotEmpty) searchKeyword(value);
           },
         ),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.of(dlgCtx).pop(), child: const Text('取消')),
           ElevatedButton(
             onPressed: () {
               final keyword = controller.text;
-              Get.back();
-              if (keyword.isNotEmpty) {
-                searchKeyword(keyword);
-              }
+              Navigator.of(dlgCtx).pop();
+              if (keyword.isNotEmpty) searchKeyword(keyword);
             },
             child: const Text('搜索'),
           ),
@@ -328,46 +368,72 @@ class NovelReaderViewModel extends GetxController {
   }
 
   void _showSearchResultsDialog(List<SearchMatch> matches) {
-    Get.dialog(
-      AlertDialog(
-        title: Text('找到 ${matches.length} 个结果'),
-        content: SizedBox(
-          width: 500,
-          height: 400,
-          child: ListView.builder(
-            itemCount: matches.length,
-            itemBuilder: (context, index) {
-              final match = matches[index];
-              return ListTile(
-                title: Text(match.chapterTitle),
-                subtitle: Text(match.snippet, maxLines: 2, overflow: TextOverflow.ellipsis),
-                onTap: () {
-                  // 切换到该结果并关闭列表
-                  selectedSearchIndex.value = index;
-                  debugPrint(
-                    '[Novel VM] search result tapped: index=$index chapterIndex=${match.chapterIndex}',
-                  );
-                  final chapterIndex = match.chapterIndex.toInt();
-                  Get.back();
+    final ctx = _pageContext;
+    if (ctx == null || !ctx.mounted) return;
 
-                  // 如果已经在当前章节，只需触发滚动；否则切换章节
-                  if (chapterIndex == currentChapterIndex.value) {
-                    searchScrollTrigger.value++;
-                  } else {
-                    goToChapter(chapterIndex);
-                    // 延迟触发滚动，等待章节加载完成
-                    Future.delayed(const Duration(milliseconds: 300), () {
-                      searchScrollTrigger.value++;
-                    });
-                  }
+    final scrollCtrl = ScrollController();
+
+    showDialog(
+      context: ctx,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (_, setModalState) {
+          // 列表打开后滚动到上次点击的结果
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!scrollCtrl.hasClients) return;
+            final idx = selectedSearchIndex.value;
+            if (idx < 0) return;
+            const itemH = 72.0;
+            final target = (idx * itemH - scrollCtrl.position.viewportDimension / 2 + itemH / 2)
+                .clamp(0.0, scrollCtrl.position.maxScrollExtent);
+            scrollCtrl.jumpTo(target);
+          });
+
+          return AlertDialog(
+            title: Text('找到 ${matches.length} 个结果'),
+            content: SizedBox(
+              width: 500,
+              height: 400,
+              child: ListView.builder(
+                controller: scrollCtrl,
+                itemCount: matches.length,
+                itemBuilder: (_, index) {
+                  final match = matches[index];
+                  final isSelected = selectedSearchIndex.value == index;
+                  return Material(
+                    color: isSelected
+                        ? Theme.of(dlgCtx).colorScheme.primaryContainer
+                        : Colors.transparent,
+                    child: ListTile(
+                      selected: isSelected,
+                      selectedColor: Theme.of(dlgCtx).colorScheme.onPrimaryContainer,
+                      title: Text(match.chapterTitle.replaceAll(RegExp(r'<[^>]+>'), '').trim()),
+                      subtitle: Text(match.snippet, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      onTap: () {
+                        selectedSearchIndex.value = index;
+                        setModalState(() {});
+                        final chapterIndex = match.chapterIndex.toInt();
+                        Navigator.of(dlgCtx).pop();
+                        if (chapterIndex == currentChapterIndex.value) {
+                          searchScrollTrigger.value++;
+                        } else {
+                          goToChapter(chapterIndex);
+                          Future.delayed(const Duration(milliseconds: 500), () {
+                            searchScrollTrigger.value++;
+                          });
+                        }
+                      },
+                    ),
+                  );
                 },
-              );
-            },
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Get.back(), child: const Text('关闭'))],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dlgCtx).pop(), child: const Text('关闭')),
+            ],
+          );
+        },
       ),
-    );
+    ).whenComplete(() => scrollCtrl.dispose());
   }
 
   /// 切换到下一个搜索结果
@@ -381,7 +447,7 @@ class NovelReaderViewModel extends GetxController {
       searchScrollTrigger.value++;
     } else {
       goToChapter(chapterIndex);
-      Future.delayed(const Duration(milliseconds: 300), () {
+      Future.delayed(const Duration(milliseconds: 500), () {
         searchScrollTrigger.value++;
       });
     }
@@ -398,7 +464,7 @@ class NovelReaderViewModel extends GetxController {
       searchScrollTrigger.value++;
     } else {
       goToChapter(chapterIndex);
-      Future.delayed(const Duration(milliseconds: 300), () {
+      Future.delayed(const Duration(milliseconds: 500), () {
         searchScrollTrigger.value++;
       });
     }
@@ -435,14 +501,15 @@ class NovelReaderViewModel extends GetxController {
 
       // 跳转到目标书籍
       final targetNovel = allNovels[targetIndex];
-      // 使用 GoRouter 导航 - 需要从上下文获取，这里暂时保留原逻辑
-      // 由于 ViewModel 中无法直接访问 context，保持使用 Get.back() 和路由跳转
-      Get.back(); // 返回书籍列表
-      // 延迟一下再打开新书，确保前一个页面已经销毁
-      // Future.delayed(const Duration(milliseconds: 100), () {
-      //   // TODO: 需要通过回调或其他方式传递 context 来使用 GoRouter
-      //   Get.toNamed(Routes.novelReader, arguments: targetNovel);
-      // });
+
+      final context = _pageContext ?? navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+
+      Navigator.of(context).maybePop();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!context.mounted) return;
+        NovelReaderRoute($extra: targetNovel).go(context);
+      });
     } catch (e) {
       debugPrint('[Novel VM] Failed to switch book: $e');
     }
@@ -450,22 +517,25 @@ class NovelReaderViewModel extends GetxController {
 
   /// 显示删除书本对话框
   void showDeleteDialog() {
-    Get.dialog(
-      AlertDialog(
+    final ctx = _pageContext;
+    if (ctx == null || !ctx.mounted) return;
+    showDialog(
+      context: ctx,
+      builder: (dlgCtx) => AlertDialog(
         title: const Text('删除书本'),
         content: Text('确定要删除《${novel.title}》吗？'),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.of(dlgCtx).pop(), child: const Text('取消')),
           TextButton(
             onPressed: () {
-              Get.back();
+              Navigator.of(dlgCtx).pop();
               _deleteNovel(false);
             },
             child: const Text('仅删除记录'),
           ),
           ElevatedButton(
             onPressed: () {
-              Get.back();
+              Navigator.of(dlgCtx).pop();
               _deleteNovel(true);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -512,7 +582,10 @@ class NovelReaderViewModel extends GetxController {
       }
 
       // 返回书籍列表
-      Get.back();
+      final context = _pageContext ?? navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        Navigator.of(context).maybePop();
+      }
     } catch (e) {
       _showSnack('错误', '删除失败: $e');
     }

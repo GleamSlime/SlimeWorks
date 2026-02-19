@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
+import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/pages/novel_reader/components/chapter_list.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_toolbar.dart';
@@ -39,6 +42,8 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 注入 context 供 ViewModel 显示对话框（MaterialApp.router 不支持 Get.dialog）
+    controller.setContext(context);
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
     return Focus(
@@ -77,8 +82,54 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       // 移动端布局：章节列表使用抽屉
       return Scaffold(
         appBar: AppBar(
-          title: Text(novel.title),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/collection/library');
+              }
+            },
+          ),
+          title: Row(
+            children: [
+              _buildHeroCover(32),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(novel.title, overflow: TextOverflow.ellipsis, maxLines: 1),
+                    if (novel.tags.isNotEmpty)
+                      Wrap(
+                        spacing: 4,
+                        children: novel.tags
+                            .take(3)
+                            .map(
+                              (tag) => Chip(
+                                label: Text(tag, style: const TextStyle(fontSize: 10)),
+                                padding: EdgeInsets.zero,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           actions: [
+            Obx(() {
+              final libraryVm = Get.find<NovelLibraryViewModel>();
+              final isFav =
+                  libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ?? false;
+              return IconButton(
+                icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+                onPressed: () => libraryVm.toggleFavorite(novel.id),
+              );
+            }),
             Obx(
               () => controller.showChapterList.value
                   ? IconButton(
@@ -142,15 +193,95 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
 
     // 桌面端布局
     return Scaffold(
-      appBar: AppBar(title: Text(novel.title)),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/collection/library');
+            }
+          },
+        ),
+        title: Row(
+          children: [
+            _buildHeroCover(32),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(novel.title, overflow: TextOverflow.ellipsis, maxLines: 1),
+                  if (novel.tags.isNotEmpty)
+                    Wrap(
+                      spacing: 4,
+                      children: novel.tags
+                          .take(3)
+                          .map(
+                            (tag) => Chip(
+                              label: Text(tag, style: const TextStyle(fontSize: 10)),
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Obx(() {
+            final libraryVm = Get.find<NovelLibraryViewModel>();
+            final isFav =
+                libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ?? false;
+            return IconButton(
+              icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+              onPressed: () => libraryVm.toggleFavorite(novel.id),
+            );
+          }),
+        ],
+      ),
       body: Row(
         children: [
-          // 章节列表侧边栏
-          Obx(
-            () => controller.showChapterList.value
-                ? SizedBox(width: 280, child: ChapterList(controller: controller))
-                : const SizedBox(),
-          ),
+          // 章节列表侧边栏（可调节宽度）
+          Obx(() {
+            final showList = controller.showChapterList.value;
+            final width = controller.chapterListWidth.value;
+
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: showList ? width : 0,
+              child: showList
+                  ? Row(
+                      children: [
+                        // 章节列表内容
+                        Expanded(child: ChapterList(controller: controller)),
+                        // 可拖动的分隔条
+                        MouseRegion(
+                          cursor: SystemMouseCursors.resizeColumn,
+                          child: GestureDetector(
+                            onHorizontalDragUpdate: (details) {
+                              final newWidth = width + details.delta.dx;
+                              // 限制宽度范围：200-600
+                              controller.chapterListWidth.value = newWidth.clamp(200.0, 600.0);
+                            },
+                            child: Container(
+                              width: 8,
+                              color: Colors.transparent,
+                              child: Center(
+                                child: Container(width: 2, color: Theme.of(context).dividerColor),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : null,
+            );
+          }),
 
           // 主阅读区域
           Expanded(
@@ -199,6 +330,38 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// AppBar 中的 Hero 封面缩略图，与书籍列表的 Hero 动画配对
+  Widget _buildHeroCover(double size) {
+    Widget cover;
+    if (novel.coverPath != null) {
+      try {
+        final file = File(novel.coverPath!);
+        if (file.existsSync()) {
+          cover = ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.file(file, width: size, height: size * 1.4, fit: BoxFit.cover),
+          );
+        } else {
+          cover = _defaultCoverThumb(size);
+        }
+      } catch (_) {
+        cover = _defaultCoverThumb(size);
+      }
+    } else {
+      cover = _defaultCoverThumb(size);
+    }
+    return Hero(tag: 'book_cover_${novel.id}', child: cover);
+  }
+
+  Widget _defaultCoverThumb(double size) {
+    return Container(
+      width: size,
+      height: size * 1.4,
+      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(4)),
+      child: Icon(Icons.book, size: size * 0.5, color: Colors.white70),
     );
   }
 }

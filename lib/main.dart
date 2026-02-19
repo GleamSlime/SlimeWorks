@@ -6,7 +6,6 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
-import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/initialize/main.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
@@ -15,8 +14,6 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
-
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   TimeConsumptionTest desktopTest = TimeConsumptionTest(tag: "应用初始化")..start();
@@ -107,11 +104,7 @@ class MyApp extends StatelessWidget {
             ],
 
             builder: (context, child) {
-              final Widget result = EasyLoading.init()(context, child);
-
-              return Overlay(
-                initialEntries: [OverlayEntry(builder: (_) => DesktopLayout(child: result))],
-              );
+              return EasyLoading.init()(context, child);
             },
           );
         },

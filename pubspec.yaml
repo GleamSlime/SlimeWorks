@@ -64,6 +64,7 @@ dependencies:
   # 图片相关
   cached_network_image: ^3.4.1 # 网络图片缓存
   flutter_svg: ^2.2.3 # SVG图片支持
+  desktop_drop: ^0.5.0 # 桌面端拖拽文件支持
 
   # UI组件
   flutter_easyloading: ^3.0.5 # 简单的加载提示

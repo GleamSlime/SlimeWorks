@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'dart:convert';
 import 'package:slime_works/src/rust/api/http_bridge.dart';
 
@@ -21,9 +20,22 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
   int? _responseTime;
   String? _errorMessage;
 
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+  }
+
   // 已注册的接口列表（从后端获取）
   List<String> _registeredModules = ['novel_reader'];
-  List<String> _registeredFunctions = ['get_all_novels', 'get_novel_content', 'get_chapter_content', 'search_in_novel', 'add_novel'];
+  List<String> _registeredFunctions = [
+    'get_all_novels',
+    'get_novel_content',
+    'get_chapter_content',
+    'search_in_novel',
+    'add_novel',
+  ];
 
   @override
   void initState() {
@@ -97,7 +109,11 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
       final params = json.decode(paramText);
 
       // 调用真实的HTTP Bridge API
-      final resultJson = callHandler(module: _moduleController.text, function: _functionController.text, params: paramText);
+      final resultJson = callHandler(
+        module: _moduleController.text,
+        function: _functionController.text,
+        params: paramText,
+      );
 
       stopwatch.stop();
       _responseTime = stopwatch.elapsedMilliseconds;
@@ -154,13 +170,13 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
     try {
       final paramText = _paramsController.text.trim();
       if (paramText.isEmpty) {
-        Get.snackbar('错误', 'JSON 内容为空');
+        _showSnack('JSON 内容为空');
         return;
       }
       final params = json.decode(paramText);
       _paramsController.text = const JsonEncoder.withIndent('  ').convert(params);
     } catch (e) {
-      Get.snackbar('错误', 'JSON 格式无效: $e');
+      _showSnack('JSON 格式无效: $e');
     }
   }
 
@@ -171,7 +187,13 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('HTTP Bridge 测试工具'),
-        actions: [IconButton(icon: const Icon(Icons.help_outline), tooltip: '帮助', onPressed: () => _showHelp())],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: '帮助',
+            onPressed: () => _showHelp(),
+          ),
+        ],
       ),
       body: isNarrow ? _buildNarrowLayout() : _buildWideLayout(),
     );
@@ -195,7 +217,11 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
     return Column(
       children: [
         Expanded(
-          child: SingleChildScrollView(child: Column(children: [_buildRequestPanel(), const Divider(height: 1), _buildResponsePanel()])),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [_buildRequestPanel(), const Divider(height: 1), _buildResponsePanel()],
+            ),
+          ),
         ),
       ],
     );
@@ -207,13 +233,20 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('请求配置', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            '请求配置',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 24),
 
           // 模块名（下拉选择）
           DropdownButtonFormField<String>(
             initialValue: _moduleController.text,
-            decoration: const InputDecoration(labelText: '模块名称', border: OutlineInputBorder(), prefixIcon: Icon(Icons.category)),
+            decoration: const InputDecoration(
+              labelText: '模块名称',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.category),
+            ),
             items: _registeredModules.map((module) {
               return DropdownMenuItem(value: module, child: Text(module));
             }).toList(),
@@ -230,8 +263,14 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  initialValue: _registeredFunctions.contains(_functionController.text) ? _functionController.text : null,
-                  decoration: const InputDecoration(labelText: '函数名称', border: OutlineInputBorder(), prefixIcon: Icon(Icons.functions)),
+                  initialValue: _registeredFunctions.contains(_functionController.text)
+                      ? _functionController.text
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: '函数名称',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.functions),
+                  ),
                   items: _registeredFunctions.map((func) {
                     return DropdownMenuItem(value: func, child: Text(func));
                   }).toList(),
@@ -253,7 +292,11 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
           Row(
             children: [
               Expanded(child: Text('参数 (JSON)', style: Theme.of(context).textTheme.titleMedium)),
-              TextButton.icon(onPressed: _formatJson, icon: const Icon(Icons.auto_fix_high, size: 18), label: const Text('格式化')),
+              TextButton.icon(
+                onPressed: _formatJson,
+                icon: const Icon(Icons.auto_fix_high, size: 18),
+                label: const Text('格式化'),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -269,7 +312,11 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               expands: true,
               textAlignVertical: TextAlignVertical.top,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(hintText: '输入 JSON 格式的参数', border: InputBorder.none, contentPadding: EdgeInsets.all(12)),
+              decoration: const InputDecoration(
+                hintText: '输入 JSON 格式的参数',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.all(12),
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -277,7 +324,13 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
           // 发送按钮
           ElevatedButton.icon(
             onPressed: _isLoading ? null : _sendRequest,
-            icon: _isLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send),
+            icon: _isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send),
             label: Text(_isLoading ? '发送中...' : '发送请求'),
             style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
           ),
@@ -295,9 +348,15 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
           Row(
             children: [
               Expanded(
-                child: Text('响应结果', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                child: Text(
+                  '响应结果',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
               ),
-              if (_response.isNotEmpty || _errorMessage != null) IconButton(icon: const Icon(Icons.clear), tooltip: '清除', onPressed: _clearResponse),
+              if (_response.isNotEmpty || _errorMessage != null)
+                IconButton(icon: const Icon(Icons.clear), tooltip: '清除', onPressed: _clearResponse),
             ],
           ),
           const SizedBox(height: 16),
@@ -306,12 +365,18 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
           if (_responseTime != null)
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Theme.of(context).primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Row(
                 children: [
                   const Icon(Icons.timer, size: 16),
                   const SizedBox(width: 8),
-                  Text('响应时间: $_responseTime ms', style: const TextStyle(fontWeight: FontWeight.w500)),
+                  Text(
+                    '响应时间: $_responseTime ms',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
                 ],
               ),
             ),
@@ -340,7 +405,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  SelectableText(_errorMessage!, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                  SelectableText(
+                    _errorMessage!,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
                 ],
               ),
             ),
@@ -356,7 +424,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: SingleChildScrollView(
-                  child: SelectableText(_response, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+                  child: SelectableText(
+                    _response,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                  ),
                 ),
               ),
             ),
@@ -390,7 +461,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('这个工具用于测试 HTTP Bridge 模块的请求和响应。\n', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                '这个工具用于测试 HTTP Bridge 模块的请求和响应。\n',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const Text('1. 模块名称: 从下拉列表选择已注册的模块'),
               const SizedBox(height: 8),
               const Text('2. 函数名称: 从下拉列表选择已注册的函数'),
@@ -403,7 +477,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(4),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -413,11 +490,17 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('模块: $module', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text(
+                              '模块: $module',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             for (var func in _registeredFunctions)
                               Padding(
                                 padding: const EdgeInsets.only(left: 16, top: 2),
-                                child: Text('- $func', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                                child: Text(
+                                  '- $func',
+                                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                                ),
                               ),
                           ],
                         ),
@@ -428,7 +511,9 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('关闭'))],
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('关闭')),
+        ],
       ),
     );
   }

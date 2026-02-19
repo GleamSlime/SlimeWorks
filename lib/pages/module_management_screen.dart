@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:slime_works/src/rust/api/module_manager.dart';
 
 import 'dart:io';
@@ -20,6 +19,20 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
   bool _isLoading = false;
   String? _error;
   String? _installDir;
+
+  void _showSnack(String message, {Color? backgroundColor, Duration? duration}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+          duration: duration ?? const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
 
   @override
   void initState() {
@@ -91,7 +104,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
       await _refreshModules();
 
       if (mounted) {
-        Get.snackbar('成功', '模块 $moduleName 安装成功', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green, colorText: Colors.white);
+        _showSnack('模块 $moduleName 安装成功', backgroundColor: Colors.green);
       }
     } catch (e) {
       setState(() {
@@ -112,7 +125,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
       await _refreshModules();
 
       if (mounted) {
-        Get.snackbar('成功', '模块 $moduleName 卸载成功', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green, colorText: Colors.white);
+        _showSnack('模块 $moduleName 卸载成功', backgroundColor: Colors.green);
       }
     } catch (e) {
       setState(() {
@@ -130,9 +143,9 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
 
       if (mounted) {
         if (newVersion != null) {
-          Get.snackbar('发现更新', '模块 $moduleName 有新版本: $newVersion', snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 5));
+          _showSnack('模块 $moduleName 有新版本: $newVersion', duration: const Duration(seconds: 5));
         } else {
-          Get.snackbar('无需更新', '模块 $moduleName 已是最新版本', snackPosition: SnackPosition.BOTTOM);
+          _showSnack('模块 $moduleName 已是最新版本');
         }
       }
     } catch (e) {
@@ -155,9 +168,17 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
             children: [
               Text('已安装模块: ${_modules.length}', style: Theme.of(context).textTheme.titleMedium),
               const Spacer(),
-              ElevatedButton.icon(onPressed: _isLoading ? null : _refreshModules, icon: const Icon(Icons.refresh), label: const Text('刷新')),
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : _refreshModules,
+                icon: const Icon(Icons.refresh),
+                label: const Text('刷新'),
+              ),
               const SizedBox(width: 8),
-              ElevatedButton.icon(onPressed: _isLoading ? null : () => _showInstallDialog(), icon: const Icon(Icons.add), label: const Text('安装模块')),
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : () => _showInstallDialog(),
+                icon: const Icon(Icons.add),
+                label: const Text('安装模块'),
+              ),
             ],
           ),
         ),
@@ -174,7 +195,10 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                 Expanded(
                   child: Text(_error!, style: const TextStyle(color: Colors.red)),
                 ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _error = null)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() => _error = null),
+                ),
               ],
             ),
           ),
@@ -192,7 +216,11 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                       const SizedBox(height: 16),
                       Text('暂无已安装的模块', style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 8),
-                      ElevatedButton.icon(onPressed: () => _showInstallDialog(), icon: const Icon(Icons.add), label: const Text('安装模块')),
+                      ElevatedButton.icon(
+                        onPressed: () => _showInstallDialog(),
+                        icon: const Icon(Icons.add),
+                        label: const Text('安装模块'),
+                      ),
                     ],
                   ),
                 )
@@ -210,7 +238,8 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
   }
 
   Widget _buildModuleCard(InstalledModule module) {
-    final isLoaded = _loader != null && moduleIsLoaded(loader: _loader!, moduleName: module.moduleName);
+    final isLoaded =
+        _loader != null && moduleIsLoaded(loader: _loader!, moduleName: module.moduleName);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -222,7 +251,11 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
             // 模块名称和状态
             Row(
               children: [
-                Icon(_getModuleIcon(module.moduleType), size: 32, color: Theme.of(context).primaryColor),
+                Icon(
+                  _getModuleIcon(module.moduleType),
+                  size: 32,
+                  color: Theme.of(context).primaryColor,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -230,7 +263,12 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                     children: [
                       Row(
                         children: [
-                          Text(module.moduleName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            module.moduleName,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
                           const SizedBox(width: 8),
                           if (module.isLocked)
                             const Chip(
@@ -303,7 +341,9 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
             // 文件路径
             Text(
               '路径: ${module.filePath}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -317,7 +357,12 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor)),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+        ),
         Text(value, style: Theme.of(context).textTheme.bodyMedium),
       ],
     );
@@ -400,7 +445,11 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(module.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        if (module.description.isNotEmpty) Text(module.description, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        if (module.description.isNotEmpty)
+                          Text(
+                            module.description,
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
                       ],
                     ),
                   );
@@ -409,7 +458,10 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
               ),
               const SizedBox(height: 16),
               if (selectedModuleName != null) ...[
-                Text('版本: ${availableModules.firstWhere((m) => m.name == selectedModuleName).version}', style: const TextStyle(fontSize: 12)),
+                Text(
+                  '版本: ${availableModules.firstWhere((m) => m.name == selectedModuleName).version}',
+                  style: const TextStyle(fontSize: 12),
+                ),
                 const SizedBox(height: 4),
               ],
               const Text('将安装最新版本的模块', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -445,7 +497,10 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
               Navigator.of(context).pop();
               _uninstallModule(module.moduleName, module.version);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('卸载'),
           ),
         ],
@@ -476,13 +531,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                   );
                   await _refreshModules();
                   if (mounted) {
-                    Get.snackbar(
-                      '成功',
-                      '模块 ${module.moduleName} 重新安装成功',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: Colors.green,
-                      colorText: Colors.white,
-                    );
+                    _showSnack('模块 ${module.moduleName} 重新安装成功', backgroundColor: Colors.green);
                   }
                 } catch (e) {
                   setState(() {

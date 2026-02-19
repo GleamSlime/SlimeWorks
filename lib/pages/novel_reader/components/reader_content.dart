@@ -21,6 +21,13 @@ class _ReaderContentState extends State<ReaderContent> {
   bool _showPlainTextMode = false;
   int _lastChapterIndex = -1;
   final GlobalKey _searchTargetKey = GlobalKey();
+  
+  // 虚拟滚动相关常量和变量
+  static const int _virtualScrollThreshold = 50000; // 50KB 触发虚拟滚动
+  static const int _chunkSize = 8000; // 每块 8KB
+  List<String> _contentChunks = [];
+  String _cachedContent = '';
+  bool _useVirtualScroll = false;
 
   @override
   void initState() {
@@ -56,6 +63,73 @@ class _ReaderContentState extends State<ReaderContent> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+  
+  /// 将长文本内容分块，每块约 _chunkSize 字符
+  /// 保留完整的HTML标签，避免在标签中间切断
+  /// 如果启用搜索，先对整个内容进行高亮处理，然后再分块
+  List<String> _splitContentIntoChunks(String content, {bool shouldHighlight = false, String keyword = '', int? selectedOccurrence}) {
+    // 如果需要搜索高亮，先处理整个内容
+    String processedContent = content;
+    if (shouldHighlight && keyword.isNotEmpty) {
+      // 判断是HTML还是纯文本
+      final isHtml = RegExp(r'<\s*(p|br|div|span|img|style|h[1-6])\b', caseSensitive: false).hasMatch(content);
+      if (isHtml) {
+        processedContent = _highlightHtml(content, keyword, selectedOccurrence: selectedOccurrence);
+        // 嵌入本地图片
+        processedContent = _embedLocalImages(processedContent);
+      }
+    }
+    
+    final chunks = <String>[];
+    if (processedContent.length <= _chunkSize) {
+      return [processedContent];
+    }
+    
+    int start = 0;
+    while (start < processedContent.length) {
+      int end = (start + _chunkSize).clamp(0, processedContent.length);
+      
+      // 如果不是最后一块，尝试在合适的位置分割（避免切断HTML标签）
+      if (end < processedContent.length) {
+        // 优先在段落结束标签后分割
+        final closeTags = [r'</p>', r'</div>', r'<br>', r'<br/>'];
+        int bestSplit = -1;
+        int minDistance = _chunkSize ~/ 2; // 在后半部分寻找分割点
+        
+        for (final tag in closeTags) {
+          final tagPattern = RegExp(tag, caseSensitive: false);
+          final matches = tagPattern.allMatches(processedContent, start + minDistance);
+          for (final match in matches) {
+            if (match.end <= end) {
+              bestSplit = match.end;
+            } else {
+              break;
+            }
+          }
+          if (bestSplit != -1) break;
+        }
+        
+        // 如果找到合适的标签分割点，使用它
+        if (bestSplit != -1) {
+          end = bestSplit;
+        } else {
+          // 否则在空白字符处分割，避免切断单词
+          for (int i = end; i > start + minDistance && i < processedContent.length; i--) {
+            if (processedContent[i] == ' ' || processedContent[i] == '\n') {
+              end = i;
+              break;
+            }
+          }
+        }
+      }
+      
+      chunks.add(processedContent.substring(start, end));
+      start = end;
+    }
+    
+    debugPrint('[VirtualScroll] Split content into ${chunks.length} chunks, total length: ${processedContent.length}');
+    return chunks;
   }
 
   void _scrollToTop() {
@@ -151,6 +225,45 @@ class _ReaderContentState extends State<ReaderContent> {
           child: Text('暂无内容', style: TextStyle(color: Colors.grey)),
         );
       }
+      
+      // 检查是否需要使用虚拟滚动（内容超过阈值）
+      if (currentContent != _cachedContent) {
+        _cachedContent = currentContent;
+        _useVirtualScroll = currentContent.length > _virtualScrollThreshold;
+        if (_useVirtualScroll) {
+          // 检查是否有搜索高亮需求
+          final hasSearch = controller.searchMatches.isNotEmpty;
+          final keyword = controller.lastSearchQuery.value;
+          final selectedIndex = controller.selectedSearchIndex.value;
+          
+          // 计算选中的搜索结果在当前章节中的序号
+          int? selectedOccurrence;
+          if (hasSearch && selectedIndex >= 0 && selectedIndex < controller.searchMatches.length) {
+            final selectedMatch = controller.searchMatches[selectedIndex];
+            final currentChapterIdx = controller.currentChapterIndex.value;
+            if (selectedMatch.chapterIndex.toInt() == currentChapterIdx) {
+              final chapterMatches = controller.searchMatches
+                  .where((m) => m.chapterIndex.toInt() == currentChapterIdx)
+                  .toList();
+              selectedOccurrence = chapterMatches.indexWhere(
+                (m) => m.position == selectedMatch.position,
+              );
+            }
+          }
+          
+          // 分块时如果有搜索，先进行高亮处理
+          _contentChunks = _splitContentIntoChunks(
+            currentContent,
+            shouldHighlight: hasSearch,
+            keyword: keyword,
+            selectedOccurrence: selectedOccurrence,
+          );
+          debugPrint('[VirtualScroll] Enabled for content size: ${currentContent.length} chars');
+        } else {
+          _contentChunks = [];
+          debugPrint('[VirtualScroll] Disabled, using standard rendering');
+        }
+      }
 
       debugPrint('[Novel UI] Building content view, length: ${currentContent.length} chars');
 
@@ -189,6 +302,11 @@ class _ReaderContentState extends State<ReaderContent> {
           _scrollToTop();
         });
         _lastChapterIndex = currentIndex;
+      }
+      
+      // 根据内容大小选择渲染策略
+      if (_useVirtualScroll) {
+        return _buildVirtualScrollView(context, controller, currentContent, buildStart, isNarrow, shouldRenderHtml, hasImages);
       }
 
       return Container(
@@ -644,6 +762,473 @@ class _ReaderContentState extends State<ReaderContent> {
         ),
       );
     });
+  }
+  
+  /// 构建虚拟滚动视图，只渲染可见的内容块
+  Widget _buildVirtualScrollView(
+    BuildContext context,
+    NovelReaderViewModel controller,
+    String currentContent,
+    DateTime buildStart,
+    bool isNarrow,
+    bool shouldRenderHtml,
+    bool hasImages,
+  ) {
+    final currentChapterIndex = controller.currentChapterIndex.value;
+    final hasSearch = controller.searchMatches.isNotEmpty;
+    
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // 顶部间距
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              isNarrow ? 16 : 48,
+              isNarrow ? 16 : 48,
+              isNarrow ? 16 : 48,
+              0,
+            ),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // 章节标题
+                if (controller.chapters.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Theme.of(context).dividerColor.withOpacity(0.3),
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          controller.chapters[currentChapterIndex].title,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              '第 ${currentChapterIndex + 1} / ${controller.chapters.length} 章',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              '本章 ${currentContent.length} 字',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              '进度 ${((currentChapterIndex + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 24),
+                
+                // 如果内容包含 HTML 图片，允许切换为纯文本模式
+                if (hasImages)
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _showPlainTextMode = !_showPlainTextMode;
+                          });
+                        },
+                        icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
+                        label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
+                      ),
+                    ],
+                  ),
+              ]),
+            ),
+          ),
+          
+          // 虚拟滚动的内容块
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 48),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  // 添加渲染时间日志
+                  if (index == 0) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final duration = DateTime.now().difference(buildStart);
+                      debugPrint(
+                        '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
+                      );
+                    });
+                  }
+                  
+                  final chunk = _contentChunks[index];
+                  
+                  // 根据格式决定渲染方式
+                  if (shouldRenderHtml && !_showPlainTextMode) {
+                    return _buildHtmlChunk(chunk, controller, hasSearch, context);
+                  } else {
+                    // 纯文本模式或TXT格式
+                    String textChunk = chunk;
+                    if (_showPlainTextMode || !shouldRenderHtml) {
+                      textChunk = _convertHtmlToPlainText(chunk);
+                    }
+                    return _buildTextChunk(textChunk, controller, hasSearch, context);
+                  }
+                },
+                childCount: _contentChunks.length,
+              ),
+            ),
+          ),
+          
+          // 底部导航和间距
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              isNarrow ? 16 : 48,
+              24,
+              isNarrow ? 16 : 48,
+              isNarrow ? 16 : 48,
+            ),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (controller.hasPreviousChapter())
+                      TextButton.icon(
+                        onPressed: controller.previousChapter,
+                        icon: const Icon(Icons.chevron_left),
+                        label: const Text('上一章'),
+                      ),
+                    if (controller.hasPreviousChapter() && controller.hasNextChapter())
+                      const SizedBox(width: 16),
+                    if (controller.hasNextChapter())
+                      TextButton.icon(
+                        onPressed: controller.nextChapter,
+                        icon: const Icon(Icons.chevron_right),
+                        label: const Text('下一章'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// 构建HTML格式的内容块
+  Widget _buildHtmlChunk(
+    String htmlChunk,
+    NovelReaderViewModel controller,
+    bool hasSearch,
+    BuildContext context,
+  ) {
+    // HTML块已经在分块前完成了高亮和图片嵌入处理
+    // 这里直接渲染即可
+    return SelectionArea(
+      child: Html(
+        data: htmlChunk,
+        onLinkTap: (url, _, _) {
+          if (url == null) return;
+          try {
+            final uri = Uri.tryParse(url);
+            final path = uri?.path ?? url;
+            final basename = path.split('/').where((s) => s.isNotEmpty).toList().isNotEmpty
+                ? path.split('/').last
+                : path;
+            final target = controller.chapters.indexWhere(
+              (c) => c.id.endsWith(basename) || c.id.contains(basename) || c.title.contains(basename),
+            );
+            if (target != -1 && target != controller.currentChapterIndex.value) {
+              controller.goToChapter(target);
+            }
+          } catch (e) {
+            debugPrint('[Reader] onLinkTap error: $e');
+          }
+        },
+        style: {
+          'body': Style(
+            fontSize: FontSize(controller.fontSize.value),
+            lineHeight: LineHeight(1.8),
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+          ),
+          'p': Style(
+            display: Display.block,
+            lineHeight: LineHeight(2.8),
+            padding: HtmlPaddings.only(bottom: 16),
+          ),
+          'div': Style(
+            display: Display.block,
+            lineHeight: LineHeight(1.8),
+            padding: HtmlPaddings.only(bottom: 16),
+          ),
+          'span': Style(display: Display.inline),
+          'strong': Style(fontWeight: FontWeight.bold),
+          'b': Style(fontWeight: FontWeight.bold),
+          'em': Style(fontStyle: FontStyle.italic),
+          'i': Style(fontStyle: FontStyle.italic),
+          'u': Style(textDecoration: TextDecoration.underline),
+          'mark': Style(
+            backgroundColor: Colors.yellow.withOpacity(0.5),
+            color: Colors.orange.shade900,
+            fontWeight: FontWeight.bold,
+          ),
+          'mark_selected': Style(
+            backgroundColor: Colors.orange.withOpacity(0.5),
+            color: Colors.orange.shade900,
+            fontWeight: FontWeight.bold,
+          ),
+        },
+        extensions: [
+          TagExtension(
+            tagsToExtend: {'mark_selected'},
+            builder: (extensionContext) {
+              return Container(
+                key: _searchTargetKey,
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                  extensionContext.innerHtml,
+                  style: TextStyle(
+                    color: Colors.orange.shade900,
+                    fontWeight: FontWeight.bold,
+                    fontSize: controller.fontSize.value,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// 构建纯文本格式的内容块
+  Widget _buildTextChunk(
+    String textChunk,
+    NovelReaderViewModel controller,
+    bool hasSearch,
+    BuildContext context,
+  ) {
+    // 在虚拟滚动模式下，我们需要基于块的内容构建高亮
+    // 由于搜索位置是基于整个文本的，我们需要计算当前块在整个文本中的偏移
+    if (hasSearch && controller.searchMatches.isNotEmpty) {
+      // 计算当前块的起始位置
+      int chunkStartPos = 0;
+      final currentChunkIndex = _contentChunks.indexOf(textChunk);
+      for (int i = 0; i < currentChunkIndex; i++) {
+        chunkStartPos += _contentChunks[i].length;
+      }
+      final chunkEndPos = chunkStartPos + textChunk.length;
+      
+      // 获取当前章节的搜索匹配
+      final currentChapterIndex = controller.currentChapterIndex.value;
+      final chapterMatches = controller.searchMatches
+          .where((m) => m.chapterIndex.toInt() == currentChapterIndex)
+          .toList();
+      
+      // 过滤出在当前块范围内的匹配
+      final chunkMatches = chapterMatches.where((m) {
+        final pos = m.position.toInt();
+        return pos >= chunkStartPos && pos < chunkEndPos;
+      }).toList();
+      
+      // 如果当前块有匹配结果，使用高亮显示
+      if (chunkMatches.isNotEmpty) {
+        return _buildHighlightedTextForChunk(
+          textChunk,
+          chunkStartPos,
+          chunkMatches,
+          controller,
+          context,
+        );
+      }
+    }
+    
+    // 否则使用普通的可选择文本
+    return SelectableText(
+      textChunk,
+      style: TextStyle(
+        fontSize: controller.fontSize.value,
+        height: 1.8,
+        letterSpacing: 0.5,
+        color: Theme.of(context).textTheme.bodyLarge?.color,
+      ),
+    );
+  }
+  
+  /// 为特定内容块构建带高亮的文本
+  Widget _buildHighlightedTextForChunk(
+    String chunkContent,
+    int chunkStartPos,
+    List<dynamic> chunkMatches,
+    NovelReaderViewModel controller,
+    BuildContext context,
+  ) {
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    final selectedIndex = controller.selectedSearchIndex.value;
+    
+    // 按位置排序匹配结果
+    chunkMatches.sort((a, b) => a.position.compareTo(b.position));
+    
+    for (int i = 0; i < chunkMatches.length; i++) {
+      final match = chunkMatches[i];
+      // 将全局位置转换为块内位置
+      int matchStart = match.position.toInt() - chunkStartPos;
+      
+      // 获取搜索关键词
+      String searchKeyword = controller.lastSearchQuery.value.trim();
+      if (searchKeyword.isEmpty && match.snippet.isNotEmpty) {
+        final snippetLines = match.snippet.split(RegExp(r'[\n\r]'));
+        if (snippetLines.isNotEmpty) {
+          final firstLine = snippetLines.first;
+          final tokenMatch = RegExp(r'\\S+').firstMatch(firstLine);
+          searchKeyword = tokenMatch != null ? tokenMatch.group(0)!.trim() : firstLine.trim();
+        }
+      }
+      
+      // 估算关键词长度
+      int keywordLength = searchKeyword.length;
+      if (matchStart >= 0 && matchStart < chunkContent.length) {
+        final remainingContent = chunkContent.substring(matchStart);
+        final keywordMatch = RegExp.escape(searchKeyword);
+        final regex = RegExp(keywordMatch, caseSensitive: false);
+        final actualMatch = regex.firstMatch(remainingContent);
+        if (actualMatch != null) {
+          keywordLength = actualMatch.group(0)?.length ?? keywordLength;
+        }
+      }
+      
+      int matchEnd = (matchStart + keywordLength).clamp(0, chunkContent.length);
+      
+      // 确保匹配位置有效
+      if (matchStart < 0 || matchEnd <= matchStart || matchStart >= chunkContent.length) {
+        continue;
+      }
+      
+      // 添加普通文本
+      if (matchStart > lastEnd) {
+        spans.add(
+          TextSpan(
+            text: chunkContent.substring(lastEnd, matchStart),
+            style: TextStyle(
+              fontSize: controller.fontSize.value,
+              height: 1.8,
+              letterSpacing: 0.5,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+            ),
+          ),
+        );
+      }
+      
+      // 判断是否是选中的匹配
+      final isSelected = selectedIndex >= 0 &&
+          selectedIndex < controller.searchMatches.length &&
+          controller.searchMatches[selectedIndex].position == match.position;
+      
+      // 添加高亮文本
+      spans.add(
+        TextSpan(
+          text: chunkContent.substring(matchStart, matchEnd),
+          style: TextStyle(
+            fontSize: controller.fontSize.value,
+            height: 1.8,
+            letterSpacing: 0.5,
+            backgroundColor: isSelected
+                ? Colors.orange.withOpacity(0.5)
+                : Colors.yellow.withOpacity(0.3),
+            color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+          ),
+        ),
+      );
+      
+      lastEnd = matchEnd;
+    }
+    
+    // 添加剩余文本
+    if (lastEnd < chunkContent.length) {
+      spans.add(
+        TextSpan(
+          text: chunkContent.substring(lastEnd),
+          style: TextStyle(
+            fontSize: controller.fontSize.value,
+            height: 1.8,
+            letterSpacing: 0.5,
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+          ),
+        ),
+      );
+    }
+    
+    return SelectableText.rich(TextSpan(children: spans), textAlign: TextAlign.justify);
+  }
+  
+  /// 将HTML转换为纯文本（用于纯文本模式）
+  String _convertHtmlToPlainText(String html) {
+    String plain = html;
+    
+    // 将常见的块级或换行标签替换为换行符，保留段落分隔
+    plain = plain.replaceAll(
+      RegExp(r'</p>|<br\s*/?>|</div>|</h[1-6]>', caseSensitive: false),
+      '\n\n',
+    );
+    plain = plain.replaceAll(
+      RegExp(r'<p[^>]*>|<div[^>]*>|<h[1-6][^>]*>', caseSensitive: false),
+      '\n\n',
+    );
+    
+    // 移除剩余的 HTML 标签
+    plain = plain.replaceAll(RegExp(r'<[^>]+>'), '');
+    
+    // 解码常见 HTML 实体
+    plain = plain.replaceAll('&nbsp;', ' ');
+    plain = plain.replaceAll('&amp;', '&');
+    plain = plain.replaceAll('&lt;', '<');
+    plain = plain.replaceAll('&gt;', '>');
+    plain = plain.replaceAll('&quot;', '"');
+    plain = plain.replaceAll('&apos;', "'");
+    
+    // 解码数字实体
+    plain = plain.replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+      try {
+        final code = int.parse(m[1]!);
+        return String.fromCharCode(code);
+      } catch (_) {
+        return '';
+      }
+    });
+    plain = plain.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) {
+      try {
+        final code = int.parse(m[1]!, radix: 16);
+        return String.fromCharCode(code);
+      } catch (_) {
+        return '';
+      }
+    });
+    
+    // 合并连续的空白行并修剪首尾
+    plain = plain.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+    
+    return plain;
   }
 
   // 构建带高亮的文本

@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 584748686;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1453511454;
 
 // Section: executor
 
@@ -273,6 +273,75 @@ fn wire__crate__api__novel_reader__add_novel_impl(
             transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                 (move || {
                     let output_ok = crate::api::novel_reader::add_novel(api_file_paths)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__add_novel_to_folder_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "add_novel_to_folder",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_file_paths = <Vec<String>>::sse_decode(&mut deserializer);
+            let api_folder_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::novel_reader::add_novel_to_folder(
+                        api_file_paths,
+                        api_folder_id,
+                    )?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__batch_update_folder_orders_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "batch_update_folder_orders",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_folder_ids = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::batch_update_folder_orders(api_folder_ids)?;
                     Ok(output_ok)
                 })(),
             )
@@ -750,6 +819,72 @@ fn wire__crate__api__capture__clear_captured_data_impl(
         },
     )
 }
+fn wire__crate__api__novel_reader__clear_novel_cache_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "clear_novel_cache",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_file_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::novel_reader::clear_novel_cache(api_file_path)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__create_child_folder_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_child_folder",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            let api_parent_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::create_child_folder(api_name, api_parent_id)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 fn wire__crate__api__novel_reader__create_folder_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -872,6 +1007,39 @@ fn wire__crate__api__novel_reader__delete_folder_impl(
             transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                 (move || {
                     let output_ok = crate::api::novel_reader::delete_folder(api_folder_id)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__delete_folder_with_novels_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "delete_folder_with_novels",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_folder_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::delete_folder_with_novels(api_folder_id)?;
                     Ok(output_ok)
                 })(),
             )
@@ -1211,6 +1379,38 @@ fn wire__crate__api__novel_reader__get_chapter_content_impl(
                     })(),
                 )
             }
+        },
+    )
+}
+fn wire__crate__api__novel_reader__get_child_folders_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_child_folders",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_parent_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::novel_reader::get_child_folders(api_parent_id)?;
+                    Ok(output_ok)
+                })(),
+            )
         },
     )
 }
@@ -2732,6 +2932,74 @@ fn wire__crate__api__novel_reader__remove_novel_with_file_impl(
         },
     )
 }
+fn wire__crate__api__novel_reader__rename_folder_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rename_folder",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_folder_id = <String>::sse_decode(&mut deserializer);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::rename_folder(api_folder_id, api_name)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__rename_novel_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rename_novel",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_title = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::rename_novel(api_novel_id, api_title)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 fn wire__crate__api__novel_reader__scan_novels_folder_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2915,6 +3183,42 @@ fn wire__crate__api__novel_reader__search_in_novel_impl(
         },
     )
 }
+fn wire__crate__api__novel_reader__set_novel_favorite_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_novel_favorite",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_is_favorite = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::novel_reader::set_novel_favorite(
+                        api_novel_id,
+                        api_is_favorite,
+                    )?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 fn wire__crate__api__capture__start_capture_proxy_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2977,6 +3281,155 @@ fn wire__crate__api__capture__stop_capture_proxy_impl(
         },
     )
 }
+fn wire__crate__api__novel_reader__update_novel_author_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_novel_author",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_author = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::update_novel_author(api_novel_id, api_author)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__update_novel_cover_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_novel_cover",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_image_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::novel_reader::update_novel_cover(
+                            api_novel_id,
+                            api_image_path,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__novel_reader__update_novel_info_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_novel_info",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_title = <Option<String>>::sse_decode(&mut deserializer);
+            let api_author = <Option<String>>::sse_decode(&mut deserializer);
+            let api_notes = <Option<String>>::sse_decode(&mut deserializer);
+            let api_tags = <Option<Vec<String>>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::novel_reader::update_novel_info(
+                        api_novel_id,
+                        api_title,
+                        api_author,
+                        api_notes,
+                        api_tags,
+                    )?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__update_novel_notes_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_novel_notes",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_notes = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::update_novel_notes(api_novel_id, api_notes)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 fn wire__crate__api__novel_reader__update_novel_order_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -3005,6 +3458,40 @@ fn wire__crate__api__novel_reader__update_novel_order_impl(
                 (move || {
                     let output_ok =
                         crate::api::novel_reader::update_novel_order(api_novel_id, api_order)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__novel_reader__update_novel_tags_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_novel_tags",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_novel_id = <String>::sse_decode(&mut deserializer);
+            let api_tags = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::novel_reader::update_novel_tags(api_novel_id, api_tags)?;
                     Ok(output_ok)
                 })(),
             )
@@ -4531,11 +5018,13 @@ impl SseDecode for crate::api::novel_reader::NovelFolder {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
         let mut var_order = <i32>::sse_decode(deserializer);
+        let mut var_parentId = <Option<String>>::sse_decode(deserializer);
         return crate::api::novel_reader::NovelFolder {
             id: var_id,
             name: var_name,
             created_at: var_createdAt,
             order: var_order,
+            parent_id: var_parentId,
         };
     }
 }
@@ -4568,6 +5057,9 @@ impl SseDecode for crate::api::novel_reader::NovelMetadata {
         let mut var_coverPath = <Option<String>>::sse_decode(deserializer);
         let mut var_folderId = <Option<String>>::sse_decode(deserializer);
         let mut var_customOrder = <Option<i32>>::sse_decode(deserializer);
+        let mut var_isFavorite = <bool>::sse_decode(deserializer);
+        let mut var_tags = <Vec<String>>::sse_decode(deserializer);
+        let mut var_notes = <Option<String>>::sse_decode(deserializer);
         return crate::api::novel_reader::NovelMetadata {
             id: var_id,
             title: var_title,
@@ -4582,6 +5074,9 @@ impl SseDecode for crate::api::novel_reader::NovelMetadata {
             cover_path: var_coverPath,
             folder_id: var_folderId,
             custom_order: var_customOrder,
+            is_favorite: var_isFavorite,
+            tags: var_tags,
+            notes: var_notes,
         };
     }
 }
@@ -4649,6 +5144,17 @@ impl SseDecode for Option<i64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<i64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<String>>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4804,201 +5310,207 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         4 => wire__crate__api__ffmpeg__FFmpegManager_new_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__module_loader__capture_proxy_module_clear_data_impl(
+        11 => wire__crate__api__module_loader__capture_proxy_module_clear_data_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        10 => wire__crate__api__module_loader__capture_proxy_module_get_videos_impl(
+        12 => wire__crate__api__module_loader__capture_proxy_module_get_videos_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__module_loader__capture_proxy_module_install_certificate_impl(
+        13 => wire__crate__api__module_loader__capture_proxy_module_install_certificate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__module_loader__capture_proxy_module_is_certificate_installed_impl(
+        14 => wire__crate__api__module_loader__capture_proxy_module_is_certificate_installed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__module_loader__capture_proxy_module_is_running_impl(
+        15 => wire__crate__api__module_loader__capture_proxy_module_is_running_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__module_loader__capture_proxy_module_start_impl(
+        16 => wire__crate__api__module_loader__capture_proxy_module_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__module_loader__capture_proxy_module_stop_impl(
+        17 => wire__crate__api__module_loader__capture_proxy_module_stop_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__logger__cleanup_old_logs_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__module_loader__download_capture_proxy_module_impl(
+        19 => wire__crate__api__logger__cleanup_old_logs_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__module_loader__download_capture_proxy_module_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
+        30 => wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__novel_reader__get_chapter_content_impl(
+        38 => wire__crate__api__novel_reader__get_chapter_content_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__novel_reader__get_novel_content_impl(
+        40 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__novel_reader__get_novel_content_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__ffmpeg__get_video_metadata_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__logger__init_logger_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__ffmpeg__initialize_ffmpeg_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__module_loader__is_capture_proxy_downloaded_impl(
+        45 => wire__crate__api__ffmpeg__get_video_metadata_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__logger__init_logger_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__ffmpeg__initialize_ffmpeg_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__module_loader__is_capture_proxy_downloaded_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__logger__log_warn_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__module_manager__module_check_update_impl(
+        55 => wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__logger__log_warn_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__module_manager__module_check_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__module_manager__module_get_available_impl(
+        63 => wire__crate__api__module_manager__module_get_available_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => {
+        64 => {
             wire__crate__api__module_manager__module_install_impl(port, ptr, rust_vec_len, data_len)
         }
-        60 => wire__crate__api__module_manager__module_list_all_impl(
+        66 => wire__crate__api__module_manager__module_list_all_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__module_manager__module_list_versions_impl(
+        68 => wire__crate__api__module_manager__module_list_versions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__module_manager__module_load_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__module_manager__module_reinstall_impl(
+        69 => wire__crate__api__module_manager__module_load_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__module_manager__module_reinstall_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => {
+        71 => {
             wire__crate__api__module_manager__module_reload_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => wire__crate__api__module_manager__module_uninstall_impl(
+        72 => wire__crate__api__module_manager__module_uninstall_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => {
+        73 => {
             wire__crate__api__module_manager__module_unload_impl(port, ptr, rust_vec_len, data_len)
         }
-        72 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
+        80 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__api__novel_reader__search_in_all_novels_impl(
+        81 => wire__crate__api__novel_reader__search_in_all_novels_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
+        82 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => {
+        83 => {
             wire__crate__api__novel_reader__search_in_novel_impl(port, ptr, rust_vec_len, data_len)
         }
-        82 => {
+        88 => wire__crate__api__novel_reader__update_novel_cover_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        96 => {
             wire__crate__api__websocket__ws_client_connect_impl(port, ptr, rust_vec_len, data_len)
         }
-        83 => wire__crate__api__websocket__ws_client_disconnect_impl(
+        97 => wire__crate__api__websocket__ws_client_disconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => {
+        98 => {
             wire__crate__api__websocket__ws_client_get_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        85 => wire__crate__api__websocket__ws_client_is_connected_impl(
+        99 => wire__crate__api__websocket__ws_client_is_connected_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        87 => wire__crate__api__websocket__ws_client_receive_message_impl(
+        101 => wire__crate__api__websocket__ws_client_receive_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__websocket__ws_client_send_binary_impl(
+        102 => wire__crate__api__websocket__ws_client_send_binary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => {
+        103 => {
             wire__crate__api__websocket__ws_client_send_text_impl(port, ptr, rust_vec_len, data_len)
         }
-        94 => {
+        108 => {
             wire__crate__api__websocket__ws_server_broadcast_impl(port, ptr, rust_vec_len, data_len)
         }
-        95 => wire__crate__api__websocket__ws_server_get_client_count_impl(
+        109 => wire__crate__api__websocket__ws_server_get_client_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
+        111 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5012,78 +5524,99 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         5 => wire__crate__api__novel_reader__add_novel_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__novel_reader__batch_update_novel_orders_impl(
+        6 => wire__crate__api__novel_reader__add_novel_to_folder_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__novel_reader__batch_update_folder_orders_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__http_bridge__call_handler_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__novel_reader__cancel_search_impl(ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__capture__cleanup_logger_old_files_impl(ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__novel_reader__clear_all_novels_impl(ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__capture__clear_captured_data_impl(ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__novel_reader__create_folder_impl(ptr, rust_vec_len, data_len),
-        21 => {
+        8 => wire__crate__api__novel_reader__batch_update_novel_orders_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        9 => wire__crate__api__http_bridge__call_handler_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__novel_reader__cancel_search_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__capture__cleanup_logger_old_files_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__novel_reader__clear_all_novels_impl(ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__capture__clear_captured_data_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__novel_reader__clear_novel_cache_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__novel_reader__create_child_folder_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__novel_reader__create_folder_impl(ptr, rust_vec_len, data_len),
+        25 => {
             wire__crate__api__module_manager__create_module_loader_impl(ptr, rust_vec_len, data_len)
         }
-        22 => wire__crate__api__module_manager__create_module_manager_impl(
+        26 => wire__crate__api__module_manager__create_module_manager_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__novel_reader__delete_folder_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
-        38 => {
+        27 => wire__crate__api__novel_reader__delete_folder_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__novel_reader__delete_folder_with_novels_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        31 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__novel_reader__get_child_folders_impl(ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
+        44 => {
             wire__crate__api__http_bridge__get_registered_handlers_impl(ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__http_bridge__init_http_bridge_impl(ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__capture__initialize_logger_impl(ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__capture__install_ca_certificate_impl(ptr, rust_vec_len, data_len),
-        47 => {
+        46 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__http_bridge__init_http_bridge_impl(ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__capture__initialize_logger_impl(ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__capture__install_ca_certificate_impl(ptr, rust_vec_len, data_len),
+        53 => {
             wire__crate__api__capture__is_ca_certificate_installed_impl(ptr, rust_vec_len, data_len)
         }
-        50 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
-        51 => {
+        56 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
+        57 => {
             wire__crate__api__capture__is_running_as_administrator_impl(ptr, rust_vec_len, data_len)
         }
-        59 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
-        61 => {
+        65 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
+        67 => {
             wire__crate__api__module_manager__module_list_loaded_impl(ptr, rust_vec_len, data_len)
         }
-        68 => {
+        74 => {
             wire__crate__api__novel_reader__move_novel_to_folder_impl(ptr, rust_vec_len, data_len)
         }
-        69 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
-        70 => {
+        75 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
+        76 => {
             wire__crate__api__novel_reader__remove_novel_with_file_impl(ptr, rust_vec_len, data_len)
         }
-        71 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__novel_reader__update_reading_progress_impl(
+        77 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__novel_reader__update_novel_author_impl(ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__novel_reader__update_reading_progress_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
-        91 => {
+        94 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
+        100 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
+        104 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
+        105 => {
             wire__crate__api__websocket__ws_message_get_timestamp_impl(ptr, rust_vec_len, data_len)
         }
-        92 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
-        93 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
-        96 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
+        106 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
+        110 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5380,6 +5913,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::novel_reader::NovelFolder {
             self.name.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.order.into_into_dart().into_dart(),
+            self.parent_id.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5433,6 +5967,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::novel_reader::NovelMetadata {
             self.cover_path.into_into_dart().into_dart(),
             self.folder_id.into_into_dart().into_dart(),
             self.custom_order.into_into_dart().into_dart(),
+            self.is_favorite.into_into_dart().into_dart(),
+            self.tags.into_into_dart().into_dart(),
+            self.notes.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5949,6 +6486,7 @@ impl SseEncode for crate::api::novel_reader::NovelFolder {
         <String>::sse_encode(self.name, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <i32>::sse_encode(self.order, serializer);
+        <Option<String>>::sse_encode(self.parent_id, serializer);
     }
 }
 
@@ -5984,6 +6522,9 @@ impl SseEncode for crate::api::novel_reader::NovelMetadata {
         <Option<String>>::sse_encode(self.cover_path, serializer);
         <Option<String>>::sse_encode(self.folder_id, serializer);
         <Option<i32>>::sse_encode(self.custom_order, serializer);
+        <bool>::sse_encode(self.is_favorite, serializer);
+        <Vec<String>>::sse_encode(self.tags, serializer);
+        <Option<String>>::sse_encode(self.notes, serializer);
     }
 }
 
@@ -6041,6 +6582,16 @@ impl SseEncode for Option<i64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <i64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<String>>::sse_encode(value, serializer);
         }
     }
 }

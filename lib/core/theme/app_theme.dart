@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/main.dart';
 import 'app_colors.dart';

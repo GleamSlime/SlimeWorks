@@ -60,6 +60,8 @@ pub struct NovelMetadata {
     pub folder_id: Option<String>,
     /// 自定义排序位置（数字越小越靠前）
     pub custom_order: Option<i32>,
+    /// 书籍备注
+    pub notes: Option<String>,
 }
 
 /// 书籍章节信息（主要用于 epub）
@@ -121,4 +123,6 @@ pub struct NovelFolder {
     pub created_at: DateTime<Utc>,
     /// 排序位置
     pub order: i32,
+    /// 父文件夹ID（None 表示顶级文件夹）
+    pub parent_id: Option<String>,
 }

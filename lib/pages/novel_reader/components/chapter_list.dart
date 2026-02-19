@@ -3,15 +3,47 @@ import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 
 /// 章节列表组件
-class ChapterList extends StatelessWidget {
+class ChapterList extends StatefulWidget {
   final NovelReaderViewModel controller;
 
   const ChapterList({super.key, required this.controller});
 
   @override
+  State<ChapterList> createState() => _ChapterListState();
+}
+
+class _ChapterListState extends State<ChapterList> {
+  late final ScrollController _scrollCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl = ScrollController();
+    // 列表显示后滚动到当前章节
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrentChapter());
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCurrentChapter() {
+    final idx = widget.controller.currentChapterIndex.value;
+    if (!_scrollCtrl.hasClients || idx < 0) return;
+    const itemH = 56.0; // 每行大约高度
+    // 将选中章节滚动到列表顶部（若已接近末尾则滚动到最大可滚动位置）
+    final rawTarget = idx * itemH;
+    final maxExtent = _scrollCtrl.position.maxScrollExtent;
+    final target = rawTarget.clamp(0.0, maxExtent);
+    _scrollCtrl.jumpTo(target);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Obx(() {
-      if (controller.chapters.isEmpty) {
+      if (widget.controller.chapters.isEmpty) {
         return const Center(
           child: Text('暂无章节', style: TextStyle(color: Colors.grey)),
         );
@@ -20,7 +52,13 @@ class ChapterList extends StatelessWidget {
       return Container(
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(2, 0))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(2, 0),
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -34,9 +72,17 @@ class ChapterList extends StatelessWidget {
                 children: [
                   const Icon(Icons.list, size: 20),
                   const SizedBox(width: 8),
-                  Text('章节列表', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  Text(
+                    '章节列表',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
                   const Spacer(),
-                  Text('共 ${controller.chapters.length} 章', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(
+                    '共 ${widget.controller.chapters.length} 章',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
                 ],
               ),
             ),
@@ -44,21 +90,28 @@ class ChapterList extends StatelessWidget {
             // 章节列表内容
             Expanded(
               child: ListView.builder(
-                itemCount: controller.chapters.length,
+                controller: _scrollCtrl,
+                itemCount: widget.controller.chapters.length,
                 itemBuilder: (context, index) {
-                  final chapter = controller.chapters[index];
+                  final chapter = widget.controller.chapters[index];
 
                   return Obx(() {
-                    final isCurrent = controller.currentChapterIndex.value == index;
+                    final isCurrent = widget.controller.currentChapterIndex.value == index;
 
                     return Material(
-                      color: isCurrent ? Theme.of(context).primaryColor.withOpacity(0.1) : Colors.transparent,
+                      color: isCurrent
+                          ? Theme.of(context).primaryColor.withOpacity(0.1)
+                          : Colors.transparent,
                       child: InkWell(
-                        onTap: () => controller.goToChapter(index),
+                        onTap: () => widget.controller.goToChapter(index),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3))),
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Theme.of(context).dividerColor.withOpacity(0.3),
+                              ),
+                            ),
                           ),
                           child: Row(
                             children: [
@@ -67,28 +120,36 @@ class ChapterList extends StatelessWidget {
                                 width: 32,
                                 height: 32,
                                 decoration: BoxDecoration(
-                                  color: isCurrent ? Theme.of(context).primaryColor : Colors.grey[300],
+                                  color: isCurrent
+                                      ? Theme.of(context).primaryColor
+                                      : Colors.grey[300],
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Center(
                                   child: Text(
                                     '${index + 1}',
-                                    style: TextStyle(color: isCurrent ? Colors.white : Colors.black87, fontSize: 12, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      color: isCurrent ? Colors.white : Colors.black87,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 12),
 
-                              // 章节标题
+                              // 章节标题（去除 HTML 标签）
                               Expanded(
                                 child: Text(
-                                  chapter.title,
+                                  chapter.title.replaceAll(RegExp(r'<[^>]+>'), '').trim(),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                    color: isCurrent ? Theme.of(context).primaryColor : Theme.of(context).textTheme.bodyLarge?.color,
+                                    color: isCurrent
+                                        ? Theme.of(context).primaryColor
+                                        : Theme.of(context).textTheme.bodyLarge?.color,
                                   ),
                                 ),
                               ),
@@ -97,7 +158,11 @@ class ChapterList extends StatelessWidget {
                               if (isCurrent)
                                 Container(
                                   margin: const EdgeInsets.only(left: 8),
-                                  child: Icon(Icons.play_arrow, size: 20, color: Theme.of(context).primaryColor),
+                                  child: Icon(
+                                    Icons.play_arrow,
+                                    size: 20,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
                                 ),
                             ],
                           ),

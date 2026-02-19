@@ -60,3 +60,4 @@ rust/**/gen/schemas
 *.key
 
 *.g.dart
+*_keyword.json

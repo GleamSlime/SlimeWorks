@@ -1,16 +1,26 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
 class LibraryBookCard extends StatefulWidget {
   final NovelMetadata metadata;
   final NovelLibraryViewModel viewModel;
+  final bool isSelected;
+  final bool isSelecting;
 
-  const LibraryBookCard({super.key, required this.metadata, required this.viewModel});
+  const LibraryBookCard({
+    super.key,
+    required this.metadata,
+    required this.viewModel,
+    this.isSelected = false,
+    this.isSelecting = false,
+  });
 
   @override
   State<LibraryBookCard> createState() => _LibraryBookCardState();
@@ -20,81 +30,414 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   bool _hovering = false;
 
   void _onTap() {
+    if (widget.isSelecting) {
+      widget.viewModel.toggleSelection(widget.metadata.id);
+      return;
+    }
     NovelReaderRoute($extra: widget.metadata).go(context);
     widget.viewModel.loadNovels();
   }
 
+  void _onLongPress() {
+    if (!widget.isSelecting) {
+      widget.viewModel.enterSelection(widget.metadata.id);
+    }
+  }
+
+  // ── 右键菜单 ──────────────────────────────────────────────────────────────
+
+  void _showContextMenu(BuildContext ctx, Offset globalPos) async {
+    // 将全局坐标转换到 Overlay 的局部坐标系，避免 ScreenUtil 等变换导致偏移
+    final overlay = Overlay.of(ctx).context.findRenderObject() as RenderBox;
+    final localPos = overlay.globalToLocal(globalPos);
+    final overlaySize = overlay.size;
+    final meta = widget.metadata;
+    final result = await showMenu<String>(
+      context: ctx,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(localPos.dx, localPos.dy, 1, 1),
+        Offset.zero & overlaySize,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'info',
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: scaleW(18)),
+              SizedBox(width: scaleW(8)),
+              const Text('书籍信息'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'rename',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: scaleW(18)),
+              SizedBox(width: scaleW(8)),
+              const Text('重命名'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'cover',
+          child: Row(
+            children: [
+              Icon(Icons.image_outlined, size: scaleW(18)),
+              SizedBox(width: scaleW(8)),
+              const Text('编辑封面'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'favorite',
+          child: Row(
+            children: [
+              Icon(
+                meta.isFavorite ? Icons.star : Icons.star_border,
+                size: scaleW(18),
+                color: meta.isFavorite ? Colors.amber : null,
+              ),
+              SizedBox(width: scaleW(8)),
+              Text(meta.isFavorite ? '取消收藏' : '加入收藏'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'move',
+          child: Row(
+            children: [
+              Icon(Icons.drive_file_move_outlined, size: scaleW(18)),
+              SizedBox(width: scaleW(8)),
+              const Text('移动到文件夹'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outlined, size: scaleW(18), color: Colors.red),
+              SizedBox(width: scaleW(8)),
+              const Text('删除', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (!ctx.mounted) return;
+    switch (result) {
+      case 'info':
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _showInfoDialog(context);
+        });
+        break;
+      case 'rename':
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _showRenameDialog(context);
+        });
+        break;
+      case 'cover':
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _pickAndSetCover(context);
+        });
+        break;
+      case 'favorite':
+        await widget.viewModel.toggleFavorite(widget.metadata.id);
+        break;
+      case 'move':
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (ctx.mounted) _showMoveFolderDialog(ctx);
+        });
+        break;
+      case 'delete':
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (ctx.mounted) _confirmDelete(ctx);
+        });
+        break;
+    }
+  }
+
+  void _showRenameDialog(BuildContext ctx) {
+    final controller = TextEditingController(text: widget.metadata.title);
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx2) => AlertDialog(
+        title: const Text('重命名书籍'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '输入新的书名'),
+          onSubmitted: (_) async {
+            final title = controller.text.trim();
+            if (ctx2.mounted) Navigator.of(ctx2).pop();
+            await widget.viewModel.renameNovel(widget.metadata.id, title);
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx2).pop(), child: const Text('取消')),
+          TextButton(
+            onPressed: () async {
+              final title = controller.text.trim();
+              if (ctx2.mounted) Navigator.of(ctx2).pop();
+              await widget.viewModel.renameNovel(widget.metadata.id, title);
+            },
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMoveFolderDialog(BuildContext ctx) async {
+    final vm = widget.viewModel;
+    final currentFolderId = widget.metadata.folderId;
+    // 如果当前在文件夹内，显示该文件夹的子文件夹；否则显示所有顶级文件夹
+    final contextFolderId = vm.currentFolderId.value;
+    final List<NovelFolder> foldersToShow = contextFolderId != null
+        ? vm.getChildFolders(contextFolderId)
+        : vm.folders.where((f) => f.parentId == null).toList();
+
+    if (!mounted) return;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx2) => SimpleDialog(
+        title: const Text('移动到文件夹'),
+        children: [
+          if (currentFolderId != null)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx2).pop('__ROOT__'),
+              child: const Row(
+                children: [Icon(Icons.home_outlined), SizedBox(width: 8), Text('移回根目录')],
+              ),
+            ),
+          ...foldersToShow
+              .where((f) => f.id != currentFolderId)
+              .map(
+                (f) => SimpleDialogOption(
+                  onPressed: () => Navigator.of(ctx2).pop(f.id),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.folder_outlined),
+                      const SizedBox(width: 8),
+                      Text(f.name),
+                    ],
+                  ),
+                ),
+              ),
+          if (foldersToShow.where((f) => f.id != currentFolderId).isEmpty &&
+              currentFolderId == null)
+            const SimpleDialogOption(
+              child: Text('暂无文件夹', style: TextStyle(color: Colors.grey)),
+            ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    await vm.moveNovelToFolder(widget.metadata.id, result == '__ROOT__' ? null : result);
+  }
+
+  void _confirmDelete(BuildContext ctx) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx2) => AlertDialog(
+        title: const Text('删除书籍'),
+        content: Text('确定要删除《${widget.metadata.title}》吗？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx2).pop(), child: const Text('取消')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () {
+              Navigator.of(ctx2).pop();
+              widget.viewModel.deleteNovel(widget.metadata.id);
+            },
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 编辑封面 ───────────────────────────────────────────────────────────────
+
+  Future<void> _pickAndSetCover(BuildContext ctx) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.first.path;
+    if (path == null) return;
+    await widget.viewModel.updateNovelCover(widget.metadata.id, path);
+  }
+
+  // ── 书籍信息弹层 ───────────────────────────────────────────────────────────
+
+  void _showInfoDialog(BuildContext ctx) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (dlgCtx) =>
+          LibraryBookInfoDialog(metadata: widget.metadata, viewModel: widget.viewModel),
+    );
+  }
+
+  // ── UI ───────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    print(widget.metadata.progress);
-    return Card(
-      elevation: 0,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: appMetrics.radius8),
-      child: InkWell(
-        onTap: _onTap,
-        mouseCursor: SystemMouseCursors.click,
-        hoverColor: Colors.transparent,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hovering = true),
-          onExit: (_) => setState(() => _hovering = false),
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(color: Colors.grey[200]),
-            child: Stack(
-              children: [
-                // 封面作为整个卡片背景
-                if (widget.metadata.coverPath != null) _buildCoverImage() else _buildDefaultCover(),
+    final accent = Theme.of(context).colorScheme.primary;
+    const dur = Duration(milliseconds: 200);
+    const curve = Curves.easeOut;
 
-                // 格式标签（磨砂玻璃质感）
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        color: Colors.black.withAlpha(89),
-                        child: Text(
-                          widget.metadata.format.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+    return AnimatedScale(
+      scale: _hovering ? 1.03 : 1.0,
+      duration: dur,
+      curve: curve,
+      child: Card(
+        elevation: _hovering ? 4 : 0,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: appMetrics.radius8,
+          side: widget.isSelected ? BorderSide(color: accent, width: 2) : BorderSide.none,
+        ),
+        child: InkWell(
+          onTap: _onTap,
+          onLongPress: _onLongPress,
+          onSecondaryTapDown: (d) => _showContextMenu(context, d.globalPosition),
+          mouseCursor: SystemMouseCursors.click,
+          hoverColor: Colors.transparent,
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hovering = true),
+            onExit: (_) => setState(() => _hovering = false),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(color: Colors.grey[200]),
+              child: Stack(
+                children: [
+                  // 封面作为整个卡片背景
+                  if (widget.metadata.coverPath != null)
+                    _buildCoverImage()
+                  else
+                    _buildDefaultCover(),
+
+                  // 格式标签（右上角磨砂玻璃，hover 时缩放淡入）
+                  if (!widget.isSelecting)
+                    Positioned(
+                      top: scaleW(8),
+                      right: scaleW(8),
+                      child: AnimatedOpacity(
+                        opacity: _hovering ? 1.0 : 0.7,
+                        duration: dur,
+                        curve: curve,
+                        child: AnimatedScale(
+                          scale: _hovering ? 1.0 : 0.85,
+                          duration: dur,
+                          curve: curve,
+                          child: ClipRRect(
+                            borderRadius: appMetrics.radius12,
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: scaleW(8),
+                                  vertical: scaleW(4),
+                                ),
+                                color: Colors.black.withAlpha(89),
+                                child: Text(
+                                  widget.metadata.format.toString(),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: appMetrics.fontSize10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // 底部磨砂栏：始终底部对齐，hover 时通过高度动画展开显示更多信息
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: ClipRect(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                  // 收藏图标（左上角）
+                  if (!widget.isSelecting)
+                    Positioned(
+                      top: scaleW(8),
+                      left: scaleW(8),
+                      child: AnimatedOpacity(
+                        opacity: _hovering ? 1.0 : (widget.metadata.isFavorite ? 0.9 : 0.0),
+                        duration: dur,
+                        curve: curve,
+                        child: AnimatedScale(
+                          scale: _hovering ? 1.0 : 0.7,
+                          duration: dur,
+                          curve: curve,
+                          child: GestureDetector(
+                            onTap: () => widget.viewModel.toggleFavorite(widget.metadata.id),
+                            child: ClipRRect(
+                              borderRadius: appMetrics.radius12,
+                              child: TweenAnimationBuilder<double>(
+                                duration: dur,
+                                curve: curve,
+                                tween: Tween(
+                                  begin: _hovering ? 8.0 : 0.0,
+                                  end: _hovering ? 0.0 : 8.0,
+                                ),
+                                builder: (_, sigma, child) => BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                                  child: child,
+                                ),
+                                child: Container(
+                                  padding: EdgeInsets.all(scaleW(4)),
+                                  color: Colors.black.withAlpha(89),
+                                  child: Icon(
+                                    widget.metadata.isFavorite ? Icons.star : Icons.star_border,
+                                    color: widget.metadata.isFavorite
+                                        ? Colors.amber
+                                        : Colors.white70,
+                                    size: scaleW(16),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // 底部磨砂栏：hover 时通过高度动画展开 + 模糊渐清晰
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: TweenAnimationBuilder<double>(
+                      duration: dur,
+                      curve: curve,
+                      tween: Tween(begin: _hovering ? 6.0 : 3.0, end: _hovering ? 3.0 : 6.0),
+                      builder: (_, blurSigma, child) => ClipRect(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                          child: child,
+                        ),
+                      ),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        curve: Curves.easeOut,
-                        height: _hovering ? 120 : 70,
+                        duration: dur,
+                        curve: curve,
+                        height: _hovering ? scaleW(120) : scaleW(70),
                         color: Colors.black.withAlpha(89),
-                        clipBehavior: Clip.none,
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            // 阅读进度条（在底部标题上方显示）
+                            // 阅读进度条
                             if (widget.metadata.progress > 0)
                               Positioned(
                                 top: 0,
                                 left: 0,
                                 right: 0,
                                 child: SizedBox(
-                                  height: 4,
+                                  height: scaleW(4),
                                   child: LinearProgressIndicator(
                                     value: widget.metadata.progress,
                                     backgroundColor: Colors.black.withAlpha(38),
@@ -104,92 +447,137 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   ),
                                 ),
                               ),
-                            // 标题和作者靠上排列
+                            // 标题和作者
                             Positioned(
                               top: 0,
                               left: 0,
                               right: 0,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      widget.metadata.title,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
+                              child: AnimatedSlide(
+                                offset: _hovering ? Offset.zero : const Offset(0, 0.05),
+                                duration: dur,
+                                curve: curve,
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: scaleW(8),
+                                    vertical: scaleW(8),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.metadata.title,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: appMetrics.fontSize14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      widget.metadata.author ?? "",
-                                      style: const TextStyle(fontSize: 12, color: Colors.white70),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
+                                      SizedBox(height: scaleW(4)),
+                                      Text(
+                                        widget.metadata.author ?? '',
+                                        style: TextStyle(
+                                          fontSize: appMetrics.fontSize12,
+                                          color: Colors.white70,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
 
-                            // 额外信息在底部对齐，通过 AnimatedSwitcher 切换，避免占用布局空间
+                            // 额外信息（进度/格式），hover 时淡入滑入
                             Positioned(
                               left: 0,
                               right: 0,
                               bottom: 0,
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 360),
-                                switchInCurve: Curves.easeOut,
-                                switchOutCurve: Curves.easeOut,
-                                child: KeyedSubtree(
-                                  key: UniqueKey(),
-                                  child: _hovering
-                                      ? Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white.withAlpha(20),
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              child: Text(
-                                                widget.metadata.format.toString(),
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
+                              child: AnimatedOpacity(
+                                opacity: _hovering ? 1.0 : 0.0,
+                                duration: dur,
+                                curve: curve,
+                                child: AnimatedSlide(
+                                  offset: _hovering ? Offset.zero : const Offset(0, 0.3),
+                                  duration: dur,
+                                  curve: curve,
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: scaleW(8),
+                                      vertical: scaleW(4),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: scaleW(6),
+                                            vertical: scaleW(2),
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withAlpha(20),
+                                            borderRadius: appMetrics.radius10,
+                                          ),
+                                          child: Text(
+                                            widget.metadata.format.toString(),
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: appMetrics.fontSize12,
                                             ),
-                                            const SizedBox(width: 8),
-                                            if (widget.metadata.progress > 0)
-                                              Text(
-                                                '${(widget.metadata.progress * 100).toStringAsFixed(0)}% 阅读',
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 12,
-                                                ),
+                                          ),
+                                        ),
+                                        SizedBox(width: scaleW(8)),
+                                        if (widget.metadata.progress > 0)
+                                          Flexible(
+                                            child: Text(
+                                              '${(widget.metadata.progress * 100).toStringAsFixed(0)}% 阅读',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: appMetrics.fontSize12,
                                               ),
-                                          ],
-                                        )
-                                      : const SizedBox.shrink(),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
+
+                            // 选中状态 overlay（右上角）
+                            if (widget.isSelecting)
+                              Positioned(
+                                top: scaleW(6),
+                                right: scaleW(6),
+                                child: Container(
+                                  width: scaleW(22),
+                                  height: scaleW(22),
+                                  decoration: BoxDecoration(
+                                    color: widget.isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.black.withAlpha(60),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: widget.isSelected
+                                      ? Icon(
+                                          Icons.check,
+                                          size: appMetrics.fontSize14,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                                ),
+                              ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -205,9 +593,16 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           child: ClipRect(
             child: AnimatedScale(
               scale: _hovering ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 150),
+              duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
-              child: Image.file(file, fit: BoxFit.cover),
+              child: Hero(
+                tag: 'book_cover_${widget.metadata.id}',
+                child: Image.file(
+                  file,
+                  key: ValueKey('${file.path}_${file.lastModifiedSync().millisecondsSinceEpoch}'),
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
         );
@@ -217,9 +612,14 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   }
 
   Widget _buildDefaultCover() {
-    return Container(
-      color: Colors.grey[300],
-      child: const Center(child: Icon(Icons.book, size: 40, color: Colors.white70)),
+    return Hero(
+      tag: 'book_cover_${widget.metadata.id}',
+      child: Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Icon(Icons.book, size: scaleW(40), color: Colors.white70),
+        ),
+      ),
     );
   }
 }

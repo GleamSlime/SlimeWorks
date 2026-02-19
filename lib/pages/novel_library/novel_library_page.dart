@@ -75,7 +75,22 @@ class NovelLibraryPage extends StatelessWidget {
                 ? IconButton(
                     icon: const Icon(Icons.delete_sweep),
                     tooltip: '清空所有',
-                    onPressed: () => controller.confirmClearAllNovels(),
+                    onPressed: () => Get.dialog(
+                      AlertDialog(
+                        title: const Text('清空所有书籍'),
+                        content: const Text('确定要清空所有书籍吗？此操作不可撤销。'),
+                        actions: [
+                          TextButton(onPressed: Get.back, child: const Text('取消')),
+                          FilledButton(
+                            onPressed: () {
+                              Get.back();
+                              controller.clearAllNovelsAction();
+                            },
+                            child: const Text('确认'),
+                          ),
+                        ],
+                      ),
+                    ),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -423,7 +438,7 @@ class NovelLibraryPage extends StatelessWidget {
                             (n) => n.id == draggedNovel.id,
                           );
                           if (draggedIndex != -1 && draggedIndex != index) {
-                            controller.reorderNovels(draggedIndex, index);
+                            controller.reorderItems(draggedIndex, index);
                           }
                         },
                         builder: (context, candidateData, rejectedData) {

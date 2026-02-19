@@ -27,6 +27,9 @@ epub = "2.0"
 # 禁用默认特性以避免引入 bzip2 本地依赖（macOS 链接报错）
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 
+# 图片处理（封面压缩缩放）
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+
 # 文件遍历
 walkdir = "2.5"
 

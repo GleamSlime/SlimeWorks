@@ -12,47 +12,58 @@
 - 在MacOS/Windows如果缩放窗口为手机比例(窄屏)则会且为移动端模式显示，修改flutter时需考虑响应式
 - 状态管理(UI/页面状态 使用GetX | 业务逻辑Service、Rust FFI桥接层、配置、数据库 使用GetIt)
 - 路由操作使用GoRouter TypedGoRoute
-- DevTools MCP 诊断：ws://127.0.0.1:49330/qgaGYxWZlRM=
+- Dart中的尺寸需参考lib\core\theme\app_theme.dart appMetrics，颜色也需考虑亮色和暗色，如果尺寸未定义则使用scaleW，禁止直接数字或者int.w
+- 打日志使用Loggers class
 
 ‌## Dart规则
-// 1. 类型安全
+
+‌### 1. 类型安全
+
 - 始终声明变量和函数类型
 - 避免使用dynamic/any
 - 创建必要的类型定义
 - 类名：PascalCase
-// 2. 命名规范
+
+‌### 2. 命名规范
+
 - 变量/函数：camelCase
 - 文件/目录：snake_case
 - 常量：UPPER_SNAKE_CASE
 - 单一职责（<20行）
-// 3. 函数设计
+
+‌### 3. 函数设计
+
 - 使用动词命名（getUser, saveData）
 - 布尔变量：isLoading, hasError, canDelete
 - 避免嵌套，提前返回
 
 ‌## ‌Flutter规则
-// 1. 组件优化
+
+‌### 1. 组件优化
+
 - 尽可能使用const构造函数
 - 避免深度嵌套（拆分为小组件）
 - 使用ConsumerWidget + Riverpod
 - 或BlocBuilder + flutter_bloc
 
-// 2. 性能优化
+‌### 2. 性能优化
+
 - ListView.builder用于长列表
 - const修饰不可变组件
 - 最小化重绘范围
 - 使用compute()处理耗时操作
 
-// 3. 错误处理
+‌### 3. 错误处理
+
 - 使用SelectableText.rich显示错误
 - AsyncValue处理异步状态
 - Either<Failure, Success>模式
 - 全局异常处理
 
-
 ‌## 静态分析
+
 flutter analyze
 
-
 ‌## MCP诊断
+
 flutter pub global run devtools

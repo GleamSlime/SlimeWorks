@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
+import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/pages/capture_screen_page.dart';
 import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
@@ -51,6 +52,8 @@ class Routes {
   Routes._();
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 /// 应用路由配置
 class AppRoutes {
   AppRoutes._();
@@ -91,7 +94,14 @@ class AppRoutes {
 
     router = GoRouter(
       initialLocation: '/dashboard',
-      routes: $appRoutes,
+      routes: [
+        ShellRoute(
+          builder: (context, state, child) => DesktopLayout(child: child),
+          routes: $appRoutes,
+        ),
+      ],
+      navigatorKey: navigatorKey,
+      debugLogDiagnostics: true,
       redirect: (context, state) {
         // 权限检查 - 在路由级别进行权限控制
         final path = state.uri.path;
@@ -113,7 +123,12 @@ class AppRoutes {
         }
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          controller.selectedRoute.value = path;
+          // 如果是阅读器页面，则侧边栏保持"书库"高亮
+          if (path == '/novel-reader') {
+            controller.selectedRoute.value = '/collection/library';
+          } else {
+            controller.selectedRoute.value = path;
+          }
         });
 
         return null; // 无重定向

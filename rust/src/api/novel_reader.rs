@@ -16,6 +16,10 @@ pub struct NovelMetadata {
     pub cover_path: Option<String>,
     pub folder_id: Option<String>,
     pub custom_order: Option<i32>,
+    pub is_favorite: bool,
+    pub tags: Vec<String>,
+    /// 书籍备注
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +69,9 @@ fn convert_metadata(meta: novel_reader::types::NovelMetadata) -> NovelMetadata {
         cover_path: meta.cover_path,
         folder_id: meta.folder_id,
         custom_order: meta.custom_order,
+        is_favorite: meta.is_favorite,
+        tags: meta.tags,
+        notes: meta.notes,
     }
 }
 
@@ -168,6 +175,8 @@ pub struct NovelFolder {
     pub name: String,
     pub created_at: i64,
     pub order: i32,
+    /// 父文件夹ID（None 表示顶级）
+    pub parent_id: Option<String>,
 }
 
 fn convert_folder(folder: novel_reader::types::NovelFolder) -> NovelFolder {
@@ -176,6 +185,7 @@ fn convert_folder(folder: novel_reader::types::NovelFolder) -> NovelFolder {
         name: folder.name,
         created_at: folder.created_at.timestamp(),
         order: folder.order,
+        parent_id: folder.parent_id,
     }
 }
 
@@ -218,6 +228,55 @@ pub fn update_novel_order(novel_id: String, order: i32) -> anyhow::Result<()> {
 #[frb(sync)]
 pub fn batch_update_novel_orders(novel_ids: Vec<String>) -> anyhow::Result<()> {
     novel_reader::batch_update_novel_orders(novel_ids).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 重命名书籍标题
+#[frb(sync)]
+pub fn rename_novel(novel_id: String, title: String) -> anyhow::Result<()> {
+    novel_reader::rename_novel(novel_id, title).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 设置收藏状态
+#[frb(sync)]
+pub fn set_novel_favorite(novel_id: String, is_favorite: bool) -> anyhow::Result<()> {
+    novel_reader::set_novel_favorite(novel_id, is_favorite).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 更新书籍标签
+#[frb(sync)]
+pub fn update_novel_tags(novel_id: String, tags: Vec<String>) -> anyhow::Result<()> {
+    novel_reader::update_novel_tags(novel_id, tags).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 清除书籍内容缓存（强制下次重新解析 epub 图片）
+#[frb(sync)]
+pub fn clear_novel_cache(file_path: String) -> anyhow::Result<()> {
+    novel_reader::clear_novel_cache(file_path).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 重命名文件夹
+#[frb(sync)]
+pub fn rename_folder(folder_id: String, name: String) -> anyhow::Result<()> {
+    novel_reader::rename_folder(folder_id, name).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 批量更新文件夹排序
+#[frb(sync)]
+pub fn batch_update_folder_orders(folder_ids: Vec<String>) -> anyhow::Result<()> {
+    novel_reader::batch_update_folder_orders(folder_ids).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(())
+}
+
+/// 删除文件夹及其内所有书籍
+#[frb(sync)]
+pub fn delete_folder_with_novels(folder_id: String) -> anyhow::Result<()> {
+    novel_reader::delete_folder_with_novels(folder_id).map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
 }
 
@@ -309,4 +368,63 @@ pub fn scan_novels_folder_batched(
     let results = novel_reader::scan_novels_folder_batched(folder_path, batch_size)
         .map_err(|e| anyhow::anyhow!(e))?;
     Ok(results.into_iter().map(convert_scan_batch_result).collect())
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// 扩展书籍元数据操作
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 更新书籍封面（压缩后保存，异步执行避免阻塞 UI）
+pub fn update_novel_cover(novel_id: String, image_path: String) -> anyhow::Result<()> {
+    novel_reader::update_novel_cover(novel_id, image_path).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 更新书籍作者
+#[frb(sync)]
+pub fn update_novel_author(novel_id: String, author: String) -> anyhow::Result<()> {
+    novel_reader::update_novel_author(novel_id, author).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 更新书籍备注
+#[frb(sync)]
+pub fn update_novel_notes(novel_id: String, notes: String) -> anyhow::Result<()> {
+    novel_reader::update_novel_notes(novel_id, notes).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 批量更新书籍基本信息
+#[frb(sync)]
+pub fn update_novel_info(
+    novel_id: String,
+    title: Option<String>,
+    author: Option<String>,
+    notes: Option<String>,
+    tags: Option<Vec<String>>,
+) -> anyhow::Result<()> {
+    novel_reader::update_novel_info(novel_id, title, author, notes, tags)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 创建子文件夹
+#[frb(sync)]
+pub fn create_child_folder(name: String, parent_id: String) -> anyhow::Result<NovelFolder> {
+    let folder =
+        novel_reader::create_child_folder(name, parent_id).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(convert_folder(folder))
+}
+
+/// 获取子文件夹列表
+#[frb(sync)]
+pub fn get_child_folders(parent_id: String) -> anyhow::Result<Vec<NovelFolder>> {
+    let folders = novel_reader::get_child_folders(parent_id).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(folders.into_iter().map(convert_folder).collect())
+}
+
+/// 添加书籍并关联到指定文件夹
+#[frb(sync)]
+pub fn add_novel_to_folder(
+    file_paths: Vec<String>,
+    folder_id: String,
+) -> anyhow::Result<Vec<NovelMetadata>> {
+    let novels =
+        novel_reader::add_novel_to_folder(file_paths, folder_id).map_err(|e| anyhow::anyhow!(e))?;
+    Ok(novels.into_iter().map(convert_metadata).collect())
 }
