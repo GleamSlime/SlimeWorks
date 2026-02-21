@@ -9,11 +9,13 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   void enterFolder(String folderId) {
     currentFolderId.value = folderId;
     exitSelection();
+    resetPagination();
   }
 
   void exitFolder() {
     currentFolderId.value = null;
     exitSelection();
+    resetPagination();
   }
 
   // ─────────────────────────────────────────

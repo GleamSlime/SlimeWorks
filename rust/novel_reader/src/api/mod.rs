@@ -103,7 +103,7 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
     if let Ok(exe) = maybe_exe {
         if let Some(parent) = exe.parent() {
             let p = parent.join("tag_keyword.json");
-            log::debug!("[Tag] checking override file at {:?}", p);
+            log::info!("[Tag] checking override file at {:?}", p);
             if p.exists() {
                 match std::fs::read_to_string(&p) {
                     Ok(s) => match serde_json::from_str::<HashMap<String, Vec<String>>>(&s) {
@@ -111,7 +111,7 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
                             log::info!(
                                 "[Tag] loaded override tag_keyword.json from {:?} ({} keys)",
                                 p,
-                                map.len()
+                                map.len(),
                             );
                             return map;
                         }
@@ -132,11 +132,11 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
                     }
                 }
             } else {
-                log::debug!("[Tag] no override file at {:?}", p);
+                log::info!("[Tag] no override file at {:?}", p);
             }
         }
     } else {
-        log::debug!("[Tag] current_exe() failed: {:?}", maybe_exe.err());
+        log::info!("[Tag] current_exe() failed: {:?}", maybe_exe.err());
     }
 
     // 使用内嵌默认规则
@@ -144,7 +144,7 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
         Ok(map) => {
             log::info!(
                 "[Tag] loaded embedded default tag_keyword.json ({} keys)",
-                map.len()
+                map.len(),
             );
             map
         }
@@ -176,7 +176,7 @@ fn sample_file_raw(file_path: &str) -> String {
                             acc.push('\n');
                         }
                     }
-                    log::debug!("[Tag] txt sample_len={} for {}", acc.len(), file_path);
+                    log::info!("[Tag] txt sample_len={} for {}", acc.len(), file_path);
                     acc.to_lowercase()
                 }
                 Err(e) => {
@@ -225,11 +225,11 @@ fn apply_tag_keywords(novel: &mut NovelMetadata) {
     }
     let sample = sample_file_raw(&novel.file_path);
     // 调试日志：输出规则预览和样本片段，方便排查匹配失败原因
-    log::debug!("[Tag] rules_keys={:?}", rules.keys().collect::<Vec<_>>());
-    log::debug!(
+    log::info!("[Tag] rules_keys={:?}", rules.keys().collect::<Vec<_>>());
+    log::info!(
         "[Tag] sample_len={} snippet={}",
         sample.len(),
-        sample.chars().take(200).collect::<String>()
+        sample.chars().take(200).collect::<String>(),
     );
     if sample.is_empty() {
         return;
@@ -243,7 +243,7 @@ fn apply_tag_keywords(novel: &mut NovelMetadata) {
                     "[Tag] matched tag='{}' keyword='{}' for file={} ",
                     tag,
                     kw,
-                    novel.file_path
+                    novel.file_path,
                 );
                 tags.insert(tag.clone());
                 break;
@@ -390,14 +390,21 @@ pub fn clear_all_novels() -> Result<(), String> {
 /// 获取书籍内容（带缓存）
 pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     use std::fs;
+    use std::sync::Once;
     use std::time::Instant;
+    // 初始化日志（确保只初始化一次）以便将 Rust 层的 logger.info/debug! 输出到控制台
+    static INIT_LOGGER: Once = Once::new();
+    INIT_LOGGER.call_once(|| {
+        let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("info"))
+            .try_init();
+    });
 
     let start_time = Instant::now();
     log::info!("[Novel] Starting to load novel: {}", file_path);
 
     let path = PathBuf::from(&file_path);
 
-    log::debug!("[Novel] Checking file metadata...");
+    log::info!("[Novel] Checking file metadata...");
     let metadata = fs::metadata(&path).map_err(|e| {
         log::error!("[Novel] Failed to read file metadata: {}", e);
         format!("Failed to read file metadata: {}", e)
@@ -410,11 +417,11 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     log::info!(
         "[Novel] File size: {} bytes, modified: {:?}",
         file_size,
-        modified_time
+        modified_time,
     );
 
     {
-        log::debug!("[Novel] Checking cache...");
+        log::info!("[Novel] Checking cache...");
         let cache = get_content_cache().lock().map_err(|e| e.to_string())?;
         if let Some((cached_content, cached_time)) = cache.get(&file_path) {
             if cached_time >= &modified_time {
@@ -422,7 +429,7 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
                 log::info!(
                     "[Novel] Cache hit! Returned in {:?}, chapters: {}",
                     elapsed,
-                    cached_content.chapters.len()
+                    cached_content.chapters.len(),
                 );
                 return Ok(cached_content.clone());
             } else {
@@ -449,7 +456,7 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
             log::info!(
                 "[Novel] TXT parsed in {:?}, chapters: {}",
                 parse_start.elapsed(),
-                result.chapters.len()
+                result.chapters.len(),
             );
             result
         }
@@ -461,7 +468,7 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
             log::info!(
                 "[Novel] EPUB parsed in {:?}, chapters: {}",
                 parse_start.elapsed(),
-                result.chapters.len()
+                result.chapters.len(),
             );
             result
         }
@@ -469,12 +476,12 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     };
 
     {
-        log::debug!("[Novel] Updating cache...");
+        log::info!("[Novel] Updating cache...");
         let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
         cache.insert(file_path.clone(), (content.clone(), modified_time));
         log::info!(
             "[Novel] Cache updated, total cached novels: {}",
-            cache.len()
+            cache.len(),
         );
     }
 
@@ -483,33 +490,65 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     Ok(content)
 }
 
-/// 获取书籍章节内容（使用缓存）
+/// 获取书籍章节内容（按需加载）
 pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<String, String> {
+    use std::path::PathBuf;
+
     log::info!(
         "[Novel] Getting chapter {} from {}",
         chapter_index,
-        file_path
+        file_path,
     );
-    let content = get_novel_content(file_path)?;
 
-    let result = content
-        .chapters
-        .get(chapter_index)
-        .and_then(|ch| ch.content.clone())
-        .ok_or_else(|| {
-            log::error!(
-                "[Novel] Chapter {} not found or has no content",
-                chapter_index
+    let path = PathBuf::from(&file_path);
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| "Invalid file extension".to_string())?;
+
+    match ext.to_lowercase().as_str() {
+        "epub" => {
+            // EPUB: 按需加载章节内容和图片
+            log::info!("[Novel] Loading EPUB chapter {} on-demand", chapter_index);
+            let result = crate::parser::EpubParser::get_chapter_content(&path, chapter_index)
+                .map_err(|e| {
+                    log::error!("[Novel] Failed to load EPUB chapter: {}", e);
+                    e.to_string()
+                })?;
+
+            log::info!(
+                "[Novel] EPUB chapter {} loaded, length: {} chars",
+                chapter_index,
+                result.len(),
             );
-            format!("Chapter {} not found or has no content", chapter_index)
-        })?;
+            Ok(result)
+        }
+        "txt" => {
+            // TXT: 从缓存中获取（已在parse时全部加载）
+            log::info!("[Novel] Loading TXT chapter {} from cache", chapter_index);
+            let content = get_novel_content(file_path)?;
 
-    log::info!(
-        "[Novel] Chapter {} loaded, length: {} chars",
-        chapter_index,
-        result.len()
-    );
-    Ok(result)
+            let result = content
+                .chapters
+                .get(chapter_index)
+                .and_then(|ch| ch.content.clone())
+                .ok_or_else(|| {
+                    log::error!(
+                        "[Novel] Chapter {} not found or has no content",
+                        chapter_index
+                    );
+                    format!("Chapter {} not found or has no content", chapter_index)
+                })?;
+
+            log::info!(
+                "[Novel] TXT chapter {} loaded, length: {} chars",
+                chapter_index,
+                result.len(),
+            );
+            Ok(result)
+        }
+        _ => Err(format!("Unsupported file format: {}", ext)),
+    }
 }
 
 /// 清除书籍内容缓存（强制下次打开时重新解析 epub 图片）

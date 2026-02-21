@@ -11,281 +11,329 @@ use zip::ZipArchive;
 pub struct EpubParser;
 
 impl EpubParser {
-    /// 解析 epub 文件
+    /// 解析 epub 文件（仅从 TOC/spine 元数据获取章节列表，不加载任何内容）
     pub fn parse<P: AsRef<Path>>(path: P) -> Result<NovelContent> {
+        let path = path.as_ref();
+        let doc = epub::doc::EpubDoc::new(path)
+            .map_err(|e| anyhow::anyhow!("Failed to open epub: {:?}", e))?;
+
+        let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
+        log::info!("EpubParser: Parsing metadata from TOC/spine (no content loading)");
+
+        // ── 1. 从 TOC 构建 资源路径 → 标题 映射 ──
+        let mut toc_title_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        fn collect_toc(
+            toc: &[epub::doc::NavPoint],
+            map: &mut std::collections::HashMap<String, String>,
+        ) {
+            for nav in toc {
+                let path_str = nav.content.to_string_lossy().to_string();
+                // 去掉 fragment（#anchor）以匹配 resource path
+                let base_path = path_str.split('#').next().unwrap_or(&path_str).to_string();
+                if !nav.label.trim().is_empty() {
+                    let label = nav.label.trim().to_string();
+                    map.entry(base_path.clone()).or_insert(label.clone());
+                    // 也用文件名作为后备匹配键
+                    if let Some(filename) = base_path.split('/').last() {
+                        map.entry(filename.to_string()).or_insert(label);
+                    }
+                }
+                collect_toc(&nav.children, map);
+            }
+        }
+        collect_toc(&doc.toc, &mut toc_title_map);
+        log::info!("EpubParser: TOC has {} label entries", toc_title_map.len());
+
+        // ── 2. 遍历 spine，直接构建章节列表（不加载内容） ──
+        let mut chapters = Vec::new();
+        for (index, spine_item) in doc.spine.iter().enumerate() {
+            let resource_id = &spine_item.idref;
+
+            // 查找资源路径和 MIME 类型
+            let resource = match doc.resources.get(resource_id.as_str()) {
+                Some(r) => r,
+                None => continue, // 未知资源，跳过
+            };
+
+            // 跳过非内容资源（图片、CSS 等）
+            let mime_lower = resource.mime.to_lowercase();
+            if !mime_lower.contains("html") && !mime_lower.contains("xml") {
+                continue;
+            }
+
+            let resource_path = resource.path.to_string_lossy().to_string();
+
+            // 从 TOC 映射获取标题
+            let title = toc_title_map
+                .get(&resource_path)
+                .or_else(|| {
+                    // 尝试只用文件名匹配
+                    resource_path
+                        .split('/')
+                        .last()
+                        .and_then(|filename| toc_title_map.get(filename))
+                })
+                .cloned()
+                .unwrap_or_else(|| {
+                    if !resource_id.is_empty() {
+                        resource_id.clone()
+                    } else {
+                        format!("第{}章", index + 1)
+                    }
+                });
+
+            chapters.push(NovelChapter {
+                id: format!("{}_{}::res::{}", novel_id, index, resource_id),
+                title,
+                index,
+                content: None, // 延迟加载，由 get_chapter_content 提供
+            });
+        }
+
+        log::info!(
+            "EpubParser: Parsed {} chapters from spine (no content loaded)",
+            chapters.len()
+        );
+        Ok(NovelContent { novel_id, chapters })
+    }
+
+    /// 获取指定章节的内容（按需提取图片并转base64）
+    pub fn get_chapter_content<P: AsRef<Path>>(path: P, chapter_index: usize) -> Result<String> {
         let path = path.as_ref();
         let mut doc = epub::doc::EpubDoc::new(path)
             .map_err(|e| anyhow::anyhow!("Failed to open epub: {:?}", e))?;
 
         let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
 
-        // 创建临时目录存储提取的图片
-        let image_dir = std::env::temp_dir()
-            .join("slimeworks")
-            .join("epub_images")
-            .join(&novel_id);
-        let _ = fs::create_dir_all(&image_dir);
-        log::info!("EpubParser: Image directory: {:?}", image_dir);
-
-        // 检查是否需要重新提取图片：比较epub内图片数量与缓存目录中文件数量
-        let archive_image_count = (|| -> Result<usize> {
-            let f = File::open(path)?;
-            let mut archive = ZipArchive::new(f)?;
-            let mut cnt: usize = 0;
-            for i in 0..archive.len() {
-                if let Ok(file) = archive.by_index(i) {
-                    let name = file.name().to_lowercase();
-                    if name.ends_with(".jpg")
-                        || name.ends_with(".jpeg")
-                        || name.ends_with(".png")
-                        || name.ends_with(".gif")
-                        || name.ends_with(".svg")
-                        || name.ends_with(".webp")
-                    {
-                        cnt += 1;
-                    }
-                }
-            }
-            Ok(cnt)
-        })()
-        .unwrap_or(0);
-
-        // 统计缓存目录中文件数量
-        let existing_count = Self::count_files_in_dir(&image_dir).unwrap_or(0);
-
-        let need_extract = existing_count == 0 || archive_image_count > existing_count;
-
-        log::info!(
-            "EpubParser: archive_images={} cached_images={} image_dir={:?}",
-            archive_image_count,
-            existing_count,
-            image_dir
-        );
-
-        if need_extract {
-            log::info!("EpubParser: Image directory missing/partial, extracting images...");
-            match Self::extract_images(path, &image_dir) {
-                Ok(_) => log::info!("EpubParser: Images extracted successfully"),
-                Err(e) => log::warn!("EpubParser: Failed to extract images: {:?}", e),
-            };
-        } else {
-            log::info!("EpubParser: Using existing images from cache");
-        }
-
-        // 创建CSS目录并提取CSS文件
+        // CSS目录
         let css_dir = std::env::temp_dir()
             .join("slimeworks")
             .join("epub_css")
             .join(&novel_id);
         let _ = fs::create_dir_all(&css_dir);
 
-        let css_content = match Self::extract_css(path, &css_dir) {
-            Ok(css) => {
-                log::info!("EpubParser: CSS extracted, {} bytes", css.len());
-                css
-            }
-            Err(e) => {
-                log::warn!("EpubParser: Failed to extract CSS: {:?}", e);
-                String::new()
-            }
-        };
+        // 读取章节内容
+        doc.set_current_chapter(chapter_index);
+        let (content_bytes, _mime) = doc
+            .get_current()
+            .ok_or_else(|| anyhow::anyhow!("Chapter {} not found", chapter_index))?;
 
-        let mut chapters = Vec::new();
-        let num_pages = doc.get_num_pages();
-
-        for index in 0..num_pages {
-            doc.set_current_page(index);
-            if let Some((content_bytes, _mime)) = doc.get_current() {
-                let mut content = String::from_utf8_lossy(&content_bytes).to_string();
-                if content.contains('\u{FFFD}') {
-                    let fallbacks: [&'static encoding_rs::Encoding; 4] = [
-                        encoding_rs::GBK,
-                        encoding_rs::SHIFT_JIS,
-                        encoding_rs::WINDOWS_1252,
-                        encoding_rs::EUC_JP,
-                    ];
-                    for fb in &fallbacks {
-                        let (s, _, _) = fb.decode(&content_bytes);
-                        let s = s.to_string();
-                        if !s.contains('\u{FFFD}') {
-                            content = s;
-                            log::info!("EpubParser: fallback decode used: {}", fb.name());
-                            break;
-                        }
-                    }
-                }
-
-                let mut content = Self::convert_image_paths(&content, &image_dir);
-
-                if !css_content.is_empty() {
-                    content = Self::inline_css_styles(&content, &css_content);
-                }
-
-                let text = Self::strip_html_tags(&content);
-
-                if !text.trim().is_empty() {
-                    let extracted_title = Self::extract_title_from_content(&text);
-
-                    let resource_id = doc
-                        .get_current_id()
-                        .map(|s| s.to_string())
-                        .unwrap_or_default();
-                    let chapter = NovelChapter {
-                        id: format!("{}_{}::res::{}", novel_id, index, resource_id),
-                        title: extracted_title
-                            .or_else(|| Self::extract_title_from_html(&content))
-                            .or_else(|| Self::extract_first_paragraph_as_title(&text))
-                            .unwrap_or_else(|| {
-                                if !resource_id.is_empty() {
-                                    resource_id.clone()
-                                } else {
-                                    format!("第{}章", index + 1)
-                                }
-                            }),
-                        index,
-                        content: Some(text),
-                    };
-                    chapters.push(chapter);
+        let mut content = String::from_utf8_lossy(&content_bytes).to_string();
+        if content.contains('\u{FFFD}') {
+            let fallbacks: [&'static encoding_rs::Encoding; 4] = [
+                encoding_rs::GBK,
+                encoding_rs::SHIFT_JIS,
+                encoding_rs::WINDOWS_1252,
+                encoding_rs::EUC_JP,
+            ];
+            for fb in &fallbacks {
+                let (s, _, _) = fb.decode(&content_bytes);
+                let s = s.to_string();
+                if !s.contains('\u{FFFD}') {
+                    content = s;
+                    log::debug!("EpubParser: fallback decode used: {}", fb.name());
+                    break;
                 }
             }
         }
 
-        Ok(NovelContent { novel_id, chapters })
+        // 将图片转为base64内嵌（不写本地）
+        content = Self::embed_images_as_base64(path, &content)?;
+
+        // 提取CSS（如果还没有）
+        let css_content = match Self::extract_css(path, &css_dir) {
+            Ok(css) => {
+                log::debug!("EpubParser: CSS loaded, {} bytes", css.len());
+                css
+            }
+            Err(_) => String::new(),
+        };
+
+        // 应用CSS样式
+        if !css_content.is_empty() {
+            content = Self::inline_css_styles(&content, &css_content);
+        }
+
+        // 返回处理后的HTML内容（保留HTML标签和base64图片）
+        log::info!(
+            "EpubParser: Returning chapter content, length: {} chars, contains 'data:image': {}",
+            content.len(),
+            content.contains("data:image")
+        );
+
+        // 打印前500个字符用于调试
+        if content.len() > 500 {
+            log::debug!("EpubParser: Content preview: {}", &content[..500]);
+        } else {
+            log::debug!("EpubParser: Full content: {}", content);
+        }
+
+        Ok(content)
     }
 
     // ─── 图片相关 ──────────────────────────────────────────────────────
 
-    /// 从EPUB中提取所有图片
-    fn extract_images<P: AsRef<Path>>(epub_path: P, output_dir: &Path) -> Result<()> {
+    /// 将HTML中的图片转为base64内嵌（直接从EPUB读取，不写本地）
+    fn embed_images_as_base64<P: AsRef<Path>>(epub_path: P, html: &str) -> Result<String> {
+        use regex::Regex;
+
+        log::debug!(
+            "EpubParser: embed_images_as_base64 called, HTML length: {}",
+            html.len()
+        );
+
+        // 找出HTML中引用的所有图片路径
+        let img_regex = Regex::new(r#"<img[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#)?;
+
+        // 打开EPUB archive
         let file = File::open(epub_path)?;
         let mut archive = ZipArchive::new(file)?;
 
+        // 构建图片路径到base64的映射
+        let mut image_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        // 遍历archive找到所有图片
         for i in 0..archive.len() {
-            let mut file = archive.by_index(i)?;
-            let name = file.name().to_string();
+            if let Ok(mut file) = archive.by_index(i) {
+                let name = file.name().to_string();
+                let name_lower = name.to_lowercase();
 
-            if name.ends_with(".jpg")
-                || name.ends_with(".jpeg")
-                || name.ends_with(".png")
-                || name.ends_with(".gif")
-                || name.ends_with(".svg")
-                || name.ends_with(".webp")
-            {
-                let file_path = output_dir.join(&name);
-                if let Some(parent) = file_path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                let mut out_file = File::create(&file_path)?;
-                let copied = std::io::copy(&mut file, &mut out_file)?;
-                if copied > 0 {
-                    log::info!(
-                        "EpubParser: Extracted image: {} ({} bytes)",
-                        file_path.display(),
-                        copied
-                    );
-                } else {
-                    log::warn!(
-                        "EpubParser: Extracted image {} but size is 0",
-                        file_path.display()
-                    );
-                    let _ = std::fs::remove_file(&file_path);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// 递归统计目录中文件数量
-    fn count_files_in_dir(dir: &Path) -> Option<usize> {
-        let mut cnt: usize = 0;
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    if let Some(sub) = Self::count_files_in_dir(&path) {
-                        cnt += sub;
-                    }
-                } else {
-                    cnt += 1;
-                }
-            }
-            return Some(cnt);
-        }
-        None
-    }
-
-    /// 转换HTML中的图片路径为本地文件路径
-    fn convert_image_paths(html: &str, image_dir: &Path) -> String {
-        use regex::Regex;
-
-        let img_regex = Regex::new(r#"<img[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
-
-        let result = img_regex.replace_all(html, |caps: &regex::Captures| {
-            let src = &caps[1];
-            let cleaned_src = src.trim_start_matches("../").trim_start_matches("./");
-            let mut local_path = image_dir.join(cleaned_src);
-
-            if !local_path.exists() {
-                if let Some(file_name) = cleaned_src
-                    .split('/')
-                    .last()
-                    .or_else(|| cleaned_src.split('\\').last())
+                if name_lower.ends_with(".jpg")
+                    || name_lower.ends_with(".jpeg")
+                    || name_lower.ends_with(".png")
+                    || name_lower.ends_with(".gif")
+                    || name_lower.ends_with(".svg")
+                    || name_lower.ends_with(".webp")
                 {
-                    if let Some(found) = Self::find_image_recursive(image_dir, file_name) {
-                        local_path = found;
-                        log::debug!(
-                            "EpubParser: Found image via recursive search: {}",
-                            local_path.display()
+                    // 读取图片数据
+                    let mut buffer = Vec::new();
+                    if file.read_to_end(&mut buffer).is_ok() && !buffer.is_empty() {
+                        // 转为base64
+                        let base64_data = base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            &buffer,
                         );
+
+                        // 猜测MIME类型
+                        let mime_type = if name_lower.ends_with(".png") {
+                            "image/png"
+                        } else if name_lower.ends_with(".gif") {
+                            "image/gif"
+                        } else if name_lower.ends_with(".svg") {
+                            "image/svg+xml"
+                        } else if name_lower.ends_with(".webp") {
+                            "image/webp"
+                        } else {
+                            "image/jpeg"
+                        };
+
+                        let data_url = format!("data:{};base64,{}", mime_type, base64_data);
+
+                        // 存储多个变体路径（去掉 ../ 等）
+                        image_map.insert(name.clone(), data_url.clone());
+                        image_map
+                            .insert(name.trim_start_matches("../").to_string(), data_url.clone());
+                        image_map
+                            .insert(name.trim_start_matches("./").to_string(), data_url.clone());
+
+                        // 只存储文件名
+                        if let Some(file_name) = name.split('/').last() {
+                            image_map.insert(file_name.to_string(), data_url.clone());
+                        }
+
+                        log::debug!("EpubParser: Converted image to base64: {}", name);
                     }
                 }
             }
+        }
 
-            if !local_path.exists() {
-                log::warn!(
-                    "EpubParser: Image referenced not found after search: {}",
-                    src
+        if image_map.is_empty() {
+            log::debug!("EpubParser: No images found in this chapter");
+            return Ok(html.to_string());
+        }
+
+        log::debug!("EpubParser: Converted {} images to base64", image_map.len());
+
+        // 检查HTML中是否有img标签
+        let img_count = img_regex.find_iter(html).count();
+        log::debug!(
+            "EpubParser: Found {} img tags in HTML before replacement",
+            img_count
+        );
+
+        // 替换HTML中的图片路径
+        let mut replaced_count = 0;
+        let result = img_regex.replace_all(html, |caps: &regex::Captures| {
+            let full_tag = &caps[0]; // 完整的 <img> 标签
+            let original_src = &caps[1]; // src 属性原始值
+            let cleaned_src = original_src
+                .trim_start_matches("../")
+                .trim_start_matches("./");
+
+            // 尝试从映射中找到base64数据
+            if let Some(data_url) = image_map
+                .get(cleaned_src)
+                .or_else(|| image_map.get(original_src))
+                .or_else(|| {
+                    // 尝试只用文件名匹配
+                    let file_name = cleaned_src
+                        .split('/')
+                        .last()
+                        .or_else(|| cleaned_src.split('\\').last())?;
+                    image_map.get(file_name)
+                })
+            {
+                log::debug!(
+                    "EpubParser: Embedding image: {} ({}KB base64)",
+                    original_src,
+                    data_url.len() / 1024
                 );
-                return caps[0].to_string();
+
+                // 安全替换：先尝试双引号，再尝试单引号
+                if full_tag.contains(&format!("src=\"{}\"", original_src)) {
+                    return full_tag.replace(
+                        &format!("src=\"{}\"", original_src),
+                        &format!("src=\"{}\"", data_url),
+                    );
+                } else if full_tag.contains(&format!("src='{}'", original_src)) {
+                    return full_tag.replace(
+                        &format!("src='{}'", original_src),
+                        &format!("src='{}'", data_url),
+                    );
+                } else {
+                    // 如果都不匹配，说明可能有特殊格式，记录日志
+                    log::warn!("EpubParser: Unusual img tag format: {}", full_tag);
+                    return full_tag.to_string();
+                }
             }
 
-            #[cfg(target_os = "windows")]
-            let file_url = format!(
-                "file:///{}",
-                local_path.to_string_lossy().replace('\\', "/")
-            );
-
-            #[cfg(not(target_os = "windows"))]
-            let file_url = format!("file://{}", local_path.to_string_lossy());
-
-            log::debug!("EpubParser: Image path converted: {} -> {}", src, file_url);
-            caps[0].replace(src, &file_url)
+            log::warn!("EpubParser: Image not found in archive: {}", original_src);
+            full_tag.to_string()
         });
 
-        result.to_string()
-    }
+        let result_str = result.to_string();
 
-    /// 递归查找图片文件（不区分大小写）
-    fn find_image_recursive(dir: &Path, file_name: &str) -> Option<std::path::PathBuf> {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    if let Some(found) = Self::find_image_recursive(&path, file_name) {
-                        return Some(found);
-                    }
-                } else if path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n.eq_ignore_ascii_case(file_name))
-                    .unwrap_or(false)
-                {
-                    return Some(path);
-                }
-            }
+        // 验证替换结果
+        let result_img_count = img_regex.find_iter(&result_str).count();
+        log::info!(
+            "EpubParser: Image replacement complete - {} img tags remain, original had {}",
+            result_img_count,
+            img_count
+        );
+
+        // 检查是否有不完整的img标签
+        let img_open_count = result_str.matches("<img").count();
+        if img_open_count != result_img_count {
+            log::warn!(
+                "EpubParser: WARNING - Found {} '<img' but only {} complete img tags!",
+                img_open_count,
+                result_img_count
+            );
         }
-        None
+
+        Ok(result_str)
     }
 
     // ─── CSS 相关 ──────────────────────────────────────────────────────
@@ -342,8 +390,7 @@ impl EpubParser {
         }
 
         let tag_regex =
-            Regex::new(r#"<([a-zA-Z0-9]+)([^>]*?)class\s*=\s*["']([^"']+)["']([^>]*?)>"#)
-                .unwrap();
+            Regex::new(r#"<([a-zA-Z0-9]+)([^>]*?)class\s*=\s*["']([^"']+)["']([^>]*?)>"#).unwrap();
 
         let result = tag_regex.replace_all(html, |caps: &regex::Captures| {
             let tag_name = &caps[1];

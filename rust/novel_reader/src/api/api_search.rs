@@ -57,45 +57,96 @@ fn strip_all_html_tags(html: &str) -> String {
     result.to_string()
 }
 
-/// 搜索书籍内容中的关键词（使用缓存）
+/// 搜索书籍内容中的关键词（支持EPUB按需加载）
 pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchMatch>, String> {
-    let content = get_novel_content(file_path)?;
+    use std::path::PathBuf;
+
+    let path = PathBuf::from(&file_path);
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| "Invalid file extension".to_string())?;
+
+    let content = get_novel_content(file_path.clone())?;
     let mut matches = Vec::new();
 
-    for chapter in &content.chapters {
-        if let Some(text) = &chapter.content {
-            // 去除HTML标签后再搜索
-            let clean_text = strip_all_html_tags(text);
+    match ext.to_lowercase().as_str() {
+        "epub" => {
+            // EPUB: 按需加载每一章节内容
+            log::debug!(
+                "[Search] Searching in EPUB, {} chapters",
+                content.chapters.len()
+            );
 
-            // 使用基于字符的搜索以避免在多字节 UTF-8 字符上按字节切片导致 panic
-            let text_chars: Vec<char> = clean_text.chars().collect();
-            let text_lower_chars: Vec<char> = clean_text.to_lowercase().chars().collect();
-            let keyword_lower_chars: Vec<char> = keyword.to_lowercase().chars().collect();
-            let kw_len = keyword_lower_chars.len();
+            for chapter in &content.chapters {
+                // 按需加载章节内容
+                let text =
+                    match crate::parser::EpubParser::get_chapter_content(&path, chapter.index) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            log::warn!("[Search] Failed to load chapter {}: {}", chapter.index, e);
+                            continue;
+                        }
+                    };
 
-            if kw_len == 0 || text_lower_chars.len() < kw_len {
-                continue;
+                // 去除HTML标签后再搜索
+                let clean_text = strip_all_html_tags(&text);
+                search_in_text(&clean_text, &keyword, chapter, &mut matches);
             }
+        }
+        "txt" => {
+            // TXT: 从缓存中获取（已在parse时全部加载）
+            log::debug!(
+                "[Search] Searching in TXT, {} chapters",
+                content.chapters.len()
+            );
 
-            for i in 0..=text_lower_chars.len() - kw_len {
-                if text_lower_chars[i..i + kw_len] == keyword_lower_chars[..] {
-                    // 构建片段（前后各50个字符）
-                    let start_char = if i >= 50 { i - 50 } else { 0 };
-                    let end_char = (i + kw_len + 50).min(text_chars.len());
-                    let snippet: String = text_chars[start_char..end_char].iter().collect();
-
-                    matches.push(SearchMatch {
-                        chapter_index: chapter.index,
-                        chapter_title: chapter.title.clone(),
-                        position: i, // 以字符为单位的位置
-                        snippet,
-                    });
+            for chapter in &content.chapters {
+                if let Some(text) = &chapter.content {
+                    // 去除HTML标签后再搜索
+                    let clean_text = strip_all_html_tags(text);
+                    search_in_text(&clean_text, &keyword, chapter, &mut matches);
                 }
             }
         }
+        _ => return Err(format!("Unsupported file format: {}", ext)),
     }
 
     Ok(matches)
+}
+
+/// 在文本中搜索关键词并添加到匹配列表
+fn search_in_text(
+    clean_text: &str,
+    keyword: &str,
+    chapter: &crate::types::NovelChapter,
+    matches: &mut Vec<SearchMatch>,
+) {
+    // 使用基于字符的搜索以避免在多字节 UTF-8 字符上按字节切片导致 panic
+    let text_chars: Vec<char> = clean_text.chars().collect();
+    let text_lower_chars: Vec<char> = clean_text.to_lowercase().chars().collect();
+    let keyword_lower_chars: Vec<char> = keyword.to_lowercase().chars().collect();
+    let kw_len = keyword_lower_chars.len();
+
+    if kw_len == 0 || text_lower_chars.len() < kw_len {
+        return;
+    }
+
+    for i in 0..=text_lower_chars.len() - kw_len {
+        if text_lower_chars[i..i + kw_len] == keyword_lower_chars[..] {
+            // 构建片段（前后各50个字符）
+            let start_char = if i >= 50 { i - 50 } else { 0 };
+            let end_char = (i + kw_len + 50).min(text_chars.len());
+            let snippet: String = text_chars[start_char..end_char].iter().collect();
+
+            matches.push(SearchMatch {
+                chapter_index: chapter.index,
+                chapter_title: chapter.title.clone(),
+                position: i, // 以字符为单位的位置
+                snippet,
+            });
+        }
+    }
 }
 
 /// 取消搜索
@@ -177,21 +228,51 @@ pub fn search_in_all_novels_batched(
                 Ok(content) => {
                     let mut match_count = 0;
 
-                    for chapter in &content.chapters {
-                        if let Some(text) = &chapter.content {
-                            // 去除HTML标签后再搜索
-                            let clean_text = strip_all_html_tags(text);
-                            let text_lower_chars: Vec<char> =
-                                clean_text.to_lowercase().chars().collect();
+                    // 判断文件类型
+                    let path = std::path::PathBuf::from(&novel.file_path);
+                    let is_epub = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e.eq_ignore_ascii_case("epub"))
+                        .unwrap_or(false);
 
-                            if text_lower_chars.len() < kw_len {
-                                continue;
+                    if is_epub {
+                        // EPUB: 按需加载每一章
+                        for chapter in &content.chapters {
+                            if let Ok(text) =
+                                crate::parser::EpubParser::get_chapter_content(&path, chapter.index)
+                            {
+                                let clean_text = strip_all_html_tags(&text);
+                                let text_lower_chars: Vec<char> =
+                                    clean_text.to_lowercase().chars().collect();
+
+                                if text_lower_chars.len() >= kw_len {
+                                    for i in 0..=text_lower_chars.len() - kw_len {
+                                        if text_lower_chars[i..i + kw_len]
+                                            == keyword_lower_chars[..]
+                                        {
+                                            match_count += 1;
+                                        }
+                                    }
+                                }
                             }
+                        }
+                    } else {
+                        // TXT: 从缓存获取
+                        for chapter in &content.chapters {
+                            if let Some(text) = &chapter.content {
+                                let clean_text = strip_all_html_tags(text);
+                                let text_lower_chars: Vec<char> =
+                                    clean_text.to_lowercase().chars().collect();
 
-                            // 计算当前章节的匹配数
-                            for i in 0..=text_lower_chars.len() - kw_len {
-                                if text_lower_chars[i..i + kw_len] == keyword_lower_chars[..] {
-                                    match_count += 1;
+                                if text_lower_chars.len() >= kw_len {
+                                    for i in 0..=text_lower_chars.len() - kw_len {
+                                        if text_lower_chars[i..i + kw_len]
+                                            == keyword_lower_chars[..]
+                                        {
+                                            match_count += 1;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -257,18 +338,51 @@ pub fn search_in_all_novels(keyword: String) -> Result<Vec<NovelSearchResult>, S
                 Ok(content) => {
                     let mut match_count = 0;
 
-                    for chapter in &content.chapters {
-                        if let Some(text) = &chapter.content {
-                            let text_lower_chars: Vec<char> = text.to_lowercase().chars().collect();
+                    // 判断文件类型
+                    let path = std::path::PathBuf::from(&novel.file_path);
+                    let is_epub = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e.eq_ignore_ascii_case("epub"))
+                        .unwrap_or(false);
 
-                            if text_lower_chars.len() < kw_len {
-                                continue;
+                    if is_epub {
+                        // EPUB: 按需加载每一章
+                        for chapter in &content.chapters {
+                            if let Ok(text) =
+                                crate::parser::EpubParser::get_chapter_content(&path, chapter.index)
+                            {
+                                let clean_text = strip_all_html_tags(&text);
+                                let text_lower_chars: Vec<char> =
+                                    clean_text.to_lowercase().chars().collect();
+
+                                if text_lower_chars.len() >= kw_len {
+                                    for i in 0..=text_lower_chars.len() - kw_len {
+                                        if text_lower_chars[i..i + kw_len]
+                                            == keyword_lower_chars[..]
+                                        {
+                                            match_count += 1;
+                                        }
+                                    }
+                                }
                             }
+                        }
+                    } else {
+                        // TXT: 从缓存获取
+                        for chapter in &content.chapters {
+                            if let Some(text) = &chapter.content {
+                                let clean_text = strip_all_html_tags(text);
+                                let text_lower_chars: Vec<char> =
+                                    clean_text.to_lowercase().chars().collect();
 
-                            // 计算当前章节的匹配数
-                            for i in 0..=text_lower_chars.len() - kw_len {
-                                if text_lower_chars[i..i + kw_len] == keyword_lower_chars[..] {
-                                    match_count += 1;
+                                if text_lower_chars.len() >= kw_len {
+                                    for i in 0..=text_lower_chars.len() - kw_len {
+                                        if text_lower_chars[i..i + kw_len]
+                                            == keyword_lower_chars[..]
+                                        {
+                                            match_count += 1;
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -42,6 +42,10 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 保存的滚动位置
   final savedScrollOffset = 0.0.obs;
 
+  // 分页相关
+  final displayedItemCount = 100.obs; // 当前显示的项目数量
+  final itemsPerPage = 50; // 每次加载更多的数量
+
   // 选择相关
   final selectedIds = <String>{}.obs;
   final isSelecting = false.obs;
@@ -121,6 +125,33 @@ class NovelLibraryViewModel extends BaseViewModel {
       if (filterTags.isEmpty) ...sortedFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
       ...rootBooks.map<LibraryItem>((n) => LibraryBookItem(n)),
     ];
+  }
+
+  /// 用于显示的项目（支持分页）
+  List<LibraryItem> get displayedItems {
+    final allItems = filteredItems;
+    final maxCount = displayedItemCount.value;
+    if (allItems.length <= maxCount) {
+      return allItems;
+    }
+    return allItems.sublist(0, maxCount);
+  }
+
+  /// 是否可以加载更多
+  bool get canLoadMore => filteredItems.length > displayedItemCount.value;
+
+  /// 加载更多项目
+  void loadMoreItems() {
+    if (!canLoadMore) return;
+    final allCount = filteredItems.length;
+    final newCount = (displayedItemCount.value + itemsPerPage).clamp(0, allCount);
+    displayedItemCount.value = newCount;
+    logger.info('加载更多：当前显示 $newCount / $allCount');
+  }
+
+  /// 重置分页（切换文件夹或筛选时调用）
+  void resetPagination() {
+    displayedItemCount.value = 100;
   }
 
   /// 所有书籍拥有的 tags

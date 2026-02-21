@@ -2,9 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_html/flutter_html.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'dart:convert';
 import 'dart:io';
+
+/// String扩展：统计子字符串出现次数
+extension StringOccurrences on String {
+  int allOccurrences(String substring) {
+    int count = 0;
+    int index = 0;
+    while ((index = indexOf(substring, index)) != -1) {
+      count++;
+      index += substring.length;
+    }
+    return count;
+  }
+}
 
 /// 阅读内容区域组件
 class ReaderContent extends StatefulWidget {
@@ -21,10 +34,10 @@ class _ReaderContentState extends State<ReaderContent> {
   bool _showPlainTextMode = false;
   int _lastChapterIndex = -1;
   final GlobalKey _searchTargetKey = GlobalKey();
-  
+
   // 虚拟滚动相关常量和变量
-  static const int _virtualScrollThreshold = 50000; // 50KB 触发虚拟滚动
-  static const int _chunkSize = 8000; // 每块 8KB
+  static const int _virtualScrollThreshold = 200000; // 200KB 触发虚拟滚动（提高阈值以支持base64图片）
+  static const int _chunkSize = 15000; // 每块 15KB（增加块大小避免截断大图片）
   List<String> _contentChunks = [];
   String _cachedContent = '';
   bool _useVirtualScroll = false;
@@ -64,71 +77,108 @@ class _ReaderContentState extends State<ReaderContent> {
     _scrollController.dispose();
     super.dispose();
   }
-  
+
   /// 将长文本内容分块，每块约 _chunkSize 字符
   /// 保留完整的HTML标签，避免在标签中间切断
   /// 如果启用搜索，先对整个内容进行高亮处理，然后再分块
-  List<String> _splitContentIntoChunks(String content, {bool shouldHighlight = false, String keyword = '', int? selectedOccurrence}) {
+  List<String> _splitContentIntoChunks(
+    String content, {
+    bool shouldHighlight = false,
+    String keyword = '',
+    int? selectedOccurrence,
+  }) {
     // 如果需要搜索高亮，先处理整个内容
     String processedContent = content;
     if (shouldHighlight && keyword.isNotEmpty) {
       // 判断是HTML还是纯文本
-      final isHtml = RegExp(r'<\s*(p|br|div|span|img|style|h[1-6])\b', caseSensitive: false).hasMatch(content);
+      final isHtml = RegExp(
+        r'<\s*(p|br|div|span|img|style|h[1-6])\b',
+        caseSensitive: false,
+      ).hasMatch(content);
       if (isHtml) {
         processedContent = _highlightHtml(content, keyword, selectedOccurrence: selectedOccurrence);
         // 嵌入本地图片
         processedContent = _embedLocalImages(processedContent);
       }
     }
-    
+
     final chunks = <String>[];
     if (processedContent.length <= _chunkSize) {
       return [processedContent];
     }
-    
+
     int start = 0;
     while (start < processedContent.length) {
       int end = (start + _chunkSize).clamp(0, processedContent.length);
-      
+
       // 如果不是最后一块，尝试在合适的位置分割（避免切断HTML标签）
       if (end < processedContent.length) {
-        // 优先在段落结束标签后分割
-        final closeTags = [r'</p>', r'</div>', r'<br>', r'<br/>'];
-        int bestSplit = -1;
-        int minDistance = _chunkSize ~/ 2; // 在后半部分寻找分割点
-        
-        for (final tag in closeTags) {
-          final tagPattern = RegExp(tag, caseSensitive: false);
-          final matches = tagPattern.allMatches(processedContent, start + minDistance);
-          for (final match in matches) {
-            if (match.end <= end) {
-              bestSplit = match.end;
-            } else {
-              break;
-            }
+        // 检查是否在img标签内部（特别是base64图片）
+        final remainingContent = processedContent.substring(start);
+        final imgStartPattern = RegExp(r'<img[^>]*>', caseSensitive: false);
+        final imgMatch = imgStartPattern.firstMatch(remainingContent);
+
+        if (imgMatch != null && imgMatch.start < (end - start) && imgMatch.end > (end - start)) {
+          // 当前分割点在img标签内部，移动到img标签结束后
+          final adjustedEnd = start + imgMatch.end;
+          if (adjustedEnd < processedContent.length) {
+            end = adjustedEnd;
+            debugPrint('[VirtualScroll] Adjusted split to avoid breaking img tag at position $end');
           }
-          if (bestSplit != -1) break;
-        }
-        
-        // 如果找到合适的标签分割点，使用它
-        if (bestSplit != -1) {
-          end = bestSplit;
         } else {
-          // 否则在空白字符处分割，避免切断单词
-          for (int i = end; i > start + minDistance && i < processedContent.length; i--) {
-            if (processedContent[i] == ' ' || processedContent[i] == '\n') {
-              end = i;
-              break;
+          // 优先在段落结束标签后分割
+          final closeTags = [r'</p>', r'</div>', r'<br>', r'<br/>'];
+          int bestSplit = -1;
+          int minDistance = _chunkSize ~/ 2; // 在后半部分寻找分割点
+
+          for (final tag in closeTags) {
+            final tagPattern = RegExp(tag, caseSensitive: false);
+            final matches = tagPattern.allMatches(processedContent, start + minDistance);
+            for (final match in matches) {
+              if (match.end <= end) {
+                bestSplit = match.end;
+              } else {
+                break;
+              }
+            }
+            if (bestSplit != -1) break;
+          }
+
+          // 如果找到合适的标签分割点，使用它
+          if (bestSplit != -1) {
+            end = bestSplit;
+          } else {
+            // 否则在空白字符处分割，避免切断单词
+            for (int i = end; i > start + minDistance && i < processedContent.length; i--) {
+              if (processedContent[i] == ' ' || processedContent[i] == '\n') {
+                end = i;
+                break;
+              }
             }
           }
         }
       }
-      
-      chunks.add(processedContent.substring(start, end));
+
+      final chunk = processedContent.substring(start, end);
+      chunks.add(chunk);
+
+      // 验证chunk是否包含完整的img标签
+      if (chunk.contains('<img')) {
+        final imgCount = RegExp(r'<img[^>]*>', caseSensitive: false).allMatches(chunk).length;
+        final imgOpenCount = chunk.allOccurrences('<img');
+        if (imgOpenCount != imgCount) {
+          debugPrint(
+            '[VirtualScroll] WARNING: Chunk may contain incomplete img tag! imgOpen=$imgOpenCount complete=$imgCount',
+          );
+        }
+      }
+
       start = end;
     }
-    
-    debugPrint('[VirtualScroll] Split content into ${chunks.length} chunks, total length: ${processedContent.length}');
+
+    debugPrint(
+      '[VirtualScroll] Split content into ${chunks.length} chunks, total length: ${processedContent.length}',
+    );
     return chunks;
   }
 
@@ -225,7 +275,7 @@ class _ReaderContentState extends State<ReaderContent> {
           child: Text('暂无内容', style: TextStyle(color: Colors.grey)),
         );
       }
-      
+
       // 检查是否需要使用虚拟滚动（内容超过阈值）
       if (currentContent != _cachedContent) {
         _cachedContent = currentContent;
@@ -235,7 +285,7 @@ class _ReaderContentState extends State<ReaderContent> {
           final hasSearch = controller.searchMatches.isNotEmpty;
           final keyword = controller.lastSearchQuery.value;
           final selectedIndex = controller.selectedSearchIndex.value;
-          
+
           // 计算选中的搜索结果在当前章节中的序号
           int? selectedOccurrence;
           if (hasSearch && selectedIndex >= 0 && selectedIndex < controller.searchMatches.length) {
@@ -250,7 +300,7 @@ class _ReaderContentState extends State<ReaderContent> {
               );
             }
           }
-          
+
           // 分块时如果有搜索，先进行高亮处理
           _contentChunks = _splitContentIntoChunks(
             currentContent,
@@ -274,14 +324,28 @@ class _ReaderContentState extends State<ReaderContent> {
         if (currentContent.contains('class="') || currentContent.contains("class='")) {
           debugPrint('[Novel UI] content contains class attributes');
         }
+
+        // 检查img标签
         final imgReg = RegExp(r'''<img[^>]*src=["']([^"']+)["']''', caseSensitive: false);
-        final imgs = imgReg
-            .allMatches(currentContent)
-            .map((m) => m.group(1))
-            .whereType<String>()
-            .toList();
-        if (imgs.isNotEmpty) {
-          debugPrint('[Novel UI] Found image srcs: ${imgs.join(', ')}');
+        final imgMatches = imgReg.allMatches(currentContent).toList();
+        if (imgMatches.isNotEmpty) {
+          debugPrint('[Novel UI] Found ${imgMatches.length} img tags');
+          for (int i = 0; i < imgMatches.length && i < 3; i++) {
+            final src = imgMatches[i].group(1) ?? '';
+            final srcPreview = src.length > 100 ? '${src.substring(0, 100)}...' : src;
+            debugPrint(
+              '[Novel UI] Image $i src type: ${src.startsWith('data:image') ? 'base64' : 'url'}, preview: $srcPreview',
+            );
+          }
+        }
+
+        // 检查是否有不完整的img标签
+        final imgOpenCount = currentContent.allOccurrences('<img');
+        final imgCompleteCount = imgMatches.length;
+        if (imgOpenCount != imgCompleteCount) {
+          debugPrint(
+            '[Novel UI] WARNING: Found $imgOpenCount <img but only $imgCompleteCount complete tags!',
+          );
         }
       } catch (e) {
         debugPrint('[Novel UI] content debug error: $e');
@@ -303,10 +367,18 @@ class _ReaderContentState extends State<ReaderContent> {
         });
         _lastChapterIndex = currentIndex;
       }
-      
+
       // 根据内容大小选择渲染策略
       if (_useVirtualScroll) {
-        return _buildVirtualScrollView(context, controller, currentContent, buildStart, isNarrow, shouldRenderHtml, hasImages);
+        return _buildVirtualScrollView(
+          context,
+          controller,
+          currentContent,
+          buildStart,
+          isNarrow,
+          shouldRenderHtml,
+          hasImages,
+        );
       }
 
       return Container(
@@ -488,11 +560,11 @@ class _ReaderContentState extends State<ReaderContent> {
                           );
                         }
                       }
-                      // 将本地 file:// 图片替换为 base64 data URL，以避免依赖 flutter_html 的不同版本自定义图片 API
+                      // 将本地 file:// 图片替换为 base64 data URL，以避免依赖不同版本的自定义图片 API
                       embeddedHtml = _embedLocalImages(htmlData);
 
                       // 如果 HTML 中没有段落/换行/div 标签，说明内容可能是带换行的纯文本。
-                      // 把连续空行转换为段落 (<p>..</p>)，并把单个换行转换为 <br/> ，以便 flutter_html 正确渲染段落。
+                      // 把连续空行转换为段落 (<p>..</p>)，并把单个换行转换为 <br/> ，以便正确渲染段落。
                       final hasParagraphLike = RegExp(
                         r'<\s*(p|br|div)\b',
                         caseSensitive: false,
@@ -618,10 +690,9 @@ class _ReaderContentState extends State<ReaderContent> {
                     }
 
                     return SelectionArea(
-                      child: Html(
-                        data: embeddedHtml,
-                        onLinkTap: (url, _, _) {
-                          if (url == null) return;
+                      child: HtmlWidget(
+                        embeddedHtml,
+                        onTapUrl: (url) {
                           try {
                             final uri = Uri.tryParse(url);
                             final path = uri?.path ?? url;
@@ -637,7 +708,6 @@ class _ReaderContentState extends State<ReaderContent> {
                             );
                             if (target != -1) {
                               if (target == controller.currentChapterIndex.value) {
-                                // If it's the same chapter, do nothing (or could scroll to anchor if implemented)
                                 debugPrint(
                                   '[Reader] Link tapped points to current chapter: $basename',
                                 );
@@ -651,66 +721,77 @@ class _ReaderContentState extends State<ReaderContent> {
                               Get.snackbar('提示', '未找到目标章节: $url');
                             }
                           } catch (e) {
-                            debugPrint('[Reader] onLinkTap error: $e');
+                            debugPrint('[Reader] onTapUrl error: $e');
                           }
+                          return true;
                         },
-                        style: {
-                          'body': Style(
-                            fontSize: FontSize(controller.fontSize.value),
-                            lineHeight: LineHeight(1.8),
-                            color: Theme.of(context).textTheme.bodyLarge?.color,
-                          ),
-                          'p': Style(
-                            display: Display.block,
-                            lineHeight: LineHeight(2.8),
-                            padding: HtmlPaddings.only(bottom: 16),
-                          ),
-                          'div': Style(
-                            display: Display.block,
-                            lineHeight: LineHeight(1.8),
-                            padding: HtmlPaddings.only(bottom: 16),
-                          ),
-                          'span': Style(display: Display.inline),
-                          'strong': Style(fontWeight: FontWeight.bold),
-                          'b': Style(fontWeight: FontWeight.bold),
-                          'em': Style(fontStyle: FontStyle.italic),
-                          'i': Style(fontStyle: FontStyle.italic),
-                          'u': Style(textDecoration: TextDecoration.underline),
-                          'mark': Style(
-                            backgroundColor: Colors.yellow.withOpacity(0.5),
-                            color: Colors.orange.shade900,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          'mark_selected': Style(
-                            backgroundColor: Colors.orange.withOpacity(0.5),
-                            color: Colors.orange.shade900,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        textStyle: TextStyle(
+                          fontSize: controller.fontSize.value,
+                          height: 1.8,
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                        ),
+                        customStylesBuilder: (element) {
+                          final tag = element.localName;
+                          switch (tag) {
+                            case 'p':
+                              return {
+                                'display': 'block',
+                                'line-height': '2.8',
+                                'margin-bottom': '16px',
+                              };
+                            case 'div':
+                              return {
+                                'display': 'block',
+                                'line-height': '1.8',
+                                'margin-bottom': '16px',
+                              };
+                            case 'mark':
+                              return {
+                                'background-color': 'rgba(255, 255, 0, 0.5)',
+                                'color': '#E65100',
+                                'font-weight': 'bold',
+                              };
+                            case 'mark_selected':
+                              return {
+                                'background-color': 'rgba(255, 152, 0, 0.5)',
+                                'color': '#E65100',
+                                'font-weight': 'bold',
+                              };
+                          }
+                          return null;
                         },
-                        extensions: [
-                          TagExtension(
-                            tagsToExtend: {'mark_selected'},
-                            builder: (extensionContext) {
-                              // 给选中的搜索结果添加Key，用于滚动定位
-                              return Container(
-                                key: _searchTargetKey,
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.5),
-                                  borderRadius: BorderRadius.circular(2),
+                        customWidgetBuilder: (element) {
+                          // 处理选中的搜索结果高亮
+                          if (element.localName == 'mark_selected') {
+                            return Container(
+                              key: _searchTargetKey,
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 2),
+                              child: Text(
+                                element.text,
+                                style: TextStyle(
+                                  color: Colors.orange.shade900,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: controller.fontSize.value,
                                 ),
-                                padding: const EdgeInsets.symmetric(horizontal: 2),
-                                child: Text(
-                                  extensionContext.innerHtml,
-                                  style: TextStyle(
-                                    color: Colors.orange.shade900,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: controller.fontSize.value,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                              ),
+                            );
+                          }
+                          // 优化图片渲染（epub常见场景）
+                          if (element.localName == 'img') {
+                            final src = element.attributes['src'];
+                            if (src != null && src.startsWith('data:image')) {
+                              // 对于内嵌的base64图片，直接渲染
+                              return null; // 让默认处理器处理
+                            }
+                          }
+                          return null;
+                        },
+                        renderMode: RenderMode.column,
+                        enableCaching: true,
                       ),
                     );
                   }
@@ -763,7 +844,7 @@ class _ReaderContentState extends State<ReaderContent> {
       );
     });
   }
-  
+
   /// 构建虚拟滚动视图，只渲染可见的内容块
   Widget _buildVirtualScrollView(
     BuildContext context,
@@ -776,7 +857,7 @@ class _ReaderContentState extends State<ReaderContent> {
   ) {
     final currentChapterIndex = controller.currentChapterIndex.value;
     final hasSearch = controller.searchMatches.isNotEmpty;
-    
+
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: CustomScrollView(
@@ -798,9 +879,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     padding: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).dividerColor.withOpacity(0.3),
-                        ),
+                        bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3)),
                       ),
                     ),
                     child: Column(
@@ -836,7 +915,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     ),
                   ),
                 const SizedBox(height: 24),
-                
+
                 // 如果内容包含 HTML 图片，允许切换为纯文本模式
                 if (hasImages)
                   Row(
@@ -855,42 +934,38 @@ class _ReaderContentState extends State<ReaderContent> {
               ]),
             ),
           ),
-          
+
           // 虚拟滚动的内容块
           SliverPadding(
             padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 48),
             sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  // 添加渲染时间日志
-                  if (index == 0) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      final duration = DateTime.now().difference(buildStart);
-                      debugPrint(
-                        '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
-                      );
-                    });
+              delegate: SliverChildBuilderDelegate((context, index) {
+                // 添加渲染时间日志
+                if (index == 0) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    final duration = DateTime.now().difference(buildStart);
+                    debugPrint(
+                      '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
+                    );
+                  });
+                }
+
+                final chunk = _contentChunks[index];
+                // 根据格式决定渲染方式
+                if (shouldRenderHtml && !_showPlainTextMode) {
+                  return _buildHtmlChunk(chunk, controller, hasSearch, context);
+                } else {
+                  // 纯文本模式或TXT格式
+                  String textChunk = chunk;
+                  if (_showPlainTextMode || !shouldRenderHtml) {
+                    textChunk = _convertHtmlToPlainText(chunk);
                   }
-                  
-                  final chunk = _contentChunks[index];
-                  
-                  // 根据格式决定渲染方式
-                  if (shouldRenderHtml && !_showPlainTextMode) {
-                    return _buildHtmlChunk(chunk, controller, hasSearch, context);
-                  } else {
-                    // 纯文本模式或TXT格式
-                    String textChunk = chunk;
-                    if (_showPlainTextMode || !shouldRenderHtml) {
-                      textChunk = _convertHtmlToPlainText(chunk);
-                    }
-                    return _buildTextChunk(textChunk, controller, hasSearch, context);
-                  }
-                },
-                childCount: _contentChunks.length,
-              ),
+                  return _buildTextChunk(textChunk, controller, hasSearch, context);
+                }
+              }, childCount: _contentChunks.length),
             ),
           ),
-          
+
           // 底部导航和间距
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
@@ -929,7 +1004,7 @@ class _ReaderContentState extends State<ReaderContent> {
       ),
     );
   }
-  
+
   /// 构建HTML格式的内容块
   Widget _buildHtmlChunk(
     String htmlChunk,
@@ -940,10 +1015,9 @@ class _ReaderContentState extends State<ReaderContent> {
     // HTML块已经在分块前完成了高亮和图片嵌入处理
     // 这里直接渲染即可
     return SelectionArea(
-      child: Html(
-        data: htmlChunk,
-        onLinkTap: (url, _, _) {
-          if (url == null) return;
+      child: HtmlWidget(
+        htmlChunk,
+        onTapUrl: (url) {
           try {
             final uri = Uri.tryParse(url);
             final path = uri?.path ?? url;
@@ -951,75 +1025,80 @@ class _ReaderContentState extends State<ReaderContent> {
                 ? path.split('/').last
                 : path;
             final target = controller.chapters.indexWhere(
-              (c) => c.id.endsWith(basename) || c.id.contains(basename) || c.title.contains(basename),
+              (c) =>
+                  c.id.endsWith(basename) || c.id.contains(basename) || c.title.contains(basename),
             );
             if (target != -1 && target != controller.currentChapterIndex.value) {
               controller.goToChapter(target);
             }
           } catch (e) {
-            debugPrint('[Reader] onLinkTap error: $e');
+            debugPrint('[Reader] onTapUrl error: $e');
           }
+          return true;
         },
-        style: {
-          'body': Style(
-            fontSize: FontSize(controller.fontSize.value),
-            lineHeight: LineHeight(1.8),
-            color: Theme.of(context).textTheme.bodyLarge?.color,
-          ),
-          'p': Style(
-            display: Display.block,
-            lineHeight: LineHeight(2.8),
-            padding: HtmlPaddings.only(bottom: 16),
-          ),
-          'div': Style(
-            display: Display.block,
-            lineHeight: LineHeight(1.8),
-            padding: HtmlPaddings.only(bottom: 16),
-          ),
-          'span': Style(display: Display.inline),
-          'strong': Style(fontWeight: FontWeight.bold),
-          'b': Style(fontWeight: FontWeight.bold),
-          'em': Style(fontStyle: FontStyle.italic),
-          'i': Style(fontStyle: FontStyle.italic),
-          'u': Style(textDecoration: TextDecoration.underline),
-          'mark': Style(
-            backgroundColor: Colors.yellow.withOpacity(0.5),
-            color: Colors.orange.shade900,
-            fontWeight: FontWeight.bold,
-          ),
-          'mark_selected': Style(
-            backgroundColor: Colors.orange.withOpacity(0.5),
-            color: Colors.orange.shade900,
-            fontWeight: FontWeight.bold,
-          ),
+        textStyle: TextStyle(
+          fontSize: controller.fontSize.value,
+          height: 1.8,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+        customStylesBuilder: (element) {
+          final tag = element.localName;
+          switch (tag) {
+            case 'p':
+              return {'display': 'block', 'line-height': '2.8', 'margin-bottom': '16px'};
+            case 'div':
+              return {'display': 'block', 'line-height': '1.8', 'margin-bottom': '16px'};
+            case 'mark':
+              return {
+                'background-color': 'rgba(255, 255, 0, 0.5)',
+                'color': '#E65100',
+                'font-weight': 'bold',
+              };
+            case 'mark_selected':
+              return {
+                'background-color': 'rgba(255, 152, 0, 0.5)',
+                'color': '#E65100',
+                'font-weight': 'bold',
+              };
+          }
+          return null;
         },
-        extensions: [
-          TagExtension(
-            tagsToExtend: {'mark_selected'},
-            builder: (extensionContext) {
-              return Container(
-                key: _searchTargetKey,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(2),
+        customWidgetBuilder: (element) {
+          // 处理选中的搜索结果高亮
+          if (element.localName == 'mark_selected') {
+            return Container(
+              key: _searchTargetKey,
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                element.text,
+                style: TextStyle(
+                  color: Colors.orange.shade900,
+                  fontWeight: FontWeight.bold,
+                  fontSize: controller.fontSize.value,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Text(
-                  extensionContext.innerHtml,
-                  style: TextStyle(
-                    color: Colors.orange.shade900,
-                    fontWeight: FontWeight.bold,
-                    fontSize: controller.fontSize.value,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+              ),
+            );
+          }
+          // 优化图片渲染（epub常见场景）
+          if (element.localName == 'img') {
+            final src = element.attributes['src'];
+            if (src != null && src.startsWith('data:image')) {
+              // 对于内嵌的base64图片，直接渲染
+              return null; // 让默认处理器处理
+            }
+          }
+          return null;
+        },
+        renderMode: RenderMode.column,
+        enableCaching: true,
       ),
     );
   }
-  
+
   /// 构建纯文本格式的内容块
   Widget _buildTextChunk(
     String textChunk,
@@ -1037,19 +1116,19 @@ class _ReaderContentState extends State<ReaderContent> {
         chunkStartPos += _contentChunks[i].length;
       }
       final chunkEndPos = chunkStartPos + textChunk.length;
-      
+
       // 获取当前章节的搜索匹配
       final currentChapterIndex = controller.currentChapterIndex.value;
       final chapterMatches = controller.searchMatches
           .where((m) => m.chapterIndex.toInt() == currentChapterIndex)
           .toList();
-      
+
       // 过滤出在当前块范围内的匹配
       final chunkMatches = chapterMatches.where((m) {
         final pos = m.position.toInt();
         return pos >= chunkStartPos && pos < chunkEndPos;
       }).toList();
-      
+
       // 如果当前块有匹配结果，使用高亮显示
       if (chunkMatches.isNotEmpty) {
         return _buildHighlightedTextForChunk(
@@ -1061,7 +1140,7 @@ class _ReaderContentState extends State<ReaderContent> {
         );
       }
     }
-    
+
     // 否则使用普通的可选择文本
     return SelectableText(
       textChunk,
@@ -1073,7 +1152,7 @@ class _ReaderContentState extends State<ReaderContent> {
       ),
     );
   }
-  
+
   /// 为特定内容块构建带高亮的文本
   Widget _buildHighlightedTextForChunk(
     String chunkContent,
@@ -1085,15 +1164,15 @@ class _ReaderContentState extends State<ReaderContent> {
     final spans = <TextSpan>[];
     int lastEnd = 0;
     final selectedIndex = controller.selectedSearchIndex.value;
-    
+
     // 按位置排序匹配结果
     chunkMatches.sort((a, b) => a.position.compareTo(b.position));
-    
+
     for (int i = 0; i < chunkMatches.length; i++) {
       final match = chunkMatches[i];
       // 将全局位置转换为块内位置
       int matchStart = match.position.toInt() - chunkStartPos;
-      
+
       // 获取搜索关键词
       String searchKeyword = controller.lastSearchQuery.value.trim();
       if (searchKeyword.isEmpty && match.snippet.isNotEmpty) {
@@ -1104,7 +1183,7 @@ class _ReaderContentState extends State<ReaderContent> {
           searchKeyword = tokenMatch != null ? tokenMatch.group(0)!.trim() : firstLine.trim();
         }
       }
-      
+
       // 估算关键词长度
       int keywordLength = searchKeyword.length;
       if (matchStart >= 0 && matchStart < chunkContent.length) {
@@ -1116,14 +1195,14 @@ class _ReaderContentState extends State<ReaderContent> {
           keywordLength = actualMatch.group(0)?.length ?? keywordLength;
         }
       }
-      
+
       int matchEnd = (matchStart + keywordLength).clamp(0, chunkContent.length);
-      
+
       // 确保匹配位置有效
       if (matchStart < 0 || matchEnd <= matchStart || matchStart >= chunkContent.length) {
         continue;
       }
-      
+
       // 添加普通文本
       if (matchStart > lastEnd) {
         spans.add(
@@ -1138,12 +1217,13 @@ class _ReaderContentState extends State<ReaderContent> {
           ),
         );
       }
-      
+
       // 判断是否是选中的匹配
-      final isSelected = selectedIndex >= 0 &&
+      final isSelected =
+          selectedIndex >= 0 &&
           selectedIndex < controller.searchMatches.length &&
           controller.searchMatches[selectedIndex].position == match.position;
-      
+
       // 添加高亮文本
       spans.add(
         TextSpan(
@@ -1160,10 +1240,10 @@ class _ReaderContentState extends State<ReaderContent> {
           ),
         ),
       );
-      
+
       lastEnd = matchEnd;
     }
-    
+
     // 添加剩余文本
     if (lastEnd < chunkContent.length) {
       spans.add(
@@ -1178,14 +1258,14 @@ class _ReaderContentState extends State<ReaderContent> {
         ),
       );
     }
-    
+
     return SelectableText.rich(TextSpan(children: spans), textAlign: TextAlign.justify);
   }
-  
+
   /// 将HTML转换为纯文本（用于纯文本模式）
   String _convertHtmlToPlainText(String html) {
     String plain = html;
-    
+
     // 将常见的块级或换行标签替换为换行符，保留段落分隔
     plain = plain.replaceAll(
       RegExp(r'</p>|<br\s*/?>|</div>|</h[1-6]>', caseSensitive: false),
@@ -1195,10 +1275,10 @@ class _ReaderContentState extends State<ReaderContent> {
       RegExp(r'<p[^>]*>|<div[^>]*>|<h[1-6][^>]*>', caseSensitive: false),
       '\n\n',
     );
-    
+
     // 移除剩余的 HTML 标签
     plain = plain.replaceAll(RegExp(r'<[^>]+>'), '');
-    
+
     // 解码常见 HTML 实体
     plain = plain.replaceAll('&nbsp;', ' ');
     plain = plain.replaceAll('&amp;', '&');
@@ -1206,7 +1286,7 @@ class _ReaderContentState extends State<ReaderContent> {
     plain = plain.replaceAll('&gt;', '>');
     plain = plain.replaceAll('&quot;', '"');
     plain = plain.replaceAll('&apos;', "'");
-    
+
     // 解码数字实体
     plain = plain.replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
       try {
@@ -1224,10 +1304,10 @@ class _ReaderContentState extends State<ReaderContent> {
         return '';
       }
     });
-    
+
     // 合并连续的空白行并修剪首尾
     plain = plain.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
-    
+
     return plain;
   }
 

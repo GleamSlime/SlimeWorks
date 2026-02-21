@@ -177,6 +177,31 @@ class Loggers {
     return basicLogEntry;
   }
 
+  /// 信息级别日志（同步），便于兼容现有调用 `logger.info(...)`
+  String info(
+    String message, {
+    DateTime? time,
+    int? sequenceNumber,
+    int level = 0,
+    String name = 'INFO',
+    Zone? zone,
+    Object? error,
+    StackTrace? stackTrace,
+    bool reportToLoki = false,
+  }) {
+    return log(
+      message,
+      time: time,
+      sequenceNumber: sequenceNumber,
+      level: level,
+      name: name,
+      zone: zone,
+      error: error,
+      stackTrace: stackTrace,
+      reportToLoki: reportToLoki,
+    );
+  }
+
   /// 异步处理日志上报，确保设备ID初始化后再生成TraceId
   // static Future<String> _handleAsyncReport(
   //   String message,

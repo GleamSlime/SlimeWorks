@@ -35,7 +35,14 @@ class SidebarGroup {
   final String? icon;
   final Permission? permission;
 
-  const SidebarGroup({required this.id, this.title, required this.items, this.icon, this.permission, this.sort});
+  const SidebarGroup({
+    required this.id,
+    this.title,
+    required this.items,
+    this.icon,
+    this.permission,
+    this.sort,
+  });
 }
 
 /// 侧边栏控制器
@@ -159,7 +166,8 @@ class CollapsibleSidebar extends StatelessWidget {
           isExpanded: isExpanded,
           showExtends: showExtends,
           isMobile: desktopScreen.isMobile.value,
-          buildContent: (context) => _buildSidebarContent(context, controller, isExpanded, showExtends),
+          buildContent: (context) =>
+              _buildSidebarContent(context, controller, isExpanded, showExtends),
         );
       }
 
@@ -173,9 +181,16 @@ class CollapsibleSidebar extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: AppTheme.metrics.radius10,
-            boxShadow: desktopScreen.isDesktop.value ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))] : null,
+            boxShadow: desktopScreen.isDesktop.value
+                ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))]
+                : null,
             gradient: AppTheme.sideBarTheme(context),
-            border: Border.all(width: 1.w, color: AppTheme.isLight(context) ? Colors.white : Color(0xFF333333).withAlpha((255 * 0.9).toInt())),
+            border: Border.all(
+              width: 1.w,
+              color: AppTheme.isLight(context)
+                  ? Colors.white
+                  : Color(0xFF333333).withAlpha((255 * 0.9).toInt()),
+            ),
           ),
           child: _buildSidebarContent(context, controller, isExpanded, showExtends),
         ),
@@ -184,7 +199,12 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建侧边栏内容
-  Widget _buildSidebarContent(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+  Widget _buildSidebarContent(
+    BuildContext context,
+    SidebarController controller,
+    bool isExpanded,
+    bool showExtends,
+  ) {
     if (desktopScreen.isMobile.value) {
       isExpanded = true;
       showExtends = true;
@@ -199,8 +219,15 @@ class CollapsibleSidebar extends StatelessWidget {
               ? SizedBox.shrink()
               : Platform.isMacOS
               ? Padding(
-                  padding: EdgeInsets.only(top: AppTheme.metrics.kSpace8, left: isExpanded ? AppTheme.metrics.kSpace8 : 0),
-                  child: MacWindowButtons(mainAxisAlignment: showExtends ? MainAxisAlignment.start : MainAxisAlignment.center),
+                  padding: EdgeInsets.only(
+                    top: AppTheme.metrics.kSpace8,
+                    left: isExpanded ? AppTheme.metrics.kSpace8 : 0,
+                  ),
+                  child: MacWindowButtons(
+                    mainAxisAlignment: showExtends
+                        ? MainAxisAlignment.start
+                        : MainAxisAlignment.center,
+                  ),
                 )
               : SizedBox.shrink(),
         ),
@@ -226,11 +253,16 @@ class CollapsibleSidebar extends StatelessWidget {
     return AnimatedContainer(
       duration: animationDuration,
       curve: Curves.easeInOut,
-      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.metrics.kSpace8,
+        vertical: AppTheme.metrics.kSpace4,
+      ),
       alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
       child: HoverSvgButton(
         size: AppTheme.metrics.fontSize24,
-        svg: controller.isExpanded.value ? Assets.image.svg.sidebarOpen : Assets.image.svg.sidebarClose,
+        svg: controller.isExpanded.value
+            ? Assets.image.svg.sidebarOpen
+            : Assets.image.svg.sidebarClose,
         onTap: controller.toggleSidebar,
         color: Theme.of(context).iconTheme.color,
       ),
@@ -238,7 +270,12 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建可滚动的菜单列表
-  Widget _buildScrollableMenuList(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+  Widget _buildScrollableMenuList(
+    BuildContext context,
+    SidebarController controller,
+    bool isExpanded,
+    bool showExtends,
+  ) {
     final scrollableGroups = groups.take(groups.length - 1).toList();
 
     return ScrollConfiguration(
@@ -255,7 +292,12 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建底部固定菜单
-  Widget _buildBottomMenu(BuildContext context, SidebarController controller, bool isExpanded, bool showExtends) {
+  Widget _buildBottomMenu(
+    BuildContext context,
+    SidebarController controller,
+    bool isExpanded,
+    bool showExtends,
+  ) {
     if (groups.isEmpty) return const SizedBox.shrink();
 
     final bottomGroup = groups.last;
@@ -263,12 +305,20 @@ class CollapsibleSidebar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Divider(height: scaleW(1), thickness: scaleW(0.5), color: Theme.of(context).dividerColor.withAlpha(15)),
+        Divider(
+          height: scaleW(1),
+          thickness: scaleW(0.5),
+          color: Theme.of(context).dividerColor.withAlpha(15),
+        ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: bottomGroup.items.map((item) => _buildMenuItem(context, controller, item, isExpanded, showExtends, 0)).toList(),
+            children: bottomGroup.items
+                .map(
+                  (item) => _buildMenuItem(context, controller, item, isExpanded, showExtends, 0),
+                )
+                .toList(),
           ),
         ),
       ],
@@ -276,7 +326,13 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建分组
-  Widget _buildGroup(BuildContext context, SidebarController controller, SidebarGroup group, bool isExpanded, bool showExtends) {
+  Widget _buildGroup(
+    BuildContext context,
+    SidebarController controller,
+    SidebarGroup group,
+    bool isExpanded,
+    bool showExtends,
+  ) {
     final theme = Theme.of(context);
 
     return Column(
@@ -285,7 +341,10 @@ class CollapsibleSidebar extends StatelessWidget {
         // 分组标题
         if (group.title != null && isExpanded)
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace4),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace12,
+              vertical: AppTheme.metrics.kSpace4,
+            ),
             child: Text(
               group.title!,
               style: TextStyle(
@@ -300,7 +359,11 @@ class CollapsibleSidebar extends StatelessWidget {
         if (group.title != null && !isExpanded)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Divider(height: 1, thickness: scaleW(0.5), color: theme.dividerColor.withAlpha(25)),
+            child: Divider(
+              height: 1,
+              thickness: scaleW(0.5),
+              color: theme.dividerColor.withAlpha(25),
+            ),
           ),
 
         // 菜单项列表
@@ -337,7 +400,9 @@ class CollapsibleSidebar extends StatelessWidget {
             ? null
             : BoxDecoration(
                 color: isItemExpanded ? theme.dividerColor.withAlpha(5) : Colors.transparent,
-                border: isItemExpanded ? Border.all(width: 1.w, color: theme.dividerColor.withAlpha(10)) : null,
+                border: isItemExpanded
+                    ? Border.all(width: 1.w, color: theme.dividerColor.withAlpha(10))
+                    : null,
               ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -369,7 +434,9 @@ class CollapsibleSidebar extends StatelessWidget {
                     curve: Curves.easeInOut,
                     height: AppTheme.metrics.kSpace44,
                     padding: EdgeInsets.only(
-                      left: isExpanded ? AppTheme.metrics.kSpace24 + (level * AppTheme.metrics.kSpace24) : 0,
+                      left: isExpanded
+                          ? AppTheme.metrics.kSpace24 + (level * AppTheme.metrics.kSpace24)
+                          : 0,
                       right: isExpanded ? AppTheme.metrics.kSpace8 : 0,
                     ),
                     alignment: isExpanded ? Alignment.centerLeft : Alignment.center,
@@ -388,21 +455,31 @@ class CollapsibleSidebar extends StatelessWidget {
                                 child: SvgPicture.asset(
                                   Assets.image.svg.arrowRight,
                                   width: AppTheme.metrics.fontSize14,
-                                  colorFilter: ColorFilter.mode(theme.textTheme.bodySmall?.color ?? Colors.black.withAlpha(51), BlendMode.srcIn),
+                                  colorFilter: ColorFilter.mode(
+                                    theme.textTheme.bodySmall?.color ?? Colors.black.withAlpha(51),
+                                    BlendMode.srcIn,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         Row(
-                          mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                          mainAxisAlignment: isExpanded
+                              ? MainAxisAlignment.start
+                              : MainAxisAlignment.center,
                           children: [
                             if (item.route.sidebarIcon != null)
                               SvgPicture.asset(
                                 item.route.sidebarIcon!,
-                                width: isExpanded ? AppTheme.metrics.fontSize20 : AppTheme.metrics.fontSize24,
+                                width: isExpanded
+                                    ? AppTheme.metrics.fontSize20
+                                    : AppTheme.metrics.fontSize24,
                                 colorFilter: isSelected
                                     ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
-                                    : ColorFilter.mode(theme.iconTheme.color?.withAlpha(179) ?? Colors.black, BlendMode.srcIn),
+                                    : ColorFilter.mode(
+                                        theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
+                                        BlendMode.srcIn,
+                                      ),
                               ),
                             if (isExpanded && showExtends)
                               Expanded(
@@ -419,7 +496,9 @@ class CollapsibleSidebar extends StatelessWidget {
                                           item.route.sidebarLabel,
                                           style: TextStyle(
                                             fontSize: AppTheme.metrics.fontSize14,
-                                            color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color,
+                                            color: isSelected
+                                                ? theme.colorScheme.primary
+                                                : theme.textTheme.bodyMedium?.color,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                           softWrap: false,
@@ -428,13 +507,24 @@ class CollapsibleSidebar extends StatelessWidget {
                                       ),
                                       if (item.route.sidebarBadgeCount != null)
                                         Container(
-                                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4, vertical: AppTheme.metrics.kSpace2),
-                                          constraints: BoxConstraints(minWidth: AppTheme.metrics.kSpace16),
-                                          decoration: BoxDecoration(color: theme.hintColor.withAlpha(38), borderRadius: AppTheme.metrics.radius8),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: AppTheme.metrics.kSpace4,
+                                            vertical: AppTheme.metrics.kSpace2,
+                                          ),
+                                          constraints: BoxConstraints(
+                                            minWidth: AppTheme.metrics.kSpace16,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: theme.hintColor.withAlpha(38),
+                                            borderRadius: AppTheme.metrics.radius8,
+                                          ),
                                           child: Text(
                                             item.route.sidebarBadgeCount.toString(),
                                             textAlign: TextAlign.center,
-                                            style: TextStyle(fontSize: AppTheme.metrics.fontSize8, color: theme.hintColor),
+                                            style: TextStyle(
+                                              fontSize: AppTheme.metrics.fontSize8,
+                                              color: theme.hintColor,
+                                            ),
                                             maxLines: 1,
                                           ),
                                         ),
@@ -462,7 +552,14 @@ class CollapsibleSidebar extends StatelessWidget {
                         children: [
                           ...item.children!.map(
                             (child) => isExpanded && showExtends
-                                ? _buildMenuItem(context, controller, child, isExpanded, showExtends, level + 1)
+                                ? _buildMenuItem(
+                                    context,
+                                    controller,
+                                    child,
+                                    isExpanded,
+                                    showExtends,
+                                    level + 1,
+                                  )
                                 : _buildCollapsedChildItem(context, controller, child),
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace4),
@@ -477,7 +574,11 @@ class CollapsibleSidebar extends StatelessWidget {
   }
 
   /// 构建收起状态下的子菜单项
-  Widget _buildCollapsedChildItem(BuildContext context, SidebarController controller, SidebarMenuItem item) {
+  Widget _buildCollapsedChildItem(
+    BuildContext context,
+    SidebarController controller,
+    SidebarMenuItem item,
+  ) {
     return Obx(() {
       final isSelected = controller.selectedRoute.value == item.route.location;
       final theme = Theme.of(context);
@@ -494,7 +595,10 @@ class CollapsibleSidebar extends StatelessWidget {
           borderRadius: AppTheme.metrics.radius12,
           hoverColor: theme.colorScheme.onSurface.withAlpha(13),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace10),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace12,
+              vertical: AppTheme.metrics.kSpace10,
+            ),
             decoration: BoxDecoration(
               borderRadius: AppTheme.metrics.radius12,
               color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
@@ -598,7 +702,7 @@ class MobileSidebarState extends State<MobileSidebar> {
                 left: 0,
                 top: 0,
                 bottom: 0,
-                width: scaleW(40), // 边缘检测区域宽度
+                width: scaleW(15), // 边缘检测区域宽度（缩小避免遮挡左侧按钮）
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onHorizontalDragStart: (details) {
@@ -610,7 +714,10 @@ class MobileSidebarState extends State<MobileSidebar> {
                   onHorizontalDragUpdate: (details) {
                     if (_isDragging) {
                       setState(() {
-                        _dragOffset = (_dragOffset + details.delta.dx).clamp(0.0, widget.targetWidth);
+                        _dragOffset = (_dragOffset + details.delta.dx).clamp(
+                          0.0,
+                          widget.targetWidth,
+                        );
                       });
                     }
                   },
@@ -647,7 +754,13 @@ class MobileSidebarState extends State<MobileSidebar> {
                   },
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
-                    child: Container(decoration: BoxDecoration(color: Theme.of(context).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()))),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()),
+                      ),
+                    ),
                   ),
                 ),
               ),

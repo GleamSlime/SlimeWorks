@@ -46,6 +46,15 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     controller.setContext(context);
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
+    // 移动端默认收起章节列表
+    if (isNarrow && controller.chapters.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (controller.showChapterList.value) {
+          controller.showChapterList.value = false;
+        }
+      });
+    }
+
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {

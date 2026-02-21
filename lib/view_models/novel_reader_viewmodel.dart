@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:get/get.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+
+final Loggers logger = Loggers(name: '书籍');
 
 /// 书籍阅读器 ViewModel
 class NovelReaderViewModel extends GetxController {
@@ -78,9 +81,9 @@ class NovelReaderViewModel extends GetxController {
     // 先清除 Rust 内容解析缓存，确保下次打开重新解压图片
     try {
       clearNovelCache(filePath: novel.filePath);
-      debugPrint('[Novel UI] Cleared Rust content cache for: ${novel.filePath}');
+      logger.info('Cleared Rust content cache for: ${novel.filePath}');
     } catch (e) {
-      debugPrint('[Novel UI] Failed to clear Rust content cache: $e');
+      logger.info('[Novel UI] Failed to clear Rust content cache: $e');
     }
 
     // 尝试删除基于 novel.id 的临时目录（如果存在）
@@ -90,10 +93,10 @@ class NovelReaderViewModel extends GetxController {
       );
       if (base.existsSync()) {
         base.deleteSync(recursive: true);
-        debugPrint('[Novel UI] Cleared epub image cache: ${base.path}');
+        logger.info('[Novel UI] Cleared epub image cache: ${base.path}');
       }
     } catch (e) {
-      debugPrint('[Novel UI] Failed to clear epub image cache: $e');
+      logger.info('[Novel UI] Failed to clear epub image cache: $e');
     }
 
     // 退出阅读器时保存当前阅读位置
@@ -101,10 +104,10 @@ class NovelReaderViewModel extends GetxController {
       if (chapters.isNotEmpty) {
         final progress = (currentChapterIndex.value + 1) / (chapters.length);
         updateReadingProgress(novelId: novel.id, progress: progress);
-        debugPrint('[Novel UI] Saved progress $progress for novel ${novel.id} on close');
+        logger.info('[Novel UI] Saved progress $progress for novel ${novel.id} on close');
       }
     } catch (e) {
-      debugPrint('[Novel UI] Failed to save progress on close: $e');
+      logger.info('[Novel UI] Failed to save progress on close: $e');
     }
 
     super.onClose();
@@ -137,23 +140,35 @@ class NovelReaderViewModel extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      debugPrint('[Novel UI] ========== Loading novel ==========');
-      debugPrint('[Novel UI] Title: ${novel.title}');
-      debugPrint('[Novel UI] File: ${novel.filePath}');
+      logger.info('[Novel UI] ========== Loading novel ==========');
+      logger.info('[Novel UI] Title: ${novel.title}');
+      logger.info('[Novel UI] File: ${novel.filePath}');
       final fileSize = File(novel.filePath).existsSync() ? File(novel.filePath).lengthSync() : 0;
       final fileSizeMB = (fileSize / 1024 / 1024).toStringAsFixed(2);
-      debugPrint('[Novel UI] File size: ${fileSizeMB}MB');
-      debugPrint('[Novel UI] Start time: $startTime');
+      logger.info('[Novel UI] File size: ${fileSizeMB}MB');
+      logger.info('[Novel UI] Start time: $startTime');
 
-      debugPrint('[Novel UI] Calling Rust getNovelContent...');
+      logger.info('[Novel UI] Calling Rust getNovelContent...');
+      final callStart = DateTime.now();
       final beforeRust = DateTime.now();
       final content = await getNovelContent(filePath: novel.filePath);
-      final rustDuration = DateTime.now().difference(beforeRust);
-      debugPrint('[Novel UI] Rust getNovelContent completed in ${rustDuration.inMilliseconds}ms');
+      final afterRust = DateTime.now();
+      final rustDuration = afterRust.difference(beforeRust);
+      logger.info('[Novel UI] Rust getNovelContent completed in ${rustDuration.inMilliseconds}ms');
 
+      // 记录从调用到 Dart 层收到结果的总时长（包含 FFI + 序列化开销）
+      final afterReceive = DateTime.now();
+      final totalCallMs = afterReceive.difference(callStart).inMilliseconds;
+      logger.info(
+        '[Novel UI] getNovelContent total await elapsed: ${totalCallMs}ms (includes FFI/serialization)',
+      );
+
+      // 赋值并记录耗时
+      final assignStart = DateTime.now();
       chapters.value = content.chapters;
+      final assignDuration = DateTime.now().difference(assignStart).inMilliseconds;
       final chaptersLen = chapters.length;
-      debugPrint('[Novel UI] Loaded $chaptersLen chapters');
+      logger.info('[Novel UI] Loaded $chaptersLen chapters (assign took ${assignDuration}ms)');
 
       if (chapters.isNotEmpty) {
         // 根据上次阅读进度恢复到对应章节
@@ -169,27 +184,27 @@ class NovelReaderViewModel extends GetxController {
         } catch (_) {
           startIndex = 0;
         }
-        debugPrint(
+        logger.info(
           '[Novel UI] Restoring chapter index $startIndex (progress=${(novel.progress * 100).toStringAsFixed(1)}%)',
         );
         // 先设置索引以更新 UI 选中状态，再加载章节内容
         currentChapterIndex.value = startIndex;
-        debugPrint('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
+        logger.info('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
 
         final beforeChapter = DateTime.now();
         await loadChapterContent(startIndex);
         final chapterLoadMs = DateTime.now().difference(beforeChapter).inMilliseconds;
-        debugPrint('[Novel UI] Initial chapter load took ${chapterLoadMs}ms');
+        logger.info('[Novel UI] Initial chapter load took ${chapterLoadMs}ms');
       }
 
       final now = DateTime.now();
       final totalDuration = now.millisecondsSinceEpoch - startMs;
-      debugPrint('[Novel UI] ========== Total load time: ${totalDuration}ms ==========');
+      logger.info('[Novel UI] ========== Total load time: ${totalDuration}ms ==========');
     } catch (e, stackTrace) {
       final now = DateTime.now();
       final duration = now.millisecondsSinceEpoch - startMs;
-      debugPrint('[Novel UI] *** ERROR after ${duration}ms: $e ***');
-      debugPrint('[Novel UI] Stack trace: $stackTrace');
+      logger.info('[Novel UI] *** ERROR after ${duration}ms: $e ***');
+      logger.info('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载失败: $e';
     } finally {
       isLoading.value = false;
@@ -206,9 +221,9 @@ class NovelReaderViewModel extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      debugPrint('[Novel UI] --- Loading chapter $index ---');
+      logger.info('[Novel UI] --- Loading chapter $index ---');
       final chTitle = chapters[index].title;
-      debugPrint('[Novel UI] Chapter title: $chTitle');
+      logger.info('[Novel UI] Chapter title: $chTitle');
 
       final beforeRust = DateTime.now();
       final content = await getChapterContent(
@@ -218,13 +233,13 @@ class NovelReaderViewModel extends GetxController {
       final rustDuration = DateTime.now().difference(beforeRust);
       final contentLenKB = (content.length / 1024).toStringAsFixed(1);
 
-      debugPrint(
+      logger.info(
         '[Novel UI] Chapter loaded in ${rustDuration.inMilliseconds}ms, length: ${content.length} chars (${contentLenKB}KB)',
       );
 
       // currentChapterIndex 已由 goToChapter 设置，此处不再重复设置
       currentContent.value = content;
-      debugPrint('[Novel UI] Updated currentContent.value');
+      logger.info('[Novel UI] Updated currentContent.value');
 
       // 更新阅读进度
       final progress = (index + 1) / chapters.length;
@@ -235,12 +250,12 @@ class NovelReaderViewModel extends GetxController {
 
       final now = DateTime.now();
       final totalDuration = now.millisecondsSinceEpoch - startMs;
-      debugPrint('[Novel UI] --- Chapter display ready in ${totalDuration}ms ---');
+      logger.info('[Novel UI] --- Chapter display ready in ${totalDuration}ms ---');
     } catch (e, stackTrace) {
       final now = DateTime.now();
       final duration = now.millisecondsSinceEpoch - startMs;
-      debugPrint('[Novel UI] *** ERROR loading chapter after ${duration}ms: $e ***');
-      debugPrint('[Novel UI] Stack trace: $stackTrace');
+      logger.info('[Novel UI] *** ERROR loading chapter after ${duration}ms: $e ***');
+      logger.info('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载章节失败: $e';
     } finally {
       isLoading.value = false;
@@ -345,7 +360,7 @@ class NovelReaderViewModel extends GetxController {
       final matches = await searchInNovel(filePath: novel.filePath, keyword: keyword);
       searchMatches.value = matches;
       selectedSearchIndex.value = matches.isNotEmpty ? 0 : -1;
-      debugPrint(
+      logger.info(
         '[Novel VM] searchKeyword: matches=${matches.length} selectedIndex=${selectedSearchIndex.value}',
       );
 
@@ -511,7 +526,7 @@ class NovelReaderViewModel extends GetxController {
         NovelReaderRoute($extra: targetNovel).go(context);
       });
     } catch (e) {
-      debugPrint('[Novel VM] Failed to switch book: $e');
+      logger.info('[Novel VM] Failed to switch book: $e');
     }
   }
 
@@ -565,7 +580,7 @@ class NovelReaderViewModel extends GetxController {
         await Process.run('xdg-open', [dir]);
       }
     } catch (e) {
-      debugPrint('[Novel VM] revealFileInFolder failed: $e');
+      logger.info('[Novel VM] revealFileInFolder failed: $e');
       _showSnack('错误', '无法打开所在文件夹: $e');
     }
   }

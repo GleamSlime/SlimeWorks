@@ -4,7 +4,7 @@
 - 如果需求有创建新的模块参考目录如下
   - 静态链接模块参考： rust/ws_module 文件夹
   - 动态载入模块参考： rust/capture_proxy 文件夹
-- 应用主要是一套Flutter兼容移动和桌面端，当RUST功能无法再移动端完全实现时，则会通过HTTP请求客户端方式让客户端执行完逻辑后返回数据
+- 应用主要是一套Flutter兼容移动和桌面端，当RUST功能无法再移动端完全实现时，则会通过HTTP请求客户端方式让客户端执行完逻辑后返回数据,设计和选择方案时应当考虑到兼容移动端
 - 完成代码调整后需 flutter run 以校验是否有编译错误，如果只有Rust调整应当cargo build
 - 完成代码后不需要输出README
 - 页面目录位于 lib/pages 下，如果一个页面包含多个子页面则需创建主页面名的文件夹，在里面创建子页面
@@ -14,6 +14,7 @@
 - 路由操作使用GoRouter TypedGoRoute
 - Dart中的尺寸需参考lib\core\theme\app_theme.dart appMetrics，颜色也需考虑亮色和暗色，如果尺寸未定义则使用scaleW，禁止直接数字或者int.w
 - 打日志使用Loggers class
+- 修改完代码务必执行静态分析确保刚刚的修改没有报错!
 
 ‌## Dart规则
 

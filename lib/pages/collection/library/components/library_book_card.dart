@@ -345,9 +345,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   horizontal: scaleW(8),
                                   vertical: scaleW(4),
                                 ),
-                                color: Colors.black.withAlpha(89),
+                                color: _hovering
+                                    ? Colors.black.withAlpha(120)
+                                    : Colors.black.withAlpha(84),
                                 child: Text(
-                                  widget.metadata.format.toString(),
+                                  widget.metadata.format.name.toUpperCase(),
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: appMetrics.fontSize10,
@@ -391,9 +393,13 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                 ),
                                 child: Container(
                                   padding: EdgeInsets.all(scaleW(4)),
-                                  color: Colors.black.withAlpha(89),
+                                  color: _hovering
+                                      ? Colors.black.withAlpha(150)
+                                      : Colors.transparent,
                                   child: Icon(
-                                    widget.metadata.isFavorite ? Icons.star : Icons.star_border,
+                                    widget.metadata.isFavorite
+                                        ? Icons.star_sharp
+                                        : Icons.star_border_sharp,
                                     color: widget.metadata.isFavorite
                                         ? Colors.amber
                                         : Colors.white70,
@@ -407,6 +413,62 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                       ),
                     ),
 
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: AnimatedContainer(
+                      duration: dur,
+                      curve: curve,
+                      height: _hovering ? scaleW(145) : scaleW(95),
+                      clipBehavior: Clip.none,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // 标签展示（进度条上方，前5个）
+                          if (widget.metadata.tags.isNotEmpty)
+                            Positioned(
+                              top: 0,
+                              left: scaleW(8),
+                              right: scaleW(8),
+                              child: Wrap(
+                                alignment: WrapAlignment.end,
+                                spacing: scaleW(4),
+                                runSpacing: scaleW(4),
+                                children: widget.metadata.tags.take(5).map((tag) {
+                                  return ClipRRect(
+                                    borderRadius: appMetrics.radius12,
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: scaleW(6),
+                                          vertical: scaleW(2),
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _hovering
+                                              ? Colors.black.withAlpha(120)
+                                              : Colors.black.withAlpha(89),
+                                          borderRadius: appMetrics.radius12,
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: appMetrics.fontSize10,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                   // 底部磨砂栏：hover 时通过高度动画展开 + 模糊渐清晰
                   Positioned(
                     left: 0,
@@ -426,7 +488,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                         duration: dur,
                         curve: curve,
                         height: _hovering ? scaleW(120) : scaleW(70),
-                        color: Colors.black.withAlpha(89),
+                        color: _hovering ? Colors.black.withAlpha(120) : Colors.black.withAlpha(89),
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: [
@@ -447,6 +509,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   ),
                                 ),
                               ),
+
                             // 标题和作者
                             Positioned(
                               top: 0,

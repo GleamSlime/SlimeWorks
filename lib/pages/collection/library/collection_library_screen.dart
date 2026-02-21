@@ -41,11 +41,31 @@ class _CollectionLibraryScreenState
   void initState() {
     super.initState();
 
+    // 如果有保存的滚动位置，预先加载更多项目以确保能滚动到该位置
+    if (viewModel.savedScrollOffset.value > 0) {
+      viewModel.displayedItemCount.value = 200; // 预加载足够的项目
+    }
+
     _scrollController = ScrollController(initialScrollOffset: viewModel.savedScrollOffset.value);
+
+    // 添加滚动监听，接近底部时加载更多
+    _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _rebuildToolbar();
     });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final threshold = 500.0; // 距离底部500像素时触发加载
+
+    if (maxScroll - currentScroll <= threshold && viewModel.canLoadMore) {
+      viewModel.loadMoreItems();
+    }
   }
 
   void _rebuildToolbar() {
@@ -528,7 +548,7 @@ class _CollectionLibraryScreenState
     return Obx(() {
       // ignore: unused_local_variable
       final selectedCount = viewModel.selectedIds.length;
-      final items = viewModel.filteredItems;
+      final items = viewModel.displayedItems; // 使用分页后的项目
       final hasBackButton = inFolder;
 
       if (items.isEmpty && !hasBackButton) {
@@ -538,20 +558,19 @@ class _CollectionLibraryScreenState
       // 计算总条目数：返回按钮（如果有）+ 实际条目
       final totalCount = (hasBackButton ? 1 : 0) + items.length;
 
-      // 使用 GridView.builder 实现虚拟滚动，提升大规模列表性能
-      return GridView.builder(
+      // 使用 GridView.custom 恢复之前的实现以改善滚动流畅度
+      return GridView.custom(
         controller: _scrollController,
         padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-        cacheExtent: 500, // 增加缓存区域，减少滚动时的重建
-        physics: const BouncingScrollPhysics(), // 使用弹性物理效果，提升滚动手感
+        cacheExtent: 500,
+        physics: const BouncingScrollPhysics(),
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: scaleW(200),
           childAspectRatio: 0.65,
           mainAxisSpacing: AppTheme.metrics.kSpace12,
           crossAxisSpacing: AppTheme.metrics.kSpace12,
         ),
-        itemCount: totalCount,
-        itemBuilder: (context, index) {
+        childrenDelegate: SliverChildBuilderDelegate((context, index) {
           // 如果有返回按钮且是第一个索引，显示返回按钮
           if (hasBackButton && index == 0) {
             return _buildBackButton();
@@ -563,7 +582,7 @@ class _CollectionLibraryScreenState
           final isSelected = viewModel.selectedIds.contains(item.id);
 
           return _buildDraggableItem(context, itemIndex, item, isSelected, isSelecting);
-        },
+        }, childCount: totalCount),
       );
     });
   }
