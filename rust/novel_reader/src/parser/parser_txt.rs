@@ -49,7 +49,7 @@ impl TxtParser {
         let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
 
         // 尝试自动识别章节
-        log::debug!("[TxtParser] Detecting chapters...");
+        log::info!("[TxtParser] Detecting chapters...");
         let chapter_detect_start = Instant::now();
         let chapters = Self::detect_chapters(&novel_id, &content);
         log::info!(
@@ -68,21 +68,29 @@ impl TxtParser {
     fn detect_chapters(novel_id: &str, content: &str) -> Vec<NovelChapter> {
         use regex::Regex;
 
-        // 常见章节标题模式 - 修复：去掉行末约束$，允许章节标题后有内容
+        // 常见章节标题模式 - 允许行首空白字符（包括全角空格）
         let patterns = vec![
-            r"(?m)^第[零一二三四五六七八九十百千万0-9]+章[^\n]{0,30}",
-            r"(?m)^第[零一二三四五六七八九十百千万0-9]+节[^\n]{0,30}",
-            r"(?m)^第[零一二三四五六七八九十百千万0-9]+回[^\n]{0,30}",
-            r"(?m)^第[零一二三四五六七八九十百千万0-9]+卷[^\n]{0,30}",
-            r"(?m)^Chapter [0-9]+[^\n]{0,30}",
-            r"(?m)^[0-9]+\.[^\n]{1,30}",
+            r"(?m)^\s*第[零一二三四五六七八九十百千万0-9]+章[^\n]{0,40}",
+            r"(?m)^\s*第[零一二三四五六七八九十百千万0-9]+节[^\n]{0,40}",
+            r"(?m)^\s*第[零一二三四五六七八九十百千万0-9]+回[^\n]{0,40}",
+            r"(?m)^\s*第[零一二三四五六七八九十百千万0-9]+卷[^\n]{0,40}",
+            r"(?m)^\s*Chapter [0-9]+[^\n]{0,40}",
+            r"(?m)^\s*[0-9]+\.[^\n]{1,40}",
         ];
 
         let mut chapter_positions: Vec<(usize, String)> = Vec::new();
 
         for pattern in &patterns {
             if let Ok(re) = Regex::new(pattern) {
-                for mat in re.find_iter(content) {
+                let matches: Vec<_> = re.find_iter(content).collect();
+                if !matches.is_empty() {
+                    log::info!(
+                        "[TxtParser] Pattern matched {} times: {}",
+                        matches.len(),
+                        pattern
+                    );
+                }
+                for mat in matches {
                     let title = mat.as_str().trim().to_string();
                     chapter_positions.push((mat.start(), title));
                 }
@@ -91,24 +99,9 @@ impl TxtParser {
 
         // 如果没找到章节，返回整篇文章
         if chapter_positions.is_empty() {
-            log::debug!("[TxtParser] No chapters detected, using full text");
-            return vec![NovelChapter {
-                id: format!("{}_chapter_0", novel_id),
-                title: "全文".to_string(),
-                index: 0,
-                content: Some(content.to_string()),
-            }];
-        }
-
-        // 按位置排序并去重
-        chapter_positions.sort_by_key(|k| k.0);
-        chapter_positions.dedup_by_key(|k| k.0);
-
-        // 限制章节数量，避免过度拆分
-        if chapter_positions.len() > 1000 {
-            log::warn!(
-                "[TxtParser] Too many chapters detected ({}), using full text",
-                chapter_positions.len()
+            log::info!(
+                "[TxtParser] No chapters detected, using full text (content length: {} chars)",
+                content.len()
             );
             return vec![NovelChapter {
                 id: format!("{}_chapter_0", novel_id),
@@ -118,7 +111,52 @@ impl TxtParser {
             }];
         }
 
+        // 按位置排序
+        chapter_positions.sort_by_key(|k| k.0);
+
+        // 去重：同一位置只保留最长的标题（避免"第X章"和"第X卷"重复匹配）
+        let mut deduplicated: Vec<(usize, String)> = Vec::new();
+        for (pos, title) in &chapter_positions {
+            if let Some(last) = deduplicated.last_mut() {
+                // 如果位置相同或非常接近（<10字符），保留更长的标题
+                if pos.saturating_sub(last.0) < 10 {
+                    if title.len() > last.1.len() {
+                        last.1 = title.clone();
+                    }
+                    continue;
+                }
+            }
+            deduplicated.push((*pos, title.clone()));
+        }
+
+        log::info!(
+            "[TxtParser] After deduplication: {} chapters (from {} raw matches)",
+            deduplicated.len(),
+            chapter_positions.len()
+        );
+
+        // 限制章节数量，避免过度拆分（提高到5000，支持超长小说）
+        if deduplicated.len() > 5000 {
+            log::warn!(
+                "[TxtParser] Too many chapters detected ({}), using full text",
+                deduplicated.len()
+            );
+            return vec![NovelChapter {
+                id: format!("{}_chapter_0", novel_id),
+                title: "全文".to_string(),
+                index: 0,
+                content: Some(content.to_string()),
+            }];
+        }
+
+        let chapter_positions = deduplicated;
+
         let mut chapters = Vec::new();
+
+        log::info!(
+            "[TxtParser] Creating {} chapter objects...",
+            chapter_positions.len()
+        );
 
         for (i, (start_pos, title)) in chapter_positions.iter().enumerate() {
             let end_pos = if i + 1 < chapter_positions.len() {

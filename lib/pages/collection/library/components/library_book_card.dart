@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
@@ -340,22 +341,44 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                             borderRadius: appMetrics.radius12,
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: scaleW(8),
-                                  vertical: scaleW(4),
-                                ),
-                                color: _hovering
-                                    ? Colors.black.withAlpha(120)
-                                    : Colors.black.withAlpha(84),
-                                child: Text(
-                                  widget.metadata.format.name.toUpperCase(),
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: appMetrics.fontSize10,
-                                    fontWeight: FontWeight.bold,
+                              child: Row(
+                                spacing: appMetrics.kSpace2,
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: scaleW(8),
+                                      vertical: scaleW(4),
+                                    ),
+                                    color: _hovering
+                                        ? Colors.black.withAlpha(120)
+                                        : Colors.black.withAlpha(84),
+                                    child: Text(
+                                      formatFileSize(widget.metadata.fileSize),
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: appMetrics.fontSize10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: scaleW(8),
+                                      vertical: scaleW(4),
+                                    ),
+                                    color: _hovering
+                                        ? Colors.black.withAlpha(120)
+                                        : Colors.black.withAlpha(84),
+                                    child: Text(
+                                      widget.metadata.format.name.toUpperCase(),
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: appMetrics.fontSize10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
