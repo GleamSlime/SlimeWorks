@@ -99,6 +99,8 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       // capture old orders before applying local update
       final oldOrderMap = {for (final n in novels) n.id: n.customOrder};
       _applyBookOrderLocally(orderedIds);
+      // 拖拽排序后,切换到customOrder排序模式
+      sortField.value = 'customOrder';
       logger.log(
         'scheduling async persist of changed novel orders for ${orderedIds.length} novels',
         name: '书库',
@@ -140,6 +142,8 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       final orderedIds = bookList.map((b) => b.id).toList();
       final oldOrderMap = {for (final n in novels) n.id: n.customOrder};
       _applyBookOrderLocally(orderedIds);
+      // 拖拽排序后,切换到customOrder排序模式
+      sortField.value = 'customOrder';
       logger.log(
         'scheduling async persist of changed novel orders for ${orderedIds.length} novels (byId)',
         name: '书库',

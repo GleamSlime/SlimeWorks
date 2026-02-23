@@ -761,6 +761,21 @@ class _ReaderContentState extends State<ReaderContent> {
                           return null;
                         },
                         customWidgetBuilder: (element) {
+                          // 处理翻译后的段落（带重试按钮）
+                          if (element.attributes['data-translated'] == 'true') {
+                            final originalText = element.attributes['data-original-text'];
+                            if (originalText != null) {
+                              return _TranslatedParagraphWidget(
+                                element: element,
+                                originalText: originalText,
+                                fontSize: controller.fontSize.value,
+                                onRetry: () {
+                                  controller.handleRetryFromHtml(originalText);
+                                },
+                              );
+                            }
+                          }
+                          
                           // 处理选中的搜索结果高亮
                           if (element.localName == 'mark_selected') {
                             return Container(
@@ -1737,5 +1752,67 @@ class _ReaderContentState extends State<ReaderContent> {
       debugPrint('[Reader] _embedLocalImages error: $e');
       return html;
     }
+  }
+}
+
+/// 翻译后的段落widget，带有hover显示的重试图标
+class _TranslatedParagraphWidget extends StatefulWidget {
+  final dynamic element;
+  final String originalText;
+  final double fontSize;
+  final VoidCallback onRetry;
+
+  const _TranslatedParagraphWidget({
+    required this.element,
+    required this.originalText,
+    required this.fontSize,
+    required this.onRetry,
+  });
+
+  @override
+  State<_TranslatedParagraphWidget> createState() => _TranslatedParagraphWidgetState();
+}
+
+class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 重试图标（hover时显示）
+          AnimatedOpacity(
+            opacity: _isHovering ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: GestureDetector(
+              onTap: widget.onRetry,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4, top: 2),
+                child: Icon(
+                  Icons.refresh,
+                  size: widget.fontSize * 0.9,
+                  color: _isHovering ? const Color(0xFF007AFF) : Colors.grey,
+                ),
+              ),
+            ),
+          ),
+          // 段落文本内容
+          Expanded(
+            child: SelectableText(
+              widget.element.text,
+              style: TextStyle(
+                fontSize: widget.fontSize,
+                height: 2.8,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

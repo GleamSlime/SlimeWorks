@@ -22,7 +22,7 @@ class DashboardRoute extends AppRouteData with $DashboardRoute {
   }
 }
 
-@TypedGoRoute<AboutRoute>(path: '/settings')
+@TypedGoRoute<AboutRoute>(path: '/about')
 class AboutRoute extends AppRouteData with $AboutRoute {
   const AboutRoute();
 

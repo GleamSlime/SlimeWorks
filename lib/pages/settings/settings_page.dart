@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -9,6 +10,7 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = [
       _SettingsTab(label: '主体设置', content: const ThemeSettingsTab()),
+      _SettingsTab(label: 'Ollama 设置', content: const OllamaSettingsTab()),
       _SettingsTab(
         label: '账户设置',
         content: const SettingsTabPlaceholder(title: '账户设置'),
@@ -24,7 +26,10 @@ class SettingsPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('设置'),
-          bottom: TabBar(isScrollable: true, tabs: tabs.map((tab) => Tab(text: tab.label)).toList()),
+          bottom: TabBar(
+            isScrollable: true,
+            tabs: tabs.map((tab) => Tab(text: tab.label)).toList(),
+          ),
         ),
         body: TabBarView(children: tabs.map((tab) => tab.content).toList()),
       ),

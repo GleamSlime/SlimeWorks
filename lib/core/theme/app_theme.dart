@@ -309,6 +309,18 @@ class ThemeMetrics {
   final double kSpace44;
   final double kSpace48;
 
+  // Padding aliases
+  double get paddingSmall => kSpace8;
+  double get paddingMedium => kSpace16;
+  double get paddingLarge => kSpace24;
+  double get paddingXLarge => kSpace32;
+
+  // Spacing aliases
+  double get spacingSmall => kSpace8;
+  double get spacingMedium => kSpace16;
+  double get spacingLarge => kSpace24;
+  double get spacingXLarge => kSpace32;
+
   final BoxShadow boxShadow10;
 
   ThemeMetrics()

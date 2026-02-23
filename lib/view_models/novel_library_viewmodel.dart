@@ -62,6 +62,10 @@ class NovelLibraryViewModel extends BaseViewModel {
   // 关键词规则
   final keywordRules = <Map<String, String>>[].obs;
 
+  // 排序相关
+  final sortField = 'addedAt'.obs; // 'addedAt', 'title', 'fileSize'
+  final sortAscending = false.obs; // true=升序, false=降序
+
   /// 当前文件夹名称
   String get currentFolderName {
     final fid = currentFolderId.value;
@@ -176,14 +180,42 @@ class NovelLibraryViewModel extends BaseViewModel {
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
 
-      // 2. 按 customOrder 排序（拖动、最近阅读会修改order值）
-      final aOrder = a.customOrder ?? 999999;
-      final bOrder = b.customOrder ?? 999999;
-      if (aOrder != bOrder) return aOrder.compareTo(bOrder);
+      // 2. 在收藏分组内按用户选择的排序方式
+      final field = sortField.value;
+      final ascending = sortAscending.value;
+      int cmp = 0;
 
-      // 3. order相同时按添加时间倒序
-      return b.addedAt.compareTo(a.addedAt);
+      switch (field) {
+        case 'addedAt':
+          cmp = a.addedAt.compareTo(b.addedAt);
+          break;
+        case 'title':
+          cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          break;
+        case 'fileSize':
+          cmp = a.fileSize.compareTo(b.fileSize);
+          break;
+        case 'customOrder':
+          // 使用 customOrder 排序
+          final aOrder = a.customOrder ?? 999999;
+          final bOrder = b.customOrder ?? 999999;
+          cmp = aOrder.compareTo(bOrder);
+          if (cmp == 0) cmp = a.addedAt.compareTo(b.addedAt);
+          break;
+        default:
+          // 回退到 addedAt
+          cmp = a.addedAt.compareTo(b.addedAt);
+      }
+
+      return ascending ? cmp : -cmp;
     });
+  }
+
+  /// 设置排序选项
+  void setSortOption(String field, bool ascending) {
+    sortField.value = field;
+    sortAscending.value = ascending;
+    logger.info('排序设置: $field ${ascending ? "升序" : "降序"}');
   }
 
   /// 过滤后的书籍列表

@@ -139,6 +139,14 @@ class _CollectionLibraryScreenState
                   ),
               ],
             ),
+            // 排序按钮
+            Builder(
+              builder: (sortBtnCtx) => DesktopHeadToolsButton(
+                icon: const Icon(Icons.sort),
+                size: AppTheme.metrics.kSpace40,
+                onTap: () => _showSortMenu(sortBtnCtx),
+              ),
+            ),
             // 关键词自动打标规则管理
             DesktopHeadToolsButton(
               icon: const Icon(Icons.auto_awesome_outlined),
@@ -255,6 +263,150 @@ class _CollectionLibraryScreenState
               );
             },
           ),
+        ),
+      ],
+    );
+  }
+
+  /// 排序菜单
+  void _showSortMenu(BuildContext btnCtx) {
+    final navigatorContext = navigatorKey.currentContext;
+    if (navigatorContext == null) {
+      return;
+    }
+
+    final RenderBox button = btnCtx.findRenderObject()! as RenderBox;
+    final RenderBox overlay =
+        Overlay.of(navigatorContext, rootOverlay: true).context.findRenderObject()! as RenderBox;
+
+    final Offset overlayTopLeft = overlay.localToGlobal(Offset.zero);
+    final Offset buttonTopLeft = button.localToGlobal(Offset.zero);
+    final Offset buttonBottomRight = button.localToGlobal(button.size.bottomRight(Offset.zero));
+
+    final Offset topLeft = buttonTopLeft - overlayTopLeft;
+    final Offset bottomRight = buttonBottomRight - overlayTopLeft;
+
+    final RelativeRect position = RelativeRect.fromLTRB(
+      topLeft.dx,
+      bottomRight.dy + 4,
+      overlay.size.width - bottomRight.dx,
+      0,
+    );
+
+    final sortOptions = [
+      {'field': 'addedAt', 'label': '添加时间'},
+      {'field': 'title', 'label': '书籍名称'},
+      {'field': 'fileSize', 'label': '文件大小'},
+    ];
+
+    showMenu<void>(
+      context: navigatorContext,
+      useRootNavigator: true,
+      position: position,
+      constraints: const BoxConstraints(minWidth: 200),
+      items: [
+        PopupMenuItem<void>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Obx(() {
+            final currentField = viewModel.sortField.value;
+            final currentAscending = viewModel.sortAscending.value;
+
+            return DefaultTextStyle(
+              style: Theme.of(context).textTheme.bodyMedium!,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                    child: Text('排序方式', style: Theme.of(context).textTheme.titleSmall),
+                  ),
+                  ...sortOptions.map((option) {
+                    final field = option['field']!;
+                    final label = option['label']!;
+                    final isCurrentField = currentField == field;
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 升序选项
+                        ListTile(
+                          dense: true,
+                          leading: Icon(
+                            Icons.arrow_upward,
+                            size: 18,
+                            color: isCurrentField && currentAscending
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                          ),
+                          title: Text(
+                            '$label升序',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isCurrentField && currentAscending
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                              fontWeight: isCurrentField && currentAscending
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          trailing: isCurrentField && currentAscending
+                              ? Icon(
+                                  Icons.check,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary,
+                                )
+                              : null,
+                          onTap: () {
+                            viewModel.setSortOption(field, true);
+                            Navigator.of(navigatorContext, rootNavigator: true).pop();
+                          },
+                        ),
+                        // 降序选项
+                        ListTile(
+                          dense: true,
+                          leading: Icon(
+                            Icons.arrow_downward,
+                            size: 18,
+                            color: isCurrentField && !currentAscending
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                          ),
+                          title: Text(
+                            '$label降序',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isCurrentField && !currentAscending
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                              fontWeight: isCurrentField && !currentAscending
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          trailing: isCurrentField && !currentAscending
+                              ? Icon(
+                                  Icons.check,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary,
+                                )
+                              : null,
+                          onTap: () {
+                            viewModel.setSortOption(field, false);
+                            Navigator.of(navigatorContext, rootNavigator: true).pop();
+                          },
+                        ),
+                        if (option != sortOptions.last) const Divider(height: 1),
+                      ],
+                    );
+                  }),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            );
+          }),
         ),
       ],
     );

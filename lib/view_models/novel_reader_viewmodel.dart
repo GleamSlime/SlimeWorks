@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:io';
 import 'package:get/get.dart';
+import 'package:dio/dio.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/ollama/ollama_models.dart';
+import 'package:slime_works/core/services/ollama/ollama_service.dart';
+import 'package:html/parser.dart' as html_parser;
 
 final Loggers logger = Loggers(name: '书籍');
 
@@ -25,8 +32,27 @@ class NovelReaderViewModel extends GetxController {
   final searchScrollTrigger = 0.obs; // 用于触发滚动到搜索结果
   final lastSearchQuery = ''.obs; // 记录最近一次搜索的原始关键词，供 UI 高亮使用
 
+  // 翻译相关状态
+  final isAutoTranslateEnabled = false.obs; // 是否开启自动翻译
+  final isTranslating = false.obs; // 正在翻译中
+  final translationProgress = 0.obs; // 当前翻译进度 (已完成段落数)
+  final translationTotal = 0.obs; // 总段落数
+  final RxnString translationModel = RxnString(null); // 翻译模型
+  final Rx<TranslationLanguagePair> translationLanguagePair =
+      TranslationLanguagePair.presets[0].obs; // 翻译语言对
+  final useStreamingTranslation = false.obs; // 是否使用流式输出
+  final translationTimeout = 60.obs; // 翻译超时时间（秒）
+  String? _originalContent; // 原文内容（用于切换译文/原文）
+  CancelToken? _translationCancelToken; // 翻译请求取消令牌
+
   // HTML内容缓存，避免重复转换（key: chapterIndex）
   final Map<int, String> _processedHtmlCache = {};
+
+  // 章节标题翻译缓存（key: original title, value: translated title）
+  final Map<String, String> _chapterTitleCache = {};
+
+  // 翻译失败的段落原文列表
+  final failedTranslations = <String>[].obs;
 
   /// 由 Page build 时注入，用于弹窗（MaterialApp.router 不支持 Get.dialog）
   BuildContext? _pageContext;
@@ -75,6 +101,17 @@ class NovelReaderViewModel extends GetxController {
 
   @override
   void onClose() {
+    // 关闭页面时，立即取消所有翻译任务
+    logger.info('[Novel UI] onClose: 开始清理资源');
+    _cancelTranslation();
+    
+    // 清除翻译相关状态
+    isTranslating.value = false;
+    isAutoTranslateEnabled.value = false;
+    failedTranslations.clear();
+    _chapterTitleCache.clear();
+    _originalContent = null;
+    
     // 清空HTML缓存
     _processedHtmlCache.clear();
 
@@ -170,6 +207,11 @@ class NovelReaderViewModel extends GetxController {
       final chaptersLen = chapters.length;
       logger.info('[Novel UI] Loaded $chaptersLen chapters (assign took ${assignDuration}ms)');
 
+      // TODO: 暂时注释掉章节标题翻译，避免加载时卡顿
+      // if (isAutoTranslateEnabled.value && translationModel.value != null) {
+      //   _translateChapterTitles();
+      // }
+
       if (chapters.isNotEmpty) {
         // 根据上次阅读进度恢复到对应章节
         final len = chapters.length;
@@ -208,12 +250,19 @@ class NovelReaderViewModel extends GetxController {
       errorMessage.value = '加载失败: $e';
     } finally {
       isLoading.value = false;
+      // 在章节显示后异步执行翻译（不阻塞显示）
+      if (isAutoTranslateEnabled.value && translationModel.value != null) {
+        translateCurrentChapter();
+      }
     }
   }
 
   /// 加载章节内容
   Future<void> loadChapterContent(int index) async {
     if (index < 0 || index >= chapters.length) return;
+
+    // 切换章节时取消正在进行的翻译
+    _cancelTranslation();
 
     final startTime = DateTime.now();
     final startMs = startTime.millisecondsSinceEpoch;
@@ -259,6 +308,11 @@ class NovelReaderViewModel extends GetxController {
       errorMessage.value = '加载章节失败: $e';
     } finally {
       isLoading.value = false;
+
+      // 在章节显示后异步执行翻译（不阻塞显示）
+      if (isAutoTranslateEnabled.value && translationModel.value != null) {
+        translateCurrentChapter();
+      }
     }
   }
 
@@ -603,6 +657,503 @@ class NovelReaderViewModel extends GetxController {
       }
     } catch (e) {
       _showSnack('错误', '删除失败: $e');
+    }
+  }
+
+  /// 显示翻译配置面板
+  void showTranslationPanel() {
+    // 由 toolbar 处理
+  }
+
+  /// 翻译当前章节
+  Future<void> translateCurrentChapter() async {
+    final model = translationModel.value;
+    if (model == null) {
+      _showSnack('错误', '请先配置翻译模型');
+      return;
+    }
+
+    if (currentContent.value.isEmpty) {
+      _showSnack('提示', '当前章节没有内容');
+      return;
+    }
+
+    try {
+      isTranslating.value = true;
+      _originalContent = currentContent.value; // 保存原文
+
+      // 创建新的取消令牌
+      _translationCancelToken = CancelToken();
+
+      logger.info('开始翻译章节, model=$model, lang=${translationLanguagePair.value.displayName}');
+
+      // 解析 HTML，创建可修改的 document
+      final document = html_parser.parse(_originalContent);
+      final textNodes = _extractTextNodesFromDocument(document);
+      logger.info('提取到 ${textNodes.length} 个文本节点');
+
+      if (textNodes.isEmpty) {
+        _showSnack('提示', '当前章节没有可翻译的内容');
+        return;
+      }
+
+      // 逐段翻译并实时更新UI
+      final ollamaService = getIt.get<OllamaService>();
+
+      // 清空失败列表
+      failedTranslations.clear();
+      
+      // 初始化翻译进度
+      translationProgress.value = 0;
+      translationTotal.value = textNodes.length;
+      
+      // 优化：批量更新减少UI刷新频率（每5个段落或每2秒更新一次）
+      int lastUpdateIndex = -1;
+      DateTime lastUpdateTime = DateTime.now();
+      const updateInterval = Duration(seconds: 2);
+      DateTime? lastStreamUpdate; // 流式输出节流控制
+
+      for (int i = 0; i < textNodes.length; i++) {
+        // 检查是否已取消翻译
+        if (_translationCancelToken?.isCancelled ?? false) {
+          logger.info('翻译已取消，退出循环 (${i + 1}/${textNodes.length})');
+          break;
+        }
+
+        final textNode = textNodes[i];
+        final originalText = textNode.text.trim();
+        if (originalText.isEmpty) {
+          // 跳过空内容但也更新进度
+          translationProgress.value = i + 1;
+          continue;
+        }
+
+        try {
+          logger.info('正在翻译节点 ${i + 1}/${textNodes.length}');
+
+          // 翻译单个段落（带超时控制）
+          final translated = await ollamaService
+              .translate(
+                model: model,
+                text: originalText,
+                languagePair: translationLanguagePair.value,
+                onChunk: useStreamingTranslation.value
+                    ? (chunk) {
+                        // 流式更新：每500ms更新一次UI，避免过于频繁
+                        final now = DateTime.now();
+                        if (lastStreamUpdate == null || 
+                            now.difference(lastStreamUpdate!) > const Duration(milliseconds: 500)) {
+                          textNode.text = _cleanTranslationResult(textNode.text + chunk);
+                          currentContent.value = document.outerHtml;
+                          lastStreamUpdate = now;
+                        } else {
+                          // 仅更新文本，不触发UI
+                          textNode.text = _cleanTranslationResult(textNode.text + chunk);
+                        }
+                      }
+                    : null,
+                cancelToken: _translationCancelToken,
+              )
+              .timeout(
+                Duration(seconds: translationTimeout.value),
+                onTimeout: () {
+                  logger.error('翻译节点 ${i + 1} 超时 (${translationTimeout.value}秒)');
+                  throw TimeoutException('翻译超时', Duration(seconds: translationTimeout.value));
+                },
+              );
+
+          // 清理翻译结果中的标签
+          final cleanedTranslation = _cleanTranslationResult(translated);
+          logger.info(
+            '节点 ${i + 1} 翻译完成, 原文=${originalText.substring(0, originalText.length > 20 ? 20 : originalText.length)}... => 译文=${cleanedTranslation.substring(0, cleanedTranslation.length > 20 ? 20 : cleanedTranslation.length)}...',
+          );
+
+          // 更新文本内容
+          textNode.text = cleanedTranslation;
+          
+          // 在父元素上标记原文（用于重试）
+          final parent = textNode.parent;
+          if (parent != null) {
+            // HTML转义原文
+            final escapedOriginal = originalText
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+            parent.attributes['data-original-text'] = escapedOriginal;
+            parent.attributes['data-translated'] = 'true';
+          }
+          
+          // 更新翻译进度
+          translationProgress.value = i + 1;
+          
+          // 优化UI刷新：每5个段落或每2秒更新一次UI，减少document.outerHtml调用
+          final now = DateTime.now();
+          final shouldUpdate = (i - lastUpdateIndex >= 5) || 
+                               (now.difference(lastUpdateTime) >= updateInterval) ||
+                               (i == textNodes.length - 1); // 最后一个必须更新
+          
+          if (shouldUpdate) {
+            currentContent.value = document.outerHtml;
+            lastUpdateIndex = i;
+            lastUpdateTime = now;
+            logger.info('更新UI: 已翻译 ${i + 1}/${textNodes.length} 个节点');
+          }
+        } catch (e) {
+          logger.error('翻译节点 ${i + 1} 失败', error: e);
+          // 失败时保留原文，并记录失败段落
+          if (!failedTranslations.contains(originalText)) {
+            failedTranslations.add(originalText);
+          }
+        }
+      }
+
+      // 翻译完成，确保最终UI更新
+      currentContent.value = document.outerHtml;
+      logger.info('章节翻译完成，最终UI已更新');
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) {
+        logger.info('翻译已取消');
+        // 取消时不显示错误
+      } else {
+        logger.error('翻译失败', error: e);
+        _showSnack('错误', '翻译失败: $e');
+        // 恢复原文
+        if (_originalContent != null) {
+          currentContent.value = _originalContent!;
+        }
+      }
+    } catch (e, st) {
+      logger.error('翻译失败', error: e, stackTrace: st);
+      _showSnack('错误', '翻译失败: $e');
+      // 恢复原文
+      if (_originalContent != null) {
+        currentContent.value = _originalContent!;
+      }
+    } finally {
+      isTranslating.value = false;
+      _translationCancelToken = null;
+    }
+  }
+
+  /// 提取单个元素中的文本节点
+  List<dynamic> _extractTextNodesFromElement(dynamic element) {
+    final textNodes = <dynamic>[];
+    
+    // 如果元素直接包含文本
+    if (element.nodes.any((node) => node.nodeType == 3)) {
+      return [element];
+    }
+    
+    // 递归查找文本节点
+    for (final child in element.children) {
+      final childTextNodes = _extractTextNodesFromElement(child);
+      textNodes.addAll(childTextNodes);
+    }
+    
+    return textNodes;
+  }
+
+  /// 提取 HTML 中所有包含文本的节点（不仅限于 <p> 标签）
+  List<dynamic> _extractTextNodesFromDocument(dynamic document) {
+    try {
+      final textNodes = <dynamic>[];
+      final Set<dynamic> visited = {};
+
+      // 递归提取所有有意义的文本节点
+      void extractFromNode(dynamic node) {
+        // 避免重复处理
+        if (visited.contains(node)) return;
+        visited.add(node);
+
+        final nodeName = node.localName?.toLowerCase() ?? '';
+
+        // 特别处理 title 标签
+        if (nodeName == 'title') {
+          final text = node.text?.trim() ?? '';
+          if (text.isNotEmpty) {
+            textNodes.add(node);
+          }
+          return;
+        }
+
+        // 排除 script、style 等标签，但不排除 head（因为title在head里）
+        if (['script', 'style', 'meta', 'link'].contains(nodeName)) {
+          return;
+        }
+
+        // 改进的逻辑：检查节点是否包含直接文本节点（nodeType == 3）
+        // 如果包含直接文本节点，说明这是一个需要翻译的节点（可能包含混合内容）
+        final hasDirectText = node.nodes.any((n) => n.nodeType == 3 && (n.text?.trim().isNotEmpty ?? false));
+        
+        if (hasDirectText) {
+          // 这个节点包含直接文本，将其作为翻译单元
+          textNodes.add(node);
+          return;
+        }
+
+        // 如果节点有子元素节点但没有直接文本，递归处理子节点
+        final hasElementChildren = node.children.any((child) => child.nodeType == 1);
+        if (hasElementChildren) {
+          for (final child in node.children) {
+            extractFromNode(child);
+          }
+          return;
+        }
+
+        // 叶子节点，如果有文本就提取
+        final text = node.text?.trim() ?? '';
+        if (text.isNotEmpty) {
+          textNodes.add(node);
+        }
+      }
+
+      extractFromNode(document.body ?? document);
+      logger.info('成功提取 ${textNodes.length} 个有效文本节点');
+      return textNodes;
+    } catch (e) {
+      logger.error('提取文本节点失败', error: e);
+      return [];
+    }
+  }
+
+  /// 清理翻译结果中的 XML/HTML 标签
+  String _cleanTranslationResult(String translated) {
+    String cleaned = translated.trim();
+
+    // 移除常见的 XML 标签包装
+    final tagPatterns = [
+      RegExp(r'^<target>\s*(.+?)\s*</target>\s*$', dotAll: true),
+      RegExp(r'^<translation>\s*(.+?)\s*</translation>\s*$', dotAll: true),
+      RegExp(r'^<result>\s*(.+?)\s*</result>\s*$', dotAll: true),
+    ];
+
+    for (final pattern in tagPatterns) {
+      final match = pattern.firstMatch(cleaned);
+      if (match != null && match.groupCount >= 1) {
+        cleaned = match.group(1)!.trim();
+        break;
+      }
+    }
+
+    return cleaned;
+  }
+
+  /// 取消正在进行的翻译
+  void _cancelTranslation() {
+    if (_translationCancelToken != null && !_translationCancelToken!.isCancelled) {
+      logger.info('取消正在进行的翻译请求');
+      _translationCancelToken!.cancel('切换章节');
+    }
+    _translationCancelToken = null;
+    isTranslating.value = false;
+  }
+
+  /// 切换自动翻译
+  void toggleAutoTranslate() {
+    isAutoTranslateEnabled.value = !isAutoTranslateEnabled.value;
+    if (isAutoTranslateEnabled.value) {
+      logger.info('开启自动翻译');
+      // TODO: 暂时注释掉章节标题翻译
+      // if (translationModel.value != null) {
+      //   _translateChapterTitles();
+      // }
+      // 立即翻译当前章节
+      if (translationModel.value != null) {
+        translateCurrentChapter();
+      }
+    } else {
+      logger.info('关闭自动翻译');
+      // 取消正在进行的翻译
+      _cancelTranslation();
+      // 恢复原文
+      if (_originalContent != null) {
+        currentContent.value = _originalContent!;
+        _originalContent = null;
+      }
+      // 清除章节标题缓存
+      _chapterTitleCache.clear();
+    }
+  }
+
+  /// 翻译章节标题列表（后台异步执行，不阻塞UI）
+  Future<void> _translateChapterTitles() async {
+    final model = translationModel.value;
+    if (model == null || chapters.isEmpty) return;
+
+    logger.info('开始翻译 ${chapters.length} 个章节标题');
+    final ollamaService = getIt.get<OllamaService>();
+
+    // 异步翻译所有章节标题
+    for (int i = 0; i < chapters.length; i++) {
+      final chapter = chapters[i];
+      final originalTitle = chapter.title;
+
+      // 已翻译过则跳过
+      if (_chapterTitleCache.containsKey(originalTitle)) {
+        continue;
+      }
+
+      try {
+        // 翻译标题（不使用流式，避免UI频繁刷新）
+        final translatedTitle = await ollamaService.translate(
+          model: model,
+          text: originalTitle,
+          languagePair: translationLanguagePair.value,
+          cancelToken: _translationCancelToken,
+        );
+
+        final cleaned = _cleanTranslationResult(translatedTitle);
+        _chapterTitleCache[originalTitle] = cleaned;
+
+        // 更新章节标题（触发列表刷新）
+        chapters[i] = NovelChapter(
+          id: chapter.id,
+          title: cleaned,
+          index: chapter.index,
+          content: chapter.content,
+        );
+        chapters.refresh();
+
+        logger.info('章节 ${i + 1} 标题翻译完成: $originalTitle => $cleaned');
+      } catch (e) {
+        logger.error('翻译章节标题失败: $originalTitle', error: e);
+        // 失败时保留原标题
+      }
+    }
+
+    logger.info('章节标题翻译完成');
+  }
+
+  /// Debug: 复制当前章节原始HTML到剪贴板
+  Future<void> copyOriginalHtmlToClipboard() async {
+    try {
+      final content = _originalContent ?? currentContent.value;
+      if (content.isEmpty) {
+        _showSnack('提示', '当前没有内容');
+        return;
+      }
+
+      // 使用 Flutter 的剪贴板API
+      await Clipboard.setData(ClipboardData(text: content));
+      _showSnack('成功', '已复制原始HTML (${content.length}字符) 到剪贴板');
+      logger.info('已复制HTML到剪贴板, length=${content.length}');
+    } catch (e) {
+      logger.error('复制HTML失败', error: e);
+      _showSnack('错误', '复制失败: $e');
+    }
+  }
+
+  /// 从HTML中提取原文并重新翻译
+  Future<void> handleRetryFromHtml(String escapedOriginalText) async {
+    // HTML反转义
+    final originalText = escapedOriginalText
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'");
+    
+    await retryTranslateParagraph(originalText);
+  }
+
+  /// 重新翻译指定段落（用于重试）
+  Future<void> retryTranslateParagraph(String originalText) async {
+    final model = translationModel.value;
+    if (model == null) {
+      _showSnack('错误', '请先配置翻译模型');
+      return;
+    }
+
+    if (_originalContent == null) {
+      _showSnack('错误', '没有可用的原文内容');
+      return;
+    }
+
+    try {
+      logger.info('重试翻译段落: $originalText');
+
+      final ollamaService = getIt.get<OllamaService>();
+      final cancelToken = CancelToken();
+
+      // 翻译段落
+      final translated = await ollamaService
+          .translate(
+            model: model,
+            text: originalText,
+            languagePair: translationLanguagePair.value,
+            cancelToken: cancelToken,
+          )
+          .timeout(
+            Duration(seconds: translationTimeout.value),
+            onTimeout: () {
+              throw TimeoutException('翻译超时', Duration(seconds: translationTimeout.value));
+            },
+          );
+
+      final cleanedTranslation = _cleanTranslationResult(translated);
+
+      // 更新当前内容中的该段落
+      final document = html_parser.parse(currentContent.value);
+      
+      // 查找包含原文标记的元素
+      final allElements = document.querySelectorAll('[data-original-text]');
+      for (final element in allElements) {
+        final dataText = element.attributes['data-original-text'];
+        if (dataText == null) continue;
+        
+        // HTML反转义比对
+        final unescapedData = dataText
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&#39;', "'");
+        
+        if (unescapedData == originalText) {
+          // 找到对应元素，提取其文本节点并更新
+          final textNodes = _extractTextNodesFromElement(element);
+          if (textNodes.isNotEmpty) {
+            textNodes.first.text = cleanedTranslation;
+            currentContent.value = document.outerHtml;
+            logger.info('成功重试翻译段落');
+            _showSnack('成功', '已重新翻译该段落');
+            
+            // 从失败列表中移除（如果存在）
+            failedTranslations.remove(originalText);
+            return;
+          }
+        }
+      }
+
+      _showSnack('错误', '找不到指定段落');
+    } catch (e) {
+      logger.error('重试翻译失败', error: e);
+      _showSnack('错误', '重试翻译失败: $e');
+    }
+  }
+
+  /// 重试所有翻译失败的段落
+  Future<void> retryAllFailedTranslations() async {
+    if (failedTranslations.isEmpty) {
+      _showSnack('提示', '没有翻译失败的段落');
+      return;
+    }
+
+    final failedList = List<String>.from(failedTranslations);
+    logger.info('开始重试 ${failedList.length} 个失败段落');
+
+    for (final text in failedList) {
+      await retryTranslateParagraph(text);
+      // 如果成功，从失败列表中移除
+      failedTranslations.remove(text);
+    }
+
+    if (failedTranslations.isEmpty) {
+      _showSnack('成功', '所有段落已重新翻译');
+    } else {
+      _showSnack('部分成功', '仍有 ${failedTranslations.length} 个段落翻译失败');
     }
   }
 }
