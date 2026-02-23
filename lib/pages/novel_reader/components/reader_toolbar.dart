@@ -143,7 +143,7 @@ class ReaderToolbar extends StatelessWidget {
                 final isTranslating = controller.isTranslating.value;
                 final progress = controller.translationProgress.value;
                 final total = controller.translationTotal.value;
-                
+
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -317,7 +317,7 @@ class ReaderToolbar extends StatelessWidget {
               final isTranslating = controller.isTranslating.value;
               final progress = controller.translationProgress.value;
               final total = controller.translationTotal.value;
-              
+
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

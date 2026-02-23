@@ -104,14 +104,14 @@ class NovelReaderViewModel extends GetxController {
     // 关闭页面时，立即取消所有翻译任务
     logger.info('[Novel UI] onClose: 开始清理资源');
     _cancelTranslation();
-    
+
     // 清除翻译相关状态
     isTranslating.value = false;
     isAutoTranslateEnabled.value = false;
     failedTranslations.clear();
     _chapterTitleCache.clear();
     _originalContent = null;
-    
+
     // 清空HTML缓存
     _processedHtmlCache.clear();
 
@@ -702,11 +702,11 @@ class NovelReaderViewModel extends GetxController {
 
       // 清空失败列表
       failedTranslations.clear();
-      
+
       // 初始化翻译进度
       translationProgress.value = 0;
       translationTotal.value = textNodes.length;
-      
+
       // 优化：批量更新减少UI刷新频率（每5个段落或每2秒更新一次）
       int lastUpdateIndex = -1;
       DateTime lastUpdateTime = DateTime.now();
@@ -741,7 +741,7 @@ class NovelReaderViewModel extends GetxController {
                     ? (chunk) {
                         // 流式更新：每500ms更新一次UI，避免过于频繁
                         final now = DateTime.now();
-                        if (lastStreamUpdate == null || 
+                        if (lastStreamUpdate == null ||
                             now.difference(lastStreamUpdate!) > const Duration(milliseconds: 500)) {
                           textNode.text = _cleanTranslationResult(textNode.text + chunk);
                           currentContent.value = document.outerHtml;
@@ -770,7 +770,7 @@ class NovelReaderViewModel extends GetxController {
 
           // 更新文本内容
           textNode.text = cleanedTranslation;
-          
+
           // 在父元素上标记原文（用于重试）
           final parent = textNode.parent;
           if (parent != null) {
@@ -784,16 +784,17 @@ class NovelReaderViewModel extends GetxController {
             parent.attributes['data-original-text'] = escapedOriginal;
             parent.attributes['data-translated'] = 'true';
           }
-          
+
           // 更新翻译进度
           translationProgress.value = i + 1;
-          
+
           // 优化UI刷新：每5个段落或每2秒更新一次UI，减少document.outerHtml调用
           final now = DateTime.now();
-          final shouldUpdate = (i - lastUpdateIndex >= 5) || 
-                               (now.difference(lastUpdateTime) >= updateInterval) ||
-                               (i == textNodes.length - 1); // 最后一个必须更新
-          
+          final shouldUpdate =
+              (i - lastUpdateIndex >= 5) ||
+              (now.difference(lastUpdateTime) >= updateInterval) ||
+              (i == textNodes.length - 1); // 最后一个必须更新
+
           if (shouldUpdate) {
             currentContent.value = document.outerHtml;
             lastUpdateIndex = i;
@@ -840,18 +841,18 @@ class NovelReaderViewModel extends GetxController {
   /// 提取单个元素中的文本节点
   List<dynamic> _extractTextNodesFromElement(dynamic element) {
     final textNodes = <dynamic>[];
-    
+
     // 如果元素直接包含文本
     if (element.nodes.any((node) => node.nodeType == 3)) {
       return [element];
     }
-    
+
     // 递归查找文本节点
     for (final child in element.children) {
       final childTextNodes = _extractTextNodesFromElement(child);
       textNodes.addAll(childTextNodes);
     }
-    
+
     return textNodes;
   }
 
@@ -885,8 +886,10 @@ class NovelReaderViewModel extends GetxController {
 
         // 改进的逻辑：检查节点是否包含直接文本节点（nodeType == 3）
         // 如果包含直接文本节点，说明这是一个需要翻译的节点（可能包含混合内容）
-        final hasDirectText = node.nodes.any((n) => n.nodeType == 3 && (n.text?.trim().isNotEmpty ?? false));
-        
+        final hasDirectText = node.nodes.any(
+          (n) => n.nodeType == 3 && (n.text?.trim().isNotEmpty ?? false),
+        );
+
         if (hasDirectText) {
           // 这个节点包含直接文本，将其作为翻译单元
           textNodes.add(node);
@@ -1054,7 +1057,7 @@ class NovelReaderViewModel extends GetxController {
         .replaceAll('&gt;', '>')
         .replaceAll('&quot;', '"')
         .replaceAll('&#39;', "'");
-    
+
     await retryTranslateParagraph(originalText);
   }
 
@@ -1096,13 +1099,13 @@ class NovelReaderViewModel extends GetxController {
 
       // 更新当前内容中的该段落
       final document = html_parser.parse(currentContent.value);
-      
+
       // 查找包含原文标记的元素
       final allElements = document.querySelectorAll('[data-original-text]');
       for (final element in allElements) {
         final dataText = element.attributes['data-original-text'];
         if (dataText == null) continue;
-        
+
         // HTML反转义比对
         final unescapedData = dataText
             .replaceAll('&amp;', '&')
@@ -1110,7 +1113,7 @@ class NovelReaderViewModel extends GetxController {
             .replaceAll('&gt;', '>')
             .replaceAll('&quot;', '"')
             .replaceAll('&#39;', "'");
-        
+
         if (unescapedData == originalText) {
           // 找到对应元素，提取其文本节点并更新
           final textNodes = _extractTextNodesFromElement(element);
@@ -1119,7 +1122,7 @@ class NovelReaderViewModel extends GetxController {
             currentContent.value = document.outerHtml;
             logger.info('成功重试翻译段落');
             _showSnack('成功', '已重新翻译该段落');
-            
+
             // 从失败列表中移除（如果存在）
             failedTranslations.remove(originalText);
             return;
