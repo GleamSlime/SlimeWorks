@@ -14,7 +14,6 @@
 - 路由操作使用GoRouter TypedGoRoute
 - Dart中的尺寸需参考lib\core\theme\app_theme.dart appMetrics，颜色也需考虑亮色和暗色，如果尺寸未定义则使用scaleW，禁止直接数字或者int.w
 - 打日志使用Loggers class
-- 修改完代码务必执行静态分析确保刚刚的修改没有报错!
 
 ‌## Dart规则
 
@@ -68,3 +67,5 @@ flutter analyze
 ‌## MCP诊断
 
 flutter pub global run devtools
+
+TIPS: 修改完代码务必执行 flutter analyze 确保没有报错!

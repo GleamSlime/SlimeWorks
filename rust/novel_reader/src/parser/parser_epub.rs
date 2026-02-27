@@ -106,9 +106,8 @@ impl EpubParser {
 
         let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
 
-        // CSS目录
-        let css_dir = std::env::temp_dir()
-            .join("slimeworks")
+        // CSS目录（使用应用数据目录而非临时目录）
+        let css_dir = crate::api::get_app_data_dir()
             .join("epub_css")
             .join(&novel_id);
         let _ = fs::create_dir_all(&css_dir);
@@ -604,7 +603,7 @@ impl EpubParser {
 
                 if let Some(idx) = found_index {
                     if let Ok(mut f) = archive.by_index(idx) {
-                        let tmp = std::env::temp_dir().join("slimeworks").join("covers");
+                        let tmp = crate::api::get_app_data_dir().join("covers");
                         let _ = fs::create_dir_all(&tmp);
                         let out_path = tmp.join(format!("{}.jpg", novel_id));
 

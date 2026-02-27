@@ -4,6 +4,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:get/get.dart';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 
 import 'package:slime_works/core/index.dart';
@@ -30,6 +31,11 @@ class _CollectionLibraryScreenState
 
   /// 外部文件拖拽悬停状态
   bool _isExternalDropHovering = false;
+
+  /// 框选相关状态
+  Offset? _selectionBoxStart;
+  Offset? _selectionBoxEnd;
+  final GlobalKey _gridKey = GlobalKey();
 
   /// 判断是否桌面端（桌面用 Draggable，移动用 LongPressDraggable）
   bool get _isDesktop => !Platform.isAndroid && !Platform.isIOS;
@@ -630,68 +636,112 @@ class _CollectionLibraryScreenState
 
   @override
   Widget buildContent(BuildContext context) {
-    return DropTarget(
-      onDragDone: (details) {
-        viewModel.addDroppedFiles(details.files.map((f) => f.path).toList());
-        setState(() => _isExternalDropHovering = false);
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          // Escape键:退出选择模式
+          if (event.logicalKey.keyLabel == 'Escape') {
+            if (viewModel.isSelecting.value) {
+              viewModel.exitSelection();
+              return KeyEventResult.handled;
+            }
+          }
+          // Ctrl+A:全选
+          else if (event.logicalKey.keyLabel == 'A' &&
+              (HardwareKeyboard.instance.isControlPressed ||
+                  HardwareKeyboard.instance.isMetaPressed)) {
+            if (!viewModel.isSelecting.value) {
+              viewModel.isSelecting.value = true;
+            }
+            viewModel.toggleSelectAll();
+            return KeyEventResult.handled;
+          }
+          // Delete键:删除选中项
+          else if (event.logicalKey.keyLabel == 'Delete') {
+            if (viewModel.isSelecting.value && viewModel.selectedIds.isNotEmpty) {
+              _showDeleteNotImplemented(context);
+              return KeyEventResult.handled;
+            }
+          }
+        }
+        return KeyEventResult.ignored;
       },
-      onDragEntered: (_) => setState(() => _isExternalDropHovering = true),
-      onDragExited: (_) => setState(() => _isExternalDropHovering = false),
-      child: Stack(
-        children: [
-          Obx(() {
-            final isSelecting = viewModel.isSelecting.value;
-            final inFolder = viewModel.currentFolderId.value != null;
-            final folderName = viewModel.currentFolderName;
+      child: DropTarget(
+        onDragDone: (details) {
+          viewModel.addDroppedFiles(details.files.map((f) => f.path).toList());
+          setState(() => _isExternalDropHovering = false);
+        },
+        onDragEntered: (_) => setState(() => _isExternalDropHovering = true),
+        onDragExited: (_) => setState(() => _isExternalDropHovering = false),
+        child: Stack(
+          children: [
+            Obx(() {
+              final isSelecting = viewModel.isSelecting.value;
+              final inFolder = viewModel.currentFolderId.value != null;
+              final folderName = viewModel.currentFolderName;
 
-            return Column(
-              children: [
-                if (inFolder)
-                  FolderBreadcrumb(folderName: folderName, onBack: viewModel.exitFolder),
-                Expanded(child: _buildGrid(isSelecting, inFolder)),
-                if (isSelecting) LibrarySelectionBar(viewModel: viewModel),
-              ],
-            );
-          }),
-          // 外部拖拽文件悬停遮罩
-          if (_isExternalDropHovering)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: Theme.of(context).colorScheme.primary.withAlpha(30),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.file_download_outlined,
-                          size: scaleW(64),
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        SizedBox(height: appMetrics.kSpace16),
-                        Text(
-                          '松开以导入书籍',
-                          style: TextStyle(
-                            fontSize: appMetrics.fontSize18,
-                            fontWeight: FontWeight.w600,
+              return Column(
+                children: [
+                  if (inFolder)
+                    FolderBreadcrumb(folderName: folderName, onBack: viewModel.exitFolder),
+                  Expanded(child: _buildGrid(isSelecting, inFolder)),
+                  if (isSelecting) LibrarySelectionBar(viewModel: viewModel),
+                ],
+              );
+            }),
+            // 外部拖拽文件悬停遮罩
+            if (_isExternalDropHovering)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    color: Theme.of(context).colorScheme.primary.withAlpha(30),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.file_download_outlined,
+                            size: scaleW(64),
                             color: Theme.of(context).colorScheme.primary,
                           ),
-                        ),
-                        SizedBox(height: appMetrics.kSpace8),
-                        Text(
-                          '支持 .txt / .epub 格式',
-                          style: TextStyle(
-                            fontSize: appMetrics.fontSize14,
-                            color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                          SizedBox(height: appMetrics.kSpace16),
+                          Text(
+                            '松开以导入书籍',
+                            style: TextStyle(
+                              fontSize: appMetrics.fontSize18,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(height: appMetrics.kSpace8),
+                          Text(
+                            '支持 .txt / .epub 格式',
+                            style: TextStyle(
+                              fontSize: appMetrics.fontSize14,
+                              color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 显示删除功能未实现提示
+  void _showDeleteNotImplemented(BuildContext ctx) {
+    showDialog(
+      context: ctx,
+      builder: (dlgCtx) => AlertDialog(
+        title: const Text('提示'),
+        content: const Text('批量删除功能尚未实现，请单独删除书籍或文件夹。'),
+        actions: [FilledButton(onPressed: () => Navigator.pop(dlgCtx), child: const Text('确定'))],
       ),
     );
   }
@@ -711,7 +761,8 @@ class _CollectionLibraryScreenState
       final totalCount = (hasBackButton ? 1 : 0) + items.length;
 
       // 使用 GridView.custom 恢复之前的实现以改善滚动流畅度
-      return GridView.custom(
+      final gridView = GridView.custom(
+        key: _gridKey,
         controller: _scrollController,
         padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
         cacheExtent: 500,
@@ -735,6 +786,47 @@ class _CollectionLibraryScreenState
 
           return _buildDraggableItem(context, itemIndex, item, isSelected, isSelecting);
         }, childCount: totalCount),
+      );
+
+      // 框选功能包装
+      return GestureDetector(
+        onPanStart: (details) {
+          if (!isSelecting) {
+            viewModel.isSelecting.value = true;
+          }
+          setState(() {
+            _selectionBoxStart = details.localPosition;
+            _selectionBoxEnd = details.localPosition;
+          });
+        },
+        onPanUpdate: (details) {
+          setState(() {
+            _selectionBoxEnd = details.localPosition;
+          });
+          _updateSelectionByBox();
+        },
+        onPanEnd: (_) {
+          setState(() {
+            _selectionBoxStart = null;
+            _selectionBoxEnd = null;
+          });
+        },
+        child: Stack(
+          children: [
+            gridView,
+            if (_selectionBoxStart != null && _selectionBoxEnd != null)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SelectionBoxPainter(
+                    start: _selectionBoxStart!,
+                    end: _selectionBoxEnd!,
+                    color: Theme.of(context).colorScheme.primary.withAlpha(50),
+                    borderColor: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+          ],
+        ),
       );
     });
   }
@@ -815,6 +907,8 @@ class _CollectionLibraryScreenState
             key: ValueKey(item.id),
             child: Draggable<String>(
               data: item.id,
+              dragAnchorStrategy: pointerDragAnchorStrategy,
+              maxSimultaneousDrags: 1,
               onDragStarted: () {
                 developer.log('dragStarted (desktop) id=${item.id}', name: '库-拖拽');
               },
@@ -828,6 +922,8 @@ class _CollectionLibraryScreenState
             key: ValueKey(item.id),
             child: LongPressDraggable<String>(
               data: item.id,
+              dragAnchorStrategy: pointerDragAnchorStrategy,
+              hapticFeedbackOnStart: true,
               onDragStarted: () {
                 developer.log('dragStarted (mobile) id=${item.id}', name: '库-拖拽');
                 if (!isSelecting) viewModel.enterSelection(item.id);
@@ -864,7 +960,7 @@ class _CollectionLibraryScreenState
           }
         },
         onLongPress: () => viewModel.enterSelection(item.id),
-        onDoubleTap: () => viewModel.enterFolder(item.folder.id),
+        onDoubleTap: () {}, // 双击将在LibraryFolderCard内部处理为进入重命名模式
       );
     } else if (item is LibraryBookItem) {
       return LibraryBookCard(
@@ -878,92 +974,112 @@ class _CollectionLibraryScreenState
   }
 
   Widget _buildDragFeedback(LibraryItem item) {
+    // 简化并明确括号/层级，减少语法错误风险
     if (item is LibraryBookItem) {
       final meta = item.metadata;
-      final double w = scaleW(140);
-      final double h = w / 0.65; // match grid childAspectRatio
-      return Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(8),
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          width: w,
-          height: h,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 封面背景
-              meta.coverPath != null && File(meta.coverPath!).existsSync()
-                  ? Image.file(File(meta.coverPath!), fit: BoxFit.cover)
-                  : Container(
-                      color: Colors.grey[300],
-                      child: Center(
-                        child: Icon(Icons.book, size: scaleW(36), color: Colors.white70),
+      final double w = scaleW(100);
+      final double h = w / 0.65;
+
+      Widget cover;
+      if (meta.coverPath != null && File(meta.coverPath!).existsSync()) {
+        cover = Image.file(File(meta.coverPath!), fit: BoxFit.cover);
+      } else {
+        cover = Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Icon(Icons.book, size: scaleW(28), color: Colors.white70),
+          ),
+        );
+      }
+
+      return Transform.translate(
+        offset: Offset(-w / 2, -h / 2),
+        child: Opacity(
+          opacity: 0.85,
+          child: Material(
+            elevation: 12,
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: SizedBox(
+              width: w,
+              height: h,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  cover,
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: scaleW(4), vertical: scaleW(4)),
+                      color: Colors.black.withAlpha(140),
+                      child: Text(
+                        meta.title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-              // 底部标题磨砂�?
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: scaleW(6), vertical: scaleW(6)),
-                  color: Colors.black.withAlpha(140),
-                  child: Text(
-                    meta.title,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11.0,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
-      );
-    } else if (item is LibraryFolderItem) {
-      final double w = scaleW(140);
-      final double h = w; // square for folder
-      return Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(8),
-        child: SizedBox(
-          width: w,
-          height: h,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.blue.withAlpha(60), Colors.blue.withAlpha(30)],
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.folder_rounded, size: scaleW(44), color: Colors.blue.withAlpha(200)),
-                SizedBox(height: scaleW(4)),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: scaleW(8)),
-                  child: Text(
-                    item.folder.name,
-                    style: TextStyle(fontSize: 11.0, fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
             ),
           ),
         ),
       );
     }
+
+    if (item is LibraryFolderItem) {
+      final double w = scaleW(100);
+      final double h = w;
+      return Transform.translate(
+        offset: Offset(-w / 2, -h / 2),
+        child: Opacity(
+          opacity: 0.85,
+          child: Material(
+            elevation: 12,
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: w,
+              height: h,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.blue.withAlpha(60), Colors.blue.withAlpha(30)],
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.folder_rounded, size: scaleW(36), color: Colors.blue.withAlpha(200)),
+                    SizedBox(height: scaleW(3)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: scaleW(6)),
+                      child: Text(
+                        item.folder.name,
+                        style: TextStyle(fontSize: 9.0, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return const SizedBox.shrink();
   }
 
@@ -985,44 +1101,66 @@ class _CollectionLibraryScreenState
         }
       },
       builder: (ctx, candidateData, _) {
-        final isHovering = candidateData.isNotEmpty;
-        return GestureDetector(
-          onTap: viewModel.exitFolder,
-          child: Card(
-            elevation: 0,
-            clipBehavior: Clip.antiAlias,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              decoration: BoxDecoration(
-                color: isHovering
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: isHovering
-                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: scaleW(2))
-                    : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isHovering ? Icons.drive_file_move_rtl_outlined : Icons.arrow_back_rounded,
-                    size: 40,
-                    color: isHovering
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isHovering ? '移至上级' : '返回',
-                    style: TextStyle(
-                      fontSize: appMetrics.fontSize12,
-                      color: isHovering
+        final isDragHovering = candidateData.isNotEmpty;
+        final parentFolderName = viewModel.currentFolderName;
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: viewModel.exitFolder,
+            child: Card(
+              elevation: 0,
+              clipBehavior: Clip.antiAlias,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  color: isDragHovering
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  border: isDragHovering
+                      ? Border.all(color: Theme.of(context).colorScheme.primary, width: scaleW(2))
+                      : null,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isDragHovering
+                          ? Icons.drive_file_move_rtl_outlined
+                          : Icons.arrow_back_rounded,
+                      size: scaleW(40),
+                      color: isDragHovering
                           ? Theme.of(context).colorScheme.primary
                           : Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: isHovering ? FontWeight.w600 : FontWeight.normal,
                     ),
-                  ),
-                ],
+                    SizedBox(height: appMetrics.kSpace8),
+                    Text(
+                      isDragHovering ? '移至上级' : '返回',
+                      style: TextStyle(
+                        fontSize: appMetrics.fontSize12,
+                        color: isDragHovering
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: isDragHovering ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                    if (parentFolderName.isNotEmpty && !isDragHovering) ...[
+                      SizedBox(height: appMetrics.kSpace4),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: appMetrics.kSpace8),
+                        child: Text(
+                          parentFolderName,
+                          style: TextStyle(
+                            fontSize: appMetrics.fontSize10,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(180),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1051,5 +1189,94 @@ class _CollectionLibraryScreenState
         ],
       ),
     );
+  }
+
+  /// 根据框选框更新选中的items
+  void _updateSelectionByBox() {
+    if (_selectionBoxStart == null || _selectionBoxEnd == null) return;
+
+    // 计算选择框的矩形区域
+    final selectionRect = Rect.fromPoints(_selectionBoxStart!, _selectionBoxEnd!);
+
+    // 获取GridView的RenderBox
+    final gridRenderBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    if (gridRenderBox == null) return;
+
+    // 遍历所有items,检查是否与选择框相交
+    final items = viewModel.displayedItems;
+    final newSelection = <String>{};
+
+    // 基于GridView布局参数估算每个item的位置
+    final maxCrossAxisExtent = scaleW(200);
+    final mainAxisSpacing = AppTheme.metrics.kSpace12;
+    final crossAxisSpacing = AppTheme.metrics.kSpace12;
+    final padding = AppTheme.metrics.kSpace12;
+
+    // 计算每行的列数
+    final gridWidth = gridRenderBox.size.width - 2 * padding;
+    final crossAxisCount = (gridWidth / (maxCrossAxisExtent + crossAxisSpacing)).floor();
+    if (crossAxisCount <= 0) return;
+
+    final itemWidth = (gridWidth - (crossAxisCount - 1) * crossAxisSpacing) / crossAxisCount;
+    final itemHeight = itemWidth / 0.65; // childAspectRatio
+
+    // 遍历items计算位置
+    for (int i = 0; i < items.length; i++) {
+      final row = i ~/ crossAxisCount;
+      final col = i % crossAxisCount;
+
+      final left = padding + col * (itemWidth + crossAxisSpacing);
+      final top = padding + row * (itemHeight + mainAxisSpacing);
+      final right = left + itemWidth;
+      final bottom = top + itemHeight;
+
+      final itemRect = Rect.fromLTRB(left, top, right, bottom);
+
+      // 判断item是否与选择框相交
+      if (selectionRect.overlaps(itemRect)) {
+        newSelection.add(items[i].id);
+      }
+    }
+
+    // 更新选中状态
+    viewModel.selectedIds.assignAll(newSelection);
+  }
+}
+
+/// 绘制框选矩形的Painter
+class _SelectionBoxPainter extends CustomPainter {
+  final Offset start;
+  final Offset end;
+  final Color color;
+  final Color borderColor;
+
+  _SelectionBoxPainter({
+    required this.start,
+    required this.end,
+    required this.color,
+    required this.borderColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromPoints(start, end);
+
+    // 填充
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(rect, fillPaint);
+
+    // 边框
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    canvas.drawRect(rect, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SelectionBoxPainter oldDelegate) {
+    return oldDelegate.start != start || oldDelegate.end != end;
   }
 }

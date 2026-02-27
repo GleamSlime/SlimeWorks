@@ -73,6 +73,38 @@ class NovelLibraryViewModel extends BaseViewModel {
     return folders.firstWhereOrNull((f) => f.id == fid)?.name ?? '';
   }
 
+  /// 获取文件夹封面（返回该文件夹内第一本有封面的epub或txt书籍的封面路径）
+  String? getFolderCover(String folderId) {
+    final folderBooks = novels.where((n) => n.folderId == folderId).toList();
+    // 优先查找有封面的书籍
+    for (final book in folderBooks) {
+      if (book.coverPath != null && book.coverPath!.isNotEmpty) {
+        final coverFile = File(book.coverPath!);
+        if (coverFile.existsSync()) {
+          return book.coverPath;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// 获取文件夹前6本书的封面列表（用于6宫格显示）
+  List<String> getFolderCovers(String folderId, {int maxCount = 6}) {
+    final folderBooks = novels.where((n) => n.folderId == folderId).toList();
+    final covers = <String>[];
+
+    for (final book in folderBooks) {
+      if (covers.length >= maxCount) break;
+      if (book.coverPath != null && book.coverPath!.isNotEmpty) {
+        final coverFile = File(book.coverPath!);
+        if (coverFile.existsSync()) {
+          covers.add(book.coverPath!);
+        }
+      }
+    }
+    return covers;
+  }
+
   /// 当前展示的 items（文件夹 + 书籍）
   List<LibraryItem> get filteredItems {
     final fid = currentFolderId.value;

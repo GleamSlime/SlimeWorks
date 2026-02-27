@@ -11,11 +11,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::parser::NovelParser;
 use crate::scanner::DirectoryScanner;
-use crate::types::{
-    NovelChapter, NovelContent, NovelFolder, NovelFormat, NovelMetadata, ScanProgress,
-};
+use crate::types::{NovelContent, NovelFolder, NovelMetadata};
 use db_module;
 use serde_json; // 使用工作区内的 db_module 来持久化元数据
 
@@ -24,6 +21,75 @@ static NOVEL_LIBRARY: OnceLock<Arc<Mutex<Vec<NovelMetadata>>>> = OnceLock::new()
 
 // 全局存储的文件夹列表
 static FOLDER_LIST: OnceLock<Arc<Mutex<Vec<NovelFolder>>>> = OnceLock::new();
+
+// ─────────────────────────────────────────────────────────────
+// 获取应用数据目录
+// ─────────────────────────────────────────────────────────────
+
+/// 获取应用数据目录（跨平台）
+/// - Windows: %LOCALAPPDATA%\slimeworks 或 %APPDATA%\slimeworks
+/// - macOS: ~/Library/Application Support/slimeworks
+/// - Linux: ~/.local/share/slimeworks
+pub fn get_app_data_dir() -> PathBuf {
+    let app_name = "slimeworks";
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: 优先使用 LOCALAPPDATA，其次 APPDATA
+        if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            let path = PathBuf::from(local_appdata).join(app_name);
+            let _ = std::fs::create_dir_all(&path);
+            return path;
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let path = PathBuf::from(appdata).join(app_name);
+            let _ = std::fs::create_dir_all(&path);
+            return path;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: ~/Library/Application Support/slimeworks
+        if let Ok(home) = std::env::var("HOME") {
+            let path = PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join(app_name);
+            let _ = std::fs::create_dir_all(&path);
+            return path;
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Linux: ~/.local/share/slimeworks
+        if let Ok(home) = std::env::var("HOME") {
+            let path = PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join(app_name);
+            let _ = std::fs::create_dir_all(&path);
+            return path;
+        }
+    }
+
+    // Fallback: 使用 HOME/.slimeworks 或临时目录
+    if let Ok(home) = std::env::var("HOME") {
+        let path = PathBuf::from(home).join(format!(".{}", app_name));
+        let _ = std::fs::create_dir_all(&path);
+        path
+    } else {
+        let path = std::env::temp_dir().join(app_name);
+        let _ = std::fs::create_dir_all(&path);
+        log::warn!("[AppData] Using temp directory as fallback: {:?}", path);
+        path
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 书籍库管理
+// ─────────────────────────────────────────────────────────────
 
 // 内容缓存：存储已解析的书籍内容，避免重复解析
 type ContentCache = Arc<Mutex<HashMap<String, (NovelContent, DateTime<Utc>)>>>;
@@ -38,21 +104,13 @@ fn get_library() -> &'static Arc<Mutex<Vec<NovelMetadata>>> {
         // 尝试初始化数据库并从表中加载已保存的书籍元数据
         let library = Arc::new(Mutex::new(Vec::new()));
 
-        let db_path = std::env::var("HOME")
-            .map(|h| {
-                let mut p = std::path::PathBuf::from(h);
-                p.push(".slimeworks");
-                p.push("db.redb");
-                p.to_string_lossy().to_string()
-            })
-            .unwrap_or_else(|_| {
-                let mut p = std::env::temp_dir();
-                p.push("slimeworks");
-                p.push("db.redb");
-                p.to_string_lossy().to_string()
-            });
+        // 获取应用数据目录（优先使用系统应用数据目录，而非临时目录）
+        let db_path = get_app_data_dir().join("db.redb");
+        let db_path_str = db_path.to_string_lossy().to_string();
 
-        let _ = db_module::db_init(db_path.clone());
+        log::info!("[NovelLibrary] Database path: {}", db_path_str);
+
+        let _ = db_module::db_init(db_path_str.clone());
         let _ = db_module::db_register_table("novels".to_string());
 
         if let Ok(records) = db_module::db_list_all("novels".to_string()) {
@@ -335,12 +393,11 @@ pub fn remove_novel(novel_id: String) -> Result<bool, String> {
         if let Some(path) = cover_path {
             let _ = std::fs::remove_file(&path);
         }
-        let epub_images_dir = std::env::temp_dir()
-            .join("slimeworks")
-            .join("epub_images")
-            .join(&novel_id);
+        // 清理相关文件（使用应用数据目录）
+        let app_dir = get_app_data_dir();
+        let epub_images_dir = app_dir.join("epub_images").join(&novel_id);
         let _ = std::fs::remove_dir_all(&epub_images_dir);
-        let covers_dir = std::env::temp_dir().join("slimeworks").join("covers");
+        let covers_dir = app_dir.join("covers");
         for ext in &["jpg", "jpeg", "png", "webp", "gif"] {
             let p = covers_dir.join(format!("{}.{}", novel_id, ext));
             if p.exists() {
@@ -556,6 +613,13 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<St
 pub fn clear_novel_cache(file_path: String) -> Result<(), String> {
     let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
     cache.remove(&file_path);
+
+    // 同时清理相关的临时文件
+    let novel_id = format!("{:x}", md5::compute(file_path.as_bytes()));
+    let app_dir = get_app_data_dir();
+    let epub_images_dir = app_dir.join("epub_images").join(&novel_id);
+    let _ = std::fs::remove_dir_all(epub_images_dir);
+
     Ok(())
 }
 

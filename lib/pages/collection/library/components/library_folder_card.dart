@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
@@ -34,9 +36,62 @@ class LibraryFolderCard extends StatefulWidget {
 
 class _LibraryFolderCardState extends State<LibraryFolderCard> {
   bool _hovering = false;
+  bool _isEditing = false;
+  late TextEditingController _editController;
+  late FocusNode _editFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _editController = TextEditingController();
+    _editFocusNode = FocusNode();
+    _editFocusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _editFocusNode.removeListener(_onFocusChange);
+    _editController.dispose();
+    _editFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_editFocusNode.hasFocus && _isEditing) {
+      _saveRename();
+    }
+  }
+
+  void _startEditing() {
+    if (widget.isSelecting) return;
+    setState(() {
+      _isEditing = true;
+      _editController.text = widget.folder.name;
+    });
+    // 延迟聚焦以确保TextField已构建
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _editFocusNode.requestFocus();
+      _editController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _editController.text.length,
+      );
+    });
+  }
+
+  void _saveRename() {
+    final newName = _editController.text.trim();
+    setState(() => _isEditing = false);
+    if (newName.isNotEmpty && newName != widget.folder.name) {
+      widget.viewModel.renameFolder(widget.folder.id, newName);
+    }
+  }
 
   /// 在鼠标位置弹出菜单
   void _showContextMenu(BuildContext ctx, Offset globalPos) {
+    // 先尝试关闭可能存在的菜单，再打开新的菜单（避免多个菜单同时存在）
+    try {
+      Navigator.of(ctx).maybePop();
+    } catch (_) {}
     // 将全局坐标转换到 Overlay 局部坐标系，避免 ScreenUtil 变换造成右偏
     final overlay = Overlay.of(ctx).context.findRenderObject() as RenderBox;
     final localPos = overlay.globalToLocal(globalPos);
@@ -47,28 +102,44 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
         Rect.fromLTWH(localPos.dx, localPos.dy, 1, 1),
         Offset.zero & overlaySize,
       ),
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: appMetrics.radius8),
       items: [
         PopupMenuItem(
-          child: Row(
-            children: [
-              Icon(Icons.drive_file_rename_outline, size: appMetrics.fontSize16),
-              SizedBox(width: appMetrics.kSpace8),
-              const Text('重命名'),
-            ],
+          padding: EdgeInsets.symmetric(
+            horizontal: appMetrics.kSpace12,
+            vertical: appMetrics.kSpace4,
+          ),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Row(
+              children: [
+                Icon(Icons.drive_file_rename_outline, size: appMetrics.fontSize16),
+                SizedBox(width: appMetrics.kSpace12),
+                const Text('重命名'),
+              ],
+            ),
           ),
           onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) => _showRenameDialog(ctx)),
         ),
         PopupMenuItem(
-          child: Row(
-            children: [
-              Icon(
-                Icons.delete_outline,
-                size: appMetrics.fontSize16,
-                color: Theme.of(ctx).colorScheme.error,
-              ),
-              SizedBox(width: appMetrics.kSpace8),
-              Text('删除文件夹', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
-            ],
+          padding: EdgeInsets.symmetric(
+            horizontal: appMetrics.kSpace12,
+            vertical: appMetrics.kSpace4,
+          ),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.delete_outline,
+                  size: appMetrics.fontSize16,
+                  color: Theme.of(ctx).colorScheme.error,
+                ),
+                SizedBox(width: appMetrics.kSpace12),
+                Text('删除文件夹', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              ],
+            ),
           ),
           onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) => _confirmDelete(ctx)),
         ),
@@ -139,10 +210,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
     final accent = theme.colorScheme.primary;
 
     return GestureDetector(
-      onTap: widget.isSelecting ? widget.onTap : null,
-      onDoubleTap: widget.isSelecting ? null : widget.onDoubleTap,
-      onLongPress: widget.onLongPress,
-      onSecondaryTapDown: (d) => _showContextMenu(context, d.globalPosition),
+      onTap: widget.isSelecting || _isEditing ? null : widget.onTap,
+      onLongPress: _isEditing ? null : widget.onLongPress,
+      onSecondaryTapDown: _isEditing ? null : (d) => _showContextMenu(context, d.globalPosition),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovering = true),
@@ -160,7 +230,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
           ),
           child: Stack(
             children: [
-              // 背景渐变
+              // 背景渐变或封面图片
               Container(
                 width: double.infinity,
                 height: double.infinity,
@@ -176,6 +246,85 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                         : [accent.withAlpha(40), accent.withAlpha(20)],
                   ),
                 ),
+                child: () {
+                  // 尝试获取文件夹封面(前6个书籍封面)
+                  if (!widget.isBookHover) {
+                    final coverPaths = widget.viewModel.getFolderCovers(widget.folder.id);
+                    if (coverPaths.isNotEmpty) {
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // 3x2 宫格使用两行三列的等比分布，确保铺满父容器
+                          Column(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: List.generate(3, (col) {
+                                    final idx = col;
+                                    if (idx < coverPaths.length) {
+                                      final coverFile = File(coverPaths[idx]);
+                                      if (coverFile.existsSync()) {
+                                        return Expanded(
+                                          child: Image.file(coverFile, fit: BoxFit.cover),
+                                        );
+                                      }
+                                    }
+                                    return Expanded(
+                                      child: Container(
+                                        color: Color.alphaBlend(
+                                          Colors.white.withAlpha(200),
+                                          accent,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                              Expanded(
+                                child: Row(
+                                  children: List.generate(3, (col) {
+                                    final idx = 3 + col;
+                                    if (idx < coverPaths.length) {
+                                      final coverFile = File(coverPaths[idx]);
+                                      if (coverFile.existsSync()) {
+                                        return Expanded(
+                                          child: Image.file(coverFile, fit: BoxFit.cover),
+                                        );
+                                      }
+                                    }
+                                    return Expanded(
+                                      child: Container(
+                                        color: Color.alphaBlend(
+                                          Colors.white.withAlpha(200),
+                                          accent,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ],
+                          ),
+                          // 半透明遮罩，让图标和文字更清晰
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.black.withAlpha(100), Colors.black.withAlpha(180)],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                  }
+                  return null;
+                }(),
+              ),
+
+              // 文件夹内容（图标+名称），使用Column居中
+              Positioned.fill(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -185,25 +334,58 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       size: scaleW(56),
                       color: widget.isBookHover
                           ? theme.colorScheme.tertiary.withAlpha(220)
-                          : accent.withAlpha(200),
+                          : Colors.white.withAlpha(220),
                     ),
                     SizedBox(height: appMetrics.kSpace8),
                     // 文件夹名称 / 拖放提示
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: appMetrics.kSpace8),
-                      child: Text(
-                        widget.isBookHover ? '放入此文件夹' : widget.folder.name,
-                        style: TextStyle(
-                          fontSize: appMetrics.fontSize12,
-                          fontWeight: FontWeight.w600,
-                          color: widget.isBookHover
-                              ? theme.colorScheme.tertiary
-                              : theme.textTheme.bodyMedium?.color,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
+                      child: _isEditing
+                          ? TextField(
+                              controller: _editController,
+                              focusNode: _editFocusNode,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: appMetrics.fontSize12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: appMetrics.radius4,
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: appMetrics.kSpace4,
+                                  vertical: appMetrics.kSpace4,
+                                ),
+                              ),
+                              onSubmitted: (_) => _saveRename(),
+                            )
+                          : GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: widget.isSelecting || widget.isBookHover
+                                  ? null
+                                  : () {}, // 空handler阻止事件冒泡到外层
+                              onDoubleTap: widget.isSelecting || widget.isBookHover
+                                  ? null
+                                  : _startEditing,
+                              child: Text(
+                                widget.isBookHover ? '放入此文件夹' : widget.folder.name,
+                                style: TextStyle(
+                                  fontSize: appMetrics.fontSize12,
+                                  fontWeight: FontWeight.w600,
+                                  color: widget.isBookHover
+                                      ? theme.colorScheme.tertiary
+                                      : Colors.white,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                     ),
                   ],
                 ),

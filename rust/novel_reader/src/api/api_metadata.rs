@@ -1,9 +1,10 @@
 use flutter_rust_bridge::frb;
-use serde::{Deserialize, Serialize};
 
 use crate::types::{NovelFolder, NovelMetadata};
 
-use super::{add_novel, get_folder_list, get_library, move_novel_to_folder, remove_novel};
+use super::{
+    add_novel, get_app_data_dir, get_folder_list, get_library, move_novel_to_folder, remove_novel,
+};
 
 /// 更新阅读进度
 #[frb(sync)]
@@ -130,8 +131,8 @@ pub fn update_novel_cover(novel_id: String, image_path: String) -> Result<(), St
         .unwrap_or("jpg")
         .to_lowercase();
 
-    // 目标目录
-    let dst_dir = std::env::temp_dir().join("slimeworks").join("covers");
+    // 目标目录（使用应用数据目录而非临时目录）
+    let dst_dir = get_app_data_dir().join("covers");
     let _ = std::fs::create_dir_all(&dst_dir);
     let dst_path = dst_dir.join(format!("{}.{}", novel_id, ext));
 
