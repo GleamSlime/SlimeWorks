@@ -2,6 +2,7 @@
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -158,6 +159,12 @@ class _CollectionLibraryScreenState
               icon: const Icon(Icons.auto_awesome_outlined),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _showKeywordRulesDialog(),
+            ),
+            // 局域网传输
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.device_hub),
+              size: AppTheme.metrics.kSpace40,
+              onTap: () => context.go('/lan-transfer'),
             ),
             LibraryBookAppendButton(viewModel: viewModel),
           ],

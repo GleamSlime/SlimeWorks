@@ -21,6 +21,7 @@ import 'package:slime_works/pages/module_management_screen.dart';
 import 'package:slime_works/pages/websocket_test_page.dart';
 import 'package:slime_works/pages/http_bridge_test_page.dart';
 import 'package:slime_works/pages/settings/settings_page.dart';
+import 'package:slime_works/pages/lan_transfer/lan_transfer_screen.dart';
 
 part 'app_routes.g.dart';
 
@@ -34,6 +35,7 @@ part 'routes/placeholder_routes.dart';
 part 'routes/collection_routes.dart';
 part 'routes/demo_routes.dart';
 part 'routes/capture_routers.dart';
+part 'routes/lan_transfer_routes.dart';
 
 // // 导航到 Dashboard
 // DashboardRoute().go(context);

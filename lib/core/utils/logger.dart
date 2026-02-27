@@ -268,6 +268,21 @@ class Loggers {
     return "";
   }
 
+  /// 调试信息简写 (debug)
+  String d(String message) {
+    return log(message, name: 'DEBUG');
+  }
+
+  /// 信息简写 (info)
+  String i(String message) {
+    return info(message);
+  }
+
+  /// 错误简写 (error)
+  Future<String> e(String message, [Object? error]) {
+    return this.error(message, error: error);
+  }
+
   /// 保存日志到文件（Base64 编码）
   static Future<String> saveLogsToFile(bool? encrypt) async {
     final directory = await getApplicationDocumentsDirectory();

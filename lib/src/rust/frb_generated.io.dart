@@ -6,6 +6,7 @@
 import 'api/capture.dart';
 import 'api/ffmpeg.dart';
 import 'api/http_bridge.dart';
+import 'api/lan_transfer.dart';
 import 'api/logger.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';

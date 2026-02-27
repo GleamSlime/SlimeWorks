@@ -42,6 +42,9 @@ novel_reader = { path = "novel_reader" }
 # HTTP Bridge 模块（独立 crate）
 http_bridge = { path = "http_bridge" }
 
+# 局域网传输模块（独立 crate）
+lan_transfer = { path = "lan_transfer" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]
