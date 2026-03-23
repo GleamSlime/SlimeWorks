@@ -60,6 +60,12 @@ impl LanTransferManager {
             return Ok(());
         }
 
+        // 停止传输监听并释放端口
+        {
+            let mut transfer = self.transfer.write().await;
+            transfer.stop_listening().await?;
+        }
+
         // 停止发现服务
         {
             let discovery = self.discovery.read().await;
@@ -76,7 +82,7 @@ impl LanTransferManager {
             device_id: DiscoveryService::get_device_id(),
             device_name: DiscoveryService::get_device_name(),
             device_type: DiscoveryService::get_device_type(),
-            ip_address: "127.0.0.1".to_string(),
+            ip_address: DiscoveryService::get_preferred_local_ip(),
             port,
             discovered_at: chrono::Utc::now().to_rfc3339(),
             is_online: true,
@@ -86,6 +92,15 @@ impl LanTransferManager {
     /// 获取已发现的设备列表
     pub async fn get_discovered_devices(&self) -> Vec<DeviceInfo> {
         self.discovery.read().await.get_discovered_devices().await
+    }
+
+    /// 当 mDNS 为空时触发主动扫描兜底
+    pub async fn refresh_devices_fallback_scan(&self) -> Result<()> {
+        self.discovery
+            .read()
+            .await
+            .refresh_devices_fallback_scan()
+            .await
     }
 
     /// 发送文本消息

@@ -89,6 +89,7 @@ class AppRoutes {
       const CloudWordRoute(),
       const DistributedRoute(),
       const RequestHostRoute(),
+      const LanTransferRoute(),
 
       const GooeyDemoRoute(),
       const ViewModelDemoRoute(),

@@ -27,6 +27,12 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
   bool get enableNetworkMonitoring => true;
 
   @override
+  Future<void> onNetworkReconnected() async {
+    await viewModel.startService();
+    await viewModel.refreshDevices();
+  }
+
+  @override
   Widget buildContent(BuildContext context) {
     return Obx(() {
       // 待处理的请求弹窗

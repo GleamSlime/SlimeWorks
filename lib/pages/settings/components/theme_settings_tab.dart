@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_text_styles.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -25,20 +26,65 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     LightColors.red,
   ];
 
+  static const String _themeModeKey = 'theme_mode';
+  static const String _accentColorKey = 'accent_color';
+  static const String _fontScaleKey = 'font_scale';
+
   ThemeMode _themeMode = ThemeMode.system;
   double _fontScale = 1.0;
   Color _accentColor = LightColors.primary;
-  bool _appliedInitial = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_appliedInitial) {
+  void initState() {
+    super.initState();
+    _loadSavedSettings();
+  }
+
+  Future<void> _loadSavedSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // 加载主题模式
+      final themeModeIndex = prefs.getInt(_themeModeKey) ?? ThemeMode.system.index;
+      setState(() {
+        _themeMode = ThemeMode.values[themeModeIndex];
+      });
+
+      // 加载强调色
+      final accentColorValue = prefs.getInt(_accentColorKey) ?? LightColors.primary.toARGB32();
+      setState(() {
+        _accentColor = Color(accentColorValue);
+      });
+
+      // 加载字体缩放
+      final fontScale = prefs.getDouble(_fontScaleKey) ?? 1.0;
+      setState(() {
+        _fontScale = fontScale;
+      });
+
+      // 应用加载的设置
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _applyTheme();
       });
-      _appliedInitial = true;
+    } catch (e) {
+      // 如果加载失败，使用默认设置
+      // 加载主题设置失败: $e
     }
+  }
+
+  Future<void> _saveThemeMode(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_themeModeKey, mode.index);
+  }
+
+  Future<void> _saveAccentColor(Color color) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_accentColorKey, color.toARGB32());
+  }
+
+  Future<void> _saveFontScale(double scale) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_fontScaleKey, scale);
   }
 
   void _onThemeModeChanged(ThemeMode mode) {
@@ -47,17 +93,20 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
       _themeMode = mode;
     });
     Get.changeThemeMode(mode);
+    _saveThemeMode(mode);
     _applyTheme();
   }
 
   void _onAccentColorTap(Color color) {
-    if (_accentColor.value == color.value) return;
+    if (_accentColor.toARGB32() == color.toARGB32()) return;
     setState(() => _accentColor = color);
+    _saveAccentColor(color);
     _applyTheme();
   }
 
   void _onFontScaleChanged(double value) {
     setState(() => _fontScale = value);
+    _saveFontScale(value);
     _applyTheme();
   }
 
@@ -85,7 +134,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     final colorScheme = base.colorScheme.copyWith(
       primary: accentColor,
       secondary: accentColor,
-      primaryContainer: accentColor.withOpacity(0.2),
+      primaryContainer: accentColor.withValues(
+        alpha: (accentColor.a * 255.0).round().clamp(0, 255).toDouble(),
+      ),
       onPrimary: _getContrastColor(accentColor),
     );
     return base.copyWith(
@@ -95,14 +146,22 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
       tabBarTheme: base.tabBarTheme.copyWith(
         indicator: UnderlineTabIndicator(borderSide: BorderSide(color: accentColor, width: 3)),
         labelColor: colorScheme.onSurface,
-        unselectedLabelColor: colorScheme.onSurface.withAlpha(140),
+        unselectedLabelColor: colorScheme.onSurface.withValues(
+          alpha: (colorScheme.onSurface.a * 255.0 * 0.55).round().clamp(0, 255).toDouble(),
+        ),
       ),
       textTheme: scaledTextTheme,
       primaryTextTheme: scaledPrimaryTextTheme,
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: _getContrastColor(accentColor)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: accentColor,
+          foregroundColor: _getContrastColor(accentColor),
+        ),
       ),
-      sliderTheme: base.sliderTheme.copyWith(thumbColor: accentColor, activeTrackColor: accentColor),
+      sliderTheme: base.sliderTheme.copyWith(
+        thumbColor: accentColor,
+        activeTrackColor: accentColor,
+      ),
     );
   }
 
@@ -155,10 +214,15 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   Widget _buildModeChip(ThemeMode mode) {
     final theme = Theme.of(context);
     return ChoiceChip(
-      label: Text(_themeModeLabel(mode), style: AppTextStyles.body2(color: theme.colorScheme.onSurface)),
+      label: Text(
+        _themeModeLabel(mode),
+        style: AppTextStyles.body2(color: theme.colorScheme.onSurface),
+      ),
       selected: _themeMode == mode,
       side: BorderSide(color: _themeMode == mode ? theme.colorScheme.primary : theme.dividerColor),
-      selectedColor: theme.colorScheme.primary.withOpacity(0.15),
+      selectedColor: theme.colorScheme.primary.withValues(
+        alpha: (theme.colorScheme.primary.a * 255.0 * 0.15).round().clamp(0, 255).toDouble(),
+      ),
       onSelected: (_) => _onThemeModeChanged(mode),
     );
   }
@@ -175,8 +239,18 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: color,
-          border: Border.all(color: isSelected ? Colors.black87 : Colors.transparent, width: isSelected ? 3 : 1),
-          boxShadow: [if (isSelected) BoxShadow(color: Colors.black.withAlpha(64), blurRadius: 6, offset: const Offset(0, 3))],
+          border: Border.all(
+            color: isSelected ? Colors.black87 : Colors.transparent,
+            width: isSelected ? 3 : 1,
+          ),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 64),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+          ],
         ),
         child: isSelected ? Icon(Icons.check, color: _getContrastColor(color), size: 28) : null,
       ),
@@ -193,30 +267,56 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         children: [
           Text(
             '主题模式',
-            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
+            style: AppTextStyles.h5(
+              color: theme.colorScheme.onSurface,
+              fontWeight: AppFontWeights.semiBold,
+            ),
           ),
           const SizedBox(height: 12),
           Wrap(spacing: 12, children: ThemeMode.values.map(_buildModeChip).toList()),
           const SizedBox(height: 24),
           Text(
             '主题配色',
-            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
+            style: AppTextStyles.h5(
+              color: theme.colorScheme.onSurface,
+              fontWeight: AppFontWeights.semiBold,
+            ),
           ),
           const SizedBox(height: 12),
-          Wrap(spacing: 12, runSpacing: 12, children: _accentPalette.map(_buildAccentSwatch).toList()),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: _accentPalette.map(_buildAccentSwatch).toList(),
+          ),
           const SizedBox(height: 24),
           Text(
             '字号大小',
-            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
+            style: AppTextStyles.h5(
+              color: theme.colorScheme.onSurface,
+              fontWeight: AppFontWeights.semiBold,
+            ),
           ),
           const SizedBox(height: 12),
-          Slider(value: _fontScale, min: 0.8, max: 1.3, divisions: 10, label: '${(_fontScale * 100).round()}%', onChanged: _onFontScaleChanged),
+          Slider(
+            value: _fontScale,
+            min: 0.8,
+            max: 1.3,
+            divisions: 10,
+            label: '${(_fontScale * 100).round()}%',
+            onChanged: _onFontScaleChanged,
+          ),
           const SizedBox(height: 4),
-          Text('当前缩放：${(_fontScale * 100).round()}%', style: AppTextStyles.body2(color: theme.colorScheme.onSurface)),
+          Text(
+            '当前缩放：${(_fontScale * 100).round()}%',
+            style: AppTextStyles.body2(color: theme.colorScheme.onSurface),
+          ),
           const SizedBox(height: 32),
           Text(
             '预览样式',
-            style: AppTextStyles.h5(color: theme.colorScheme.onSurface, fontWeight: AppFontWeights.semiBold),
+            style: AppTextStyles.h5(
+              color: theme.colorScheme.onSurface,
+              fontWeight: AppFontWeights.semiBold,
+            ),
           ),
           const SizedBox(height: 12),
           Card(

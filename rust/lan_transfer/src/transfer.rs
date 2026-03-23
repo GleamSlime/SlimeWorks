@@ -1,3 +1,4 @@
+use crate::discovery::DiscoveryService;
 use crate::types::*;
 use anyhow::{anyhow, Result};
 use async_channel::{Receiver, Sender};
@@ -7,10 +8,12 @@ use serde_json;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, RwLock};
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 const CHUNK_SIZE: usize = 64 * 1024; // 64KB chunks
@@ -26,14 +29,14 @@ pub struct TransferService {
     event_sender: Sender<TransferEvent>,
     event_receiver: Receiver<TransferEvent>,
     listener: Option<TcpListener>,
+    listen_task: Option<JoinHandle<()>>,
+    stop_signal: Option<oneshot::Sender<()>>,
 }
 
 impl TransferService {
     /// 创建新的传输服务
     pub async fn new(port: u16, device_id: String, device_name: String) -> Result<Self> {
-        let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
-            .await
-            .map_err(|e| anyhow!("Failed to bind to port {}: {}", port, e))?;
+        let listener = bind_listener_with_recovery(port).await?;
 
         let (event_sender, event_receiver) = async_channel::unbounded();
 
@@ -48,53 +51,100 @@ impl TransferService {
             event_sender,
             event_receiver,
             listener: Some(listener),
+            listen_task: None,
+            stop_signal: None,
         })
     }
 
     /// 开始监听连接
     pub async fn start_listening(&mut self) -> Result<()> {
+        if self.listen_task.is_some() {
+            return Ok(());
+        }
+
         let listener = self
             .listener
             .take()
             .ok_or_else(|| anyhow!("Listener already taken"))?;
+        let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
         let transfers = self.transfers.clone();
         let trusted_devices = self.trusted_devices.clone();
         let event_sender = self.event_sender.clone();
         let device_id = self.device_id.clone();
+        let device_name = self.device_name.clone();
+        let listen_port = self.port;
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             loop {
-                match listener.accept().await {
-                    Ok((stream, addr)) => {
-                        debug!("New connection from: {}", addr);
-                        let transfers = transfers.clone();
-                        let trusted_devices = trusted_devices.clone();
-                        let event_sender = event_sender.clone();
-                        let device_id = device_id.clone();
-
-                        tokio::spawn(async move {
-                            if let Err(e) = handle_connection(
-                                stream,
-                                transfers,
-                                trusted_devices,
-                                event_sender,
-                                device_id,
-                            )
-                            .await
-                            {
-                                error!("Error handling connection: {}", e);
-                            }
-                        });
+                tokio::select! {
+                    _ = &mut stop_rx => {
+                        info!("Transfer listener received stop signal");
+                        break;
                     }
-                    Err(e) => {
-                        error!("Failed to accept connection: {}", e);
+                    result = listener.accept() => {
+                        match result {
+                            Ok((stream, addr)) => {
+                                debug!("New connection from: {}", addr);
+                                let transfers = transfers.clone();
+                                let trusted_devices = trusted_devices.clone();
+                                let event_sender = event_sender.clone();
+                                let device_id = device_id.clone();
+                                let device_name = device_name.clone();
+
+                                tokio::spawn(async move {
+                                    if let Err(e) = handle_connection(
+                                        stream,
+                                        transfers,
+                                        trusted_devices,
+                                        event_sender,
+                                        device_id,
+                                        device_name,
+                                        listen_port,
+                                    )
+                                    .await
+                                    {
+                                        error!("Error handling connection: {}", e);
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                error!("Failed to accept connection: {}", e);
+                                tokio::time::sleep(Duration::from_millis(50)).await;
+                            }
+                        }
                     }
                 }
             }
+            info!("Transfer listener stopped");
         });
 
+        self.stop_signal = Some(stop_tx);
+        self.listen_task = Some(handle);
+
         info!("Started listening for incoming transfers");
+        Ok(())
+    }
+
+    /// 停止监听连接并释放端口
+    pub async fn stop_listening(&mut self) -> Result<()> {
+        if let Some(tx) = self.stop_signal.take() {
+            let _ = tx.send(());
+        }
+
+        if let Some(handle) = self.listen_task.take() {
+            match tokio::time::timeout(Duration::from_secs(2), handle).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    warn!("Transfer listener task ended with join error: {}", e);
+                }
+                Err(_) => {
+                    warn!("Timed out waiting for transfer listener to stop; aborting task");
+                }
+            }
+        }
+
+        self.listener = Some(bind_listener_with_recovery(self.port).await?);
         Ok(())
     }
 
@@ -404,6 +454,130 @@ impl TransferService {
     }
 }
 
+async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
+    let addr = format!("0.0.0.0:{}", port);
+    match TcpListener::bind(&addr).await {
+        Ok(listener) => Ok(listener),
+        Err(first_err) => {
+            if first_err.kind() != std::io::ErrorKind::AddrInUse {
+                return Err(anyhow!("Failed to bind to port {}: {}", port, first_err));
+            }
+
+            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            {
+                if force_kill_port_process(port) {
+                    warn!(
+                        "Port {} was occupied; killed process and retrying bind once",
+                        port
+                    );
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    if let Ok(listener) = TcpListener::bind(&addr).await {
+                        return Ok(listener);
+                    }
+                }
+            }
+
+            Err(anyhow!("Failed to bind to port {}: {}", port, first_err))
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn force_kill_port_process(port: u16) -> bool {
+    use std::process::Command;
+
+    let output = match Command::new("lsof")
+        .args(["-ti", &format!("tcp:{}", port)])
+        .output()
+    {
+        Ok(output) => output,
+        Err(e) => {
+            warn!("Failed to run lsof for port {}: {}", port, e);
+            return false;
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut killed_any = false;
+    for pid in stdout.lines().map(str::trim).filter(|pid| !pid.is_empty()) {
+        match Command::new("kill").args(["-9", pid]).status() {
+            Ok(status) if status.success() => {
+                killed_any = true;
+                info!("Killed process {} on tcp:{}", pid, port);
+            }
+            Ok(status) => {
+                warn!(
+                    "Failed to kill process {} on tcp:{} (status={})",
+                    pid, port, status
+                );
+            }
+            Err(e) => {
+                warn!("Failed to execute kill for pid {} on tcp:{}: {}", pid, port, e);
+            }
+        }
+    }
+
+    killed_any
+}
+
+#[cfg(target_os = "windows")]
+fn force_kill_port_process(port: u16) -> bool {
+    use std::collections::HashSet;
+    use std::process::Command;
+
+    let output = match Command::new("netstat").args(["-ano", "-p", "tcp"]).output() {
+        Ok(output) => output,
+        Err(e) => {
+            warn!("Failed to run netstat for port {}: {}", port, e);
+            return false;
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let port_suffix = format!(":{}", port);
+    let mut pids: HashSet<String> = HashSet::new();
+
+    for line in stdout.lines() {
+        if !line.contains(&port_suffix) || !line.contains("LISTENING") {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if let Some(pid) = parts.last() {
+            if !pid.is_empty() {
+                pids.insert((*pid).to_string());
+            }
+        }
+    }
+
+    let mut killed_any = false;
+    for pid in pids {
+        match Command::new("taskkill")
+            .args(["/F", "/PID", &pid])
+            .status()
+        {
+            Ok(status) if status.success() => {
+                killed_any = true;
+                info!("Killed process {} on tcp:{}", pid, port);
+            }
+            Ok(status) => {
+                warn!(
+                    "Failed to kill process {} on tcp:{} (status={})",
+                    pid, port, status
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to execute taskkill for pid {} on tcp:{}: {}",
+                    pid, port, e
+                );
+            }
+        }
+    }
+
+    killed_any
+}
+
 /// 处理传入连接
 async fn handle_connection(
     mut stream: TcpStream,
@@ -411,6 +585,8 @@ async fn handle_connection(
     trusted_devices: Arc<RwLock<HashMap<String, TrustedDevice>>>,
     event_sender: Sender<TransferEvent>,
     device_id: String,
+    device_name: String,
+    listen_port: u16,
 ) -> Result<()> {
     // 读取消息长度（4字节）
     let mut len_buf = [0u8; 4];
@@ -429,6 +605,39 @@ async fn handle_connection(
     let message: TransferMessage = serde_json::from_str(&msg_str)?;
 
     match message.message_type {
+        MessageType::Heartbeat => {
+            let request: HeartbeatPayload = serde_json::from_str(&message.payload)?;
+            debug!(
+                "Heartbeat probe from {} ({})",
+                request.device_name, request.device_id
+            );
+
+            let local_ip = stream
+                .local_addr()
+                .map(|addr| addr.ip().to_string())
+                .unwrap_or_else(|_| "127.0.0.1".to_string());
+
+            let response_device = DeviceInfo {
+                device_id: device_id,
+                device_name,
+                device_type: DiscoveryService::get_device_type(),
+                ip_address: local_ip,
+                port: listen_port,
+                discovered_at: Utc::now().to_rfc3339(),
+                is_online: true,
+            };
+
+            let response_message = TransferMessage {
+                message_type: MessageType::Heartbeat,
+                payload: serde_json::to_string(&response_device)?,
+                timestamp: Utc::now().to_rfc3339(),
+            };
+            let response_bytes = serde_json::to_vec(&response_message)?;
+            let response_len = response_bytes.len() as u32;
+            stream.write_all(&response_len.to_be_bytes()).await?;
+            stream.write_all(&response_bytes).await?;
+            stream.flush().await?;
+        }
         MessageType::TransferRequest => {
             let request: TransferRequest = serde_json::from_str(&message.payload)?;
 

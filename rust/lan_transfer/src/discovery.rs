@@ -1,13 +1,21 @@
-use crate::types::{DeviceInfo, EventType, TransferEvent};
+use crate::types::{
+    DeviceInfo, EventType, HeartbeatPayload, MessageType, TransferEvent, TransferMessage,
+};
 use anyhow::{anyhow, Result};
 use async_channel::{Receiver, Sender};
 use chrono::Utc;
+use if_addrs::get_if_addrs;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 use tokio::sync::RwLock;
+use tokio::task::JoinSet;
+use tokio::time::{timeout, Duration, Instant};
 use uuid::Uuid;
 
 const SERVICE_TYPE: &str = "_slimeworks-lan._tcp.local.";
@@ -57,6 +65,7 @@ pub struct DiscoveryService {
     event_sender: Sender<TransferEvent>,
     event_receiver: Receiver<TransferEvent>,
     service_port: u16,
+    last_fallback_scan: Arc<RwLock<Option<Instant>>>,
 }
 
 impl DiscoveryService {
@@ -72,6 +81,7 @@ impl DiscoveryService {
             event_sender,
             event_receiver,
             service_port: port,
+            last_fallback_scan: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -90,10 +100,27 @@ impl DiscoveryService {
         DEVICE_TYPE.clone()
     }
 
+    /// 获取本机首选局域网 IP（优先 IPv4）
+    pub fn get_preferred_local_ip() -> String {
+        match collect_local_ips() {
+            Ok(ips) => ips
+                .first()
+                .map(std::string::ToString::to_string)
+                .unwrap_or_else(|| "127.0.0.1".to_string()),
+            Err(_) => "127.0.0.1".to_string(),
+        }
+    }
+
     /// 开始广播服务
     pub fn start_broadcast(&self) -> Result<()> {
         let service_name = format!("{}{}", SERVICE_NAME_PREFIX, DEVICE_ID.clone());
-        let host_name = format!("{}.local.", DEVICE_NAME.clone());
+        // Host name 使用 ASCII，避免设备名中的空格或非 ASCII 导致 Bonjour 兼容问题。
+        let host_name = format!("slimeworks-{}.local.", DEVICE_ID.replace('-', ""));
+        let local_ips = collect_local_ips()?;
+        info!(
+            "mDNS broadcast register: service_name={}, host_name={}, port={}, ips={:?}",
+            service_name, host_name, self.service_port, local_ips
+        );
 
         let properties: Option<std::collections::HashMap<String, String>> = Some(
             vec![
@@ -109,7 +136,7 @@ impl DiscoveryService {
             SERVICE_TYPE,
             &service_name,
             &host_name,
-            "",
+            local_ips.as_slice(),
             self.service_port,
             properties,
         )
@@ -160,10 +187,7 @@ impl DiscoveryService {
                             .unwrap_or_default()
                             .to_string();
 
-                        let ip_address = info
-                            .get_addresses()
-                            .iter()
-                            .next()
+                        let ip_address = select_preferred_ip_address(&info)
                             .map(|addr| addr.to_string())
                             .unwrap_or_default();
 
@@ -185,8 +209,8 @@ impl DiscoveryService {
 
                         if is_new {
                             info!(
-                                "New device discovered: {} ({})",
-                                device.device_name, device.device_id
+                                "New device discovered: {} ({}) ip={} port={}",
+                                device.device_name, device.device_id, device.ip_address, device.port
                             );
 
                             // 发送事件
@@ -243,6 +267,83 @@ impl DiscoveryService {
         devices.values().cloned().collect()
     }
 
+    /// mDNS 发现为空时，主动扫描同网段设备（不依赖 multicast entitlement）
+    pub async fn refresh_devices_fallback_scan(&self) -> Result<()> {
+        {
+            let mut last_scan = self.last_fallback_scan.write().await;
+            let now = Instant::now();
+            if let Some(previous) = *last_scan {
+                if now.duration_since(previous) < Duration::from_secs(15) {
+                    return Ok(());
+                }
+            }
+            *last_scan = Some(now);
+        }
+
+        let local_ipv4 = collect_primary_ipv4()?;
+        let octets = local_ipv4.octets();
+        let prefix = format!("{}.{}.{}.", octets[0], octets[1], octets[2]);
+
+        let probe = HeartbeatPayload {
+            device_id: DEVICE_ID.to_string(),
+            device_name: DEVICE_NAME.to_string(),
+            device_type: DEVICE_TYPE.to_string(),
+            port: self.service_port,
+        };
+
+        let mut join_set = JoinSet::new();
+        for host in 1..=254u8 {
+            let target_ip = format!("{}{}", prefix, host);
+            if target_ip == local_ipv4.to_string() {
+                continue;
+            }
+
+            if join_set.len() >= 48 {
+                if let Some(joined) = join_set.join_next().await {
+                    if let Ok(Some(device)) = joined {
+                        self.save_discovered_device(device).await;
+                    }
+                }
+            }
+
+            let payload = probe.clone();
+            let port = self.service_port;
+            join_set.spawn(async move { probe_device_by_heartbeat(target_ip, port, payload).await });
+        }
+
+        let mut found = 0usize;
+        while let Some(joined) = join_set.join_next().await {
+            if let Ok(Some(device)) = joined {
+                found += 1;
+                self.save_discovered_device(device).await;
+            }
+        }
+
+        info!(
+            "Fallback subnet scan done: local_ip={}, found={} (port={})",
+            local_ipv4, found, self.service_port
+        );
+        Ok(())
+    }
+
+    async fn save_discovered_device(&self, device: DeviceInfo) {
+        if device.device_id == *DEVICE_ID {
+            return;
+        }
+
+        let mut devices = self.discovered_devices.write().await;
+        let is_new = !devices.contains_key(&device.device_id);
+        devices.insert(device.device_id.clone(), device.clone());
+        drop(devices);
+
+        if is_new {
+            info!(
+                "Fallback discovered device: {} ({}) ip={} port={}",
+                device.device_name, device.device_id, device.ip_address, device.port
+            );
+        }
+    }
+
     /// 接收事件
     pub fn get_event_receiver(&self) -> Receiver<TransferEvent> {
         self.event_receiver.clone()
@@ -256,4 +357,127 @@ impl DiscoveryService {
         info!("Discovery service shutdown");
         Ok(())
     }
+}
+
+fn collect_local_ips() -> Result<Vec<IpAddr>> {
+    let mut ipv4 = Vec::new();
+    let mut ipv6 = Vec::new();
+
+    for iface in get_if_addrs().map_err(|e| anyhow!("Failed to query interfaces: {}", e))? {
+        let ip = iface.ip();
+        if ip.is_loopback() || ip.is_unspecified() {
+            continue;
+        }
+
+        match ip {
+            IpAddr::V4(_) => ipv4.push(ip),
+            IpAddr::V6(v6) if !v6.is_unicast_link_local() => ipv6.push(ip),
+            _ => {}
+        }
+    }
+
+    if ipv4.is_empty() && ipv6.is_empty() {
+        error!("No active local network interface found for mDNS broadcast");
+        return Err(anyhow!("No active local network interface found"));
+    }
+
+    ipv4.extend(ipv6);
+    Ok(ipv4)
+}
+
+fn collect_primary_ipv4() -> Result<Ipv4Addr> {
+    for iface in get_if_addrs().map_err(|e| anyhow!("Failed to query interfaces: {}", e))? {
+        if let IpAddr::V4(v4) = iface.ip() {
+            if !v4.is_loopback() && !v4.is_unspecified() {
+                return Ok(v4);
+            }
+        }
+    }
+
+    Err(anyhow!("No active IPv4 interface found"))
+}
+
+async fn probe_device_by_heartbeat(
+    target_ip: String,
+    target_port: u16,
+    payload: HeartbeatPayload,
+) -> Option<DeviceInfo> {
+    let addr = format!("{}:{}", target_ip, target_port);
+    let mut stream = match timeout(Duration::from_millis(180), TcpStream::connect(&addr)).await {
+        Ok(Ok(stream)) => stream,
+        _ => return None,
+    };
+
+    let message = TransferMessage {
+        message_type: MessageType::Heartbeat,
+        payload: serde_json::to_string(&payload).ok()?,
+        timestamp: Utc::now().to_rfc3339(),
+    };
+    let bytes = serde_json::to_vec(&message).ok()?;
+    let len = bytes.len() as u32;
+
+    if timeout(Duration::from_millis(120), stream.write_all(&len.to_be_bytes()))
+        .await
+        .is_err()
+    {
+        return None;
+    }
+    if timeout(Duration::from_millis(120), stream.write_all(&bytes))
+        .await
+        .is_err()
+    {
+        return None;
+    }
+
+    let mut len_buf = [0u8; 4];
+    if timeout(Duration::from_millis(180), stream.read_exact(&mut len_buf))
+        .await
+        .is_err()
+    {
+        return None;
+    }
+    let msg_len = u32::from_be_bytes(len_buf) as usize;
+    if msg_len == 0 || msg_len > 64 * 1024 {
+        return None;
+    }
+
+    let mut msg_buf = vec![0u8; msg_len];
+    if timeout(Duration::from_millis(180), stream.read_exact(&mut msg_buf))
+        .await
+        .is_err()
+    {
+        return None;
+    }
+
+    let response: TransferMessage = serde_json::from_slice(&msg_buf).ok()?;
+    if !matches!(response.message_type, MessageType::Heartbeat) {
+        return None;
+    }
+
+    let mut device: DeviceInfo = serde_json::from_str(&response.payload).ok()?;
+    if device.ip_address.is_empty() {
+        device.ip_address = target_ip;
+    }
+    Some(device)
+}
+
+fn select_preferred_ip_address(info: &ServiceInfo) -> Option<IpAddr> {
+    let mut ipv4_candidate: Option<IpAddr> = None;
+    let mut ipv6_candidate: Option<IpAddr> = None;
+
+    for addr in info.get_addresses() {
+        if addr.is_loopback() || addr.is_unspecified() {
+            continue;
+        }
+
+        match addr {
+            IpAddr::V4(_) if ipv4_candidate.is_none() => ipv4_candidate = Some(*addr),
+            IpAddr::V6(v6) if !v6.is_unicast_link_local() && ipv6_candidate.is_none() => {
+                ipv6_candidate = Some(*addr)
+            }
+            _ => {}
+        }
+    }
+
+    ipv4_candidate.or(ipv6_candidate)
 }

@@ -30,6 +30,8 @@ async-channel = "2.3"
 sha2 = "0.10"
 # 跨平台设备信息
 hostname = "0.4"
+# 本地网卡地址
+if-addrs = "0.13"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

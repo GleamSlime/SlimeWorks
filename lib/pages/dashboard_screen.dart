@@ -44,7 +44,7 @@ class DashboardScreen extends StatelessWidget {
               maxCrossAxisExtent: 320,
               mainAxisSpacing: 24,
               crossAxisSpacing: 24,
-              mainAxisExtent: scaleW(230),
+              mainAxisExtent: scaleW(230).clamp(180.0, 320.0),
             ),
           ),
         ),

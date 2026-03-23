@@ -6,6 +6,7 @@ use crate::types::*;
 use anyhow::Result;
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
+use log::{info, warn};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -31,8 +32,11 @@ pub async fn lan_transfer_start(port: u16) -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
     
     if manager_guard.is_some() {
-        return Err(anyhow::anyhow!("Manager already started"));
+        warn!("lan_transfer_start ignored because manager already started");
+        return Ok(());
     }
+
+    info!("lan_transfer_start begin, port={}", port);
 
     let manager = LanTransferManager::new(port).await?;
     manager.start().await?;
@@ -45,12 +49,14 @@ pub async fn lan_transfer_start(port: u16) -> Result<()> {
 /// 停止传输管理器
 pub async fn lan_transfer_stop() -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
+    info!("lan_transfer_stop begin");
     
     if let Some(manager) = manager_guard.as_ref() {
         manager.stop().await?;
     }
     
     *manager_guard = None;
+    info!("lan_transfer_stop done");
     
     Ok(())
 }
@@ -72,7 +78,12 @@ pub async fn lan_transfer_get_devices() -> Result<Vec<String>> {
     let manager_guard = MANAGER.read().await;
     
     if let Some(manager) = manager_guard.as_ref() {
-        let devices = manager.get_discovered_devices().await;
+        let mut devices = manager.get_discovered_devices().await;
+        if devices.is_empty() {
+            let _ = manager.refresh_devices_fallback_scan().await;
+            devices = manager.get_discovered_devices().await;
+        }
+        info!("lan_transfer_get_devices count={}", devices.len());
         devices
             .iter()
             .map(|d| serde_json::to_string(d).map_err(|e| anyhow::anyhow!(e)))

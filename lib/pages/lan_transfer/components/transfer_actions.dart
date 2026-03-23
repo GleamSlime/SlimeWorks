@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
 
@@ -26,7 +25,7 @@ class _TransferActionsState extends State<TransferActions> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final device = widget.viewModel.selectedDevice.value;
 
     if (device == null) return const SizedBox.shrink();
@@ -117,11 +116,15 @@ class _TransferActionsState extends State<TransferActions> {
   Future<void> _sendText() async {
     final text = _textController.text.trim();
     if (text.isEmpty) {
-      Get.snackbar('提示', '请输入文本内容');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入文本内容')),
+      );
       return;
     }
 
     await widget.viewModel.sendText(text);
+    if (!mounted) return;
     _textController.clear();
     setState(() => _showTextInput = false);
   }
@@ -137,7 +140,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return ElevatedButton.icon(
       onPressed: onPressed,

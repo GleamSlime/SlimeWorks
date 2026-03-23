@@ -139,6 +139,15 @@ pub struct TransferDataChunk {
     pub data: Vec<u8>,
 }
 
+/// 心跳探测载荷（用于主动发现）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatPayload {
+    pub device_id: String,
+    pub device_name: String,
+    pub device_type: String,
+    pub port: u16,
+}
+
 /// 事件类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventType {

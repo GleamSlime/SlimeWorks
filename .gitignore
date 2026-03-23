@@ -61,3 +61,6 @@ rust/**/gen/schemas
 
 *.g.dart
 *_keyword.json
+
+# FVM Version Cache
+.fvm/

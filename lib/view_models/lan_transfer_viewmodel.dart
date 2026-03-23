@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
+import 'package:slime_works/core/utils/logger.dart';
 
 /// 局域网传输页面 ViewModel
 class LanTransferViewModel extends BaseViewModel {
   final LanTransferService _service = GetIt.instance.get<LanTransferService>();
+  final Loggers _logger = const Loggers(name: '局域网互传');
 
   // 服务状态
   final RxBool isServiceRunning = false.obs;
@@ -37,6 +40,7 @@ class LanTransferViewModel extends BaseViewModel {
   Future<void> startService() async {
     try {
       setLoading(true);
+      _logger.i('Start LAN service requested');
 
       if (!_service.isRunning) {
         await _service.startService();
@@ -58,6 +62,8 @@ class LanTransferViewModel extends BaseViewModel {
 
       // 启动定时刷新
       _startAutoRefresh();
+
+      await _service.runSelfCheck(reason: 'viewmodel-start-service');
     } catch (e) {
       handleError(e, '启动服务失败');
     } finally {
@@ -68,6 +74,7 @@ class LanTransferViewModel extends BaseViewModel {
   /// 停止服务
   Future<void> stopService() async {
     try {
+      _logger.i('Stop LAN service requested');
       _stopAutoRefresh();
       isScanning.value = false;
       await _service.stopService();
@@ -98,6 +105,11 @@ class LanTransferViewModel extends BaseViewModel {
     try {
       final devices = await _service.getDevices();
       discoveredDevices.value = devices;
+      _logger.i('Refresh devices completed, count=${devices.length}');
+
+      if (devices.isEmpty && isServiceRunning.value && _service.shouldRunEmptyDevicesSelfCheck()) {
+        await _service.runSelfCheck(reason: 'refresh-empty-devices');
+      }
     } catch (e) {
       handleError(e, '刷新设备列表失败');
     }
@@ -294,32 +306,47 @@ class LanTransferViewModel extends BaseViewModel {
   /// 错误处理辅助方法
   void handleError(dynamic error, String message) {
     setError('$message: $error');
-    Get.snackbar(
-      '错误',
-      message,
-      snackPosition: SnackPosition.BOTTOM,
-      duration: const Duration(seconds: 3),
-    );
+    _logger.error(message, error: error);
+    _showSnack(message: message, isError: true, duration: const Duration(seconds: 3));
   }
 
   /// 显示错误消息
   void showError(String message) {
-    Get.snackbar(
-      '错误',
-      message,
-      snackPosition: SnackPosition.BOTTOM,
-      duration: const Duration(seconds: 2),
-    );
+    _showSnack(message: message, isError: true);
   }
 
   /// 显示成功消息
   void showSuccess(String message) {
-    Get.snackbar(
-      '成功',
-      message,
-      snackPosition: SnackPosition.BOTTOM,
-      duration: const Duration(seconds: 2),
-    );
+    _showSnack(message: message, isError: false);
+  }
+
+  void _showSnack({
+    required String message,
+    required bool isError,
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    final BuildContext? context = navigatorKey.currentContext;
+    if (context == null) {
+      _logger.i('Skip snack because no navigator context: $message');
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) {
+      _logger.i('Skip snack because no ScaffoldMessenger: $message');
+      return;
+    }
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: duration,
+          backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+        ),
+      );
   }
 
   @override

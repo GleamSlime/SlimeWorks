@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/lan_transfer.dart' as rust_api;
@@ -168,6 +170,9 @@ class LanTransferService {
 
   bool _isRunning = false;
   Timer? _deviceRefreshTimer;
+  Future<void>? _pendingStart;
+  Future<void>? _pendingStop;
+  DateTime? _lastEmptyDevicesSelfCheckAt;
 
   /// 启动服务
   Future<void> startService({int port = kDefaultPort}) async {
@@ -176,7 +181,26 @@ class LanTransferService {
       return;
     }
 
+    if (_pendingStart != null) {
+      await _pendingStart;
+      return;
+    }
+
+    _pendingStart = _startServiceInternal(port: port);
     try {
+      await _pendingStart;
+    } finally {
+      _pendingStart = null;
+    }
+  }
+
+  Future<void> _startServiceInternal({required int port}) async {
+    if (_pendingStop != null) {
+      await _pendingStop;
+    }
+
+    try {
+      logger.i('LAN Transfer start begin, port=$port');
       rust_api.lanTransferInit();
       await rust_api.lanTransferStart(port: port);
       _isRunning = true;
@@ -185,7 +209,31 @@ class LanTransferService {
       _startDeviceRefresh();
 
       logger.i('LAN Transfer service started on port $port');
+      await runSelfCheck(reason: 'start-service-success');
     } catch (e) {
+      if (_isAddressInUseError(e)) {
+        logger.i('Port $port is in use, try restart once after stop');
+        try {
+          await rust_api.lanTransferStop();
+        } catch (_) {}
+
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        await rust_api.lanTransferStart(port: port);
+        _isRunning = true;
+        _startDeviceRefresh();
+        logger.i('LAN Transfer service restarted on port $port');
+        await runSelfCheck(reason: 'start-service-restarted');
+        return;
+      }
+
+      if (_isManagerAlreadyStartedError(e)) {
+        _isRunning = true;
+        _startDeviceRefresh();
+        logger.i('LAN Transfer manager already started, sync local running state');
+        await runSelfCheck(reason: 'manager-already-started');
+        return;
+      }
+
       logger.e('Failed to start LAN Transfer service: $e');
       rethrow;
     }
@@ -193,11 +241,26 @@ class LanTransferService {
 
   /// 停止服务
   Future<void> stopService() async {
+    if (_pendingStop != null) {
+      await _pendingStop;
+      return;
+    }
+
     if (!_isRunning) {
       return;
     }
 
+    _pendingStop = _stopServiceInternal();
     try {
+      await _pendingStop;
+    } finally {
+      _pendingStop = null;
+    }
+  }
+
+  Future<void> _stopServiceInternal() async {
+    try {
+      logger.i('LAN Transfer stop begin');
       _stopDeviceRefresh();
       await rust_api.lanTransferStop();
       _isRunning = false;
@@ -206,6 +269,15 @@ class LanTransferService {
       logger.e('Failed to stop LAN Transfer service: $e');
       rethrow;
     }
+  }
+
+  bool _isAddressInUseError(Object error) {
+    final message = error.toString();
+    return message.contains('Address already in use') || message.contains('os error 48');
+  }
+
+  bool _isManagerAlreadyStartedError(Object error) {
+    return error.toString().contains('Manager already started');
   }
 
   /// 获取本机设备信息
@@ -224,13 +296,65 @@ class LanTransferService {
   Future<List<DeviceInfo>> getDevices() async {
     try {
       final jsonStrList = await rust_api.lanTransferGetDevices();
-      return jsonStrList
+      final devices = jsonStrList
           .map((jsonStr) => DeviceInfo.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))
           .toList();
+      logger.i('LAN Transfer discovered devices count=${devices.length}');
+      return devices;
     } catch (e) {
       logger.e('Failed to get devices: $e');
       return [];
     }
+  }
+
+  /// 自检日志（用于排查设备发现和服务状态问题）
+  Future<Map<String, dynamic>> runSelfCheck({String reason = 'manual'}) async {
+    final DateTime now = DateTime.now();
+    final List<ConnectivityResult> connectivityResults = await Connectivity().checkConnectivity();
+    final bool connected = connectivityResults.any((result) => result != ConnectivityResult.none);
+
+    DeviceInfo? local;
+    String? localError;
+    try {
+      local = await getLocalDevice();
+    } catch (e) {
+      localError = e.toString();
+    }
+
+    final List<DeviceInfo> devices = await getDevices();
+
+    final Map<String, dynamic> report = <String, dynamic>{
+      'reason': reason,
+      'timestamp': now.toIso8601String(),
+      'platform': Platform.operatingSystem,
+      'is_running_local': _isRunning,
+      'default_port': kDefaultPort,
+      'connectivity': connectivityResults.map((e) => e.name).toList(),
+      'is_connected': connected,
+      'local_device': local?.toJson(),
+      'local_device_error': localError,
+      'discovered_count': devices.length,
+      'discovered_devices': devices.map((d) => d.toJson()).toList(),
+    };
+
+    logger.i('LAN Transfer self-check: ${jsonEncode(report)}');
+    return report;
+  }
+
+  bool shouldRunEmptyDevicesSelfCheck() {
+    final DateTime now = DateTime.now();
+    if (_lastEmptyDevicesSelfCheckAt == null) {
+      _lastEmptyDevicesSelfCheckAt = now;
+      return true;
+    }
+
+    final Duration delta = now.difference(_lastEmptyDevicesSelfCheckAt!);
+    if (delta.inSeconds >= 15) {
+      _lastEmptyDevicesSelfCheckAt = now;
+      return true;
+    }
+
+    return false;
   }
 
   /// 发送文本消�?

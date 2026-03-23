@@ -7,5 +7,6 @@ final SidebarGroup coreSidebarGroup = SidebarGroup(
   items: [
     SidebarMenuItem(route: const DashboardRoute()),
     SidebarMenuItem(route: const CaptureRoute()),
+    SidebarMenuItem(route: const LanTransferRoute()),
   ],
 );

@@ -35,75 +35,81 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
     return Container(
       height: scaleW(200),
       alignment: Alignment.center,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // 脉冲圆圈动画
-          AnimatedBuilder(
-            animation: _animation,
-            builder: (context, child) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  // 外圈
-                  Container(
-                    width: scaleW(100) * (1 + _animation.value * 0.5),
-                    height: scaleW(100) * (1 + _animation.value * 0.5),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: (isDark ? DarkColors.primary : LightColors.primary).withOpacity(
-                          1 - _animation.value,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 脉冲圆圈动画
+            AnimatedBuilder(
+              animation: _animation,
+              builder: (context, child) {
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // 外圈
+                    Container(
+                      width: scaleW(100) * (1 + _animation.value * 0.5),
+                      height: scaleW(100) * (1 + _animation.value * 0.5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: (isDark ? DarkColors.primary : LightColors.primary).withOpacity(
+                            1 - _animation.value,
+                          ),
+                          width: 2,
                         ),
-                        width: 2,
                       ),
                     ),
-                  ),
-                  // 中圈
-                  Container(
-                    width: scaleW(80),
-                    height: scaleW(80),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: (isDark ? DarkColors.primary : LightColors.primary).withOpacity(0.5),
-                        width: 2,
+                    // 中圈
+                    Container(
+                      width: scaleW(80),
+                      height: scaleW(80),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: (isDark ? DarkColors.primary : LightColors.primary).withOpacity(
+                            0.5,
+                          ),
+                          width: 2,
+                        ),
                       ),
                     ),
-                  ),
-                  // 内圈
-                  Container(
-                    width: scaleW(60),
-                    height: scaleW(60),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: (isDark ? DarkColors.primary : LightColors.primary).withOpacity(0.3),
+                    // 内圈
+                    Container(
+                      width: scaleW(60),
+                      height: scaleW(60),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: (isDark ? DarkColors.primary : LightColors.primary).withOpacity(0.3),
+                      ),
+                      child: Icon(
+                        Icons.radar,
+                        size: scaleW(32),
+                        color: isDark ? DarkColors.white100 : LightColors.black100,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.radar,
-                      size: scaleW(32),
-                      color: isDark ? DarkColors.white100 : LightColors.black100,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                  ],
+                );
+              },
+            ),
 
-          SizedBox(height: AppTheme.metrics.kSpace24),
+            SizedBox(height: AppTheme.metrics.kSpace24),
 
-          Text(
-            '正在搜索设备...',
-            style: AppTextStyles.body1(color: isDark ? DarkColors.white80 : LightColors.black80),
-          ),
+            Text(
+              '正在搜索设备...',
+              style: AppTextStyles.body1(color: isDark ? DarkColors.white80 : LightColors.black80),
+            ),
 
-          SizedBox(height: AppTheme.metrics.kSpace8),
+            SizedBox(height: AppTheme.metrics.kSpace8),
 
-          Text(
-            '请确保设备在同一局域网内',
-            style: AppTextStyles.caption(color: isDark ? DarkColors.white80 : LightColors.black80),
-          ),
-        ],
+            Text(
+              '请确保设备在同一局域网内',
+              style: AppTextStyles.caption(color: isDark ? DarkColors.white80 : LightColors.black80),
+            ),
+          ],
+        ),
       ),
     );
   }

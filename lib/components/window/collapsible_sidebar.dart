@@ -276,7 +276,10 @@ class CollapsibleSidebar extends StatelessWidget {
     bool isExpanded,
     bool showExtends,
   ) {
-    final scrollableGroups = groups.take(groups.length - 1).toList();
+    final scrollableGroups = groups
+        .take(groups.length - 1)
+        .where((group) => group.permission == null || RoleManager.canAccess(group.permission!))
+        .toList();
 
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
@@ -301,6 +304,9 @@ class CollapsibleSidebar extends StatelessWidget {
     if (groups.isEmpty) return const SizedBox.shrink();
 
     final bottomGroup = groups.last;
+    if (bottomGroup.permission != null && !RoleManager.canAccess(bottomGroup.permission!)) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -495,7 +501,7 @@ class CollapsibleSidebar extends StatelessWidget {
                                         child: Text(
                                           item.route.sidebarLabel,
                                           style: TextStyle(
-                                            fontSize: AppTheme.metrics.fontSize14,
+                                            fontSize: AppTheme.metrics.fontSize16,
                                             color: isSelected
                                                 ? theme.colorScheme.primary
                                                 : theme.textTheme.bodyMedium?.color,

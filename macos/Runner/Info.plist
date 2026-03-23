@@ -33,6 +33,12 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于发现和连接同一局域网内的设备，实现局域网互传功能。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_slimeworks-lan._tcp</string>
+	</array>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
