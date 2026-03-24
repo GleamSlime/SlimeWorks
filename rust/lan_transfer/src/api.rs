@@ -16,8 +16,7 @@ lazy_static! {
 
 // 重新导出类型（FRB 需要）
 pub use crate::types::{
-    DeviceInfo, EventType, TransferEvent, TransferItem, TransferStatus, TransferType,
-    TrustedDevice,
+    DeviceInfo, EventType, TransferEvent, TransferItem, TransferStatus, TransferType, TrustedDevice,
 };
 
 /// 初始化局域网传输服务
@@ -30,7 +29,7 @@ pub fn lan_transfer_init() -> Result<()> {
 /// 创建并启动传输管理器
 pub async fn lan_transfer_start(port: u16) -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
-    
+
     if manager_guard.is_some() {
         warn!("lan_transfer_start ignored because manager already started");
         return Ok(());
@@ -40,9 +39,9 @@ pub async fn lan_transfer_start(port: u16) -> Result<()> {
 
     let manager = LanTransferManager::new(port).await?;
     manager.start().await?;
-    
+
     *manager_guard = Some(manager);
-    
+
     Ok(())
 }
 
@@ -50,21 +49,21 @@ pub async fn lan_transfer_start(port: u16) -> Result<()> {
 pub async fn lan_transfer_stop() -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
     info!("lan_transfer_stop begin");
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.stop().await?;
     }
-    
+
     *manager_guard = None;
     info!("lan_transfer_stop done");
-    
+
     Ok(())
 }
 
 /// 获取本机设备信息
 pub async fn lan_transfer_get_local_device(port: u16) -> Result<String> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let device = manager.get_local_device_info(port);
         Ok(serde_json::to_string(&device)?)
@@ -76,7 +75,7 @@ pub async fn lan_transfer_get_local_device(port: u16) -> Result<String> {
 /// 获取已发现的设备列表
 pub async fn lan_transfer_get_devices() -> Result<Vec<String>> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut devices = manager.get_discovered_devices().await;
         if devices.is_empty() {
@@ -101,7 +100,7 @@ pub async fn lan_transfer_send_text(
     text: String,
 ) -> Result<String> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager
             .send_text(target_ip, target_port, target_device_id, text)
@@ -119,7 +118,7 @@ pub async fn lan_transfer_send_file(
     file_path: String,
 ) -> Result<String> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager
             .send_file(target_ip, target_port, target_device_id, file_path)
@@ -132,7 +131,7 @@ pub async fn lan_transfer_send_file(
 /// 接受传输
 pub async fn lan_transfer_accept(transfer_id: String) -> Result<()> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.accept_transfer(transfer_id).await
     } else {
@@ -143,7 +142,7 @@ pub async fn lan_transfer_accept(transfer_id: String) -> Result<()> {
 /// 拒绝传输
 pub async fn lan_transfer_reject(transfer_id: String) -> Result<()> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.reject_transfer(transfer_id).await
     } else {
@@ -154,7 +153,7 @@ pub async fn lan_transfer_reject(transfer_id: String) -> Result<()> {
 /// 取消传输
 pub async fn lan_transfer_cancel(transfer_id: String) -> Result<()> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.cancel_transfer(transfer_id).await
     } else {
@@ -165,7 +164,7 @@ pub async fn lan_transfer_cancel(transfer_id: String) -> Result<()> {
 /// 获取所有传输记录
 pub async fn lan_transfer_get_transfers() -> Result<Vec<String>> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let transfers = manager.get_transfers().await;
         transfers
@@ -180,7 +179,7 @@ pub async fn lan_transfer_get_transfers() -> Result<Vec<String>> {
 /// 添加信任设备
 pub async fn lan_transfer_add_trusted(device_id: String, device_name: String) -> Result<()> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.add_trusted_device(device_id, device_name).await
     } else {
@@ -191,7 +190,7 @@ pub async fn lan_transfer_add_trusted(device_id: String, device_name: String) ->
 /// 移除信任设备
 pub async fn lan_transfer_remove_trusted(device_id: String) -> Result<()> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.remove_trusted_device(device_id).await
     } else {
@@ -202,7 +201,7 @@ pub async fn lan_transfer_remove_trusted(device_id: String) -> Result<()> {
 /// 检查是否为信任设备
 pub async fn lan_transfer_is_trusted(device_id: String) -> Result<bool> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         Ok(manager.is_trusted_device(device_id).await)
     } else {
@@ -213,7 +212,7 @@ pub async fn lan_transfer_is_trusted(device_id: String) -> Result<bool> {
 /// 获取信任设备列表
 pub async fn lan_transfer_get_trusted_devices() -> Result<Vec<String>> {
     let manager_guard = MANAGER.read().await;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let devices = manager.get_trusted_devices().await;
         devices

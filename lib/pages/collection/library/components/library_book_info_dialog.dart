@@ -36,6 +36,17 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
     _tagsCtrl = TextEditingController(text: m.tags.join(', '));
   }
 
+  Future<void> _searchByTag(String tag) async {
+    final keyword = tag.trim();
+    if (keyword.isEmpty) return;
+
+    widget.viewModel.searchByContent.value = true;
+    widget.viewModel.searchQuery.value = keyword;
+    await widget.viewModel.searchInContent(keyword);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   @override
   void dispose() {
     _titleCtrl.dispose();
@@ -334,12 +345,45 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
       children: [
         // 进度
         _infoRow('阅读进度', '${(m.progress * 100).toStringAsFixed(1)}%'),
+        if (widget.viewModel.isRemoteNovel(m.id))
+          _infoRow('节点', widget.viewModel.getNovelNodeName(m.id) ?? '未知节点'),
         // 添加时间
         _infoRow('添加时间', _formatDate(m.addedAt.toInt())),
         // 上次阅读
         if (m.lastReadAt != null) _infoRow('上次阅读', _formatDate(m.lastReadAt!.toInt())),
-        // 标签
-        if (m.tags.isNotEmpty) ...[const SizedBox(height: 4), _infoRow('标签', m.tags.join('  ·  '))],
+        // 标签（可点击搜索）
+        if (m.tags.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 72,
+                  child: Text(
+                    '标签',
+                    style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: m.tags
+                        .map(
+                          (tag) => ActionChip(
+                            label: Text(tag, style: const TextStyle(fontSize: 12)),
+                            onPressed: () => _searchByTag(tag),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         // 文件路径
         _infoRow('文件路径', m.filePath),
         // 备注

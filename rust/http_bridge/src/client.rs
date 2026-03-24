@@ -28,7 +28,7 @@ impl HttpBridgeClient {
 
         // 这里需要使用HTTP客户端发送请求
         // 由于hyper的客户端实现比较复杂，这里先返回一个占位实现
-        
+
         // TODO: 实现实际的HTTP客户端调用
         Err(anyhow::anyhow!("HTTP client not yet implemented"))
     }

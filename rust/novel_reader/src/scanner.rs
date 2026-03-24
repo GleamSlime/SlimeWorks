@@ -1,10 +1,21 @@
 use anyhow::Result;
-use std::path::Path;
+use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
 use walkdir::WalkDir;
 
 use crate::parser::NovelParser;
 use crate::types::{NovelFormat, NovelMetadata, ScanProgress};
+
+fn is_hidden_path(path: &Path) -> bool {
+    path.components().any(|component| {
+        if let Component::Normal(name) = component {
+            if let Some(name) = name.to_str() {
+                return name.starts_with('.') || name.starts_with("._");
+            }
+        }
+        false
+    })
+}
 
 /// 目录扫描器
 pub struct DirectoryScanner {
@@ -57,6 +68,10 @@ impl DirectoryScanner {
 
             let path = entry.path();
             let file_type = entry.file_type();
+
+            if is_hidden_path(path) {
+                continue;
+            }
 
             // 支持 Windows 下的 .epub 文件夹（包含 mimetype 文件）
             let is_valid_epub_dir = file_type.is_dir()
@@ -163,6 +178,10 @@ impl DirectoryScanner {
             let path = entry.path();
             let file_type = entry.file_type();
 
+            if is_hidden_path(path) {
+                continue;
+            }
+
             // 支持 Windows 下的 .epub 文件夹（包含 mimetype 文件）
             let is_valid_epub_dir = file_type.is_dir()
                 && path.extension().and_then(|s| s.to_str()) == Some("epub")
@@ -188,6 +207,10 @@ impl DirectoryScanner {
 
         if !file_path.exists() {
             return Err(anyhow::anyhow!("File does not exist: {:?}", file_path));
+        }
+
+        if is_hidden_path(file_path) {
+            return Err(anyhow::anyhow!("Hidden file is ignored: {:?}", file_path));
         }
 
         // 支持 Windows 下的 .epub 文件夹（包含 mimetype 文件）

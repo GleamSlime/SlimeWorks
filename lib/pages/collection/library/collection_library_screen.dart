@@ -59,6 +59,7 @@ class _CollectionLibraryScreenState
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      viewModel.refreshRemoteNovels();
       _rebuildToolbar();
     });
   }
@@ -165,6 +166,11 @@ class _CollectionLibraryScreenState
               icon: const Icon(Icons.device_hub),
               size: AppTheme.metrics.kSpace40,
               onTap: () => context.go('/lan-transfer'),
+            ),
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.cloud_sync_outlined),
+              size: AppTheme.metrics.kSpace40,
+              onTap: () => viewModel.refreshRemoteNovels(),
             ),
             LibraryBookAppendButton(viewModel: viewModel),
           ],
@@ -532,12 +538,33 @@ class _CollectionLibraryScreenState
                         icon: const Icon(Icons.auto_awesome, size: 16),
                         label: const Text('应用到所有书籍'),
                         onPressed: () async {
-                          final nav = Navigator.of(dlgCtx, rootNavigator: true);
+                          final pendingKeyword = keywordCtrl.text.trim();
+                          if (pendingKeyword.isNotEmpty) {
+                            final pendingTag = tagCtrl.text.trim();
+                            await viewModel.addKeywordRule(
+                              pendingKeyword,
+                              pendingTag.isEmpty ? pendingKeyword : pendingTag,
+                            );
+                            keywordCtrl.clear();
+                            tagCtrl.clear();
+                          }
                           await viewModel.applyKeywordRulesToAll();
-                          nav.pop();
+                          if (!dlgCtx.mounted) return;
+                          Navigator.of(dlgCtx, rootNavigator: true).pop();
                         },
                       ),
               ),
+              Obx(() {
+                final total = viewModel.keywordApplyTotal.value;
+                if (total <= 0) {
+                  return const SizedBox.shrink();
+                }
+                final completed = viewModel.keywordApplyCompleted.value;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text('$completed/$total', style: Theme.of(context).textTheme.bodySmall),
+                );
+              }),
               FilledButton(
                 onPressed: () => Navigator.of(dlgCtx, rootNavigator: true).pop(),
                 child: const Text('关闭'),
@@ -687,11 +714,25 @@ class _CollectionLibraryScreenState
               final isSelecting = viewModel.isSelecting.value;
               final inFolder = viewModel.currentFolderId.value != null;
               final folderName = viewModel.currentFolderName;
+              final currentBookCount = viewModel.filteredItems.whereType<LibraryBookItem>().length;
 
               return Column(
                 children: [
                   if (inFolder)
                     FolderBreadcrumb(folderName: folderName, onBack: viewModel.exitFolder),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: appMetrics.kSpace12,
+                      vertical: appMetrics.kSpace8,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '当前书籍：$currentBookCount 本',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ),
                   Expanded(child: _buildGrid(isSelecting, inFolder)),
                   if (isSelecting) LibrarySelectionBar(viewModel: viewModel),
                 ],

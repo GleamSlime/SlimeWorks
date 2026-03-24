@@ -18,7 +18,7 @@ impl LanTransferManager {
     pub async fn new(port: u16) -> Result<Self> {
         let device_id = DiscoveryService::get_device_id();
         let device_name = DiscoveryService::get_device_name();
-        
+
         let discovery = DiscoveryService::new(port)?;
         let transfer = TransferService::new(port, device_id, device_name).await?;
 
@@ -135,17 +135,29 @@ impl LanTransferManager {
 
     /// 接受传输
     pub async fn accept_transfer(&self, transfer_id: String) -> Result<()> {
-        self.transfer.read().await.accept_transfer(transfer_id).await
+        self.transfer
+            .read()
+            .await
+            .accept_transfer(transfer_id)
+            .await
     }
 
     /// 拒绝传输
     pub async fn reject_transfer(&self, transfer_id: String) -> Result<()> {
-        self.transfer.read().await.reject_transfer(transfer_id).await
+        self.transfer
+            .read()
+            .await
+            .reject_transfer(transfer_id)
+            .await
     }
 
     /// 取消传输
     pub async fn cancel_transfer(&self, transfer_id: String) -> Result<()> {
-        self.transfer.read().await.cancel_transfer(transfer_id).await
+        self.transfer
+            .read()
+            .await
+            .cancel_transfer(transfer_id)
+            .await
     }
 
     /// 获取所有传输记录

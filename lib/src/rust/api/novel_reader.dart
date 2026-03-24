@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_metadata`, `convert_scan_batch_result`, `convert_search_batch_result`, `convert_search_match`, `convert_search_result`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_keyword_apply_batch_result`, `convert_keyword_rule_input`, `convert_metadata`, `convert_scan_batch_result`, `convert_search_batch_result`, `convert_search_match`, `convert_search_result`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 扫描文件夹获取书籍列表
 List<NovelMetadata> scanNovelsFolder({required String folderPath}) => RustLib
@@ -161,6 +161,17 @@ Future<List<ScanBatchResult>> scanNovelsFolderBatched({
   batchSize: batchSize,
 );
 
+/// 对所有书籍分批应用关键词规则（Rust 并发执行，返回进度）
+Future<KeywordApplyBatchResult> applyKeywordRulesToAllNovelsBatch({
+  required List<KeywordRuleInput> rules,
+  required BigInt start,
+  required BigInt batchSize,
+}) => RustLib.instance.api.crateApiNovelReaderApplyKeywordRulesToAllNovelsBatch(
+  rules: rules,
+  start: start,
+  batchSize: batchSize,
+);
+
 /// 更新书籍封面（压缩后保存，异步执行避免阻塞 UI）
 Future<void> updateNovelCover({
   required String novelId,
@@ -220,6 +231,55 @@ List<NovelMetadata> addNovelToFolder({
   filePaths: filePaths,
   folderId: folderId,
 );
+
+class KeywordApplyBatchResult {
+  final BigInt completed;
+  final BigInt total;
+  final BigInt updated;
+  final bool isFinished;
+
+  const KeywordApplyBatchResult({
+    required this.completed,
+    required this.total,
+    required this.updated,
+    required this.isFinished,
+  });
+
+  @override
+  int get hashCode =>
+      completed.hashCode ^
+      total.hashCode ^
+      updated.hashCode ^
+      isFinished.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KeywordApplyBatchResult &&
+          runtimeType == other.runtimeType &&
+          completed == other.completed &&
+          total == other.total &&
+          updated == other.updated &&
+          isFinished == other.isFinished;
+}
+
+class KeywordRuleInput {
+  final String keyword;
+  final String tag;
+
+  const KeywordRuleInput({required this.keyword, required this.tag});
+
+  @override
+  int get hashCode => keyword.hashCode ^ tag.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KeywordRuleInput &&
+          runtimeType == other.runtimeType &&
+          keyword == other.keyword &&
+          tag == other.tag;
+}
 
 class NovelChapter {
   final String id;

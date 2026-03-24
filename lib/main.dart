@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -27,18 +30,25 @@ Future<void> main() async {
   getItInit();
 
   // 初始化桌面窗口管理器
-  await DesktopScaffold.initManager();
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    await DesktopScaffold.initManager();
+  }
 
   // 运行应用
   runApp(const MyApp());
 
-  // 运行应用
+  unawaited(_postAppInit(desktopTest));
+}
+
+Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   await RustLib.init();
 
   initializeLogger();
 
   // 异步加载 Rust 模块
-  RustModules.initializeLazy();
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    RustModules.initializeLazy();
+  }
 
   // 配置 EasyLoading
   configLoading();

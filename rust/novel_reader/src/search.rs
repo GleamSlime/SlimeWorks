@@ -1,6 +1,6 @@
+use crate::types::SearchResult;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use crate::types::SearchResult;
 
 pub struct SearchEngine {
     index_path: PathBuf,
@@ -13,7 +13,11 @@ impl SearchEngine {
         Ok(Self { index_path })
     }
 
-    pub fn index_novel(&self, _metadata: &crate::types::NovelMetadata, _content: &crate::types::NovelContent) -> Result<()> {
+    pub fn index_novel(
+        &self,
+        _metadata: &crate::types::NovelMetadata,
+        _content: &crate::types::NovelContent,
+    ) -> Result<()> {
         Ok(())
     }
 

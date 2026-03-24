@@ -512,7 +512,10 @@ fn force_kill_port_process(port: u16) -> bool {
                 );
             }
             Err(e) => {
-                warn!("Failed to execute kill for pid {} on tcp:{}: {}", pid, port, e);
+                warn!(
+                    "Failed to execute kill for pid {} on tcp:{}: {}",
+                    pid, port, e
+                );
             }
         }
     }
@@ -552,10 +555,7 @@ fn force_kill_port_process(port: u16) -> bool {
 
     let mut killed_any = false;
     for pid in pids {
-        match Command::new("taskkill")
-            .args(["/F", "/PID", &pid])
-            .status()
-        {
+        match Command::new("taskkill").args(["/F", "/PID", &pid]).status() {
             Ok(status) if status.success() => {
                 killed_any = true;
                 info!("Killed process {} on tcp:{}", pid, port);

@@ -8,6 +8,8 @@ import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart' hide cancelSearch;
@@ -20,8 +22,11 @@ Loggers logger = Loggers(name: '书库');
 
 /// 书库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {
+  final NodeSettingsService nodeSettingsService = getIt<NodeSettingsService>();
+
   // 书库 数据
   final novels = <NovelMetadata>[].obs;
+  final remoteNovels = <NovelMetadata>[].obs;
   final isScanning = false.obs;
   final searchQuery = ''.obs;
   final searchByContent = false.obs;
@@ -61,6 +66,16 @@ class NovelLibraryViewModel extends BaseViewModel {
 
   // 关键词规则
   final keywordRules = <Map<String, String>>[].obs;
+  final keywordApplyCompleted = 0.obs;
+  final keywordApplyTotal = 0.obs;
+
+  // 章节数量缓存（novelId -> chapterCount）
+  final chapterCountMap = <String, int>{}.obs;
+
+  // 远程节点映射
+  final remoteNovelNodeId = <String, String>{}.obs;
+  final remoteNovelNodeName = <String, String>{}.obs;
+  final remoteNovelRawId = <String, String>{}.obs;
 
   // 排序相关
   final sortField = 'addedAt'.obs; // 'addedAt', 'title', 'fileSize'
@@ -105,6 +120,31 @@ class NovelLibraryViewModel extends BaseViewModel {
     return covers;
   }
 
+  /// 获取文件夹直属书籍数量（不包含子文件夹）
+  int getFolderNovelCount(String folderId) {
+    return novels.where((n) => n.folderId == folderId).length;
+  }
+
+  int? getNovelChapterCount(String novelId) {
+    return chapterCountMap[novelId];
+  }
+
+  bool isRemoteNovel(String novelId) {
+    return remoteNovelNodeId.containsKey(novelId);
+  }
+
+  String? getNovelNodeName(String novelId) {
+    return remoteNovelNodeName[novelId];
+  }
+
+  String? getRemoteNodeId(String novelId) {
+    return remoteNovelNodeId[novelId];
+  }
+
+  String? getRemoteRawNovelId(String novelId) {
+    return remoteNovelRawId[novelId];
+  }
+
   /// 当前展示的 items（文件夹 + 书籍）
   List<LibraryItem> get filteredItems {
     final fid = currentFolderId.value;
@@ -118,7 +158,8 @@ class NovelLibraryViewModel extends BaseViewModel {
         results = contentSearchResults.toList();
       } else {
         final lq = query.toLowerCase();
-        results = novels.where((n) => n.title.toLowerCase().contains(lq)).toList();
+        final merged = <NovelMetadata>[...novels, ...remoteNovels];
+        results = merged.where((n) => n.title.toLowerCase().contains(lq)).toList();
       }
       if (filterTags.isNotEmpty) {
         results = results.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
@@ -149,6 +190,7 @@ class NovelLibraryViewModel extends BaseViewModel {
       });
 
     var rootBooks = novels.where((n) => n.folderId == null).toList();
+    rootBooks.addAll(remoteNovels);
     if (filterTags.isNotEmpty) {
       rootBooks = rootBooks.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
     }
@@ -198,7 +240,7 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 所有书籍标签计数（tag -> count）
   Map<String, int> get allTagCounts {
     final tagCountMap = <String, int>{};
-    for (final n in novels) {
+    for (final n in [...novels, ...remoteNovels]) {
       for (final tag in n.tags) {
         tagCountMap[tag] = (tagCountMap[tag] ?? 0) + 1;
       }
@@ -261,7 +303,74 @@ class NovelLibraryViewModel extends BaseViewModel {
   @override
   Future<void> onInitAsync() async {
     await super.onInitAsync();
-    await Future.wait([loadData(), loadKeywordRules()]);
+    await nodeSettingsService.init();
+    await Future.wait([loadData(), loadKeywordRules(), loadChapterCounts()]);
+    await refreshRemoteNovels();
+  }
+
+  Future<void> refreshRemoteNovels() async {
+    final allRemote = <NovelMetadata>[];
+    final nodeIdMap = <String, String>{};
+    final nodeNameMap = <String, String>{};
+    final rawIdMap = <String, String>{};
+
+    for (final node in nodeSettingsService.enabledRemoteNodes) {
+      try {
+        final payloads = await nodeSettingsService.fetchNodeNovels(node);
+        for (final payload in payloads) {
+          final remoteId = (payload['id'] ?? '').toString();
+          if (remoteId.isEmpty) continue;
+
+          final syntheticId = 'remote:${node.id}:$remoteId';
+          final model = _buildRemoteNovelModel(payload, syntheticId);
+          allRemote.add(model);
+          nodeIdMap[syntheticId] = node.id;
+          nodeNameMap[syntheticId] = node.name;
+          rawIdMap[syntheticId] = remoteId;
+        }
+      } catch (e) {
+        logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
+      }
+    }
+
+    remoteNovels.assignAll(allRemote);
+    remoteNovelNodeId.assignAll(nodeIdMap);
+    remoteNovelNodeName.assignAll(nodeNameMap);
+    remoteNovelRawId.assignAll(rawIdMap);
+  }
+
+  NovelMetadata _buildRemoteNovelModel(Map<String, dynamic> payload, String syntheticId) {
+    final formatRaw = (payload['format'] ?? 'txt').toString().toLowerCase();
+    final format = formatRaw == 'epub' ? NovelFormat.epub : NovelFormat.txt;
+    final fileSize = BigInt.tryParse((payload['file_size'] ?? '0').toString()) ?? BigInt.zero;
+    final modifiedAt = int.tryParse((payload['modified_at'] ?? '0').toString()) ?? 0;
+    final addedAt = int.tryParse((payload['added_at'] ?? '0').toString()) ?? 0;
+    final lastReadAtRaw = payload['last_read_at'];
+    final lastReadAt =
+      lastReadAtRaw == null ? null : int.tryParse(lastReadAtRaw.toString());
+    final tags = (payload['tags'] as List<dynamic>? ?? <dynamic>[])
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+
+    return NovelMetadata(
+      id: syntheticId,
+      title: (payload['title'] ?? '未命名书籍').toString(),
+      author: payload['author']?.toString(),
+      filePath: (payload['file_path'] ?? '').toString(),
+      format: format,
+      fileSize: fileSize,
+      modifiedAt: modifiedAt,
+      addedAt: addedAt,
+      progress: (payload['progress'] is num) ? (payload['progress'] as num).toDouble() : 0,
+      lastReadAt: lastReadAt,
+      coverPath: payload['cover_path']?.toString(),
+      folderId: null,
+      customOrder: payload['custom_order'] is int ? payload['custom_order'] as int : null,
+      isFavorite: payload['is_favorite'] == true,
+      tags: tags,
+      notes: payload['notes']?.toString(),
+    );
   }
 
   void showSnack(

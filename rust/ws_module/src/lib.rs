@@ -21,4 +21,4 @@ pub use client::*;
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-pub use server::{WsServerHandle};
+pub use server::WsServerHandle;

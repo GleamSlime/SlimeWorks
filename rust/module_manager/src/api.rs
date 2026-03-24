@@ -1,7 +1,7 @@
 /// 模块管理系统 API
-/// 
+///
 /// 对外暴露的所有模块管理功能（纯 Rust，不依赖 FRB）
-use super::{ModuleManager, ModuleLoader, InstalledModule};
+use super::{InstalledModule, ModuleLoader, ModuleManager};
 use std::path::PathBuf;
 
 // ============================================================================
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 // ============================================================================
 
 /// 创建模块管理器
-/// 
+///
 /// # 参数
 /// - install_dir: 安装目录（会创建 dll/ 和 bin/ 子目录）
 /// - config_url: 模块配置 JSON 的 URL
@@ -18,7 +18,7 @@ pub fn create_module_manager(install_dir: String, config_url: String) -> ModuleM
 }
 
 /// 检查模块是否有更新
-/// 
+///
 /// 返回：Some(version) 表示有新版本，None 表示已是最新或锁定版本
 pub async fn module_check_update(
     manager: &ModuleManager,
@@ -28,14 +28,14 @@ pub async fn module_check_update(
 }
 
 /// 安装模块
-/// 
+///
 /// # 参数
 /// - manager: 模块管理器
 /// - module_name: 模块名（如 "capture_proxy", "ffmpeg"）
 /// - version: 指定版本（None 为最新版，如 "1.2.0+23"）
 /// - lock_version: 是否锁定版本（文件名会带 _lock 后缀）
 /// - auto_load: 是否自动加载（仅对动态库有效）
-/// 
+///
 /// 返回：安装后的文件路径
 pub async fn module_install(
     manager: &ModuleManager,
@@ -44,7 +44,9 @@ pub async fn module_install(
     lock_version: bool,
     auto_load: bool,
 ) -> Result<String, String> {
-    manager.install_module(&module_name, version, lock_version, auto_load).await
+    manager
+        .install_module(&module_name, version, lock_version, auto_load)
+        .await
 }
 
 /// 列出模块的已安装版本
@@ -56,12 +58,12 @@ pub fn module_list_versions(
 }
 
 /// 卸载模块
-/// 
+///
 /// # 参数
 /// - manager: 模块管理器
 /// - module_name: 模块名
 /// - version: 指定版本（None 表示卸载所有版本）
-/// 
+///
 /// 返回：卸载的文件数量
 pub fn module_uninstall(
     manager: &ModuleManager,
@@ -79,7 +81,9 @@ pub async fn module_reinstall(
     lock_version: bool,
     auto_load: bool,
 ) -> Result<String, String> {
-    manager.reinstall_module(&module_name, version, lock_version, auto_load).await
+    manager
+        .reinstall_module(&module_name, version, lock_version, auto_load)
+        .await
 }
 
 /// 列出所有已安装的模块
@@ -97,7 +101,7 @@ pub fn create_module_loader(install_dir: String) -> ModuleLoader {
 }
 
 /// 加载动态库模块
-/// 
+///
 /// # 参数
 /// - loader: 模块加载器
 /// - module_name: 模块名

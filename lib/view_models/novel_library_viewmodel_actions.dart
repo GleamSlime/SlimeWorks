@@ -10,33 +10,40 @@ extension NovelLibraryActions on NovelLibraryViewModel {
   Future<void> deleteSelected() async {
     final ids = selectedIds.toList();
     final folderIds = ids.where((id) => folders.any((f) => f.id == id)).toList();
-    final novelIds = ids.where((id) => novels.any((n) => n.id == id)).toList();
+    final novelIds = ids.where((id) => novels.any((n) => n.id == id) || isRemoteNovel(id)).toList();
 
     for (final fid in folderIds) {
       rust_api.deleteFolder(folderId: fid);
     }
     for (final nid in novelIds) {
-      removeNovel(novelId: nid);
+      await deleteNovel(nid);
     }
 
     exitSelection();
     await loadData();
+    await refreshRemoteNovels();
     showSnack('成功', '已删除 ${ids.length} 个项目');
   }
 
   /// 批量收藏/取消收藏已选中的书籍
   Future<void> favoriteSelected() async {
-    final novelIds = selectedIds.where((id) => novels.any((n) => n.id == id)).toList();
+    final novelIds = selectedIds
+        .where((id) => novels.any((n) => n.id == id) || isRemoteNovel(id))
+        .toList();
     if (novelIds.isEmpty) return;
     try {
-      final allFavorited = novelIds.every(
-        (id) => novels.firstWhereOrNull((n) => n.id == id)?.isFavorite ?? false,
-      );
+      final allFavorited = novelIds.every((id) {
+        final local = novels.firstWhereOrNull((n) => n.id == id);
+        if (local != null) return local.isFavorite;
+        final remote = remoteNovels.firstWhereOrNull((n) => n.id == id);
+        return remote?.isFavorite ?? false;
+      });
       for (final id in novelIds) {
-        rust_api.setNovelFavorite(novelId: id, isFavorite: !allFavorited);
+        await toggleFavorite(id);
       }
       exitSelection();
       await loadNovels();
+      await refreshRemoteNovels();
       showSnack('成功', allFavorited ? '已取消收藏' : '已添加到收藏');
     } catch (e) {
       showSnack('错误', '收藏操作失败: $e');
@@ -276,6 +283,25 @@ extension NovelLibraryActions on NovelLibraryViewModel {
 
         contentSearchResults.value = allResults.toList();
       }
+
+      for (final node in nodeSettingsService.enabledRemoteNodes) {
+        try {
+          final results = await nodeSettingsService.searchNodeNovels(node, keyword);
+          for (final payload in results) {
+            final rawId = (payload['id'] ?? '').toString();
+            if (rawId.isEmpty) continue;
+            final syntheticId = 'remote:${node.id}:$rawId';
+            final existed = allResults.any((n) => n.id == syntheticId);
+            if (existed) continue;
+            allResults.add(_buildRemoteNovelModel(payload, syntheticId));
+            remoteNovelNodeId[syntheticId] = node.id;
+            remoteNovelNodeName[syntheticId] = node.name;
+            remoteNovelRawId[syntheticId] = rawId;
+          }
+        } catch (_) {}
+      }
+
+      contentSearchResults.value = allResults.toList();
 
       if (!searchCancelled) {
         if (allResults.isEmpty) {

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
+import 'package:slime_works/pages/collection/library/components/remote_novel_reader_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
@@ -33,6 +34,10 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   void _onTap() {
     if (widget.isSelecting) {
       widget.viewModel.toggleSelection(widget.metadata.id);
+      return;
+    }
+    if (widget.viewModel.isRemoteNovel(widget.metadata.id)) {
+      _showRemoteReaderDialog(context);
       return;
     }
     NovelReaderRoute($extra: widget.metadata).go(context);
@@ -285,6 +290,23 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     );
   }
 
+  void _showRemoteReaderDialog(BuildContext ctx) {
+    final nodeId = widget.viewModel.getRemoteNodeId(widget.metadata.id);
+    final nodeName = widget.viewModel.getNovelNodeName(widget.metadata.id);
+    if (nodeId == null || nodeName == null) {
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => RemoteNovelReaderDialog(
+        metadata: widget.metadata,
+        nodeId: nodeId,
+        nodeName: nodeName,
+      ),
+    );
+  }
+
   // ── UI ───────────────────────────────────────────────────────────────────
 
   @override
@@ -449,45 +471,48 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                         clipBehavior: Clip.none,
                         children: [
                           // 标签展示（进度条上方，前5个）
-                          if (widget.metadata.tags.isNotEmpty)
-                            Positioned(
-                              top: 0,
-                              left: scaleW(8),
-                              right: scaleW(8),
-                              child: Wrap(
-                                alignment: WrapAlignment.end,
-                                spacing: scaleW(4),
-                                runSpacing: scaleW(4),
-                                children: widget.metadata.tags.take(5).map((tag) {
-                                  return ClipRRect(
-                                    borderRadius: appMetrics.radius12,
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
-                                      child: Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: scaleW(6),
-                                          vertical: scaleW(2),
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _hovering
-                                              ? Colors.black.withAlpha(120)
-                                              : Colors.black.withAlpha(89),
-                                          borderRadius: appMetrics.radius12,
-                                        ),
-                                        child: Text(
-                                          tag,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: appMetrics.fontSize10,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
+                          Positioned(
+                            top: 0,
+                            left: scaleW(8),
+                            right: scaleW(8),
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: ClipRRect(
+                                borderRadius: appMetrics.radius12,
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: scaleW(6),
+                                      vertical: scaleW(2),
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _hovering
+                                          ? Colors.black.withAlpha(120)
+                                          : Colors.black.withAlpha(89),
+                                      borderRadius: appMetrics.radius12,
+                                    ),
+                                    child: Text(
+                                      () {
+                                        final chapterCount = widget.viewModel.getNovelChapterCount(
+                                          widget.metadata.id,
+                                        );
+                                        if (chapterCount == null) {
+                                          return '章节 --';
+                                        }
+                                        return '章节 $chapterCount';
+                                      }(),
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: appMetrics.fontSize10,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                  );
-                                }).toList(),
+                                  ),
+                                ),
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -571,6 +596,18 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
+                                      if (widget.viewModel.isRemoteNovel(widget.metadata.id)) ...[
+                                        SizedBox(height: scaleW(4)),
+                                        Text(
+                                          '节点: ${widget.viewModel.getNovelNodeName(widget.metadata.id) ?? '未知'}',
+                                          style: TextStyle(
+                                            fontSize: appMetrics.fontSize10,
+                                            color: Colors.lightBlueAccent,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

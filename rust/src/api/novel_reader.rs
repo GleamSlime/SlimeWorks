@@ -351,6 +351,38 @@ pub struct ScanBatchResult {
     pub is_finished: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct KeywordRuleInput {
+    pub keyword: String,
+    pub tag: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct KeywordApplyBatchResult {
+    pub completed: usize,
+    pub total: usize,
+    pub updated: usize,
+    pub is_finished: bool,
+}
+
+fn convert_keyword_rule_input(rule: KeywordRuleInput) -> novel_reader::api::KeywordRuleInput {
+    novel_reader::api::KeywordRuleInput {
+        keyword: rule.keyword,
+        tag: rule.tag,
+    }
+}
+
+fn convert_keyword_apply_batch_result(
+    result: novel_reader::api::KeywordApplyBatchResult,
+) -> KeywordApplyBatchResult {
+    KeywordApplyBatchResult {
+        completed: result.completed,
+        total: result.total,
+        updated: result.updated,
+        is_finished: result.is_finished,
+    }
+}
+
 fn convert_scan_batch_result(result: novel_reader::api::ScanBatchResult) -> ScanBatchResult {
     ScanBatchResult {
         novels: result.novels.into_iter().map(convert_metadata).collect(),
@@ -368,6 +400,21 @@ pub fn scan_novels_folder_batched(
     let results = novel_reader::scan_novels_folder_batched(folder_path, batch_size)
         .map_err(|e| anyhow::anyhow!(e))?;
     Ok(results.into_iter().map(convert_scan_batch_result).collect())
+}
+
+/// 对所有书籍分批应用关键词规则（Rust 并发执行，返回进度）
+pub fn apply_keyword_rules_to_all_novels_batch(
+    rules: Vec<KeywordRuleInput>,
+    start: usize,
+    batch_size: usize,
+) -> anyhow::Result<KeywordApplyBatchResult> {
+    let result = novel_reader::apply_keyword_rules_to_all_novels_batch(
+        rules.into_iter().map(convert_keyword_rule_input).collect(),
+        start,
+        batch_size,
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(convert_keyword_apply_batch_result(result))
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // 扩展书籍元数据操作

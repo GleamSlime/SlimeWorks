@@ -15,6 +15,7 @@ import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
 import 'api/simple.dart';
+import 'api/system_metrics.dart';
 import 'api/websocket.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -238,6 +239,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InstalledModule dco_decode_installed_module(dynamic raw);
 
   @protected
+  KeywordApplyBatchResult dco_decode_keyword_apply_batch_result(dynamic raw);
+
+  @protected
+  KeywordRuleInput dco_decode_keyword_rule_input(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -245,6 +252,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<InstalledModule> dco_decode_list_installed_module(dynamic raw);
+
+  @protected
+  List<KeywordRuleInput> dco_decode_list_keyword_rule_input(dynamic raw);
 
   @protected
   List<NovelChapter> dco_decode_list_novel_chapter(dynamic raw);
@@ -329,6 +339,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchMatch dco_decode_search_match(dynamic raw);
+
+  @protected
+  SystemResourceSnapshot dco_decode_system_resource_snapshot(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -540,6 +553,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InstalledModule sse_decode_installed_module(SseDeserializer deserializer);
 
   @protected
+  KeywordApplyBatchResult sse_decode_keyword_apply_batch_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  KeywordRuleInput sse_decode_keyword_rule_input(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -549,6 +570,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<InstalledModule> sse_decode_list_installed_module(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<KeywordRuleInput> sse_decode_list_keyword_rule_input(
     SseDeserializer deserializer,
   );
 
@@ -655,6 +681,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchMatch sse_decode_search_match(SseDeserializer deserializer);
+
+  @protected
+  SystemResourceSnapshot sse_decode_system_resource_snapshot(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -901,6 +932,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_keyword_apply_batch_result(
+    KeywordApplyBatchResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_keyword_rule_input(
+    KeywordRuleInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
@@ -912,6 +955,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_installed_module(
     List<InstalledModule> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_keyword_rule_input(
+    List<KeywordRuleInput> self,
     SseSerializer serializer,
   );
 
@@ -1044,6 +1093,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_search_match(SearchMatch self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_system_resource_snapshot(
+    SystemResourceSnapshot self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_u_16(int self, SseSerializer serializer);

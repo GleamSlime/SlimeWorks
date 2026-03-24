@@ -6,6 +6,7 @@ pub use api_search::*;
 
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -646,6 +647,153 @@ pub struct ScanBatchResult {
     pub completed: usize,
     pub total: usize,
     pub is_finished: bool,
+}
+
+/// 关键词规则（Dart 传入）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeywordRuleInput {
+    pub keyword: String,
+    pub tag: String,
+}
+
+/// 关键词批处理进度
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeywordApplyBatchResult {
+    pub completed: usize,
+    pub total: usize,
+    pub updated: usize,
+    pub is_finished: bool,
+}
+
+fn content_contains_keyword(content: &crate::types::NovelContent, keyword_lower: &str) -> bool {
+    if keyword_lower.is_empty() {
+        return false;
+    }
+
+    for chapter in &content.chapters {
+        if let Some(text) = &chapter.content {
+            if text.to_lowercase().contains(keyword_lower) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// 对所有书籍分批应用关键词规则。
+/// - start: 当前批次起始下标
+/// - batch_size: 批大小
+/// 返回当前批次结束后的整体进度，用于 Dart 侧显示 `x/y`。
+pub fn apply_keyword_rules_to_all_novels_batch(
+    rules: Vec<KeywordRuleInput>,
+    start: usize,
+    batch_size: usize,
+) -> Result<KeywordApplyBatchResult, String> {
+    if batch_size == 0 {
+        return Err("batch_size must be > 0".to_string());
+    }
+
+    let cleaned_rules: Vec<(String, String)> = rules
+        .into_iter()
+        .filter_map(|r| {
+            let keyword = r.keyword.trim().to_string();
+            let tag = if r.tag.trim().is_empty() {
+                keyword.clone()
+            } else {
+                r.tag.trim().to_string()
+            };
+
+            if keyword.is_empty() || tag.is_empty() {
+                None
+            } else {
+                Some((keyword.to_lowercase(), tag))
+            }
+        })
+        .collect();
+
+    if cleaned_rules.is_empty() {
+        return Ok(KeywordApplyBatchResult {
+            completed: 0,
+            total: 0,
+            updated: 0,
+            is_finished: true,
+        });
+    }
+
+    let snapshot = {
+        let library = get_library().lock().map_err(|e| e.to_string())?;
+        library.clone()
+    };
+
+    let total = snapshot.len();
+    if total == 0 {
+        return Ok(KeywordApplyBatchResult {
+            completed: 0,
+            total: 0,
+            updated: 0,
+            is_finished: true,
+        });
+    }
+
+    let begin = start.min(total);
+    let end = (begin + batch_size).min(total);
+    if begin >= end {
+        return Ok(KeywordApplyBatchResult {
+            completed: total,
+            total,
+            updated: 0,
+            is_finished: true,
+        });
+    }
+
+    let updates: Vec<(String, Vec<String>)> = snapshot[begin..end]
+        .par_iter()
+        .filter_map(|novel| {
+            let content = match get_novel_content(novel.file_path.clone()) {
+                Ok(c) => c,
+                Err(_) => return None,
+            };
+
+            let mut tag_set: std::collections::HashSet<String> =
+                novel.tags.iter().cloned().collect();
+            let before_len = tag_set.len();
+
+            for (keyword_lower, tag) in &cleaned_rules {
+                if content_contains_keyword(&content, keyword_lower) {
+                    tag_set.insert(tag.clone());
+                }
+            }
+
+            if tag_set.len() <= before_len {
+                return None;
+            }
+
+            let mut tags: Vec<String> = tag_set.into_iter().collect();
+            tags.sort();
+            Some((novel.id.clone(), tags))
+        })
+        .collect();
+
+    let updated = updates.len();
+    if updated > 0 {
+        let mut library = get_library().lock().map_err(|e| e.to_string())?;
+        for (novel_id, tags) in updates {
+            if let Some(novel) = library.iter_mut().find(|n| n.id == novel_id) {
+                novel.tags = tags;
+                if let Ok(json) = serde_json::to_string(novel) {
+                    let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
+                }
+            }
+        }
+    }
+
+    let completed = end;
+    Ok(KeywordApplyBatchResult {
+        completed,
+        total,
+        updated,
+        is_finished: completed >= total,
+    })
 }
 
 /// 批量扫描文件夹（分批返回结果，rayon 并行解析 + 自动打标签，避免 3k+ 文件时串行过慢）

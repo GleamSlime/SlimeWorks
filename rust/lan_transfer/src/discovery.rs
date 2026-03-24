@@ -210,7 +210,10 @@ impl DiscoveryService {
                         if is_new {
                             info!(
                                 "New device discovered: {} ({}) ip={} port={}",
-                                device.device_name, device.device_id, device.ip_address, device.port
+                                device.device_name,
+                                device.device_id,
+                                device.ip_address,
+                                device.port
                             );
 
                             // 发送事件
@@ -308,7 +311,8 @@ impl DiscoveryService {
 
             let payload = probe.clone();
             let port = self.service_port;
-            join_set.spawn(async move { probe_device_by_heartbeat(target_ip, port, payload).await });
+            join_set
+                .spawn(async move { probe_device_by_heartbeat(target_ip, port, payload).await });
         }
 
         let mut found = 0usize;
@@ -416,9 +420,12 @@ async fn probe_device_by_heartbeat(
     let bytes = serde_json::to_vec(&message).ok()?;
     let len = bytes.len() as u32;
 
-    if timeout(Duration::from_millis(120), stream.write_all(&len.to_be_bytes()))
-        .await
-        .is_err()
+    if timeout(
+        Duration::from_millis(120),
+        stream.write_all(&len.to_be_bytes()),
+    )
+    .await
+    .is_err()
     {
         return None;
     }

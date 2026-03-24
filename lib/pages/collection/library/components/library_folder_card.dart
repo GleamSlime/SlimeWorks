@@ -208,6 +208,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final folderBookCount = widget.viewModel.getFolderNovelCount(widget.folder.id);
 
     return GestureDetector(
       onTap: widget.isSelecting || _isEditing ? null : widget.onTap,
@@ -387,6 +388,16 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                               ),
                             ),
                     ),
+                    if (!_isEditing && !widget.isBookHover) ...[
+                      SizedBox(height: appMetrics.kSpace4),
+                      Text(
+                        '$folderBookCount 本',
+                        style: TextStyle(
+                          fontSize: appMetrics.fontSize10,
+                          color: Colors.white.withAlpha(220),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

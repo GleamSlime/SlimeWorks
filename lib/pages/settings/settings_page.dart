@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
@@ -10,6 +11,7 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = [
       _SettingsTab(label: '主体设置', content: const ThemeSettingsTab()),
+      _SettingsTab(label: '节点设置', content: const NodeSettingsTab()),
       _SettingsTab(label: 'Ollama 设置', content: const OllamaSettingsTab()),
       _SettingsTab(
         label: '账户设置',

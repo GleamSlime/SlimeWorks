@@ -6,8 +6,7 @@ use flutter_rust_bridge::frb;
 
 // 重新导出类型（FRB 需要）
 pub use lan_transfer::{
-    DeviceInfo, EventType, TransferEvent, TransferItem, TransferStatus, TransferType,
-    TrustedDevice,
+    DeviceInfo, EventType, TransferEvent, TransferItem, TransferStatus, TransferType, TrustedDevice,
 };
 
 /// 初始化局域网传输服务

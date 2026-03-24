@@ -2,6 +2,151 @@ part of 'novel_library_viewmodel.dart';
 
 /// 文件夹导航 / CRUD 以及书籍 CRUD / 元数据操作
 extension NovelLibraryNovelOps on NovelLibraryViewModel {
+  bool _isHiddenNovelPath(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final segments = normalized.split('/');
+    for (final segment in segments) {
+      if (segment.isEmpty) continue;
+      if (segment.startsWith('.') || segment.startsWith('._')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _normalizePath(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    return normalized.replaceAll(RegExp('/+'), '/');
+  }
+
+  String? _extractLeafFolderName({required String scanRoot, required String filePath}) {
+    final root = _normalizePath(scanRoot).replaceAll(RegExp(r'/+$'), '');
+    final normalizedPath = _normalizePath(filePath);
+    final rootPrefix = '$root/';
+
+    if (!normalizedPath.startsWith(rootPrefix)) {
+      return null;
+    }
+
+    final relativePath = normalizedPath.substring(rootPrefix.length);
+    final segments = relativePath.split('/');
+    if (segments.length < 2) {
+      return null;
+    }
+
+    final leaf = segments[segments.length - 2].trim();
+    if (leaf.isEmpty || leaf == '.' || leaf.startsWith('.') || leaf.startsWith('._')) {
+      return null;
+    }
+
+    return leaf;
+  }
+
+  Future<String> _ensureChildFolderForScan({
+    required String parentId,
+    required String folderName,
+    required Map<String, String> cache,
+  }) async {
+    final cached = cache[folderName];
+    if (cached != null) {
+      return cached;
+    }
+
+    final existed = folders.firstWhereOrNull((f) => f.parentId == parentId && f.name == folderName);
+    if (existed != null) {
+      cache[folderName] = existed.id;
+      return existed.id;
+    }
+
+    try {
+      final created = rust_api.createChildFolder(name: folderName, parentId: parentId);
+      cache[folderName] = created.id;
+      if (!folders.any((f) => f.id == created.id)) {
+        folders.add(created);
+      }
+      return created.id;
+    } catch (_) {
+      await loadFolders();
+      final fallback = folders.firstWhereOrNull(
+        (f) => f.parentId == parentId && f.name == folderName,
+      );
+      if (fallback != null) {
+        cache[folderName] = fallback.id;
+        return fallback.id;
+      }
+      rethrow;
+    }
+  }
+
+  String get _chapterCountFilePath {
+    final appData = Platform.environment['APPDATA'] ?? Platform.environment['HOME'];
+    final base = appData != null
+        ? '$appData${Platform.pathSeparator}slimeworks'
+        : Directory.systemTemp.path;
+    return '$base${Platform.pathSeparator}chapter_counts.json';
+  }
+
+  Future<void> loadChapterCounts() async {
+    try {
+      final file = File(_chapterCountFilePath);
+      if (!file.existsSync()) return;
+      final raw = await file.readAsString();
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+
+      final loaded = <String, int>{};
+      decoded.forEach((key, value) {
+        if (value is int) {
+          loaded[key] = value;
+        } else if (value is num) {
+          loaded[key] = value.toInt();
+        }
+      });
+      chapterCountMap.assignAll(loaded);
+    } catch (e) {
+      if (kDebugMode) {
+        print('[ChapterCount] load failed: $e');
+      }
+    }
+  }
+
+  Future<void> saveChapterCounts() async {
+    try {
+      final file = File(_chapterCountFilePath);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonEncode(chapterCountMap), encoding: const Utf8Codec());
+    } catch (e) {
+      if (kDebugMode) {
+        print('[ChapterCount] save failed: $e');
+      }
+    }
+  }
+
+  Future<void> _computeChapterCountsForPaths(List<String> filePaths) async {
+    if (filePaths.isEmpty) return;
+
+    bool changed = false;
+    for (final path in filePaths) {
+      final novel = novels.firstWhereOrNull(
+        (n) => n.filePath == path || n.filePath.replaceAll('\\', '/') == path.replaceAll('\\', '/'),
+      );
+      if (novel == null) continue;
+      if (chapterCountMap.containsKey(novel.id)) continue;
+
+      try {
+        final content = await rust_api.getNovelContent(filePath: novel.filePath);
+        chapterCountMap[novel.id] = content.chapters.length;
+        changed = true;
+      } catch (e) {
+        logger.log('[ChapterCount] compute failed for ${novel.id}: $e');
+      }
+    }
+
+    if (changed) {
+      await saveChapterCounts();
+    }
+  }
+
   // ─────────────────────────────────────────
   // 文件夹导航
   // ─────────────────────────────────────────
@@ -90,26 +235,56 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       if (result == null) return;
 
       isScanning.value = true;
+      final scanRoot = result;
       final fid = currentFolderId.value;
+      final childFolderIdCache = <String, String>{};
+      if (fid != null) {
+        for (final folder in folders.where((f) => f.parentId == fid)) {
+          childFolderIdCache[folder.name] = folder.id;
+        }
+      }
 
       final batches = await scanNovelsFolderBatched(
-        folderPath: result,
+        folderPath: scanRoot,
         batchSize: BigInt.from(100),
       );
 
       int totalFound = 0;
       final allScannedPaths = <String>[];
       for (final batch in batches) {
-        totalFound += batch.novels.length;
-        allScannedPaths.addAll(batch.novels.map((n) => n.filePath));
+        final visibleNovels = <NovelMetadata>[];
+        for (final novel in batch.novels) {
+          if (_isHiddenNovelPath(novel.filePath)) {
+            rust_api.removeNovel(novelId: novel.id);
+            continue;
+          }
+          visibleNovels.add(novel);
+        }
+
+        totalFound += visibleNovels.length;
+        allScannedPaths.addAll(visibleNovels.map((n) => n.filePath));
         await loadNovels();
-        // 如果在文件夹内，批量将新添加的书籍归入当前文件夹
+
+        // 如果在文件夹内，按扫描路径自动创建子文件夹并归类书籍
         if (fid != null) {
-          for (final novel in batch.novels) {
-            rust_api.moveNovelToFolder(novelId: novel.id, folderId: fid);
+          for (final novel in visibleNovels) {
+            final leafFolder = _extractLeafFolderName(scanRoot: scanRoot, filePath: novel.filePath);
+            String targetFolderId = fid;
+
+            if (leafFolder != null) {
+              targetFolderId = await _ensureChildFolderForScan(
+                parentId: fid,
+                folderName: leafFolder,
+                cache: childFolderIdCache,
+              );
+            }
+
+            rust_api.moveNovelToFolder(novelId: novel.id, folderId: targetFolderId);
           }
           await loadNovels();
+          await loadFolders();
         }
+
         if (!batch.isFinished) {
           showSnack(
             '扫描中',
@@ -120,6 +295,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       }
 
       await loadNovels();
+      await _computeChapterCountsForPaths(allScannedPaths);
       // 对本次扫描中的新书籍应用 Dart 端关键词规则
       await _autoTagByPaths(allScannedPaths);
       showSnack('成功', '扫描完成，共找到 $totalFound 本新书籍');
@@ -147,6 +323,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         addNovel(filePaths: paths);
       }
       await loadNovels();
+      await _computeChapterCountsForPaths(paths);
       await _autoTagByPaths(paths);
       showSnack('成功', '已添加 ${result.files.length} 本书籍');
     } catch (e) {
@@ -157,8 +334,22 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 删除书籍
   Future<void> deleteNovel(String novelId) async {
     try {
+      if (isRemoteNovel(novelId)) {
+        final nodeId = getRemoteNodeId(novelId);
+        final rawId = getRemoteRawNovelId(novelId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.deleteNodeNovel(nodeId: nodeId, novelId: rawId);
+        await refreshRemoteNovels();
+        showSnack('成功', '已删除远程书籍');
+        return;
+      }
+
       removeNovel(novelId: novelId);
       novels.removeWhere((n) => n.id == novelId);
+      chapterCountMap.remove(novelId);
+      await saveChapterCounts();
       showSnack('成功', '已删除书籍');
     } catch (e) {
       showSnack('错误', '删除失败: $e');
@@ -172,6 +363,8 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       clearAllNovels();
       await Future.delayed(const Duration(milliseconds: 100));
       await loadData();
+      chapterCountMap.clear();
+      await saveChapterCounts();
       showSnack('成功', '已清空所有书籍');
     } catch (e) {
       showSnack('错误', '清空失败: $e');
@@ -183,6 +376,29 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 将书籍移动到指定文件夹（folderId 为 null 时移回根目录）
   Future<void> moveNovelToFolder(String novelId, String? folderId) async {
     try {
+      if (isRemoteNovel(novelId)) {
+        final nodeId = getRemoteNodeId(novelId);
+        final rawId = getRemoteRawNovelId(novelId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        final node = nodeSettingsService.getNodeById(nodeId);
+        if (node == null || !node.supportsMove) {
+          showSnack('提示', '该节点未开启远程移动能力');
+          return;
+        }
+        if (folderId != null) {
+          showSnack('提示', '远程书籍当前仅支持移动到根目录');
+          return;
+        }
+        await nodeSettingsService.moveNodeNovelToFolder(
+          nodeId: nodeId,
+          novelId: rawId,
+          folderId: folderId,
+        );
+        await refreshRemoteNovels();
+        return;
+      }
       rust_api.moveNovelToFolder(novelId: novelId, folderId: folderId);
       await loadNovels();
     } catch (e) {
@@ -194,6 +410,21 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   Future<void> renameNovel(String novelId, String title) async {
     if (title.isEmpty) return;
     try {
+      if (isRemoteNovel(novelId)) {
+        final nodeId = getRemoteNodeId(novelId);
+        final rawId = getRemoteRawNovelId(novelId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.updateNodeNovelInfo(
+          nodeId: nodeId,
+          novelId: rawId,
+          title: title,
+        );
+        await refreshRemoteNovels();
+        return;
+      }
+
       rust_api.renameNovel(novelId: novelId, title: title);
       await loadNovels();
     } catch (e) {
@@ -204,6 +435,22 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 切换书籍收藏状态
   Future<void> toggleFavorite(String novelId) async {
     try {
+      if (isRemoteNovel(novelId)) {
+        final nodeId = getRemoteNodeId(novelId);
+        final rawId = getRemoteRawNovelId(novelId);
+        final novel = remoteNovels.firstWhereOrNull((n) => n.id == novelId);
+        if (nodeId == null || rawId == null || novel == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.setNodeNovelFavorite(
+          nodeId: nodeId,
+          novelId: rawId,
+          isFavorite: !novel.isFavorite,
+        );
+        await refreshRemoteNovels();
+        return;
+      }
+
       final novel = novels.firstWhereOrNull((n) => n.id == novelId);
       if (novel == null) return;
       rust_api.setNovelFavorite(novelId: novelId, isFavorite: !novel.isFavorite);
@@ -220,6 +467,26 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 更新书籍封面（会压缩图片，异步执行避免 UI 阻塞）
   Future<void> updateNovelCover(String novelId, String imagePath) async {
     try {
+      if (isRemoteNovel(novelId)) {
+        final nodeId = getRemoteNodeId(novelId);
+        final rawId = getRemoteRawNovelId(novelId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        final node = nodeSettingsService.getNodeById(nodeId);
+        if (node == null || !node.supportsCoverUpdate) {
+          showSnack('提示', '该节点未开启远程封面能力');
+          return;
+        }
+        await nodeSettingsService.updateNodeNovelCover(
+          nodeId: nodeId,
+          novelId: rawId,
+          imagePath: imagePath,
+        );
+        await refreshRemoteNovels();
+        return;
+      }
+
       // 主动清除旧封面缓存，避免 Flutter 返回旧图
       final oldCover = novels.firstWhereOrNull((n) => n.id == novelId)?.coverPath;
       if (oldCover != null) {
@@ -245,6 +512,24 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
     List<String>? tags,
   }) async {
     try {
+      if (isRemoteNovel(novelId)) {
+        final nodeId = getRemoteNodeId(novelId);
+        final rawId = getRemoteRawNovelId(novelId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.updateNodeNovelInfo(
+          nodeId: nodeId,
+          novelId: rawId,
+          title: title,
+          author: author,
+          notes: notes,
+          tags: tags,
+        );
+        await refreshRemoteNovels();
+        return;
+      }
+
       rust_api.updateNovelInfo(
         novelId: novelId,
         title: title,
@@ -277,6 +562,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         addNovel(filePaths: supported);
       }
       await loadNovels();
+      await _computeChapterCountsForPaths(supported);
       await _autoTagByPaths(supported);
       showSnack('导入成功', '已导入 ${supported.length} 本书籍');
     } catch (e) {
@@ -383,22 +669,66 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
 
   /// 对当前库中所有书籍批量应用关键词规则（冘倒挂载）
   Future<void> applyKeywordRulesToAll() async {
+    await loadKeywordRules();
     if (keywordRules.isEmpty) {
       showSnack('提示', '请先添加关键词规则');
       return;
     }
     try {
       isScanning.value = true;
-      int processed = 0;
-      for (final novel in novels.toList()) {
-        await applyKeywordRulesToNovel(novel.id, novel.filePath);
-        processed++;
+      keywordApplyCompleted.value = 0;
+      keywordApplyTotal.value = novels.length;
+
+      final rules = keywordRules
+          .map(
+            (rule) => rust_api.KeywordRuleInput(
+              keyword: (rule['keyword'] ?? '').trim(),
+              tag:
+                  ((rule['tag'] ?? '').trim().isEmpty ? (rule['keyword'] ?? '') : rule['tag'] ?? '')
+                      .trim(),
+            ),
+          )
+          .where((r) => r.keyword.isNotEmpty && r.tag.isNotEmpty)
+          .toList();
+
+      if (rules.isEmpty) {
+        showSnack('提示', '规则为空，请先添加有效关键词规则');
+        return;
       }
+
+      BigInt start = BigInt.zero;
+      BigInt total = BigInt.zero;
+      int updated = 0;
+
+      final BigInt batchSize = BigInt.from(24);
+      while (true) {
+        final batch = await rust_api.applyKeywordRulesToAllNovelsBatch(
+          rules: rules,
+          start: start,
+          batchSize: batchSize,
+        );
+        total = batch.total;
+        updated += batch.updated.toInt();
+        keywordApplyTotal.value = total.toInt();
+        keywordApplyCompleted.value = batch.completed.toInt();
+
+        if (batch.isFinished || batch.completed >= total) {
+          break;
+        }
+
+        start = batch.completed;
+      }
+
       await loadNovels();
-      showSnack('完成', '已对 $processed 本书籍应用关键词规则');
+      showSnack(
+        '完成',
+        '已处理 ${keywordApplyCompleted.value}/${keywordApplyTotal.value} 本书籍，更新 $updated 本',
+      );
     } catch (e) {
       showSnack('错误', '批量打标失败: $e');
     } finally {
+      keywordApplyCompleted.value = 0;
+      keywordApplyTotal.value = 0;
       isScanning.value = false;
     }
   }
