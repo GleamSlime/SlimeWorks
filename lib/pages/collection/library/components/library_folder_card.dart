@@ -40,6 +40,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
   late TextEditingController _editController;
   late FocusNode _editFocusNode;
 
+  bool get _isRemoteVirtualFolder => widget.folder.id.startsWith('remote-folder:');
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +65,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
   }
 
   void _startEditing() {
-    if (widget.isSelecting) return;
+    if (widget.isSelecting || _isRemoteVirtualFolder) return;
     setState(() {
       _isEditing = true;
       _editController.text = widget.folder.name;
@@ -88,6 +90,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
 
   /// 在鼠标位置弹出菜单
   void _showContextMenu(BuildContext ctx, Offset globalPos) {
+    if (_isRemoteVirtualFolder) {
+      return;
+    }
     // 先尝试关闭可能存在的菜单，再打开新的菜单（避免多个菜单同时存在）
     try {
       Navigator.of(ctx).maybePop();
@@ -212,8 +217,10 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
 
     return GestureDetector(
       onTap: widget.isSelecting || _isEditing ? null : widget.onTap,
-      onLongPress: _isEditing ? null : widget.onLongPress,
-      onSecondaryTapDown: _isEditing ? null : (d) => _showContextMenu(context, d.globalPosition),
+      onLongPress: _isEditing || _isRemoteVirtualFolder ? null : widget.onLongPress,
+      onSecondaryTapDown: _isEditing || _isRemoteVirtualFolder
+          ? null
+          : (d) => _showContextMenu(context, d.globalPosition),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovering = true),
@@ -403,7 +410,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
               ),
 
               // Hover 右上角操作按钮（非选择模式）
-              if (_hovering && !widget.isSelecting && !widget.isBookHover)
+              if (_hovering && !widget.isSelecting && !widget.isBookHover && !_isRemoteVirtualFolder)
                 Positioned(
                   top: appMetrics.kSpace4,
                   right: appMetrics.kSpace4,

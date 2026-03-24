@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -30,6 +31,10 @@ class LibraryBookCard extends StatefulWidget {
 
 class _LibraryBookCardState extends State<LibraryBookCard> {
   bool _hovering = false;
+
+  void _onTagTap(String tag) {
+    widget.viewModel.filterBySingleTag(tag);
+  }
 
   void _onTap() {
     if (widget.isSelecting) {
@@ -297,12 +302,44 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
       return;
     }
 
+    if (PlatformUtil.isMobile) {
+      _pushBookOpenRoute(
+        RemoteNovelReaderPage(metadata: widget.metadata, nodeId: nodeId, nodeName: nodeName),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (dlgCtx) => RemoteNovelReaderDialog(
         metadata: widget.metadata,
         nodeId: nodeId,
         nodeName: nodeName,
+      ),
+    );
+  }
+
+  void _pushBookOpenRoute(Widget page) {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 420),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (_, __, ___) => page,
+        transitionsBuilder: (_, animation, __, child) {
+          final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+          return Stack(
+            children: [
+              FadeTransition(
+                opacity: Tween<double>(begin: 0, end: 0.22).animate(curved),
+                child: Container(color: Colors.black),
+              ),
+              ScaleTransition(
+                scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
+                child: FadeTransition(opacity: curved, child: child),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -414,11 +451,13 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                       top: scaleW(8),
                       left: scaleW(8),
                       child: AnimatedOpacity(
-                        opacity: _hovering ? 1.0 : (widget.metadata.isFavorite ? 0.9 : 0.0),
+                        opacity: (_hovering || PlatformUtil.isMobile)
+                            ? 1.0
+                            : (widget.metadata.isFavorite ? 0.9 : 0.0),
                         duration: dur,
                         curve: curve,
                         child: AnimatedScale(
-                          scale: _hovering ? 1.0 : 0.7,
+                          scale: (_hovering || PlatformUtil.isMobile) ? 1.0 : 0.7,
                           duration: dur,
                           curve: curve,
                           child: GestureDetector(
@@ -492,21 +531,51 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                           : Colors.black.withAlpha(89),
                                       borderRadius: appMetrics.radius12,
                                     ),
-                                    child: Text(
-                                      () {
+                                    child: Builder(
+                                      builder: (context) {
                                         final chapterCount = widget.viewModel.getNovelChapterCount(
                                           widget.metadata.id,
                                         );
-                                        if (chapterCount == null) {
-                                          return '章节 --';
-                                        }
-                                        return '章节 $chapterCount';
-                                      }(),
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: appMetrics.fontSize10,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                        final displayTags = <String>[
+                                          ...widget.metadata.tags.take(3),
+                                          '章节 ${chapterCount ?? '--'}',
+                                        ];
+
+                                        return Wrap(
+                                          spacing: scaleW(4),
+                                          runSpacing: scaleW(2),
+                                          alignment: WrapAlignment.end,
+                                          children: displayTags
+                                              .map(
+                                                (tag) => Container(
+                                                  child: GestureDetector(
+                                                    onTap: tag.startsWith('章节 ')
+                                                        ? null
+                                                        : () => _onTagTap(tag),
+                                                    child: Container(
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: scaleW(5),
+                                                        vertical: scaleW(1),
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white.withAlpha(40),
+                                                        borderRadius: appMetrics.radius8,
+                                                      ),
+                                                      child: Text(
+                                                        tag,
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: appMetrics.fontSize10,
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                              .toList(growable: false),
+                                        );
+                                      },
                                     ),
                                   ),
                                 ),
@@ -710,6 +779,28 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
 
   Widget _buildCoverImage() {
     try {
+      final coverPath = widget.metadata.coverPath;
+      if (coverPath != null && coverPath.startsWith('data:image/')) {
+        final commaIndex = coverPath.indexOf(',');
+        if (commaIndex > 0 && commaIndex < coverPath.length - 1) {
+          final encoded = coverPath.substring(commaIndex + 1);
+          final bytes = base64Decode(encoded);
+          return Positioned.fill(
+            child: ClipRect(
+              child: AnimatedScale(
+                scale: _hovering ? 1.08 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: Hero(
+                  tag: 'book_cover_${widget.metadata.id}',
+                  child: Image.memory(bytes, fit: BoxFit.cover),
+                ),
+              ),
+            ),
+          );
+        }
+      }
+
       final file = File(widget.metadata.coverPath!);
       if (file.existsSync()) {
         return Positioned.fill(

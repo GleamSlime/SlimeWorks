@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
@@ -16,6 +18,9 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _resourceTimer;
   rust_sys.SystemResourceSnapshot? _snapshot;
+  final NodeSettingsService _nodeSettingsService = getIt<NodeSettingsService>();
+  double _appRxKbps = 0;
+  double _appTxKbps = 0;
 
   @override
   void initState() {
@@ -35,13 +40,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _refreshResourceSnapshot() {
     try {
       final next = rust_sys.getSystemResourceSnapshot();
+      _nodeSettingsService.syncTrafficDisplayNow();
       if (!mounted) return;
-      setState(() => _snapshot = next);
+      setState(() {
+        _snapshot = next;
+        _appRxKbps = _nodeSettingsService.appRxKbps.value;
+        _appTxKbps = _nodeSettingsService.appTxKbps.value;
+      });
     } catch (_) {}
   }
 
   String _formatMemory(rust_sys.SystemResourceSnapshot snapshot) {
-    return '${snapshot.memoryUsedMb}/${snapshot.memoryTotalMb} MB';
+    return '${snapshot.memoryUsedMb} MB';
   }
 
   String _formatSpeed(double kbps) {
@@ -97,13 +107,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       context,
                       icon: Icons.download,
                       title: '下行',
-                      value: _snapshot == null ? '--' : _formatSpeed(_snapshot!.rxKbps),
+                      value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
                     ),
                     _buildMetricCard(
                       context,
                       icon: Icons.upload,
                       title: '上行',
-                      value: _snapshot == null ? '--' : _formatSpeed(_snapshot!.txKbps),
+                      value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
                     ),
                   ],
                 ),

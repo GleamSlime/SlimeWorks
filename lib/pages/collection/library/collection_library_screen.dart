@@ -836,12 +836,13 @@ class _CollectionLibraryScreenState
         }, childCount: totalCount),
       );
 
+      if (!_isDesktop) {
+        return gridView;
+      }
+
       // 框选功能包装
       return GestureDetector(
         onPanStart: (details) {
-          if (!isSelecting) {
-            viewModel.isSelecting.value = true;
-          }
           setState(() {
             _selectionBoxStart = details.localPosition;
             _selectionBoxEnd = details.localPosition;
@@ -902,6 +903,10 @@ class _CollectionLibraryScreenState
 
     // 选择模式下禁用拖拽
     if (isSelecting) {
+      return RepaintBoundary(key: ValueKey(item.id), child: buildCard());
+    }
+
+    if (!_isDesktop) {
       return RepaintBoundary(key: ValueKey(item.id), child: buildCard());
     }
 
@@ -1287,7 +1292,16 @@ class _CollectionLibraryScreenState
     }
 
     // 更新选中状态
+    if (!viewModel.isSelecting.value && newSelection.isEmpty) {
+      return;
+    }
+
     viewModel.selectedIds.assignAll(newSelection);
+    if (newSelection.isNotEmpty) {
+      viewModel.isSelecting.value = true;
+    } else {
+      viewModel.exitSelection();
+    }
   }
 }
 

@@ -137,6 +137,14 @@ class CollapsibleSidebar extends StatelessWidget {
     this.animationDuration = const Duration(milliseconds: 300),
   });
 
+  void _navigateAndMaybeClose(SidebarController controller, String route) {
+    controller.selectItem(route);
+    goRouter.go(route);
+    if (desktopScreen.isMobile.value) {
+      controller.closeSidebar();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = Get.put(SidebarController());
@@ -429,8 +437,7 @@ class CollapsibleSidebar extends StatelessWidget {
                       return controller.toggleItemExpanded(item.route.title);
                     }
 
-                    controller.selectItem(item.route.location);
-                    goRouter.go(item.route.location);
+                    _navigateAndMaybeClose(controller, item.route.location);
                   },
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.transparent,
@@ -593,8 +600,7 @@ class CollapsibleSidebar extends StatelessWidget {
         color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
         child: InkWell(
           onTap: () {
-            controller.selectItem(item.route.location);
-            AppRoutes.router?.go(item.route.location);
+            _navigateAndMaybeClose(controller, item.route.location);
           },
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
@@ -615,8 +621,7 @@ class CollapsibleSidebar extends StatelessWidget {
                 svg: item.route.sidebarIcon!,
                 color: isSelected ? theme.colorScheme.primary : null,
                 onTap: () {
-                  controller.selectItem(item.route.location);
-                  AppRoutes.router?.go(item.route.location);
+                  _navigateAndMaybeClose(controller, item.route.location);
                 },
               ),
             ),

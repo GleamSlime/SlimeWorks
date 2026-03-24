@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
 class RemoteNovelReaderDialog extends StatefulWidget {
   final NovelMetadata metadata;
@@ -58,6 +62,7 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
   @override
   Widget build(BuildContext context) {
     final chapter = _chapters.isEmpty ? null : _chapters[_selected];
+    final chapterText = (chapter?['content'] ?? '').toString();
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -118,12 +123,7 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                         Expanded(
                           child: Padding(
                             padding: EdgeInsets.all(appMetrics.kSpace12),
-                            child: SingleChildScrollView(
-                              child: SelectableText(
-                                (chapter?['content'] ?? '').toString(),
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
+                            child: _buildChapterContent(context, chapterText),
                           ),
                         ),
                       ],
@@ -134,4 +134,171 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
       ),
     );
   }
+}
+
+class RemoteNovelReaderPage extends StatefulWidget {
+  final NovelMetadata metadata;
+  final String nodeId;
+  final String nodeName;
+
+  const RemoteNovelReaderPage({
+    super.key,
+    required this.metadata,
+    required this.nodeId,
+    required this.nodeName,
+  });
+
+  @override
+  State<RemoteNovelReaderPage> createState() => _RemoteNovelReaderPageState();
+}
+
+class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
+  final NodeSettingsService _service = getIt<NodeSettingsService>();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _chapters = <Map<String, dynamic>>[];
+  int _selected = 0;
+
+  void _showBookInfoDialog() {
+    final vm = Get.find<NovelLibraryViewModel>();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => LibraryBookInfoDialog(metadata: widget.metadata, viewModel: vm),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final chapters = await _service.fetchNodeNovelContent(
+        nodeId: widget.nodeId,
+        filePath: widget.metadata.filePath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _chapters = chapters;
+        _loading = false;
+        _selected = 0;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chapter = _chapters.isEmpty ? null : _chapters[_selected];
+    final chapterText = (chapter?['content'] ?? '').toString();
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            final nav = Navigator.of(context);
+            if (nav.canPop()) {
+              nav.pop();
+            }
+          },
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.metadata.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              widget.nodeName,
+              style: Theme.of(context).textTheme.bodySmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: '书籍详情',
+            onPressed: _showBookInfoDialog,
+            icon: const Icon(Icons.info_outline),
+          ),
+          IconButton(
+            tooltip: '目录',
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            icon: const Icon(Icons.menu_book_outlined),
+          ),
+        ],
+      ),
+      drawer: Drawer(
+        child: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.separated(
+                  itemCount: _chapters.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final title = (_chapters[index]['title'] ?? '章节 ${index + 1}').toString();
+                    return ListTile(
+                      selected: index == _selected,
+                      title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      onTap: () {
+                        setState(() => _selected = index);
+                        Navigator.of(context).maybePop();
+                      },
+                    );
+                  },
+                ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        child: const Icon(Icons.menu_book_outlined),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(child: Text('加载失败: $_error'))
+          : Padding(
+              padding: EdgeInsets.all(appMetrics.kSpace12),
+              child: _buildChapterContent(context, chapterText),
+            ),
+    );
+  }
+}
+
+Widget _buildChapterContent(BuildContext context, String content) {
+  final trimmed = content.trim();
+  if (trimmed.isEmpty) {
+    return const Center(child: Text('正文为空'));
+  }
+
+  final looksLikeHtml =
+      trimmed.contains('<p') ||
+      trimmed.contains('<div') ||
+      trimmed.contains('<span') ||
+      trimmed.contains('<img') ||
+      trimmed.contains('<br') ||
+      trimmed.contains('</');
+
+  if (looksLikeHtml) {
+    return SingleChildScrollView(
+      child: HtmlWidget(
+        trimmed,
+        textStyle: Theme.of(context).textTheme.bodyMedium,
+      ),
+    );
+  }
+
+  return SingleChildScrollView(
+    child: SelectableText(trimmed, style: Theme.of(context).textTheme.bodyMedium),
+  );
 }

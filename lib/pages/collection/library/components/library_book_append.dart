@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/components/animations/state_transition_animation.dart';
 import 'package:slime_works/components/dropdown/gooey_dropdown_shader.dart';
@@ -17,59 +18,48 @@ class LibraryBookAppendButton extends StatefulWidget {
 }
 
 class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
-  String label = "导入";
-
-  bool loading = false;
-
-  void handleTap() async {
-    setState(() {
-      label = '导入中...';
-      loading = true;
-    });
-    await Future.delayed(const Duration(seconds: 10));
-    setState(() {
-      label = "导入完毕";
-      loading = false;
-    });
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      label = "导入";
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    return GooeyDropdownShader(
-      button: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: DefaultTextStyle.merge(
-          style: const TextStyle(decoration: TextDecoration.none),
-          child: StateTransitionAnimation(
-            label: label,
-            textStyle: TextStyle(
-              fontSize: AppTheme.metrics.fontSize14,
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-              fontWeight: FontWeight.w500,
-            ),
-            svg: Assets.image.svg.libraryImport,
-            svgSize: AppTheme.metrics.fontSize16,
-            loading: loading,
-            height: AppTheme.metrics.kSpace40,
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
-            decoration: BoxDecoration(
-              borderRadius: AppTheme.metrics.radius32,
-              color: Theme.of(context).appBarTheme.backgroundColor,
+    return Obx(() {
+      final loading = widget.viewModel.isScanning.value;
+      final status = widget.viewModel.scanStatusText.value;
+      final progress = widget.viewModel.scanProgressText.value;
+      final label = loading
+          ? (progress.isEmpty ? (status.isEmpty ? '扫描中...' : status) : '${status.isEmpty ? '扫描中' : status} $progress')
+          : '导入';
+
+      return GooeyDropdownShader(
+        button: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(decoration: TextDecoration.none),
+            child: StateTransitionAnimation(
+              label: label,
+              textStyle: TextStyle(
+                fontSize: AppTheme.metrics.fontSize14,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                fontWeight: FontWeight.w500,
+              ),
+              svg: Assets.image.svg.libraryImport,
+              svgSize: AppTheme.metrics.fontSize16,
+              loading: loading,
+              height: AppTheme.metrics.kSpace40,
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
+              decoration: BoxDecoration(
+                borderRadius: AppTheme.metrics.radius32,
+                color: Theme.of(context).appBarTheme.backgroundColor,
+              ),
             ),
           ),
         ),
-      ),
-      buttonColor: Theme.of(context).appBarTheme.backgroundColor!,
-      cardColor: Theme.of(context).appBarTheme.backgroundColor!,
-      content: _MessageContent(viewModel: widget.viewModel),
-      buttonRadius: AppTheme.metrics.kSpace32,
-      cardOffset: scaleW(30),
-      duration: const Duration(milliseconds: 150),
-    );
+        buttonColor: Theme.of(context).appBarTheme.backgroundColor!,
+        cardColor: Theme.of(context).appBarTheme.backgroundColor!,
+        content: _MessageContent(viewModel: widget.viewModel),
+        buttonRadius: AppTheme.metrics.kSpace32,
+        cardOffset: scaleW(30),
+        duration: const Duration(milliseconds: 150),
+      );
+    });
   }
 }
 
@@ -117,7 +107,7 @@ class _MessageContent extends StatelessWidget {
 class _ImportOptionItem extends StatefulWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final Future<void> Function() onTap;
 
   const _ImportOptionItem({required this.icon, required this.label, required this.onTap});
 
@@ -136,9 +126,9 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown: (_) {
+        onTapDown: (_) async {
           GooeyDropdownScope.of(context)?.close();
-          widget.onTap();
+          await widget.onTap();
         },
         child: Container(
           padding: EdgeInsets.symmetric(

@@ -28,6 +28,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
   Future<void> _init() async {
     final service = getIt.get<NodeSettingsService>();
     await service.init();
+    await service.refreshNodeConnectivity();
     if (!mounted) {
       return;
     }
@@ -82,13 +83,10 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
   Future<void> _showNodeEditor({NodeEndpoint? initial}) async {
     final nameCtrl = TextEditingController(text: initial?.name ?? '');
     final apiCtrl = TextEditingController(text: initial?.apiBaseUrl ?? 'http://127.0.0.1:17888');
-    bool supportsMove = initial?.supportsMove ?? true;
-    bool supportsCover = initial?.supportsCoverUpdate ?? true;
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocalState) => AlertDialog(
+      builder: (ctx) => AlertDialog(
           title: Text(initial == null ? '添加节点' : '编辑节点'),
           content: SizedBox(
             width: 420,
@@ -107,19 +105,6 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                     hintText: 'http://127.0.0.1:17888',
                   ),
                 ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  value: supportsMove,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('允许远程移动书籍'),
-                  onChanged: (v) => setLocalState(() => supportsMove = v),
-                ),
-                SwitchListTile(
-                  value: supportsCover,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('允许远程更新封面'),
-                  onChanged: (v) => setLocalState(() => supportsCover = v),
-                ),
               ],
             ),
           ),
@@ -128,7 +113,6 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
             FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
           ],
         ),
-      ),
     );
 
     if (confirmed != true || _service == null) {
@@ -145,25 +129,15 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     try {
       if (initial == null) {
         await _service!.addRemoteNode(name: name, apiBaseUrl: api);
-        final created = _service!.remoteNodes.lastOrNull;
-        if (created != null) {
-          await _service!.updateRemoteNode(
-            created.copyWith(
-              supportsMove: supportsMove,
-              supportsCoverUpdate: supportsCover,
-            ),
-          );
-        }
       } else {
         await _service!.updateRemoteNode(
           initial.copyWith(
             name: name.isEmpty ? initial.name : name,
             apiBaseUrl: api,
-            supportsMove: supportsMove,
-            supportsCoverUpdate: supportsCover,
           ),
         );
       }
+      await _service!.refreshNodeConnectivity();
       _showSnack('保存成功');
     } catch (e) {
       _showSnack('保存节点失败: $e');
@@ -240,6 +214,11 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                 children: [
                   Expanded(child: Text('远程节点', style: Theme.of(context).textTheme.titleLarge)),
                   IconButton(
+                    onPressed: service.refreshNodeConnectivity,
+                    icon: const Icon(Icons.sync),
+                    tooltip: '刷新连通状态',
+                  ),
+                  IconButton(
                     onPressed: () => _showNodeEditor(),
                     icon: const Icon(Icons.add),
                     tooltip: '添加节点',
@@ -256,11 +235,31 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                 )
               else
                 ...service.remoteNodes.map(
-                  (node) => Card(
+                  (node) {
+                    final ok = service.nodeConnectivity[node.id];
+                    final dotColor = ok == null
+                        ? Colors.grey
+                        : ok
+                        ? Colors.green
+                        : Colors.red;
+                    final tip = service.nodeConnectivityError[node.id] ?? '';
+                    return Card(
                     child: ListTile(
-                      title: Text(node.name),
+                      title: Row(
+                        children: [
+                          Expanded(child: Text(node.name)),
+                          Tooltip(
+                            message: ok == true ? '可连通' : (tip.isEmpty ? '不可连通' : tip),
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                            ),
+                          ),
+                        ],
+                      ),
                       subtitle: Text(
-                        '${node.apiBaseUrl}\n能力: 移动=${node.supportsMove ? '开' : '关'} 封面=${node.supportsCoverUpdate ? '开' : '关'}',
+                        node.apiBaseUrl,
                       ),
                       isThreeLine: true,
                       leading: Switch(
@@ -281,7 +280,8 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                         ],
                       ),
                     ),
-                  ),
+                  );
+                  },
                 ),
             ],
           ),

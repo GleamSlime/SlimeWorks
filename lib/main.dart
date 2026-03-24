@@ -11,6 +11,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/initialize/main.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -42,6 +43,7 @@ Future<void> main() async {
 
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   await RustLib.init();
+  await getIt<NodeSettingsService>().init();
 
   initializeLogger();
 

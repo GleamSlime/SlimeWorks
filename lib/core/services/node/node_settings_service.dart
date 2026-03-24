@@ -20,6 +20,11 @@ class NodeSettingsService extends GetxService {
   final Loggers _logger = Loggers(name: 'NodeSettings');
 
   final RxList<NodeEndpoint> remoteNodes = <NodeEndpoint>[].obs;
+  final RxMap<String, bool> nodeConnectivity = <String, bool>{}.obs;
+  final RxMap<String, String> nodeConnectivityError = <String, String>{}.obs;
+  final RxDouble appRxKbps = 0.0.obs;
+  final RxDouble appTxKbps = 0.0.obs;
+  final RxInt libraryMutationTick = 0.obs;
   final RxBool localNodeEnabled = false.obs;
   final RxString localNodeName = '本机节点'.obs;
   final RxInt localNodePort = 17888.obs;
@@ -36,6 +41,10 @@ class NodeSettingsService extends GetxService {
   );
 
   bool _isInitialized = false;
+  DateTime? _trafficWindowStartAt;
+  DateTime? _lastTrafficAt;
+  int _trafficWindowRxBytes = 0;
+  int _trafficWindowTxBytes = 0;
 
   Future<void> init() async {
     if (_isInitialized) {
@@ -73,6 +82,7 @@ class NodeSettingsService extends GetxService {
     );
     remoteNodes.add(endpoint);
     await _save();
+    await checkNodeConnectivity(endpoint.id);
   }
 
   Future<void> updateRemoteNode(NodeEndpoint endpoint) async {
@@ -84,10 +94,13 @@ class NodeSettingsService extends GetxService {
     remoteNodes[index] = endpoint.copyWith(apiBaseUrl: _normalizeBaseUrl(endpoint.apiBaseUrl));
     remoteNodes.refresh();
     await _save();
+    await checkNodeConnectivity(endpoint.id);
   }
 
   Future<void> removeRemoteNode(String nodeId) async {
     remoteNodes.removeWhere((n) => n.id == nodeId);
+    nodeConnectivity.remove(nodeId);
+    nodeConnectivityError.remove(nodeId);
     await _save();
   }
 
@@ -98,6 +111,49 @@ class NodeSettingsService extends GetxService {
     }
 
     await updateRemoteNode(node.copyWith(enabled: enabled));
+    if (!enabled) {
+      nodeConnectivity[nodeId] = false;
+      nodeConnectivityError[nodeId] = '节点已禁用';
+    }
+  }
+
+  Future<void> refreshNodeConnectivity() async {
+    for (final node in remoteNodes) {
+      if (!node.enabled) {
+        nodeConnectivity[node.id] = false;
+        nodeConnectivityError[node.id] = '节点已禁用';
+        continue;
+      }
+      await checkNodeConnectivity(node.id);
+    }
+  }
+
+  Future<void> checkNodeConnectivity(String nodeId) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      return;
+    }
+    if (!node.enabled) {
+      nodeConnectivity[nodeId] = false;
+      nodeConnectivityError[nodeId] = '节点已禁用';
+      return;
+    }
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        _nodeCallUrl(node.apiBaseUrl),
+        data: const <String, dynamic>{
+          'action': 'list_novels',
+          'params': <String, dynamic>{},
+        },
+      );
+      final ok = response.statusCode == 200 && (response.data?['success'] == true);
+      nodeConnectivity[nodeId] = ok;
+      nodeConnectivityError[nodeId] = ok ? '' : '响应异常';
+    } catch (e) {
+      nodeConnectivity[nodeId] = false;
+      nodeConnectivityError[nodeId] = e.toString();
+    }
   }
 
   Future<void> updateLocalSettings({
@@ -126,7 +182,7 @@ class NodeSettingsService extends GetxService {
     }
 
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, localNodePort.value, shared: true);
+      _server = await HttpServer.bind(InternetAddress.anyIPv4, localNodePort.value);
       _server!.listen(_handleRequest, onError: (Object e, StackTrace st) {
         _logger.error('节点服务监听出错', error: e, stackTrace: st);
       });
@@ -231,11 +287,19 @@ class NodeSettingsService extends GetxService {
       throw StateError('节点不存在: $nodeId');
     }
 
-    await _callNode(
-      node: node,
-      action: 'set_novel_favorite',
-      params: <String, dynamic>{'novel_id': novelId, 'is_favorite': isFavorite},
-    );
+    try {
+      await _callNode(
+        node: node,
+        action: 'set_novel_favorite',
+        params: <String, dynamic>{'novel_id': novelId, 'is_favorite': isFavorite},
+      );
+    } catch (_) {
+      await _callNode(
+        node: node,
+        action: 'update_novel_info',
+        params: <String, dynamic>{'novel_id': novelId, 'is_favorite': isFavorite},
+      );
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchNodeNovelContent({
@@ -278,9 +342,6 @@ class NodeSettingsService extends GetxService {
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
     }
-    if (!node.supportsMove) {
-      throw StateError('节点未开启移动能力');
-    }
 
     await _callNode(
       node: node,
@@ -297,9 +358,6 @@ class NodeSettingsService extends GetxService {
     final node = getNodeById(nodeId);
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
-    }
-    if (!node.supportsCoverUpdate) {
-      throw StateError('节点未开启封面能力');
     }
 
     final bytes = await File(imagePath).readAsBytes();
@@ -322,24 +380,122 @@ class NodeSettingsService extends GetxService {
     required String action,
     required Map<String, dynamic> params,
   }) async {
-    final url = '${_normalizeBaseUrl(node.apiBaseUrl)}/node/call';
+    final url = _nodeCallUrl(node.apiBaseUrl);
+    final requestPayload = <String, dynamic>{
+      'action': action,
+      'params': _sanitizeJsonMap(params),
+    };
+    final txBytes = _estimatePayloadBytes(requestPayload);
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         url,
-        data: <String, dynamic>{
-          'action': action,
-          'params': params,
-        },
+        data: requestPayload,
       );
       final body = response.data ?? <String, dynamic>{};
+      _recordAppTraffic(txBytes: txBytes, rxBytes: _estimatePayloadBytes(body));
       if (body['success'] == true) {
+        nodeConnectivity[node.id] = true;
+        nodeConnectivityError[node.id] = '';
         return body;
       }
       throw Exception((body['error'] ?? '节点返回失败').toString());
     } catch (e, st) {
+      nodeConnectivity[node.id] = false;
+      nodeConnectivityError[node.id] = e.toString();
       _logger.error('节点请求失败: ${node.name} $action', error: e, stackTrace: st);
       rethrow;
     }
+  }
+
+  Map<String, dynamic> _sanitizeJsonMap(Map<String, dynamic> source) {
+    final output = <String, dynamic>{};
+    source.forEach((key, value) {
+      output[key] = _sanitizeJsonValue(value);
+    });
+    return output;
+  }
+
+  dynamic _sanitizeJsonValue(dynamic value) {
+    if (value == null) return null;
+    if (value is BigInt) return value.toString();
+    if (value is DateTime) return value.toIso8601String();
+    if (value is Uint8List) return base64Encode(value);
+    if (value is Map) {
+      final map = <String, dynamic>{};
+      value.forEach((key, innerValue) {
+        map[key.toString()] = _sanitizeJsonValue(innerValue);
+      });
+      return map;
+    }
+    if (value is Iterable) {
+      return value.map(_sanitizeJsonValue).toList(growable: false);
+    }
+    if (value is num || value is bool || value is String) return value;
+    return value.toString();
+  }
+
+  int _estimatePayloadBytes(dynamic payload) {
+    try {
+      final encoded = jsonEncode(_sanitizeJsonValue(payload));
+      return utf8.encode(encoded).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  void _recordAppTraffic({required int txBytes, required int rxBytes}) {
+    final now = DateTime.now();
+    _lastTrafficAt = now;
+    final windowStart = _trafficWindowStartAt;
+    if (windowStart == null) {
+      _trafficWindowStartAt = now;
+      _trafficWindowTxBytes = txBytes;
+      _trafficWindowRxBytes = rxBytes;
+      appTxKbps.value = txBytes / 1024.0;
+      appRxKbps.value = rxBytes / 1024.0;
+      return;
+    }
+
+    _trafficWindowTxBytes += txBytes;
+    _trafficWindowRxBytes += rxBytes;
+
+    final elapsedSeconds = now.difference(windowStart).inMilliseconds / 1000.0;
+    if (elapsedSeconds < 0.5) {
+      final safeElapsed = elapsedSeconds <= 0 ? 0.1 : elapsedSeconds;
+      appTxKbps.value = (_trafficWindowTxBytes / 1024.0) / safeElapsed;
+      appRxKbps.value = (_trafficWindowRxBytes / 1024.0) / safeElapsed;
+      return;
+    }
+
+    appTxKbps.value = (_trafficWindowTxBytes / 1024.0) / elapsedSeconds;
+    appRxKbps.value = (_trafficWindowRxBytes / 1024.0) / elapsedSeconds;
+
+    _trafficWindowStartAt = now;
+    _trafficWindowTxBytes = 0;
+    _trafficWindowRxBytes = 0;
+  }
+
+  void syncTrafficDisplayNow() {
+    final lastTrafficAt = _lastTrafficAt;
+    if (lastTrafficAt == null) {
+      appTxKbps.value = 0;
+      appRxKbps.value = 0;
+      return;
+    }
+
+    final idleSeconds = DateTime.now().difference(lastTrafficAt).inMilliseconds / 1000.0;
+    if (idleSeconds >= 1.5) {
+      appTxKbps.value = 0;
+      appRxKbps.value = 0;
+      _lastTrafficAt = null;
+      _trafficWindowStartAt = DateTime.now();
+      _trafficWindowTxBytes = 0;
+      _trafficWindowRxBytes = 0;
+    }
+  }
+
+  void _emitLibraryMutation() {
+    libraryMutationTick.value++;
   }
 
   Future<void> _load() async {
@@ -368,6 +524,7 @@ class NodeSettingsService extends GetxService {
       final nodes = decoded
           .whereType<Map>()
           .map((e) => NodeEndpoint.fromJson(Map<String, dynamic>.from(e)))
+          .map((n) => n.copyWith(apiBaseUrl: _normalizeBaseUrl(n.apiBaseUrl)))
           .where((n) => n.id.isNotEmpty && n.apiBaseUrl.isNotEmpty)
           .toList();
       remoteNodes.assignAll(nodes);
@@ -398,10 +555,21 @@ class NodeSettingsService extends GetxService {
       return '';
     }
 
-    final withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    String withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
         ? trimmed
         : 'http://$trimmed';
+    if (withScheme.endsWith('/node/call')) {
+      withScheme = withScheme.substring(0, withScheme.length - '/node/call'.length);
+    }
+    if (withScheme.endsWith('/health')) {
+      withScheme = withScheme.substring(0, withScheme.length - '/health'.length);
+    }
     return withScheme.endsWith('/') ? withScheme.substring(0, withScheme.length - 1) : withScheme;
+  }
+
+  String _nodeCallUrl(String baseUrl) {
+    final normalized = _normalizeBaseUrl(baseUrl);
+    return '$normalized/node/call';
   }
 
   String _createNodeId() {
@@ -434,26 +602,34 @@ class NodeSettingsService extends GetxService {
 
   Future<void> _handleRequest(HttpRequest request) async {
     request.response.headers.contentType = ContentType.json;
+    int requestBytes = 0;
+
+    void writeJsonResponse(Map<String, dynamic> data) {
+      final body = jsonEncode(_sanitizeJsonValue(data));
+      _recordAppTraffic(txBytes: utf8.encode(body).length, rxBytes: requestBytes);
+      request.response.write(body);
+    }
 
     if (request.method == 'GET' && request.uri.path == '/health') {
       request.response.statusCode = HttpStatus.ok;
-      request.response.write(jsonEncode(<String, dynamic>{
+      writeJsonResponse(<String, dynamic>{
         'success': true,
         'data': <String, dynamic>{'name': localNodeName.value, 'port': localNodePort.value},
-      }));
+      });
       await request.response.close();
       return;
     }
 
     if (request.method != 'POST' || request.uri.path != '/node/call') {
       request.response.statusCode = HttpStatus.notFound;
-      request.response.write(jsonEncode(<String, dynamic>{'success': false, 'error': 'Not Found'}));
+      writeJsonResponse(<String, dynamic>{'success': false, 'error': 'Not Found'});
       await request.response.close();
       return;
     }
 
     try {
       final body = await utf8.decoder.bind(request).join();
+      requestBytes = utf8.encode(body).length;
       final payload = jsonDecode(body);
       if (payload is! Map<String, dynamic>) {
         throw const FormatException('Invalid payload');
@@ -465,14 +641,14 @@ class NodeSettingsService extends GetxService {
 
       final data = await _dispatchAction(action, mapParams);
       request.response.statusCode = HttpStatus.ok;
-      request.response.write(jsonEncode(<String, dynamic>{'success': true, 'data': data}));
+      writeJsonResponse(<String, dynamic>{'success': true, 'data': data});
     } catch (e, st) {
       _logger.error('节点请求处理失败', error: e, stackTrace: st);
       request.response.statusCode = HttpStatus.ok;
-      request.response.write(jsonEncode(<String, dynamic>{
+      writeJsonResponse(<String, dynamic>{
         'success': false,
         'error': e.toString(),
-      }));
+      });
     }
 
     await request.response.close();
@@ -481,15 +657,23 @@ class NodeSettingsService extends GetxService {
   Future<dynamic> _dispatchAction(String action, Map<String, dynamic> params) async {
     switch (action) {
       case 'list_novels':
+        final chapterCountMap = await _loadLocalChapterCountMap();
+        final folderNameMap = await _loadFolderNameMap();
         final novels = rust_api.getAllNovels();
-        return novels.map(_novelToJson).toList();
+        return novels
+            .map((n) => _novelToJson(n, chapterCountMap: chapterCountMap, folderNameMap: folderNameMap))
+            .toList();
       case 'search_all_novels':
         final keyword = (params['keyword'] ?? '').toString();
         if (keyword.isEmpty) {
           return <Map<String, dynamic>>[];
         }
+        final chapterCountMap = await _loadLocalChapterCountMap();
+        final folderNameMap = await _loadFolderNameMap();
         final result = await rust_api.searchInAllNovels(keyword: keyword);
-        return result.map((r) => _novelToJson(r.novel)).toList();
+        return result
+            .map((r) => _novelToJson(r.novel, chapterCountMap: chapterCountMap, folderNameMap: folderNameMap))
+            .toList();
       case 'search_in_novel':
         final filePath = (params['file_path'] ?? '').toString();
         final keyword = (params['keyword'] ?? '').toString();
@@ -515,7 +699,7 @@ class NodeSettingsService extends GetxService {
                   'id': c.id,
                   'title': c.title,
                   'content': c.content,
-                  'index': c.index,
+                  'index': c.index.toString(),
                 },
               )
               .toList(),
@@ -523,6 +707,7 @@ class NodeSettingsService extends GetxService {
       case 'delete_novel':
         final novelId = (params['novel_id'] ?? '').toString();
         rust_api.removeNovel(novelId: novelId);
+        _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
       case 'update_novel_tags':
         final novelId = (params['novel_id'] ?? '').toString();
@@ -531,11 +716,13 @@ class NodeSettingsService extends GetxService {
             .where((e) => e.trim().isNotEmpty)
             .toList();
         rust_api.updateNovelTags(novelId: novelId, tags: tags);
+        _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
       case 'set_novel_favorite':
         final novelId = (params['novel_id'] ?? '').toString();
         final isFavorite = params['is_favorite'] == true;
         rust_api.setNovelFavorite(novelId: novelId, isFavorite: isFavorite);
+        _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
       case 'update_novel_info':
         final novelId = (params['novel_id'] ?? '').toString();
@@ -543,6 +730,11 @@ class NodeSettingsService extends GetxService {
             .map((e) => e.toString())
             .where((e) => e.trim().isNotEmpty)
             .toList();
+        final hasFavorite = params.containsKey('is_favorite');
+        final isFavorite = params['is_favorite'] == true;
+        if (hasFavorite) {
+          rust_api.setNovelFavorite(novelId: novelId, isFavorite: isFavorite);
+        }
         rust_api.updateNovelInfo(
           novelId: novelId,
           title: params['title']?.toString(),
@@ -550,12 +742,14 @@ class NodeSettingsService extends GetxService {
           notes: params['notes']?.toString(),
           tags: params.containsKey('tags') ? tags : null,
         );
+        _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
       case 'move_novel_to_folder':
         final novelId = (params['novel_id'] ?? '').toString();
         final dynamic folderIdValue = params['folder_id'];
         final folderId = folderIdValue == null ? null : folderIdValue.toString();
         rust_api.moveNovelToFolder(novelId: novelId, folderId: folderId);
+        _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
       case 'update_novel_cover_base64':
         final novelId = (params['novel_id'] ?? '').toString();
@@ -567,6 +761,7 @@ class NodeSettingsService extends GetxService {
         final bytes = base64Decode(imageBase64);
         final tempPath = await _writeTempImage(bytes, ext);
         await rust_api.updateNovelCover(novelId: novelId, imagePath: tempPath);
+        _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
       default:
         throw UnsupportedError('Unsupported action: $action');
@@ -587,7 +782,74 @@ class NodeSettingsService extends GetxService {
     return file.path;
   }
 
-  Map<String, dynamic> _novelToJson(rust_api.NovelMetadata novel) {
+  Future<Map<String, int>> _loadLocalChapterCountMap() async {
+    try {
+      final appData = Platform.environment['APPDATA'] ?? Platform.environment['HOME'];
+      final base = appData != null
+          ? '$appData${Platform.pathSeparator}slimeworks'
+          : Directory.systemTemp.path;
+      final path = '$base${Platform.pathSeparator}chapter_counts.json';
+      final file = File(path);
+      if (!file.existsSync()) {
+        return <String, int>{};
+      }
+      final raw = await file.readAsString();
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return <String, int>{};
+      }
+
+      final map = <String, int>{};
+      decoded.forEach((key, value) {
+        if (value is int) {
+          map[key] = value;
+        } else if (value is num) {
+          map[key] = value.toInt();
+        }
+      });
+      return map;
+    } catch (e) {
+      _logger.log('读取章节缓存失败: $e', name: 'NodeSettings');
+      return <String, int>{};
+    }
+  }
+
+  Future<Map<String, String>> _loadFolderNameMap() async {
+    try {
+      final list = rust_api.getAllFolders();
+      return {for (final f in list) f.id: f.name};
+    } catch (e) {
+      _logger.log('读取目录映射失败: $e', name: 'NodeSettings');
+      return <String, String>{};
+    }
+  }
+
+  String? _encodeCoverBase64(String? coverPath) {
+    if (coverPath == null || coverPath.isEmpty) {
+      return null;
+    }
+    try {
+      final file = File(coverPath);
+      if (!file.existsSync()) {
+        return null;
+      }
+      final size = file.lengthSync();
+      if (size > 256 * 1024) {
+        return null;
+      }
+      return base64Encode(file.readAsBytesSync());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _novelToJson(
+    rust_api.NovelMetadata novel, {
+    required Map<String, int> chapterCountMap,
+    required Map<String, String> folderNameMap,
+  }) {
+    final coverBase64 = _encodeCoverBase64(novel.coverPath);
+    final coverExt = _extractImageExt(novel.coverPath ?? '');
     return <String, dynamic>{
       'id': novel.id,
       'title': novel.title,
@@ -600,7 +862,11 @@ class NodeSettingsService extends GetxService {
       'progress': novel.progress,
       'last_read_at': novel.lastReadAt?.toString(),
       'cover_path': novel.coverPath,
+      'cover_base64': coverBase64,
+      'cover_ext': coverExt,
       'folder_id': novel.folderId,
+      'folder_name': novel.folderId == null ? null : folderNameMap[novel.folderId],
+      'chapter_count': chapterCountMap[novel.id],
       'custom_order': novel.customOrder,
       'is_favorite': novel.isFavorite,
       'tags': novel.tags,

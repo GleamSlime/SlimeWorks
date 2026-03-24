@@ -231,8 +231,54 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 扫描文件夹（优化版，支持大量书籍）。如果当前在文件夹内，自动将扫描到的书籍归入该文件夹
   Future<void> scanFolder() async {
     try {
+      logger.log('[ScanDebug] 触发 scanFolder，platform=${Platform.operatingSystem}', name: '书库');
+      scanStatusText.value = '准备扫描...';
+      scanProgressText.value = '';
+      if (Platform.isIOS || Platform.isAndroid) {
+        final picked = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['txt', 'epub'],
+          allowMultiple: true,
+        );
+        if (picked == null || picked.files.isEmpty) {
+          showSnack('提示', '已取消导入');
+          return;
+        }
+
+        final paths = picked.files.map((f) => f.path).whereType<String>().toList();
+        if (paths.isEmpty) {
+          showSnack('错误', '未获取到可导入的文件路径');
+          scanStatusText.value = '';
+          return;
+        }
+
+        scanStatusText.value = '导入中...';
+        scanProgressText.value = '0/${paths.length}';
+
+        final fid = currentFolderId.value;
+        if (fid != null) {
+          addNovelToFolder(filePaths: paths, folderId: fid);
+        } else {
+          addNovel(filePaths: paths);
+        }
+        await loadNovels();
+        await _computeChapterCountsForPaths(paths);
+        await _autoTagByPaths(paths);
+        scanStatusText.value = '';
+        scanProgressText.value = '';
+        showSnack('成功', '已导入 ${paths.length} 本书籍');
+        return;
+      }
+
       final result = await FilePicker.platform.getDirectoryPath();
-      if (result == null) return;
+      if (result == null) {
+        showSnack('提示', '已取消扫描');
+        logger.log('[ScanDebug] 用户取消目录选择', name: '书库');
+        return;
+      }
+      showSnack('扫描中', '正在扫描目录，请稍候...', duration: const Duration(seconds: 1));
+      logger.log('[ScanDebug] 已选择目录: $result', name: '书库');
+      scanStatusText.value = '扫描中...';
 
       isScanning.value = true;
       final scanRoot = result;
@@ -248,10 +294,12 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         folderPath: scanRoot,
         batchSize: BigInt.from(100),
       );
+      logger.log('[ScanDebug] Rust返回批次数: ${batches.length}', name: '书库');
 
       int totalFound = 0;
       final allScannedPaths = <String>[];
       for (final batch in batches) {
+        scanProgressText.value = '${batch.completed}/${batch.total}';
         final visibleNovels = <NovelMetadata>[];
         for (final novel in batch.novels) {
           if (_isHiddenNovelPath(novel.filePath)) {
@@ -277,6 +325,10 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
                 folderName: leafFolder,
                 cache: childFolderIdCache,
               );
+              logger.log(
+                '[ScanDebug] 目录映射: file=${novel.filePath} -> childFolder=$leafFolder($targetFolderId)',
+                name: '书库',
+              );
             }
 
             rust_api.moveNovelToFolder(novelId: novel.id, folderId: targetFolderId);
@@ -298,8 +350,12 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       await _computeChapterCountsForPaths(allScannedPaths);
       // 对本次扫描中的新书籍应用 Dart 端关键词规则
       await _autoTagByPaths(allScannedPaths);
+      scanStatusText.value = '';
+      scanProgressText.value = '';
       showSnack('成功', '扫描完成，共找到 $totalFound 本新书籍');
     } catch (e) {
+      scanStatusText.value = '';
+      scanProgressText.value = '';
       showSnack('错误', '扫描失败: $e');
     } finally {
       isScanning.value = false;
@@ -382,15 +438,6 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程节点映射不存在');
         }
-        final node = nodeSettingsService.getNodeById(nodeId);
-        if (node == null || !node.supportsMove) {
-          showSnack('提示', '该节点未开启远程移动能力');
-          return;
-        }
-        if (folderId != null) {
-          showSnack('提示', '远程书籍当前仅支持移动到根目录');
-          return;
-        }
         await nodeSettingsService.moveNodeNovelToFolder(
           nodeId: nodeId,
           novelId: rawId,
@@ -472,11 +519,6 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         final rawId = getRemoteRawNovelId(novelId);
         if (nodeId == null || rawId == null) {
           throw StateError('远程节点映射不存在');
-        }
-        final node = nodeSettingsService.getNodeById(nodeId);
-        if (node == null || !node.supportsCoverUpdate) {
-          showSnack('提示', '该节点未开启远程封面能力');
-          return;
         }
         await nodeSettingsService.updateNodeNovelCover(
           nodeId: nodeId,

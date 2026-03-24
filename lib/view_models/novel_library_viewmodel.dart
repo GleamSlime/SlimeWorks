@@ -23,11 +23,14 @@ Loggers logger = Loggers(name: '书库');
 /// 书库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {
   final NodeSettingsService nodeSettingsService = getIt<NodeSettingsService>();
+  Worker? _nodeMutationWorker;
 
   // 书库 数据
   final novels = <NovelMetadata>[].obs;
   final remoteNovels = <NovelMetadata>[].obs;
   final isScanning = false.obs;
+  final scanStatusText = ''.obs;
+  final scanProgressText = ''.obs;
   final searchQuery = ''.obs;
   final searchByContent = false.obs;
   final isSearching = false.obs;
@@ -76,6 +79,7 @@ class NovelLibraryViewModel extends BaseViewModel {
   final remoteNovelNodeId = <String, String>{}.obs;
   final remoteNovelNodeName = <String, String>{}.obs;
   final remoteNovelRawId = <String, String>{}.obs;
+  final remoteFolderDisplayNames = <String, String>{}.obs;
 
   // 排序相关
   final sortField = 'addedAt'.obs; // 'addedAt', 'title', 'fileSize'
@@ -85,12 +89,15 @@ class NovelLibraryViewModel extends BaseViewModel {
   String get currentFolderName {
     final fid = currentFolderId.value;
     if (fid == null) return '';
+    if (fid.startsWith('remote-folder:')) {
+      return remoteFolderDisplayNames[fid] ?? '';
+    }
     return folders.firstWhereOrNull((f) => f.id == fid)?.name ?? '';
   }
 
   /// 获取文件夹封面（返回该文件夹内第一本有封面的epub或txt书籍的封面路径）
   String? getFolderCover(String folderId) {
-    final folderBooks = novels.where((n) => n.folderId == folderId).toList();
+    final folderBooks = _getBooksInFolder(folderId);
     // 优先查找有封面的书籍
     for (final book in folderBooks) {
       if (book.coverPath != null && book.coverPath!.isNotEmpty) {
@@ -105,7 +112,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
   /// 获取文件夹前6本书的封面列表（用于6宫格显示）
   List<String> getFolderCovers(String folderId, {int maxCount = 6}) {
-    final folderBooks = novels.where((n) => n.folderId == folderId).toList();
+    final folderBooks = _getBooksInFolder(folderId);
     final covers = <String>[];
 
     for (final book in folderBooks) {
@@ -122,7 +129,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
   /// 获取文件夹直属书籍数量（不包含子文件夹）
   int getFolderNovelCount(String folderId) {
-    return novels.where((n) => n.folderId == folderId).length;
+    return _getBooksInFolder(folderId).length;
   }
 
   int? getNovelChapterCount(String novelId) {
@@ -143,6 +150,65 @@ class NovelLibraryViewModel extends BaseViewModel {
 
   String? getRemoteRawNovelId(String novelId) {
     return remoteNovelRawId[novelId];
+  }
+
+  bool isRemoteFolderId(String folderId) {
+    return folderId.startsWith('remote-folder:');
+  }
+
+  String _buildRemoteFolderSyntheticId(String nodeId, String folderId) {
+    return 'remote-folder:$nodeId:$folderId';
+  }
+
+  (String nodeId, String folderId)? _parseRemoteFolderSyntheticId(String syntheticId) {
+    if (!isRemoteFolderId(syntheticId)) return null;
+    final parts = syntheticId.split(':');
+    if (parts.length < 4) return null;
+    final nodeId = parts[2];
+    final folderId = parts.sublist(3).join(':');
+    return (nodeId, folderId);
+  }
+
+  List<NovelMetadata> _getBooksInFolder(String folderId) {
+    final remoteParsed = _parseRemoteFolderSyntheticId(folderId);
+    if (remoteParsed != null) {
+      final books = remoteNovels.where((n) {
+        final nodeId = getRemoteNodeId(n.id);
+        return nodeId == remoteParsed.$1 && n.folderId == remoteParsed.$2;
+      }).toList();
+      logger.log(
+        '[RemoteDebug] 进入远程目录: folder=$folderId, node=${remoteParsed.$1}, rawFolder=${remoteParsed.$2}, books=${books.length}',
+        name: '书库',
+      );
+      return books;
+    }
+    return novels.where((n) => n.folderId == folderId).toList();
+  }
+
+  List<NovelFolder> _buildRemoteVirtualFolders() {
+    final map = <String, NovelFolder>{};
+
+    for (final novel in remoteNovels) {
+      final nodeId = getRemoteNodeId(novel.id);
+      final folderId = novel.folderId;
+      if (nodeId == null || folderId == null || folderId.isEmpty) {
+        continue;
+      }
+      final syntheticId = _buildRemoteFolderSyntheticId(nodeId, folderId);
+      final name = remoteFolderDisplayNames[syntheticId] ?? '远程目录';
+      map[syntheticId] = NovelFolder(
+        id: syntheticId,
+        name: name,
+        createdAt: 0,
+        order: 999999,
+        parentId: null,
+      );
+    }
+
+    final list = map.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    logger.log('[RemoteDebug] 构建远程目录卡片数: ${list.length}', name: '书库');
+    return list;
   }
 
   /// 当前展示的 items（文件夹 + 书籍）
@@ -171,7 +237,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     }
 
     if (fid != null) {
-      var folderBooks = novels.where((n) => n.folderId == fid).toList();
+      var folderBooks = _getBooksInFolder(fid);
       if (filterTags.isNotEmpty) {
         folderBooks = folderBooks.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
       }
@@ -188,9 +254,10 @@ class NovelLibraryViewModel extends BaseViewModel {
         if (cmp != 0) return cmp;
         return b.createdAt.compareTo(a.createdAt);
       });
+    final remoteFolders = _buildRemoteVirtualFolders();
 
     var rootBooks = novels.where((n) => n.folderId == null).toList();
-    rootBooks.addAll(remoteNovels);
+    rootBooks.addAll(remoteNovels.where((n) => n.folderId == null || n.folderId!.isEmpty));
     if (filterTags.isNotEmpty) {
       rootBooks = rootBooks.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
     }
@@ -201,6 +268,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
     return [
       if (filterTags.isEmpty) ...sortedFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
+      if (filterTags.isEmpty) ...remoteFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
       ...rootBooks.map<LibraryItem>((n) => LibraryBookItem(n)),
     ];
   }
@@ -235,6 +303,17 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 所有书籍拥有的 tags
   List<String> get allAvailableTags {
     return allTagCounts.keys.toList()..sort();
+  }
+
+  void filterBySingleTag(String tag) {
+    final normalized = tag.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    selectedFilterTags.assignAll(<String>[normalized]);
+    searchQuery.value = '';
+    searchByContent.value = false;
+    resetPagination();
   }
 
   /// 所有书籍标签计数（tag -> count）
@@ -304,8 +383,19 @@ class NovelLibraryViewModel extends BaseViewModel {
   Future<void> onInitAsync() async {
     await super.onInitAsync();
     await nodeSettingsService.init();
+    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) async {
+      await loadNovels();
+      await loadFolders();
+    });
     await Future.wait([loadData(), loadKeywordRules(), loadChapterCounts()]);
     await refreshRemoteNovels();
+  }
+
+  @override
+  void onClose() {
+    _nodeMutationWorker?.dispose();
+    _nodeMutationWorker = null;
+    super.onClose();
   }
 
   Future<void> refreshRemoteNovels() async {
@@ -313,10 +403,14 @@ class NovelLibraryViewModel extends BaseViewModel {
     final nodeIdMap = <String, String>{};
     final nodeNameMap = <String, String>{};
     final rawIdMap = <String, String>{};
+    final remoteFolderNames = <String, String>{};
+    final remoteChapterCounts = <String, int>{};
+    final previousRemoteIds = remoteNovelNodeId.keys.toSet();
 
     for (final node in nodeSettingsService.enabledRemoteNodes) {
       try {
         final payloads = await nodeSettingsService.fetchNodeNovels(node);
+        logger.log('[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}', name: '书库');
         for (final payload in payloads) {
           final remoteId = (payload['id'] ?? '').toString();
           if (remoteId.isEmpty) continue;
@@ -327,6 +421,26 @@ class NovelLibraryViewModel extends BaseViewModel {
           nodeIdMap[syntheticId] = node.id;
           nodeNameMap[syntheticId] = node.name;
           rawIdMap[syntheticId] = remoteId;
+
+          final folderIdRaw = payload['folder_id'];
+          final folderId = folderIdRaw?.toString();
+          if (folderId != null && folderId.isNotEmpty) {
+            final syntheticFolderId = _buildRemoteFolderSyntheticId(node.id, folderId);
+            final folderName =
+                payload['folder_name']?.toString() ??
+                payload['folder_title']?.toString() ??
+                '远程目录';
+            remoteFolderNames[syntheticFolderId] = folderName;
+            logger.log(
+              '[RemoteDebug] 映射远程目录: node=${node.name}, folderId=$folderId, name=$folderName, synthetic=$syntheticFolderId',
+              name: '书库',
+            );
+          }
+
+          final chapterCount = _parseChapterCount(payload);
+          if (chapterCount != null) {
+            remoteChapterCounts[syntheticId] = chapterCount;
+          }
         }
       } catch (e) {
         logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
@@ -337,6 +451,43 @@ class NovelLibraryViewModel extends BaseViewModel {
     remoteNovelNodeId.assignAll(nodeIdMap);
     remoteNovelNodeName.assignAll(nodeNameMap);
     remoteNovelRawId.assignAll(rawIdMap);
+    remoteFolderDisplayNames.assignAll(remoteFolderNames);
+    logger.log(
+      '[RemoteDebug] 汇总: remoteNovels=${allRemote.length}, remoteFolders=${remoteFolderNames.length}',
+      name: '书库',
+    );
+
+    chapterCountMap.removeWhere(
+      (novelId, _) => previousRemoteIds.contains(novelId) && !nodeIdMap.containsKey(novelId),
+    );
+    chapterCountMap.addAll(remoteChapterCounts);
+  }
+
+  int? _parseChapterCount(Map<String, dynamic> payload) {
+    final candidates = <dynamic>[
+      payload['chapter_count'],
+      payload['chapters_count'],
+      payload['chapterCount'],
+      payload['chaptersCount'],
+      payload['chapter_total'],
+    ];
+
+    for (final value in candidates) {
+      if (value == null) {
+        continue;
+      }
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      final parsed = int.tryParse(value.toString());
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return null;
   }
 
   NovelMetadata _buildRemoteNovelModel(Map<String, dynamic> payload, String syntheticId) {
@@ -352,6 +503,16 @@ class NovelLibraryViewModel extends BaseViewModel {
         .map((e) => e.toString())
         .where((e) => e.trim().isNotEmpty)
         .toList();
+    final folderIdRaw = payload['folder_id'];
+    final folderId = (folderIdRaw == null || folderIdRaw.toString().isEmpty)
+      ? null
+      : folderIdRaw.toString();
+    final coverBase64 = payload['cover_base64']?.toString();
+    final coverExt = (payload['cover_ext'] ?? 'png').toString();
+    final coverDataUri =
+      (coverBase64 != null && coverBase64.isNotEmpty)
+        ? 'data:image/$coverExt;base64,$coverBase64'
+        : null;
 
     return NovelMetadata(
       id: syntheticId,
@@ -364,8 +525,8 @@ class NovelLibraryViewModel extends BaseViewModel {
       addedAt: addedAt,
       progress: (payload['progress'] is num) ? (payload['progress'] as num).toDouble() : 0,
       lastReadAt: lastReadAt,
-      coverPath: payload['cover_path']?.toString(),
-      folderId: null,
+      coverPath: coverDataUri ?? payload['cover_path']?.toString(),
+      folderId: folderId,
       customOrder: payload['custom_order'] is int ? payload['custom_order'] as int : null,
       isFavorite: payload['is_favorite'] == true,
       tags: tags,

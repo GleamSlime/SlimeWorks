@@ -1,7 +1,7 @@
 use flutter_rust_bridge::frb;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
-use sysinfo::{Networks, System};
+use sysinfo::{ProcessesToUpdate, System};
 
 #[derive(Debug, Clone)]
 pub struct SystemResourceSnapshot {
@@ -20,26 +20,54 @@ struct NetSpeedState {
 }
 
 static NET_STATE: OnceLock<Mutex<Option<NetSpeedState>>> = OnceLock::new();
+static SYSTEM_STATE: OnceLock<Mutex<System>> = OnceLock::new();
 
 fn net_state() -> &'static Mutex<Option<NetSpeedState>> {
     NET_STATE.get_or_init(|| Mutex::new(None))
 }
 
+fn metrics_system() -> &'static Mutex<System> {
+    SYSTEM_STATE.get_or_init(|| Mutex::new(System::new_all()))
+}
+
 #[frb(sync)]
 pub fn get_system_resource_snapshot() -> anyhow::Result<SystemResourceSnapshot> {
-    let mut system = System::new_all();
+    let mut system = metrics_system()
+        .lock()
+        .map_err(|_| anyhow::anyhow!("metrics system lock poisoned"))?;
+
     system.refresh_cpu_usage();
     system.refresh_memory();
 
-    let cpu_usage_percent = system.global_cpu_usage() as f64;
-    let memory_used_mb = system.used_memory() / 1024 / 1024;
-    let memory_total_mb = system.total_memory() / 1024 / 1024;
+    let (cpu_usage_percent, memory_used_mb, memory_total_mb) =
+        match sysinfo::get_current_pid() {
+            Ok(current_pid) => {
+                system.refresh_processes(ProcessesToUpdate::Some(&[current_pid]), true);
+                if let Some(process) = system.process(current_pid) {
+                    (
+                        process.cpu_usage() as f64,
+                        process.memory() / 1024 / 1024,
+                        process.virtual_memory() / 1024 / 1024,
+                    )
+                } else {
+                    // iOS 等环境可能拿不到当前进程，回退为设备级状态。
+                    (
+                        system.global_cpu_usage() as f64,
+                        system.used_memory() / 1024 / 1024,
+                        system.total_memory() / 1024 / 1024,
+                    )
+                }
+            }
+            Err(_) => (
+                system.global_cpu_usage() as f64,
+                system.used_memory() / 1024 / 1024,
+                system.total_memory() / 1024 / 1024,
+            ),
+        };
 
-    let mut networks = Networks::new_with_refreshed_list();
-    networks.refresh(true);
-
-    let total_rx: u64 = networks.values().map(|n| n.total_received()).sum();
-    let total_tx: u64 = networks.values().map(|n| n.total_transmitted()).sum();
+    // sysinfo 暂不提供跨平台稳定的进程级网络上下行统计，先返回应用级占位值。
+    let total_rx: u64 = 0;
+    let total_tx: u64 = 0;
 
     let now = Instant::now();
     let mut rx_kbps = 0.0;

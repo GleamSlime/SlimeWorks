@@ -161,7 +161,11 @@ class MobileLayout extends StatelessWidget {
       final title = desktopScreen.title.value;
       final sidebarExpandScale = desktopScreen.sidebarExpandScale.value;
       final head = desktopScreen.screenHeadToolsWidget.value;
-      final toolsHeight = head == null ? 0.0 : desktopScreen.screenHeadToolHeight.value;
+      final toolsHeight = head == null
+          ? 0.0
+          : (desktopScreen.screenHeadToolHeight.value <= 0
+                ? AppTheme.metrics.kSpace48
+                : desktopScreen.screenHeadToolHeight.value);
 
       final double height = kToolbarHeight + (head == null ? 0.0 : scaleW(toolsHeight));
       return Scaffold(
@@ -178,7 +182,14 @@ class MobileLayout extends StatelessWidget {
                         vertical: AppTheme.metrics.kSpace8,
                         horizontal: AppTheme.metrics.kSpace12,
                       ),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [head]),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          reverse: true,
+                          child: head,
+                        ),
+                      ),
                     ),
                   ),
           ),
