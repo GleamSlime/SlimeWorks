@@ -5,6 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
+import 'package:slime_works/components/window/desktop_head.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -26,9 +30,13 @@ class NovelReaderPage extends StatefulWidget {
 class _NovelReaderPageState extends State<NovelReaderPage> {
   late final NovelMetadata novel;
   late final NovelReaderViewModel controller;
+  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
   bool _immersiveMode = false;
   Timer? _immersiveTimer;
   Color _readerBgColor = const Color(0xFFF6F0E7);
+  String? _lastSyncedTitle;
+  bool? _lastSyncedShowChapterList;
+  bool? _lastSyncedIsNarrow;
 
   @override
   void initState() {
@@ -36,11 +44,16 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     // 优先使用传入的 novel，如果没有则尝试从 Get.arguments 获取（兼容旧代码）
     novel = widget.novel ?? Get.arguments as NovelMetadata;
     controller = Get.put(NovelReaderViewModel(novel), tag: novel.id);
+    debugPrint('NovelReaderPage initialized with novel: ${novel.title} (ID: ${novel.id})');
   }
 
   @override
   void dispose() {
     _immersiveTimer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _desktopScreen.setTitle('');
+      _desktopScreen.setScreenHeadToolsWidget(null);
+    });
     try {
       Get.delete<NovelReaderViewModel>(tag: novel.id);
     } catch (_) {}
@@ -63,15 +76,6 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     setState(() {
       _immersiveMode = false;
     });
-  }
-
-  void _handleBack(BuildContext context) {
-    final nav = Navigator.of(context);
-    if (nav.canPop()) {
-      nav.pop();
-      return;
-    }
-    context.go('/collection/library');
   }
 
   void _showReaderSettingsSheet() {
@@ -164,11 +168,93 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     );
   }
 
+  String _currentChapterTitle() {
+    final index = controller.currentChapterIndex.value;
+    if (index >= 0 && index < controller.chapters.length) {
+      final title = controller.chapters[index].title.trim();
+      if (title.isNotEmpty) {
+        return title;
+      }
+    }
+    return '目录';
+  }
+
+  String _mobileLayoutTitle() {
+    return controller.showChapterList.value ? _currentChapterTitle() : novel.title;
+  }
+
+  void _syncMobileTopBar() {
+    if (!mounted) return;
+    final isNarrow = MediaQuery.of(context).size.width < 600;
+    final showChapterList = controller.showChapterList.value;
+    final appBarTitle = _mobileLayoutTitle();
+
+    if (_lastSyncedIsNarrow == isNarrow &&
+        _lastSyncedShowChapterList == showChapterList &&
+        _lastSyncedTitle == appBarTitle) {
+      return;
+    }
+
+    _lastSyncedIsNarrow = isNarrow;
+    _lastSyncedShowChapterList = showChapterList;
+    _lastSyncedTitle = appBarTitle;
+
+    if (!isNarrow) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _desktopScreen.setTitle('');
+        _desktopScreen.setScreenHeadToolsWidget(null);
+      });
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _desktopScreen.setTitle(appBarTitle);
+
+      _desktopScreen.setScreenHeadToolsWidget(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.info_outline),
+              size: AppTheme.metrics.kSpace40,
+              onTap: _showBookInfoDialog,
+            ),
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.tune),
+              size: AppTheme.metrics.kSpace40,
+              onTap: _showReaderSettingsSheet,
+            ),
+            Obx(() {
+              final libraryVm = Get.find<NovelLibraryViewModel>();
+              final isFav =
+                  libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ?? false;
+              return DesktopHeadToolsButton(
+                icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+                size: AppTheme.metrics.kSpace40,
+                onTap: () => libraryVm.toggleFavorite(novel.id),
+              );
+            }),
+            DesktopHeadToolsButton(
+              icon: Icon(
+                showChapterList ? Icons.chrome_reader_mode_outlined : Icons.menu_book_outlined,
+              ),
+              size: AppTheme.metrics.kSpace40,
+              onTap: controller.toggleChapterList,
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // 注入 context 供 ViewModel 显示对话框（MaterialApp.router 不支持 Get.dialog）
     controller.setContext(context);
     final isNarrow = MediaQuery.of(context).size.width < 600;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncMobileTopBar());
 
     // 移动端默认收起章节列表
     if (isNarrow && controller.chapters.isEmpty) {
@@ -213,148 +299,90 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   Widget _buildContent(BuildContext context, bool isNarrow) {
     if (isNarrow) {
       // 移动端布局：章节列表使用抽屉
-      return Scaffold(
-        appBar: _immersiveMode
-            ? null
-            : AppBar(
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => _handleBack(context),
-                ),
-                title: Row(
-                  children: [
-                    _buildHeroCover(32),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(novel.title, overflow: TextOverflow.ellipsis, maxLines: 1),
-                          if (novel.tags.isNotEmpty)
-                            Wrap(
-                              spacing: 4,
-                              children: novel.tags
-                                  .take(3)
-                                  .map(
-                                    (tag) => Chip(
-                                      label: Text(tag, style: const TextStyle(fontSize: 10)),
-                                      padding: EdgeInsets.zero,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                        ],
+      return Obx(() {
+        final showChapterList = controller.showChapterList.value;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _syncMobileTopBar());
+
+        return Scaffold(
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _scheduleImmersiveMode,
+            child: Stack(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  color: _readerBgColor,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: NotificationListener<UserScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification.direction == ScrollDirection.reverse) {
+                              _scheduleImmersiveMode();
+                            } else if (notification.direction == ScrollDirection.forward) {
+                              _exitImmersiveMode();
+                            }
+                            return false;
+                          },
+                          child: Obx(() {
+                            if (controller.isLoading.value) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+
+                            if (controller.errorMessage.value.isNotEmpty) {
+                              return _buildErrorView();
+                            }
+
+                            return ReaderContent(controller: controller);
+                          }),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                actions: [
-                  IconButton(
-                    tooltip: '书籍详情',
-                    onPressed: _showBookInfoDialog,
-                    icon: const Icon(Icons.info_outline),
-                  ),
-                  IconButton(
-                    tooltip: '阅读设置',
-                    onPressed: _showReaderSettingsSheet,
-                    icon: const Icon(Icons.tune),
-                  ),
-                  Obx(() {
-                    final libraryVm = Get.find<NovelLibraryViewModel>();
-                    final isFav =
-                        libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ??
-                        false;
-                    return IconButton(
-                      icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
-                      onPressed: () => libraryVm.toggleFavorite(novel.id),
-                    );
-                  }),
-                  IconButton(
-                    tooltip: '目录',
-                    icon: const Icon(Icons.menu_book_outlined),
-                    onPressed: controller.toggleChapterList,
-                  ),
-                ],
-              ),
-        body: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: _scheduleImmersiveMode,
-          child: Stack(
-          children: [
-            // 主阅读区域
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              color: _readerBgColor,
-              child: Column(
-                children: [
-                  if (!_immersiveMode) ReaderToolbar(controller: controller),
-                  if (!_immersiveMode) const Divider(height: 1),
-                  Expanded(
-                    child: NotificationListener<UserScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification.direction == ScrollDirection.reverse) {
-                          _scheduleImmersiveMode();
-                        } else if (notification.direction == ScrollDirection.forward) {
-                          _exitImmersiveMode();
-                        }
-                        return false;
-                      },
-                      child: Obx(() {
-                        if (controller.isLoading.value) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-
-                        if (controller.errorMessage.value.isNotEmpty) {
-                          return _buildErrorView();
-                        }
-
-                        return ReaderContent(controller: controller);
-                      }),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 章节列表（覆盖显示）
-            Obx(
-              () => controller.showChapterList.value
-                  ? Positioned.fill(
-                      child: GestureDetector(
-                        onTap: controller.toggleChapterList,
-                        child: Container(
-                          color: Colors.black54,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: GestureDetector(
-                              onTap: () {}, // 防止点击列表关闭
-                              child: SizedBox(
-                                width: MediaQuery.of(context).size.width * 0.75,
-                                child: ChapterList(controller: controller),
+                if (showChapterList)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: controller.toggleChapterList,
+                      child: Container(
+                        color: Colors.black54,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: GestureDetector(
+                            onTap: () {},
+                            child: SizedBox(
+                                  width: MediaQuery.of(context).size.width * 0.75,
+                              child: Material(
+                                color: Theme.of(context).colorScheme.surface,
+                                child: Column(
+                                  children: [
+                                    Expanded(
+                                      child: ChapterList(controller: controller),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    )
-                  : const SizedBox.shrink(),
+                    ),
+                  ),
+                if (_immersiveMode)
+                  Positioned(
+                    right: 16,
+                    bottom: 24,
+                    child: FloatingActionButton.small(
+                      heroTag: 'immersive_tools',
+                      onPressed: _showReaderSettingsSheet,
+                      child: const Icon(Icons.tune),
+                    ),
+                  ),
+              ],
             ),
-
-            if (_immersiveMode)
-              Positioned(
-                right: 16,
-                bottom: 24,
-                child: FloatingActionButton.small(
-                  heroTag: 'immersive_tools',
-                  onPressed: _showReaderSettingsSheet,
-                  child: const Icon(Icons.tune),
-                ),
-              ),
-          ],
           ),
-        ),
-      );
+        );
+      });
     }
 
     // 桌面端布局

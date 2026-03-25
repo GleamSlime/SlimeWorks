@@ -595,7 +595,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                       duration: dur,
                       curve: curve,
                       tween: Tween(begin: _hovering ? 6.0 : 3.0, end: _hovering ? 3.0 : 6.0),
-                      builder: (_, blurSigma, child) => ClipRect(
+                      builder: (_, blurSigma, child) => ClipRRect(
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: appMetrics.radius8.bottomLeft,
+                          bottomRight: appMetrics.radius8.bottomRight,
+                        ),
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
                           child: child,

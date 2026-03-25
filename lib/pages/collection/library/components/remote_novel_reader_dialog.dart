@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
@@ -155,11 +157,26 @@ class RemoteNovelReaderPage extends StatefulWidget {
 class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   final NodeSettingsService _service = getIt<NodeSettingsService>();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
 
   bool _loading = true;
+  bool _chapterLoading = false;
   String? _error;
+  String? _chapterError;
   List<Map<String, dynamic>> _chapters = <Map<String, dynamic>>[];
   int _selected = 0;
+  String _chapterText = '';
+
+  String _chapterTitleAt(int index) {
+    if (index < 0 || index >= _chapters.length) {
+      return widget.metadata.title;
+    }
+    final title = (_chapters[index]['title'] ?? '').toString().trim();
+    if (title.isEmpty) {
+      return '章节 ${index + 1}';
+    }
+    return title;
+  }
 
   void _showBookInfoDialog() {
     final vm = Get.find<NovelLibraryViewModel>();
@@ -173,6 +190,25 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   void initState() {
     super.initState();
     _load();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _desktopScreen.setTitle(widget.metadata.title);
+    });
+  }
+
+  @override
+  void dispose() {
+    debugPrint('RemoteNovelReaderPage for "${widget.metadata.title}" is being disposed');
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      _desktopScreen.setTitle('');
+      _desktopScreen.setScreenHeadToolsWidget(null);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _desktopScreen.setTitle('');
+        _desktopScreen.setScreenHeadToolsWidget(null);
+      });
+    }
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -187,6 +223,9 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         _loading = false;
         _selected = 0;
       });
+      if (chapters.isNotEmpty) {
+        await _loadChapter(0);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -196,10 +235,41 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     }
   }
 
+  Future<void> _loadChapter(int index) async {
+    if (index < 0 || index >= _chapters.length) {
+      return;
+    }
+
+    setState(() {
+      _selected = index;
+      _chapterLoading = true;
+      _chapterError = null;
+    });
+
+    try {
+      final content = await _service.fetchNodeChapterContent(
+        nodeId: widget.nodeId,
+        filePath: widget.metadata.filePath,
+        chapterIndex: index,
+      );
+      if (!mounted) return;
+      setState(() {
+        _chapterText = content;
+        _chapterLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _chapterText = '';
+        _chapterError = e.toString();
+        _chapterLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final chapter = _chapters.isEmpty ? null : _chapters[_selected];
-    final chapterText = (chapter?['content'] ?? '').toString();
+    final chapterTitle = _chapterTitleAt(_selected);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -216,9 +286,13 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.metadata.title, maxLines: 1, overflow: TextOverflow.ellipsis),
             Text(
-              widget.nodeName,
+              chapterTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              widget.metadata.title,
               style: Theme.of(context).textTheme.bodySmall,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -240,23 +314,57 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
       ),
       drawer: Drawer(
         child: SafeArea(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.separated(
-                  itemCount: _chapters.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final title = (_chapters[index]['title'] ?? '章节 ${index + 1}').toString();
-                    return ListTile(
-                      selected: index == _selected,
-                      title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      onTap: () {
-                        setState(() => _selected = index);
-                        Navigator.of(context).maybePop();
-                      },
-                    );
-                  },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  appMetrics.kSpace12,
+                  appMetrics.kSpace12,
+                  appMetrics.kSpace12,
+                  appMetrics.kSpace8,
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.metadata.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: appMetrics.kSpace4),
+                    Text(
+                      widget.nodeName,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.separated(
+                        itemCount: _chapters.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final title = _chapterTitleAt(index);
+                          return ListTile(
+                            selected: index == _selected,
+                            title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            onTap: () {
+                              _loadChapter(index);
+                              Navigator.of(context).maybePop();
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -267,9 +375,13 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(child: Text('加载失败: $_error'))
+          : _chapterLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _chapterError != null
+          ? Center(child: Text('加载章节失败: $_chapterError'))
           : Padding(
               padding: EdgeInsets.all(appMetrics.kSpace12),
-              child: _buildChapterContent(context, chapterText),
+              child: _buildChapterContent(context, _chapterText),
             ),
     );
   }

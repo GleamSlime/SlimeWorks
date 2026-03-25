@@ -390,7 +390,7 @@ class _ReaderContentState extends State<ReaderContent> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 章节标题
-              if (controller.chapters.isNotEmpty)
+              if (controller.chapters.isNotEmpty && !isNarrow)
                 Container(
                   padding: const EdgeInsets.only(bottom: 24),
                   decoration: BoxDecoration(
@@ -431,7 +431,7 @@ class _ReaderContentState extends State<ReaderContent> {
                   ),
                 ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: isNarrow ? 0 : 24),
 
               // 如果内容包含 HTML 图片，允许切换为纯文本模式以便选择复制文本
               if (hasImages)
@@ -872,6 +872,7 @@ class _ReaderContentState extends State<ReaderContent> {
   ) {
     final currentChapterIndex = controller.currentChapterIndex.value;
     final hasSearch = controller.searchMatches.isNotEmpty;
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
@@ -889,7 +890,7 @@ class _ReaderContentState extends State<ReaderContent> {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // 章节标题
-                if (controller.chapters.isNotEmpty)
+                if (controller.chapters.isNotEmpty && !isMobile)
                   Container(
                     padding: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
@@ -929,7 +930,7 @@ class _ReaderContentState extends State<ReaderContent> {
                       ],
                     ),
                   ),
-                const SizedBox(height: 24),
+                SizedBox(height: isMobile ? 0 : 24),
 
                 // 如果内容包含 HTML 图片，允许切换为纯文本模式
                 if (hasImages)

@@ -162,8 +162,9 @@ impl EpubParser {
         );
 
         // 打印前500个字符用于调试
-        if content.len() > 500 {
-            log::debug!("EpubParser: Content preview: {}", &content[..500]);
+        let preview: String = content.chars().take(500).collect();
+        if content.chars().count() > 500 {
+            log::debug!("EpubParser: Content preview: {}", preview);
         } else {
             log::debug!("EpubParser: Full content: {}", content);
         }

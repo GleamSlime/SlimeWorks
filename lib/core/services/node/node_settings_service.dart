@@ -333,6 +333,29 @@ class NodeSettingsService extends GetxService {
         .toList();
   }
 
+  Future<String> fetchNodeChapterContent({
+    required String nodeId,
+    required String filePath,
+    required int chapterIndex,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+
+    final response = await _callNode(
+      node: node,
+      action: 'get_chapter_content',
+      params: <String, dynamic>{
+        'file_path': filePath,
+        'chapter_index': chapterIndex,
+      },
+    );
+
+    final data = response['data'];
+    return (data ?? '').toString();
+  }
+
   Future<void> moveNodeNovelToFolder({
     required String nodeId,
     required String novelId,
@@ -704,6 +727,13 @@ class NodeSettingsService extends GetxService {
               )
               .toList(),
         };
+      case 'get_chapter_content':
+        final filePath = (params['file_path'] ?? '').toString();
+        final chapterIndex = (params['chapter_index'] as num?)?.toInt() ?? 0;
+        return await rust_api.getChapterContent(
+          filePath: filePath,
+          chapterIndex: BigInt.from(chapterIndex),
+        );
       case 'delete_novel':
         final novelId = (params['novel_id'] ?? '').toString();
         rust_api.removeNovel(novelId: novelId);
