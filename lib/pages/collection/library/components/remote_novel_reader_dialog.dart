@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/common_widget.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
@@ -111,11 +115,7 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                                   .toString();
                               return ListTile(
                                 selected: index == _selected,
-                                title: Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
                                 onTap: () => setState(() => _selected = index),
                               );
                             },
@@ -190,25 +190,6 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   void initState() {
     super.initState();
     _load();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _desktopScreen.setTitle(widget.metadata.title);
-    });
-  }
-
-  @override
-  void dispose() {
-    debugPrint('RemoteNovelReaderPage for "${widget.metadata.title}" is being disposed');
-    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
-      _desktopScreen.setTitle('');
-      _desktopScreen.setScreenHeadToolsWidget(null);
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _desktopScreen.setTitle('');
-        _desktopScreen.setScreenHeadToolsWidget(null);
-      });
-    }
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -267,122 +248,107 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     }
   }
 
+  ScreenChromeData _buildMobileScreenChromeData() {
+    return ScreenChromeData(
+      title: widget.metadata.title,
+      leading: appBarBackButton(context, prevRoutePath: '/collection/library'),
+      toolbarHeight: AppTheme.metrics.kSpace24,
+      toolbar: Text(_chapterTitleAt(_selected), maxLines: 1, overflow: TextOverflow.ellipsis),
+      actions: [
+        IconButton(
+          padding: EdgeInsets.zero,
+          tooltip: '书籍详情',
+          onPressed: _showBookInfoDialog,
+          icon: const Icon(Icons.info_outline),
+        ),
+        IconButton(
+          padding: EdgeInsets.zero,
+          tooltip: '目录',
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          icon: const Icon(Icons.menu_book_outlined),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final chapterTitle = _chapterTitleAt(_selected);
-
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            final nav = Navigator.of(context);
-            if (nav.canPop()) {
-              nav.pop();
-            }
-          },
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              chapterTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              widget.metadata.title,
-              style: Theme.of(context).textTheme.bodySmall,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: '书籍详情',
-            onPressed: _showBookInfoDialog,
-            icon: const Icon(Icons.info_outline),
-          ),
-          IconButton(
-            tooltip: '目录',
-            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            icon: const Icon(Icons.menu_book_outlined),
-          ),
-        ],
-      ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  appMetrics.kSpace12,
-                  appMetrics.kSpace12,
-                  appMetrics.kSpace12,
-                  appMetrics.kSpace8,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.metadata.title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: appMetrics.kSpace4),
-                    Text(
-                      widget.nodeName,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView.separated(
-                        itemCount: _chapters.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final title = _chapterTitleAt(index);
-                          return ListTile(
-                            selected: index == _selected,
-                            title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                            onTap: () {
-                              _loadChapter(index);
-                              Navigator.of(context).maybePop();
-                            },
-                          );
-                        },
+    return ScreenChrome(
+      data: _buildMobileScreenChromeData(),
+      child: Scaffold(
+        key: _scaffoldKey,
+        drawer: Drawer(
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    appMetrics.kSpace12,
+                    appMetrics.kSpace12,
+                    appMetrics.kSpace12,
+                    appMetrics.kSpace8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.metadata.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-              ),
-            ],
+                      SizedBox(height: appMetrics.kSpace4),
+                      Text(
+                        widget.nodeName,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.separated(
+                          itemCount: _chapters.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final title = _chapterTitleAt(index);
+                            return ListTile(
+                              selected: index == _selected,
+                              title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              onTap: () {
+                                _loadChapter(index);
+                                Navigator.of(context).maybePop();
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          child: const Icon(Icons.menu_book_outlined),
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(child: Text('加载失败: $_error'))
+            : _chapterLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _chapterError != null
+            ? Center(child: Text('加载章节失败: $_chapterError'))
+            : Padding(
+                padding: EdgeInsets.symmetric(horizontal: appMetrics.kSpace12),
+                child: _buildChapterContent(context, _chapterText),
+              ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-        child: const Icon(Icons.menu_book_outlined),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(child: Text('加载失败: $_error'))
-          : _chapterLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _chapterError != null
-          ? Center(child: Text('加载章节失败: $_chapterError'))
-          : Padding(
-              padding: EdgeInsets.all(appMetrics.kSpace12),
-              child: _buildChapterContent(context, _chapterText),
-            ),
     );
   }
 }
@@ -403,10 +369,7 @@ Widget _buildChapterContent(BuildContext context, String content) {
 
   if (looksLikeHtml) {
     return SingleChildScrollView(
-      child: HtmlWidget(
-        trimmed,
-        textStyle: Theme.of(context).textTheme.bodyMedium,
-      ),
+      child: HtmlWidget(trimmed, textStyle: Theme.of(context).textTheme.bodyMedium),
     );
   }
 

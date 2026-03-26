@@ -91,7 +91,9 @@ class DesktopLayout extends StatefulWidget {
 }
 
 class _DesktopLayoutState extends State<DesktopLayout> {
-  late final Widget _sidebar = CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups());
+  late final Widget _sidebar = RepaintBoundary(
+    child: CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -110,41 +112,90 @@ class _DesktopLayoutState extends State<DesktopLayout> {
       child: Obx(() {
         final provider = getIt<DesktopScreenProvider>();
         final isMobile = provider.isMobile.value;
-        final head = provider.screenHeadToolsWidget.value;
 
         if (isMobile) {
           return MobileLayout(child: widget.child);
         }
 
-        return Row(
-          children: [
-            _sidebar,
-            Expanded(
-              child: Column(
-                children: [
-                  Container(
-                    padding: EdgeInsets.only(
-                      right: AppTheme.metrics.kSpace16,
-                      top: AppTheme.metrics.kSpace4,
-                    ),
-                    height: scaleW(60),
-                    child: Row(
-                      spacing: AppTheme.metrics.kSpace32,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        head ?? const SizedBox.shrink(),
-                        if (Platform.isWindows) const WindowsWindowButtons(),
-                      ],
-                    ),
-                  ),
-                  Expanded(child: widget.child),
-                ],
-              ),
-            ),
-          ],
-        );
+        return _DesktopShell(sidebar: _sidebar, child: widget.child);
       }),
     );
+  }
+}
+
+class _DesktopShell extends StatelessWidget {
+  final Widget sidebar;
+  final Widget child;
+
+  const _DesktopShell({required this.sidebar, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        sidebar,
+        Expanded(
+          child: Column(
+            children: [
+              const _DesktopTopBar(),
+              Expanded(child: child),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopTopBar extends StatelessWidget {
+  const _DesktopTopBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final chrome = getIt<DesktopScreenProvider>().screenChrome.value.data;
+
+      return Container(
+        padding: EdgeInsets.only(
+          left: AppTheme.metrics.kSpace12,
+          right: AppTheme.metrics.kSpace16,
+          top: AppTheme.metrics.kSpace4,
+        ),
+        height: scaleW(60),
+        child: Row(
+          children: [
+            if (chrome.hasLeading) chrome.leading!,
+            if (chrome.hasLeading) SizedBox(width: AppTheme.metrics.kSpace12),
+            const Spacer(),
+            if (chrome.hasActions)
+              Row(
+                spacing: AppTheme.metrics.kSpace12,
+                mainAxisSize: MainAxisSize.min,
+                children: chrome.actions,
+              ),
+            if (chrome.hasActions && chrome.hasToolbar) SizedBox(width: AppTheme.metrics.kSpace12),
+            if (chrome.hasToolbar)
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    height: chrome.toolbarHeight,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: Center(child: chrome.toolbar!),
+                    ),
+                  ),
+                ),
+              ),
+            if (Platform.isWindows) ...[
+              SizedBox(width: AppTheme.metrics.kSpace12),
+              const WindowsWindowButtons(),
+            ],
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -158,40 +209,35 @@ class MobileLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final title = desktopScreen.title.value;
+      final chrome = desktopScreen.screenChrome.value.data;
+      final title = chrome.title ?? desktopScreen.title.value;
       final sidebarExpandScale = desktopScreen.sidebarExpandScale.value;
-      final head = desktopScreen.screenHeadToolsWidget.value;
-      final toolsHeight = head == null
-          ? 0.0
-          : (desktopScreen.screenHeadToolHeight.value <= 0
-                ? AppTheme.metrics.kSpace48
-                : desktopScreen.screenHeadToolHeight.value);
+      final bool showToolbar = chrome.hasToolbar && sidebarExpandScale >= 1.0;
 
-      final double height = kToolbarHeight + (head == null ? 0.0 : scaleW(toolsHeight));
       return Scaffold(
         appBar: PreferredSize(
-          preferredSize: Size.fromHeight(height),
+          preferredSize: Size.fromHeight(scaleW(showToolbar ? 75 : 50)),
           child: AppBar(
-            title: Center(child: Text(title)),
-            bottom: head == null || toolsHeight == 0
-                ? null
-                : PreferredSize(
-                    preferredSize: Size.fromHeight(scaleW(toolsHeight)),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        vertical: AppTheme.metrics.kSpace8,
-                        horizontal: AppTheme.metrics.kSpace12,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          reverse: true,
-                          child: head,
-                        ),
+            leading: chrome.leading,
+            centerTitle: true,
+            title: chrome.titleWidget ?? Text(title),
+            actions: chrome.hasActions ? chrome.actions : null,
+            actionsPadding: EdgeInsets.zero,
+            bottom: showToolbar
+                ? PreferredSize(
+                    preferredSize: Size.fromHeight(
+                      chrome.toolbarHeight ?? AppTheme.metrics.kSpace24,
+                    ),
+                    child: SizedBox(
+                      height: chrome.toolbarHeight ?? AppTheme.metrics.kSpace24,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        reverse: true,
+                        child: chrome.toolbar ?? const SizedBox.shrink(),
                       ),
                     ),
-                  ),
+                  )
+                : null,
           ),
         ),
         body: Stack(

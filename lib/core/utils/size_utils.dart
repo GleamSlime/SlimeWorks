@@ -11,38 +11,57 @@ class PlatformUtil {
   static bool get isMobile => Platform.isIOS || Platform.isAndroid;
 }
 
+double _adaptiveScaleFactor() {
+  final double screenWidth = ScreenUtil().screenWidth;
+
+  if (screenWidth <= 0) {
+    return 1.0;
+  }
+
+  if (PlatformUtil.isMobile || screenWidth < 600) {
+    if (screenWidth >= 430) {
+      return 0.94;
+    }
+    if (screenWidth >= 390) {
+      return 0.96;
+    }
+    return 1.0;
+  }
+
+  if (screenWidth >= 1920) {
+    return 1.0;
+  }
+  if (screenWidth >= 1600) {
+    return 1.04;
+  }
+  if (screenWidth >= 1366) {
+    return 1.10;
+  }
+  return 1.16;
+}
+
+double _adaptiveFontScaleFactor() {
+  final double factor = _adaptiveScaleFactor();
+
+  if (factor > 1.0) {
+    return 1.0 + ((factor - 1.0) * 0.75);
+  }
+  if (factor < 1.0) {
+    return 1.0 - ((1.0 - factor) * 0.6);
+  }
+  return 1.0;
+}
+
 double scaleW(double w, {bool large = false}) {
-  // if (isPhone) {
-  //   w = w * 2;
-  // } else if (isPad) {
-  //   w *= 1.7;
-  // } else if (ScreenUtil().screenWidth >= 1920) {
-  //   w = w * 0.7;
-  // }
-  return ScreenUtil().setWidth(w);
+  return ScreenUtil().setWidth(w * _adaptiveScaleFactor());
 }
 
 double scaleH(double h, {bool large = false}) {
-  // if (isPhone) {
-  //   w = w * 1.9;
-  // } else if (isPad) {
-  //   w *= 1.7;
-  // } else if (ScreenUtil().screenWidth >= 1920) {
-  //   w = w * 0.7;
-  // }
-  return ScreenUtil().setHeight(h);
+  return ScreenUtil().setHeight(h * _adaptiveScaleFactor());
 }
 
 double scaleS(double fontSize, {bool large = false}) {
-  // if (isPhone) {
-  //   fontSize = fontSize * 2.2;
-  // } else if (isPad) {
-  //   fontSize *= 1.7;
-  // } else if (ScreenUtil().screenWidth >= 1920) {
-  //   fontSize = fontSize * 0.7;
-  // }
-
-  return ScreenUtil().setSp(fontSize);
+  return ScreenUtil().setSp(fontSize * _adaptiveFontScaleFactor());
 }
 
 bool get isPhone => ScreenUtil().screenWidth < 600;

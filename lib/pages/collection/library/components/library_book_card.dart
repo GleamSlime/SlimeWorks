@@ -311,11 +311,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
 
     showDialog(
       context: context,
-      builder: (dlgCtx) => RemoteNovelReaderDialog(
-        metadata: widget.metadata,
-        nodeId: nodeId,
-        nodeName: nodeName,
-      ),
+      builder: (dlgCtx) =>
+          RemoteNovelReaderDialog(metadata: widget.metadata, nodeId: nodeId, nodeName: nodeName),
     );
   }
 

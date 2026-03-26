@@ -7,10 +7,10 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
 
 import 'package:slime_works/core/index.dart';
-import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_append.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_card.dart';
 import 'package:slime_works/pages/collection/library/components/library_folder_card.dart';
@@ -28,8 +28,6 @@ class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
 
 class _CollectionLibraryScreenState
     extends BasePageState<NovelLibraryViewModel, CollectionLibraryScreen> {
-  DesktopScreenProvider desktopScreen = getIt<DesktopScreenProvider>();
-
   /// 外部文件拖拽悬停状态
   bool _isExternalDropHovering = false;
 
@@ -60,7 +58,6 @@ class _CollectionLibraryScreenState
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       viewModel.refreshRemoteNovels();
-      _rebuildToolbar();
     });
   }
 
@@ -76,27 +73,26 @@ class _CollectionLibraryScreenState
     }
   }
 
-  void _rebuildToolbar() {
-    desktopScreen.setScreenHeadToolsWidget(
-      Obx(() {
+  ScreenChromeData _buildScreenChromeData(BuildContext context) {
+    return ScreenChromeData(
+      title: '书库',
+      toolbarHeight: AppTheme.metrics.kSpace48,
+      toolbar: Obx(() {
         final activeTagCount = viewModel.selectedFilterTags.length;
         final isFavoritesOnly = viewModel.showFavoritesOnly.value;
         return Row(
           spacing: AppTheme.metrics.fontSize8,
           children: [
-            // 清空书籍库（二次确认）
             DesktopHeadToolsButton(
               icon: const Icon(Icons.refresh),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _confirmClearAll(context),
             ),
-            // 新增文件夹（带输入弹窗）
             DesktopHeadToolsButton(
               icon: const Icon(Icons.create_new_folder),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _showCreateFolderDialog(context),
             ),
-            // 收藏筛选
             DesktopHeadToolsButton(
               icon: Icon(
                 isFavoritesOnly ? Icons.favorite : Icons.favorite_border,
@@ -107,7 +103,6 @@ class _CollectionLibraryScreenState
                 viewModel.showFavoritesOnly.value = !viewModel.showFavoritesOnly.value;
               },
             ),
-            // Tag 多选筛选
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -147,7 +142,6 @@ class _CollectionLibraryScreenState
                   ),
               ],
             ),
-            // 排序按钮
             Builder(
               builder: (sortBtnCtx) => DesktopHeadToolsButton(
                 icon: const Icon(Icons.sort),
@@ -155,13 +149,11 @@ class _CollectionLibraryScreenState
                 onTap: () => _showSortMenu(sortBtnCtx),
               ),
             ),
-            // 关键词自动打标规则管理
             DesktopHeadToolsButton(
               icon: const Icon(Icons.auto_awesome_outlined),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _showKeywordRulesDialog(),
             ),
-            // 局域网传输
             DesktopHeadToolsButton(
               icon: const Icon(Icons.device_hub),
               size: AppTheme.metrics.kSpace40,
@@ -653,10 +645,6 @@ class _CollectionLibraryScreenState
       viewModel.savedScrollOffset.value = _scrollController.offset;
     }
     _scrollController.dispose();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      desktopScreen.setScreenHeadToolsWidget(null);
-    });
     super.dispose();
   }
 
@@ -670,113 +658,112 @@ class _CollectionLibraryScreenState
 
   @override
   Widget buildContent(BuildContext context) {
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent) {
-          // Escape键:退出选择模式
-          if (event.logicalKey.keyLabel == 'Escape') {
-            if (viewModel.isSelecting.value) {
-              viewModel.exitSelection();
+    return ScreenChrome(
+      data: _buildScreenChromeData(context),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey.keyLabel == 'Escape') {
+              if (viewModel.isSelecting.value) {
+                viewModel.exitSelection();
+                return KeyEventResult.handled;
+              }
+            } else if (event.logicalKey.keyLabel == 'A' &&
+                (HardwareKeyboard.instance.isControlPressed ||
+                    HardwareKeyboard.instance.isMetaPressed)) {
+              if (!viewModel.isSelecting.value) {
+                viewModel.isSelecting.value = true;
+              }
+              viewModel.toggleSelectAll();
               return KeyEventResult.handled;
+            } else if (event.logicalKey.keyLabel == 'Delete') {
+              if (viewModel.isSelecting.value && viewModel.selectedIds.isNotEmpty) {
+                _showDeleteNotImplemented(context);
+                return KeyEventResult.handled;
+              }
             }
           }
-          // Ctrl+A:全选
-          else if (event.logicalKey.keyLabel == 'A' &&
-              (HardwareKeyboard.instance.isControlPressed ||
-                  HardwareKeyboard.instance.isMetaPressed)) {
-            if (!viewModel.isSelecting.value) {
-              viewModel.isSelecting.value = true;
-            }
-            viewModel.toggleSelectAll();
-            return KeyEventResult.handled;
-          }
-          // Delete键:删除选中项
-          else if (event.logicalKey.keyLabel == 'Delete') {
-            if (viewModel.isSelecting.value && viewModel.selectedIds.isNotEmpty) {
-              _showDeleteNotImplemented(context);
-              return KeyEventResult.handled;
-            }
-          }
-        }
-        return KeyEventResult.ignored;
-      },
-      child: DropTarget(
-        onDragDone: (details) {
-          viewModel.addDroppedFiles(details.files.map((f) => f.path).toList());
-          setState(() => _isExternalDropHovering = false);
+          return KeyEventResult.ignored;
         },
-        onDragEntered: (_) => setState(() => _isExternalDropHovering = true),
-        onDragExited: (_) => setState(() => _isExternalDropHovering = false),
-        child: Stack(
-          children: [
-            Obx(() {
-              final isSelecting = viewModel.isSelecting.value;
-              final inFolder = viewModel.currentFolderId.value != null;
-              final folderName = viewModel.currentFolderName;
-              final currentBookCount = viewModel.filteredItems.whereType<LibraryBookItem>().length;
+        child: DropTarget(
+          onDragDone: (details) {
+            viewModel.addDroppedFiles(details.files.map((f) => f.path).toList());
+            setState(() => _isExternalDropHovering = false);
+          },
+          onDragEntered: (_) => setState(() => _isExternalDropHovering = true),
+          onDragExited: (_) => setState(() => _isExternalDropHovering = false),
+          child: Stack(
+            children: [
+              Obx(() {
+                final isSelecting = viewModel.isSelecting.value;
+                final inFolder = viewModel.currentFolderId.value != null;
+                final folderName = viewModel.currentFolderName;
+                final currentBookCount = viewModel.filteredItems
+                    .whereType<LibraryBookItem>()
+                    .length;
 
-              return Column(
-                children: [
-                  if (inFolder)
-                    FolderBreadcrumb(folderName: folderName, onBack: viewModel.exitFolder),
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: appMetrics.kSpace12,
-                      vertical: appMetrics.kSpace8,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '当前书籍：$currentBookCount 本',
-                        style: Theme.of(context).textTheme.bodySmall,
+                return Column(
+                  children: [
+                    if (inFolder)
+                      FolderBreadcrumb(folderName: folderName, onBack: viewModel.exitFolder),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: appMetrics.kSpace12,
+                        vertical: appMetrics.kSpace8,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '当前书籍：$currentBookCount 本',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(child: _buildGrid(isSelecting, inFolder)),
-                  if (isSelecting) LibrarySelectionBar(viewModel: viewModel),
-                ],
-              );
-            }),
-            // 外部拖拽文件悬停遮罩
-            if (_isExternalDropHovering)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    color: Theme.of(context).colorScheme.primary.withAlpha(30),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.file_download_outlined,
-                            size: scaleW(64),
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          SizedBox(height: appMetrics.kSpace16),
-                          Text(
-                            '松开以导入书籍',
-                            style: TextStyle(
-                              fontSize: appMetrics.fontSize18,
-                              fontWeight: FontWeight.w600,
+                    Expanded(child: _buildGrid(isSelecting, inFolder)),
+                    if (isSelecting) LibrarySelectionBar(viewModel: viewModel),
+                  ],
+                );
+              }),
+              if (_isExternalDropHovering)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      color: Theme.of(context).colorScheme.primary.withAlpha(30),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.file_download_outlined,
+                              size: scaleW(64),
                               color: Theme.of(context).colorScheme.primary,
                             ),
-                          ),
-                          SizedBox(height: appMetrics.kSpace8),
-                          Text(
-                            '支持 .txt / .epub 格式',
-                            style: TextStyle(
-                              fontSize: appMetrics.fontSize14,
-                              color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                            SizedBox(height: appMetrics.kSpace16),
+                            Text(
+                              '松开以导入书籍',
+                              style: TextStyle(
+                                fontSize: appMetrics.fontSize18,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                            SizedBox(height: appMetrics.kSpace8),
+                            Text(
+                              '支持 .txt / .epub 格式',
+                              style: TextStyle(
+                                fontSize: appMetrics.fontSize14,
+                                color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

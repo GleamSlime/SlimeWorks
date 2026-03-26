@@ -694,12 +694,6 @@ class MobileSidebarState extends State<MobileSidebar> {
     if (sidebarExpandScale != desktopScreen.sidebarExpandScale.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         desktopScreen.sidebarExpandScale.value = sidebarExpandScale;
-
-        if (sidebarExpandScale == 1.0) {
-          desktopScreen.screenHeadToolHeight.value = AppTheme.metrics.kSpace48;
-        } else {
-          desktopScreen.screenHeadToolHeight.value = 0;
-        }
       });
     }
 

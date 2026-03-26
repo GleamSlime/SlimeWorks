@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/provider/screen_chrome.dart';
+
 bool isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 bool isMobile = Platform.isAndroid || Platform.isIOS;
 
@@ -20,11 +22,8 @@ abstract class DesktopScreenProvider {
   /// 窗口标题
   RxString title = (dotenv.env['APP_NAME'] ?? "").obs;
 
-  /// 窗口头部工具栏组件
-  Rx<Widget?> screenHeadToolsWidget = Rx<Widget?>(null);
-
-  /// 窗口头部工具栏高度
-  RxDouble screenHeadToolHeight = 48.0.obs;
+  /// 页面级顶部栏配置
+  Rx<ScreenChromeEntry> screenChrome = const ScreenChromeEntry.empty().obs;
 
   /// 侧边栏展开比例
   RxDouble sidebarExpandScale = 1.0.obs;
@@ -50,6 +49,9 @@ abstract class DesktopScreenProvider {
   /// 设置窗口标题
   void setTitle(String t);
 
-  /// 设置窗口头部工具栏组件
-  void setScreenHeadToolsWidget(Widget? widget);
+  /// 设置页面级顶部栏配置
+  void setScreenChrome(ScreenChromeData chrome, {Object? owner});
+
+  /// 清空页面级顶部栏配置
+  void clearScreenChrome({Object? owner});
 }

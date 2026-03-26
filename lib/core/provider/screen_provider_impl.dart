@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 
 class DesktopScreenProviderImpl extends DesktopScreenProvider {
@@ -18,7 +18,15 @@ class DesktopScreenProviderImpl extends DesktopScreenProvider {
   }
 
   @override
-  void setScreenHeadToolsWidget(Widget? widget) {
-    screenHeadToolsWidget.value = widget;
+  void setScreenChrome(ScreenChromeData chrome, {Object? owner}) {
+    screenChrome.value = ScreenChromeEntry(owner: owner, data: chrome);
+  }
+
+  @override
+  void clearScreenChrome({Object? owner}) {
+    if (owner != null && !identical(screenChrome.value.owner, owner)) {
+      return;
+    }
+    screenChrome.value = const ScreenChromeEntry.empty();
   }
 }

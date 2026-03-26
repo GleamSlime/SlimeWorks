@@ -27,7 +27,17 @@
     "IOS",
     "ALL"
   ],
-  "editor.wordWrapColumn": 100,
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.wordWrapColumn": 150,
+  "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [
+      150
+    ]
+  },
   "dart.lineLength": 100,
   "dart.flutterSdkPath": ".fvm/versions/3.41.5"
 }
