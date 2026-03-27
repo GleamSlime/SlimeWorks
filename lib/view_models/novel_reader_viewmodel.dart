@@ -26,6 +26,7 @@ class NovelReaderViewModel extends GetxController {
   final showChapterList = true.obs;
   final chapterListWidth = 280.0.obs; // 章节列表侧边栏宽度
   final fontSize = 16.0.obs;
+  final lineHeight = 1.8.obs;
   // 搜索结果状态
   final searchMatches = <SearchMatch>[].obs;
   final selectedSearchIndex = (-1).obs;
@@ -69,7 +70,6 @@ class NovelReaderViewModel extends GetxController {
   void _showSnack(
     String title,
     String message, {
-    SnackPosition? position,
     Color? backgroundColor,
     Color? colorText,
     Duration? duration,
@@ -370,6 +370,10 @@ class NovelReaderViewModel extends GetxController {
     if (fontSize.value > 12) {
       fontSize.value -= 2;
     }
+  }
+
+  void setLineHeight(double value) {
+    lineHeight.value = value.clamp(1.2, 2.6);
   }
 
   /// 显示搜索对话框
@@ -978,55 +982,6 @@ class NovelReaderViewModel extends GetxController {
       // 清除章节标题缓存
       _chapterTitleCache.clear();
     }
-  }
-
-  /// 翻译章节标题列表（后台异步执行，不阻塞UI）
-  Future<void> _translateChapterTitles() async {
-    final model = translationModel.value;
-    if (model == null || chapters.isEmpty) return;
-
-    logger.info('开始翻译 ${chapters.length} 个章节标题');
-    final ollamaService = getIt.get<OllamaService>();
-
-    // 异步翻译所有章节标题
-    for (int i = 0; i < chapters.length; i++) {
-      final chapter = chapters[i];
-      final originalTitle = chapter.title;
-
-      // 已翻译过则跳过
-      if (_chapterTitleCache.containsKey(originalTitle)) {
-        continue;
-      }
-
-      try {
-        // 翻译标题（不使用流式，避免UI频繁刷新）
-        final translatedTitle = await ollamaService.translate(
-          model: model,
-          text: originalTitle,
-          languagePair: translationLanguagePair.value,
-          cancelToken: _translationCancelToken,
-        );
-
-        final cleaned = _cleanTranslationResult(translatedTitle);
-        _chapterTitleCache[originalTitle] = cleaned;
-
-        // 更新章节标题（触发列表刷新）
-        chapters[i] = NovelChapter(
-          id: chapter.id,
-          title: cleaned,
-          index: chapter.index,
-          content: chapter.content,
-        );
-        chapters.refresh();
-
-        logger.info('章节 ${i + 1} 标题翻译完成: $originalTitle => $cleaned');
-      } catch (e) {
-        logger.error('翻译章节标题失败: $originalTitle', error: e);
-        // 失败时保留原标题
-      }
-    }
-
-    logger.info('章节标题翻译完成');
   }
 
   /// Debug: 复制当前章节原始HTML到剪贴板

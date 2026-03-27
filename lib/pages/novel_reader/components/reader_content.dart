@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
@@ -22,18 +24,32 @@ extension StringOccurrences on String {
 /// 阅读内容区域组件
 class ReaderContent extends StatefulWidget {
   final NovelReaderViewModel controller;
+  final EdgeInsets? contentPadding;
+  final VoidCallback? onSwipeToPreviousChapter;
+  final VoidCallback? onSwipeToNextChapter;
 
-  const ReaderContent({super.key, required this.controller});
+  const ReaderContent({
+    super.key,
+    required this.controller,
+    this.contentPadding,
+    this.onSwipeToPreviousChapter,
+    this.onSwipeToNextChapter,
+  });
 
   @override
   State<ReaderContent> createState() => _ReaderContentState();
 }
 
 class _ReaderContentState extends State<ReaderContent> {
+  static const double _kChapterSwipeTrigger = 72;
+
   late final ScrollController _scrollController;
   bool _showPlainTextMode = false;
   int _lastChapterIndex = -1;
   final GlobalKey _searchTargetKey = GlobalKey();
+  double _leadingOverscroll = 0;
+  double _trailingOverscroll = 0;
+  bool _chapterSwipeLocked = false;
 
   // 虚拟滚动相关常量和变量
   static const int _virtualScrollThreshold = 200000; // 200KB 触发虚拟滚动（提高阈值以支持base64图片）
@@ -194,6 +210,69 @@ class _ReaderContentState extends State<ReaderContent> {
     }
   }
 
+  EdgeInsets _resolvedContentPadding(bool isNarrow) {
+    return widget.contentPadding ?? EdgeInsets.all(isNarrow ? 16 : 48);
+  }
+
+  void _resetChapterSwipe() {
+    _leadingOverscroll = 0;
+    _trailingOverscroll = 0;
+    _chapterSwipeLocked = false;
+  }
+
+  bool _handleChapterSwipeNotification(ScrollNotification notification) {
+    if (widget.onSwipeToPreviousChapter == null && widget.onSwipeToNextChapter == null) {
+      return false;
+    }
+
+    if (notification is ScrollStartNotification) {
+      _resetChapterSwipe();
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final metrics = notification.metrics;
+      if (metrics.pixels > metrics.minScrollExtent && metrics.pixels < metrics.maxScrollExtent) {
+        _leadingOverscroll = 0;
+        _trailingOverscroll = 0;
+      }
+      return false;
+    }
+
+    if (notification is OverscrollNotification && !_chapterSwipeLocked) {
+      final metrics = notification.metrics;
+      if (notification.overscroll < 0 &&
+          widget.onSwipeToPreviousChapter != null &&
+          metrics.pixels <= metrics.minScrollExtent + 0.5) {
+        _leadingOverscroll += -notification.overscroll;
+        _trailingOverscroll = 0;
+        if (_leadingOverscroll >= _kChapterSwipeTrigger) {
+          _chapterSwipeLocked = true;
+          HapticFeedback.selectionClick();
+          widget.onSwipeToPreviousChapter!.call();
+        }
+      } else if (notification.overscroll > 0 &&
+          widget.onSwipeToNextChapter != null &&
+          metrics.pixels >= metrics.maxScrollExtent - 0.5) {
+        _trailingOverscroll += notification.overscroll;
+        _leadingOverscroll = 0;
+        if (_trailingOverscroll >= _kChapterSwipeTrigger) {
+          _chapterSwipeLocked = true;
+          HapticFeedback.selectionClick();
+          widget.onSwipeToNextChapter!.call();
+        }
+      }
+      return false;
+    }
+
+    if (notification is ScrollEndNotification ||
+        notification is UserScrollNotification && notification.direction == ScrollDirection.idle) {
+      _resetChapterSwipe();
+    }
+
+    return false;
+  }
+
   // 滚动到搜索结果位置
   void _scrollToSearchResult(int position) {
     debugPrint('[Reader] _scrollToSearchResult: position=$position, using ensureVisible');
@@ -228,7 +307,7 @@ class _ReaderContentState extends State<ReaderContent> {
 
     final controller = widget.controller;
     final fontSize = controller.fontSize.value;
-    final lineHeight = fontSize * 1.8;
+    final lineHeight = fontSize * controller.lineHeight.value;
     final charsPerLine = (MediaQuery.of(context).size.width - 96) / fontSize;
     final estimatedLine = position / charsPerLine;
     final estimatedOffset = estimatedLine * lineHeight;
@@ -262,12 +341,14 @@ class _ReaderContentState extends State<ReaderContent> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final isNarrow = MediaQuery.of(context).size.width < 600;
+    final contentPadding = _resolvedContentPadding(isNarrow);
 
     return Obx(() {
       final buildStart = DateTime.now();
       debugPrint('[Novel UI] ReaderContent build started');
 
       final currentContent = controller.currentContent.value;
+      final resolvedLineHeight = controller.lineHeight.value;
 
       if (currentContent.isEmpty) {
         debugPrint('[Novel UI] Content is empty');
@@ -365,6 +446,7 @@ class _ReaderContentState extends State<ReaderContent> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollToTop();
         });
+        _resetChapterSwipe();
         _lastChapterIndex = currentIndex;
       }
 
@@ -376,6 +458,8 @@ class _ReaderContentState extends State<ReaderContent> {
           currentContent,
           buildStart,
           isNarrow,
+          contentPadding,
+          resolvedLineHeight,
           shouldRenderHtml,
           hasImages,
         );
@@ -383,526 +467,30 @@ class _ReaderContentState extends State<ReaderContent> {
 
       return Container(
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          padding: EdgeInsets.all(isNarrow ? 16 : 48),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 章节标题
-              if (controller.chapters.isNotEmpty && !isNarrow)
-                Container(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3)),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        controller.chapters[controller.currentChapterIndex.value].title,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            '第 ${controller.currentChapterIndex.value + 1} / ${controller.chapters.length} 章',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            '本章 ${currentContent.length} 字',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            '进度 ${((controller.currentChapterIndex.value + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-              SizedBox(height: isNarrow ? 0 : 24),
-
-              // 如果内容包含 HTML 图片，允许切换为纯文本模式以便选择复制文本
-              if (hasImages)
-                Row(
-                  children: [
-                    TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _showPlainTextMode = !_showPlainTextMode;
-                        });
-                      },
-                      icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
-                      label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
-                    ),
-                    if (kDebugMode) const SizedBox(width: 8),
-                    if (kDebugMode)
-                      TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _showPlainTextMode = true;
-                          });
-                          debugPrint('[Reader][PlainDebug] forced plain mode by debug button');
-                        },
-                        icon: const Icon(Icons.bug_report),
-                        label: const Text('强制纯文本'),
-                      ),
-                  ],
-                ),
-
-              // 正文内容（支持搜索高亮）
-              Builder(
-                builder: (context) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    final duration = DateTime.now().difference(buildStart);
-                    debugPrint(
-                      '[Novel UI] ReaderContent fully rendered in ${duration.inMilliseconds}ms',
-                    );
-
-                    // 如果有选中的搜索结果，滚动到该位置
-                    if (controller.selectedSearchIndex.value >= 0 &&
-                        controller.searchMatches.isNotEmpty) {
-                      final match = controller.searchMatches[controller.selectedSearchIndex.value];
-                      if (match.chapterIndex.toInt() == controller.currentChapterIndex.value) {
-                        _scrollToSearchResult(match.position.toInt());
-                      }
-                    }
-                  });
-
-                  // 检查是否有搜索关键词需要高亮
-                  final hasSearch = controller.searchMatches.isNotEmpty;
-                  // 调试：记录 searchMatches 长度与当前章节索引，方便定位高亮是否会被执行
-                  try {
-                    debugPrint(
-                      '[Reader] build: hasSearch=$hasSearch searchMatches=${controller.searchMatches.length} currentChapter=${controller.currentChapterIndex.value} selectedIndex=${controller.selectedSearchIndex.value}',
-                    );
-                    if (controller.searchMatches.isNotEmpty) {
-                      final first = controller.searchMatches.first;
-                      debugPrint(
-                        '[Reader] build: firstMatch chapterIndex=${first.chapterIndex} position=${first.position} snippet="${first.snippet}"',
-                      );
-                    }
-                  } catch (e) {
-                    debugPrint('[Reader] build log error: $e');
-                  }
-
-                  // 检查是否包含图片标签（epub内容）
-                  // final hasImages 已在外部计算
-
-                  // 如果内容包含 HTML（或图片），使用 HTML 渲染（优先级最高）
-                  if (shouldRenderHtml) {
-                    debugPrint(
-                      '[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)',
-                    );
-
-                    // 检查是否有缓存的已处理HTML
-                    final currentChapterIdx = controller.currentChapterIndex.value;
-                    String? cachedHtml = controller.getCachedHtml(currentChapterIdx);
-                    String embeddedHtml;
-
-                    if (cachedHtml != null && !hasSearch) {
-                      // 使用缓存（仅在无搜索时使用缓存）
-                      embeddedHtml = cachedHtml;
-                      debugPrint('[Reader] Using cached HTML for chapter $currentChapterIdx');
-                    } else {
-                      // 处理HTML
-                      final htmlProcessStart = DateTime.now();
-                      String htmlData = currentContent;
-
-                      if (hasSearch && controller.searchMatches.isNotEmpty) {
-                        final chapterMatches = controller.searchMatches
-                            .where(
-                              (m) => m.chapterIndex.toInt() == controller.currentChapterIndex.value,
-                            )
-                            .toList();
-                        if (chapterMatches.isNotEmpty) {
-                          // 若当前有选中的搜索结果并且在本章节，计算它是本章节中第几个匹配
-                          int? selectedOccurrence;
-                          if (controller.selectedSearchIndex.value >= 0 &&
-                              controller.selectedSearchIndex.value <
-                                  controller.searchMatches.length) {
-                            final sel =
-                                controller.searchMatches[controller.selectedSearchIndex.value];
-                            if (sel.chapterIndex.toInt() == controller.currentChapterIndex.value) {
-                              // 计算选中的是本章节的第几个匹配（从0开始）
-                              int occurrenceInChapter = 0;
-                              for (int i = 0; i < controller.selectedSearchIndex.value; i++) {
-                                if (controller.searchMatches[i].chapterIndex.toInt() ==
-                                    controller.currentChapterIndex.value) {
-                                  occurrenceInChapter++;
-                                }
-                              }
-                              selectedOccurrence = occurrenceInChapter;
-                            }
-                          }
-                          // 优先使用用户原始搜索词，若为空则回退到 snippet
-                          final keyword = controller.lastSearchQuery.value.trim().isNotEmpty
-                              ? controller.lastSearchQuery.value.trim()
-                              : chapterMatches.first.snippet.trim();
-                          debugPrint(
-                            '[Reader] Preparing HTML highlight: keyword="$keyword" selectedOccurrence=$selectedOccurrence chapterMatches=${chapterMatches.length}',
-                          );
-                          htmlData = _highlightHtml(
-                            htmlData,
-                            keyword,
-                            selectedOccurrence: selectedOccurrence,
-                          );
-                        }
-                      }
-                      // 将本地 file:// 图片替换为 base64 data URL，以避免依赖不同版本的自定义图片 API
-                      embeddedHtml = _embedLocalImages(htmlData);
-
-                      // 如果 HTML 中没有段落/换行/div 标签，说明内容可能是带换行的纯文本。
-                      // 把连续空行转换为段落 (<p>..</p>)，并把单个换行转换为 <br/> ，以便正确渲染段落。
-                      final hasParagraphLike = RegExp(
-                        r'<\s*(p|br|div)\b',
-                        caseSensitive: false,
-                      ).hasMatch(embeddedHtml);
-                      if (!hasParagraphLike) {
-                        try {
-                          String t = embeddedHtml.trim();
-                          // 将多个连续空行作为段落分隔
-                          t = t.replaceAll(RegExp(r'\r?\n\s*\r?\n+'), '</p><p>');
-                          // 将剩余单个换行转为 <br/>
-                          t = t.replaceAll(RegExp(r'\r?\n'), '<br/>');
-                          embeddedHtml = '<p>$t</p>';
-                          debugPrint(
-                            '[Reader][HTMLTransform] converted plain newlines to <p>/<br/>',
-                          );
-                        } catch (e) {
-                          debugPrint('[Reader][HTMLTransform] failed: $e');
-                        }
-                      }
-
-                      final htmlProcessDuration = DateTime.now()
-                          .difference(htmlProcessStart)
-                          .inMilliseconds;
-                      debugPrint('[Reader] HTML processing took ${htmlProcessDuration}ms');
-
-                      // 缓存处理后的HTML（仅在无搜索时缓存）
-                      if (!hasSearch) {
-                        controller.cacheHtml(currentChapterIdx, embeddedHtml);
-                      }
-                    }
-
-                    debugPrint(
-                      '[Reader] Embedded HTML length=${embeddedHtml.length} contains_mark_selected=${embeddedHtml.contains("<mark_selected>")}',
-                    );
-                    // 提供“纯文本模式”切换：如果用户需要选择/复制文本，可切换为纯文本视图（丢失部分 HTML 格式）
-                    if (_showPlainTextMode) {
-                      String plain = embeddedHtml;
-
-                      // 将常见的块级或换行标签替换为换行符，保留段落分隔
-                      plain = plain.replaceAll(
-                        RegExp(r'</p>|<br\s*/?>|</div>|</h[1-6]>', caseSensitive: false),
-                        '\n\n',
-                      );
-                      plain = plain.replaceAll(
-                        RegExp(r'<p[^>]*>|<div[^>]*>|<h[1-6][^>]*>', caseSensitive: false),
-                        '\n\n',
-                      );
-
-                      // 移除剩余的 HTML 标签
-                      plain = plain.replaceAll(RegExp(r'<[^>]+>'), '');
-
-                      // 解码常见 HTML 实体（简单实现）
-                      plain = plain.replaceAll('&nbsp;', ' ');
-                      plain = plain.replaceAll('&amp;', '&');
-                      plain = plain.replaceAll('&lt;', '<');
-                      plain = plain.replaceAll('&gt;', '>');
-                      plain = plain.replaceAll('&quot;', '"');
-                      plain = plain.replaceAll('&apos;', "'");
-
-                      // 解码数字实体，如 &#1234; 或 &#x1F60A;
-                      plain = plain.replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
-                        try {
-                          final code = int.parse(m[1]!);
-                          return String.fromCharCode(code);
-                        } catch (_) {
-                          return '';
-                        }
-                      });
-                      plain = plain.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) {
-                        try {
-                          final code = int.parse(m[1]!, radix: 16);
-                          return String.fromCharCode(code);
-                        } catch (_) {
-                          return '';
-                        }
-                      });
-
-                      // 合并连续的空白行并修剪首尾
-                      plain = plain.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
-
-                      // 调试输出：记录纯文本长度、是否包含换行，以及前 400 字符样例
-                      try {
-                        debugPrint(
-                          '[Reader][PlainDebug] length=${plain.length} containsNewline=${plain.contains('\n')}',
-                        );
-                        debugPrint(
-                          '[Reader][PlainDebug] sample=${plain.substring(0, plain.length.clamp(0, 400))}',
-                        );
-                      } catch (e) {
-                        debugPrint('[Reader][PlainDebug] debug print failed: $e');
-                      }
-
-                      // 在纯文本模式下复用高亮构建逻辑
-                      return _buildHighlightedText(plain, context);
-                    }
-
-                    // Debug: 统计嵌入 HTML 中的段落/换行标签数量，帮助定位为何没有换行
-                    try {
-                      final pOpen = RegExp(
-                        r'<p\b',
-                        caseSensitive: false,
-                      ).allMatches(embeddedHtml).length;
-                      final pClose = RegExp(
-                        r'</p>',
-                        caseSensitive: false,
-                      ).allMatches(embeddedHtml).length;
-                      final brs = RegExp(
-                        r'<br\b',
-                        caseSensitive: false,
-                      ).allMatches(embeddedHtml).length;
-                      final divs = RegExp(
-                        r'<div\b',
-                        caseSensitive: false,
-                      ).allMatches(embeddedHtml).length;
-                      debugPrint(
-                        '[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs',
-                      );
-                      debugPrint(
-                        '[Reader][HTMLDebug] sample=${embeddedHtml.substring(0, embeddedHtml.length.clamp(0, 800))}',
-                      );
-                    } catch (e) {
-                      debugPrint('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
-                    }
-
-                    return SelectionArea(
-                      child: HtmlWidget(
-                        embeddedHtml,
-                        onTapUrl: (url) {
-                          try {
-                            final uri = Uri.tryParse(url);
-                            final path = uri?.path ?? url;
-                            final basename =
-                                path.split('/').where((s) => s.isNotEmpty).toList().isNotEmpty
-                                ? path.split('/').last
-                                : path;
-                            final target = controller.chapters.indexWhere(
-                              (c) =>
-                                  c.id.endsWith(basename) ||
-                                  c.id.contains(basename) ||
-                                  c.title.contains(basename),
-                            );
-                            if (target != -1) {
-                              if (target == controller.currentChapterIndex.value) {
-                                debugPrint(
-                                  '[Reader] Link tapped points to current chapter: $basename',
-                                );
-                              } else {
-                                debugPrint(
-                                  '[Reader] Link tapped, navigating to chapter index $target (basename=$basename)',
-                                );
-                                controller.goToChapter(target);
-                              }
-                            } else {
-                              Get.snackbar('提示', '未找到目标章节: $url');
-                            }
-                          } catch (e) {
-                            debugPrint('[Reader] onTapUrl error: $e');
-                          }
-                          return true;
-                        },
-                        textStyle: TextStyle(
-                          fontSize: controller.fontSize.value,
-                          height: 1.8,
-                          color: Theme.of(context).textTheme.bodyLarge?.color,
-                        ),
-                        customStylesBuilder: (element) {
-                          final tag = element.localName;
-                          switch (tag) {
-                            case 'p':
-                              return {
-                                'display': 'block',
-                                'line-height': '2.8',
-                                'margin-bottom': '16px',
-                              };
-                            case 'div':
-                              return {
-                                'display': 'block',
-                                'line-height': '1.8',
-                                'margin-bottom': '16px',
-                              };
-                            case 'mark':
-                              return {
-                                'background-color': 'rgba(255, 255, 0, 0.5)',
-                                'color': '#E65100',
-                                'font-weight': 'bold',
-                              };
-                            case 'mark_selected':
-                              return {
-                                'background-color': 'rgba(255, 152, 0, 0.5)',
-                                'color': '#E65100',
-                                'font-weight': 'bold',
-                              };
-                          }
-                          return null;
-                        },
-                        customWidgetBuilder: (element) {
-                          // 处理翻译后的段落（带重试按钮）
-                          if (element.attributes['data-translated'] == 'true') {
-                            final originalText = element.attributes['data-original-text'];
-                            if (originalText != null) {
-                              return _TranslatedParagraphWidget(
-                                element: element,
-                                originalText: originalText,
-                                fontSize: controller.fontSize.value,
-                                onRetry: () {
-                                  controller.handleRetryFromHtml(originalText);
-                                },
-                              );
-                            }
-                          }
-
-                          // 处理选中的搜索结果高亮
-                          if (element.localName == 'mark_selected') {
-                            return Container(
-                              key: _searchTargetKey,
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 2),
-                              child: Text(
-                                element.text,
-                                style: TextStyle(
-                                  color: Colors.orange.shade900,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: controller.fontSize.value,
-                                ),
-                              ),
-                            );
-                          }
-                          // 优化图片渲染（epub常见场景）
-                          if (element.localName == 'img') {
-                            final src = element.attributes['src'];
-                            if (src != null && src.startsWith('data:image')) {
-                              // 对于内嵌的base64图片，直接渲染
-                              return null; // 让默认处理器处理
-                            }
-                          }
-                          return null;
-                        },
-                        renderMode: RenderMode.column,
-                        enableCaching: true,
-                      ),
-                    );
-                  }
-
-                  // 如果有搜索结果，显示高亮
-                  if (hasSearch) {
-                    return _buildHighlightedText(currentContent, context);
-                  }
-
-                  // 默认使用可选择文本
-                  return SelectableText(
-                    currentContent,
-                    style: TextStyle(
-                      fontSize: controller.fontSize.value,
-                      height: 1.8,
-                      letterSpacing: 0.5,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 48),
-
-              // 底部导航提示
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (controller.hasPreviousChapter())
-                    TextButton.icon(
-                      onPressed: controller.previousChapter,
-                      icon: const Icon(Icons.chevron_left),
-                      label: const Text('上一章'),
-                    ),
-                  if (controller.hasPreviousChapter() && controller.hasNextChapter())
-                    const SizedBox(width: 16),
-                  if (controller.hasNextChapter())
-                    TextButton.icon(
-                      onPressed: controller.nextChapter,
-                      icon: const Icon(Icons.chevron_right),
-                      label: const Text('下一章'),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-
-  /// 构建虚拟滚动视图，只渲染可见的内容块
-  Widget _buildVirtualScrollView(
-    BuildContext context,
-    NovelReaderViewModel controller,
-    String currentContent,
-    DateTime buildStart,
-    bool isNarrow,
-    bool shouldRenderHtml,
-    bool hasImages,
-  ) {
-    final currentChapterIndex = controller.currentChapterIndex.value;
-    final hasSearch = controller.searchMatches.isNotEmpty;
-    final isMobile = MediaQuery.of(context).size.width < 600;
-
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          // 顶部间距
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              isNarrow ? 16 : 48,
-              isNarrow ? 16 : 48,
-              isNarrow ? 16 : 48,
-              0,
-            ),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _handleChapterSwipeNotification,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: contentPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 // 章节标题
-                if (controller.chapters.isNotEmpty && !isMobile)
+                if (controller.chapters.isNotEmpty && !isNarrow)
                   Container(
                     padding: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3)),
+                        bottom: BorderSide(
+                          color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+                        ),
                       ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          controller.chapters[currentChapterIndex].title,
+                          controller.chapters[controller.currentChapterIndex.value].title,
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Theme.of(context).primaryColor,
@@ -912,7 +500,7 @@ class _ReaderContentState extends State<ReaderContent> {
                         Row(
                           children: [
                             Text(
-                              '第 ${currentChapterIndex + 1} / ${controller.chapters.length} 章',
+                              '第 ${controller.currentChapterIndex.value + 1} / ${controller.chapters.length} 章',
                               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             ),
                             const SizedBox(width: 16),
@@ -922,7 +510,7 @@ class _ReaderContentState extends State<ReaderContent> {
                             ),
                             const SizedBox(width: 16),
                             Text(
-                              '进度 ${((currentChapterIndex + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
+                              '进度 ${((controller.currentChapterIndex.value + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
                               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             ),
                           ],
@@ -930,9 +518,10 @@ class _ReaderContentState extends State<ReaderContent> {
                       ],
                     ),
                   ),
-                SizedBox(height: isMobile ? 0 : 24),
 
-                // 如果内容包含 HTML 图片，允许切换为纯文本模式
+                SizedBox(height: isNarrow ? 0 : 24),
+
+                // 如果内容包含 HTML 图片，允许切换为纯文本模式以便选择复制文本
                 if (hasImages)
                   Row(
                     children: [
@@ -945,54 +534,396 @@ class _ReaderContentState extends State<ReaderContent> {
                         icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
                         label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
                       ),
+                      if (kDebugMode) const SizedBox(width: 8),
+                      if (kDebugMode)
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _showPlainTextMode = true;
+                            });
+                            debugPrint('[Reader][PlainDebug] forced plain mode by debug button');
+                          },
+                          icon: const Icon(Icons.bug_report),
+                          label: const Text('强制纯文本'),
+                        ),
                     ],
                   ),
-              ]),
-            ),
-          ),
 
-          // 虚拟滚动的内容块
-          SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 48),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                // 添加渲染时间日志
-                if (index == 0) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    final duration = DateTime.now().difference(buildStart);
-                    debugPrint(
-                      '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
+                // 正文内容（支持搜索高亮）
+                Builder(
+                  builder: (context) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final duration = DateTime.now().difference(buildStart);
+                      debugPrint(
+                        '[Novel UI] ReaderContent fully rendered in ${duration.inMilliseconds}ms',
+                      );
+
+                      // 如果有选中的搜索结果，滚动到该位置
+                      if (controller.selectedSearchIndex.value >= 0 &&
+                          controller.searchMatches.isNotEmpty) {
+                        final match =
+                            controller.searchMatches[controller.selectedSearchIndex.value];
+                        if (match.chapterIndex.toInt() == controller.currentChapterIndex.value) {
+                          _scrollToSearchResult(match.position.toInt());
+                        }
+                      }
+                    });
+
+                    // 检查是否有搜索关键词需要高亮
+                    final hasSearch = controller.searchMatches.isNotEmpty;
+                    // 调试：记录 searchMatches 长度与当前章节索引，方便定位高亮是否会被执行
+                    try {
+                      debugPrint(
+                        '[Reader] build: hasSearch=$hasSearch searchMatches=${controller.searchMatches.length} currentChapter=${controller.currentChapterIndex.value} selectedIndex=${controller.selectedSearchIndex.value}',
+                      );
+                      if (controller.searchMatches.isNotEmpty) {
+                        final first = controller.searchMatches.first;
+                        debugPrint(
+                          '[Reader] build: firstMatch chapterIndex=${first.chapterIndex} position=${first.position} snippet="${first.snippet}"',
+                        );
+                      }
+                    } catch (e) {
+                      debugPrint('[Reader] build log error: $e');
+                    }
+
+                    // 检查是否包含图片标签（epub内容）
+                    // final hasImages 已在外部计算
+
+                    // 如果内容包含 HTML（或图片），使用 HTML 渲染（优先级最高）
+                    if (shouldRenderHtml) {
+                      debugPrint(
+                        '[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)',
+                      );
+
+                      // 检查是否有缓存的已处理HTML
+                      final currentChapterIdx = controller.currentChapterIndex.value;
+                      String? cachedHtml = controller.getCachedHtml(currentChapterIdx);
+                      String embeddedHtml;
+
+                      if (cachedHtml != null && !hasSearch) {
+                        // 使用缓存（仅在无搜索时使用缓存）
+                        embeddedHtml = cachedHtml;
+                        debugPrint('[Reader] Using cached HTML for chapter $currentChapterIdx');
+                      } else {
+                        // 处理HTML
+                        final htmlProcessStart = DateTime.now();
+                        String htmlData = currentContent;
+
+                        if (hasSearch && controller.searchMatches.isNotEmpty) {
+                          final chapterMatches = controller.searchMatches
+                              .where(
+                                (m) =>
+                                    m.chapterIndex.toInt() == controller.currentChapterIndex.value,
+                              )
+                              .toList();
+                          if (chapterMatches.isNotEmpty) {
+                            // 若当前有选中的搜索结果并且在本章节，计算它是本章节中第几个匹配
+                            int? selectedOccurrence;
+                            if (controller.selectedSearchIndex.value >= 0 &&
+                                controller.selectedSearchIndex.value <
+                                    controller.searchMatches.length) {
+                              final sel =
+                                  controller.searchMatches[controller.selectedSearchIndex.value];
+                              if (sel.chapterIndex.toInt() ==
+                                  controller.currentChapterIndex.value) {
+                                // 计算选中的是本章节的第几个匹配（从0开始）
+                                int occurrenceInChapter = 0;
+                                for (int i = 0; i < controller.selectedSearchIndex.value; i++) {
+                                  if (controller.searchMatches[i].chapterIndex.toInt() ==
+                                      controller.currentChapterIndex.value) {
+                                    occurrenceInChapter++;
+                                  }
+                                }
+                                selectedOccurrence = occurrenceInChapter;
+                              }
+                            }
+                            // 优先使用用户原始搜索词，若为空则回退到 snippet
+                            final keyword = controller.lastSearchQuery.value.trim().isNotEmpty
+                                ? controller.lastSearchQuery.value.trim()
+                                : chapterMatches.first.snippet.trim();
+                            debugPrint(
+                              '[Reader] Preparing HTML highlight: keyword="$keyword" selectedOccurrence=$selectedOccurrence chapterMatches=${chapterMatches.length}',
+                            );
+                            htmlData = _highlightHtml(
+                              htmlData,
+                              keyword,
+                              selectedOccurrence: selectedOccurrence,
+                            );
+                          }
+                        }
+                        // 将本地 file:// 图片替换为 base64 data URL，以避免依赖不同版本的自定义图片 API
+                        embeddedHtml = _embedLocalImages(htmlData);
+
+                        // 如果 HTML 中没有段落/换行/div 标签，说明内容可能是带换行的纯文本。
+                        // 把连续空行转换为段落 (<p>..</p>)，并把单个换行转换为 <br/> ，以便正确渲染段落。
+                        final hasParagraphLike = RegExp(
+                          r'<\s*(p|br|div)\b',
+                          caseSensitive: false,
+                        ).hasMatch(embeddedHtml);
+                        if (!hasParagraphLike) {
+                          try {
+                            String t = embeddedHtml.trim();
+                            // 将多个连续空行作为段落分隔
+                            t = t.replaceAll(RegExp(r'\r?\n\s*\r?\n+'), '</p><p>');
+                            // 将剩余单个换行转为 <br/>
+                            t = t.replaceAll(RegExp(r'\r?\n'), '<br/>');
+                            embeddedHtml = '<p>$t</p>';
+                            debugPrint(
+                              '[Reader][HTMLTransform] converted plain newlines to <p>/<br/>',
+                            );
+                          } catch (e) {
+                            debugPrint('[Reader][HTMLTransform] failed: $e');
+                          }
+                        }
+
+                        final htmlProcessDuration = DateTime.now()
+                            .difference(htmlProcessStart)
+                            .inMilliseconds;
+                        debugPrint('[Reader] HTML processing took ${htmlProcessDuration}ms');
+
+                        // 缓存处理后的HTML（仅在无搜索时缓存）
+                        if (!hasSearch) {
+                          controller.cacheHtml(currentChapterIdx, embeddedHtml);
+                        }
+                      }
+
+                      debugPrint(
+                        '[Reader] Embedded HTML length=${embeddedHtml.length} contains_mark_selected=${embeddedHtml.contains("<mark_selected>")}',
+                      );
+                      // 提供“纯文本模式”切换：如果用户需要选择/复制文本，可切换为纯文本视图（丢失部分 HTML 格式）
+                      if (_showPlainTextMode) {
+                        String plain = embeddedHtml;
+
+                        // 将常见的块级或换行标签替换为换行符，保留段落分隔
+                        plain = plain.replaceAll(
+                          RegExp(r'</p>|<br\s*/?>|</div>|</h[1-6]>', caseSensitive: false),
+                          '\n\n',
+                        );
+                        plain = plain.replaceAll(
+                          RegExp(r'<p[^>]*>|<div[^>]*>|<h[1-6][^>]*>', caseSensitive: false),
+                          '\n\n',
+                        );
+
+                        // 移除剩余的 HTML 标签
+                        plain = plain.replaceAll(RegExp(r'<[^>]+>'), '');
+
+                        // 解码常见 HTML 实体（简单实现）
+                        plain = plain.replaceAll('&nbsp;', ' ');
+                        plain = plain.replaceAll('&amp;', '&');
+                        plain = plain.replaceAll('&lt;', '<');
+                        plain = plain.replaceAll('&gt;', '>');
+                        plain = plain.replaceAll('&quot;', '"');
+                        plain = plain.replaceAll('&apos;', "'");
+
+                        // 解码数字实体，如 &#1234; 或 &#x1F60A;
+                        plain = plain.replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+                          try {
+                            final code = int.parse(m[1]!);
+                            return String.fromCharCode(code);
+                          } catch (_) {
+                            return '';
+                          }
+                        });
+                        plain = plain.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) {
+                          try {
+                            final code = int.parse(m[1]!, radix: 16);
+                            return String.fromCharCode(code);
+                          } catch (_) {
+                            return '';
+                          }
+                        });
+
+                        // 合并连续的空白行并修剪首尾
+                        plain = plain.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+
+                        // 调试输出：记录纯文本长度、是否包含换行，以及前 400 字符样例
+                        try {
+                          debugPrint(
+                            '[Reader][PlainDebug] length=${plain.length} containsNewline=${plain.contains('\n')}',
+                          );
+                          debugPrint(
+                            '[Reader][PlainDebug] sample=${plain.substring(0, plain.length.clamp(0, 400))}',
+                          );
+                        } catch (e) {
+                          debugPrint('[Reader][PlainDebug] debug print failed: $e');
+                        }
+
+                        // 在纯文本模式下复用高亮构建逻辑
+                        return _buildHighlightedText(plain, context);
+                      }
+
+                      // Debug: 统计嵌入 HTML 中的段落/换行标签数量，帮助定位为何没有换行
+                      try {
+                        final pOpen = RegExp(
+                          r'<p\b',
+                          caseSensitive: false,
+                        ).allMatches(embeddedHtml).length;
+                        final pClose = RegExp(
+                          r'</p>',
+                          caseSensitive: false,
+                        ).allMatches(embeddedHtml).length;
+                        final brs = RegExp(
+                          r'<br\b',
+                          caseSensitive: false,
+                        ).allMatches(embeddedHtml).length;
+                        final divs = RegExp(
+                          r'<div\b',
+                          caseSensitive: false,
+                        ).allMatches(embeddedHtml).length;
+                        debugPrint(
+                          '[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs',
+                        );
+                        debugPrint(
+                          '[Reader][HTMLDebug] sample=${embeddedHtml.substring(0, embeddedHtml.length.clamp(0, 800))}',
+                        );
+                      } catch (e) {
+                        debugPrint('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
+                      }
+
+                      return SelectionArea(
+                        child: HtmlWidget(
+                          embeddedHtml,
+                          onTapUrl: (url) {
+                            try {
+                              final uri = Uri.tryParse(url);
+                              final path = uri?.path ?? url;
+                              final basename =
+                                  path.split('/').where((s) => s.isNotEmpty).toList().isNotEmpty
+                                  ? path.split('/').last
+                                  : path;
+                              final target = controller.chapters.indexWhere(
+                                (c) =>
+                                    c.id.endsWith(basename) ||
+                                    c.id.contains(basename) ||
+                                    c.title.contains(basename),
+                              );
+                              if (target != -1) {
+                                if (target == controller.currentChapterIndex.value) {
+                                  debugPrint(
+                                    '[Reader] Link tapped points to current chapter: $basename',
+                                  );
+                                } else {
+                                  debugPrint(
+                                    '[Reader] Link tapped, navigating to chapter index $target (basename=$basename)',
+                                  );
+                                  controller.goToChapter(target);
+                                }
+                              } else {
+                                Get.snackbar('提示', '未找到目标章节: $url');
+                              }
+                            } catch (e) {
+                              debugPrint('[Reader] onTapUrl error: $e');
+                            }
+                            return true;
+                          },
+                          textStyle: TextStyle(
+                            fontSize: controller.fontSize.value,
+                            height: resolvedLineHeight,
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                          ),
+                          customStylesBuilder: (element) {
+                            final tag = element.localName;
+                            switch (tag) {
+                              case 'p':
+                                return {
+                                  'display': 'block',
+                                  'line-height': resolvedLineHeight.toStringAsFixed(2),
+                                  'margin-bottom': '16px',
+                                };
+                              case 'div':
+                                return {
+                                  'display': 'block',
+                                  'line-height': resolvedLineHeight.toStringAsFixed(2),
+                                  'margin-bottom': '16px',
+                                };
+                              case 'mark':
+                                return {
+                                  'background-color': 'rgba(255, 255, 0, 0.5)',
+                                  'color': '#E65100',
+                                  'font-weight': 'bold',
+                                };
+                              case 'mark_selected':
+                                return {
+                                  'background-color': 'rgba(255, 152, 0, 0.5)',
+                                  'color': '#E65100',
+                                  'font-weight': 'bold',
+                                };
+                            }
+                            return null;
+                          },
+                          customWidgetBuilder: (element) {
+                            // 处理翻译后的段落（带重试按钮）
+                            if (element.attributes['data-translated'] == 'true') {
+                              final originalText = element.attributes['data-original-text'];
+                              if (originalText != null) {
+                                return _TranslatedParagraphWidget(
+                                  element: element,
+                                  originalText: originalText,
+                                  fontSize: controller.fontSize.value,
+                                  lineHeight: resolvedLineHeight,
+                                  onRetry: () {
+                                    controller.handleRetryFromHtml(originalText);
+                                  },
+                                );
+                              }
+                            }
+
+                            // 处理选中的搜索结果高亮
+                            if (element.localName == 'mark_selected') {
+                              return Container(
+                                key: _searchTargetKey,
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                child: Text(
+                                  element.text,
+                                  style: TextStyle(
+                                    color: Colors.orange.shade900,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: controller.fontSize.value,
+                                  ),
+                                ),
+                              );
+                            }
+                            // 优化图片渲染（epub常见场景）
+                            if (element.localName == 'img') {
+                              final src = element.attributes['src'];
+                              if (src != null && src.startsWith('data:image')) {
+                                // 对于内嵌的base64图片，直接渲染
+                                return null; // 让默认处理器处理
+                              }
+                            }
+                            return null;
+                          },
+                          renderMode: RenderMode.column,
+                          enableCaching: true,
+                        ),
+                      );
+                    }
+
+                    // 如果有搜索结果，显示高亮
+                    if (hasSearch) {
+                      return _buildHighlightedText(currentContent, context);
+                    }
+
+                    // 默认使用可选择文本
+                    return SelectableText(
+                      currentContent,
+                      style: TextStyle(
+                        fontSize: controller.fontSize.value,
+                        height: resolvedLineHeight,
+                        letterSpacing: 0.5,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
                     );
-                  });
-                }
+                  },
+                ),
 
-                final chunk = _contentChunks[index];
-                // 根据格式决定渲染方式
-                if (shouldRenderHtml && !_showPlainTextMode) {
-                  return _buildHtmlChunk(chunk, controller, hasSearch, context);
-                } else {
-                  // 纯文本模式或TXT格式
-                  String textChunk = chunk;
-                  if (_showPlainTextMode || !shouldRenderHtml) {
-                    textChunk = _convertHtmlToPlainText(chunk);
-                  }
-                  return _buildTextChunk(textChunk, controller, hasSearch, context);
-                }
-              }, childCount: _contentChunks.length),
-            ),
-          ),
+                const SizedBox(height: 48),
 
-          // 底部导航和间距
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              isNarrow ? 16 : 48,
-              24,
-              isNarrow ? 16 : 48,
-              isNarrow ? 16 : 48,
-            ),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 24),
+                // 底部导航提示
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1012,11 +943,180 @@ class _ReaderContentState extends State<ReaderContent> {
                       ),
                   ],
                 ),
+
                 const SizedBox(height: 24),
-              ]),
+              ],
             ),
           ),
-        ],
+        ),
+      );
+    });
+  }
+
+  /// 构建虚拟滚动视图，只渲染可见的内容块
+  Widget _buildVirtualScrollView(
+    BuildContext context,
+    NovelReaderViewModel controller,
+    String currentContent,
+    DateTime buildStart,
+    bool isNarrow,
+    EdgeInsets contentPadding,
+    double lineHeight,
+    bool shouldRenderHtml,
+    bool hasImages,
+  ) {
+    final currentChapterIndex = controller.currentChapterIndex.value;
+    final hasSearch = controller.searchMatches.isNotEmpty;
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _handleChapterSwipeNotification,
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            // 顶部间距
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                contentPadding.left,
+                contentPadding.top,
+                contentPadding.right,
+                0,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // 章节标题
+                  if (controller.chapters.isNotEmpty && !isMobile)
+                    Container(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            controller.chapters[currentChapterIndex].title,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text(
+                                '第 ${currentChapterIndex + 1} / ${controller.chapters.length} 章',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                '本章 ${currentContent.length} 字',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                '进度 ${((currentChapterIndex + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  SizedBox(height: isMobile ? 0 : 24),
+
+                  // 如果内容包含 HTML 图片，允许切换为纯文本模式
+                  if (hasImages)
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _showPlainTextMode = !_showPlainTextMode;
+                            });
+                          },
+                          icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
+                          label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
+                        ),
+                      ],
+                    ),
+                ]),
+              ),
+            ),
+
+            // 虚拟滚动的内容块
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(contentPadding.left, 0, contentPadding.right, 0),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  // 添加渲染时间日志
+                  if (index == 0) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final duration = DateTime.now().difference(buildStart);
+                      debugPrint(
+                        '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
+                      );
+                    });
+                  }
+
+                  final chunk = _contentChunks[index];
+                  // 根据格式决定渲染方式
+                  if (shouldRenderHtml && !_showPlainTextMode) {
+                    return _buildHtmlChunk(chunk, controller, hasSearch, context, lineHeight);
+                  } else {
+                    // 纯文本模式或TXT格式
+                    String textChunk = chunk;
+                    if (_showPlainTextMode || !shouldRenderHtml) {
+                      textChunk = _convertHtmlToPlainText(chunk);
+                    }
+                    return _buildTextChunk(textChunk, controller, hasSearch, context, lineHeight);
+                  }
+                }, childCount: _contentChunks.length),
+              ),
+            ),
+
+            // 底部导航和间距
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                contentPadding.left,
+                24,
+                contentPadding.right,
+                contentPadding.bottom,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (controller.hasPreviousChapter())
+                        TextButton.icon(
+                          onPressed: controller.previousChapter,
+                          icon: const Icon(Icons.chevron_left),
+                          label: const Text('上一章'),
+                        ),
+                      if (controller.hasPreviousChapter() && controller.hasNextChapter())
+                        const SizedBox(width: 16),
+                      if (controller.hasNextChapter())
+                        TextButton.icon(
+                          onPressed: controller.nextChapter,
+                          icon: const Icon(Icons.chevron_right),
+                          label: const Text('下一章'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ]),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1027,6 +1127,7 @@ class _ReaderContentState extends State<ReaderContent> {
     NovelReaderViewModel controller,
     bool hasSearch,
     BuildContext context,
+    double lineHeight,
   ) {
     // HTML块已经在分块前完成了高亮和图片嵌入处理
     // 这里直接渲染即可
@@ -1054,16 +1155,24 @@ class _ReaderContentState extends State<ReaderContent> {
         },
         textStyle: TextStyle(
           fontSize: controller.fontSize.value,
-          height: 1.8,
+          height: lineHeight,
           color: Theme.of(context).textTheme.bodyLarge?.color,
         ),
         customStylesBuilder: (element) {
           final tag = element.localName;
           switch (tag) {
             case 'p':
-              return {'display': 'block', 'line-height': '2.8', 'margin-bottom': '16px'};
+              return {
+                'display': 'block',
+                'line-height': lineHeight.toStringAsFixed(2),
+                'margin-bottom': '16px',
+              };
             case 'div':
-              return {'display': 'block', 'line-height': '1.8', 'margin-bottom': '16px'};
+              return {
+                'display': 'block',
+                'line-height': lineHeight.toStringAsFixed(2),
+                'margin-bottom': '16px',
+              };
             case 'mark':
               return {
                 'background-color': 'rgba(255, 255, 0, 0.5)',
@@ -1085,7 +1194,7 @@ class _ReaderContentState extends State<ReaderContent> {
             return Container(
               key: _searchTargetKey,
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.5),
+                color: Colors.orange.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(2),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -1121,6 +1230,7 @@ class _ReaderContentState extends State<ReaderContent> {
     NovelReaderViewModel controller,
     bool hasSearch,
     BuildContext context,
+    double lineHeight,
   ) {
     // 在虚拟滚动模式下，我们需要基于块的内容构建高亮
     // 由于搜索位置是基于整个文本的，我们需要计算当前块在整个文本中的偏移
@@ -1153,6 +1263,7 @@ class _ReaderContentState extends State<ReaderContent> {
           chunkMatches,
           controller,
           context,
+          lineHeight,
         );
       }
     }
@@ -1162,7 +1273,7 @@ class _ReaderContentState extends State<ReaderContent> {
       textChunk,
       style: TextStyle(
         fontSize: controller.fontSize.value,
-        height: 1.8,
+        height: lineHeight,
         letterSpacing: 0.5,
         color: Theme.of(context).textTheme.bodyLarge?.color,
       ),
@@ -1176,6 +1287,7 @@ class _ReaderContentState extends State<ReaderContent> {
     List<dynamic> chunkMatches,
     NovelReaderViewModel controller,
     BuildContext context,
+    double lineHeight,
   ) {
     final spans = <TextSpan>[];
     int lastEnd = 0;
@@ -1226,7 +1338,7 @@ class _ReaderContentState extends State<ReaderContent> {
             text: chunkContent.substring(lastEnd, matchStart),
             style: TextStyle(
               fontSize: controller.fontSize.value,
-              height: 1.8,
+              height: lineHeight,
               letterSpacing: 0.5,
               color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
@@ -1246,11 +1358,11 @@ class _ReaderContentState extends State<ReaderContent> {
           text: chunkContent.substring(matchStart, matchEnd),
           style: TextStyle(
             fontSize: controller.fontSize.value,
-            height: 1.8,
+            height: lineHeight,
             letterSpacing: 0.5,
             backgroundColor: isSelected
-                ? Colors.orange.withOpacity(0.5)
-                : Colors.yellow.withOpacity(0.3),
+                ? Colors.orange.withValues(alpha: 0.5)
+                : Colors.yellow.withValues(alpha: 0.3),
             color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
           ),
@@ -1267,7 +1379,7 @@ class _ReaderContentState extends State<ReaderContent> {
           text: chunkContent.substring(lastEnd),
           style: TextStyle(
             fontSize: controller.fontSize.value,
-            height: 1.8,
+            height: lineHeight,
             letterSpacing: 0.5,
             color: Theme.of(context).textTheme.bodyLarge?.color,
           ),
@@ -1342,7 +1454,7 @@ class _ReaderContentState extends State<ReaderContent> {
         content,
         style: TextStyle(
           fontSize: controller.fontSize.value,
-          height: 1.8,
+          height: controller.lineHeight.value,
           letterSpacing: 0.5,
           color: Theme.of(context).textTheme.bodyLarge?.color,
         ),
@@ -1390,7 +1502,7 @@ class _ReaderContentState extends State<ReaderContent> {
         final snippetLines = match.snippet.split(RegExp(r'[\n\r]'));
         if (snippetLines.isNotEmpty) {
           final firstLine = snippetLines.first;
-          final tokenMatch = RegExp(r'\S+').firstMatch(firstLine ?? '');
+          final tokenMatch = RegExp(r'\S+').firstMatch(firstLine);
           searchKeyword = tokenMatch != null ? tokenMatch.group(0)!.trim() : firstLine.trim();
         }
       }
@@ -1455,7 +1567,7 @@ class _ReaderContentState extends State<ReaderContent> {
             text: content.substring(lastEnd, matchStart),
             style: TextStyle(
               fontSize: controller.fontSize.value,
-              height: 1.8,
+              height: controller.lineHeight.value,
               letterSpacing: 0.5,
               color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
@@ -1473,11 +1585,11 @@ class _ReaderContentState extends State<ReaderContent> {
           text: content.substring(matchStart, matchEnd),
           style: TextStyle(
             fontSize: controller.fontSize.value,
-            height: 1.8,
+            height: controller.lineHeight.value,
             letterSpacing: 0.5,
             backgroundColor: isSelected
-                ? Colors.orange.withOpacity(0.5)
-                : Colors.yellow.withOpacity(0.3),
+                ? Colors.orange.withValues(alpha: 0.5)
+                : Colors.yellow.withValues(alpha: 0.3),
             color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
           ),
@@ -1494,7 +1606,7 @@ class _ReaderContentState extends State<ReaderContent> {
           text: content.substring(lastEnd),
           style: TextStyle(
             fontSize: controller.fontSize.value,
-            height: 1.8,
+            height: controller.lineHeight.value,
             letterSpacing: 0.5,
             color: Theme.of(context).textTheme.bodyLarge?.color,
           ),
@@ -1761,12 +1873,14 @@ class _TranslatedParagraphWidget extends StatefulWidget {
   final dynamic element;
   final String originalText;
   final double fontSize;
+  final double lineHeight;
   final VoidCallback onRetry;
 
   const _TranslatedParagraphWidget({
     required this.element,
     required this.originalText,
     required this.fontSize,
+    required this.lineHeight,
     required this.onRetry,
   });
 
@@ -1807,7 +1921,7 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
               widget.element.text,
               style: TextStyle(
                 fontSize: widget.fontSize,
-                height: 2.8,
+                height: widget.lineHeight,
                 color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),

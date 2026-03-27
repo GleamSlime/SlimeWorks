@@ -17,13 +17,21 @@ abstract class DesktopScreenProvider {
   double minHeight = 800;
 
   /// 窗口尺寸
-  Rx<Size> get size => Rx<Size>(Size(double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520"), double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050")));
+  Rx<Size> get size => Rx<Size>(
+    Size(
+      double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520"),
+      double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050"),
+    ),
+  );
 
   /// 窗口标题
   RxString title = (dotenv.env['APP_NAME'] ?? "").obs;
 
   /// 页面级顶部栏配置
   Rx<ScreenChromeEntry> screenChrome = const ScreenChromeEntry.empty().obs;
+
+  /// 移动端沉浸模式
+  RxBool mobileImmersiveMode = false.obs;
 
   /// 侧边栏展开比例
   RxDouble sidebarExpandScale = 1.0.obs;
@@ -35,7 +43,8 @@ abstract class DesktopScreenProvider {
   RxDouble height = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050").obs;
 
   /// 是否为桌面端
-  RxBool get isDesktop => RxBool(width.value > 600 || Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+  RxBool get isDesktop =>
+      RxBool(width.value > 600 || Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   /// 是否为移动端
   RxBool get isMobile => RxBool(width.value <= 600 || Platform.isAndroid || Platform.isIOS);
@@ -54,4 +63,7 @@ abstract class DesktopScreenProvider {
 
   /// 清空页面级顶部栏配置
   void clearScreenChrome({Object? owner});
+
+  /// 设置移动端沉浸模式
+  void setMobileImmersiveMode(bool isImmersive);
 }

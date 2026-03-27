@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -6,14 +8,17 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/pages/novel_reader/components/chapter_list.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_toolbar.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_content.dart';
-import 'dart:async';
 
 /// 书籍阅读器页面
 class NovelReaderPage extends StatefulWidget {
@@ -28,7 +33,7 @@ class NovelReaderPage extends StatefulWidget {
 class _NovelReaderPageState extends State<NovelReaderPage> {
   late final NovelMetadata novel;
   late final NovelReaderViewModel controller;
-  bool _immersiveMode = false;
+  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
   Timer? _immersiveTimer;
   Color _readerBgColor = const Color(0xFFF6F0E7);
 
@@ -54,23 +59,20 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     _immersiveTimer?.cancel();
     _immersiveTimer = Timer(const Duration(seconds: 30), () {
       if (!mounted) return;
-      setState(() {
-        _immersiveMode = true;
-      });
+      _desktopScreen.setMobileImmersiveMode(true);
     });
   }
 
   void _exitImmersiveMode() {
     _immersiveTimer?.cancel();
-    if (!mounted || !_immersiveMode) return;
-    setState(() {
-      _immersiveMode = false;
-    });
+    if (!mounted || !_desktopScreen.mobileImmersiveMode.value) return;
+    _desktopScreen.setMobileImmersiveMode(false);
   }
 
   void _showReaderSettingsSheet() {
     showModalBottomSheet<void>(
       context: context,
+      showDragHandle: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -105,40 +107,62 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                       ],
                     ),
                     const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Text('行间距'),
+                        const Spacer(),
+                        Obx(() => Text(controller.lineHeight.value.toStringAsFixed(1))),
+                      ],
+                    ),
+                    Obx(
+                      () => Slider(
+                        value: controller.lineHeight.value,
+                        min: 1.2,
+                        max: 2.6,
+                        divisions: 7,
+                        label: controller.lineHeight.value.toStringAsFixed(1),
+                        onChanged: (value) {
+                          controller.setLineHeight(value);
+                          setModalState(() {});
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     const Text('背景色'),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
-                      children: [
-                        const Color(0xFFF6F0E7),
-                        const Color(0xFFFFFFFF),
-                        const Color(0xFFEAF4E8),
-                        const Color(0xFFEAF1F8),
-                        const Color(0xFF1F1F1F),
-                      ]
-                          .map(
-                            (color) => GestureDetector(
-                              onTap: () {
-                                setState(() => _readerBgColor = color);
-                                setModalState(() {});
-                              },
-                              child: Container(
-                                width: 30,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: _readerBgColor == color
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Colors.grey.shade400,
-                                    width: _readerBgColor == color ? 2 : 1,
+                      children:
+                          [
+                                const Color(0xFFF6F0E7),
+                                const Color(0xFFFFFFFF),
+                                const Color(0xFFEAF4E8),
+                                const Color(0xFFEAF1F8),
+                                const Color(0xFF1F1F1F),
+                              ]
+                              .map(
+                                (color) => GestureDetector(
+                                  onTap: () {
+                                    setState(() => _readerBgColor = color);
+                                    setModalState(() {});
+                                  },
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: _readerBgColor == color
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Colors.grey.shade400,
+                                        width: _readerBgColor == color ? 2 : 1,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
+                              )
+                              .toList(growable: false),
                     ),
                   ],
                 ),
@@ -173,9 +197,35 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     return controller.showChapterList.value ? _currentChapterTitle() : novel.title;
   }
 
+  EdgeInsets _mobileReaderImmersivePadding() {
+    return EdgeInsets.only(top: AppTheme.metrics.kSpace16, bottom: AppTheme.metrics.kSpace24);
+  }
+
+  double _mobileReaderBottomBarHeight() {
+    return scaleW(72);
+  }
+
+  EdgeInsets _mobileReaderContentPadding(BuildContext context) {
+    final mediaPadding = MediaQuery.paddingOf(context);
+    final immersivePadding = _mobileReaderImmersivePadding();
+    final isImmersiveMode = _desktopScreen.mobileImmersiveMode.value;
+
+    return EdgeInsets.fromLTRB(
+      AppTheme.metrics.kSpace16,
+      mediaPadding.top + immersivePadding.top + (isImmersiveMode ? 0 : AppTheme.metrics.kSpace48),
+      AppTheme.metrics.kSpace16,
+      mediaPadding.bottom +
+          immersivePadding.bottom +
+          (isImmersiveMode ? 0 : _mobileReaderBottomBarHeight()),
+    );
+  }
+
   ScreenChromeData _buildMobileScreenChromeData(bool showChapterList) {
     return ScreenChromeData(
       title: _mobileLayoutTitle(),
+      enableMobileImmersiveMode: true,
+      mobileBodyHandlesInsets: true,
+      mobileImmersivePadding: _mobileReaderImmersivePadding(),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: () {
@@ -186,35 +236,13 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           }
         },
       ),
-      actions: [
-        IconButton(
-          tooltip: '书籍详情',
-          onPressed: _showBookInfoDialog,
-          icon: const Icon(Icons.info_outline),
-        ),
-        IconButton(
-          tooltip: '阅读设置',
-          onPressed: _showReaderSettingsSheet,
-          icon: const Icon(Icons.tune),
-        ),
-        Obx(() {
-          final libraryVm = Get.find<NovelLibraryViewModel>();
-          final isFav =
-              libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ?? false;
-          return IconButton(
-            tooltip: isFav ? '取消收藏' : '收藏',
-            icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
-            onPressed: () => libraryVm.toggleFavorite(novel.id),
-          );
-        }),
-        IconButton(
-          tooltip: showChapterList ? '隐藏目录' : '显示目录',
-          icon: Icon(
-            showChapterList ? Icons.chrome_reader_mode_outlined : Icons.menu_book_outlined,
-          ),
-          onPressed: controller.toggleChapterList,
-        ),
-      ],
+      bottomBarHeight: _mobileReaderBottomBarHeight(),
+      bottomBar: _MobileReaderBottomBar(
+        controller: controller,
+        onShowBookInfo: _showBookInfoDialog,
+        onShowReaderSettings: _showReaderSettingsSheet,
+        novel: novel,
+      ),
     );
   }
 
@@ -302,7 +330,16 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                 return _buildErrorView();
                               }
 
-                              return ReaderContent(controller: controller);
+                              return ReaderContent(
+                                controller: controller,
+                                contentPadding: _mobileReaderContentPadding(context),
+                                onSwipeToPreviousChapter: controller.hasPreviousChapter()
+                                    ? controller.previousChapter
+                                    : null,
+                                onSwipeToNextChapter: controller.hasNextChapter()
+                                    ? controller.nextChapter
+                                    : null,
+                              );
                             }),
                           ),
                         ),
@@ -312,7 +349,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                   if (showChapterList)
                     Positioned.fill(
                       child: GestureDetector(
-                        onTap: controller.toggleChapterList,
+                        onTap: () {
+                          _exitImmersiveMode();
+                          controller.toggleChapterList();
+                        },
                         child: Container(
                           color: Colors.black54,
                           child: Align(
@@ -325,9 +365,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                   color: Theme.of(context).colorScheme.surface,
                                   child: Column(
                                     children: [
-                                      Expanded(
-                                        child: ChapterList(controller: controller),
-                                      ),
+                                      Expanded(child: ChapterList(controller: controller)),
                                     ],
                                   ),
                                 ),
@@ -335,16 +373,6 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  if (_immersiveMode)
-                    Positioned(
-                      right: 16,
-                      bottom: 24,
-                      child: FloatingActionButton.small(
-                        heroTag: 'immersive_tools',
-                        onPressed: _showReaderSettingsSheet,
-                        child: const Icon(Icons.tune),
                       ),
                     ),
                 ],
@@ -531,6 +559,90 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       height: size * 1.4,
       decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(4)),
       child: Icon(Icons.book, size: size * 0.5, color: Colors.white70),
+    );
+  }
+}
+
+class _MobileReaderBottomBar extends StatelessWidget {
+  final NovelReaderViewModel controller;
+  final VoidCallback onShowBookInfo;
+  final VoidCallback onShowReaderSettings;
+  final NovelMetadata novel;
+
+  const _MobileReaderBottomBar({
+    required this.controller,
+    required this.onShowBookInfo,
+    required this.onShowReaderSettings,
+    required this.novel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Material(
+      color: theme.colorScheme.surface.withAlpha(245),
+      elevation: 8,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: '目录',
+              onPressed: controller.toggleChapterList,
+              icon: const Icon(Icons.menu_book_outlined),
+            ),
+            Obx(
+              () => IconButton(
+                tooltip: '上一章',
+                onPressed: controller.hasPreviousChapter() ? controller.previousChapter : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Obx(
+                  () => Text(
+                    controller.chapters.isEmpty
+                        ? '0/0'
+                        : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge,
+                  ),
+                ),
+              ),
+            ),
+            Obx(
+              () => IconButton(
+                tooltip: '下一章',
+                onPressed: controller.hasNextChapter() ? controller.nextChapter : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ),
+            Obx(() {
+              final libraryVm = Get.find<NovelLibraryViewModel>();
+              final bool isFav =
+                  libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ?? false;
+              return IconButton(
+                tooltip: isFav ? '取消收藏' : '收藏',
+                onPressed: () => libraryVm.toggleFavorite(novel.id),
+                icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+              );
+            }),
+            IconButton(
+              tooltip: '书籍详情',
+              onPressed: onShowBookInfo,
+              icon: const Icon(Icons.info_outline),
+            ),
+            IconButton(
+              tooltip: '阅读设置',
+              onPressed: onShowReaderSettings,
+              icon: const Icon(Icons.tune),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
