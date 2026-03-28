@@ -32,6 +32,9 @@ class LanTransferViewModel extends BaseViewModel {
 
   @override
   Future<void> onInitAsync() async {
+    if (isInitialized) {
+      return;
+    }
     await super.onInitAsync();
     await startService();
   }

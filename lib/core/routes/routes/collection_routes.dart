@@ -26,7 +26,7 @@ class CollectionPictureRoute extends AppRouteData with $CollectionPictureRoute {
   const CollectionPictureRoute();
 
   @override
-  String get title => '图库';
+  String get title => '媒体库';
 
   @override
   String get sidebarLabel => title;

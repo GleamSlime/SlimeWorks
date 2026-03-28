@@ -1621,6 +1621,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "media_collection"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "db_module",
+ "image",
+ "log",
+ "serde",
+ "serde_json",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2322,6 +2337,7 @@ dependencies = [
  "libloading",
  "log",
  "md5",
+ "media_collection",
  "module_manager",
  "novel_reader",
  "reqwest",

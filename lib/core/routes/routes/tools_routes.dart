@@ -36,6 +36,6 @@ class MediaLibraryRoute extends GoRouteData with $MediaLibraryRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, AppRoutes.buildPlaceholder('媒体库'));
+    return AppRoutes.buildPage(context, state, const CollectionPictureScreen());
   }
 }

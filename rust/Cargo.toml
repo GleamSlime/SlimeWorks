@@ -40,6 +40,9 @@ db_module = { path = "db_module" }
 # Novel Reader 模块（独立 crate）
 novel_reader = { path = "novel_reader" }
 
+# Media Collection 模块（独立 crate）
+media_collection = { path = "media_collection" }
+
 # HTTP Bridge 模块（独立 crate）
 http_bridge = { path = "http_bridge" }
 
@@ -60,6 +63,7 @@ strip = true
 [workspace]
 members = [
   "capture_proxy",
+  "media_collection",
   "novel_reader",
   "db_module",
   # "ffmpeg_lib",

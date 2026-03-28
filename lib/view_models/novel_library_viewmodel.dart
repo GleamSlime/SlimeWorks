@@ -381,6 +381,9 @@ class NovelLibraryViewModel extends BaseViewModel {
 
   @override
   Future<void> onInitAsync() async {
+    if (isInitialized) {
+      return;
+    }
     await super.onInitAsync();
     await nodeSettingsService.init();
     _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) async {
@@ -427,9 +430,7 @@ class NovelLibraryViewModel extends BaseViewModel {
           if (folderId != null && folderId.isNotEmpty) {
             final syntheticFolderId = _buildRemoteFolderSyntheticId(node.id, folderId);
             final folderName =
-                payload['folder_name']?.toString() ??
-                payload['folder_title']?.toString() ??
-                '远程目录';
+                payload['folder_name']?.toString() ?? payload['folder_title']?.toString() ?? '远程目录';
             remoteFolderNames[syntheticFolderId] = folderName;
             logger.log(
               '[RemoteDebug] 映射远程目录: node=${node.name}, folderId=$folderId, name=$folderName, synthetic=$syntheticFolderId',
@@ -497,20 +498,18 @@ class NovelLibraryViewModel extends BaseViewModel {
     final modifiedAt = int.tryParse((payload['modified_at'] ?? '0').toString()) ?? 0;
     final addedAt = int.tryParse((payload['added_at'] ?? '0').toString()) ?? 0;
     final lastReadAtRaw = payload['last_read_at'];
-    final lastReadAt =
-      lastReadAtRaw == null ? null : int.tryParse(lastReadAtRaw.toString());
+    final lastReadAt = lastReadAtRaw == null ? null : int.tryParse(lastReadAtRaw.toString());
     final tags = (payload['tags'] as List<dynamic>? ?? <dynamic>[])
         .map((e) => e.toString())
         .where((e) => e.trim().isNotEmpty)
         .toList();
     final folderIdRaw = payload['folder_id'];
     final folderId = (folderIdRaw == null || folderIdRaw.toString().isEmpty)
-      ? null
-      : folderIdRaw.toString();
+        ? null
+        : folderIdRaw.toString();
     final coverBase64 = payload['cover_base64']?.toString();
     final coverExt = (payload['cover_ext'] ?? 'png').toString();
-    final coverDataUri =
-      (coverBase64 != null && coverBase64.isNotEmpty)
+    final coverDataUri = (coverBase64 != null && coverBase64.isNotEmpty)
         ? 'data:image/$coverExt;base64,$coverBase64'
         : null;
 

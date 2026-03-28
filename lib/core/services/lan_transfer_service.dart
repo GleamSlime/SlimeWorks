@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/lan_transfer.dart' as rust_api;
+import 'package:slime_works/src/rust/frb_generated.dart';
 
 /// 设备信息模型
 class DeviceInfo {
@@ -172,7 +173,27 @@ class LanTransferService {
   Timer? _deviceRefreshTimer;
   Future<void>? _pendingStart;
   Future<void>? _pendingStop;
+  Future<void>? _rustInitFuture;
   DateTime? _lastEmptyDevicesSelfCheckAt;
+
+  Future<void> _ensureRustReady() async {
+    final existing = _rustInitFuture;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final future = RustLib.init();
+    _rustInitFuture = future;
+    try {
+      await future;
+    } catch (_) {
+      if (identical(_rustInitFuture, future)) {
+        _rustInitFuture = null;
+      }
+      rethrow;
+    }
+  }
 
   /// 启动服务
   Future<void> startService({int port = kDefaultPort}) async {
@@ -200,6 +221,7 @@ class LanTransferService {
     }
 
     try {
+      await _ensureRustReady();
       logger.i('LAN Transfer start begin, port=$port');
       rust_api.lanTransferInit();
       await rust_api.lanTransferStart(port: port);
@@ -260,6 +282,7 @@ class LanTransferService {
 
   Future<void> _stopServiceInternal() async {
     try {
+      await _ensureRustReady();
       logger.i('LAN Transfer stop begin');
       _stopDeviceRefresh();
       await rust_api.lanTransferStop();
@@ -283,6 +306,7 @@ class LanTransferService {
   /// 获取本机设备信息
   Future<DeviceInfo> getLocalDevice({int port = kDefaultPort}) async {
     try {
+      await _ensureRustReady();
       final jsonStr = await rust_api.lanTransferGetLocalDevice(port: port);
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
       return DeviceInfo.fromJson(json);
@@ -295,6 +319,7 @@ class LanTransferService {
   /// 获取已发现的设备列表
   Future<List<DeviceInfo>> getDevices() async {
     try {
+      await _ensureRustReady();
       final jsonStrList = await rust_api.lanTransferGetDevices();
       final devices = jsonStrList
           .map((jsonStr) => DeviceInfo.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))
@@ -365,6 +390,7 @@ class LanTransferService {
     required String text,
   }) async {
     try {
+      await _ensureRustReady();
       final transferId = await rust_api.lanTransferSendText(
         targetIp: targetIp,
         targetPort: targetPort,
@@ -387,6 +413,7 @@ class LanTransferService {
     required String filePath,
   }) async {
     try {
+      await _ensureRustReady();
       final transferId = await rust_api.lanTransferSendFile(
         targetIp: targetIp,
         targetPort: targetPort,
@@ -404,6 +431,7 @@ class LanTransferService {
   /// 接受传输
   Future<void> acceptTransfer(String transferId) async {
     try {
+      await _ensureRustReady();
       await rust_api.lanTransferAccept(transferId: transferId);
       logger.i('Transfer accepted: $transferId');
     } catch (e) {
@@ -415,6 +443,7 @@ class LanTransferService {
   /// 拒绝传输
   Future<void> rejectTransfer(String transferId) async {
     try {
+      await _ensureRustReady();
       await rust_api.lanTransferReject(transferId: transferId);
       logger.i('Transfer rejected: $transferId');
     } catch (e) {
@@ -426,6 +455,7 @@ class LanTransferService {
   /// 取消传输
   Future<void> cancelTransfer(String transferId) async {
     try {
+      await _ensureRustReady();
       await rust_api.lanTransferCancel(transferId: transferId);
       logger.i('Transfer cancelled: $transferId');
     } catch (e) {
@@ -437,6 +467,7 @@ class LanTransferService {
   /// 获取所有传输记�?
   Future<List<TransferItem>> getTransfers() async {
     try {
+      await _ensureRustReady();
       final jsonStrList = await rust_api.lanTransferGetTransfers();
       return jsonStrList
           .map((jsonStr) => TransferItem.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))
@@ -450,6 +481,7 @@ class LanTransferService {
   /// 添加信任设备
   Future<void> addTrustedDevice(String deviceId, String deviceName) async {
     try {
+      await _ensureRustReady();
       await rust_api.lanTransferAddTrusted(deviceId: deviceId, deviceName: deviceName);
       logger.i('Device trusted: $deviceName');
     } catch (e) {
@@ -461,6 +493,7 @@ class LanTransferService {
   /// 移除信任设备
   Future<void> removeTrustedDevice(String deviceId) async {
     try {
+      await _ensureRustReady();
       await rust_api.lanTransferRemoveTrusted(deviceId: deviceId);
       logger.i('Device untrusted: $deviceId');
     } catch (e) {
@@ -472,6 +505,7 @@ class LanTransferService {
   /// 检查是否为信任设备
   Future<bool> isTrustedDevice(String deviceId) async {
     try {
+      await _ensureRustReady();
       return await rust_api.lanTransferIsTrusted(deviceId: deviceId);
     } catch (e) {
       logger.e('Failed to check trusted device: $e');
@@ -482,6 +516,7 @@ class LanTransferService {
   /// 获取信任设备列表
   Future<List<TrustedDevice>> getTrustedDevices() async {
     try {
+      await _ensureRustReady();
       final jsonStrList = await rust_api.lanTransferGetTrustedDevices();
       return jsonStrList
           .map((jsonStr) => TrustedDevice.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))

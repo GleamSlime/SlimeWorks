@@ -105,7 +105,7 @@ class SidebarController extends GetxController {
   /// 选择菜单项
   void selectItem(String? route) {
     if (route != null && route.isNotEmpty) {
-      // selectedRoute.value = route;
+      selectedRoute.value = route;
     }
   }
 

@@ -55,10 +55,6 @@ class _CollectionLibraryScreenState
 
     // 添加滚动监听，接近底部时加载更多
     _scrollController.addListener(_onScroll);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      viewModel.refreshRemoteNovels();
-    });
   }
 
   void _onScroll() {

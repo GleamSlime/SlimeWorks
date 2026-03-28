@@ -7,6 +7,7 @@ pub mod logger;
 pub mod module_downloader;
 pub mod module_loader; // 旧 API（CaptureProxy相关）
 pub mod module_manager; // 新的统一模块管理系统（使用独立 crate）
+pub mod media_collection; // 媒体集合模块
 pub mod novel_reader; // 书籍阅读器模块
 pub mod simple;
 pub mod system_metrics;

@@ -11,6 +11,7 @@ import 'api/ffmpeg.dart';
 import 'api/http_bridge.dart';
 import 'api/lan_transfer.dart';
 import 'api/logger.dart';
+import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
@@ -215,6 +216,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
   CaptureProxyModule dco_decode_capture_proxy_module(dynamic raw);
 
   @protected
@@ -257,6 +264,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<KeywordRuleInput> dco_decode_list_keyword_rule_input(dynamic raw);
 
   @protected
+  List<MediaCollection> dco_decode_list_media_collection(dynamic raw);
+
+  @protected
+  List<MediaFolder> dco_decode_list_media_folder(dynamic raw);
+
+  @protected
+  List<MediaItem> dco_decode_list_media_item(dynamic raw);
+
+  @protected
   List<NovelChapter> dco_decode_list_novel_chapter(dynamic raw);
 
   @protected
@@ -285,6 +301,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SearchMatch> dco_decode_list_search_match(dynamic raw);
+
+  @protected
+  MediaCollection dco_decode_media_collection(dynamic raw);
+
+  @protected
+  MediaFolder dco_decode_media_folder(dynamic raw);
+
+  @protected
+  MediaItem dco_decode_media_item(dynamic raw);
+
+  @protected
+  MediaKind dco_decode_media_kind(dynamic raw);
 
   @protected
   ModuleType dco_decode_module_type(dynamic raw);
@@ -324,6 +352,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
@@ -527,6 +561,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   CaptureProxyModule sse_decode_capture_proxy_module(
     SseDeserializer deserializer,
   );
@@ -579,6 +619,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<MediaCollection> sse_decode_list_media_collection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MediaFolder> sse_decode_list_media_folder(SseDeserializer deserializer);
+
+  @protected
+  List<MediaItem> sse_decode_list_media_item(SseDeserializer deserializer);
+
+  @protected
   List<NovelChapter> sse_decode_list_novel_chapter(
     SseDeserializer deserializer,
   );
@@ -619,6 +670,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SearchMatch> sse_decode_list_search_match(SseDeserializer deserializer);
+
+  @protected
+  MediaCollection sse_decode_media_collection(SseDeserializer deserializer);
+
+  @protected
+  MediaFolder sse_decode_media_folder(SseDeserializer deserializer);
+
+  @protected
+  MediaItem sse_decode_media_item(SseDeserializer deserializer);
+
+  @protected
+  MediaKind sse_decode_media_kind(SseDeserializer deserializer);
 
   @protected
   ModuleType sse_decode_module_type(SseDeserializer deserializer);
@@ -662,6 +725,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
@@ -902,6 +971,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
   void sse_encode_capture_proxy_module(
     CaptureProxyModule self,
     SseSerializer serializer,
@@ -965,6 +1040,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_media_collection(
+    List<MediaCollection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_media_folder(
+    List<MediaFolder> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_media_item(
+    List<MediaItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_novel_chapter(
     List<NovelChapter> self,
     SseSerializer serializer,
@@ -1022,6 +1115,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_media_collection(
+    MediaCollection self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_folder(MediaFolder self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_media_item(MediaItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_media_kind(MediaKind self, SseSerializer serializer);
+
+  @protected
   void sse_encode_module_type(ModuleType self, SseSerializer serializer);
 
   @protected
@@ -1069,6 +1177,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PlatformInt64? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
