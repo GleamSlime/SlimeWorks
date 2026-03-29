@@ -42,14 +42,13 @@ class MediaPrefsService {
 
   static const levels = [
     ThumbQualityLevel(label: '极低', scaleWidth: 120, qv: 10, frameCount: 3, frameCountFallback: 2),
-    ThumbQualityLevel(label: '低',   scaleWidth: 180, qv: 8,  frameCount: 4, frameCountFallback: 2),
-    ThumbQualityLevel(label: '中',   scaleWidth: 240, qv: 6,  frameCount: 6, frameCountFallback: 3),
-    ThumbQualityLevel(label: '高',   scaleWidth: 360, qv: 4,  frameCount: 6, frameCountFallback: 3),
-    ThumbQualityLevel(label: '超高', scaleWidth: 480, qv: 3,  frameCount: 8, frameCountFallback: 4),
+    ThumbQualityLevel(label: '低', scaleWidth: 180, qv: 8, frameCount: 4, frameCountFallback: 2),
+    ThumbQualityLevel(label: '中', scaleWidth: 240, qv: 6, frameCount: 6, frameCountFallback: 3),
+    ThumbQualityLevel(label: '高', scaleWidth: 360, qv: 4, frameCount: 6, frameCountFallback: 3),
+    ThumbQualityLevel(label: '超高', scaleWidth: 480, qv: 3, frameCount: 8, frameCountFallback: 4),
   ];
 
-  ThumbQualityLevel get currentLevel =>
-      levels[(quality.value - 1).clamp(0, levels.length - 1)];
+  ThumbQualityLevel get currentLevel => levels[(quality.value - 1).clamp(0, levels.length - 1)];
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

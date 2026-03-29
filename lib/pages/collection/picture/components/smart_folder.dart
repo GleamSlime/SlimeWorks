@@ -30,10 +30,36 @@ enum SmartFolderFileType {
 }
 
 /// 常见图片扩展名集合。
-const _imageExts = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.heic', '.heif', '.avif', '.svg'};
+const _imageExts = {
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.tiff',
+  '.tif',
+  '.heic',
+  '.heif',
+  '.avif',
+  '.svg',
+};
 
 /// 常见视频扩展名集合。
-const _videoExts = {'.mp4', '.mkv', '.mov', '.avi', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.rmvb', '.rm', '.3gp'};
+const _videoExts = {
+  '.mp4',
+  '.mkv',
+  '.mov',
+  '.avi',
+  '.wmv',
+  '.flv',
+  '.webm',
+  '.m4v',
+  '.ts',
+  '.rmvb',
+  '.rm',
+  '.3gp',
+};
 
 /// A virtual folder that uses an optional regex pattern to filter media collections.
 /// [targetFolderIds] scopes the filter to specific regular folders (empty = all folders).
@@ -187,4 +213,3 @@ class SmartFolder {
     }).toList();
   }
 }
-

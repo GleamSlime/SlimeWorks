@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 List<MediaCollection> getAllMediaCollections() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaCollections();
@@ -75,6 +75,37 @@ bool deleteMediaCollection({required String collectionId}) => RustLib
     .instance
     .api
     .crateApiMediaCollectionDeleteMediaCollection(collectionId: collectionId);
+
+/// Return size + file-path list for every local collection in one pass.
+/// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
+List<CollectionStats> getAllCollectionStats() =>
+    RustLib.instance.api.crateApiMediaCollectionGetAllCollectionStats();
+
+/// Aggregated per-collection stats returned in a single batch FFI call.
+class CollectionStats {
+  final String collectionId;
+  final BigInt totalSize;
+  final List<String> filePaths;
+
+  const CollectionStats({
+    required this.collectionId,
+    required this.totalSize,
+    required this.filePaths,
+  });
+
+  @override
+  int get hashCode =>
+      collectionId.hashCode ^ totalSize.hashCode ^ filePaths.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CollectionStats &&
+          runtimeType == other.runtimeType &&
+          collectionId == other.collectionId &&
+          totalSize == other.totalSize &&
+          filePaths == other.filePaths;
+}
 
 class MediaCollection {
   final String id;

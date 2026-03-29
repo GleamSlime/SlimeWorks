@@ -65,10 +65,13 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   bool _hovering = false;
   double _hoverLocalX = 0;
   double _cardWidth = 1;
+
   /// 实时视频帧（优先级最高）。
   String? _realtimeVideoFrame;
+
   /// 悬停进入 3s 后才触发预取的计时器。
   Timer? _hoverTimer;
+
   /// 3s 阈值是否已达到（预取已触发）。
   bool _hoverPreviewActive = false;
 
@@ -107,7 +110,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       final left = idx - d;
       final right = idx + d;
       if (left >= 0 && sources[left] != null && sources[left]!.isNotEmpty) return sources[left];
-      if (right < count && sources[right] != null && sources[right]!.isNotEmpty) return sources[right];
+      if (right < count && sources[right] != null && sources[right]!.isNotEmpty)
+        return sources[right];
     }
     return widget.coverSource;
   }
@@ -148,12 +152,18 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       ],
     );
     if (!mounted) return;
-    if (action == 'rename') widget.onRename();
-    else if (action == 'move') widget.onMove();
-    else if (action == 'open_folder') widget.onOpenFolder();
-    else if (action == 'favorite') widget.onToggleFavorite();
-    else if (action == 'delete') widget.onDelete();
-    else if (action == 'delete_folder') widget.onDeleteFolder?.call();
+    if (action == 'rename')
+      widget.onRename();
+    else if (action == 'move')
+      widget.onMove();
+    else if (action == 'open_folder')
+      widget.onOpenFolder();
+    else if (action == 'favorite')
+      widget.onToggleFavorite();
+    else if (action == 'delete')
+      widget.onDelete();
+    else if (action == 'delete_folder')
+      widget.onDeleteFolder?.call();
   }
 
   @override
@@ -167,40 +177,38 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-            onEnter: (_) {
-              setState(() => _hovering = true);
-              // 3s 后触发预取：届时才调用 onHoverEnter（避免一进来就拉满 CPU）
-              _hoverTimer?.cancel();
-              _hoverPreviewActive = false;
-              _hoverTimer = Timer(const Duration(seconds: 3), () {
-                if (!mounted) return;
-                setState(() => _hoverPreviewActive = true);
-                widget.onHoverEnter?.call();
-              });
-            },
-            onExit: (_) {
-              _hoverTimer?.cancel();
-              _hoverTimer = null;
-              setState(() {
-                _hovering = false;
-                _hoverLocalX = 0;
-                _realtimeVideoFrame = null;
-                _hoverPreviewActive = false;
-              });
-            },
-            onHover: (e) {
-              setState(() => _hoverLocalX = e.localPosition.dx);
-              // 实时视频帧取样（仅在 3s 阈值达到后才请求）
-              if (_hoverPreviewActive &&
-                  widget.onRequestVideoFrame != null &&
-                  _cardWidth > 0) {
-                final fraction = (e.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
-                final frame = widget.onRequestVideoFrame!(fraction);
-                if (frame != null && frame != _realtimeVideoFrame) {
-                  setState(() => _realtimeVideoFrame = frame);
-                }
-              }
-            },
+        onEnter: (_) {
+          setState(() => _hovering = true);
+          // 3s 后触发预取：届时才调用 onHoverEnter（避免一进来就拉满 CPU）
+          _hoverTimer?.cancel();
+          _hoverPreviewActive = false;
+          _hoverTimer = Timer(const Duration(seconds: 3), () {
+            if (!mounted) return;
+            setState(() => _hoverPreviewActive = true);
+            widget.onHoverEnter?.call();
+          });
+        },
+        onExit: (_) {
+          _hoverTimer?.cancel();
+          _hoverTimer = null;
+          setState(() {
+            _hovering = false;
+            _hoverLocalX = 0;
+            _realtimeVideoFrame = null;
+            _hoverPreviewActive = false;
+          });
+        },
+        onHover: (e) {
+          setState(() => _hoverLocalX = e.localPosition.dx);
+          // 实时视频帧取样（仅在 3s 阈值达到后才请求）
+          if (_hoverPreviewActive && widget.onRequestVideoFrame != null && _cardWidth > 0) {
+            final fraction = (e.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
+            final frame = widget.onRequestVideoFrame!(fraction);
+            if (frame != null && frame != _realtimeVideoFrame) {
+              setState(() => _realtimeVideoFrame = frame);
+            }
+          }
+        },
         child: LayoutBuilder(
           builder: (context, constraints) {
             _cardWidth = constraints.maxWidth > 0 ? constraints.maxWidth : 1;
@@ -330,7 +338,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                             right: 0,
                             bottom: 0,
                             child: LinearProgressIndicator(
-                              value: _cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0,
+                              value: _cardWidth > 0
+                                  ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0)
+                                  : 0,
                               minHeight: 3,
                               backgroundColor: Colors.white24,
                               valueColor: const AlwaysStoppedAnimation<Color>(Colors.white70),
@@ -377,5 +387,3 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     );
   }
 }
-
-

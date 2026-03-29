@@ -114,16 +114,20 @@ class VideoThumbQueue {
       if (task.isCancelled) continue;
       _running++;
       debugPrint('[Queue] 开始执行 key=${task.key} running=$_running');
-      task.work().then((_) {
-        if (!task._completer.isCompleted) task._completer.complete();
-      }).catchError((e) {
-        debugPrint('[Queue] 执行异常 key=${task.key} err=$e');
-        if (!task._completer.isCompleted) task._completer.complete();
-      }).whenComplete(() {
-        _running--;
-        debugPrint('[Queue] 执行完毕 key=${task.key} running=$_running');
-        _tick();
-      });
+      task
+          .work()
+          .then((_) {
+            if (!task._completer.isCompleted) task._completer.complete();
+          })
+          .catchError((e) {
+            debugPrint('[Queue] 执行异常 key=${task.key} err=$e');
+            if (!task._completer.isCompleted) task._completer.complete();
+          })
+          .whenComplete(() {
+            _running--;
+            debugPrint('[Queue] 执行完毕 key=${task.key} running=$_running');
+            _tick();
+          });
     }
   }
 }

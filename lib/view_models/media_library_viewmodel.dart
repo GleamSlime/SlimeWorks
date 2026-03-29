@@ -298,15 +298,17 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (folderId != null && isSmartFolder(folderId)) {
       final sf = getSmartFolder(folderId);
       if (sf == null) return [];
-      var filtered = mergedCollections.where((c) {
-        if (!sf.matchesCollection(c)) return false;
-        // 文件名匹配模式：额外检查集合内文件名缓存
-        if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
-          final paths = _collectionItemPaths[c.id] ?? const [];
-          return sf.matchesFileNames(paths);
-        }
-        return true;
-      }).toList(growable: true);
+      var filtered = mergedCollections
+          .where((c) {
+            if (!sf.matchesCollection(c)) return false;
+            // 文件名匹配模式：额外检查集合内文件名缓存
+            if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
+              final paths = _collectionItemPaths[c.id] ?? const [];
+              return sf.matchesFileNames(paths);
+            }
+            return true;
+          })
+          .toList(growable: true);
       if (favOnly) filtered = filtered.where((c) => favIds.contains(c.id)).toList();
       return _applySortOrder(filtered, folderId);
     }
@@ -335,13 +337,15 @@ class MediaLibraryViewModel extends BaseViewModel {
           result.sort((a, b) => a.itemCount.compareTo(b.itemCount));
         case CollectionSortOrder.sizeDesc:
           result.sort(
-            (a, b) => (_collectionSizes[b.id] ?? BigInt.zero)
-                .compareTo(_collectionSizes[a.id] ?? BigInt.zero),
+            (a, b) => (_collectionSizes[b.id] ?? BigInt.zero).compareTo(
+              _collectionSizes[a.id] ?? BigInt.zero,
+            ),
           );
         case CollectionSortOrder.sizeAsc:
           result.sort(
-            (a, b) => (_collectionSizes[a.id] ?? BigInt.zero)
-                .compareTo(_collectionSizes[b.id] ?? BigInt.zero),
+            (a, b) => (_collectionSizes[a.id] ?? BigInt.zero).compareTo(
+              _collectionSizes[b.id] ?? BigInt.zero,
+            ),
           );
         case CollectionSortOrder.dateUpdated:
           break;
@@ -612,9 +616,10 @@ class MediaLibraryViewModel extends BaseViewModel {
         if (frames.isEmpty) return;
         final frameIdx = totalSlots == 1
             ? 0
-            : ((slotIdx / (totalSlots - 1)) * (frames.length - 1))
-                .round()
-                .clamp(0, frames.length - 1);
+            : ((slotIdx / (totalSlots - 1)) * (frames.length - 1)).round().clamp(
+                0,
+                frames.length - 1,
+              );
         final thumb = frames[frameIdx];
         final sources = _hoverSourcesCache[collectionId];
         if (sources != null && slotIdx < sources.length) {
@@ -1123,9 +1128,12 @@ class MediaLibraryViewModel extends BaseViewModel {
       if (ffprobeExe != null) {
         debugPrint('[VideoThumb] ffprobe: $ffprobeExe');
         final probe = await Process.run(ffprobeExe, [
-          '-v', 'error',
-          '-show_entries', 'format=duration',
-          '-of', 'default=noprint_wrappers=1:nokey=1',
+          '-v',
+          'error',
+          '-show_entries',
+          'format=duration',
+          '-of',
+          'default=noprint_wrappers=1:nokey=1',
           videoPath,
         ]);
         final parsed = double.tryParse((probe.stdout as String).trim());
@@ -1133,7 +1141,9 @@ class MediaLibraryViewModel extends BaseViewModel {
           probedDuration = parsed;
           debugPrint('[VideoThumb] ffprobe 时长: ${probedDuration}s');
         } else {
-          debugPrint('[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}\"');
+          debugPrint(
+            '[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}\"',
+          );
         }
       } else {
         debugPrint('[VideoThumb] ffprobe 不可用，跳过时长探测');
@@ -1167,9 +1177,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         continue;
       }
       // 分布于 [0, duration*0.9]，避免最后一帧恰好越界
-      final double t = frameCount == 1
-          ? 0.0
-          : (duration * 0.9 * i / (frameCount - 1));
+      final double t = frameCount == 1 ? 0.0 : (duration * 0.9 * i / (frameCount - 1));
       final int secs = t.toInt();
       final String seek =
           '${(secs ~/ 3600).toString().padLeft(2, '0')}'
@@ -1178,11 +1186,16 @@ class MediaLibraryViewModel extends BaseViewModel {
       try {
         // -ss 放在 -i 之前：输入快速定位（避免慢解码导致的 EINVAL）
         final result = await Process.run(ffmpegExe, [
-          '-ss', seek,
-          '-i', videoPath,
-          '-vframes', '1',
-          '-vf', 'scale=${qualityLevel.scaleWidth}:-2',
-          '-q:v', '${qualityLevel.qv}',
+          '-ss',
+          seek,
+          '-i',
+          videoPath,
+          '-vframes',
+          '1',
+          '-vf',
+          'scale=${qualityLevel.scaleWidth}:-2',
+          '-q:v',
+          '${qualityLevel.qv}',
           '-y',
           outFile.path,
         ]);
@@ -1191,7 +1204,9 @@ class MediaLibraryViewModel extends BaseViewModel {
           consecutiveFails = 0;
         } else {
           // 删除可能残留的空文件
-          try { if (outFile.existsSync()) outFile.deleteSync(); } catch (_) {}
+          try {
+            if (outFile.existsSync()) outFile.deleteSync();
+          } catch (_) {}
           debugPrint('[VideoThumb] ffmpeg 帧$i 失败: exitCode=${result.exitCode} seek=$seek');
           consecutiveFails++;
           if (consecutiveFails >= 3) {
@@ -1320,9 +1335,13 @@ class MediaLibraryViewModel extends BaseViewModel {
       // 回读验证写入成功
       final written = await file.readAsString();
       if (written == json) {
-        debugPrint('[MediaLibrary] _saveSmartFolders: ✅ 写入验证通过，${smartFolders.length} 个智能文件夹，${json.length} 字节');
+        debugPrint(
+          '[MediaLibrary] _saveSmartFolders: ✅ 写入验证通过，${smartFolders.length} 个智能文件夹，${json.length} 字节',
+        );
       } else {
-        debugPrint('[MediaLibrary] _saveSmartFolders: ❌ 内容不符！期望 ${json.length} 字节，实际 ${written.length} 字节');
+        debugPrint(
+          '[MediaLibrary] _saveSmartFolders: ❌ 内容不符！期望 ${json.length} 字节，实际 ${written.length} 字节',
+        );
       }
     } catch (err, stack) {
       debugPrint('[MediaLibrary] _saveSmartFolders: ❌ 保存失败 err=$err');
@@ -1400,14 +1419,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   ///   <目标目录>/<文件夹名>/<集合名>/<原文件> → 移动文件 → reimport 更新 DB。
   ///
   /// [folderId] 与 [smartFolderId] 二选一，传入非 null 值。
-  Future<void> transferFolderCollections({
-    String? folderId,
-    String? smartFolderId,
-  }) async {
+  Future<void> transferFolderCollections({String? folderId, String? smartFolderId}) async {
     // 1. 弹出文件夹选择器
-    final targetRoot = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '选择转移目标目录',
-    );
+    final targetRoot = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择转移目标目录');
     if (targetRoot == null || targetRoot.isEmpty) return;
 
     // 2. 确定集合列表
@@ -1417,14 +1431,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       final sf = getSmartFolder(smartFolderId);
       if (sf == null) return;
       containerName = sf.name;
-      toTransfer = mergedCollections.where((c) {
-        if (!sf.matchesCollection(c)) return false;
-        if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
-          final paths = _collectionItemPaths[c.id] ?? const [];
-          return sf.matchesFileNames(paths);
-        }
-        return true;
-      }).where((c) => !isRemoteCollection(c.id)).toList();
+      toTransfer = mergedCollections
+          .where((c) {
+            if (!sf.matchesCollection(c)) return false;
+            if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
+              final paths = _collectionItemPaths[c.id] ?? const [];
+              return sf.matchesFileNames(paths);
+            }
+            return true;
+          })
+          .where((c) => !isRemoteCollection(c.id))
+          .toList();
     } else if (folderId != null) {
       final folder = mergedFolders.firstWhereOrNull((f) => f.id == folderId);
       if (folder == null) return;
@@ -1455,9 +1472,7 @@ class MediaLibraryViewModel extends BaseViewModel {
           scanStatusText.value = '转移中: ${collection.title} ($successCount/${toTransfer.length})';
 
           // 3. 创建目标集合目录：<targetRoot>/<containerName>/<collectionTitle>
-          final destCollectionDir = Directory(
-            '${containerDir.path}$sep${collection.title}',
-          );
+          final destCollectionDir = Directory('${containerDir.path}$sep${collection.title}');
           await destCollectionDir.create(recursive: true);
 
           // 4. 获取集合内所有文件
@@ -1480,7 +1495,9 @@ class MediaLibraryViewModel extends BaseViewModel {
                 await srcFile.copy(destFile.path);
                 await srcFile.delete();
               } catch (copyErr) {
-                debugPrint('[Transfer] copy+delete 失败: ${item.filePath} → ${destFile.path} err=$copyErr');
+                debugPrint(
+                  '[Transfer] copy+delete 失败: ${item.filePath} → ${destFile.path} err=$copyErr',
+                );
               }
             }
           }
@@ -1530,8 +1547,6 @@ class MediaLibraryViewModel extends BaseViewModel {
       scanStatusText.value = '';
     }
   }
-
-
 
   Future<void> createFolderWithName(String name, {String? targetNodeId}) async {
     final normalized = name.trim();

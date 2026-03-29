@@ -1,4 +1,5 @@
 use chrono::Utc;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -609,6 +610,33 @@ pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem
             .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
     });
     Ok(result)
+}
+
+/// Aggregated per-collection stats: total file size and all file paths.
+/// Used by the Dart layer to populate size/path caches in a single FFI call
+/// instead of calling `get_media_collection_items` once per collection.
+pub struct CollectionStats {
+    pub collection_id: String,
+    pub total_size: u64,
+    pub file_paths: Vec<String>,
+}
+
+/// Return size + file-path list for every collection in one pass over MEDIA_ITEMS.
+pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
+    let items = get_items().lock().map_err(|e| e.to_string())?;
+    let mut map: HashMap<String, CollectionStats> = HashMap::new();
+    for item in items.iter() {
+        let entry = map
+            .entry(item.collection_id.clone())
+            .or_insert_with(|| CollectionStats {
+                collection_id: item.collection_id.clone(),
+                total_size: 0,
+                file_paths: Vec::new(),
+            });
+        entry.total_size += item.file_size;
+        entry.file_paths.push(item.file_path.clone());
+    }
+    Ok(map.into_values().collect())
 }
 
 pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, String> {

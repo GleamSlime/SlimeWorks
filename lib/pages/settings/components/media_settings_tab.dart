@@ -44,9 +44,9 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
       _cacheSizeBytes = sz;
       _clearing = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('缓存已清除'), duration: Duration(seconds: 2)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('缓存已清除'), duration: Duration(seconds: 2)));
   }
 
   String _formatBytes(int bytes) {
@@ -243,9 +243,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
             padding: const EdgeInsets.only(top: 12),
             child: Text(
               '注意：视频封面功能仅在 Windows / macOS 上可用。',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
             ),
           ),
       ],
@@ -286,9 +284,7 @@ class _SettingsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withAlpha(80),
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
       ),
       child: child,
     );

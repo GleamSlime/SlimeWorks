@@ -171,3 +171,27 @@ pub fn delete_media_folder(folder_id: String) -> anyhow::Result<bool> {
 pub fn delete_media_collection(collection_id: String) -> anyhow::Result<bool> {
     media_collection::delete_media_collection(collection_id).map_err(|error| anyhow::anyhow!(error))
 }
+
+/// Aggregated per-collection stats returned in a single batch FFI call.
+#[derive(Debug, Clone)]
+pub struct CollectionStats {
+    pub collection_id: String,
+    pub total_size: u64,
+    pub file_paths: Vec<String>,
+}
+
+/// Return size + file-path list for every local collection in one pass.
+/// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
+#[frb(sync)]
+pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
+    let stats =
+        media_collection::get_all_collection_stats().map_err(|error| anyhow::anyhow!(error))?;
+    Ok(stats
+        .into_iter()
+        .map(|s| CollectionStats {
+            collection_id: s.collection_id,
+            total_size: s.total_size,
+            file_paths: s.file_paths,
+        })
+        .collect())
+}

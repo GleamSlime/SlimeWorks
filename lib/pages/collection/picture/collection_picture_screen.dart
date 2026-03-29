@@ -175,8 +175,7 @@ class _CollectionPictureScreenState
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.grid_view_rounded, size: scaleW(16),
-                    color: Theme.of(context).hintColor),
+                Icon(Icons.grid_view_rounded, size: scaleW(16), color: Theme.of(context).hintColor),
                 SizedBox(width: appMetrics.kSpace4),
                 IconButton(
                   icon: const Icon(Icons.remove_rounded),
@@ -188,8 +187,7 @@ class _CollectionPictureScreenState
                       ? () => setState(() => _detailColumnCount--)
                       : null,
                 ),
-                Text('$_detailColumnCount 列',
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text('$_detailColumnCount 列', style: Theme.of(context).textTheme.bodySmall),
                 IconButton(
                   icon: const Icon(Icons.add_rounded),
                   iconSize: scaleW(16),
@@ -262,7 +260,8 @@ class _CollectionPictureScreenState
               style: Theme.of(context).textTheme.bodySmall,
             ),
           const Spacer(),
-          if (hasBreadcrumb && hasNodes) ...[             Text(
+          if (hasBreadcrumb && hasNodes) ...[
+            Text(
               '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -270,37 +269,37 @@ class _CollectionPictureScreenState
           ],
           // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
           PopupMenuButton<CollectionSortOrder>(
-              tooltip: '集合排序',
-              icon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.sort_rounded, size: scaleW(18)),
-                  SizedBox(width: appMetrics.kSpace4),
-                  Text(
-                    viewModel.collectionSortOrder.value.label,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              onSelected: (v) => viewModel.collectionSortOrder.value = v,
-              itemBuilder: (_) => CollectionSortOrder.values
-                  .map(
-                    (o) => PopupMenuItem<CollectionSortOrder>(
-                      value: o,
-                      child: Row(
-                        children: [
-                          if (viewModel.collectionSortOrder.value == o)
-                            Icon(Icons.check_rounded, size: scaleW(16))
-                          else
-                            SizedBox(width: scaleW(16)),
-                          SizedBox(width: appMetrics.kSpace8),
-                          Text(o.label),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
+            tooltip: '集合排序',
+            icon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.sort_rounded, size: scaleW(18)),
+                SizedBox(width: appMetrics.kSpace4),
+                Text(
+                  viewModel.collectionSortOrder.value.label,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ),
+            onSelected: (v) => viewModel.collectionSortOrder.value = v,
+            itemBuilder: (_) => CollectionSortOrder.values
+                .map(
+                  (o) => PopupMenuItem<CollectionSortOrder>(
+                    value: o,
+                    child: Row(
+                      children: [
+                        if (viewModel.collectionSortOrder.value == o)
+                          Icon(Icons.check_rounded, size: scaleW(16))
+                        else
+                          SizedBox(width: scaleW(16)),
+                        SizedBox(width: appMetrics.kSpace8),
+                        Text(o.label),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
         ],
       ),
     );
@@ -587,20 +586,19 @@ class _CollectionPictureScreenState
                       style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     ),
                     // 文件类型过滤（仅匹配文件名时显示）
-                    if (regexTarget == SmartFolderRegexTarget.fileName) ...
-                      [
-                        SizedBox(height: appMetrics.kSpace8),
-                        const Text('文件类型'),
-                        SizedBox(height: appMetrics.kSpace4),
-                        SegmentedButton<SmartFolderFileType>(
-                          segments: SmartFolderFileType.values
-                              .map((t) => ButtonSegment(value: t, label: Text(t.label)))
-                              .toList(),
-                          selected: {fileTypeFilter},
-                          onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
-                          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                        ),
-                      ],
+                    if (regexTarget == SmartFolderRegexTarget.fileName) ...[
+                      SizedBox(height: appMetrics.kSpace8),
+                      const Text('文件类型'),
+                      SizedBox(height: appMetrics.kSpace4),
+                      SegmentedButton<SmartFolderFileType>(
+                        segments: SmartFolderFileType.values
+                            .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                            .toList(),
+                        selected: {fileTypeFilter},
+                        onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
+                        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                      ),
+                    ],
                     SizedBox(height: appMetrics.kSpace12),
                     TextField(
                       controller: patternCtrl,
@@ -729,20 +727,19 @@ class _CollectionPictureScreenState
                       style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     ),
                     // 文件类型过滤（仅匹配文件名时显示）
-                    if (regexTarget == SmartFolderRegexTarget.fileName) ...
-                      [
-                        SizedBox(height: appMetrics.kSpace8),
-                        const Text('文件类型'),
-                        SizedBox(height: appMetrics.kSpace4),
-                        SegmentedButton<SmartFolderFileType>(
-                          segments: SmartFolderFileType.values
-                              .map((t) => ButtonSegment(value: t, label: Text(t.label)))
-                              .toList(),
-                          selected: {fileTypeFilter},
-                          onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
-                          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                        ),
-                      ],
+                    if (regexTarget == SmartFolderRegexTarget.fileName) ...[
+                      SizedBox(height: appMetrics.kSpace8),
+                      const Text('文件类型'),
+                      SizedBox(height: appMetrics.kSpace4),
+                      SegmentedButton<SmartFolderFileType>(
+                        segments: SmartFolderFileType.values
+                            .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                            .toList(),
+                        selected: {fileTypeFilter},
+                        onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
+                        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                      ),
+                    ],
                     SizedBox(height: appMetrics.kSpace12),
                     TextField(
                       controller: patternCtrl,
@@ -920,13 +917,13 @@ class _CollectionPictureScreenState
             smartFolder: sf,
             coverSource: viewModel.buildSmartFolderCoverSource(sf),
             matchCount: viewModel.mergedCollections.where((c) {
-                if (!sf.matchesCollection(c)) return false;
-                if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
-                  final paths = viewModel.collectionItemPaths(c.id);
-                  return sf.matchesFileNames(paths);
-                }
-                return true;
-              }).length,
+              if (!sf.matchesCollection(c)) return false;
+              if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
+                final paths = viewModel.collectionItemPaths(c.id);
+                return sf.matchesFileNames(paths);
+              }
+              return true;
+            }).length,
             isSelected: viewModel.selectedIds.contains(sf.id),
             onTap: () {
               if (viewModel.isSelecting.value) {
@@ -961,8 +958,7 @@ class _CollectionPictureScreenState
           nodeName: viewModel.getRemoteNodeName(collection.id),
           totalSize: viewModel.getCollectionTotalSize(collection.id),
           isFavorited: viewModel.isFavorite(collection.id),
-          hoverCoverSources:
-              viewModel.isRemoteCollection(collection.id)
+          hoverCoverSources: viewModel.isRemoteCollection(collection.id)
               ? null
               : viewModel.buildCollectionHoverSources(collection),
           onHoverEnter: viewModel.isRemoteCollection(collection.id)
@@ -1450,9 +1446,7 @@ class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
     final heights = List.filled(widget.columnCount, 0.0);
     for (int i = 0; i < widget.items.length; i++) {
       final src = widget.viewModel.buildMediaSource(widget.items[i]);
-      final ar = (src != null && src.isNotEmpty)
-          ? (_aspectRatios[src] ?? 1.0)
-          : 1.0;
+      final ar = (src != null && src.isNotEmpty) ? (_aspectRatios[src] ?? 1.0) : 1.0;
       final h = colWidth / ar;
       // Place in the shortest column
       int shortest = 0;
@@ -1468,9 +1462,7 @@ class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
   Widget _buildTile(media_api.MediaItem item, int globalIndex, double colWidth) {
     final source = widget.viewModel.buildMediaSource(item);
     final isVideo = item.kind == media_api.MediaKind.video;
-    final ar = (source != null && source.isNotEmpty)
-        ? (_aspectRatios[source] ?? 1.0)
-        : 1.0;
+    final ar = (source != null && source.isNotEmpty) ? (_aspectRatios[source] ?? 1.0) : 1.0;
     final tileHeight = (colWidth / ar).clamp(60.0, colWidth * 2.5);
 
     // 非视频图片：首次渲染后异步解码真实宽高比
@@ -1486,8 +1478,7 @@ class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
       source: source,
       fixedHeight: tileHeight,
       onTap: () => widget.onOpenViewer(globalIndex),
-      onRequestScrubFrames:
-          (isVideo && !widget.isRemote)
+      onRequestScrubFrames: (isVideo && !widget.isRemote)
           ? () => widget.viewModel.getVideoScrubFrames(item.filePath)
           : null,
       onOpenFolder: widget.isRemote ? null : () => widget.viewModel.openItemInFolder(item),
@@ -1516,7 +1507,8 @@ class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final colWidth = (constraints.maxWidth - 2 * padding - (crossAxisCount - 1) * spacing) / crossAxisCount;
+        final colWidth =
+            (constraints.maxWidth - 2 * padding - (crossAxisCount - 1) * spacing) / crossAxisCount;
         final columns = _distributeColumns(colWidth);
 
         return SingleChildScrollView(
@@ -1533,11 +1525,7 @@ class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
                     children: [
                       for (int i = 0; i < columns[c].length; i++) ...[
                         if (i > 0) SizedBox(height: spacing),
-                        _buildTile(
-                          widget.items[columns[c][i]],
-                          columns[c][i],
-                          colWidth,
-                        ),
+                        _buildTile(widget.items[columns[c][i]], columns[c][i], colWidth),
                       ],
                     ],
                   ),
@@ -1729,9 +1717,7 @@ class _PictureLibraryToolbar extends StatelessWidget {
                           viewModel.showFavoritesOnly.value
                               ? Icons.favorite_rounded
                               : Icons.favorite_border_rounded,
-                          color: viewModel.showFavoritesOnly.value
-                              ? Colors.redAccent
-                              : null,
+                          color: viewModel.showFavoritesOnly.value ? Colors.redAccent : null,
                         ),
                         size: AppTheme.metrics.kSpace40,
                         onTap: () =>
