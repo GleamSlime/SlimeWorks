@@ -18,6 +18,7 @@ class MediaFolderCard extends StatelessWidget {
     required this.onDelete,
     required this.isRemote,
     required this.nodeName,
+    this.onTransfer,
   });
 
   final media_api.MediaFolder folder;
@@ -30,6 +31,7 @@ class MediaFolderCard extends StatelessWidget {
   final VoidCallback onDelete;
   final bool isRemote;
   final String? nodeName;
+  final VoidCallback? onTransfer;
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -41,13 +43,17 @@ class MediaFolderCard extends StatelessWidget {
         Rect.fromLTWH(localPosition.dx, localPosition.dy, 1, 1),
         Offset.zero & overlaySize,
       ),
-      items: const [
-        PopupMenuItem<String>(value: 'rename', child: Text('重命名文件夹')),
-        PopupMenuItem<String>(value: 'delete', child: Text('删除文件夹')),
+      items: [
+        const PopupMenuItem<String>(value: 'rename', child: Text('重命名文件夹')),
+        if (onTransfer != null)
+          const PopupMenuItem<String>(value: 'transfer', child: Text('转移集合到...')),
+        const PopupMenuItem<String>(value: 'delete', child: Text('删除文件夹')),
       ],
     );
     if (action == 'rename') {
       onRename();
+    } else if (action == 'transfer') {
+      onTransfer?.call();
     } else if (action == 'delete') {
       onDelete();
     }

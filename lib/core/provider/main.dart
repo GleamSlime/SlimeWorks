@@ -2,6 +2,7 @@ import 'package:get_it/get_it.dart';
 
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/provider/screen_provider_impl.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -29,6 +30,9 @@ void getItInit() {
 
   // 节点设置服务
   getIt.registerLazySingleton<NodeSettingsService>(() => NodeSettingsService());
+
+  // 媒体偏好设置服务
+  getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
 
   isInitialized = true;
 }

@@ -12,6 +12,9 @@ class MediaItemTile extends StatefulWidget {
     required this.source,
     required this.onTap,
     this.onRequestScrubFrames,
+    this.onOpenFolder,
+    this.onDeleteFile,
+    this.fixedHeight,
   });
 
   final media_api.MediaItem item;
@@ -20,6 +23,15 @@ class MediaItemTile extends StatefulWidget {
 
   /// 仅本地视频提供：异步返回均匀分布的帧文件路径列表。
   final Future<List<String>> Function()? onRequestScrubFrames;
+
+  /// 在文件管理器中显示该文件（本地）。
+  final VoidCallback? onOpenFolder;
+
+  /// 删除该文件（本地）。
+  final VoidCallback? onDeleteFile;
+
+  /// 瀑布流模式下由外部指定的固定高度（null = 填满格子）。
+  final double? fixedHeight;
 
   @override
   State<MediaItemTile> createState() => _MediaItemTileState();
@@ -33,13 +45,20 @@ class _MediaItemTileState extends State<MediaItemTile> {
 
   bool get _isVideo => widget.item.kind == media_api.MediaKind.video;
 
+  /// 视频：优先显示 scrub 帧；悬停时按比例选帧，非悬停时取第 2 帧（≈10s）作为默认封面。
+  /// 非视频：直接返回 widget.source。
   String? get _displaySource {
-    if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty) {
-      final idx = (_hoverRatio * (_scrubFrames!.length - 1)).round().clamp(
-        0,
-        _scrubFrames!.length - 1,
-      );
-      return _scrubFrames![idx];
+    if (_isVideo) {
+      final frames = _scrubFrames;
+      if (frames != null && frames.isNotEmpty) {
+        if (_hovering) {
+          final idx = (_hoverRatio * (frames.length - 1)).round().clamp(0, frames.length - 1);
+          return frames[idx];
+        }
+        // 默认封面：第 2 帧（约 10s 位置），若只有 1 帧则用第 1 帧
+        return frames[frames.length > 1 ? 1 : 0];
+      }
+      return null; // 帧未就绪时显示占位图标，不尝试解码视频文件
     }
     return widget.source;
   }
@@ -61,19 +80,53 @@ class _MediaItemTileState extends State<MediaItemTile> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // 视频 tile：立即后台加载帧，提供默认封面（不等待 hover）
+    if (_isVideo && widget.onRequestScrubFrames != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadScrubFrames());
+    }
+  }
+
+  Future<void> _showContextMenu(BuildContext context, Offset globalPosition) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final local = overlay.globalToLocal(globalPosition);
+    final overlaySize = overlay.size;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(local.dx, local.dy, 1, 1),
+        Offset.zero & overlaySize,
+      ),
+      items: [
+        if (widget.onOpenFolder != null)
+          const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
+        if (widget.onDeleteFile != null)
+          const PopupMenuItem<String>(value: 'delete', child: Text('删除文件')),
+      ],
+    );
+    if (!mounted) return;
+    if (action == 'open_folder') widget.onOpenFolder?.call();
+    if (action == 'delete') widget.onDeleteFile?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final src = _displaySource;
-    final hasCover = src != null && src.isNotEmpty;
-    final showCoverAnyway =
-        hasCover && (!_isVideo || (_scrubFrames != null && _scrubFrames!.isNotEmpty));
+    // src 始终是 jpg 帧路径或 null（视频不再传入 .mp4 路径），或图片文件路径
+    final showCoverAnyway = src != null && src.isNotEmpty;
 
-    return GestureDetector(
+    final tile = GestureDetector(
       onTap: widget.onTap,
+      onSecondaryTapDown: (widget.onOpenFolder != null || widget.onDeleteFile != null)
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) {
           setState(() => _hovering = true);
+          // hover 时也确保帧已加载（initState 中已触发，此处为兜底）
           if (_isVideo && widget.onRequestScrubFrames != null) _loadScrubFrames();
         },
         onHover: (event) {
@@ -185,5 +238,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
         ),
       ),
     );
+    if (widget.fixedHeight != null) {
+      return SizedBox(height: widget.fixedHeight, child: tile);
+    }
+    return tile;
   }
 }

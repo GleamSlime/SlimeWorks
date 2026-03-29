@@ -10,7 +10,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:slime_works/core/services/initialize/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -42,6 +41,9 @@ Future<void> main() async {
   // 初始化 media_kit（视频播放）
   MediaKit.ensureInitialized();
 
+  // 在 UI 启动前完成 NodeSettingsService 初始化，避免 ViewModel 与 _postAppInit 并发竞争
+  await getIt<NodeSettingsService>().init();
+
   // 运行应用
   runApp(const MyApp());
 
@@ -49,14 +51,7 @@ Future<void> main() async {
 }
 
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
-  await getIt<NodeSettingsService>().init();
-
   initializeLogger();
-
-  // 异步加载 Rust 模块
-  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-    RustModules.initializeLazy();
-  }
 
   // 配置 EasyLoading
   configLoading();

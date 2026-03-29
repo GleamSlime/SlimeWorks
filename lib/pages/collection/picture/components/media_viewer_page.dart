@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -97,53 +98,80 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
           }
           return KeyEventResult.ignored;
         },
-        child: Stack(
+        child: Column(
           children: [
-            PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.vertical,
-              itemCount: widget.items.length,
-              onPageChanged: (index) => setState(() => _currentIndex = index),
-              itemBuilder: (context, index) {
-                final currentItem = widget.items[index];
-                final source = widget.viewModel.buildMediaSource(
-                  currentItem,
-                  collectionId: widget.collectionId,
-                );
-                if (currentItem.kind == media_api.MediaKind.video) {
-                  return _VideoPreview(source: source);
-                }
-                if (source == null || source.isEmpty) {
-                  return const Center(
-                    child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
-                  );
-                }
-                final child = source.startsWith('http')
-                    ? Image.network(source, fit: BoxFit.contain)
-                    : Image.file(File(source), fit: BoxFit.contain);
-                return InteractiveViewer(child: Center(child: child));
-              },
+            // 导航条：紧贴内容顶部，不遮挡播放器控制栏
+            ColoredBox(
+              color: Colors.black87,
+              child: SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    if (_currentIndex > 0)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => _jump(-1),
+                        icon: const Icon(Icons.arrow_upward_rounded, size: 16),
+                        label: const Text('上一项'),
+                      ),
+                    const Spacer(),
+                    if (_currentIndex < widget.items.length - 1)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => _jump(1),
+                        icon: const Icon(Icons.arrow_downward_rounded, size: 16),
+                        label: const Text('下一项'),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            if (_currentIndex > 0)
-              Positioned(
-                left: appMetrics.kSpace16,
-                bottom: appMetrics.kSpace24,
-                child: FilledButton.icon(
-                  onPressed: () => _jump(-1),
-                  icon: const Icon(Icons.arrow_upward),
-                  label: const Text('上一项'),
+            // 内容区：鼠标滚轮触发翻页
+            Expanded(
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    if (event.scrollDelta.dy > 0) {
+                      _jump(1);
+                    } else if (event.scrollDelta.dy < 0) {
+                      _jump(-1);
+                    }
+                  }
+                },
+                child: PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: widget.items.length,
+                  onPageChanged: (index) => setState(() => _currentIndex = index),
+                  itemBuilder: (context, index) {
+                    final currentItem = widget.items[index];
+                    final source = widget.viewModel.buildMediaSource(
+                      currentItem,
+                      collectionId: widget.collectionId,
+                    );
+                    if (currentItem.kind == media_api.MediaKind.video) {
+                      return _VideoPreview(source: source);
+                    }
+                    if (source == null || source.isEmpty) {
+                      return const Center(
+                        child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
+                      );
+                    }
+                    final child = source.startsWith('http')
+                        ? Image.network(source, fit: BoxFit.contain)
+                        : Image.file(File(source), fit: BoxFit.contain);
+                    return InteractiveViewer(child: Center(child: child));
+                  },
                 ),
               ),
-            if (_currentIndex < widget.items.length - 1)
-              Positioned(
-                right: appMetrics.kSpace16,
-                bottom: appMetrics.kSpace24,
-                child: FilledButton.icon(
-                  onPressed: () => _jump(1),
-                  icon: const Icon(Icons.arrow_downward),
-                  label: const Text('下一项'),
-                ),
-              ),
+            ),
           ],
         ),
       ),

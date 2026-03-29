@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,6 +32,7 @@ class _CollectionPictureScreenState
   Offset? _selectionBoxStart;
   Offset? _selectionBoxEnd;
   final GlobalKey _gridKey = GlobalKey();
+  int _detailColumnCount = 3;
   late final ScrollController _scrollController;
   late final MediaLibraryViewModel _persistentViewModel = Get.put(
     MediaLibraryViewModel(),
@@ -158,40 +160,146 @@ class _CollectionPictureScreenState
       return Padding(
         padding: EdgeInsets.fromLTRB(
           appMetrics.kSpace16,
-          appMetrics.kSpace12,
-          appMetrics.kSpace16,
           appMetrics.kSpace8,
+          appMetrics.kSpace8,
+          appMetrics.kSpace4,
         ),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+        child: Row(
+          children: [
+            Text(
+              '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const Spacer(),
+            // 列数调节
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.grid_view_rounded, size: scaleW(16),
+                    color: Theme.of(context).hintColor),
+                SizedBox(width: appMetrics.kSpace4),
+                IconButton(
+                  icon: const Icon(Icons.remove_rounded),
+                  iconSize: scaleW(16),
+                  padding: EdgeInsets.all(appMetrics.kSpace4),
+                  constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                  tooltip: '减少列数',
+                  onPressed: _detailColumnCount > 2
+                      ? () => setState(() => _detailColumnCount--)
+                      : null,
+                ),
+                Text('$_detailColumnCount 列',
+                    style: Theme.of(context).textTheme.bodySmall),
+                IconButton(
+                  icon: const Icon(Icons.add_rounded),
+                  iconSize: scaleW(16),
+                  padding: EdgeInsets.all(appMetrics.kSpace4),
+                  constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                  tooltip: '增加列数',
+                  onPressed: _detailColumnCount < 6
+                      ? () => setState(() => _detailColumnCount++)
+                      : null,
+                ),
+              ],
+            ),
+            SizedBox(width: appMetrics.kSpace4),
+            // 排序按钮
+            PopupMenuButton<MediaItemSortOrder>(
+              tooltip: '排序',
+              icon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sort_rounded, size: scaleW(18)),
+                  SizedBox(width: appMetrics.kSpace4),
+                  Text(
+                    viewModel.itemSortOrder.value.label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              onSelected: (v) => viewModel.itemSortOrder.value = v,
+              itemBuilder: (_) => MediaItemSortOrder.values
+                  .map(
+                    (o) => PopupMenuItem<MediaItemSortOrder>(
+                      value: o,
+                      child: Row(
+                        children: [
+                          if (viewModel.itemSortOrder.value == o)
+                            Icon(Icons.check_rounded, size: scaleW(16))
+                          else
+                            SizedBox(width: scaleW(16)),
+                          SizedBox(width: appMetrics.kSpace8),
+                          Text(o.label),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
         ),
       );
     }
 
+    // 浏览模式：面包屑 + 集合排序
     final hasBreadcrumb =
         viewModel.currentFolderTrail.isNotEmpty || viewModel.currentSmartFolder != null;
     final hasNodes = viewModel.enabledRemoteNodes.isNotEmpty;
-    if (!hasBreadcrumb && !hasNodes) return const SizedBox.shrink();
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
         appMetrics.kSpace16,
         appMetrics.kSpace4,
-        appMetrics.kSpace16,
+        appMetrics.kSpace8,
         appMetrics.kSpace4,
       ),
       child: Row(
         children: [
           if (hasBreadcrumb) Flexible(child: _buildBreadcrumb(context)),
-          const Spacer(),
-          if (hasNodes)
+          if (!hasBreadcrumb && hasNodes)
             Text(
               '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+          const Spacer(),
+          if (hasBreadcrumb && hasNodes) ...[             Text(
+              '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            SizedBox(width: appMetrics.kSpace8),
+          ],
+          // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
+          PopupMenuButton<CollectionSortOrder>(
+              tooltip: '集合排序',
+              icon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sort_rounded, size: scaleW(18)),
+                  SizedBox(width: appMetrics.kSpace4),
+                  Text(
+                    viewModel.collectionSortOrder.value.label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              onSelected: (v) => viewModel.collectionSortOrder.value = v,
+              itemBuilder: (_) => CollectionSortOrder.values
+                  .map(
+                    (o) => PopupMenuItem<CollectionSortOrder>(
+                      value: o,
+                      child: Row(
+                        children: [
+                          if (viewModel.collectionSortOrder.value == o)
+                            Icon(Icons.check_rounded, size: scaleW(16))
+                          else
+                            SizedBox(width: scaleW(16)),
+                          SizedBox(width: appMetrics.kSpace8),
+                          Text(o.label),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
         ],
       ),
@@ -423,6 +531,8 @@ class _CollectionPictureScreenState
     final nameCtrl = TextEditingController();
     final patternCtrl = TextEditingController();
     final selectedFolderIds = <String>{}; // empty = 全部集合
+    var regexTarget = SmartFolderRegexTarget.collectionName;
+    var fileTypeFilter = SmartFolderFileType.all;
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -465,12 +575,41 @@ class _CollectionPictureScreenState
                         ],
                       ),
                     SizedBox(height: appMetrics.kSpace12),
+                    // 正则匹配目标
+                    const Text('正则匹配目标'),
+                    SizedBox(height: appMetrics.kSpace4),
+                    SegmentedButton<SmartFolderRegexTarget>(
+                      segments: SmartFolderRegexTarget.values
+                          .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                          .toList(),
+                      selected: {regexTarget},
+                      onSelectionChanged: (s) => setState(() => regexTarget = s.first),
+                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                    ),
+                    // 文件类型过滤（仅匹配文件名时显示）
+                    if (regexTarget == SmartFolderRegexTarget.fileName) ...
+                      [
+                        SizedBox(height: appMetrics.kSpace8),
+                        const Text('文件类型'),
+                        SizedBox(height: appMetrics.kSpace4),
+                        SegmentedButton<SmartFolderFileType>(
+                          segments: SmartFolderFileType.values
+                              .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                              .toList(),
+                          selected: {fileTypeFilter},
+                          onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
+                          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                        ),
+                      ],
+                    SizedBox(height: appMetrics.kSpace12),
                     TextField(
                       controller: patternCtrl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: '正则匹配规则（可选）',
                         hintText: '例：大名|别名|关键词',
-                        helperText: '留空则显示目标文件夹内全部集合',
+                        helperText: regexTarget == SmartFolderRegexTarget.fileName
+                            ? '留空则显示目标文件夹内符合文件类型的全部集合'
+                            : '留空则显示目标文件夹内全部集合',
                       ),
                     ),
                   ],
@@ -485,6 +624,8 @@ class _CollectionPictureScreenState
                       nameCtrl.text,
                       patternCtrl.text,
                       targetFolderIds: selectedFolderIds.toList(),
+                      regexTarget: regexTarget,
+                      fileTypeFilter: fileTypeFilter,
                     );
                   },
                   child: const Text('创建'),
@@ -532,6 +673,8 @@ class _CollectionPictureScreenState
     final nameCtrl = TextEditingController(text: sf.name);
     final patternCtrl = TextEditingController(text: sf.regexPattern);
     final selectedFolderIds = <String>{...sf.targetFolderIds};
+    var regexTarget = sf.regexTarget;
+    var fileTypeFilter = sf.fileTypeFilter;
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -574,12 +717,41 @@ class _CollectionPictureScreenState
                         ],
                       ),
                     SizedBox(height: appMetrics.kSpace12),
+                    // 正则匹配目标
+                    const Text('正则匹配目标'),
+                    SizedBox(height: appMetrics.kSpace4),
+                    SegmentedButton<SmartFolderRegexTarget>(
+                      segments: SmartFolderRegexTarget.values
+                          .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                          .toList(),
+                      selected: {regexTarget},
+                      onSelectionChanged: (s) => setState(() => regexTarget = s.first),
+                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                    ),
+                    // 文件类型过滤（仅匹配文件名时显示）
+                    if (regexTarget == SmartFolderRegexTarget.fileName) ...
+                      [
+                        SizedBox(height: appMetrics.kSpace8),
+                        const Text('文件类型'),
+                        SizedBox(height: appMetrics.kSpace4),
+                        SegmentedButton<SmartFolderFileType>(
+                          segments: SmartFolderFileType.values
+                              .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                              .toList(),
+                          selected: {fileTypeFilter},
+                          onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
+                          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                        ),
+                      ],
+                    SizedBox(height: appMetrics.kSpace12),
                     TextField(
                       controller: patternCtrl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: '正则匹配规则（可选）',
                         hintText: '例：大名|别名|关键词',
-                        helperText: '留空则显示目标文件夹内全部集合',
+                        helperText: regexTarget == SmartFolderRegexTarget.fileName
+                            ? '留空则显示目标文件夹内符合文件类型的全部集合'
+                            : '留空则显示目标文件夹内全部集合',
                       ),
                     ),
                   ],
@@ -595,6 +767,8 @@ class _CollectionPictureScreenState
                       name: nameCtrl.text,
                       pattern: patternCtrl.text,
                       targetFolderIds: selectedFolderIds.toList(),
+                      regexTarget: regexTarget,
+                      fileTypeFilter: fileTypeFilter,
                     );
                   },
                   child: const Text('确定'),
@@ -701,7 +875,7 @@ class _CollectionPictureScreenState
       padding: EdgeInsets.all(appMetrics.kSpace12),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: scaleW(250),
-        childAspectRatio: 0.78,
+        childAspectRatio: 0.95,
         mainAxisSpacing: appMetrics.kSpace12,
         crossAxisSpacing: appMetrics.kSpace12,
       ),
@@ -727,6 +901,9 @@ class _CollectionPictureScreenState
             onLongPress: () => viewModel.enterSelection(folder.id),
             onRename: () => _showRenameFolderDialog(folder.id, folder.name),
             onDelete: () => _confirmDeleteFolder(folder.id, folder.name),
+            onTransfer: viewModel.isRemoteFolder(folder.id)
+                ? null
+                : () => viewModel.transferFolderCollections(folderId: folder.id),
           );
           if (viewModel.isRemoteFolder(folder.id)) return folderCard;
           return DragTarget<String>(
@@ -742,7 +919,14 @@ class _CollectionPictureScreenState
           final sfCard = SmartFolderCard(
             smartFolder: sf,
             coverSource: viewModel.buildSmartFolderCoverSource(sf),
-            matchCount: viewModel.mergedCollections.where((c) => sf.matches(c)).length,
+            matchCount: viewModel.mergedCollections.where((c) {
+                if (!sf.matchesCollection(c)) return false;
+                if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
+                  final paths = viewModel.collectionItemPaths(c.id);
+                  return sf.matchesFileNames(paths);
+                }
+                return true;
+              }).length,
             isSelected: viewModel.selectedIds.contains(sf.id),
             onTap: () {
               if (viewModel.isSelecting.value) {
@@ -755,8 +939,9 @@ class _CollectionPictureScreenState
             onRename: () => _showRenameSmartFolderDialog(sf.id, sf.name),
             onEdit: () => _showEditSmartFolderDialog(sf),
             onDelete: () => _confirmDeleteSmartFolder(sf.id, sf.name),
+            onTransfer: () => viewModel.transferFolderCollections(smartFolderId: sf.id),
           );
-          final targetId = sf.targetFolderId;
+          final targetId = sf.targetFolderIds.length == 1 ? sf.targetFolderIds.first : null;
           if (targetId == null) return sfCard;
           return DragTarget<String>(
             onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
@@ -774,6 +959,18 @@ class _CollectionPictureScreenState
           isSelecting: viewModel.isSelecting.value,
           isRemote: viewModel.isRemoteCollection(collection.id),
           nodeName: viewModel.getRemoteNodeName(collection.id),
+          totalSize: viewModel.getCollectionTotalSize(collection.id),
+          isFavorited: viewModel.isFavorite(collection.id),
+          hoverCoverSources:
+              viewModel.isRemoteCollection(collection.id)
+              ? null
+              : viewModel.buildCollectionHoverSources(collection),
+          onHoverEnter: viewModel.isRemoteCollection(collection.id)
+              ? null
+              : () => viewModel.prefetchCollectionVideoFrames(collection.id),
+          onRequestVideoFrame: viewModel.isRemoteCollection(collection.id)
+              ? null
+              : (fraction) => viewModel.getCollectionVideoFrameAtFraction(collection.id, fraction),
           onTap: () {
             if (viewModel.isSelecting.value) {
               viewModel.toggleSelection(collection.id);
@@ -793,6 +990,7 @@ class _CollectionPictureScreenState
                   collection.folderPath,
                   collection.title,
                 ),
+          onToggleFavorite: () => viewModel.toggleFavorite(collection.id),
         );
         // Local collections: draggable (to folder) + DragTarget (from other collections for reorder)
         if (viewModel.isRemoteCollection(collection.id)) return collectionCard;
@@ -878,45 +1076,52 @@ class _CollectionPictureScreenState
       return Center(child: Text('该集合暂无可预览媒体', style: Theme.of(context).textTheme.bodyMedium));
     }
 
-    return GridView.builder(
-      padding: EdgeInsets.all(appMetrics.kSpace12),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: scaleW(220),
-        childAspectRatio: 0.82,
-        mainAxisSpacing: appMetrics.kSpace12,
-        crossAxisSpacing: appMetrics.kSpace12,
-      ),
-      itemCount: viewModel.currentItems.length,
-      itemBuilder: (context, index) {
-        final item = viewModel.currentItems[index];
-        final source = viewModel.buildMediaSource(item);
-        return MediaItemTile(
-          item: item,
-          source: source,
-          onTap: () {
-            final collectionId = viewModel.currentCollectionId.value;
-            if (collectionId == null) {
-              return;
-            }
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => MediaViewerPage(
-                  items: viewModel.currentItems.toList(),
-                  initialIndex: index,
-                  collectionId: collectionId,
-                  viewModel: viewModel,
-                ),
-              ),
-            );
-          },
-          onRequestScrubFrames:
-              (item.kind == media_api.MediaKind.video &&
-                  !viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? ''))
-              ? () => viewModel.getVideoScrubFrames(item.filePath)
-              : null,
+    final collectionId = viewModel.currentCollectionId.value ?? '';
+    final isRemote = viewModel.isRemoteCollection(collectionId);
+    final sortedItems = viewModel.sortedCurrentItems;
+
+    return _MasonryMediaGrid(
+      items: sortedItems,
+      collectionId: collectionId,
+      isRemote: isRemote,
+      viewModel: viewModel,
+      columnCount: _detailColumnCount,
+      onOpenViewer: (index) {
+        if (collectionId.isEmpty) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => MediaViewerPage(
+              items: sortedItems,
+              initialIndex: index,
+              collectionId: collectionId,
+              viewModel: viewModel,
+            ),
+          ),
         );
       },
+      onConfirmDelete: _confirmDeleteItemFile,
     );
+  }
+
+  Future<void> _confirmDeleteItemFile(media_api.MediaItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除文件'),
+        content: Text('确定要删除「${item.title}」吗？\n此操作不可恢复，文件将从磁盘永久删除。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await viewModel.deleteItemFile(item);
+    }
   }
 
   void _updateSelectionByBox() {
@@ -1201,6 +1406,151 @@ class _CollectionPictureScreenState
   }
 }
 
+/// 瀑布流（Masonry）媒体网格。
+/// 不依赖外部包：将 [items] 均匀分配到两列，每个 tile 高度由图片自然宽高比决定；
+/// 图片加载前按默认 1:1 占位，加载完成后刷新实际宽高比。
+class _MasonryMediaGrid extends StatefulWidget {
+  const _MasonryMediaGrid({
+    required this.items,
+    required this.collectionId,
+    required this.isRemote,
+    required this.viewModel,
+    required this.columnCount,
+    required this.onOpenViewer,
+    required this.onConfirmDelete,
+  });
+
+  final List<media_api.MediaItem> items;
+  final String collectionId;
+  final bool isRemote;
+  final MediaLibraryViewModel viewModel;
+  final int columnCount;
+  final void Function(int index) onOpenViewer;
+  final Future<void> Function(media_api.MediaItem) onConfirmDelete;
+
+  @override
+  State<_MasonryMediaGrid> createState() => _MasonryMediaGridState();
+}
+
+class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
+  final _scrollController = ScrollController();
+  // 缓存每张已加载图片的宽高比，key 为 filePath
+  final Map<String, double> _aspectRatios = {};
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 将 items 分配到两列（按当前累计高度平衡）。
+  /// 返回 [leftIndices, rightIndices]。
+  List<List<int>> _distributeColumns(double colWidth) {
+    final cols = List.generate(widget.columnCount, (_) => <int>[]);
+    final heights = List.filled(widget.columnCount, 0.0);
+    for (int i = 0; i < widget.items.length; i++) {
+      final src = widget.viewModel.buildMediaSource(widget.items[i]);
+      final ar = (src != null && src.isNotEmpty)
+          ? (_aspectRatios[src] ?? 1.0)
+          : 1.0;
+      final h = colWidth / ar;
+      // Place in the shortest column
+      int shortest = 0;
+      for (int c = 1; c < widget.columnCount; c++) {
+        if (heights[c] < heights[shortest]) shortest = c;
+      }
+      cols[shortest].add(i);
+      heights[shortest] += h;
+    }
+    return cols;
+  }
+
+  Widget _buildTile(media_api.MediaItem item, int globalIndex, double colWidth) {
+    final source = widget.viewModel.buildMediaSource(item);
+    final isVideo = item.kind == media_api.MediaKind.video;
+    final ar = (source != null && source.isNotEmpty)
+        ? (_aspectRatios[source] ?? 1.0)
+        : 1.0;
+    final tileHeight = (colWidth / ar).clamp(60.0, colWidth * 2.5);
+
+    // 非视频图片：首次渲染后异步解码真实宽高比
+    if (!isVideo && source != null && source.isNotEmpty && !source.startsWith('http')) {
+      if (!_aspectRatios.containsKey(source)) {
+        _resolveAspectRatio(source, File(source));
+      }
+    }
+
+    return MediaItemTile(
+      key: ValueKey(item.id),
+      item: item,
+      source: source,
+      fixedHeight: tileHeight,
+      onTap: () => widget.onOpenViewer(globalIndex),
+      onRequestScrubFrames:
+          (isVideo && !widget.isRemote)
+          ? () => widget.viewModel.getVideoScrubFrames(item.filePath)
+          : null,
+      onOpenFolder: widget.isRemote ? null : () => widget.viewModel.openItemInFolder(item),
+      onDeleteFile: widget.isRemote ? null : () => widget.onConfirmDelete(item),
+    );
+  }
+
+  void _resolveAspectRatio(String source, File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final ar = frame.image.width / frame.image.height;
+      frame.image.dispose();
+      if (mounted && ar > 0 && !_aspectRatios.containsKey(source)) {
+        setState(() => _aspectRatios[source] = ar.clamp(0.3, 3.0));
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final crossAxisCount = widget.columnCount;
+    final padding = AppTheme.metrics.kSpace12;
+    final spacing = AppTheme.metrics.kSpace8;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final colWidth = (constraints.maxWidth - 2 * padding - (crossAxisCount - 1) * spacing) / crossAxisCount;
+        final columns = _distributeColumns(colWidth);
+
+        return SingleChildScrollView(
+          controller: _scrollController,
+          padding: EdgeInsets.all(padding),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int c = 0; c < crossAxisCount; c++) ...[
+                if (c > 0) SizedBox(width: spacing),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (int i = 0; i < columns[c].length; i++) ...[
+                        if (i > 0) SizedBox(height: spacing),
+                        _buildTile(
+                          widget.items[columns[c][i]],
+                          columns[c][i],
+                          colWidth,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _SelectionBoxPainter extends CustomPainter {
   const _SelectionBoxPainter({
     required this.start,
@@ -1268,6 +1618,25 @@ class _PictureLibraryToolbar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           spacing: AppTheme.metrics.kSpace8,
           children: [
+            // 返回按钮（左侧）
+            AnimatedOpacity(
+              opacity: showBack ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 150),
+              child: IgnorePointer(
+                ignoring: !showBack,
+                child: DesktopHeadToolsButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () {
+                    if (inDetail) {
+                      viewModel.exitCollection();
+                    } else {
+                      viewModel.exitFolder();
+                    }
+                  },
+                ),
+              ),
+            ),
             // 扫描进度（opacity 不增删节点）
             AnimatedOpacity(
               opacity: isScanning ? 1.0 : 0.0,
@@ -1353,6 +1722,22 @@ class _PictureLibraryToolbar extends StatelessWidget {
                         onTap: onCreateSmartFolder,
                       ),
                     ),
+                    Tooltip(
+                      message: viewModel.showFavoritesOnly.value ? '显示全部' : '只显示收藏',
+                      child: DesktopHeadToolsButton(
+                        icon: Icon(
+                          viewModel.showFavoritesOnly.value
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          color: viewModel.showFavoritesOnly.value
+                              ? Colors.redAccent
+                              : null,
+                        ),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: () =>
+                            viewModel.showFavoritesOnly.value = !viewModel.showFavoritesOnly.value,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1361,25 +1746,6 @@ class _PictureLibraryToolbar extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               size: AppTheme.metrics.kSpace40,
               onTap: onRefresh,
-            ),
-            // 返回按钮
-            AnimatedOpacity(
-              opacity: showBack ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 150),
-              child: IgnorePointer(
-                ignoring: !showBack,
-                child: DesktopHeadToolsButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  size: AppTheme.metrics.kSpace40,
-                  onTap: () {
-                    if (inDetail) {
-                      viewModel.exitCollection();
-                    } else {
-                      viewModel.exitFolder();
-                    }
-                  },
-                ),
-              ),
             ),
           ],
         ),

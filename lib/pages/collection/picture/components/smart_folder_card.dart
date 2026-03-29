@@ -17,6 +17,7 @@ class SmartFolderCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.coverSource,
+    this.onTransfer,
   });
 
   final SmartFolder smartFolder;
@@ -28,6 +29,7 @@ class SmartFolderCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final String? coverSource;
+  final VoidCallback? onTransfer;
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -39,16 +41,20 @@ class SmartFolderCard extends StatelessWidget {
         Rect.fromLTWH(localPosition.dx, localPosition.dy, 1, 1),
         Offset.zero & overlaySize,
       ),
-      items: const [
-        PopupMenuItem<String>(value: 'rename', child: Text('重命名')),
-        PopupMenuItem<String>(value: 'edit', child: Text('编辑智能文件夹')),
-        PopupMenuItem<String>(value: 'delete', child: Text('删除智能文件夹')),
+      items: [
+        const PopupMenuItem<String>(value: 'rename', child: Text('重命名')),
+        const PopupMenuItem<String>(value: 'edit', child: Text('编辑智能文件夹')),
+        if (onTransfer != null)
+          const PopupMenuItem<String>(value: 'transfer', child: Text('转移集合到...')),
+        const PopupMenuItem<String>(value: 'delete', child: Text('删除智能文件夹')),
       ],
     );
     if (action == 'rename') {
       onRename();
     } else if (action == 'edit') {
       onEdit();
+    } else if (action == 'transfer') {
+      onTransfer?.call();
     } else if (action == 'delete') {
       onDelete();
     }

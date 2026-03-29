@@ -1,0 +1,129 @@
+import 'dart:async';
+import 'dart:collection';
+
+import 'package:flutter/foundation.dart';
+
+/// 单个缩略图任务。
+class _ThumbTask {
+  _ThumbTask({required this.key, required this.work});
+
+  /// 任务唯一标识（通常为 videoPath）。
+  final String key;
+
+  /// 实际执行逻辑，返回结果 T。
+  final Future<void> Function() work;
+
+  /// 任务完成/被取消时通知。
+  final Completer<void> _completer = Completer<void>();
+
+  bool _cancelled = false;
+
+  bool get isCancelled => _cancelled;
+
+  /// 外部等待任务完成（不可传递 cancel 状态）。
+  Future<void> get done => _completer.future;
+}
+
+/// 带优先级（前插）的串行任务队列，用于视频封面 / scrub 帧提取。
+///
+/// - 最大并发数 [concurrency]（可动态修改），默认 2。
+/// - [enqueue]：将任务推入队尾，相同 key 的任务不重复入队。
+/// - [prioritize]：将已有任务移到队首；若任务不存在则新建并插入队首。
+/// - [cancel]：标记任务取消，正在执行中的任务不中断但结果会被忽略。
+/// - [cancelGroup]：批量取消一批 key。
+class VideoThumbQueue {
+  VideoThumbQueue({int concurrency = 2}) : concurrency = concurrency;
+
+  int concurrency;
+  int _running = 0;
+
+  final _queue = ListQueue<_ThumbTask>();
+
+  /// key → task（仅在等待中，执行中不在此 map 内）。
+  final _pending = <String, _ThumbTask>{};
+
+  /// 将任务推入队尾；若 key 已存在（等待或执行）则忽略。
+  /// 返回 future，任务完成时 resolve。
+  Future<void> enqueue(String key, Future<void> Function() work) {
+    if (_pending.containsKey(key)) {
+      debugPrint('[Queue] enqueue skip (已存在) key=$key');
+      return _pending[key]!.done;
+    }
+    final task = _ThumbTask(key: key, work: work);
+    _pending[key] = task;
+    _queue.addLast(task);
+    debugPrint('[Queue] enqueue key=$key queueLen=${_queue.length}');
+    _tick();
+    return task.done;
+  }
+
+  /// 将 key 对应任务移到队首（高优先级），若不存在则新建任务插入队首。
+  Future<void> prioritize(String key, Future<void> Function() work) {
+    // 若已在等待中，移到队首
+    if (_pending.containsKey(key)) {
+      final existing = _pending[key]!;
+      _queue.remove(existing);
+      _queue.addFirst(existing);
+      debugPrint('[Queue] prioritize (移到队首) key=$key queueLen=${_queue.length}');
+      return existing.done;
+    }
+    // 若已在执行中（不在 _pending），直接等待
+    final task = _ThumbTask(key: key, work: work);
+    _pending[key] = task;
+    _queue.addFirst(task);
+    debugPrint('[Queue] prioritize (新建到队首) key=$key queueLen=${_queue.length}');
+    _tick();
+    return task.done;
+  }
+
+  /// 取消单个 key 的等待任务。正在执行的任务不中断。
+  void cancel(String key) {
+    final task = _pending.remove(key);
+    if (task == null) return;
+    task._cancelled = true;
+    _queue.remove(task);
+    if (!task._completer.isCompleted) task._completer.complete();
+    debugPrint('[Queue] cancel key=$key');
+  }
+
+  /// 批量取消 [keys] 中每个 key 的等待任务。
+  void cancelGroup(Iterable<String> keys) {
+    for (final k in keys) {
+      cancel(k);
+    }
+  }
+
+  /// 取消全部等待中（未执行）的任务。
+  void cancelAll() {
+    for (final task in List<_ThumbTask>.from(_queue)) {
+      task._cancelled = true;
+      if (!task._completer.isCompleted) task._completer.complete();
+    }
+    _queue.clear();
+    _pending.clear();
+    debugPrint('[Queue] cancelAll');
+  }
+
+  /// 查询 key 是否已在队列或执行中。
+  bool contains(String key) => _pending.containsKey(key);
+
+  void _tick() {
+    while (_running < concurrency && _queue.isNotEmpty) {
+      final task = _queue.removeFirst();
+      _pending.remove(task.key);
+      if (task.isCancelled) continue;
+      _running++;
+      debugPrint('[Queue] 开始执行 key=${task.key} running=$_running');
+      task.work().then((_) {
+        if (!task._completer.isCompleted) task._completer.complete();
+      }).catchError((e) {
+        debugPrint('[Queue] 执行异常 key=${task.key} err=$e');
+        if (!task._completer.isCompleted) task._completer.complete();
+      }).whenComplete(() {
+        _running--;
+        debugPrint('[Queue] 执行完毕 key=${task.key} running=$_running');
+        _tick();
+      });
+    }
+  }
+}

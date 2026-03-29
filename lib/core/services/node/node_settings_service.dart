@@ -43,6 +43,7 @@ class NodeSettingsService extends GetxService {
   );
 
   bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
   DateTime? _trafficWindowStartAt;
   DateTime? _lastTrafficAt;
   int _trafficWindowRxBytes = 0;
