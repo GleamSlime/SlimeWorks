@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -160,80 +161,64 @@ class _VideoPreview extends StatefulWidget {
 }
 
 class _VideoPreviewState extends State<_VideoPreview> {
-  VideoPlayerController? _controller;
-  Future<void>? _initializeFuture;
+  Player? _player;
+  VideoController? _videoController;
 
   @override
   void initState() {
     super.initState();
     final source = widget.source;
-    if (source == null || source.isEmpty) {
-      return;
-    }
-    if (source.startsWith('http')) {
-      _controller = VideoPlayerController.networkUrl(Uri.parse(source));
-    } else {
-      _controller = VideoPlayerController.file(File(source));
-    }
-    _initializeFuture = _controller!.initialize().then((_) {
-      _controller!.setLooping(true);
-      _controller!.play();
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    if (source == null || source.isEmpty) return;
+    _player = Player();
+    _videoController = VideoController(_player!);
+    final uri = source.startsWith('http')
+        ? source
+        : Uri.file(source).toString();
+    _player!.open(Media(uri));
+    _player!.setPlaylistMode(PlaylistMode.loop);
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
-    final initializeFuture = _initializeFuture;
-    if (controller == null || initializeFuture == null) {
+    final player = _player;
+    final controller = _videoController;
+    if (player == null || controller == null) {
       return const Center(
         child: Text('无法加载视频', style: TextStyle(color: Colors.white)),
       );
     }
-
-    return FutureBuilder<void>(
-      future: initializeFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        return Center(
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio == 0 ? 16 / 9 : controller.value.aspectRatio,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                VideoPlayer(controller),
-                Positioned(
-                  bottom: appMetrics.kSpace24,
-                  child: IconButton.filled(
-                    onPressed: () {
-                      if (controller.value.isPlaying) {
-                        controller.pause();
-                      } else {
-                        controller.play();
-                      }
-                      setState(() {});
-                    },
-                    icon: Icon(
-                      controller.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    ),
-                  ),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Video(controller: controller),
+        Positioned(
+          bottom: appMetrics.kSpace24,
+          child: StreamBuilder<bool>(
+            stream: player.stream.playing,
+            builder: (context, snapshot) {
+              final isPlaying = snapshot.data ?? false;
+              return IconButton.filled(
+                onPressed: () {
+                  if (isPlaying) {
+                    player.pause();
+                  } else {
+                    player.play();
+                  }
+                },
+                icon: Icon(
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 ),
-              ],
-            ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }

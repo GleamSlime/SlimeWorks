@@ -1,3 +1,4 @@
+import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 sealed class MediaLibraryItem {
@@ -20,4 +21,13 @@ class MediaLibraryCollectionItem extends MediaLibraryItem {
 
   @override
   String get id => collection.id;
+}
+
+class MediaLibrarySmartFolderItem extends MediaLibraryItem {
+  MediaLibrarySmartFolderItem(this.smartFolder);
+
+  final SmartFolder smartFolder;
+
+  @override
+  String get id => smartFolder.id;
 }

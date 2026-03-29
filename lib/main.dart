@@ -18,6 +18,7 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
+import 'package:media_kit/media_kit.dart';
 
 Future<void> main() async {
   TimeConsumptionTest desktopTest = TimeConsumptionTest(tag: "应用初始化")..start();
@@ -35,6 +36,12 @@ Future<void> main() async {
     await DesktopScaffold.initManager();
   }
 
+  // 必须在任何 Rust FFI 调用前初始化
+  await RustLib.init();
+
+  // 初始化 media_kit（视频播放）
+  MediaKit.ensureInitialized();
+
   // 运行应用
   runApp(const MyApp());
 
@@ -42,7 +49,6 @@ Future<void> main() async {
 }
 
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
-  await RustLib.init();
   await getIt<NodeSettingsService>().init();
 
   initializeLogger();

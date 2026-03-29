@@ -90,13 +90,15 @@ fn convert_item(item: media_collection::types::MediaItem) -> MediaItem {
 
 #[frb(sync)]
 pub fn get_all_media_collections() -> anyhow::Result<Vec<MediaCollection>> {
-    let collections = media_collection::get_all_media_collections().map_err(|error| anyhow::anyhow!(error))?;
+    let collections =
+        media_collection::get_all_media_collections().map_err(|error| anyhow::anyhow!(error))?;
     Ok(collections.into_iter().map(convert_collection).collect())
 }
 
 #[frb(sync)]
 pub fn get_all_media_folders() -> anyhow::Result<Vec<MediaFolder>> {
-    let folders = media_collection::get_all_media_folders().map_err(|error| anyhow::anyhow!(error))?;
+    let folders =
+        media_collection::get_all_media_folders().map_err(|error| anyhow::anyhow!(error))?;
     Ok(folders.into_iter().map(convert_folder).collect())
 }
 
@@ -128,7 +130,8 @@ pub fn scan_media_folders(folder_path: String) -> anyhow::Result<Vec<MediaCollec
 
 #[frb(sync)]
 pub fn create_media_folder(name: String) -> anyhow::Result<MediaFolder> {
-    let folder = media_collection::create_media_folder(name).map_err(|error| anyhow::anyhow!(error))?;
+    let folder =
+        media_collection::create_media_folder(name).map_err(|error| anyhow::anyhow!(error))?;
     Ok(convert_folder(folder))
 }
 

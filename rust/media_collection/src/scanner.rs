@@ -35,20 +35,28 @@ fn file_name_without_extension(path: &Path) -> String {
 }
 
 fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<MediaItem> {
-    let metadata = fs::metadata(path)?;
+    let metadata = fs::metadata(path)
+        .map_err(|error| anyhow::anyhow!("Cannot read metadata for {:?}: {}", path, error))?;
     let ext = path
         .extension()
         .and_then(|value| value.to_str())
-        .ok_or_else(|| anyhow::anyhow!("Unsupported media file: {:?}", path))?;
+        .ok_or_else(|| anyhow::anyhow!("No extension: {:?}", path))?;
     let kind = MediaKind::from_extension(ext)
-        .ok_or_else(|| anyhow::anyhow!("Unsupported media file: {:?}", path))?;
+        .ok_or_else(|| anyhow::anyhow!("Unsupported extension '{}': {:?}", ext, path))?;
     let modified_at = metadata
         .modified()
         .map(DateTime::<Utc>::from)
         .unwrap_or_else(|_| Utc::now());
 
-    let (width, height) = if matches!(kind, MediaKind::Image) {
-        image::image_dimensions(path).ok().map(|(w, h)| (Some(w), Some(h)))
+    // Only attempt dimension reading for known-decodable formats; skip for HEIC/TIFF etc.
+    let decodable = matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "jpg" | "jpeg" | "jfif" | "png" | "gif" | "webp" | "bmp"
+    );
+    let (width, height) = if matches!(kind, MediaKind::Image) && decodable {
+        image::image_dimensions(path)
+            .ok()
+            .map(|(w, h)| (Some(w), Some(h)))
     } else {
         None
     }
@@ -74,6 +82,7 @@ pub struct MediaFolderScanner;
 impl MediaFolderScanner {
     pub fn scan_media_directories<P: AsRef<Path>>(root: P) -> Result<Vec<PathBuf>> {
         let root = root.as_ref();
+        log::debug!("[media_scan] scan_media_directories: root={:?}", root);
         if !root.exists() {
             return Err(anyhow::anyhow!("Directory does not exist: {:?}", root));
         }
@@ -99,9 +108,23 @@ impl MediaFolderScanner {
                 continue;
             }
 
-            let has_media = fs::read_dir(entry.path())?
-                .filter_map(Result::ok)
-                .any(|child| child.path().is_file() && Self::is_supported_media_file(&child.path()));
+            let has_media = match fs::read_dir(entry.path()) {
+                Ok(read_dir) => {
+                    let found = read_dir.filter_map(Result::ok).any(|child| {
+                        child.path().is_file() && Self::is_supported_media_file(&child.path())
+                    });
+                    log::debug!("[media_scan] dir {:?} has_media={}", entry.path(), found);
+                    found
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Skipping unreadable directory {:?}: {}",
+                        entry.path(),
+                        error
+                    );
+                    false
+                }
+            };
 
             if has_media {
                 directories.push(entry.path().to_path_buf());
@@ -143,7 +166,13 @@ impl MediaFolderScanner {
                 }
             }
         } else {
-            for entry in fs::read_dir(folder)? {
+            let read_dir = match fs::read_dir(folder) {
+                Ok(rd) => rd,
+                Err(error) => {
+                    return Err(anyhow::anyhow!("Cannot read directory {:?}: {}", folder, error));
+                }
+            };
+            for entry in read_dir {
                 let entry = match entry {
                     Ok(value) => value,
                     Err(error) => {
@@ -152,16 +181,21 @@ impl MediaFolderScanner {
                     }
                 };
                 let path = entry.path();
-                if path.is_file() && !is_hidden_path(&path) && Self::is_supported_media_file(&path) {
+                if path.is_file() && !is_hidden_path(&path) && Self::is_supported_media_file(&path)
+                {
                     media_paths.push(path);
                 }
             }
         }
 
         media_paths.sort();
+        log::debug!("[media_scan] collect_media_items: found {} media files in {:?}", media_paths.len(), folder);
         let mut items = Vec::with_capacity(media_paths.len());
         for (index, path) in media_paths.iter().enumerate() {
-            items.push(build_media_item(collection_id, index as i32, path)?);
+            match build_media_item(collection_id, index as i32, path) {
+                Ok(item) => items.push(item),
+                Err(error) => log::warn!("Skipping media file {:?}: {}", path, error),
+            }
         }
         Ok(items)
     }

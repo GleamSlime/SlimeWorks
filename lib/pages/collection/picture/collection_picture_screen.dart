@@ -9,11 +9,14 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_card.dart';
+import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/media_folder_card.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/pages/collection/picture/components/media_selection_bar.dart';
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
+import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
+import 'package:slime_works/pages/collection/picture/components/smart_folder_card.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
 
 class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
@@ -37,11 +40,27 @@ class _CollectionPictureScreenState
   @override
   MediaLibraryViewModel createViewModel() => _persistentViewModel;
 
+  Worker? _scrollRestoreWorker;
+
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController(initialScrollOffset: viewModel.savedScrollOffset.value);
     _scrollController.addListener(_onScroll);
+    // Consume scroll-restore signals emitted by the viewmodel on exitCollection / exitFolder
+    _scrollRestoreWorker = ever<double?>(viewModel.scrollRestoreTarget, (offset) {
+      if (offset == null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          final clamped = offset.clamp(
+            _scrollController.position.minScrollExtent,
+            _scrollController.position.maxScrollExtent,
+          );
+          _scrollController.jumpTo(clamped);
+        }
+        viewModel.scrollRestoreTarget.value = null;
+      });
+    });
   }
 
   void _onScroll() {
@@ -52,6 +71,7 @@ class _CollectionPictureScreenState
 
   @override
   void dispose() {
+    _scrollRestoreWorker?.dispose();
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
     }
@@ -63,29 +83,14 @@ class _CollectionPictureScreenState
     return ScreenChromeData(
       title: viewModel.isInDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
       toolbarHeight: AppTheme.metrics.kSpace48,
-      toolbar: Row(
-        spacing: AppTheme.metrics.kSpace8,
-        children: [
-          DesktopHeadToolsButton(
-            icon: const Icon(Icons.refresh),
-            size: AppTheme.metrics.kSpace40,
-            onTap: () async {
-              await viewModel.refreshAll();
-            },
-          ),
-          if (viewModel.isInDetail || viewModel.currentFolderId.value != null)
-            DesktopHeadToolsButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () {
-                if (viewModel.isInDetail) {
-                  viewModel.exitCollection();
-                } else {
-                  viewModel.exitFolder();
-                }
-              },
-            ),
-        ],
+      toolbar: _PictureLibraryToolbar(
+        viewModel: viewModel,
+        onCreateFolder: () => _showCreateFolderDialog(),
+        onScanFolder: () => _handleFolderAction(scanMode: true),
+        onImportFolder: () => _handleFolderAction(scanMode: false),
+        onRefresh: () async => viewModel.refreshAll(),
+        onClearLibrary: () => _confirmClearLibrary(),
+        onCreateSmartFolder: () => _showCreateSmartFolderDialog(),
       ),
     );
   }
@@ -148,6 +153,11 @@ class _CollectionPictureScreenState
   Widget _buildActionBar(BuildContext context) {
     final inDetail = viewModel.isInDetail;
     if (inDetail) {
+      final items = viewModel.currentItems;
+      final totalSize = items.fold(
+        BigInt.zero,
+        (sum, item) => sum + item.fileSize,
+      );
       return Padding(
         padding: EdgeInsets.fromLTRB(
           appMetrics.kSpace16,
@@ -158,53 +168,30 @@ class _CollectionPictureScreenState
         child: Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            '集合内媒体 ${viewModel.currentItems.length} 项',
+            '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
       );
     }
 
+    final hasBreadcrumb =
+        viewModel.currentFolderTrail.isNotEmpty || viewModel.currentSmartFolder != null;
+    final hasNodes = viewModel.enabledRemoteNodes.isNotEmpty;
+    if (!hasBreadcrumb && !hasNodes) return const SizedBox.shrink();
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         appMetrics.kSpace16,
-        appMetrics.kSpace12,
+        appMetrics.kSpace4,
         appMetrics.kSpace16,
-        appMetrics.kSpace8,
+        appMetrics.kSpace4,
       ),
-      child: Wrap(
-        spacing: appMetrics.kSpace12,
-        runSpacing: appMetrics.kSpace8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Row(
         children: [
-          if (viewModel.currentFolderTrail.isNotEmpty) _buildBreadcrumb(context),
-          FilledButton.icon(
-            onPressed: () => _showCreateFolderDialog(),
-            icon: const Icon(Icons.create_new_folder_outlined),
-            label: const Text('新建文件夹'),
-          ),
-          FilledButton.icon(
-            onPressed: viewModel.isScanning.value
-                ? null
-                : () => _handleFolderAction(scanMode: true),
-            icon: const Icon(Icons.travel_explore_outlined),
-            label: const Text('扫描文件夹'),
-          ),
-          OutlinedButton.icon(
-            onPressed: viewModel.isScanning.value
-                ? null
-                : () => _handleFolderAction(scanMode: false),
-            icon: const Icon(Icons.create_new_folder_outlined),
-            label: const Text('导入文件夹'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () async {
-              await viewModel.refreshAll();
-            },
-            icon: const Icon(Icons.cloud_sync_outlined),
-            label: const Text('同步节点'),
-          ),
-          if (viewModel.enabledRemoteNodes.isNotEmpty)
+          if (hasBreadcrumb) Flexible(child: _buildBreadcrumb(context)),
+          const Spacer(),
+          if (hasNodes)
             Text(
               '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
               style: Theme.of(context).textTheme.bodySmall,
@@ -216,6 +203,7 @@ class _CollectionPictureScreenState
 
   Widget _buildBreadcrumb(BuildContext context) {
     final trail = viewModel.currentFolderTrail;
+    final smartFolder = viewModel.currentSmartFolder;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -223,11 +211,11 @@ class _CollectionPictureScreenState
         children: [
           TextButton(
             onPressed: () {
-              viewModel.exitSelection();
-              viewModel.currentFolderId.value = null;
+              viewModel.exitToRoot();
             },
             child: const Text('媒体库'),
           ),
+          // Regular folder trail
           for (int index = 0; index < trail.length; index++) ...[
             Icon(Icons.chevron_right_rounded, size: scaleW(18)),
             TextButton(
@@ -235,13 +223,36 @@ class _CollectionPictureScreenState
               child: Text(trail[index].name),
             ),
           ],
+          // Smart folder in trail (always root-level, no further sub-path)
+          if (smartFolder != null) ...[
+            Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.auto_awesome_outlined, size: scaleW(14)),
+                SizedBox(width: appMetrics.kSpace4),
+                Text(
+                  smartFolder.name,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
-
   Future<void> _handleFolderAction({required bool scanMode}) async {
     final activeRemoteFolderId = viewModel.currentFolderId.value;
+
+    // 当在小智能文件夹（无目标文件夹）中操作扫描，集合会被导入到根目录而非当前文件夹→拦截并提示
+    if (activeRemoteFolderId != null &&
+        viewModel.isSmartFolder(activeRemoteFolderId) &&
+        viewModel.effectiveFolderId == null) {
+      viewModel.showSnack('提示', '该智能文件夹未关联实际目录，请先进入一个普通文件夹再执行扫描');
+      return;
+    }
+
     if (activeRemoteFolderId != null && viewModel.isRemoteFolder(activeRemoteFolderId)) {
       final nodeId = viewModel.getRemoteFolderNodeId(activeRemoteFolderId);
       if (nodeId == null) {
@@ -407,6 +418,285 @@ class _CollectionPictureScreenState
     );
   }
 
+  // ── Smart Folder Dialogs ─────────────────────────────────────────────────
+
+  Future<void> _showCreateSmartFolderDialog() async {
+    // 确保文件夹列表是最新的
+    await viewModel.loadFolders();
+    // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
+    final snapshotFolders = viewModel.folders.toList();
+    final nameCtrl = TextEditingController();
+    final patternCtrl = TextEditingController();
+    final selectedFolderIds = <String>{}; // empty = 全部集合
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('新建智能文件夹'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: '文件夹名称',
+                        hintText: '例：我的收藏',
+                      ),
+                    ),
+                    SizedBox(height: appMetrics.kSpace12),
+                    const Text('目标文件夹（可多选，空选则匹配全部集合）'),
+                    SizedBox(height: appMetrics.kSpace4),
+                    if (snapshotFolders.isEmpty)
+                      const Text('（暂无文件夹）', style: TextStyle(color: Colors.grey))
+                    else
+                      Wrap(
+                        spacing: appMetrics.kSpace8,
+                        runSpacing: appMetrics.kSpace4,
+                        children: [
+                          for (final f in snapshotFolders)
+                            FilterChip(
+                              label: Text(f.name),
+                              selected: selectedFolderIds.contains(f.id),
+                              onSelected: (v) => setState(() {
+                                if (v) {
+                                  selectedFolderIds.add(f.id);
+                                } else {
+                                  selectedFolderIds.remove(f.id);
+                                }
+                              }),
+                            ),
+                        ],
+                      ),
+                    SizedBox(height: appMetrics.kSpace12),
+                    TextField(
+                      controller: patternCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '正则匹配规则（可选）',
+                        hintText: '例：大名|别名|关键词',
+                        helperText: '留空则显示目标文件夹内全部集合',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await viewModel.createSmartFolder(
+                      nameCtrl.text,
+                      patternCtrl.text,
+                      targetFolderIds: selectedFolderIds.toList(),
+                    );
+                  },
+                  child: const Text('创建'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showRenameSmartFolderDialog(String id, String currentName) async {
+    final ctrl = TextEditingController(text: currentName);
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('重命名智能文件夹'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: '新名称'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await viewModel.renameSmartFolder(id, ctrl.text);
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditSmartFolderDialog(SmartFolder sf) async {
+    // 确保文件夹列表是最新的
+    await viewModel.loadFolders();
+    // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
+    final snapshotFolders = viewModel.folders.toList();
+    final nameCtrl = TextEditingController(text: sf.name);
+    final patternCtrl = TextEditingController(text: sf.regexPattern);
+    final selectedFolderIds = <String>{...sf.targetFolderIds};
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('编辑智能文件夹'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: '文件夹名称'),
+                    ),
+                    SizedBox(height: appMetrics.kSpace12),
+                    const Text('目标文件夹（可多选，空选则匹配全部集合）'),
+                    SizedBox(height: appMetrics.kSpace4),
+                    if (snapshotFolders.isEmpty)
+                      const Text('（暂无文件夹）', style: TextStyle(color: Colors.grey))
+                    else
+                      Wrap(
+                        spacing: appMetrics.kSpace8,
+                        runSpacing: appMetrics.kSpace4,
+                        children: [
+                          for (final f in snapshotFolders)
+                            FilterChip(
+                              label: Text(f.name),
+                              selected: selectedFolderIds.contains(f.id),
+                              onSelected: (v) => setState(() {
+                                if (v) {
+                                  selectedFolderIds.add(f.id);
+                                } else {
+                                  selectedFolderIds.remove(f.id);
+                                }
+                              }),
+                            ),
+                        ],
+                      ),
+                    SizedBox(height: appMetrics.kSpace12),
+                    TextField(
+                      controller: patternCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '正则匹配规则（可选）',
+                        hintText: '例：大名|别名|关键词',
+                        helperText: '留空则显示目标文件夹内全部集合',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await viewModel.editSmartFolder(
+                      sf.id,
+                      name: nameCtrl.text,
+                      pattern: patternCtrl.text,
+                      targetFolderIds: selectedFolderIds.toList(),
+                    );
+                  },
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmDeleteSmartFolder(String id, String name) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除智能文件夹'),
+          content: Text('确定删除"$name"？集合本身不受影响，仅删除此筛选规则。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await viewModel.deleteSmartFolder(id);
+              },
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openFolderInExplorer(String folderPath) {
+    try {
+      if (Platform.isWindows) {
+        Process.run('explorer.exe', [folderPath]);
+      } else if (Platform.isMacOS) {
+        Process.run('open', [folderPath]);
+      } else if (Platform.isLinux) {
+        Process.run('xdg-open', [folderPath]);
+      }
+    } catch (e) {
+      viewModel.showSnack('错误', '打开文件夹失败: $e');
+    }
+  }
+
+  static String _formatBytes(BigInt bytes) {
+    final d = bytes.toDouble();
+    if (d < 1024) return '${d.toStringAsFixed(0)} B';
+    if (d < 1024 * 1024) return '${(d / 1024).toStringAsFixed(1)} KB';
+    if (d < 1024 * 1024 * 1024) return '${(d / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  /// Wraps [child] in a colored overlay ring when a draggable is hovering over it.
+  Widget _buildDropHighlight(
+    BuildContext context, {
+    required bool highlighted,
+    required Widget child,
+  }) {
+    if (!highlighted) return child;
+    final color = Theme.of(context).colorScheme.primary;
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: appMetrics.radius8,
+                border: Border.all(color: color, width: scaleW(3)),
+                color: color.withAlpha(40),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBrowseGrid(BuildContext context) {
     final items = viewModel.visibleItems;
     if (items.isEmpty) {
@@ -440,7 +730,7 @@ class _CollectionPictureScreenState
         final item = items[index];
         if (item is MediaLibraryFolderItem) {
           final folder = item.folder;
-          return MediaFolderCard(
+          final folderCard = MediaFolderCard(
             folder: folder,
             coverSource: viewModel.buildFolderCoverSource(folder),
             collectionCount: viewModel.collectionCountInFolder(folder.id),
@@ -458,10 +748,54 @@ class _CollectionPictureScreenState
             onRename: () => _showRenameFolderDialog(folder.id, folder.name),
             onDelete: () => _confirmDeleteFolder(folder.id, folder.name),
           );
+          if (viewModel.isRemoteFolder(folder.id)) return folderCard;
+          return DragTarget<String>(
+            onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
+            onAcceptWithDetails: (d) =>
+                viewModel.moveCollectionToFolder(d.data, folder.id),
+            builder: (ctx, candidateData, _) => _buildDropHighlight(
+              ctx,
+              highlighted: candidateData.isNotEmpty,
+              child: folderCard,
+            ),
+          );
+        }
+
+        if (item is MediaLibrarySmartFolderItem) {
+          final sf = item.smartFolder;
+          final sfCard = SmartFolderCard(
+            smartFolder: sf,
+            coverSource: viewModel.buildSmartFolderCoverSource(sf),
+            matchCount: viewModel.mergedCollections.where((c) => sf.matches(c)).length,
+            isSelected: viewModel.selectedIds.contains(sf.id),
+            onTap: () {
+              if (viewModel.isSelecting.value) {
+                viewModel.toggleSelection(sf.id);
+                return;
+              }
+              viewModel.enterFolder(sf.id);
+            },
+            onLongPress: () => viewModel.enterSelection(sf.id),
+            onRename: () => _showRenameSmartFolderDialog(sf.id, sf.name),
+            onEdit: () => _showEditSmartFolderDialog(sf),
+            onDelete: () => _confirmDeleteSmartFolder(sf.id, sf.name),
+          );
+          final targetId = sf.targetFolderId;
+          if (targetId == null) return sfCard;
+          return DragTarget<String>(
+            onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
+            onAcceptWithDetails: (d) =>
+                viewModel.moveCollectionToFolder(d.data, targetId),
+            builder: (ctx, candidateData, _) => _buildDropHighlight(
+              ctx,
+              highlighted: candidateData.isNotEmpty,
+              child: sfCard,
+            ),
+          );
         }
 
         final collection = (item as MediaLibraryCollectionItem).collection;
-        return MediaCollectionCard(
+        final collectionCard = MediaCollectionCard(
           collection: collection,
           coverSource: viewModel.buildCollectionCoverSource(collection),
           isSelected: viewModel.selectedIds.contains(collection.id),
@@ -479,6 +813,50 @@ class _CollectionPictureScreenState
           onRename: () => _showRenameDialog(collection.id, collection.title),
           onDelete: () => _confirmDeleteSingle(collection.id, collection.title),
           onMove: () => _showMoveCollectionDialog(collection.id, collection.folderId),
+          onOpenFolder: () => _openFolderInExplorer(collection.folderPath),
+          onDeleteFolder: viewModel.isRemoteCollection(collection.id)
+              ? null
+              : () => _confirmDeleteCollectionFolder(
+                    collection.id,
+                    collection.folderPath,
+                    collection.title,
+                  ),
+        );
+        // Local collections: draggable (to folder) + DragTarget (from other collections for reorder)
+        if (viewModel.isRemoteCollection(collection.id)) return collectionCard;
+        final draggable = Draggable<String>(
+          data: collection.id,
+          feedback: Material(
+            elevation: 8,
+            borderRadius: appMetrics.radius8,
+            child: SizedBox(
+              width: scaleW(160),
+              height: scaleW(60),
+              child: Padding(
+                padding: EdgeInsets.all(appMetrics.kSpace12),
+                child: Text(
+                  collection.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+            ),
+          ),
+          childWhenDragging: Opacity(opacity: 0.3, child: collectionCard),
+          child: collectionCard,
+        );
+        return DragTarget<String>(
+          onWillAcceptWithDetails: (d) =>
+              d.data != collection.id &&
+              !viewModel.isRemoteCollection(d.data) &&
+              viewModel.mergedCollections.any((c) => c.id == d.data),
+          onAcceptWithDetails: (d) => viewModel.reorderCollection(d.data, collection.id),
+          builder: (ctx, candidateData, _) => _buildDropHighlight(
+            ctx,
+            highlighted: candidateData.isNotEmpty,
+            child: draggable,
+          ),
         );
       },
     );
@@ -488,6 +866,7 @@ class _CollectionPictureScreenState
     }
 
     return GestureDetector(
+
       onPanStart: (details) {
         setState(() {
           _selectionBoxStart = details.localPosition;
@@ -562,6 +941,11 @@ class _CollectionPictureScreenState
               ),
             );
           },
+          onRequestScrubFrames: (item.kind == media_api.MediaKind.video &&
+                  !viewModel.isRemoteCollection(
+                      viewModel.currentCollectionId.value ?? ''))
+              ? () => viewModel.getVideoScrubFrames(item.filePath)
+              : null,
         );
       },
     );
@@ -711,6 +1095,31 @@ class _CollectionPictureScreenState
     );
   }
 
+  Future<void> _confirmClearLibrary() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('清空媒体库'),
+          content: const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。确定继续吗？'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await viewModel.clearLocalLibrary();
+              },
+              child: const Text('清空'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _confirmDeleteSingle(String collectionId, String title) async {
     await showDialog<void>(
       context: context,
@@ -753,6 +1162,62 @@ class _CollectionPictureScreenState
         );
       },
     );
+  }
+
+  /// 确认删除集合对应的本地文件夹（永久删除物理目录）
+  Future<void> _confirmDeleteCollectionFolder(
+    String collectionId,
+    String folderPath,
+    String title,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除本地文件夹'),
+          content: Text(
+            '确定删除“$title”对应的本地文件夹吗？\n'
+            '路径：$folderPath\n\n'
+            '此操作不可撤销，将永久删除该目录及其内全部文件。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _deleteCollectionFolder(collectionId, folderPath);
+              },
+              child: const Text('永久删除'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 删除物理目录并从媒体库移除集合记录
+  Future<void> _deleteCollectionFolder(String collectionId, String folderPath) async {
+    try {
+      final dir = Directory(folderPath);
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+      await viewModel.deleteCollection(collectionId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('删除文件夹失败: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _confirmDeleteSelected(BuildContext context) async {
@@ -808,5 +1273,159 @@ class _SelectionBoxPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SelectionBoxPainter oldDelegate) {
     return oldDelegate.start != start || oldDelegate.end != end;
+  }
+}
+
+/// Stable toolbar widget - kept as a dedicated class so Flutter’s element
+/// reconciliation reuses the same element across ScreenChromeData rebuilds,
+/// preventing semantics-tree node-ID churn that causes AXTree errors on Windows.
+class _PictureLibraryToolbar extends StatelessWidget {
+  const _PictureLibraryToolbar({
+    required this.viewModel,
+    required this.onCreateFolder,
+    required this.onScanFolder,
+    required this.onImportFolder,
+    required this.onRefresh,
+    required this.onClearLibrary,
+    required this.onCreateSmartFolder,
+  });
+
+  final MediaLibraryViewModel viewModel;
+  final VoidCallback onCreateFolder;
+  final VoidCallback onScanFolder;
+  final VoidCallback onImportFolder;
+  final VoidCallback onRefresh;
+  final VoidCallback onClearLibrary;
+  final VoidCallback onCreateSmartFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final isScanning = viewModel.isScanning.value;
+      final statusText = viewModel.scanStatusText.value;
+      final inDetail = viewModel.isInDetail;
+      final showBack = inDetail || viewModel.currentFolderId.value != null;
+      return ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: AppTheme.metrics.kSpace8,
+          children: [
+            // 扫描进度（opacity 不增删节点）
+            AnimatedOpacity(
+              opacity: isScanning ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 150),
+              child: IgnorePointer(
+                ignoring: !isScanning,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: AppTheme.metrics.kSpace8,
+                  children: [
+                    SizedBox(
+                      width: AppTheme.metrics.kSpace20,
+                      height: AppTheme.metrics.kSpace20,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    AnimatedOpacity(
+                      opacity: statusText.isNotEmpty ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 150),
+                      child: Text(
+                        statusText.isNotEmpty ? statusText : ' ',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 操作按钮
+            AnimatedOpacity(
+              opacity: (!isScanning && !inDetail) ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 150),
+              child: IgnorePointer(
+                ignoring: isScanning || inDetail,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: AppTheme.metrics.kSpace8,
+                  children: [
+                    Tooltip(
+                      message: '新建文件夹',
+                      child: DesktopHeadToolsButton(
+                        icon: const Icon(Icons.create_new_folder_outlined),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: onCreateFolder,
+                      ),
+                    ),
+                    Tooltip(
+                      message: '扫描文件夹',
+                      child: DesktopHeadToolsButton(
+                        icon: const Icon(Icons.travel_explore_outlined),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: onScanFolder,
+                      ),
+                    ),
+                    Tooltip(
+                      message: '导入文件夹',
+                      child: DesktopHeadToolsButton(
+                        icon: const Icon(Icons.folder_open_outlined),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: onImportFolder,
+                      ),
+                    ),
+                    Tooltip(
+                      message: '同步节点',
+                      child: DesktopHeadToolsButton(
+                        icon: const Icon(Icons.cloud_sync_outlined),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: onRefresh,
+                      ),
+                    ),
+                    Tooltip(
+                      message: '清空媒体库',
+                      child: DesktopHeadToolsButton(
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: onClearLibrary,
+                      ),
+                    ),
+                    Tooltip(
+                      message: '新建智能文件夹',
+                      child: DesktopHeadToolsButton(
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: onCreateSmartFolder,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            DesktopHeadToolsButton(
+              icon: const Icon(Icons.refresh),
+              size: AppTheme.metrics.kSpace40,
+              onTap: onRefresh,
+            ),
+            // 返回按钮
+            AnimatedOpacity(
+              opacity: showBack ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 150),
+              child: IgnorePointer(
+                ignoring: !showBack,
+                child: DesktopHeadToolsButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () {
+                    if (inDetail) {
+                      viewModel.exitCollection();
+                    } else {
+                      viewModel.exitFolder();
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

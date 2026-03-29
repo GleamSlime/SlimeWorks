@@ -19,6 +19,8 @@ class MediaCollectionCard extends StatefulWidget {
     required this.onRename,
     required this.onDelete,
     required this.onMove,
+    required this.onOpenFolder,
+    this.onDeleteFolder,
   });
 
   final media_api.MediaCollection collection;
@@ -32,6 +34,8 @@ class MediaCollectionCard extends StatefulWidget {
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final VoidCallback onMove;
+  final VoidCallback onOpenFolder;
+  final VoidCallback? onDeleteFolder;
 
   @override
   State<MediaCollectionCard> createState() => _MediaCollectionCardState();
@@ -50,10 +54,13 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         Rect.fromLTWH(localPosition.dx, localPosition.dy, 1, 1),
         Offset.zero & overlaySize,
       ),
-      items: const [
-        PopupMenuItem<String>(value: 'rename', child: Text('重命名集合')),
-        PopupMenuItem<String>(value: 'move', child: Text('移动到文件夹')),
-        PopupMenuItem<String>(value: 'delete', child: Text('从媒体库移除')),
+      items: [
+        const PopupMenuItem<String>(value: 'rename', child: Text('重命名集合')),
+        const PopupMenuItem<String>(value: 'move', child: Text('移动到文件夹')),
+        const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
+        const PopupMenuItem<String>(value: 'delete', child: Text('删除集合')),
+        if (widget.onDeleteFolder != null)
+          const PopupMenuItem<String>(value: 'delete_folder', child: Text('删除文件夹')),
       ],
     );
     if (!mounted) {
@@ -63,8 +70,12 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       widget.onRename();
     } else if (action == 'move') {
       widget.onMove();
+    } else if (action == 'open_folder') {
+      widget.onOpenFolder();
     } else if (action == 'delete') {
       widget.onDelete();
+    } else if (action == 'delete_folder') {
+      widget.onDeleteFolder?.call();
     }
   }
 
@@ -110,9 +121,14 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                         ),
                       ),
                       child: hasCover
-                          ? (coverSource.startsWith('http')
-                                ? Image.network(coverSource, fit: BoxFit.cover)
-                                : Image.file(File(coverSource), fit: BoxFit.cover))
+                          ? AnimatedScale(
+                              scale: _hovering ? 1.06 : 1.0,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                              child: coverSource.startsWith('http')
+                                  ? Image.network(coverSource, fit: BoxFit.cover)
+                                  : Image.file(File(coverSource), fit: BoxFit.cover),
+                            )
                           : Center(
                               child: Icon(
                                 Icons.collections_outlined,

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::scanner::MediaFolderScanner;
@@ -8,10 +8,172 @@ use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind};
 static MEDIA_COLLECTIONS: OnceLock<Arc<Mutex<Vec<MediaCollection>>>> = OnceLock::new();
 static MEDIA_ITEMS: OnceLock<Arc<Mutex<Vec<MediaItem>>>> = OnceLock::new();
 static MEDIA_FOLDERS: OnceLock<Arc<Mutex<Vec<MediaFolder>>>> = OnceLock::new();
+/// Caches the DB initialization result: None = success, Some(msg) = failure.
+static DB_INIT_RESULT: OnceLock<Option<String>> = OnceLock::new();
+
+/// Returns the platform-specific default base dir for app data.
+fn app_data_base() -> String {
+    #[cfg(windows)]
+    return std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    #[cfg(target_os = "macos")]
+    return {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        format!("{}/Library/Application Support", home)
+    };
+    #[cfg(not(any(windows, target_os = "macos")))]
+    return std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        format!("{}/.local/share", home)
+    });
+}
+
+/// Returns the platform-specific default path for the media DB file.
+fn default_db_path() -> String {
+    let dir = std::path::Path::new(&app_data_base()).join("SlimeWorks");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("media.db").to_string_lossy().into_owned()
+}
+
+/// Returns the directory used for video thumbnails / scrub frames.
+fn thumbnail_cache_dir() -> std::path::PathBuf {
+    let dir = std::path::Path::new(&app_data_base())
+        .join("SlimeWorks")
+        .join("thumbnails");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+/// Initialise the DB exactly once.  Returns the error string on failure.
+/// Exposed publicly so Dart can call it explicitly at startup.
+pub fn initialize_db() -> Result<(), String> {
+    let result = DB_INIT_RESULT.get_or_init(|| {
+        let path = default_db_path();
+        log::info!("[media_db] Initializing DB at: {}", path);
+        match db_module::db_init(path) {
+            Ok(_) => {
+                log::info!("[media_db] DB initialized successfully");
+                None
+            }
+            Err(e) => {
+                log::error!("[media_db] DB init failed: {}", e);
+                Some(e)
+            }
+        }
+    });
+    match result {
+        None => Ok(()),
+        Some(e) => Err(e.clone()),
+    }
+}
+
+/// Ensures the DB is initialized (idempotent, no-op after first call).
+fn ensure_db_initialized() {
+    let _ = initialize_db();
+}
+
+/// Simple FNV-1a hash for deriving a stable short key from a path string.
+fn path_key(path: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in path.bytes() {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    format!("{:016x}", hash)
+}
+
+/// Try to extract a single thumbnail frame from `video_path` using the system
+/// ffmpeg binary.  The frame is cached at `thumbnails/{id}.jpg` and the path
+/// returned on success.
+fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<String> {
+    let dir = thumbnail_cache_dir();
+    let out = dir.join(format!("{}.jpg", thumb_id));
+    if out.exists() {
+        return Some(out.to_string_lossy().into_owned());
+    }
+    let out_str = out.to_string_lossy().into_owned();
+    // Try progressively earlier seek positions in case the video is short.
+    for seek in &["00:00:10", "00:00:03", "00:00:00"] {
+        let ok = std::process::Command::new("ffmpeg")
+            .args(["-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok && out.exists() {
+            return Some(out_str);
+        }
+    }
+    None
+}
+
+/// Use ffprobe to get the video duration in seconds.
+fn video_duration_secs(video_path: &str) -> Option<f64> {
+    let out = std::process::Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path,
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok()
+}
+
+/// Extract `frame_count` evenly-spaced frames from a video using system ffmpeg.
+/// Frames are cached in `thumbnails/scrub/<path_key>/frame_NN.jpg`.
+/// Returns the list of frame file paths that were successfully created.
+pub fn extract_video_scrub_frames(video_path: String, frame_count: u32) -> Result<Vec<String>, String> {
+    let n = (frame_count.max(2)) as usize;
+    let key = path_key(&video_path);
+    let frame_dir = thumbnail_cache_dir().join("scrub").join(&key);
+
+    // Return cached frames if they all exist.
+    let cached: Vec<String> = (0..n)
+        .map(|i| frame_dir.join(format!("frame_{:02}.jpg", i)).to_string_lossy().into_owned())
+        .collect();
+    if cached.iter().all(|p| std::path::Path::new(p).exists()) {
+        return Ok(cached);
+    }
+    let _ = std::fs::create_dir_all(&frame_dir);
+
+    let duration = video_duration_secs(&video_path).unwrap_or(60.0).max(1.0);
+    let mut paths = Vec::new();
+    for i in 0..n {
+        let t = duration * i as f64 / (n - 1) as f64;
+        let secs = t as u64;
+        let seek = format!("{:02}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60);
+        let out = frame_dir.join(format!("frame_{:02}.jpg", i));
+        let out_str = out.to_string_lossy().into_owned();
+        let ok = std::process::Command::new("ffmpeg")
+            .args(["-i", &video_path, "-ss", &seek, "-vframes", "1",
+                   "-vf", "scale=320:-1", "-q:v", "5", "-y", &out_str])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok && out.exists() {
+            paths.push(out_str);
+        }
+    }
+    if paths.is_empty() {
+        Err("ffmpeg not available or failed to extract frames".to_string())
+    } else {
+        Ok(paths)
+    }
+}
 
 fn normalize_folder_path(path: &Path) -> Result<String, String> {
-    let normalized = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    Ok(normalized.to_string_lossy().to_string())
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let s = canonical.to_string_lossy().into_owned();
+    // Windows canonicalize adds \\?\ prefix – strip it for consistent storage/comparison
+    #[cfg(windows)]
+    let s = s.strip_prefix("\\\\?\\").map(|v| v.to_string()).unwrap_or(s);
+    Ok(s)
 }
 
 fn collection_table_name() -> String {
@@ -28,6 +190,7 @@ fn folder_table_name() -> String {
 
 fn get_collections() -> &'static Arc<Mutex<Vec<MediaCollection>>> {
     MEDIA_COLLECTIONS.get_or_init(|| {
+        ensure_db_initialized();
         let collections = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(collection_table_name());
         if let Ok(records) = db_module::db_list_all(collection_table_name()) {
@@ -45,6 +208,7 @@ fn get_collections() -> &'static Arc<Mutex<Vec<MediaCollection>>> {
 
 fn get_items() -> &'static Arc<Mutex<Vec<MediaItem>>> {
     MEDIA_ITEMS.get_or_init(|| {
+        ensure_db_initialized();
         let items = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(item_table_name());
         if let Ok(records) = db_module::db_list_all(item_table_name()) {
@@ -62,6 +226,7 @@ fn get_items() -> &'static Arc<Mutex<Vec<MediaItem>>> {
 
 fn get_folders() -> &'static Arc<Mutex<Vec<MediaFolder>>> {
     MEDIA_FOLDERS.get_or_init(|| {
+        ensure_db_initialized();
         let folders = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(folder_table_name());
         if let Ok(records) = db_module::db_list_all(folder_table_name()) {
@@ -113,6 +278,8 @@ fn default_collection_title(path: &Path) -> String {
         .unwrap_or_else(|| "未命名集合".to_string())
 }
 
+/// Choose cover: prefer first image item; fall back to first video path.
+/// Actual video thumbnail generation happens lazily from the Dart side.
 fn pick_cover_path(items: &[MediaItem]) -> Option<String> {
     items.iter()
         .find(|item| matches!(item.kind, MediaKind::Image))
@@ -120,13 +287,16 @@ fn pick_cover_path(items: &[MediaItem]) -> Option<String> {
         .map(|item| item.file_path.clone())
 }
 
-fn upsert_collection_from_folder(folder_path: &str, recursive: bool) -> Result<MediaCollection, String> {
-    let folder = PathBuf::from(folder_path);
+fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<MediaCollection, String> {
+    log::debug!("[media_scan] upsert_collection_from_folder: {:?} (recursive={})", folder, recursive);
     if !folder.exists() || !folder.is_dir() {
-        return Err(format!("Path is not a directory: {}", folder_path));
+        let err = format!("Path is not a directory: {:?}", folder);
+        log::warn!("[media_scan] {}", err);
+        return Err(err);
     }
 
-    let normalized_path = normalize_folder_path(&folder)?;
+    let normalized_path = normalize_folder_path(folder)?;
+    log::debug!("[media_scan] normalized_path = {:?}", normalized_path);
 
     let existing = {
         let collections = get_collections().lock().map_err(|error| error.to_string())?;
@@ -141,10 +311,13 @@ fn upsert_collection_from_folder(folder_path: &str, recursive: bool) -> Result<M
         .map(|collection| collection.id.clone())
         .unwrap_or_else(|| format!("media_collection_{}", uuid::Uuid::new_v4()));
 
-    let items = MediaFolderScanner::collect_media_items(&collection_id, &folder, recursive)
+    let items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
         .map_err(|error| error.to_string())?;
+    log::debug!("[media_scan] collect_media_items returned {} items for {:?}", items.len(), folder);
     if items.is_empty() {
-        return Err("未在目标目录中发现图片或视频文件".to_string());
+        let err = format!("No media found in {:?}", folder);
+        log::warn!("[media_scan] {}", err);
+        return Err(err);
     }
 
     {
@@ -159,7 +332,9 @@ fn upsert_collection_from_folder(folder_path: &str, recursive: bool) -> Result<M
             delete_item_from_db(&item_id);
         }
         for item in &items {
-            persist_item(item)?;
+            if let Err(error) = persist_item(item) {
+                log::warn!("[media_scan] persist_item failed for {:?}: {}", item.file_path, error);
+            }
         }
         stored_items.extend(items.iter().cloned());
     }
@@ -170,7 +345,7 @@ fn upsert_collection_from_folder(folder_path: &str, recursive: bool) -> Result<M
         title: existing
             .as_ref()
             .map(|collection| collection.title.clone())
-            .unwrap_or_else(|| default_collection_title(&folder)),
+            .unwrap_or_else(|| default_collection_title(folder)),
         folder_path: normalized_path,
         folder_id: existing.as_ref().and_then(|collection| collection.folder_id.clone()),
         cover_path: pick_cover_path(&items),
@@ -194,6 +369,7 @@ fn upsert_collection_from_folder(folder_path: &str, recursive: bool) -> Result<M
         }
     }
     persist_collection(&updated_collection)?;
+    log::debug!("[media_scan] collection persisted: id={} title={:?} item_count={}", updated_collection.id, updated_collection.title, updated_collection.item_count);
     Ok(updated_collection)
 }
 
@@ -343,19 +519,33 @@ pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem
 }
 
 pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, String> {
-    upsert_collection_from_folder(&folder_path, true)
+    upsert_collection_from_folder(Path::new(&folder_path), true)
 }
 
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {
-    let directories = MediaFolderScanner::scan_media_directories(&folder_path)
-        .map_err(|error| error.to_string())?;
+    let root = Path::new(&folder_path);
+    log::info!("[media_scan] scan_media_folders called: {:?}", root);
+    log::info!("[media_scan] root.exists()={} root.is_dir()={}", root.exists(), root.is_dir());
+    let directories = MediaFolderScanner::scan_media_directories(root)
+        .map_err(|error| {
+            log::error!("[media_scan] scan_media_directories error: {}", error);
+            error.to_string()
+        })?;
+    log::info!("[media_scan] scan_media_directories found {} dirs with media under {:?}", directories.len(), root);
+    for (i, dir) in directories.iter().enumerate() {
+        log::info!("[media_scan]   dir[{}] = {:?}", i, dir);
+    }
     let mut collections = Vec::new();
-    for directory in directories {
-        match upsert_collection_from_folder(&directory.to_string_lossy(), false) {
-            Ok(collection) => collections.push(collection),
-            Err(error) => log::warn!("Failed to import media directory {:?}: {}", directory, error),
+    for directory in &directories {
+        match upsert_collection_from_folder(directory, false) {
+            Ok(collection) => {
+                log::info!("scan_media_folders: imported '{}' from {:?}", collection.title, directory);
+                collections.push(collection);
+            }
+            Err(error) => log::warn!("scan_media_folders: failed {:?}: {}", directory, error),
         }
     }
+    log::info!("scan_media_folders: result {}/{} collections imported", collections.len(), directories.len());
     collections.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
     Ok(collections)
 }

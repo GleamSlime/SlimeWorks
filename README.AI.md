@@ -13,7 +13,8 @@
 - 状态管理(UI/页面状态 使用GetX | 业务逻辑Service、Rust FFI桥接层、配置、数据库 使用GetIt)
 - 路由操作使用GoRouter TypedGoRoute
 - Dart中的尺寸需参考lib\core\theme\app_theme.dart appMetrics，颜色也需考虑亮色和暗色，如果尺寸未定义则使用scaleW，禁止直接数字或者int.w
-- 打日志使用Loggers class
+- 打日志使用Loggers class，关键流程使用中文打info/debug/error/warn log方便后续定位问题
+- 注释必须使用中文
 
 ‌## Dart规则
 

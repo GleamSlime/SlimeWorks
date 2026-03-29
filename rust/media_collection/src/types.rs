@@ -10,10 +10,11 @@ pub enum MediaKind {
 impl MediaKind {
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_ascii_lowercase().as_str() {
-            "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "avif" => {
-                Some(MediaKind::Image)
+            "jpg" | "jpeg" | "jfif" | "png" | "gif" | "webp" | "bmp" | "avif" | "heic" | "heif"
+            | "tif" | "tiff" => Some(MediaKind::Image),
+            "mp4" | "mov" | "m4v" | "mkv" | "avi" | "webm" | "wmv" | "flv" | "ts" => {
+                Some(MediaKind::Video)
             }
-            "mp4" | "mov" | "m4v" | "mkv" | "avi" | "webm" => Some(MediaKind::Video),
             _ => None,
         }
     }
