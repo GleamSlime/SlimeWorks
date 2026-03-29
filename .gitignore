@@ -64,3 +64,4 @@ rust/**/gen/schemas
 
 # FVM Version Cache
 .fvm/
+*.exe
