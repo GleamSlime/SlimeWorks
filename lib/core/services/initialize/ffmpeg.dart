@@ -26,8 +26,7 @@ class RustFFmpeg {
       final appDir = await getApplicationSupportDirectory();
       final sep = Platform.pathSeparator;
       final ext = Platform.isWindows ? '.exe' : '';
-      final internalPath =
-          '${appDir.path}${sep}modules${sep}ffmpeg${sep}ffmpeg$ext';
+      final internalPath = '${appDir.path}${sep}modules${sep}ffmpeg${sep}ffmpeg$ext';
 
       // 已存在直接返回
       if (File(internalPath).existsSync()) return internalPath;

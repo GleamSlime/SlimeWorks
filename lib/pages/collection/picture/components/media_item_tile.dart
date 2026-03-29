@@ -17,6 +17,7 @@ class MediaItemTile extends StatefulWidget {
   final media_api.MediaItem item;
   final String? source;
   final VoidCallback onTap;
+
   /// 仅本地视频提供：异步返回均匀分布的帧文件路径列表。
   final Future<List<String>> Function()? onRequestScrubFrames;
 
@@ -34,8 +35,10 @@ class _MediaItemTileState extends State<MediaItemTile> {
 
   String? get _displaySource {
     if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty) {
-      final idx = (_hoverRatio * (_scrubFrames!.length - 1)).round()
-          .clamp(0, _scrubFrames!.length - 1);
+      final idx = (_hoverRatio * (_scrubFrames!.length - 1)).round().clamp(
+        0,
+        _scrubFrames!.length - 1,
+      );
       return _scrubFrames![idx];
     }
     return widget.source;
@@ -47,7 +50,11 @@ class _MediaItemTileState extends State<MediaItemTile> {
     setState(() => _loadingFrames = true);
     try {
       final frames = await widget.onRequestScrubFrames!();
-      if (mounted) setState(() { _scrubFrames = frames; _loadingFrames = false; });
+      if (mounted)
+        setState(() {
+          _scrubFrames = frames;
+          _loadingFrames = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loadingFrames = false);
     }
@@ -58,10 +65,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
     final theme = Theme.of(context);
     final src = _displaySource;
     final hasCover = src != null && src.isNotEmpty;
-    final showCoverAnyway = hasCover && (
-      !_isVideo ||
-      (_scrubFrames != null && _scrubFrames!.isNotEmpty)
-    );
+    final showCoverAnyway =
+        hasCover && (!_isVideo || (_scrubFrames != null && _scrubFrames!.isNotEmpty));
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -80,7 +85,10 @@ class _MediaItemTileState extends State<MediaItemTile> {
           final curIdx = (_hoverRatio * (_scrubFrames!.length - 1)).round();
           if (newIdx != curIdx) setState(() => _hoverRatio = ratio);
         },
-        onExit: (_) => setState(() { _hovering = false; _hoverRatio = 0.0; }),
+        onExit: (_) => setState(() {
+          _hovering = false;
+          _hoverRatio = 0.0;
+        }),
         child: Card(
           elevation: 0,
           clipBehavior: Clip.antiAlias,
@@ -121,9 +129,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                     value: _hoverRatio,
                     minHeight: scaleW(3),
                     backgroundColor: Colors.white24,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      theme.colorScheme.primary,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
                   ),
                 ),
               Positioned(

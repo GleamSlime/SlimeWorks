@@ -154,10 +154,7 @@ class _CollectionPictureScreenState
     final inDetail = viewModel.isInDetail;
     if (inDetail) {
       final items = viewModel.currentItems;
-      final totalSize = items.fold(
-        BigInt.zero,
-        (sum, item) => sum + item.fileSize,
-      );
+      final totalSize = items.fold(BigInt.zero, (sum, item) => sum + item.fileSize);
       return Padding(
         padding: EdgeInsets.fromLTRB(
           appMetrics.kSpace16,
@@ -231,10 +228,7 @@ class _CollectionPictureScreenState
               children: [
                 Icon(Icons.auto_awesome_outlined, size: scaleW(14)),
                 SizedBox(width: appMetrics.kSpace4),
-                Text(
-                  smartFolder.name,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
+                Text(smartFolder.name, style: Theme.of(context).textTheme.labelMedium),
               ],
             ),
           ],
@@ -242,6 +236,7 @@ class _CollectionPictureScreenState
       ),
     );
   }
+
   Future<void> _handleFolderAction({required bool scanMode}) async {
     final activeRemoteFolderId = viewModel.currentFolderId.value;
 
@@ -443,10 +438,7 @@ class _CollectionPictureScreenState
                     TextField(
                       controller: nameCtrl,
                       autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: '文件夹名称',
-                        hintText: '例：我的收藏',
-                      ),
+                      decoration: const InputDecoration(labelText: '文件夹名称', hintText: '例：我的收藏'),
                     ),
                     SizedBox(height: appMetrics.kSpace12),
                     const Text('目标文件夹（可多选，空选则匹配全部集合）'),
@@ -485,10 +477,7 @@ class _CollectionPictureScreenState
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
                 FilledButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
@@ -521,10 +510,7 @@ class _CollectionPictureScreenState
             decoration: const InputDecoration(hintText: '新名称'),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -600,10 +586,7 @@ class _CollectionPictureScreenState
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
                 FilledButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
@@ -632,10 +615,7 @@ class _CollectionPictureScreenState
           title: const Text('删除智能文件夹'),
           content: Text('确定删除"$name"？集合本身不受影响，仅删除此筛选规则。'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -751,13 +731,9 @@ class _CollectionPictureScreenState
           if (viewModel.isRemoteFolder(folder.id)) return folderCard;
           return DragTarget<String>(
             onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
-            onAcceptWithDetails: (d) =>
-                viewModel.moveCollectionToFolder(d.data, folder.id),
-            builder: (ctx, candidateData, _) => _buildDropHighlight(
-              ctx,
-              highlighted: candidateData.isNotEmpty,
-              child: folderCard,
-            ),
+            onAcceptWithDetails: (d) => viewModel.moveCollectionToFolder(d.data, folder.id),
+            builder: (ctx, candidateData, _) =>
+                _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: folderCard),
           );
         }
 
@@ -784,13 +760,9 @@ class _CollectionPictureScreenState
           if (targetId == null) return sfCard;
           return DragTarget<String>(
             onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
-            onAcceptWithDetails: (d) =>
-                viewModel.moveCollectionToFolder(d.data, targetId),
-            builder: (ctx, candidateData, _) => _buildDropHighlight(
-              ctx,
-              highlighted: candidateData.isNotEmpty,
-              child: sfCard,
-            ),
+            onAcceptWithDetails: (d) => viewModel.moveCollectionToFolder(d.data, targetId),
+            builder: (ctx, candidateData, _) =>
+                _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: sfCard),
           );
         }
 
@@ -817,10 +789,10 @@ class _CollectionPictureScreenState
           onDeleteFolder: viewModel.isRemoteCollection(collection.id)
               ? null
               : () => _confirmDeleteCollectionFolder(
-                    collection.id,
-                    collection.folderPath,
-                    collection.title,
-                  ),
+                  collection.id,
+                  collection.folderPath,
+                  collection.title,
+                ),
         );
         // Local collections: draggable (to folder) + DragTarget (from other collections for reorder)
         if (viewModel.isRemoteCollection(collection.id)) return collectionCard;
@@ -852,11 +824,8 @@ class _CollectionPictureScreenState
               !viewModel.isRemoteCollection(d.data) &&
               viewModel.mergedCollections.any((c) => c.id == d.data),
           onAcceptWithDetails: (d) => viewModel.reorderCollection(d.data, collection.id),
-          builder: (ctx, candidateData, _) => _buildDropHighlight(
-            ctx,
-            highlighted: candidateData.isNotEmpty,
-            child: draggable,
-          ),
+          builder: (ctx, candidateData, _) =>
+              _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: draggable),
         );
       },
     );
@@ -866,7 +835,6 @@ class _CollectionPictureScreenState
     }
 
     return GestureDetector(
-
       onPanStart: (details) {
         setState(() {
           _selectionBoxStart = details.localPosition;
@@ -941,9 +909,9 @@ class _CollectionPictureScreenState
               ),
             );
           },
-          onRequestScrubFrames: (item.kind == media_api.MediaKind.video &&
-                  !viewModel.isRemoteCollection(
-                      viewModel.currentCollectionId.value ?? ''))
+          onRequestScrubFrames:
+              (item.kind == media_api.MediaKind.video &&
+                  !viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? ''))
               ? () => viewModel.getVideoScrubFrames(item.filePath)
               : null,
         );
@@ -1105,9 +1073,7 @@ class _CollectionPictureScreenState
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
               onPressed: () async {
                 Navigator.of(context).pop();
                 await viewModel.clearLocalLibrary();
@@ -1181,14 +1147,9 @@ class _CollectionPictureScreenState
             '此操作不可撤销，将永久删除该目录及其内全部文件。',
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
               onPressed: () async {
                 Navigator.of(context).pop();
                 await _deleteCollectionFolder(collectionId, folderPath);
@@ -1211,12 +1172,9 @@ class _CollectionPictureScreenState
       await viewModel.deleteCollection(collectionId);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('删除文件夹失败: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除文件夹失败: $e'), behavior: SnackBarBehavior.floating));
     }
   }
 

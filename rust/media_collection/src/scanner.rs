@@ -169,7 +169,11 @@ impl MediaFolderScanner {
             let read_dir = match fs::read_dir(folder) {
                 Ok(rd) => rd,
                 Err(error) => {
-                    return Err(anyhow::anyhow!("Cannot read directory {:?}: {}", folder, error));
+                    return Err(anyhow::anyhow!(
+                        "Cannot read directory {:?}: {}",
+                        folder,
+                        error
+                    ));
                 }
             };
             for entry in read_dir {
@@ -189,7 +193,11 @@ impl MediaFolderScanner {
         }
 
         media_paths.sort();
-        log::debug!("[media_scan] collect_media_items: found {} media files in {:?}", media_paths.len(), folder);
+        log::debug!(
+            "[media_scan] collect_media_items: found {} media files in {:?}",
+            media_paths.len(),
+            folder
+        );
         let mut items = Vec::with_capacity(media_paths.len());
         for (index, path) in media_paths.iter().enumerate() {
             match build_media_item(collection_id, index as i32, path) {

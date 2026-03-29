@@ -41,22 +41,29 @@ class MediaLibraryViewModel extends BaseViewModel {
   final currentFolderId = RxnString();
   final currentCollectionId = RxnString();
   final savedScrollOffset = 0.0.obs;
+
   /// Emits a non-null value whenever the screen should jump its scroll controller
   /// to the given offset. The screen resets this to null after consuming it.
   final scrollRestoreTarget = Rxn<double>();
+
   /// Per-browse-level scroll offset memory: key = folderId (null = root)
   final _browseScrollOffsets = <String?, double>{};
 
   final smartFolders = <SmartFolder>[].obs;
+
   /// 增量版本触发重新排序后的响应式重建。
   final collectionOrderVersion = 0.obs;
   final _collectionOrders = <String, List<String>>{};
+
   /// 视频封面异步生成版本计数器（读取即注册响应式依赖）。
   final _asyncCoverVersion = 0.obs;
+
   /// collectionId → 缩略图路径（仅含成功生成的条目）。
   final _collectionVideoThumbnails = <String, String>{};
+
   /// 正在生成封面的 collectionId 集合（防重入，失败后移除允许重试）。
   final _pendingCovers = <String>{};
+
   /// videoPath → scrub 帧路径列表的异步缓存（仅含非空结果）。
   final _videoFrameCache = <String, Future<List<String>>>{};
 
@@ -132,8 +139,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   bool isSmartFolder(String id) => id.startsWith(_smartFolderPrefix);
 
-  SmartFolder? getSmartFolder(String id) =>
-      smartFolders.firstWhereOrNull((sf) => sf.id == id);
+  SmartFolder? getSmartFolder(String id) => smartFolders.firstWhereOrNull((sf) => sf.id == id);
 
   /// The "real" folder context for operations (create sub-folder, scan, import).
   /// • When navigated into a smart folder with a single [targetFolderIds], that real folder
@@ -296,8 +302,18 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   static const _kVideoExtensions = {
-    'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', 'wmv',
-    '3gp', 'ts', 'm2ts', 'mts',
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+    'flv',
+    'm4v',
+    'wmv',
+    '3gp',
+    'ts',
+    'm2ts',
+    'mts',
   };
 
   static bool _isVideoPath(String path) {
@@ -306,14 +322,16 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   void _generateCollectionVideoThumbnailAsync(String collectionId, String videoPath) {
-    getVideoScrubFrames(videoPath).then((frames) {
-      _pendingCovers.remove(collectionId);
-      if (frames.isEmpty) return; // ffmpeg 未就绪或提取失败，允许下次重试
-      _collectionVideoThumbnails[collectionId] = frames[frames.length ~/ 2];
-      _asyncCoverVersion.value++;
-    }).catchError((_) {
-      _pendingCovers.remove(collectionId); // 失败后允许重试
-    });
+    getVideoScrubFrames(videoPath)
+        .then((frames) {
+          _pendingCovers.remove(collectionId);
+          if (frames.isEmpty) return; // ffmpeg 未就绪或提取失败，允许下次重试
+          _collectionVideoThumbnails[collectionId] = frames[frames.length ~/ 2];
+          _asyncCoverVersion.value++;
+        })
+        .catchError((_) {
+          _pendingCovers.remove(collectionId); // 失败后允许重试
+        });
   }
 
   String? buildFolderCoverSource(media_api.MediaFolder folder) {
@@ -659,22 +677,14 @@ class MediaLibraryViewModel extends BaseViewModel {
     return _doExtractScrubFrames(videoPath, ffmpegExe);
   }
 
-  Future<List<String>> _doExtractScrubFrames(
-    String videoPath,
-    String ffmpegExe,
-  ) async {
+  Future<List<String>> _doExtractScrubFrames(String videoPath, String ffmpegExe) async {
     const frameCount = 12;
-    final key = videoPath.hashCode
-        .toUnsigned(32)
-        .toRadixString(16)
-        .padLeft(8, '0');
+    final key = videoPath.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
     late Directory frameDir;
     try {
       final appDir = await getApplicationSupportDirectory();
       final sep = Platform.pathSeparator;
-      frameDir = Directory(
-        '${appDir.path}${sep}thumbnails${sep}scrub$sep$key',
-      );
+      frameDir = Directory('${appDir.path}${sep}thumbnails${sep}scrub$sep$key');
       await frameDir.create(recursive: true);
     } catch (_) {
       return const <String>[];
@@ -690,24 +700,22 @@ class MediaLibraryViewModel extends BaseViewModel {
               Platform.isWindows ? 'ffprobe.exe' : 'ffprobe',
             );
       final probe = await Process.run(ffprobeExe, [
-        '-v', 'error',
-        '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1',
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
         videoPath,
       ]);
-      duration = double.tryParse(
-            (probe.stdout as String).trim(),
-          ) ??
-          60.0;
+      duration = double.tryParse((probe.stdout as String).trim()) ?? 60.0;
     } catch (_) {}
     if (duration <= 0) duration = 60.0;
 
     final sep = Platform.pathSeparator;
     final paths = <String>[];
     for (int i = 0; i < frameCount; i++) {
-      final outFile = File(
-        '${frameDir.path}${sep}frame_${i.toString().padLeft(2, '0')}.jpg',
-      );
+      final outFile = File('${frameDir.path}${sep}frame_${i.toString().padLeft(2, '0')}.jpg');
       if (outFile.existsSync()) {
         paths.add(outFile.path);
         continue;
@@ -720,12 +728,18 @@ class MediaLibraryViewModel extends BaseViewModel {
           ':${(secs % 60).toString().padLeft(2, '0')}';
       try {
         final result = await Process.run(ffmpegExe, [
-          '-i', videoPath,
-          '-ss', seek,
-          '-vframes', '1',
-          '-vf', 'scale=320:-1',
-          '-q:v', '5',
-          '-y', outFile.path,
+          '-i',
+          videoPath,
+          '-ss',
+          seek,
+          '-vframes',
+          '1',
+          '-vf',
+          'scale=320:-1',
+          '-q:v',
+          '5',
+          '-y',
+          outFile.path,
         ]);
         if (result.exitCode == 0 && outFile.existsSync()) {
           paths.add(outFile.path);
@@ -746,8 +760,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         final json = prefs.getString(key);
         if (json != null) {
           try {
-            _collectionOrders[orderKey] =
-                (jsonDecode(json) as List).cast<String>();
+            _collectionOrders[orderKey] = (jsonDecode(json) as List).cast<String>();
           } catch (_) {}
         }
       }

@@ -171,9 +171,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
     if (source == null || source.isEmpty) return;
     _player = Player();
     _videoController = VideoController(_player!);
-    final uri = source.startsWith('http')
-        ? source
-        : Uri.file(source).toString();
+    final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.loop);
   }
@@ -211,9 +209,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                     player.play();
                   }
                 },
-                icon: Icon(
-                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                ),
+                icon: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
               );
             },
           ),

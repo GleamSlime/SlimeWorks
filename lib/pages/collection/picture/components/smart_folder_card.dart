@@ -178,9 +178,7 @@ class SmartFolderCard extends StatelessWidget {
                   ),
                   SizedBox(height: appMetrics.kSpace4),
                   Text(
-                    smartFolder.regexPattern.isEmpty
-                        ? '全部集合'
-                        : smartFolder.regexPattern,
+                    smartFolder.regexPattern.isEmpty ? '全部集合' : smartFolder.regexPattern,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

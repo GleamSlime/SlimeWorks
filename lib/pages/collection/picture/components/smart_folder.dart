@@ -8,9 +8,11 @@ import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 class SmartFolder {
   final String id;
   final String name;
+
   /// Regex pattern applied (case-insensitively) to collection title and folderPath.
   /// Empty string means "no filter" – all collections in [targetFolderIds] are shown.
   final String regexPattern;
+
   /// When non-empty, only collections whose folderId is in this list are included.
   /// Empty list means "all folders" (no scope restriction).
   final List<String> targetFolderIds;
@@ -37,11 +39,11 @@ class SmartFolder {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'regexPattern': regexPattern,
-        'targetFolderIds': targetFolderIds,
-      };
+    'id': id,
+    'name': name,
+    'regexPattern': regexPattern,
+    'targetFolderIds': targetFolderIds,
+  };
 
   factory SmartFolder.fromJson(Map<String, dynamic> json) {
     // Migration: old format had 'targetFolderId' (single String?)

@@ -94,7 +94,9 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
     // Try progressively earlier seek positions in case the video is short.
     for seek in &["00:00:10", "00:00:03", "00:00:00"] {
         let ok = std::process::Command::new("ffmpeg")
-            .args(["-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str])
+            .args([
+                "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str,
+            ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
@@ -111,29 +113,43 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
 fn video_duration_secs(video_path: &str) -> Option<f64> {
     let out = std::process::Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
             video_path,
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()
         .ok()?;
-    String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok()
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<f64>()
+        .ok()
 }
 
 /// Extract `frame_count` evenly-spaced frames from a video using system ffmpeg.
 /// Frames are cached in `thumbnails/scrub/<path_key>/frame_NN.jpg`.
 /// Returns the list of frame file paths that were successfully created.
-pub fn extract_video_scrub_frames(video_path: String, frame_count: u32) -> Result<Vec<String>, String> {
+pub fn extract_video_scrub_frames(
+    video_path: String,
+    frame_count: u32,
+) -> Result<Vec<String>, String> {
     let n = (frame_count.max(2)) as usize;
     let key = path_key(&video_path);
     let frame_dir = thumbnail_cache_dir().join("scrub").join(&key);
 
     // Return cached frames if they all exist.
     let cached: Vec<String> = (0..n)
-        .map(|i| frame_dir.join(format!("frame_{:02}.jpg", i)).to_string_lossy().into_owned())
+        .map(|i| {
+            frame_dir
+                .join(format!("frame_{:02}.jpg", i))
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect();
     if cached.iter().all(|p| std::path::Path::new(p).exists()) {
         return Ok(cached);
@@ -145,12 +161,29 @@ pub fn extract_video_scrub_frames(video_path: String, frame_count: u32) -> Resul
     for i in 0..n {
         let t = duration * i as f64 / (n - 1) as f64;
         let secs = t as u64;
-        let seek = format!("{:02}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60);
+        let seek = format!(
+            "{:02}:{:02}:{:02}",
+            secs / 3600,
+            (secs % 3600) / 60,
+            secs % 60
+        );
         let out = frame_dir.join(format!("frame_{:02}.jpg", i));
         let out_str = out.to_string_lossy().into_owned();
         let ok = std::process::Command::new("ffmpeg")
-            .args(["-i", &video_path, "-ss", &seek, "-vframes", "1",
-                   "-vf", "scale=320:-1", "-q:v", "5", "-y", &out_str])
+            .args([
+                "-i",
+                &video_path,
+                "-ss",
+                &seek,
+                "-vframes",
+                "1",
+                "-vf",
+                "scale=320:-1",
+                "-q:v",
+                "5",
+                "-y",
+                &out_str,
+            ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
@@ -172,7 +205,10 @@ fn normalize_folder_path(path: &Path) -> Result<String, String> {
     let s = canonical.to_string_lossy().into_owned();
     // Windows canonicalize adds \\?\ prefix – strip it for consistent storage/comparison
     #[cfg(windows)]
-    let s = s.strip_prefix("\\\\?\\").map(|v| v.to_string()).unwrap_or(s);
+    let s = s
+        .strip_prefix("\\\\?\\")
+        .map(|v| v.to_string())
+        .unwrap_or(s);
     Ok(s)
 }
 
@@ -255,7 +291,8 @@ fn persist_item(item: &MediaItem) -> Result<(), String> {
 
 fn persist_folder(folder: &MediaFolder) -> Result<(), String> {
     let json = serde_json::to_string(folder).map_err(|error| error.to_string())?;
-    db_module::db_set(folder_table_name(), folder.id.clone(), json).map_err(|error| error.to_string())
+    db_module::db_set(folder_table_name(), folder.id.clone(), json)
+        .map_err(|error| error.to_string())
 }
 
 fn delete_item_from_db(item_id: &str) {
@@ -281,14 +318,22 @@ fn default_collection_title(path: &Path) -> String {
 /// Choose cover: prefer first image item; fall back to first video path.
 /// Actual video thumbnail generation happens lazily from the Dart side.
 fn pick_cover_path(items: &[MediaItem]) -> Option<String> {
-    items.iter()
+    items
+        .iter()
         .find(|item| matches!(item.kind, MediaKind::Image))
         .or_else(|| items.first())
         .map(|item| item.file_path.clone())
 }
 
-fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<MediaCollection, String> {
-    log::debug!("[media_scan] upsert_collection_from_folder: {:?} (recursive={})", folder, recursive);
+fn upsert_collection_from_folder(
+    folder: &Path,
+    recursive: bool,
+) -> Result<MediaCollection, String> {
+    log::debug!(
+        "[media_scan] upsert_collection_from_folder: {:?} (recursive={})",
+        folder,
+        recursive
+    );
     if !folder.exists() || !folder.is_dir() {
         let err = format!("Path is not a directory: {:?}", folder);
         log::warn!("[media_scan] {}", err);
@@ -299,7 +344,9 @@ fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<Media
     log::debug!("[media_scan] normalized_path = {:?}", normalized_path);
 
     let existing = {
-        let collections = get_collections().lock().map_err(|error| error.to_string())?;
+        let collections = get_collections()
+            .lock()
+            .map_err(|error| error.to_string())?;
         collections
             .iter()
             .find(|collection| collection.folder_path == normalized_path)
@@ -313,7 +360,11 @@ fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<Media
 
     let items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
         .map_err(|error| error.to_string())?;
-    log::debug!("[media_scan] collect_media_items returned {} items for {:?}", items.len(), folder);
+    log::debug!(
+        "[media_scan] collect_media_items returned {} items for {:?}",
+        items.len(),
+        folder
+    );
     if items.is_empty() {
         let err = format!("No media found in {:?}", folder);
         log::warn!("[media_scan] {}", err);
@@ -333,7 +384,11 @@ fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<Media
         }
         for item in &items {
             if let Err(error) = persist_item(item) {
-                log::warn!("[media_scan] persist_item failed for {:?}: {}", item.file_path, error);
+                log::warn!(
+                    "[media_scan] persist_item failed for {:?}: {}",
+                    item.file_path,
+                    error
+                );
             }
         }
         stored_items.extend(items.iter().cloned());
@@ -347,7 +402,9 @@ fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<Media
             .map(|collection| collection.title.clone())
             .unwrap_or_else(|| default_collection_title(folder)),
         folder_path: normalized_path,
-        folder_id: existing.as_ref().and_then(|collection| collection.folder_id.clone()),
+        folder_id: existing
+            .as_ref()
+            .and_then(|collection| collection.folder_id.clone()),
         cover_path: pick_cover_path(&items),
         item_count: items.len(),
         created_at: existing
@@ -358,7 +415,9 @@ fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<Media
     };
 
     {
-        let mut collections = get_collections().lock().map_err(|error| error.to_string())?;
+        let mut collections = get_collections()
+            .lock()
+            .map_err(|error| error.to_string())?;
         if let Some(existing_collection) = collections
             .iter_mut()
             .find(|collection| collection.id == updated_collection.id)
@@ -369,14 +428,23 @@ fn upsert_collection_from_folder(folder: &Path, recursive: bool) -> Result<Media
         }
     }
     persist_collection(&updated_collection)?;
-    log::debug!("[media_scan] collection persisted: id={} title={:?} item_count={}", updated_collection.id, updated_collection.title, updated_collection.item_count);
+    log::debug!(
+        "[media_scan] collection persisted: id={} title={:?} item_count={}",
+        updated_collection.id,
+        updated_collection.title,
+        updated_collection.item_count
+    );
     Ok(updated_collection)
 }
 
 pub fn get_all_media_folders() -> Result<Vec<MediaFolder>, String> {
     let folders = get_folders().lock().map_err(|error| error.to_string())?;
     let mut result = folders.clone();
-    result.sort_by(|left, right| left.order.cmp(&right.order).then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase())));
+    result.sort_by(|left, right| {
+        left.order
+            .cmp(&right.order)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
     Ok(result)
 }
 
@@ -387,7 +455,11 @@ pub fn get_child_media_folders(parent_id: String) -> Result<Vec<MediaFolder>, St
         .filter(|folder| folder.parent_id.as_deref() == Some(parent_id.as_str()))
         .cloned()
         .collect::<Vec<MediaFolder>>();
-    result.sort_by(|left, right| left.order.cmp(&right.order).then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase())));
+    result.sort_by(|left, right| {
+        left.order
+            .cmp(&right.order)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
     Ok(result)
 }
 
@@ -402,7 +474,10 @@ pub fn create_media_folder(name: String) -> Result<MediaFolder, String> {
         id: format!("media_folder_{}", uuid::Uuid::new_v4()),
         name: normalized_name.to_string(),
         created_at: Utc::now(),
-        order: folders.iter().filter(|folder| folder.parent_id.is_none()).count() as i32,
+        order: folders
+            .iter()
+            .filter(|folder| folder.parent_id.is_none())
+            .count() as i32,
         parent_id: None,
     };
     folders.push(folder.clone());
@@ -460,7 +535,10 @@ pub fn delete_media_folder(folder_id: String) -> Result<bool, String> {
         if folders.len() == previous_len {
             return Ok(false);
         }
-        for child in folders.iter_mut().filter(|folder| folder.parent_id.as_deref() == Some(folder_id.as_str())) {
+        for child in folders
+            .iter_mut()
+            .filter(|folder| folder.parent_id.as_deref() == Some(folder_id.as_str()))
+        {
             child.parent_id = parent_id.clone();
             persist_folder(child)?;
         }
@@ -468,8 +546,13 @@ pub fn delete_media_folder(folder_id: String) -> Result<bool, String> {
     };
 
     {
-        let mut collections = get_collections().lock().map_err(|error| error.to_string())?;
-        for collection in collections.iter_mut().filter(|collection| collection.folder_id.as_deref() == Some(folder_id.as_str())) {
+        let mut collections = get_collections()
+            .lock()
+            .map_err(|error| error.to_string())?;
+        for collection in collections
+            .iter_mut()
+            .filter(|collection| collection.folder_id.as_deref() == Some(folder_id.as_str()))
+        {
             collection.folder_id = parent_id.clone();
             persist_collection(collection)?;
         }
@@ -479,9 +562,17 @@ pub fn delete_media_folder(folder_id: String) -> Result<bool, String> {
     Ok(true)
 }
 
-pub fn move_media_collection_to_folder(collection_id: String, folder_id: Option<String>) -> Result<bool, String> {
-    let mut collections = get_collections().lock().map_err(|error| error.to_string())?;
-    if let Some(collection) = collections.iter_mut().find(|collection| collection.id == collection_id) {
+pub fn move_media_collection_to_folder(
+    collection_id: String,
+    folder_id: Option<String>,
+) -> Result<bool, String> {
+    let mut collections = get_collections()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    if let Some(collection) = collections
+        .iter_mut()
+        .find(|collection| collection.id == collection_id)
+    {
         collection.folder_id = folder_id;
         collection.updated_at = Utc::now();
         persist_collection(collection)?;
@@ -492,7 +583,9 @@ pub fn move_media_collection_to_folder(collection_id: String, folder_id: Option<
 }
 
 pub fn get_all_media_collections() -> Result<Vec<MediaCollection>, String> {
-    let collections = get_collections().lock().map_err(|error| error.to_string())?;
+    let collections = get_collections()
+        .lock()
+        .map_err(|error| error.to_string())?;
     let mut result = collections.clone();
     result.sort_by(|left, right| {
         right
@@ -525,13 +618,20 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {
     let root = Path::new(&folder_path);
     log::info!("[media_scan] scan_media_folders called: {:?}", root);
-    log::info!("[media_scan] root.exists()={} root.is_dir()={}", root.exists(), root.is_dir());
-    let directories = MediaFolderScanner::scan_media_directories(root)
-        .map_err(|error| {
-            log::error!("[media_scan] scan_media_directories error: {}", error);
-            error.to_string()
-        })?;
-    log::info!("[media_scan] scan_media_directories found {} dirs with media under {:?}", directories.len(), root);
+    log::info!(
+        "[media_scan] root.exists()={} root.is_dir()={}",
+        root.exists(),
+        root.is_dir()
+    );
+    let directories = MediaFolderScanner::scan_media_directories(root).map_err(|error| {
+        log::error!("[media_scan] scan_media_directories error: {}", error);
+        error.to_string()
+    })?;
+    log::info!(
+        "[media_scan] scan_media_directories found {} dirs with media under {:?}",
+        directories.len(),
+        root
+    );
     for (i, dir) in directories.iter().enumerate() {
         log::info!("[media_scan]   dir[{}] = {:?}", i, dir);
     }
@@ -539,13 +639,21 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
     for directory in &directories {
         match upsert_collection_from_folder(directory, false) {
             Ok(collection) => {
-                log::info!("scan_media_folders: imported '{}' from {:?}", collection.title, directory);
+                log::info!(
+                    "scan_media_folders: imported '{}' from {:?}",
+                    collection.title,
+                    directory
+                );
                 collections.push(collection);
             }
             Err(error) => log::warn!("scan_media_folders: failed {:?}: {}", directory, error),
         }
     }
-    log::info!("scan_media_folders: result {}/{} collections imported", collections.len(), directories.len());
+    log::info!(
+        "scan_media_folders: result {}/{} collections imported",
+        collections.len(),
+        directories.len()
+    );
     collections.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
     Ok(collections)
 }
@@ -556,8 +664,13 @@ pub fn rename_media_collection(collection_id: String, title: String) -> Result<b
         return Err("集合名称不能为空".to_string());
     }
 
-    let mut collections = get_collections().lock().map_err(|error| error.to_string())?;
-    if let Some(collection) = collections.iter_mut().find(|collection| collection.id == collection_id) {
+    let mut collections = get_collections()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    if let Some(collection) = collections
+        .iter_mut()
+        .find(|collection| collection.id == collection_id)
+    {
         collection.title = normalized_title.to_string();
         collection.updated_at = Utc::now();
         persist_collection(collection)?;
@@ -569,7 +682,9 @@ pub fn rename_media_collection(collection_id: String, title: String) -> Result<b
 
 pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
     {
-        let mut collections = get_collections().lock().map_err(|error| error.to_string())?;
+        let mut collections = get_collections()
+            .lock()
+            .map_err(|error| error.to_string())?;
         let previous_len = collections.len();
         collections.retain(|collection| collection.id != collection_id);
         if collections.len() == previous_len {
