@@ -32,6 +32,12 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
   late final PageController _pageController;
   int _currentIndex = 0;
 
+  /// 触摸板/手指滑动累计偏移量：超过阈值才触发翻页，避免误触
+  double _scrollAccum = 0.0;
+
+  /// 每次翻页后的冷却，防止连续多次触发
+  static const double _kScrollThreshold = 60.0;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +55,33 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  /// 处理触摸板/鼠标滚轮事件。
+  /// - 鼠标滚轮（scrollDelta.dy 较大、单次离散事件）：立即翻页
+  /// - 触摸板（scrollDelta.dy 较小、连续事件）：累积偏移超阈值才翻页
+  void _handlePointerScroll(PointerScrollEvent event) {
+    final dy = event.scrollDelta.dy;
+    final absDy = dy.abs();
+
+    // 鼠标滚轮单次偏移通常 >= 100，直接翻页
+    if (absDy >= 100) {
+      _scrollAccum = 0;
+      if (dy > 0) {
+        _jump(1);
+      } else {
+        _jump(-1);
+      }
+      return;
+    }
+
+    // 触摸板：累积偏移
+    _scrollAccum += dy;
+    if (_scrollAccum.abs() >= _kScrollThreshold) {
+      final direction = _scrollAccum > 0 ? 1 : -1;
+      _scrollAccum = 0;
+      _jump(direction);
+    }
   }
 
   @override
@@ -132,43 +165,54 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
                 ),
               ),
             ),
-            // 内容区：鼠标滚轮触发翻页
+            // 内容区：支持鼠标滚轮（含触摸板累积阈值）+ 移动端/触控板手势上下滑动翻页
             Expanded(
               child: Listener(
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
-                    if (event.scrollDelta.dy > 0) {
-                      _jump(1);
-                    } else if (event.scrollDelta.dy < 0) {
-                      _jump(-1);
-                    }
+                    _handlePointerScroll(event);
                   }
                 },
-                child: PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: widget.items.length,
-                  onPageChanged: (index) => setState(() => _currentIndex = index),
-                  itemBuilder: (context, index) {
-                    final currentItem = widget.items[index];
-                    final source = widget.viewModel.buildMediaSource(
-                      currentItem,
-                      collectionId: widget.collectionId,
-                    );
-                    if (currentItem.kind == media_api.MediaKind.video) {
-                      return _VideoPreview(source: source);
+                child: GestureDetector(
+                  // 竖向拖动手势：累积偏移超阈值才翻页（适配移动端手指滑动）
+                  onVerticalDragUpdate: (details) {
+                    _scrollAccum -= details.delta.dy;
+                    if (_scrollAccum.abs() >= _kScrollThreshold) {
+                      final direction = _scrollAccum > 0 ? 1 : -1;
+                      _scrollAccum = 0;
+                      _jump(direction);
                     }
-                    if (source == null || source.isEmpty) {
-                      return const Center(
-                        child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
-                      );
-                    }
-                    final child = source.startsWith('http')
-                        ? Image.network(source, fit: BoxFit.contain)
-                        : Image.file(File(source), fit: BoxFit.contain);
-                    return InteractiveViewer(child: Center(child: child));
                   },
+                  onVerticalDragEnd: (_) {
+                    _scrollAccum = 0;
+                  },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    scrollDirection: Axis.vertical,
+                    // 禁用 PageView 自身物理效果，改由上层 GestureDetector 统一处理
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.items.length,
+                    onPageChanged: (index) => setState(() => _currentIndex = index),
+                    itemBuilder: (context, index) {
+                      final currentItem = widget.items[index];
+                      final source = widget.viewModel.buildMediaSource(
+                        currentItem,
+                        collectionId: widget.collectionId,
+                      );
+                      if (currentItem.kind == media_api.MediaKind.video) {
+                        return _VideoPreview(source: source);
+                      }
+                      if (source == null || source.isEmpty) {
+                        return const Center(
+                          child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
+                        );
+                      }
+                      final child = source.startsWith('http')
+                          ? Image.network(source, fit: BoxFit.contain)
+                          : Image.file(File(source), fit: BoxFit.contain);
+                      return InteractiveViewer(child: Center(child: child));
+                    },
+                  ),
                 ),
               ),
             ),
@@ -219,30 +263,6 @@ class _VideoPreviewState extends State<_VideoPreview> {
         child: Text('无法加载视频', style: TextStyle(color: Colors.white)),
       );
     }
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Video(controller: controller),
-        Positioned(
-          bottom: appMetrics.kSpace24,
-          child: StreamBuilder<bool>(
-            stream: player.stream.playing,
-            builder: (context, snapshot) {
-              final isPlaying = snapshot.data ?? false;
-              return IconButton.filled(
-                onPressed: () {
-                  if (isPlaying) {
-                    player.pause();
-                  } else {
-                    player.play();
-                  }
-                },
-                icon: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-              );
-            },
-          ),
-        ),
-      ],
-    );
+    return Video(controller: controller);
   }
 }

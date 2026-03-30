@@ -8,7 +8,9 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_card.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/media_folder_card.dart';
@@ -84,6 +86,7 @@ class _CollectionPictureScreenState
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
     return ScreenChromeData(
       title: viewModel.isInDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
+      leading: _buildActionBar(context),
       toolbarHeight: AppTheme.metrics.kSpace48,
       toolbar: _PictureLibraryToolbar(
         viewModel: viewModel,
@@ -130,22 +133,27 @@ class _CollectionPictureScreenState
             return KeyEventResult.ignored;
           },
           child: Obx(
-            () => Column(
-              children: [
-                _buildActionBar(context),
-                Expanded(
+            () {
+              // 桌面端通过 ScreenChrome.leading 在顶栏展示 ActionBar，避免重复渲染
+              final showInlineBar = PlatformUtil.isMobile ||
+                  getIt<DesktopScreenProvider>().isMobile.value;
+              return Column(
+                children: [
+                  if (showInlineBar) _buildActionBar(context),
+                  Expanded(
                   child: !viewModel.isInDetail
                       ? _buildBrowseGrid(context)
                       : _buildCollectionDetail(context),
                 ),
-                if (viewModel.isSelecting.value)
-                  MediaSelectionBar(
-                    selectedCount: viewModel.selectedIds.length,
-                    onDelete: () => _confirmDeleteSelected(context),
-                    onCancel: viewModel.exitSelection,
-                  ),
-              ],
-            ),
+                  if (viewModel.isSelecting.value)
+                    MediaSelectionBar(
+                      selectedCount: viewModel.selectedIds.length,
+                      onDelete: () => _confirmDeleteSelected(context),
+                      onCancel: viewModel.exitSelection,
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -154,88 +162,116 @@ class _CollectionPictureScreenState
 
   Widget _buildActionBar(BuildContext context) {
     final inDetail = viewModel.isInDetail;
+    final showBack = inDetail || viewModel.currentFolderId.value != null;
     if (inDetail) {
       final items = viewModel.currentItems;
       final totalSize = items.fold(BigInt.zero, (sum, item) => sum + item.fileSize);
-      return Padding(
-        padding: EdgeInsets.fromLTRB(
-          appMetrics.kSpace16,
-          appMetrics.kSpace8,
-          appMetrics.kSpace8,
-          appMetrics.kSpace4,
-        ),
-        child: Row(
-          children: [
-            Text(
-              '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
-              style: Theme.of(context).textTheme.bodyMedium,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final hasBoundedWidth = constraints.hasBoundedWidth;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              appMetrics.kSpace16,
+              appMetrics.kSpace8,
+              appMetrics.kSpace8,
+              appMetrics.kSpace4,
             ),
-            const Spacer(),
-            // 列数调节
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
+              mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
+              spacing: appMetrics.kSpace16,
               children: [
-                Icon(Icons.grid_view_rounded, size: scaleW(16), color: Theme.of(context).hintColor),
-                SizedBox(width: appMetrics.kSpace4),
-                IconButton(
-                  icon: const Icon(Icons.remove_rounded),
-                  iconSize: scaleW(16),
-                  padding: EdgeInsets.all(appMetrics.kSpace4),
-                  constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
-                  tooltip: '减少列数',
-                  onPressed: _detailColumnCount > 2
-                      ? () => setState(() => _detailColumnCount--)
-                      : null,
+                // 返回按钮（左侧）
+                AnimatedOpacity(
+                  opacity: showBack ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: IgnorePointer(
+                    ignoring: !showBack,
+                    child: DesktopHeadToolsButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      size: AppTheme.metrics.kSpace40,
+                      onTap: () {
+                        if (inDetail) {
+                          viewModel.exitCollection();
+                        } else {
+                          viewModel.exitFolder();
+                        }
+                      },
+                    ),
+                  ),
                 ),
-                Text('$_detailColumnCount 列', style: Theme.of(context).textTheme.bodySmall),
-                IconButton(
-                  icon: const Icon(Icons.add_rounded),
-                  iconSize: scaleW(16),
-                  padding: EdgeInsets.all(appMetrics.kSpace4),
-                  constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
-                  tooltip: '增加列数',
-                  onPressed: _detailColumnCount < 6
-                      ? () => setState(() => _detailColumnCount++)
-                      : null,
+                Text(
+                  '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (hasBoundedWidth) const Spacer(),
+                if (!hasBoundedWidth) SizedBox(width: appMetrics.kSpace8),
+                // 列数调节
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.grid_view_rounded, size: scaleW(16), color: Theme.of(context).hintColor),
+                    SizedBox(width: appMetrics.kSpace4),
+                    IconButton(
+                      icon: const Icon(Icons.remove_rounded),
+                      iconSize: scaleW(16),
+                      padding: EdgeInsets.all(appMetrics.kSpace4),
+                      constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                      tooltip: '减少列数',
+                      onPressed: _detailColumnCount > 2
+                          ? () => setState(() => _detailColumnCount--)
+                          : null,
+                    ),
+                    Text('$_detailColumnCount 列', style: Theme.of(context).textTheme.bodySmall),
+                    IconButton(
+                      icon: const Icon(Icons.add_rounded),
+                      iconSize: scaleW(16),
+                      padding: EdgeInsets.all(appMetrics.kSpace4),
+                      constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                      tooltip: '增加列数',
+                      onPressed: _detailColumnCount < 6
+                          ? () => setState(() => _detailColumnCount++)
+                          : null,
+                    ),
+                  ],
+                ),
+                SizedBox(width: appMetrics.kSpace4),
+                // 排序按钮
+                PopupMenuButton<MediaItemSortOrder>(
+                  tooltip: '排序',
+                  icon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sort_rounded, size: scaleW(18)),
+                      SizedBox(width: appMetrics.kSpace4),
+                      Text(
+                        viewModel.itemSortOrder.value.label,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  onSelected: (v) => viewModel.itemSortOrder.value = v,
+                  itemBuilder: (_) => MediaItemSortOrder.values
+                      .map(
+                        (o) => PopupMenuItem<MediaItemSortOrder>(
+                          value: o,
+                          child: Row(
+                            children: [
+                              if (viewModel.itemSortOrder.value == o)
+                                Icon(Icons.check_rounded, size: scaleW(16))
+                              else
+                                SizedBox(width: scaleW(16)),
+                              SizedBox(width: appMetrics.kSpace8),
+                              Text(o.label),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
               ],
             ),
-            SizedBox(width: appMetrics.kSpace4),
-            // 排序按钮
-            PopupMenuButton<MediaItemSortOrder>(
-              tooltip: '排序',
-              icon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.sort_rounded, size: scaleW(18)),
-                  SizedBox(width: appMetrics.kSpace4),
-                  Text(
-                    viewModel.itemSortOrder.value.label,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              onSelected: (v) => viewModel.itemSortOrder.value = v,
-              itemBuilder: (_) => MediaItemSortOrder.values
-                  .map(
-                    (o) => PopupMenuItem<MediaItemSortOrder>(
-                      value: o,
-                      child: Row(
-                        children: [
-                          if (viewModel.itemSortOrder.value == o)
-                            Icon(Icons.check_rounded, size: scaleW(16))
-                          else
-                            SizedBox(width: scaleW(16)),
-                          SizedBox(width: appMetrics.kSpace8),
-                          Text(o.label),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
-        ),
+          );
+        },
       );
     }
 
@@ -244,64 +280,73 @@ class _CollectionPictureScreenState
         viewModel.currentFolderTrail.isNotEmpty || viewModel.currentSmartFolder != null;
     final hasNodes = viewModel.enabledRemoteNodes.isNotEmpty;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        appMetrics.kSpace16,
-        appMetrics.kSpace4,
-        appMetrics.kSpace8,
-        appMetrics.kSpace4,
-      ),
-      child: Row(
-        children: [
-          if (hasBreadcrumb) Flexible(child: _buildBreadcrumb(context)),
-          if (!hasBreadcrumb && hasNodes)
-            Text(
-              '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          const Spacer(),
-          if (hasBreadcrumb && hasNodes) ...[
-            Text(
-              '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            SizedBox(width: appMetrics.kSpace8),
-          ],
-          // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
-          PopupMenuButton<CollectionSortOrder>(
-            tooltip: '集合排序',
-            icon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.sort_rounded, size: scaleW(18)),
-                SizedBox(width: appMetrics.kSpace4),
+    // 使用 LayoutBuilder 判断宽度是否有界，避免在 AppBar.leading 等无界父容器中使用
+    // Spacer 导致 RenderFlex 宽度约束异常
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasBoundedWidth = constraints.hasBoundedWidth;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            appMetrics.kSpace16,
+            appMetrics.kSpace4,
+            appMetrics.kSpace8,
+            appMetrics.kSpace4,
+          ),
+          child: Row(
+            mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              if (hasBreadcrumb) Flexible(child: _buildBreadcrumb(context)),
+              if (!hasBreadcrumb && hasNodes)
                 Text(
-                  viewModel.collectionSortOrder.value.label,
+                  '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+              if (hasBoundedWidth) const Spacer(),
+              if (!hasBoundedWidth) SizedBox(width: appMetrics.kSpace8),
+              if (hasBreadcrumb && hasNodes) ...[
+                Text(
+                  '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                SizedBox(width: appMetrics.kSpace8),
               ],
-            ),
-            onSelected: (v) => viewModel.collectionSortOrder.value = v,
-            itemBuilder: (_) => CollectionSortOrder.values
-                .map(
-                  (o) => PopupMenuItem<CollectionSortOrder>(
-                    value: o,
-                    child: Row(
-                      children: [
-                        if (viewModel.collectionSortOrder.value == o)
-                          Icon(Icons.check_rounded, size: scaleW(16))
-                        else
-                          SizedBox(width: scaleW(16)),
-                        SizedBox(width: appMetrics.kSpace8),
-                        Text(o.label),
-                      ],
+              // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
+              PopupMenuButton<CollectionSortOrder>(
+                tooltip: '集合排序',
+                icon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.sort_rounded, size: scaleW(18)),
+                    SizedBox(width: appMetrics.kSpace4),
+                    Text(
+                      viewModel.collectionSortOrder.value.label,
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
-                )
-                .toList(),
+                  ],
+                ),
+                onSelected: (v) => viewModel.collectionSortOrder.value = v,
+                itemBuilder: (_) => CollectionSortOrder.values
+                    .map(
+                      (o) => PopupMenuItem<CollectionSortOrder>(
+                        value: o,
+                        child: Row(
+                          children: [
+                            if (viewModel.collectionSortOrder.value == o)
+                              Icon(Icons.check_rounded, size: scaleW(16))
+                            else
+                              SizedBox(width: scaleW(16)),
+                            SizedBox(width: appMetrics.kSpace8),
+                            Text(o.label),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -871,8 +916,8 @@ class _CollectionPictureScreenState
       controller: _scrollController,
       padding: EdgeInsets.all(appMetrics.kSpace12),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: scaleW(250),
-        childAspectRatio: 0.95,
+        maxCrossAxisExtent: scaleW(220),
+        childAspectRatio: 0.68,
         mainAxisSpacing: appMetrics.kSpace12,
         crossAxisSpacing: appMetrics.kSpace12,
       ),
@@ -1600,31 +1645,30 @@ class _PictureLibraryToolbar extends StatelessWidget {
       final isScanning = viewModel.isScanning.value;
       final statusText = viewModel.scanStatusText.value;
       final inDetail = viewModel.isInDetail;
-      final showBack = inDetail || viewModel.currentFolderId.value != null;
       return ExcludeSemantics(
         child: Row(
           mainAxisSize: MainAxisSize.min,
           spacing: AppTheme.metrics.kSpace8,
           children: [
             // 返回按钮（左侧）
-            AnimatedOpacity(
-              opacity: showBack ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 150),
-              child: IgnorePointer(
-                ignoring: !showBack,
-                child: DesktopHeadToolsButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  size: AppTheme.metrics.kSpace40,
-                  onTap: () {
-                    if (inDetail) {
-                      viewModel.exitCollection();
-                    } else {
-                      viewModel.exitFolder();
-                    }
-                  },
-                ),
-              ),
-            ),
+            // AnimatedOpacity(
+            //   opacity: showBack ? 1.0 : 0.0,
+            //   duration: const Duration(milliseconds: 150),
+            //   child: IgnorePointer(
+            //     ignoring: !showBack,
+            //     child: DesktopHeadToolsButton(
+            //       icon: const Icon(Icons.arrow_back_rounded),
+            //       size: AppTheme.metrics.kSpace40,
+            //       onTap: () {
+            //         if (inDetail) {
+            //           viewModel.exitCollection();
+            //         } else {
+            //           viewModel.exitFolder();
+            //         }
+            //       },
+            //     ),
+            //   ),
+            // ),
             // 扫描进度（opacity 不增删节点）
             AnimatedOpacity(
               opacity: isScanning ? 1.0 : 0.0,

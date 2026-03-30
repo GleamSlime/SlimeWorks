@@ -537,6 +537,8 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   String? buildFolderCoverSource(media_api.MediaFolder folder) {
+    // 注册响应式依赖：集合排序变更时同步更新文件夹封面
+    collectionOrderVersion.value;
     final collection = _findFirstCollectionForFolder(folder.id);
     if (collection == null) {
       return null;
@@ -1940,11 +1942,13 @@ class MediaLibraryViewModel extends BaseViewModel {
       return null;
     }
 
-    final directCollections = mergedCollections.where(
-      (collection) => collection.folderId == folderId,
-    );
-    if (directCollections.isNotEmpty) {
-      return directCollections.first;
+    // 使用 _applySortOrder 应用自定义排序，保证文件夹封面与用户拖拽顺序一致
+    final directCollections = mergedCollections
+        .where((collection) => collection.folderId == folderId)
+        .toList(growable: false);
+    final ordered = _applySortOrder(List.of(directCollections), folderId);
+    if (ordered.isNotEmpty) {
+      return ordered.first;
     }
 
     final children = mergedFolders.where((folder) => folder.parentId == folderId);

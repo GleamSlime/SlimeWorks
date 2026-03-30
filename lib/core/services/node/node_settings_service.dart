@@ -173,6 +173,11 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> startLocalNodeServer() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      _logger.info('移动端不支持启动本地节点服务，已跳过');
+      return;
+    }
+
     if (_server != null) {
       return;
     }

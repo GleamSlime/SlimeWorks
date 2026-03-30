@@ -164,17 +164,16 @@ class _DesktopTopBar extends StatelessWidget {
         ),
         height: scaleW(60),
         child: Row(
+          spacing: appMetrics.kSpace12,
           children: [
-            if (chrome.hasLeading) chrome.leading!,
-            if (chrome.hasLeading) SizedBox(width: AppTheme.metrics.kSpace12),
-            const Spacer(),
+            if (chrome.hasLeading) Expanded(child: chrome.leading!),
+            if (!chrome.hasLeading) const Spacer(),
             if (chrome.hasActions)
               Row(
                 spacing: AppTheme.metrics.kSpace12,
                 mainAxisSize: MainAxisSize.min,
                 children: chrome.actions,
               ),
-            if (chrome.hasActions && chrome.hasToolbar) SizedBox(width: AppTheme.metrics.kSpace12),
             if (chrome.hasToolbar)
               Flexible(
                 child: Align(
@@ -189,10 +188,7 @@ class _DesktopTopBar extends StatelessWidget {
                   ),
                 ),
               ),
-            if (Platform.isWindows) ...[
-              SizedBox(width: AppTheme.metrics.kSpace12),
-              const WindowsWindowButtons(),
-            ],
+            if (Platform.isWindows) const WindowsWindowButtons(),
           ],
         ),
       );
