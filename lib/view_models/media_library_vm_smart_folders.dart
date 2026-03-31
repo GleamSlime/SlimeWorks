@@ -8,33 +8,42 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   Future<void> _loadCollectionOrders() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      int loaded = 0;
       for (final key in prefs.getKeys()) {
         if (!key.startsWith(MediaLibraryViewModel._collectionOrderPrefsKeyPrefix)) continue;
         final orderKey = key.substring(MediaLibraryViewModel._collectionOrderPrefsKeyPrefix.length);
         final json = prefs.getString(key);
         if (json != null) {
           try {
-            _collectionOrders[orderKey] = (jsonDecode(json) as List).cast<String>();
-          } catch (_) {}
+            final ids = (jsonDecode(json) as List).cast<String>();
+            _collectionOrders[orderKey] = ids;
+            logger.d('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
+            loaded++;
+          } catch (e) {
+            logger.e('_loadCollectionOrders: 解析失败 key=$key err=$e');
+          }
         }
       }
+      logger.d('_loadCollectionOrders: 共加载 $loaded 条排序记录');
     } catch (e) {
       logger.e('加载集合排序失败: $e');
     }
   }
 
-  Future<void> _saveCollectionOrder(String orderKey) async {
+  Future<void> _saveCollectionOrder(String orderKey, List<String> ids) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = '${MediaLibraryViewModel._collectionOrderPrefsKeyPrefix}$orderKey';
-      final ids = _collectionOrders[orderKey];
-      if (ids == null || ids.isEmpty) {
+      if (ids.isEmpty) {
         await prefs.remove(key);
+        logger.d('_saveCollectionOrder: removed key=$key (empty)');
       } else {
-        await prefs.setString(key, jsonEncode(ids));
+        final encoded = jsonEncode(ids);
+        final success = await prefs.setString(key, encoded);
+        logger.d('_saveCollectionOrder: key=$key count=${ids.length} success=$success');
       }
     } catch (e) {
-      logger.e('保存集合排序失败: $e');
+      logger.e('保存集合排序失败: key=$orderKey err=$e');
     }
   }
 
@@ -51,14 +60,11 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       ids = sf == null
           ? currentCollections.map((c) => c.id).toList()
           : mergedCollections
-              .where((c) => collectionMatchesSmartFolder(sf, c))
-              .map((c) => c.id)
-              .toList();
+                .where((c) => collectionMatchesSmartFolder(sf, c))
+                .map((c) => c.id)
+                .toList();
     } else {
-      ids = mergedCollections
-          .where((c) => c.folderId == folderId)
-          .map((c) => c.id)
-          .toList();
+      ids = mergedCollections.where((c) => c.folderId == folderId).map((c) => c.id).toList();
     }
 
     // 应用当前已有的自定义排序作为基准
@@ -81,8 +87,8 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     ids.insert(toIdx, moved);
     _collectionOrders[orderKey] = ids;
     collectionOrderVersion.value++;
-    await _saveCollectionOrder(orderKey);
-    logger.i('reorderCollection: $orderKey -> saved ${ids.length} items');
+    logger.d('reorderCollection: orderKey=$orderKey newOrder=${ids.join(",")}');
+    await _saveCollectionOrder(orderKey, ids);
   }
 
   // ── 智能文件夹 CRUD ───────────────────────────────────────────────────────

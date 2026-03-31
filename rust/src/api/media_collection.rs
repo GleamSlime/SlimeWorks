@@ -4,6 +4,7 @@ use flutter_rust_bridge::frb;
 pub enum MediaKind {
     Image,
     Video,
+    Audio,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +47,7 @@ fn convert_kind(kind: media_collection::types::MediaKind) -> MediaKind {
     match kind {
         media_collection::types::MediaKind::Image => MediaKind::Image,
         media_collection::types::MediaKind::Video => MediaKind::Video,
+        media_collection::types::MediaKind::Audio => MediaKind::Audio,
     }
 }
 

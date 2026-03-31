@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -36,6 +37,13 @@ class _CollectionPictureScreenState
   final GlobalKey _gridKey = GlobalKey();
   int _detailColumnCount = 3;
   late final ScrollController _scrollController;
+
+  /// 文件/文件夹正被拖入窗口（桌面端）。
+  bool _isDraggingFiles = false;
+
+  /// true when MediaViewerPage is pushed on top; used to redirect the back
+  /// button in the action bar to close the viewer instead of exiting the collection.
+  bool _viewerActive = false;
   late final MediaLibraryViewModel _persistentViewModel = Get.put(
     MediaLibraryViewModel(),
     permanent: true,
@@ -101,6 +109,11 @@ class _CollectionPictureScreenState
           : null,
       onColumnIncrement: isMobile && viewModel.isInDetail && _detailColumnCount < 10
           ? () => setState(() => _detailColumnCount++)
+          : null,
+      onUpload: (isMobile &&
+              viewModel.isInDetail &&
+              viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? ''))
+          ? () => viewModel.uploadMediaToCurrentCollection()
           : null,
     );
 
@@ -175,7 +188,7 @@ class _CollectionPictureScreenState
             return KeyEventResult.ignored;
           },
           child: Obx(() {
-            return Column(
+            final body = Column(
               children: [
                 Expanded(
                   child: !viewModel.isInDetail
@@ -189,6 +202,57 @@ class _CollectionPictureScreenState
                     onCancel: viewModel.exitSelection,
                   ),
               ],
+            );
+            // 仅桌面端启用文件拖拽导入
+            if (Platform.isAndroid || Platform.isIOS) return body;
+            return DropTarget(
+              onDragEntered: (_) => setState(() => _isDraggingFiles = true),
+              onDragExited: (_) => setState(() => _isDraggingFiles = false),
+              onDragDone: (detail) {
+                setState(() => _isDraggingFiles = false);
+                viewModel.importDroppedPaths(
+                  detail.files.map((f) => f.path).toList(),
+                );
+              },
+              child: Stack(
+                children: [
+                  body,
+                  if (_isDraggingFiles)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withAlpha(40),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 2,
+                            ),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.folder_open_rounded,
+                                  size: 64,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  '松开以导入媒体',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             );
           }),
         ),
@@ -216,6 +280,9 @@ class _CollectionPictureScreenState
               mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
               children: [
                 // 返回按钮（左侧）
+                // When MediaViewerPage is on top (_viewerActive), this button closes
+                // the viewer instead of exiting the collection — avoids a second back
+                // button being visible inside MediaViewerPage at the same time.
                 AnimatedOpacity(
                   opacity: showBack ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 150),
@@ -225,7 +292,9 @@ class _CollectionPictureScreenState
                       icon: const Icon(Icons.arrow_back_rounded),
                       size: AppTheme.metrics.kSpace40,
                       onTap: () {
-                        if (inDetail) {
+                        if (_viewerActive) {
+                          Navigator.of(context).maybePop();
+                        } else if (inDetail) {
                           viewModel.exitCollection();
                         } else {
                           viewModel.exitFolder();
@@ -1246,34 +1315,44 @@ class _CollectionPictureScreenState
     return Stack(
       children: [
         MasonryMediaGrid(
-      items: sortedItems,
-      collectionId: collectionId,
-      isRemote: isRemote,
-      viewModel: viewModel,
-      columnCount: _detailColumnCount,
-      onOpenViewer: (index) {
-        if (collectionId.isEmpty) return;
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => MediaViewerPage(
-              items: sortedItems,
-              initialIndex: index,
-              collectionId: collectionId,
-              viewModel: viewModel,
-            ),
-          ),
-        );
-      },
-      onConfirmDelete: _confirmDeleteItemFile,
+          items: sortedItems,
+          collectionId: collectionId,
+          isRemote: isRemote,
+          viewModel: viewModel,
+          columnCount: _detailColumnCount,
+          onOpenViewer: (index) {
+            if (collectionId.isEmpty) return;
+            final isMobile = Platform.isAndroid || Platform.isIOS;
+            final route = MaterialPageRoute<void>(
+              builder: (_) => MediaViewerPage(
+                items: sortedItems,
+                initialIndex: index,
+                collectionId: collectionId,
+                viewModel: viewModel,
+              ),
+            );
+            if (isMobile) {
+              // 移动端：推到根 Navigator，使预览页覆盖整个 AppBar/chrome 层。
+              Navigator.of(context, rootNavigator: true).push(route);
+            } else {
+              // 桌面端：推到内层 Navigator，并记录 _viewerActive 以重定向操作栏返回按钮。
+              // 用 addPostFrameCallback 延迟 setState，避免在 push 帧内触发
+              // _dependents.isEmpty 断言。
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _viewerActive = true);
+              });
+              Navigator.of(context).push(route).whenComplete(() {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _viewerActive = false);
+                });
+              });
+            }
+          },
+          onConfirmDelete: _confirmDeleteItemFile,
         ),
         // 有数据但仍在加载更多时，顶部显示细进度条（不阻塞内容交互）
         if (isLoading)
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: LinearProgressIndicator(minHeight: 2),
-          ),
+          const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator(minHeight: 2)),
       ],
     );
   }

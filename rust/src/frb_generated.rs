@@ -6312,6 +6312,7 @@ impl SseDecode for crate::api::media_collection::MediaKind {
         return match inner {
             0 => crate::api::media_collection::MediaKind::Image,
             1 => crate::api::media_collection::MediaKind::Video,
+            2 => crate::api::media_collection::MediaKind::Audio,
             _ => unreachable!("Invalid variant for MediaKind: {}", inner),
         };
     }
@@ -7558,7 +7559,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::media_collection::MediaKind {
         match self {
             Self::Image => 0.into_dart(),
             Self::Video => 1.into_dart(),
-            _ => unreachable!(),
+            Self::Audio => 2.into_dart(),
         }
     }
 }
@@ -8328,9 +8329,7 @@ impl SseEncode for crate::api::media_collection::MediaKind {
             match self {
                 crate::api::media_collection::MediaKind::Image => 0,
                 crate::api::media_collection::MediaKind::Video => 1,
-                _ => {
-                    unimplemented!("");
-                }
+                crate::api::media_collection::MediaKind::Audio => 2,
             },
             serializer,
         );

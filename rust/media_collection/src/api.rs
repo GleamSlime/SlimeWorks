@@ -37,8 +37,31 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         || lower.ends_with(".heic")
         || lower.ends_with(".heif")
         || lower.ends_with(".avif");
-    if !is_image {
-        println!("[thumb] skip non-image: {}", file_path);
+    let is_video = lower.ends_with(".mp4")
+        || lower.ends_with(".mkv")
+        || lower.ends_with(".mov")
+        || lower.ends_with(".avi")
+        || lower.ends_with(".webm")
+        || lower.ends_with(".m4v")
+        || lower.ends_with(".flv")
+        || lower.ends_with(".wmv")
+        || lower.ends_with(".ts")
+        || lower.ends_with(".m2ts")
+        || lower.ends_with(".mpg")
+        || lower.ends_with(".mpeg");
+    let is_audio = lower.ends_with(".mp3")
+        || lower.ends_with(".flac")
+        || lower.ends_with(".aac")
+        || lower.ends_with(".m4a")
+        || lower.ends_with(".ogg")
+        || lower.ends_with(".opus")
+        || lower.ends_with(".wav")
+        || lower.ends_with(".wma")
+        || lower.ends_with(".ape")
+        || lower.ends_with(".aiff")
+        || lower.ends_with(".alac");
+    if !is_image && !is_video && !is_audio {
+        println!("[thumb] skip non-visual: {}", file_path);
         return None;
     }
 
@@ -67,18 +90,102 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     let t0 = std::time::Instant::now();
     println!("[thumb] generate | src={} | orig={}B | w={}", file_path, orig_size, width);
 
-    // ④ try ffmpeg first (fastest, supports HEIC/AVIF via system codecs)
+    // ④ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
+    if is_video {
+        if try_ffmpeg_video_frame(&file_path, &cache_path, width, t0, orig_size) {
+            return Some(cache_path.to_string_lossy().into_owned());
+        }
+        println!("[thumb] video frame extraction failed | src={}", file_path);
+        return None;
+    }
+
+    // ④b for audio: extract embedded cover art via ffmpeg
+    if is_audio {
+        if try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
+            return Some(cache_path.to_string_lossy().into_owned());
+        }
+        println!("[thumb] audio has no embedded cover art | src={}", file_path);
+        return None;
+    }
+
+    // ⑤ try ffmpeg for images first (fastest, supports HEIC/AVIF via system codecs)
     if try_ffmpeg_resize(&file_path, &cache_path, width, t0, orig_size) {
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
-    // ⑤ fallback: pure-Rust `image` crate (supports JPEG/PNG/WebP/BMP/GIF)
+    // ⑥ fallback: pure-Rust `image` crate (supports JPEG/PNG/WebP/BMP/GIF)
     if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
     println!("[thumb] all methods failed | src={} | w={} | elapsed={:?}", file_path, width, t0.elapsed());
     None
+}
+
+fn try_ffmpeg_audio_cover(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+    // Extract embedded album art from audio file using ffmpeg.
+    // The artwork is stored as a video stream (stream 0:v:0) in most formats.
+    let ok = std::process::Command::new("ffmpeg")
+        .args([
+            "-i", src,
+            "-map", "0:v:0",
+            "-vf", &format!("scale={}:-1", width),
+            "-q:v", "3",
+            "-frames:v", "1",
+            "-y",
+            &dst.to_string_lossy(),
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
+    if success {
+        let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+        println!(
+            "[thumb] audio-cover OK | orig={}B | thumb={}B | w={} | elapsed={:?}",
+            orig_size, thumb_size, width, t0.elapsed()
+        );
+    } else {
+        if dst.exists() { let _ = std::fs::remove_file(dst); }
+        println!("[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}", src, t0.elapsed());
+    }
+    success
+}
+
+fn try_ffmpeg_video_frame(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+    // Try seeking to 3s first; if the output is empty/missing, fall back to t=0
+    for seek_secs in &["00:00:03", "00:00:00"] {
+        let ok = std::process::Command::new("ffmpeg")
+            .args([
+                "-ss", seek_secs,
+                "-i", src,
+                "-vf", &format!("scale={}:-1", width),
+                "-q:v", "3",
+                "-frames:v", "1",
+                "-y",
+                &dst.to_string_lossy(),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
+        if success {
+            let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+            println!(
+                "[thumb] ffmpeg video-frame OK | ss={} | orig={}B | thumb={}B | w={} | elapsed={:?}",
+                seek_secs, orig_size, thumb_size, width, t0.elapsed()
+            );
+            return true;
+        }
+        // Remove zero-byte artifact before retrying
+        if dst.exists() { let _ = std::fs::remove_file(dst); }
+    }
+    println!("[thumb] ffmpeg video-frame failed | src={} | elapsed={:?}", src, t0.elapsed());
+    false
 }
 
 fn try_ffmpeg_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {

@@ -68,9 +68,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
       // 移动端：复制路径
       await Clipboard.setData(ClipboardData(text: _cachePath));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('路径已复制')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('路径已复制')));
       }
     }
   }
@@ -423,17 +421,13 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                         color: theme.colorScheme.onSurface.withAlpha(120),
                       ),
                     ),
-                    if (_cachePath.isNotEmpty) ...[  
+                    if (_cachePath.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       GestureDetector(
                         onTap: _openCachePath,
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.folder_outlined,
-                              size: 13,
-                              color: theme.colorScheme.primary,
-                            ),
+                            Icon(Icons.folder_outlined, size: 13, color: theme.colorScheme.primary),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(

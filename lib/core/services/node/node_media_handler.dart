@@ -25,6 +25,24 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     return _kImageExts.contains(path.split('.').last.toLowerCase());
   }
 
+  static const Set<String> _kVideoExts = {
+    'mp4', 'mov', 'm4v', 'mkv', 'avi', 'webm', 'wmv', 'flv', 'ts',
+  };
+
+  // 判断文件路径是否为视频格式
+  bool _isVideoFilePath(String path) {
+    return _kVideoExts.contains(path.split('.').last.toLowerCase());
+  }
+
+  static const Set<String> _kAudioExts = {
+    'mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'ape', 'aiff', 'alac',
+  };
+
+  // 判断文件路径是否为音频格式
+  bool _isAudioFilePath(String path) {
+    return _kAudioExts.contains(path.split('.').last.toLowerCase());
+  }
+
   // ── 媒体文件服务 ─────────────────────────────────────────────────────────
 
   Future<void> _serveMediaFile(HttpRequest request) async {
@@ -53,10 +71,11 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     final widthStr = request.uri.queryParameters['width'];
     final requestedWidth = widthStr != null ? int.tryParse(widthStr) : null;
     final isRangeRequest = request.headers.value(HttpHeaders.rangeHeader) != null;
-    if (!isRangeRequest && _isImageFilePath(filePath)) {
+    final isCoverMode = request.uri.queryParameters['mode'] == 'cover';
+    // 图片或视频封面请求：调用 Rust ensureCoverThumbnail 统一处理
+    if (!isRangeRequest && (_isImageFilePath(filePath) || (isCoverMode && (_isVideoFilePath(filePath) || _isAudioFilePath(filePath))))) {
       // 双向带宽保护：取 min(客户端请求宽度, 服务端本地设置宽度)，0 表示原图
       // mode=cover 使用封面清晰度设置；mode=preview（或无 mode）使用图片预览清晰度设置
-      final isCoverMode = request.uri.queryParameters['mode'] == 'cover';
       final serverMaxWidth = GetIt.instance.isRegistered<MediaPrefsService>()
           ? (isCoverMode
                 ? GetIt.instance.get<MediaPrefsService>().remoteCoverWidth.value
@@ -69,8 +88,12 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
                 ? (clientWidth < serverMaxWidth ? clientWidth : serverMaxWidth)
                 : serverMaxWidth)
           : clientWidth;
-      if (effectiveWidth > 0) {
-        await _serveResizedCover(request, file, filePath, effectiveWidth);
+      // 视频/音频封面：即使没指定宽度也强制用默认宽度 240 提取帧/封面，避免返回原始媒体文件
+      final finalWidth = effectiveWidth > 0
+          ? effectiveWidth
+          : (isCoverMode && (_isVideoFilePath(filePath) || _isAudioFilePath(filePath)) ? 240 : 0);
+      if (finalWidth > 0) {
+        await _serveResizedCover(request, file, filePath, finalWidth);
         return;
       }
     }
@@ -131,10 +154,18 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
         }
       }
     } catch (e) {
-      _logger.log('Rust ensure_cover_thumbnail 失败，回退原图: $e', name: 'WARN');
+      _logger.log('Rust ensure_cover_thumbnail 失败: $e', name: 'WARN');
     }
 
-    // ③ 全失败 → 原图
+    // ③ 全失败 → 音频/视频文件无封面时返回 404，避免客户端将媒体字节误当图片解码
+    if (_isAudioFilePath(filePath) || _isVideoFilePath(filePath)) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write('no cover available');
+      await request.response.close();
+      return;
+    }
+
+    // 图片缩放失败时才回退原图
     await _writeFileResponse(request, original, _guessMediaContentType(filePath));
   }
 

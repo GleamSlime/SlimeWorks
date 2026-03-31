@@ -147,7 +147,11 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       collectionId: collectionId,
       title: (payload['title'] ?? '未命名媒体').toString(),
       filePath: (payload['file_path'] ?? '').toString(),
-      kind: kindRaw == 'video' ? media_api.MediaKind.video : media_api.MediaKind.image,
+      kind: kindRaw == 'video'
+          ? media_api.MediaKind.video
+          : kindRaw == 'audio'
+          ? media_api.MediaKind.audio
+          : media_api.MediaKind.image,
       fileSize: _parseBigIntLike(payload['file_size']),
       modifiedAt: _parseIntLike(payload['modified_at']),
       width: _parseNullableIntLike(payload['width']),

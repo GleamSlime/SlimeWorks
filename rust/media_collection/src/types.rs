@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum MediaKind {
     Image,
     Video,
+    Audio,
 }
 
 impl MediaKind {
@@ -15,6 +16,8 @@ impl MediaKind {
             "mp4" | "mov" | "m4v" | "mkv" | "avi" | "webm" | "wmv" | "flv" | "ts" => {
                 Some(MediaKind::Video)
             }
+            "mp3" | "flac" | "aac" | "m4a" | "ogg" | "opus" | "wav" | "wma" | "ape" | "aiff"
+            | "alac" => Some(MediaKind::Audio),
             _ => None,
         }
     }
@@ -23,6 +26,7 @@ impl MediaKind {
         match self {
             MediaKind::Image => "image",
             MediaKind::Video => "video",
+            MediaKind::Audio => "audio",
         }
     }
 }

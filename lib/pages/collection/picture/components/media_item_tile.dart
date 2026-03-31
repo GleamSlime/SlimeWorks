@@ -14,6 +14,7 @@ class MediaItemTile extends StatefulWidget {
     required this.source,
     required this.onTap,
     this.onRequestScrubFrames,
+    this.onRequestAudioCover,
     this.onOpenFolder,
     this.onDeleteFile,
     this.onSaveToGallery,
@@ -26,6 +27,9 @@ class MediaItemTile extends StatefulWidget {
 
   /// 仅本地视频提供：异步返回均匀分布的帧文件路径列表。
   final Future<List<String>> Function()? onRequestScrubFrames;
+
+  /// 仅本地音频提供：异步返回提取出的嵌入专辑封面缩略图路径。
+  final Future<String?> Function()? onRequestAudioCover;
 
   /// 在文件管理器中显示该文件（本地）。
   final VoidCallback? onOpenFolder;
@@ -48,13 +52,19 @@ class _MediaItemTileState extends State<MediaItemTile> {
   double _hoverRatio = 0.0;
   List<String>? _scrubFrames;
   bool _loadingFrames = false;
+  String? _audioCoverPath;
+  bool _loadingAudioCover = false;
 
   bool get _isVideo => widget.item.kind == media_api.MediaKind.video;
+  bool get _isAudio => widget.item.kind == media_api.MediaKind.audio;
 
   /// 视频：优先显示 scrub 帧；悬停时按比例选帧，非悬停时取第 2 帧（≈10s）作为默认封面。
-  /// 非视频：直接返回 widget.source。
+  /// 音频：显示已提取的嵌入专辑封面，无封面时返回 null（显示音符图标）。
+  /// 非视频/音频：直接返回 widget.source。
   String? get _displaySource {
     if (_isVideo) {
+      // 远程视频没有 scrub 帧回调，直接使用预先构建好的封面 URL（mode=cover）
+      if (widget.onRequestScrubFrames == null) return widget.source;
       final frames = _scrubFrames;
       if (frames != null && frames.isNotEmpty) {
         if (_hovering) {
@@ -65,6 +75,11 @@ class _MediaItemTileState extends State<MediaItemTile> {
         return frames[frames.length > 1 ? 1 : 0];
       }
       return null; // 帧未就绪时显示占位图标，不尝试解码视频文件
+    }
+    if (_isAudio) {
+      // 远程音频：直接用预构建 URL；本地音频：用异步提取的封面路径
+      if (widget.onRequestAudioCover == null) return widget.source;
+      return _audioCoverPath;
     }
     return widget.source;
   }
@@ -85,12 +100,28 @@ class _MediaItemTileState extends State<MediaItemTile> {
     }
   }
 
+  Future<void> _loadAudioCover() async {
+    if (_loadingAudioCover || _audioCoverPath != null) return;
+    if (widget.onRequestAudioCover == null) return;
+    setState(() => _loadingAudioCover = true);
+    try {
+      final path = await widget.onRequestAudioCover!();
+      if (mounted) setState(() { _audioCoverPath = path; _loadingAudioCover = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingAudioCover = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     // 视频 tile：立即后台加载帧，提供默认封面（不等待 hover）
     if (_isVideo && widget.onRequestScrubFrames != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadScrubFrames());
+    }
+    // 音频 tile：立即后台提取嵌入封面
+    if (_isAudio && widget.onRequestAudioCover != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAudioCover());
     }
   }
 
@@ -184,7 +215,19 @@ class _MediaItemTileState extends State<MediaItemTile> {
                 ),
                 child: showCoverAnyway
                     ? (src!.startsWith('http')
-                          ? Image.network(src, fit: BoxFit.cover)
+                          ? Image.network(
+                              src,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Icon(
+                                  _isAudio
+                                      ? Icons.music_note_rounded
+                                      : Icons.smart_display_rounded,
+                                  size: scaleW(44),
+                                  color: theme.colorScheme.primary.withAlpha(180),
+                                ),
+                              ),
+                            )
                           : Image.file(
                               File(src),
                               fit: BoxFit.cover,
@@ -196,7 +239,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
                             ))
                     : Center(
                         child: Icon(
-                          Icons.smart_display_rounded,
+                          _isAudio
+                              ? Icons.music_note_rounded
+                              : Icons.smart_display_rounded,
                           size: scaleW(44),
                           color: theme.colorScheme.primary.withAlpha(180),
                         ),
@@ -228,7 +273,11 @@ class _MediaItemTileState extends State<MediaItemTile> {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    widget.item.kind == media_api.MediaKind.image ? '图片' : '视频',
+                    widget.item.kind == media_api.MediaKind.image
+                        ? '图片'
+                        : widget.item.kind == media_api.MediaKind.audio
+                        ? '音频'
+                        : '视频',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: appMetrics.fontSize10,
@@ -250,15 +299,34 @@ class _MediaItemTileState extends State<MediaItemTile> {
                       horizontal: appMetrics.kSpace10,
                       vertical: appMetrics.kSpace8,
                     ),
-                    child: Text(
-                      widget.item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: appMetrics.fontSize12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: appMetrics.fontSize12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if ((_isAudio || _isVideo) &&
+                            widget.item.durationMs != null &&
+                            widget.item.durationMs! > BigInt.zero) ...[
+                          SizedBox(width: appMetrics.kSpace4),
+                          Text(
+                            _formatDuration(widget.item.durationMs!),
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: appMetrics.fontSize10,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -272,5 +340,17 @@ class _MediaItemTileState extends State<MediaItemTile> {
       return SizedBox(height: widget.fixedHeight, child: tile);
     }
     return tile;
+  }
+
+  /// 将毫秒格式化为 M:SS 或 H:MM:SS 字符串。
+  static String _formatDuration(BigInt ms) {
+    final total = (ms.toInt() ~/ 1000).clamp(0, 359999); // max 99:59:59
+    final h = total ~/ 3600;
+    final m = (total % 3600) ~/ 60;
+    final s = total % 60;
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 }

@@ -353,6 +353,144 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
   // ── 集合 CRUD ────────────────────────────────────────────────────────────
 
+  /// 处理桌面端拖入的文件或文件夹路径列表。
+  /// - 目录 → 调用 scanMediaFolders，递归发现子目录，每个子目录创建一个集合
+  /// - 文件 → 去重后按父目录分组，对每个父目录调用 importMediaFolder
+  Future<void> importDroppedPaths(List<String> paths) async {
+    if (paths.isEmpty) return;
+    if (isScanning.value) return;
+
+    isScanning.value = true;
+    scanStatusText.value = '正在分析拖入文件...';
+
+    final directoryPaths = <String>{};
+    final filePaths = <String>{};
+    for (final path in paths) {
+      final entity = FileSystemEntity.typeSync(path);
+      if (entity == FileSystemEntityType.directory) {
+        directoryPaths.add(path);
+      } else if (entity == FileSystemEntityType.file) {
+        filePaths.add(path);
+      }
+    }
+
+    // 文件：取不重复的父目录，每个目录 importMediaFolder（单集合）
+    final fileParentDirs = filePaths.map((p) => File(p).parent.path).toSet();
+
+    if (directoryPaths.isEmpty && fileParentDirs.isEmpty) {
+      isScanning.value = false;
+      scanStatusText.value = '';
+      showSnack('提示', '未检测到有效路径');
+      return;
+    }
+
+    int success = 0;
+    int fail = 0;
+    final targetFolderId = effectiveFolderId;
+
+    // 目录：使用 scanMediaFolders，每个子目录创建独立集合
+    for (final dir in directoryPaths) {
+      scanStatusText.value = '扫描: ${dir.split(Platform.pathSeparator).last}';
+      try {
+        final collections = await media_api.scanMediaFolders(folderPath: dir);
+        for (final collection in collections) {
+          if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
+            media_api.moveMediaCollectionToFolder(
+              collectionId: collection.id,
+              folderId: targetFolderId,
+            );
+          }
+        }
+        success += collections.length;
+        if (collections.isEmpty) {
+          debugPrint('[DragDrop] 目录无媒体: $dir');
+        }
+      } catch (e) {
+        fail++;
+        debugPrint('[DragDrop] 扫描目录失败: $dir => $e');
+      }
+    }
+
+    // 文件父目录：importMediaFolder（单集合，只包含该目录直接文件）
+    for (final dir in fileParentDirs) {
+      scanStatusText.value = '导入: ${dir.split(Platform.pathSeparator).last}';
+      try {
+        final collection = await media_api.importMediaFolder(folderPath: dir);
+        if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
+          media_api.moveMediaCollectionToFolder(
+            collectionId: collection.id,
+            folderId: targetFolderId,
+          );
+        }
+        success++;
+      } catch (e) {
+        fail++;
+        debugPrint('[DragDrop] 导入失败: $dir => $e');
+      }
+    }
+
+    await loadCollections();
+    scanStatusText.value = '';
+    isScanning.value = false;
+
+    if (success > 0 && fail == 0) {
+      showSnack('成功', '成功导入 $success 个集合');
+    } else if (success > 0) {
+      showSnack('部分完成', '成功 $success 个，失败 $fail 个');
+    } else {
+      showSnack('失败', '导入失败，请检查文件夹是否含有支持的媒体文件');
+    }
+  }
+
+  /// 从相册/文件系统选取媒体，上传到当前远程集合。
+  Future<void> uploadMediaToCurrentCollection() async {
+    final collectionId = currentCollectionId.value;
+    if (collectionId == null || !isRemoteCollection(collectionId)) return;
+
+    final nodeId = getRemoteNodeId(collectionId);
+    final rawId = getRemoteRawCollectionId(collectionId);
+    if (nodeId == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.media,
+      allowMultiple: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    isScanning.value = true;
+    int success = 0;
+    int fail = 0;
+
+    for (int i = 0; i < result.files.length; i++) {
+      final path = result.files[i].path;
+      if (path == null) continue;
+      scanStatusText.value = '上传 ${i + 1}/${result.files.length}...';
+      try {
+        await nodeSettingsService.uploadMediaToNode(
+          nodeId: nodeId,
+          localPath: path,
+          collectionId: rawId,
+        );
+        success++;
+      } catch (_) {
+        fail++;
+      }
+    }
+
+    isScanning.value = false;
+    scanStatusText.value = '';
+
+    if (fail == 0) {
+      showSnack('成功', '已上传 $success 个文件');
+    } else {
+      showSnack('部分完成', '上传 $success 成功，$fail 失败');
+    }
+
+    // 刷新远程集合列表 + 当前集合内容
+    await refreshRemoteLibrary();
+    await loadCurrentCollectionItems();
+  }
+
   Future<void> renameCollection(String collectionId, String title) async {
     final normalized = title.trim();
     if (normalized.isEmpty) {

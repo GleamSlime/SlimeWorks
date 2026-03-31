@@ -134,6 +134,8 @@ class AppTheme {
       dividerTheme: DividerThemeData(color: LightColors.black10, thickness: scaleW(0.5), space: 1),
 
       hintColor: LightColors.black40,
+
+      dividerColor: LightColors.black10,
     );
   }
 

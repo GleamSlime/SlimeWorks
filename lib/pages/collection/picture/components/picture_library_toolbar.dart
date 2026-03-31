@@ -27,6 +27,7 @@ class PictureLibraryToolbar extends StatelessWidget {
     this.columnCount,
     this.onColumnDecrement,
     this.onColumnIncrement,
+    this.onUpload,
   });
 
   final MediaLibraryViewModel viewModel;
@@ -45,6 +46,9 @@ class PictureLibraryToolbar extends StatelessWidget {
 
   /// 列数增加回调（移动端详情模式）。
   final VoidCallback? onColumnIncrement;
+
+  /// 移动端远程集合详情模式：上传文件到当前集合。
+  final VoidCallback? onUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -188,8 +192,19 @@ class PictureLibraryToolbar extends StatelessWidget {
                     )
                     .toList(),
               ),
-            // 移动端详情模式：列数调节 + 资源排序（桌面端此控件在 leading 区域）
+            // 移动端详情模式：列数调节 + 资源排序 + 上传（桌面端此控件在 leading 区域）
             if (showMobileDetailControls) ...[
+              if (onUpload != null)
+                Tooltip(
+                  message: '上传文件到当前集合',
+                  child: IconButton(
+                    icon: const Icon(Icons.upload_rounded),
+                    iconSize: scaleW(18),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                    constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                    onPressed: onUpload,
+                  ),
+                ),
               Icon(Icons.grid_view_rounded, size: scaleW(16), color: Theme.of(context).hintColor),
               IconButton(
                 icon: const Icon(Icons.remove_rounded),

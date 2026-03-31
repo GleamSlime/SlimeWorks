@@ -62,6 +62,12 @@ fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<Medi
     }
     .unwrap_or((None, None));
 
+    let duration_ms = if matches!(kind, MediaKind::Audio | MediaKind::Video) {
+        read_duration_ms(path)
+    } else {
+        None
+    };
+
     Ok(MediaItem {
         id: format!("media_{}", uuid::Uuid::new_v4()),
         collection_id: collection_id.to_string(),
@@ -72,9 +78,27 @@ fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<Medi
         modified_at,
         width,
         height,
-        duration_ms: None,
+        duration_ms,
         order,
     })
+}
+
+/// Use ffprobe to get the media duration in milliseconds.
+fn read_duration_ms(path: &Path) -> Option<u64> {
+    let out = std::process::Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            &path.to_string_lossy(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    let secs: f64 = s.trim().parse().ok()?;
+    Some((secs * 1000.0) as u64)
 }
 
 pub struct MediaFolderScanner;

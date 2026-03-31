@@ -4,7 +4,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';import 'package:get/get.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -142,6 +143,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// videoPath → scrub 帧路径列表的异步缓存（仅含非空结果）。
   final _videoFrameCache = <String, Future<List<String>>>{};
 
+  /// filePath → 音频封面缩略图路径的异步缓存。
+  final _audioCoverCache = <String, Future<String?>>{};
+
   final remoteCollectionNodeId = <String, String>{}.obs;
   final remoteCollectionNodeName = <String, String>{}.obs;
   final remoteCollectionRawId = <String, String>{}.obs;
@@ -204,7 +208,10 @@ class MediaLibraryViewModel extends BaseViewModel {
     );
     // 启动集合文件夹自动扫描定时器（每 30 秒轮询）
     _folderWatchTimer?.cancel();
-    _folderWatchTimer = Timer.periodic(const Duration(seconds: 30), (_) => _pollCollectionFolders());
+    _folderWatchTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _pollCollectionFolders(),
+    );
   }
 
   @override
@@ -413,7 +420,11 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
     // Default: apply custom drag order
     final customOrder = _collectionOrders[orderKey];
-    if (customOrder == null || customOrder.isEmpty) return list;
+    if (customOrder == null || customOrder.isEmpty) {
+      logger.d('_applySortOrder: orderKey=$orderKey NO custom order, using default');
+      return list;
+    }
+    logger.d('_applySortOrder: orderKey=$orderKey applying ${customOrder.length}-item order to ${list.length} collections');
     list.sort((a, b) {
       final ai = customOrder.indexOf(a.id);
       final bi = customOrder.indexOf(b.id);
@@ -551,7 +562,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       return null;
     }
     if (isRemoteCollection(collection.id)) {
-      if (_isVideoPath(coverPath)) return null; // 远程视频路径不尝试读取
+      // 远程集合：视频封面路径也通过节点 URL 返回（服务端 ensureCoverThumbnail 提取帧）
+      if (_isAudioPath(coverPath)) return null; // 音频文件没有封面
       final nodeId = getRemoteNodeId(collection.id);
       if (nodeId == null) return null;
       // 应用远程封面清晰度设置，节省上行带宽；isCover=true 使服务端用对应保护策略
@@ -573,6 +585,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       }
       return null;
     }
+    // 音频文件无视觉封面
+    if (_isAudioPath(coverPath)) return null;
     return coverPath;
   }
 
@@ -594,6 +608,15 @@ class MediaLibraryViewModel extends BaseViewModel {
   static bool _isVideoPath(String path) {
     final ext = path.split('.').last.toLowerCase();
     return _kVideoExtensions.contains(ext);
+  }
+
+  static const _kAudioExtensions = {
+    'mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'ape', 'aiff', 'alac',
+  };
+
+  static bool _isAudioPath(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    return _kAudioExtensions.contains(ext);
   }
 
   void _generateCollectionVideoThumbnailAsync(String collectionId, String videoPath) {
@@ -849,16 +872,35 @@ class MediaLibraryViewModel extends BaseViewModel {
   Future<void> _pollCollectionFolders() async {
     // 只处理本地集合，跳过远程
     final localCols = collections.toList(growable: false);
+    logger.d('_pollCollectionFolders: 开始轮询 ${localCols.length} 个本地集合');
     bool anyChanged = false;
     for (final col in localCols) {
       try {
         final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount;
-        // 使用 Rust FFI 同步读取当前磁盘文件数量（不更新 DB，仅统计）
         final dir = Directory(col.folderPath);
-        if (!dir.existsSync()) continue;
+        if (!dir.existsSync()) {
+          logger.d('_pollCollectionFolders: 目录不存在，跳过: ${col.folderPath}');
+          continue;
+        }
         final exts = {
-          'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif',
-          'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', 'wmv', 'ts',
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'webp',
+          'bmp',
+          'heic',
+          'heif',
+          'avif',
+          'mp4',
+          'mov',
+          'avi',
+          'mkv',
+          'webm',
+          'flv',
+          'm4v',
+          'wmv',
+          'ts',
         };
         int count = 0;
         await for (final e in dir.list(recursive: false, followLinks: false)) {
@@ -868,25 +910,20 @@ class MediaLibraryViewModel extends BaseViewModel {
           }
         }
         _collectionItemCountSnapshot[col.id] = count;
+        logger.d('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count');
         if (count != prev) {
-          debugPrint('[MediaLibrary] 检测到文件夹变化: ${col.title} prev=$prev now=$count，触发增量扫描');
-          // 增量重新导入该集合（Rust side 会应用差量更新）
-          await compute(
-            (String fp) => media_api.importMediaFolder(folderPath: fp),
-            col.folderPath,
-          );
+          logger.d('_pollCollectionFolders: 检测到变化，触发增量扫描: ${col.title}');
+          await compute((String fp) => media_api.importMediaFolder(folderPath: fp), col.folderPath);
           anyChanged = true;
         }
       } catch (e) {
-        debugPrint('[MediaLibrary] _pollCollectionFolders 集合 ${col.id} 检查失败: $e');
+        logger.d('_pollCollectionFolders: 集合 ${col.id} 检查异常: $e');
       }
     }
     if (anyChanged) {
-      // 静默刷新集合列表，不影响当前已打开的集合详情页
+      logger.d('_pollCollectionFolders: 有变化，刷新集合列表');
       await loadCollections();
-      // 若当前打开的集合恰好有变化，则同步刷新详情
-      if (currentCollectionId.value != null &&
-          !isRemoteCollection(currentCollectionId.value!)) {
+      if (currentCollectionId.value != null && !isRemoteCollection(currentCollectionId.value!)) {
         await loadCurrentCollectionItems();
       }
     }
@@ -1044,6 +1081,10 @@ class MediaLibraryViewModel extends BaseViewModel {
     // Snapshot scroll position for the current browse level before navigating into folder
     _browseScrollOffsets[currentFolderId.value] = savedScrollOffset.value;
     currentFolderId.value = folderId;
+    // Debug: show what custom order (if any) will be applied for this folder
+    final orderKey = folderId;
+    final savedOrder = _collectionOrders[orderKey];
+    logger.d('enterFolder: folderId=$folderId, savedOrder=${savedOrder == null ? "NONE" : savedOrder.join(",")}');
     exitCollection();
     exitSelection();
   }
@@ -1125,6 +1166,42 @@ class MediaLibraryViewModel extends BaseViewModel {
     return await (_videoFrameCache[videoPath] ?? Future.value(const []));
   }
 
+  /// 异步获取音频文件的封面缩略图路径（提取嵌入的专辑封面）。
+  /// 结果缓存在 [_audioCoverCache] 中，相同路径只执行一次。
+  Future<String?> getAudioCoverSource(String filePath) {
+    return _audioCoverCache.putIfAbsent(filePath, () => _doGetAudioCover(filePath));
+  }
+
+  Future<String?> _doGetAudioCover(String filePath) async {
+    final ffmpegExe = await RustFFmpeg.resolvePath();
+    if (ffmpegExe == null) return null;
+    try {
+      final appDir = await getApplicationSupportDirectory();
+      final sep = Platform.pathSeparator;
+      final dir = Directory(
+        '${appDir.path}${sep}SlimeWorks${sep}library${sep}media${sep}covers',
+      );
+      await dir.create(recursive: true);
+      // 稳定 key：路径哈希 + 固定宽度
+      final key = filePath.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+      final outPath = '${dir.path}${sep}audio_${key}_w300.jpg';
+      final outFile = File(outPath);
+      if (outFile.existsSync() && outFile.lengthSync() > 0) return outPath;
+      // 调用 ffmpeg 提取嵌入封面（最常见格式：mp3/flac/m4a 的 0:v:0 流）
+      await Process.run(ffmpegExe, [
+        '-i', filePath,
+        '-map', '0:v:0',
+        '-vf', 'scale=300:-1',
+        '-frames:v', '1',
+        '-q:v', '3',
+        '-y', outPath,
+      ]);
+      return (outFile.existsSync() && outFile.lengthSync() > 0) ? outPath : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<String>> _doGetScrubFrames(String videoPath) async {
     debugPrint('[VideoThumb] _doGetScrubFrames: 解析 ffmpeg 路径...');
     final ffmpegExe = await RustFFmpeg.resolvePath();
@@ -1142,7 +1219,9 @@ class MediaLibraryViewModel extends BaseViewModel {
     try {
       final appDir = await getApplicationSupportDirectory();
       final sep = Platform.pathSeparator;
-      frameDir = Directory('${appDir.path}${sep}thumbnails${sep}scrub$sep$key');
+      frameDir = Directory(
+        '${appDir.path}${sep}library${sep}media${sep}thumbnails${sep}scrub$sep$key',
+      );
       await frameDir.create(recursive: true);
       debugPrint('[VideoThumb] 帧目录: ${frameDir.path}');
     } catch (e) {

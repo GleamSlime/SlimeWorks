@@ -130,9 +130,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     }
     final cacheW = () {
       if (src.startsWith('http')) return null;
-      final prefs = getIt.isRegistered<MediaPrefsService>()
-          ? getIt.get<MediaPrefsService>()
-          : null;
+      final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
       final w = prefs?.localPreviewWidth.value ?? 480;
       return w > 0 ? w : null;
     }();
@@ -145,7 +143,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
-                errorBuilder: (_, __, ___) => _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+                errorBuilder: (_, __, ___) =>
+                    _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               )
             : Image.file(
                 File(src),
@@ -153,14 +152,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 width: double.infinity,
                 height: double.infinity,
                 cacheWidth: cacheW,
-                errorBuilder: (_, __, ___) => _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+                errorBuilder: (_, __, ___) =>
+                    _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               ),
-        if (kDebugMode)
-          Positioned(
-            right: 4,
-            bottom: 4,
-            child: DebugImageSizeBadge(src: src),
-          ),
+        if (kDebugMode) Positioned(right: 4, bottom: 4, child: DebugImageSizeBadge(src: src)),
       ],
     );
   }
@@ -498,13 +493,7 @@ class _CollectionPlaceholder extends StatelessWidget {
           ],
         ),
       ),
-      child: Center(
-        child: Icon(
-          icon,
-          size: 48,
-          color: theme.colorScheme.primary.withAlpha(150),
-        ),
-      ),
+      child: Center(child: Icon(icon, size: 48, color: theme.colorScheme.primary.withAlpha(150))),
     );
   }
 }

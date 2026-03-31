@@ -229,4 +229,4 @@ class MediaItem {
           order == other.order;
 }
 
-enum MediaKind { image, video }
+enum MediaKind { image, video, audio }

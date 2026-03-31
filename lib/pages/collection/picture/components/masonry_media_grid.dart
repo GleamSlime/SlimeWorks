@@ -1,16 +1,13 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -47,27 +44,65 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   // 缓存每张已加载图片的宽高比，key 为 source
   final Map<String, double> _aspectRatios = {};
 
+  /// 当前已渲染的 item 数量（逐行递增，产生横向加载效果）。
+  int _visibleCount = 0;
+
+  /// 初始按行逐帧展开的最大行数；超过后一次性加载剩余全部。
+  static const int _kInitialRevealRows = 12;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleReveal();
+  }
+
+  @override
+  void didUpdateWidget(MasonryMediaGrid old) {
+    super.didUpdateWidget(old);
+    if (old.items.length != widget.items.length ||
+        old.columnCount != widget.columnCount) {
+      _visibleCount = 0;
+      _scheduleReveal();
+    }
+  }
+
+  void _scheduleReveal() {
+    if (widget.items.isEmpty) {
+      if (mounted) setState(() => _visibleCount = 0);
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback(_revealNextBatch);
+  }
+
+  void _revealNextBatch([_]) {
+    if (!mounted) return;
+    final total = widget.items.length;
+    if (_visibleCount >= total) return;
+    final n = widget.columnCount;
+    final threshold = n * _kInitialRevealRows;
+    if (_visibleCount < threshold) {
+      setState(() => _visibleCount = (_visibleCount + n).clamp(0, total));
+      if (_visibleCount < total) {
+        WidgetsBinding.instance.addPostFrameCallback(_revealNextBatch);
+      }
+    } else {
+      setState(() => _visibleCount = total);
+    }
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// 将 items 分配到 [columnCount] 列（按当前累计高度平衡）。
+  /// 将 items 分配到 [columnCount] 列，使用交错（round-robin）策略。
+  /// 仅分配 [_visibleCount] 个 items，实现逐行展开的横向加载效果。
   List<List<int>> _distributeColumns(double colWidth) {
     final cols = List.generate(widget.columnCount, (_) => <int>[]);
-    final heights = List.filled(widget.columnCount, 0.0);
-    for (int i = 0; i < widget.items.length; i++) {
-      final src = widget.viewModel.buildMediaSource(widget.items[i], isCover: true);
-      final ar = (src != null && src.isNotEmpty) ? (_aspectRatios[src] ?? 1.0) : 1.0;
-      final h = colWidth / ar;
-      // 放入最短的列
-      int shortest = 0;
-      for (int c = 1; c < widget.columnCount; c++) {
-        if (heights[c] < heights[shortest]) shortest = c;
-      }
-      cols[shortest].add(i);
-      heights[shortest] += h;
+    final visible = _visibleCount.clamp(0, widget.items.length);
+    for (int i = 0; i < visible; i++) {
+      cols[i % widget.columnCount].add(i);
     }
     return cols;
   }
@@ -76,15 +111,30 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     // 缩略图走「远程封面清晰度」，预览全图需另行调用 buildMediaSource(isCover:false)
     final source = widget.viewModel.buildMediaSource(item, isCover: true);
     final isVideo = item.kind == media_api.MediaKind.video;
-    final defaultAr = isVideo ? (16.0 / 9.0) : (3.0 / 5.0);
-    final ar = (source != null && source.isNotEmpty)
-        ? (_aspectRatios[source] ?? defaultAr)
-        : defaultAr;
+    final isAudio = item.kind == media_api.MediaKind.audio;
+    final defaultAr = (3.0 / 5.0);
+
+    // 优先使用 MediaItem 中已有的宽高字段（扫描时由 Rust 填入），避免在 build() 阶段
+    // 同步读取图片文件来解码尺寸（会导致"一列一列"的加载顺序问题）。
+    double ar;
+    if (source != null && source.isNotEmpty && _aspectRatios.containsKey(source)) {
+      ar = _aspectRatios[source]!;
+    } else if (item.width != null && item.height != null && item.height! > 0) {
+      ar = item.width! / item.height!;
+      // 立即缓存，下次直接命中
+      if (source != null && source.isNotEmpty) {
+        _aspectRatios[source] = ar.clamp(0.3, 3.0);
+      }
+    } else {
+      ar = defaultAr;
+    }
     final tileHeight = (colWidth / ar).clamp(60.0, colWidth * 2.5);
 
-    // 非视频图片：首次渲染后异步解码真实宽高比
-    if (!isVideo && source != null && source.isNotEmpty && !source.startsWith('http')) {
-      if (!_aspectRatios.containsKey(source)) {
+    // 仅对本地非视频且没有已知尺寸的 items 才异步解码真实宽高比（兜底）。
+    // 音频封面由 _audioCoverPath 异步返回，不从 source(原始音频文件)解码宽高比。
+    if (!isVideo && !isAudio && source != null && source.isNotEmpty && !source.startsWith('http')) {
+      if (!_aspectRatios.containsKey(source) &&
+          (item.width == null || item.height == null || item.height == 0)) {
         _resolveAspectRatio(source, File(source));
       }
     }
@@ -98,10 +148,13 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       onRequestScrubFrames: (isVideo && !widget.isRemote)
           ? () => widget.viewModel.getVideoScrubFrames(item.filePath)
           : null,
+      onRequestAudioCover: (isAudio && !widget.isRemote)
+          ? () => widget.viewModel.getAudioCoverSource(item.filePath)
+          : null,
       onOpenFolder: widget.isRemote ? null : () => widget.viewModel.openItemInFolder(item),
       onDeleteFile: widget.isRemote ? null : () => widget.onConfirmDelete(item),
       // 移动端图片支持保存到相册（本地和远程均支持）
-      onSaveToGallery: (PlatformUtil.isMobile && !isVideo)
+      onSaveToGallery: (PlatformUtil.isMobile && !isVideo && !isAudio)
           ? () => saveToGallery(context, source)
           : null,
     );
@@ -181,7 +234,6 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     final crossAxisCount = widget.columnCount;
     final padding = AppTheme.metrics.kSpace12;
     final spacing = AppTheme.metrics.kSpace8;
-    final isMobileRemote = PlatformUtil.isMobile && widget.isRemote;
 
     final grid = LayoutBuilder(
       builder: (context, constraints) {
@@ -215,62 +267,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       },
     );
 
-    if (!isMobileRemote) return grid;
-
-    return Stack(
-      children: [
-        grid,
-        Positioned(
-          bottom: 20,
-          right: 20,
-          child: FloatingActionButton.small(
-            heroTag: 'upload_media_fab',
-            tooltip: '从相册上传图片到节点',
-            onPressed: () => _pickAndUpload(context),
-            child: const Icon(Icons.upload_rounded),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 打开文件选择器，选图后上传到远程节点。
-  Future<void> _pickAndUpload(BuildContext context) async {
-    final nodeId = widget.viewModel.getRemoteNodeId(widget.collectionId);
-    if (nodeId == null) return;
-
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: true);
-    if (result == null || result.files.isEmpty) return;
-
-    final nodeService = getIt<NodeSettingsService>();
-    final rawCollId = widget.viewModel.getRemoteRawCollectionId(widget.collectionId);
-    int success = 0;
-    int fail = 0;
-
-    EasyLoading.show(status: '正在上传 0 / ${result.files.length}...');
-    for (int i = 0; i < result.files.length; i++) {
-      final path = result.files[i].path;
-      if (path == null) continue;
-      EasyLoading.show(status: '正在上传 ${i + 1} / ${result.files.length}...');
-      try {
-        await nodeService.uploadMediaToNode(
-          nodeId: nodeId,
-          localPath: path,
-          collectionId: rawCollId,
-        );
-        success++;
-      } catch (_) {
-        fail++;
-      }
-    }
-
-    if (fail == 0) {
-      EasyLoading.showSuccess('已上传 $success 张');
-    } else {
-      EasyLoading.showError('上传完成：$success 成功，$fail 失败');
-    }
-    // 触发远程集合刷新
-    await widget.viewModel.refreshRemoteCollections();
+    return grid;
   }
 }
 

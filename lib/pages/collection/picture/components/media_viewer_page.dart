@@ -10,6 +10,8 @@ import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:media_kit_video/media_kit_video_controls/media_kit_video_controls.dart'
+    as media_controls;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -103,8 +105,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
   /// 将当前图片保存到系统相册。
   Future<void> _saveCurrentItem(BuildContext context) async {
     final item = widget.items[_currentIndex];
-    if (item.kind != media_api.MediaKind.image) return;
-    // 保存时始终用原图（不传 isCover）
+    if (item.kind != media_api.MediaKind.image) return;    // 保存时始终用原图（不传 isCover）
     final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (source == null || source.isEmpty) return;
 
@@ -209,11 +210,13 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
                     currentItem,
                     collectionId: widget.collectionId,
                   );
-                  if (currentItem.kind == media_api.MediaKind.video) {
+                  if (currentItem.kind == media_api.MediaKind.video ||
+                      currentItem.kind == media_api.MediaKind.audio) {
                     return _VideoPreview(
                       source: source,
                       onSwipeDelta: _handleSwipeDelta,
                       onSwipeEnd: () => _scrollAccum = 0,
+                      isAudio: currentItem.kind == media_api.MediaKind.audio,
                     );
                   }
                   if (source == null || source.isEmpty) {
@@ -228,17 +231,6 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
                     onSave: isMobile ? () => _saveCurrentItem(context) : null,
                   );
                 },
-              ),
-            ),
-
-            // ── 左上角：玻璃返回按钮 ─────────────────────────────────────────
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              left: 12,
-              child: _GlassIconButton(
-                icon: Icons.arrow_back_rounded,
-                tooltip: '关闭预览',
-                onTap: () => Navigator.of(context).maybePop(),
               ),
             ),
 
@@ -545,12 +537,26 @@ class _ImageViewerState extends State<_ImageViewer> {
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
-    if (!_isTransformed && d.pointerCount < 2) {
-      // 未变换 + 单指：将焦点位移传给父级做翻页
+    final isDesktop = !Platform.isAndroid && !Platform.isIOS;
+    // On macOS/desktop the trackpad generates BOTH a PointerScrollEvent (caught by the
+    // outer Listener → _handlePointerScroll) and a PointerPanZoomUpdateEvent that reaches
+    // onScaleUpdate with pointerCount==0.  Handling it here too would double-process or
+    // cancel the scroll accumulation, so we skip it entirely for desktop.
+    if (isDesktop && d.pointerCount < 2) return;
+
+    // Two-finger gesture without a real scale/rotation change is a pan swipe for navigation,
+    // NOT an image transform — treat it like a single-finger swipe.
+    final isScrollSwipe =
+        d.pointerCount >= 2 &&
+        (d.scale - 1.0).abs() < 0.03 &&
+        d.rotation.abs() < 0.05 &&
+        !_isTransformed;
+    if (!_isTransformed && d.pointerCount < 2 || isScrollSwipe) {
       widget.onSwipeDelta(d.focalPointDelta.dy);
       return;
     }
-    // 双指或已变换：更新缩放 / 旋转 / 位移
+
+    // Already transformed or genuine pinch / rotate — update the transform.
     final newScale = (_baseScale * d.scale).clamp(1.0, 8.0);
     final focalDx = d.localFocalPoint.dx - _startFocalX;
     final focalDy = d.localFocalPoint.dy - _startFocalY;
@@ -643,11 +649,18 @@ class _ImageViewerState extends State<_ImageViewer> {
 // ── 视频预览 ───────────────────────────────────────────────────────────────
 
 class _VideoPreview extends StatefulWidget {
-  const _VideoPreview({required this.source, required this.onSwipeDelta, required this.onSwipeEnd});
+  const _VideoPreview({
+    required this.source,
+    required this.onSwipeDelta,
+    required this.onSwipeEnd,
+    this.isAudio = false,
+  });
 
   final String? source;
   final void Function(double dy) onSwipeDelta;
   final VoidCallback onSwipeEnd;
+  /// 是否为纯音频（无视频轨道），显示音乐占位背景
+  final bool isAudio;
 
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
@@ -656,6 +669,7 @@ class _VideoPreview extends StatefulWidget {
 class _VideoPreviewState extends State<_VideoPreview> {
   Player? _player;
   VideoController? _videoController;
+  BoxFit _videoFit = BoxFit.contain;
 
   @override
   void initState() {
@@ -684,11 +698,70 @@ class _VideoPreviewState extends State<_VideoPreview> {
         child: Text('无法加载视频', style: TextStyle(color: Colors.white)),
       );
     }
-    // 移动端平台视图会吸收所有触摸事件，用透明覆盖层（顶部）实现滑动翻页。
-    // 底部 ~80px 保留给播放器控制栏，不覆盖。
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    // Use viewPadding (physical screen insets) rather than padding so safe-area
+    // margins remain correct even while in immersiveSticky mode where system
+    // padding reports 0.
+    final viewPad = MediaQuery.viewPaddingOf(context);
+    final topInset = isMobile ? viewPad.top : 0.0;
+    final bottomInset = isMobile ? viewPad.bottom : 0.0;
+    // Gesture overlay 保留区域 = 控制栏高度(80) + 安全区底部
+    final controlsHeight = 80.0 + bottomInset;
+
+    final videoWidget = media_controls.MaterialVideoControlsTheme(
+      normal: media_controls.MaterialVideoControlsThemeData(
+        // 顶部工具栏增加：播放速度、画面适应、音量控制
+        topButtonBar: [
+          _VideoSpeedButton(player: player),
+          _VideoFitButton(
+            currentFit: _videoFit,
+            onToggle: () => setState(
+              () => _videoFit = _videoFit == BoxFit.contain ? BoxFit.cover : BoxFit.contain,
+            ),
+          ),
+          _VideoVolumeButton(player: player),
+        ],
+        // 顶部安全区（刘海/状态栏）保护：确保控制按钮不被遮挡
+        topButtonBarMargin: EdgeInsets.only(
+          top: topInset + 4,
+          left: 8,
+          right: 8,
+        ),
+        // 底部控制栏增加安全距离，确保在手机底部系统导航栏上方
+        bottomButtonBarMargin: EdgeInsets.only(
+          bottom: bottomInset + 4,
+          left: 8,
+          right: 8,
+        ),
+      ),
+      fullscreen: const media_controls.MaterialVideoControlsThemeData(),
+      child: Video(controller: controller, fit: _videoFit),
+    );
+
     return Stack(
       children: [
-        Video(controller: controller),
+        // 音频模式：显示音乐占位背景
+        if (widget.isAudio)
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1a1a2e), Color(0xFF16213e)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.music_note_rounded, color: Colors.white38, size: 96),
+                  SizedBox(height: 16),
+                  Text('音频播放中', style: TextStyle(color: Colors.white54, fontSize: 16)),
+                ],
+              ),
+            ),
+          ),
+        videoWidget,
         // 顶部滑动区（48px），Flutter Widget 层在平台视图之上，可接收手势
         Positioned(
           top: 0,
@@ -701,12 +774,12 @@ class _VideoPreviewState extends State<_VideoPreview> {
             onVerticalDragEnd: (_) => widget.onSwipeEnd(),
           ),
         ),
-        // 中间区域（避开底部控制栏 80px）也注册滑动手势
+        // 中间区域（避开底部控制栏）也注册滑动手势
         Positioned(
           top: 48,
           left: 0,
           right: 0,
-          bottom: 80,
+          bottom: controlsHeight,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onVerticalDragUpdate: (details) => widget.onSwipeDelta(details.delta.dy),
@@ -714,6 +787,127 @@ class _VideoPreviewState extends State<_VideoPreview> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── 视频播放速度按钮 ────────────────────────────────────────────────────────
+
+class _VideoSpeedButton extends StatelessWidget {
+  const _VideoSpeedButton({required this.player});
+  final Player player;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<double>(
+      stream: player.stream.rate,
+      initialData: player.state.rate,
+      builder: (context, snapshot) {
+        final rate = snapshot.data ?? 1.0;
+        final label = (rate == rate.truncateToDouble()) ? '${rate.toInt()}x' : '${rate}x';
+        return PopupMenuButton<double>(
+          tooltip: '播放速度',
+          color: Colors.black87,
+          itemBuilder: (_) => [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+              .map(
+                (r) => PopupMenuItem<double>(
+                  value: r,
+                  child: Text(
+                    (r == r.truncateToDouble()) ? '${r.toInt()}x' : '${r}x',
+                    style: TextStyle(
+                      color: r == rate ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+          onSelected: player.setRate,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── 视频适应方式按钮（contain ↔ cover）─────────────────────────────────────
+
+class _VideoFitButton extends StatelessWidget {
+  const _VideoFitButton({required this.currentFit, required this.onToggle});
+  final BoxFit currentFit;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCover = currentFit == BoxFit.cover;
+    return IconButton(
+      tooltip: isCover ? '适应屏幕' : '填充屏幕',
+      icon: Icon(
+        isCover ? Icons.fit_screen_rounded : Icons.crop_rounded,
+        color: Colors.white,
+        size: 22,
+      ),
+      onPressed: onToggle,
+    );
+  }
+}
+
+// ── 视频音量按钮（点击静音/取消静音）──────────────────────────────────────
+
+class _VideoVolumeButton extends StatelessWidget {
+  const _VideoVolumeButton({required this.player});
+  final Player player;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<double>(
+      stream: player.stream.volume,
+      initialData: player.state.volume,
+      builder: (context, snapshot) {
+        final vol = snapshot.data ?? 100.0;
+        final icon = vol == 0
+            ? Icons.volume_off_rounded
+            : (vol < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
+        return IconButton(
+          tooltip: vol == 0 ? '取消静音' : '静音',
+          icon: Icon(icon, color: Colors.white, size: 22),
+          onPressed: () => player.setVolume(vol == 0 ? 100.0 : 0.0),
+          onLongPress: () => _showVolumeSlider(context),
+        );
+      },
+    );
+  }
+
+  void _showVolumeSlider(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            const Icon(Icons.volume_down_rounded, color: Colors.white70),
+            Expanded(
+              child: StreamBuilder<double>(
+                stream: player.stream.volume,
+                initialData: player.state.volume,
+                builder: (context, snapshot) {
+                  final vol = snapshot.data ?? 100.0;
+                  return Slider(
+                    value: vol.clamp(0.0, 100.0),
+                    min: 0,
+                    max: 100,
+                    onChanged: player.setVolume,
+                  );
+                },
+              ),
+            ),
+            const Icon(Icons.volume_up_rounded, color: Colors.white70),
+          ],
+        ),
+      ),
     );
   }
 }
