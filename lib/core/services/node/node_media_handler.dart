@@ -26,7 +26,15 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
   }
 
   static const Set<String> _kVideoExts = {
-    'mp4', 'mov', 'm4v', 'mkv', 'avi', 'webm', 'wmv', 'flv', 'ts',
+    'mp4',
+    'mov',
+    'm4v',
+    'mkv',
+    'avi',
+    'webm',
+    'wmv',
+    'flv',
+    'ts',
   };
 
   // 判断文件路径是否为视频格式
@@ -35,7 +43,17 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
   }
 
   static const Set<String> _kAudioExts = {
-    'mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'ape', 'aiff', 'alac',
+    'mp3',
+    'flac',
+    'aac',
+    'm4a',
+    'ogg',
+    'opus',
+    'wav',
+    'wma',
+    'ape',
+    'aiff',
+    'alac',
   };
 
   // 判断文件路径是否为音频格式
@@ -73,7 +91,9 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     final isRangeRequest = request.headers.value(HttpHeaders.rangeHeader) != null;
     final isCoverMode = request.uri.queryParameters['mode'] == 'cover';
     // 图片或视频封面请求：调用 Rust ensureCoverThumbnail 统一处理
-    if (!isRangeRequest && (_isImageFilePath(filePath) || (isCoverMode && (_isVideoFilePath(filePath) || _isAudioFilePath(filePath))))) {
+    if (!isRangeRequest &&
+        (_isImageFilePath(filePath) ||
+            (isCoverMode && (_isVideoFilePath(filePath) || _isAudioFilePath(filePath))))) {
       // 双向带宽保护：取 min(客户端请求宽度, 服务端本地设置宽度)，0 表示原图
       // mode=cover 使用封面清晰度设置；mode=preview（或无 mode）使用图片预览清晰度设置
       final serverMaxWidth = GetIt.instance.isRegistered<MediaPrefsService>()

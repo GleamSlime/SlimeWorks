@@ -18,6 +18,9 @@ class DebugImageSizeBadge extends StatefulWidget {
 class _DebugImageSizeBadgeState extends State<DebugImageSizeBadge> {
   int? _bytes;
 
+  /// 每个 State 实例独有的 ID，防止不同 badge 实例的 AnimatedSwitcher key 相互冲撞。
+  final int _instanceId = Object().hashCode;
+
   @override
   void initState() {
     super.initState();
@@ -66,9 +69,9 @@ class _DebugImageSizeBadgeState extends State<DebugImageSizeBadge> {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
       child: b == null
-          ? SizedBox.shrink(key: ValueKey('${widget.src}_empty'))
+          ? SizedBox.shrink(key: ValueKey('${_instanceId}_empty'))
           : Container(
-              key: ValueKey('${widget.src}_$b'),
+              key: ValueKey('${_instanceId}_$b'),
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.deepPurple.withAlpha(210),

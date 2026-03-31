@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -47,6 +48,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   /// 当前已渲染的 item 数量（逐行递增，产生横向加载效果）。
   int _visibleCount = 0;
 
+  /// 逐行展开的定时器。使用 Timer 而非 addPostFrameCallback 来避免在
+  /// LayoutBuilder 的 layout 阶段中触发 setState，导致重复 key 等异常。
+  Timer? _revealTimer;
+
   /// 初始按行逐帧展开的最大行数；超过后一次性加载剩余全部。
   static const int _kInitialRevealRows = 12;
 
@@ -59,22 +64,26 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   @override
   void didUpdateWidget(MasonryMediaGrid old) {
     super.didUpdateWidget(old);
-    if (old.items.length != widget.items.length ||
-        old.columnCount != widget.columnCount) {
-      _visibleCount = 0;
+    if (old.items.length != widget.items.length || old.columnCount != widget.columnCount) {
+      _revealTimer?.cancel();
+      setState(() => _visibleCount = 0);
       _scheduleReveal();
     }
   }
 
   void _scheduleReveal() {
+    _revealTimer?.cancel();
     if (widget.items.isEmpty) {
       if (mounted) setState(() => _visibleCount = 0);
       return;
     }
-    WidgetsBinding.instance.addPostFrameCallback(_revealNextBatch);
+    // 首批用 postFrameCallback 保证第一帧可见，后续用 Timer 避免在 layout 阶段 setState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _revealNextBatch();
+    });
   }
 
-  void _revealNextBatch([_]) {
+  void _revealNextBatch() {
     if (!mounted) return;
     final total = widget.items.length;
     if (_visibleCount >= total) return;
@@ -83,7 +92,8 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     if (_visibleCount < threshold) {
       setState(() => _visibleCount = (_visibleCount + n).clamp(0, total));
       if (_visibleCount < total) {
-        WidgetsBinding.instance.addPostFrameCallback(_revealNextBatch);
+        // 16ms ≈ 1 frame；Timer 在事件循环中触发，不会打断 build/layout pipeline
+        _revealTimer = Timer(const Duration(milliseconds: 16), _revealNextBatch);
       }
     } else {
       setState(() => _visibleCount = total);
@@ -92,6 +102,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
 
   @override
   void dispose() {
+    _revealTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }

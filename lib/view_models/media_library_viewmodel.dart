@@ -424,7 +424,9 @@ class MediaLibraryViewModel extends BaseViewModel {
       logger.d('_applySortOrder: orderKey=$orderKey NO custom order, using default');
       return list;
     }
-    logger.d('_applySortOrder: orderKey=$orderKey applying ${customOrder.length}-item order to ${list.length} collections');
+    logger.d(
+      '_applySortOrder: orderKey=$orderKey applying ${customOrder.length}-item order to ${list.length} collections',
+    );
     list.sort((a, b) {
       final ai = customOrder.indexOf(a.id);
       final bi = customOrder.indexOf(b.id);
@@ -562,8 +564,7 @@ class MediaLibraryViewModel extends BaseViewModel {
       return null;
     }
     if (isRemoteCollection(collection.id)) {
-      // 远程集合：视频封面路径也通过节点 URL 返回（服务端 ensureCoverThumbnail 提取帧）
-      if (_isAudioPath(coverPath)) return null; // 音频文件没有封面
+      // 远程集合：视频/音频封面路径均通过节点 URL 返回（服务端 ensureCoverThumbnail 提取帧/封面）
       final nodeId = getRemoteNodeId(collection.id);
       if (nodeId == null) return null;
       // 应用远程封面清晰度设置，节省上行带宽；isCover=true 使服务端用对应保护策略
@@ -585,8 +586,16 @@ class MediaLibraryViewModel extends BaseViewModel {
       }
       return null;
     }
-    // 音频文件无视觉封面
-    if (_isAudioPath(coverPath)) return null;
+    // 本地音频封面 — 异步提取嵌入专辑封面
+    if (_isAudioPath(coverPath)) {
+      if (_collectionVideoThumbnails.containsKey(collection.id)) {
+        return _collectionVideoThumbnails[collection.id];
+      }
+      if (!_coverQueue.contains(collection.id)) {
+        _generateCollectionAudioCoverAsync(collection.id, coverPath);
+      }
+      return null;
+    }
     return coverPath;
   }
 
@@ -611,7 +620,17 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   static const _kAudioExtensions = {
-    'mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'ape', 'aiff', 'alac',
+    'mp3',
+    'flac',
+    'aac',
+    'm4a',
+    'ogg',
+    'opus',
+    'wav',
+    'wma',
+    'ape',
+    'aiff',
+    'alac',
   };
 
   static bool _isAudioPath(String path) {
@@ -636,6 +655,26 @@ class MediaLibraryViewModel extends BaseViewModel {
         _asyncCoverVersion.value++;
       } catch (e) {
         debugPrint('[VideoThumb] ❌ 封面生成失败: collectionId=$collectionId err=$e');
+      }
+    });
+  }
+
+  void _generateCollectionAudioCoverAsync(String collectionId, String audioPath) {
+    debugPrint('[AudioCover] 入队集合封面: collectionId=$collectionId');
+    _currentFolderCoverKeys.add(collectionId);
+    _coverQueue.enqueue(collectionId, () async {
+      _currentFolderCoverKeys.remove(collectionId);
+      try {
+        final coverPath = await getAudioCoverSource(audioPath);
+        if (coverPath == null || coverPath.isEmpty) {
+          debugPrint('[AudioCover] 无嵌入封面: collectionId=$collectionId');
+          return;
+        }
+        debugPrint('[AudioCover] ✅ 封面提取成功: collectionId=$collectionId');
+        _collectionVideoThumbnails[collectionId] = coverPath;
+        _asyncCoverVersion.value++;
+      } catch (e) {
+        debugPrint('[AudioCover] ❌ 封面提取失败: collectionId=$collectionId err=$e');
       }
     });
   }
@@ -1084,7 +1123,9 @@ class MediaLibraryViewModel extends BaseViewModel {
     // Debug: show what custom order (if any) will be applied for this folder
     final orderKey = folderId;
     final savedOrder = _collectionOrders[orderKey];
-    logger.d('enterFolder: folderId=$folderId, savedOrder=${savedOrder == null ? "NONE" : savedOrder.join(",")}');
+    logger.d(
+      'enterFolder: folderId=$folderId, savedOrder=${savedOrder == null ? "NONE" : savedOrder.join(",")}',
+    );
     exitCollection();
     exitSelection();
   }
@@ -1178,9 +1219,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     try {
       final appDir = await getApplicationSupportDirectory();
       final sep = Platform.pathSeparator;
-      final dir = Directory(
-        '${appDir.path}${sep}SlimeWorks${sep}library${sep}media${sep}covers',
-      );
+      final dir = Directory('${appDir.path}${sep}SlimeWorks${sep}library${sep}media${sep}covers');
       await dir.create(recursive: true);
       // 稳定 key：路径哈希 + 固定宽度
       final key = filePath.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
@@ -1189,12 +1228,18 @@ class MediaLibraryViewModel extends BaseViewModel {
       if (outFile.existsSync() && outFile.lengthSync() > 0) return outPath;
       // 调用 ffmpeg 提取嵌入封面（最常见格式：mp3/flac/m4a 的 0:v:0 流）
       await Process.run(ffmpegExe, [
-        '-i', filePath,
-        '-map', '0:v:0',
-        '-vf', 'scale=300:-1',
-        '-frames:v', '1',
-        '-q:v', '3',
-        '-y', outPath,
+        '-i',
+        filePath,
+        '-map',
+        '0:v:0',
+        '-vf',
+        'scale=300:-1',
+        '-frames:v',
+        '1',
+        '-q:v',
+        '3',
+        '-y',
+        outPath,
       ]);
       return (outFile.existsSync() && outFile.lengthSync() > 0) ? outPath : null;
     } catch (_) {

@@ -110,7 +110,8 @@ class _CollectionPictureScreenState
       onColumnIncrement: isMobile && viewModel.isInDetail && _detailColumnCount < 10
           ? () => setState(() => _detailColumnCount++)
           : null,
-      onUpload: (isMobile &&
+      onUpload:
+          (isMobile &&
               viewModel.isInDetail &&
               viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? ''))
           ? () => viewModel.uploadMediaToCurrentCollection()
@@ -210,9 +211,7 @@ class _CollectionPictureScreenState
               onDragExited: (_) => setState(() => _isDraggingFiles = false),
               onDragDone: (detail) {
                 setState(() => _isDraggingFiles = false);
-                viewModel.importDroppedPaths(
-                  detail.files.map((f) => f.path).toList(),
-                );
+                viewModel.importDroppedPaths(detail.files.map((f) => f.path).toList());
               },
               child: Stack(
                 children: [

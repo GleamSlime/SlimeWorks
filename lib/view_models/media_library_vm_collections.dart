@@ -451,10 +451,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     final rawId = getRemoteRawCollectionId(collectionId);
     if (nodeId == null) return;
 
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.media,
-      allowMultiple: true,
-    );
+    final result = await FilePicker.platform.pickFiles(type: FileType.media, allowMultiple: true);
     if (result == null || result.files.isEmpty) return;
 
     isScanning.value = true;
