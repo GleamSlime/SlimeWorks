@@ -2,9 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 class MediaCollectionCard extends StatefulWidget {
@@ -142,9 +146,34 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         ),
       );
     }
-    return src.startsWith('http')
-        ? Image.network(src, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-        : Image.file(File(src), fit: BoxFit.cover, width: double.infinity, height: double.infinity);
+    final cacheW = () {
+      if (src.startsWith('http')) return null;
+      final prefs = getIt.isRegistered<MediaPrefsService>()
+          ? getIt.get<MediaPrefsService>()
+          : null;
+      final w = prefs?.localPreviewWidth.value ?? 480;
+      return w > 0 ? w : null;
+    }();
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        src.startsWith('http')
+            ? Image.network(src, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+            : Image.file(
+                File(src),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                cacheWidth: cacheW,
+              ),
+        if (kDebugMode)
+          Positioned(
+            right: 4,
+            bottom: 4,
+            child: DebugImageSizeBadge(src: src),
+          ),
+      ],
+    );
   }
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
@@ -160,11 +189,16 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       items: [
         const PopupMenuItem<String>(value: 'rename', child: Text('重命名集合')),
         const PopupMenuItem<String>(value: 'move', child: Text('移动到文件夹')),
-        const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
+        if (!widget.isRemote)
+          const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
+        if (widget.isRemote)
+          const PopupMenuItem<String>(value: 'open_folder', child: Text('查看远程路径')),
         PopupMenuItem<String>(value: 'favorite', child: Text(widget.isFavorited ? '取消收藏' : '收藏')),
         const PopupMenuItem<String>(value: 'delete', child: Text('删除集合')),
         if (widget.onDeleteFolder != null)
           const PopupMenuItem<String>(value: 'delete_folder', child: Text('删除文件夹')),
+        if (PlatformUtil.isMobile)
+          const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
       ],
     );
     if (!mounted) return;
@@ -180,6 +214,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       widget.onDelete();
     } else if (action == 'delete_folder') {
       widget.onDeleteFolder?.call();
+    } else if (action == 'select') {
+      widget.onLongPress();
     }
   }
 
@@ -194,7 +230,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       curve: _kAnimCurve,
       child: GestureDetector(
         onTap: widget.onTap,
-        onLongPress: widget.onLongPress,
+        onLongPress: PlatformUtil.isMobile ? null : widget.onLongPress,
+        onLongPressStart: PlatformUtil.isMobile
+            ? (details) => _showContextMenu(context, details.globalPosition)
+            : null,
         onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -325,48 +364,48 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                         ),
                       ),
 
-                    // ── 收藏按钮
-                    if (!widget.isRemote)
-                      Positioned(
-                        right: appMetrics.kSpace8,
-                        top: appMetrics.kSpace8,
-                        child: AnimatedOpacity(
-                          opacity: (_hovering || PlatformUtil.isMobile)
-                              ? 1.0
-                              : (widget.isFavorited ? 0.9 : 0.0),
+                    // ── 收藏按钮（本地：右上角；远程：左下角避开节点名 badge）
+                    Positioned(
+                      right: widget.isRemote ? null : appMetrics.kSpace8,
+                      left: widget.isRemote ? appMetrics.kSpace8 : null,
+                      top: widget.isRemote ? null : appMetrics.kSpace8,
+                      bottom: widget.isRemote ? appMetrics.kSpace40 : null,
+                      child: AnimatedOpacity(
+                        opacity: (_hovering || PlatformUtil.isMobile)
+                            ? 1.0
+                            : (widget.isFavorited ? 0.9 : 0.0),
+                        duration: _kAnimDur,
+                        curve: _kAnimCurve,
+                        child: AnimatedScale(
+                          scale: (_hovering || PlatformUtil.isMobile) ? 1.0 : 0.7,
                           duration: _kAnimDur,
                           curve: _kAnimCurve,
-                          child: AnimatedScale(
-                            scale: (_hovering || PlatformUtil.isMobile) ? 1.0 : 0.7,
-                            duration: _kAnimDur,
-                            curve: _kAnimCurve,
-                            child: GestureDetector(
-                              onTap: widget.onToggleFavorite,
-                              child: ClipRRect(
-                                borderRadius: appMetrics.radius12,
-                                child: TweenAnimationBuilder<double>(
-                                  duration: _kAnimDur,
-                                  curve: _kAnimCurve,
-                                  tween: Tween(
-                                    begin: _hovering ? 8.0 : 0.0,
-                                    end: _hovering ? 0.0 : 8.0,
-                                  ),
-                                  builder: (_, sigma, child) => BackdropFilter(
-                                    filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                                    child: child,
-                                  ),
-                                  child: Container(
-                                    padding: EdgeInsets.all(appMetrics.kSpace4),
-                                    color: _hovering
-                                        ? Colors.black.withAlpha(150)
-                                        : Colors.transparent,
-                                    child: Icon(
-                                      widget.isFavorited
-                                          ? Icons.favorite_rounded
-                                          : Icons.favorite_border_rounded,
-                                      color: widget.isFavorited ? Colors.redAccent : Colors.white70,
-                                      size: scaleW(16),
-                                    ),
+                          child: GestureDetector(
+                            onTap: widget.onToggleFavorite,
+                            child: ClipRRect(
+                              borderRadius: appMetrics.radius12,
+                              child: TweenAnimationBuilder<double>(
+                                duration: _kAnimDur,
+                                curve: _kAnimCurve,
+                                tween: Tween(
+                                  begin: _hovering ? 8.0 : 0.0,
+                                  end: _hovering ? 0.0 : 8.0,
+                                ),
+                                builder: (_, sigma, child) => BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                                  child: child,
+                                ),
+                                child: Container(
+                                  padding: EdgeInsets.all(appMetrics.kSpace4),
+                                  color: _hovering
+                                      ? Colors.black.withAlpha(150)
+                                      : Colors.transparent,
+                                  child: Icon(
+                                    widget.isFavorited
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    color: widget.isFavorited ? Colors.redAccent : Colors.white70,
+                                    size: scaleW(16),
                                   ),
                                 ),
                               ),
@@ -374,6 +413,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                           ),
                         ),
                       ),
+                    ),
 
                     // ── 悬停预览进度条————————————————————————————
                     if (_hovering &&

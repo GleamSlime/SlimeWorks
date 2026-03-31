@@ -180,6 +180,16 @@ pub struct CollectionStats {
     pub file_paths: Vec<String>,
 }
 
+/// Generate (or serve from disk cache) a JPEG thumbnail for `file_path` at
+/// `width` pixels wide.  Returns the path to the cached thumbnail, or `None`
+/// on failure (unsupported format, decode error, etc.).
+/// Resolution strategy: ffmpeg first (supports HEIC/AVIF), then pure-Rust
+/// `image` crate as fallback.
+#[frb(sync)]
+pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
+    media_collection::ensure_cover_thumbnail(file_path, width)
+}
+
 /// Return size + file-path list for every local collection in one pass.
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
 #[frb(sync)]

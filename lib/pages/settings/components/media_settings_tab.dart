@@ -131,6 +131,187 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         const SizedBox(height: 16),
 
+        // ── 远程封面清晰度 ──────────────────────────────────────────────────
+        _SettingsCard(
+          theme: theme,
+          child: Obx(() {
+            final w = _prefs.remoteCoverWidth.value;
+            final currentLabel = MediaPrefsService.remoteCoverWidthPresets
+                .firstWhere((p) => p.value == w, orElse: () => (label: '${w}px', value: w))
+                .label;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('远程封面清晰度', style: theme.textTheme.titleSmall),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        currentLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '从远程节点获取集合封面图片时使用的目标宽度，降低清晰度可节省上行带宽。选"原图"则不压缩。',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(150),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: MediaPrefsService.remoteCoverWidthPresets
+                      .map(
+                        (p) => ChoiceChip(
+                          label: Text(p.label),
+                          selected: w == p.value,
+                          onSelected: (_) => _prefs.setRemoteCoverWidth(p.value),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            );
+          }),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── 远程图片清晰度 ──────────────────────────────────────────────────
+        _SettingsCard(
+          theme: theme,
+          child: Obx(() {
+            final w = _prefs.remoteImageWidth.value;
+            final currentLabel = MediaPrefsService.remoteImageWidthPresets
+                .firstWhere((p) => p.value == w, orElse: () => (label: '${w}px', value: w))
+                .label;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('远程图片清晰度', style: theme.textTheme.titleSmall),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        currentLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '点开图片预览时从远程节点拉取的最大宽度，与封面清晰度独立控制。选"原图"则不压缩（默认）。',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(150),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: MediaPrefsService.remoteImageWidthPresets
+                      .map(
+                        (p) => ChoiceChip(
+                          label: Text(p.label),
+                          selected: w == p.value,
+                          onSelected: (_) => _prefs.setRemoteImageWidth(p.value),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            );
+          }),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── 本地预览图质量 ──────────────────────────────────────────────────
+        _SettingsCard(
+          theme: theme,
+          child: Obx(() {
+            final w = _prefs.localPreviewWidth.value;
+            final currentLabel = MediaPrefsService.localPreviewWidthPresets
+                .firstWhere((p) => p.value == w, orElse: () => (label: '${w}px', value: w))
+                .label;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('本地预览图质量', style: theme.textTheme.titleSmall),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        currentLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '列表中本地图片解码时的 cacheWidth，降低分辨率可减少内存占用和加载时间。'
+                  '选"原图"则按完整尺寸解码（适合高分辨率屏幕）。',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(150),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: MediaPrefsService.localPreviewWidthPresets
+                      .map(
+                        (p) => ChoiceChip(
+                          label: Text(p.label),
+                          selected: w == p.value,
+                          onSelected: (_) => _prefs.setLocalPreviewWidth(p.value),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            );
+          }),
+        ),
+
+        const SizedBox(height: 16),
+
         // ── 并发量 ─────────────────────────────────────────────────────────
         _SettingsCard(
           theme: theme,

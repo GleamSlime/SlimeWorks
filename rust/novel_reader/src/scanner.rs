@@ -54,7 +54,7 @@ impl DirectoryScanner {
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    log::warn!("Failed to read directory entry: {}", e);
+                    println!("Failed to read directory entry: {}", e);
                     continue;
                 }
             };
@@ -91,7 +91,7 @@ impl DirectoryScanner {
             // 提取元数据
             match NovelParser::extract_metadata(path) {
                 Ok(metadata) => {
-                    log::info!("Found novel: {} at {:?}", metadata.title, path);
+                    println!("Found novel: {} at {:?}", metadata.title, path);
 
                     // 更新进度
                     {
@@ -102,7 +102,7 @@ impl DirectoryScanner {
                     novels.push(metadata);
                 }
                 Err(e) => {
-                    log::warn!("Failed to extract metadata from {:?}: {}", path, e);
+                    println!("Failed to extract metadata from {:?}: {}", path, e);
                 }
             }
         }
@@ -170,7 +170,7 @@ impl DirectoryScanner {
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    log::warn!("Failed to read directory entry: {}", e);
+                    println!("Failed to read directory entry: {}", e);
                     continue;
                 }
             };

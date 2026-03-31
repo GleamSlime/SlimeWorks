@@ -33,7 +33,7 @@ impl HttpBridgeServer {
 
         let server = Server::bind(&addr).serve(make_svc);
 
-        log::info!("HTTP Bridge Server listening on http://{}", addr);
+        println!("HTTP Bridge Server listening on http://{}", addr);
 
         tokio::spawn(async move {
             let graceful = server.with_graceful_shutdown(async {
@@ -41,7 +41,7 @@ impl HttpBridgeServer {
             });
 
             if let Err(e) = graceful.await {
-                log::error!("Server error: {}", e);
+                println!("Server error: {}", e);
             }
         });
 

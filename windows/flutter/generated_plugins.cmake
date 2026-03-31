@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
   desktop_drop
   flutter_secure_storage_windows
+  gal
   media_kit_libs_windows_video
   media_kit_video
   screen_retriever_windows

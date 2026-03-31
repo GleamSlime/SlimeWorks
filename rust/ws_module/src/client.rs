@@ -43,13 +43,13 @@ impl WsClient {
         }
 
         let url = self.config.url.clone();
-        log::info!("Connecting to WebSocket server: {}", url);
+        println!("Connecting to WebSocket server: {}", url);
 
         let (ws_stream, _) = connect_async(&url)
             .await
             .map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
 
-        log::info!("WebSocket connection established");
+        println!("WebSocket connection established");
 
         // 更新状态为已连接
         {
@@ -88,12 +88,12 @@ impl WsClient {
                 tokio::select! {
                     Some(msg) = message_rx.recv() => {
                         if let Err(e) = ws_sender.send(msg).await {
-                            log::error!("Failed to send message: {}", e);
+                            println!("Failed to send message: {}", e);
                             break;
                         }
                     }
                     _ = shutdown_rx.recv() => {
-                        log::info!("Client shutdown signal received");
+                        println!("Client shutdown signal received");
                         break;
                     }
                 }
@@ -109,12 +109,12 @@ impl WsClient {
                     Ok(msg) => {
                         match msg {
                             Message::Text(text) => {
-                                log::info!("Received text: {}", text);
+                                println!("Received text: {}", text);
                                 let ws_msg = WsMessage::text(text.to_string());
                                 let _ = received_tx.send(ws_msg).await;
                             }
                             Message::Binary(data) => {
-                                log::info!("Received binary: {} bytes", data.len());
+                                println!("Received binary: {} bytes", data.len());
                                 // 将二进制数据编码为 base64
                                 use base64::{engine::general_purpose, Engine as _};
                                 let encoded = general_purpose::STANDARD.encode(&data);
@@ -122,14 +122,14 @@ impl WsClient {
                                 let _ = received_tx.send(ws_msg).await;
                             }
                             Message::Close(_) => {
-                                log::info!("Server closed connection");
+                                println!("Server closed connection");
                                 break;
                             }
                             _ => {}
                         }
                     }
                     Err(e) => {
-                        log::error!("Error receiving message: {}", e);
+                        println!("Error receiving message: {}", e);
                         break;
                     }
                 }
@@ -182,7 +182,7 @@ impl WsClient {
             *state = WsConnectionState::Disconnected;
         }
 
-        log::info!("WebSocket client disconnected");
+        println!("WebSocket client disconnected");
         Ok(())
     }
 

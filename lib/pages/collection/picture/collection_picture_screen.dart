@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,13 +10,14 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_card.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/media_folder_card.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
-import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/pages/collection/picture/components/media_selection_bar.dart';
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
+import 'package:slime_works/pages/collection/picture/components/picture_library_toolbar.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder_card.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -84,19 +84,61 @@ class _CollectionPictureScreenState
   }
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
+    final isMobile = PlatformUtil.isMobile || getIt<DesktopScreenProvider>().isMobile.value;
+    // PictureLibraryToolbar：移动端传入 columnCount 以启用移动端控件（排序+列数调节）。
+    // 桌面端传 null，对应控件由 leading 区域的 _buildActionBar 负责。
+    final toolbar = PictureLibraryToolbar(
+      viewModel: viewModel,
+      onCreateFolder: () => _showCreateFolderDialog(),
+      onScanFolder: () => _handleFolderAction(scanMode: true),
+      onImportFolder: () => _handleFolderAction(scanMode: false),
+      onRefresh: () async => viewModel.refreshAll(),
+      onClearLibrary: () => _confirmClearLibrary(),
+      onCreateSmartFolder: () => _showCreateSmartFolderDialog(),
+      columnCount: isMobile ? _detailColumnCount : null,
+      onColumnDecrement: isMobile && viewModel.isInDetail && _detailColumnCount > 1
+          ? () => setState(() => _detailColumnCount--)
+          : null,
+      onColumnIncrement: isMobile && viewModel.isInDetail && _detailColumnCount < 10
+          ? () => setState(() => _detailColumnCount++)
+          : null,
+    );
+
+    if (isMobile) {
+      // 移动端：将操作控件放入 toolbar 二级行，AppBar 只保留标题和返回键。
+      // 这样避免了 leading 区域挤占导致的视觉重叠问题。
+      final inDetail = viewModel.isInDetail;
+      final showBack = inDetail || viewModel.currentFolderId.value != null;
+      return ScreenChromeData(
+        title: inDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
+        titleWidget: (!inDetail && viewModel.currentFolderTrail.isNotEmpty)
+            ? _buildBreadcrumb(context)
+            : null,
+        leading: showBack
+            ? SizedBox(
+                width: AppTheme.metrics.kSpace48,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () {
+                    if (inDetail)
+                      viewModel.exitCollection();
+                    else
+                      viewModel.exitFolder();
+                  },
+                ),
+              )
+            : null,
+        toolbarHeight: AppTheme.metrics.kSpace48,
+        toolbar: toolbar,
+      );
+    }
+
+    // 桌面端：leading 显示操作栏（面包屑/统计/排序），toolbar 显示图书馆快捷按钮
     return ScreenChromeData(
       title: viewModel.isInDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
       leading: _buildActionBar(context),
       toolbarHeight: AppTheme.metrics.kSpace48,
-      toolbar: _PictureLibraryToolbar(
-        viewModel: viewModel,
-        onCreateFolder: () => _showCreateFolderDialog(),
-        onScanFolder: () => _handleFolderAction(scanMode: true),
-        onImportFolder: () => _handleFolderAction(scanMode: false),
-        onRefresh: () async => viewModel.refreshAll(),
-        onClearLibrary: () => _confirmClearLibrary(),
-        onCreateSmartFolder: () => _showCreateSmartFolderDialog(),
-      ),
+      toolbar: toolbar,
     );
   }
 
@@ -132,29 +174,23 @@ class _CollectionPictureScreenState
             }
             return KeyEventResult.ignored;
           },
-          child: Obx(
-            () {
-              // 桌面端通过 ScreenChrome.leading 在顶栏展示 ActionBar，避免重复渲染
-              final showInlineBar = PlatformUtil.isMobile ||
-                  getIt<DesktopScreenProvider>().isMobile.value;
-              return Column(
-                children: [
-                  if (showInlineBar) _buildActionBar(context),
-                  Expanded(
+          child: Obx(() {
+            return Column(
+              children: [
+                Expanded(
                   child: !viewModel.isInDetail
                       ? _buildBrowseGrid(context)
                       : _buildCollectionDetail(context),
                 ),
-                  if (viewModel.isSelecting.value)
-                    MediaSelectionBar(
-                      selectedCount: viewModel.selectedIds.length,
-                      onDelete: () => _confirmDeleteSelected(context),
-                      onCancel: viewModel.exitSelection,
-                    ),
-                ],
-              );
-            },
-          ),
+                if (viewModel.isSelecting.value)
+                  MediaSelectionBar(
+                    selectedCount: viewModel.selectedIds.length,
+                    onDelete: () => _confirmDeleteSelected(context),
+                    onCancel: viewModel.exitSelection,
+                  ),
+              ],
+            );
+          }),
         ),
       ),
     );
@@ -178,7 +214,6 @@ class _CollectionPictureScreenState
             ),
             child: Row(
               mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
-              spacing: appMetrics.kSpace16,
               children: [
                 // 返回按钮（左侧）
                 AnimatedOpacity(
@@ -199,9 +234,13 @@ class _CollectionPictureScreenState
                     ),
                   ),
                 ),
-                Text(
-                  '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                SizedBox(width: appMetrics.kSpace8),
+                Flexible(
+                  child: Text(
+                    '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 if (hasBoundedWidth) const Spacer(),
                 if (!hasBoundedWidth) SizedBox(width: appMetrics.kSpace8),
@@ -209,7 +248,11 @@ class _CollectionPictureScreenState
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.grid_view_rounded, size: scaleW(16), color: Theme.of(context).hintColor),
+                    Icon(
+                      Icons.grid_view_rounded,
+                      size: scaleW(16),
+                      color: Theme.of(context).hintColor,
+                    ),
                     SizedBox(width: appMetrics.kSpace4),
                     IconButton(
                       icon: const Icon(Icons.remove_rounded),
@@ -217,7 +260,7 @@ class _CollectionPictureScreenState
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                       tooltip: '减少列数',
-                      onPressed: _detailColumnCount > 2
+                      onPressed: _detailColumnCount > 1
                           ? () => setState(() => _detailColumnCount--)
                           : null,
                     ),
@@ -228,7 +271,7 @@ class _CollectionPictureScreenState
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                       tooltip: '增加列数',
-                      onPressed: _detailColumnCount < 6
+                      onPressed: _detailColumnCount < 10
                           ? () => setState(() => _detailColumnCount++)
                           : null,
                     ),
@@ -243,9 +286,13 @@ class _CollectionPictureScreenState
                     children: [
                       Icon(Icons.sort_rounded, size: scaleW(18)),
                       SizedBox(width: appMetrics.kSpace4),
-                      Text(
-                        viewModel.itemSortOrder.value.label,
-                        style: Theme.of(context).textTheme.bodySmall,
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: scaleW(72)),
+                        child: Text(
+                          viewModel.itemSortOrder.value.label,
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -295,54 +342,79 @@ class _CollectionPictureScreenState
           child: Row(
             mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
             children: [
+              // 左侧：面包屑 (带文件夹时) 或节点数提示 (纯根目录时)
               if (hasBreadcrumb) Flexible(child: _buildBreadcrumb(context)),
               if (!hasBreadcrumb && hasNodes)
-                Text(
-                  '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Flexible(
+                  child: Text(
+                    '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+              // 将左侧内容推到最左，右侧控件紧靠右边
               if (hasBoundedWidth) const Spacer(),
               if (!hasBoundedWidth) SizedBox(width: appMetrics.kSpace8),
-              if (hasBreadcrumb && hasNodes) ...[
-                Text(
-                  '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                SizedBox(width: appMetrics.kSpace8),
-              ],
-              // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
-              PopupMenuButton<CollectionSortOrder>(
-                tooltip: '集合排序',
-                icon: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.sort_rounded, size: scaleW(18)),
-                    SizedBox(width: appMetrics.kSpace4),
-                    Text(
-                      viewModel.collectionSortOrder.value.label,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                onSelected: (v) => viewModel.collectionSortOrder.value = v,
-                itemBuilder: (_) => CollectionSortOrder.values
-                    .map(
-                      (o) => PopupMenuItem<CollectionSortOrder>(
-                        value: o,
-                        child: Row(
+              // 右侧：节点数小标签 + 集合排序按钮，整体作为刚性块不溢出
+              Flexible(
+                flex: 0,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasBreadcrumb && hasNodes) ...[
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: scaleW(80)),
+                          child: Text(
+                            '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(width: appMetrics.kSpace8),
+                      ],
+                      // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
+                      PopupMenuButton<CollectionSortOrder>(
+                        tooltip: '集合排序',
+                        icon: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (viewModel.collectionSortOrder.value == o)
-                              Icon(Icons.check_rounded, size: scaleW(16))
-                            else
-                              SizedBox(width: scaleW(16)),
-                            SizedBox(width: appMetrics.kSpace8),
-                            Text(o.label),
+                            Icon(Icons.sort_rounded, size: scaleW(18)),
+                            SizedBox(width: appMetrics.kSpace4),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: scaleW(72)),
+                              child: Text(
+                                viewModel.collectionSortOrder.value.label,
+                                style: Theme.of(context).textTheme.bodySmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
+                        onSelected: (v) => viewModel.collectionSortOrder.value = v,
+                        itemBuilder: (_) => CollectionSortOrder.values
+                            .map(
+                              (o) => PopupMenuItem<CollectionSortOrder>(
+                                value: o,
+                                child: Row(
+                                  children: [
+                                    if (viewModel.collectionSortOrder.value == o)
+                                      Icon(Icons.check_rounded, size: scaleW(16))
+                                    else
+                                      SizedBox(width: scaleW(16)),
+                                    SizedBox(width: appMetrics.kSpace8),
+                                    Text(o.label),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
-                    )
-                    .toList(),
-              ),
+                    ],
+                  ), // Row
+                ), // ConstrainedBox
+              ), // Flexible
             ],
           ),
         );
@@ -845,6 +917,21 @@ class _CollectionPictureScreenState
     );
   }
 
+  /// 显示远程节点集合的路径信息（不可本地打开，仅供参考）。
+  void _showRemotePathDialog(String remotePath) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('远程路径'),
+        content: SelectableText(
+          remotePath,
+          style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('关闭'))],
+      ),
+    );
+  }
+
   void _openFolderInExplorer(String folderPath) {
     try {
       if (Platform.isWindows) {
@@ -958,18 +1045,19 @@ class _CollectionPictureScreenState
 
         if (item is MediaLibrarySmartFolderItem) {
           final sf = item.smartFolder;
+          final isRemoteSf = viewModel.isRemoteSmartFolder(sf.id);
+          final nodeId = viewModel.remoteSmartFolderNodeId(sf.id);
+          final nodeName = nodeId != null
+              ? (viewModel.nodeSettingsService.getNodeById(nodeId)?.name ?? nodeId)
+              : null;
           final sfCard = SmartFolderCard(
             smartFolder: sf,
             coverSource: viewModel.buildSmartFolderCoverSource(sf),
-            matchCount: viewModel.mergedCollections.where((c) {
-              if (!sf.matchesCollection(c)) return false;
-              if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
-                final paths = viewModel.collectionItemPaths(c.id);
-                return sf.matchesFileNames(paths);
-              }
-              return true;
-            }).length,
+            matchCount: viewModel.mergedCollections
+                .where((c) => viewModel.collectionMatchesSmartFolder(sf, c))
+                .length,
             isSelected: viewModel.selectedIds.contains(sf.id),
+            nodeName: nodeName,
             onTap: () {
               if (viewModel.isSelecting.value) {
                 viewModel.toggleSelection(sf.id);
@@ -978,11 +1066,15 @@ class _CollectionPictureScreenState
               viewModel.enterFolder(sf.id);
             },
             onLongPress: () => viewModel.enterSelection(sf.id),
-            onRename: () => _showRenameSmartFolderDialog(sf.id, sf.name),
-            onEdit: () => _showEditSmartFolderDialog(sf),
-            onDelete: () => _confirmDeleteSmartFolder(sf.id, sf.name),
-            onTransfer: () => viewModel.transferFolderCollections(smartFolderId: sf.id),
+            // 远程智能文件夹不允许本地编辑/删除/转移
+            onRename: isRemoteSf ? null : () => _showRenameSmartFolderDialog(sf.id, sf.name),
+            onEdit: isRemoteSf ? null : () => _showEditSmartFolderDialog(sf),
+            onDelete: isRemoteSf ? null : () => _confirmDeleteSmartFolder(sf.id, sf.name),
+            onTransfer: isRemoteSf
+                ? null
+                : () => viewModel.transferFolderCollections(smartFolderId: sf.id),
           );
+          if (isRemoteSf) return sfCard;
           final targetId = sf.targetFolderIds.length == 1 ? sf.targetFolderIds.first : null;
           if (targetId == null) return sfCard;
           return DragTarget<String>(
@@ -1023,7 +1115,9 @@ class _CollectionPictureScreenState
           onRename: () => _showRenameDialog(collection.id, collection.title),
           onDelete: () => _confirmDeleteSingle(collection.id, collection.title),
           onMove: () => _showMoveCollectionDialog(collection.id, collection.folderId),
-          onOpenFolder: () => _openFolderInExplorer(collection.folderPath),
+          onOpenFolder: viewModel.isRemoteCollection(collection.id)
+              ? () => _showRemotePathDialog(collection.folderPath)
+              : () => _openFolderInExplorer(collection.folderPath),
           onDeleteFolder: viewModel.isRemoteCollection(collection.id)
               ? null
               : () => _confirmDeleteCollectionFolder(
@@ -1070,7 +1164,22 @@ class _CollectionPictureScreenState
     );
 
     if (Platform.isAndroid || Platform.isIOS) {
-      return grid;
+      return Stack(
+        children: [
+          grid,
+          // 远程节点异步加载中时，顶部显示一个细小的进度条
+          Obx(
+            () => viewModel.isLoadingRemote.value
+                ? const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: LinearProgressIndicator(minHeight: 2),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      );
     }
 
     return GestureDetector(
@@ -1096,7 +1205,7 @@ class _CollectionPictureScreenState
           if (_selectionBoxStart != null && _selectionBoxEnd != null)
             Positioned.fill(
               child: CustomPaint(
-                painter: _SelectionBoxPainter(
+                painter: SelectionBoxPainter(
                   start: _selectionBoxStart!,
                   end: _selectionBoxEnd!,
                   color: Theme.of(context).colorScheme.primary.withAlpha(48),
@@ -1104,6 +1213,17 @@ class _CollectionPictureScreenState
                 ),
               ),
             ),
+          // 远程节点异步加载中时，顶部细进度条
+          Obx(
+            () => viewModel.isLoadingRemote.value
+                ? const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: LinearProgressIndicator(minHeight: 2),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
@@ -1121,7 +1241,7 @@ class _CollectionPictureScreenState
     final isRemote = viewModel.isRemoteCollection(collectionId);
     final sortedItems = viewModel.sortedCurrentItems;
 
-    return _MasonryMediaGrid(
+    return MasonryMediaGrid(
       items: sortedItems,
       collectionId: collectionId,
       isRemote: isRemote,
@@ -1444,342 +1564,5 @@ class _CollectionPictureScreenState
         );
       },
     );
-  }
-}
-
-/// 瀑布流（Masonry）媒体网格。
-/// 不依赖外部包：将 [items] 均匀分配到两列，每个 tile 高度由图片自然宽高比决定；
-/// 图片加载前按默认 1:1 占位，加载完成后刷新实际宽高比。
-class _MasonryMediaGrid extends StatefulWidget {
-  const _MasonryMediaGrid({
-    required this.items,
-    required this.collectionId,
-    required this.isRemote,
-    required this.viewModel,
-    required this.columnCount,
-    required this.onOpenViewer,
-    required this.onConfirmDelete,
-  });
-
-  final List<media_api.MediaItem> items;
-  final String collectionId;
-  final bool isRemote;
-  final MediaLibraryViewModel viewModel;
-  final int columnCount;
-  final void Function(int index) onOpenViewer;
-  final Future<void> Function(media_api.MediaItem) onConfirmDelete;
-
-  @override
-  State<_MasonryMediaGrid> createState() => _MasonryMediaGridState();
-}
-
-class _MasonryMediaGridState extends State<_MasonryMediaGrid> {
-  final _scrollController = ScrollController();
-  // 缓存每张已加载图片的宽高比，key 为 filePath
-  final Map<String, double> _aspectRatios = {};
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  /// 将 items 分配到两列（按当前累计高度平衡）。
-  /// 返回 [leftIndices, rightIndices]。
-  List<List<int>> _distributeColumns(double colWidth) {
-    final cols = List.generate(widget.columnCount, (_) => <int>[]);
-    final heights = List.filled(widget.columnCount, 0.0);
-    for (int i = 0; i < widget.items.length; i++) {
-      final src = widget.viewModel.buildMediaSource(widget.items[i]);
-      final ar = (src != null && src.isNotEmpty) ? (_aspectRatios[src] ?? 1.0) : 1.0;
-      final h = colWidth / ar;
-      // Place in the shortest column
-      int shortest = 0;
-      for (int c = 1; c < widget.columnCount; c++) {
-        if (heights[c] < heights[shortest]) shortest = c;
-      }
-      cols[shortest].add(i);
-      heights[shortest] += h;
-    }
-    return cols;
-  }
-
-  Widget _buildTile(media_api.MediaItem item, int globalIndex, double colWidth) {
-    final source = widget.viewModel.buildMediaSource(item);
-    final isVideo = item.kind == media_api.MediaKind.video;
-    final ar = (source != null && source.isNotEmpty) ? (_aspectRatios[source] ?? 1.0) : 1.0;
-    final tileHeight = (colWidth / ar).clamp(60.0, colWidth * 2.5);
-
-    // 非视频图片：首次渲染后异步解码真实宽高比
-    if (!isVideo && source != null && source.isNotEmpty && !source.startsWith('http')) {
-      if (!_aspectRatios.containsKey(source)) {
-        _resolveAspectRatio(source, File(source));
-      }
-    }
-
-    return MediaItemTile(
-      key: ValueKey(item.id),
-      item: item,
-      source: source,
-      fixedHeight: tileHeight,
-      onTap: () => widget.onOpenViewer(globalIndex),
-      onRequestScrubFrames: (isVideo && !widget.isRemote)
-          ? () => widget.viewModel.getVideoScrubFrames(item.filePath)
-          : null,
-      onOpenFolder: widget.isRemote ? null : () => widget.viewModel.openItemInFolder(item),
-      onDeleteFile: widget.isRemote ? null : () => widget.onConfirmDelete(item),
-    );
-  }
-
-  void _resolveAspectRatio(String source, File file) async {
-    try {
-      final bytes = await file.readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final ar = frame.image.width / frame.image.height;
-      frame.image.dispose();
-      if (mounted && ar > 0 && !_aspectRatios.containsKey(source)) {
-        setState(() => _aspectRatios[source] = ar.clamp(0.3, 3.0));
-      }
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final crossAxisCount = widget.columnCount;
-    final padding = AppTheme.metrics.kSpace12;
-    final spacing = AppTheme.metrics.kSpace8;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final colWidth =
-            (constraints.maxWidth - 2 * padding - (crossAxisCount - 1) * spacing) / crossAxisCount;
-        final columns = _distributeColumns(colWidth);
-
-        return SingleChildScrollView(
-          controller: _scrollController,
-          padding: EdgeInsets.all(padding),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (int c = 0; c < crossAxisCount; c++) ...[
-                if (c > 0) SizedBox(width: spacing),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (int i = 0; i < columns[c].length; i++) ...[
-                        if (i > 0) SizedBox(height: spacing),
-                        _buildTile(widget.items[columns[c][i]], columns[c][i], colWidth),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SelectionBoxPainter extends CustomPainter {
-  const _SelectionBoxPainter({
-    required this.start,
-    required this.end,
-    required this.color,
-    required this.borderColor,
-  });
-
-  final Offset start;
-  final Offset end;
-  final Color color;
-  final Color borderColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromPoints(start, end);
-    final fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    canvas.drawRect(rect, fillPaint);
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = scaleW(1.5);
-    canvas.drawRect(rect, borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SelectionBoxPainter oldDelegate) {
-    return oldDelegate.start != start || oldDelegate.end != end;
-  }
-}
-
-/// Stable toolbar widget - kept as a dedicated class so Flutter’s element
-/// reconciliation reuses the same element across ScreenChromeData rebuilds,
-/// preventing semantics-tree node-ID churn that causes AXTree errors on Windows.
-class _PictureLibraryToolbar extends StatelessWidget {
-  const _PictureLibraryToolbar({
-    required this.viewModel,
-    required this.onCreateFolder,
-    required this.onScanFolder,
-    required this.onImportFolder,
-    required this.onRefresh,
-    required this.onClearLibrary,
-    required this.onCreateSmartFolder,
-  });
-
-  final MediaLibraryViewModel viewModel;
-  final VoidCallback onCreateFolder;
-  final VoidCallback onScanFolder;
-  final VoidCallback onImportFolder;
-  final VoidCallback onRefresh;
-  final VoidCallback onClearLibrary;
-  final VoidCallback onCreateSmartFolder;
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final isScanning = viewModel.isScanning.value;
-      final statusText = viewModel.scanStatusText.value;
-      final inDetail = viewModel.isInDetail;
-      return ExcludeSemantics(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: AppTheme.metrics.kSpace8,
-          children: [
-            // 返回按钮（左侧）
-            // AnimatedOpacity(
-            //   opacity: showBack ? 1.0 : 0.0,
-            //   duration: const Duration(milliseconds: 150),
-            //   child: IgnorePointer(
-            //     ignoring: !showBack,
-            //     child: DesktopHeadToolsButton(
-            //       icon: const Icon(Icons.arrow_back_rounded),
-            //       size: AppTheme.metrics.kSpace40,
-            //       onTap: () {
-            //         if (inDetail) {
-            //           viewModel.exitCollection();
-            //         } else {
-            //           viewModel.exitFolder();
-            //         }
-            //       },
-            //     ),
-            //   ),
-            // ),
-            // 扫描进度（opacity 不增删节点）
-            AnimatedOpacity(
-              opacity: isScanning ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 150),
-              child: IgnorePointer(
-                ignoring: !isScanning,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: AppTheme.metrics.kSpace8,
-                  children: [
-                    SizedBox(
-                      width: AppTheme.metrics.kSpace20,
-                      height: AppTheme.metrics.kSpace20,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    AnimatedOpacity(
-                      opacity: statusText.isNotEmpty ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 150),
-                      child: Text(
-                        statusText.isNotEmpty ? statusText : ' ',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // 操作按钮
-            AnimatedOpacity(
-              opacity: (!isScanning && !inDetail) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 150),
-              child: IgnorePointer(
-                ignoring: isScanning || inDetail,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: AppTheme.metrics.kSpace8,
-                  children: [
-                    Tooltip(
-                      message: '新建文件夹',
-                      child: DesktopHeadToolsButton(
-                        icon: const Icon(Icons.create_new_folder_outlined),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: onCreateFolder,
-                      ),
-                    ),
-                    Tooltip(
-                      message: '扫描文件夹',
-                      child: DesktopHeadToolsButton(
-                        icon: const Icon(Icons.travel_explore_outlined),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: onScanFolder,
-                      ),
-                    ),
-                    Tooltip(
-                      message: '导入文件夹',
-                      child: DesktopHeadToolsButton(
-                        icon: const Icon(Icons.folder_open_outlined),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: onImportFolder,
-                      ),
-                    ),
-                    Tooltip(
-                      message: '同步节点',
-                      child: DesktopHeadToolsButton(
-                        icon: const Icon(Icons.cloud_sync_outlined),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: onRefresh,
-                      ),
-                    ),
-                    Tooltip(
-                      message: '清空媒体库',
-                      child: DesktopHeadToolsButton(
-                        icon: const Icon(Icons.delete_sweep_outlined),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: onClearLibrary,
-                      ),
-                    ),
-                    Tooltip(
-                      message: '新建智能文件夹',
-                      child: DesktopHeadToolsButton(
-                        icon: const Icon(Icons.auto_awesome_outlined),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: onCreateSmartFolder,
-                      ),
-                    ),
-                    Tooltip(
-                      message: viewModel.showFavoritesOnly.value ? '显示全部' : '只显示收藏',
-                      child: DesktopHeadToolsButton(
-                        icon: Icon(
-                          viewModel.showFavoritesOnly.value
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                          color: viewModel.showFavoritesOnly.value ? Colors.redAccent : null,
-                        ),
-                        size: AppTheme.metrics.kSpace40,
-                        onTap: () =>
-                            viewModel.showFavoritesOnly.value = !viewModel.showFavoritesOnly.value,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            DesktopHeadToolsButton(
-              icon: const Icon(Icons.refresh),
-              size: AppTheme.metrics.kSpace40,
-              onTap: onRefresh,
-            ),
-          ],
-        ),
-      );
-    });
   }
 }

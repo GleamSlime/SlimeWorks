@@ -18,7 +18,7 @@ impl EpubParser {
             .map_err(|e| anyhow::anyhow!("Failed to open epub: {:?}", e))?;
 
         let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
-        log::info!("EpubParser: Parsing metadata from TOC/spine (no content loading)");
+        println!("EpubParser: Parsing metadata from TOC/spine (no content loading)");
 
         // ── 1. 从 TOC 构建 资源路径 → 标题 映射 ──
         let mut toc_title_map: std::collections::HashMap<String, String> =
@@ -43,7 +43,7 @@ impl EpubParser {
             }
         }
         collect_toc(&doc.toc, &mut toc_title_map);
-        log::info!("EpubParser: TOC has {} label entries", toc_title_map.len());
+        println!("EpubParser: TOC has {} label entries", toc_title_map.len());
 
         // ── 2. 遍历 spine，直接构建章节列表（不加载内容） ──
         let mut chapters = Vec::new();
@@ -91,7 +91,7 @@ impl EpubParser {
             });
         }
 
-        log::info!(
+        println!(
             "EpubParser: Parsed {} chapters from spine (no content loaded)",
             chapters.len()
         );
@@ -131,7 +131,7 @@ impl EpubParser {
                 let s = s.to_string();
                 if !s.contains('\u{FFFD}') {
                     content = s;
-                    log::debug!("EpubParser: fallback decode used: {}", fb.name());
+                    println!("EpubParser: fallback decode used: {}", fb.name());
                     break;
                 }
             }
@@ -143,7 +143,7 @@ impl EpubParser {
         // 提取CSS（如果还没有）
         let css_content = match Self::extract_css(path, &css_dir) {
             Ok(css) => {
-                log::debug!("EpubParser: CSS loaded, {} bytes", css.len());
+                println!("EpubParser: CSS loaded, {} bytes", css.len());
                 css
             }
             Err(_) => String::new(),
@@ -155,7 +155,7 @@ impl EpubParser {
         }
 
         // 返回处理后的HTML内容（保留HTML标签和base64图片）
-        log::info!(
+        println!(
             "EpubParser: Returning chapter content, length: {} chars, contains 'data:image': {}",
             content.len(),
             content.contains("data:image")
@@ -164,9 +164,9 @@ impl EpubParser {
         // 打印前500个字符用于调试
         let preview: String = content.chars().take(500).collect();
         if content.chars().count() > 500 {
-            log::debug!("EpubParser: Content preview: {}", preview);
+            println!("EpubParser: Content preview: {}", preview);
         } else {
-            log::debug!("EpubParser: Full content: {}", content);
+            println!("EpubParser: Full content: {}", content);
         }
 
         Ok(content)
@@ -178,7 +178,7 @@ impl EpubParser {
     fn embed_images_as_base64<P: AsRef<Path>>(epub_path: P, html: &str) -> Result<String> {
         use regex::Regex;
 
-        log::debug!(
+        println!(
             "EpubParser: embed_images_as_base64 called, HTML length: {}",
             html.len()
         );
@@ -243,22 +243,22 @@ impl EpubParser {
                             image_map.insert(file_name.to_string(), data_url.clone());
                         }
 
-                        log::debug!("EpubParser: Converted image to base64: {}", name);
+                        println!("EpubParser: Converted image to base64: {}", name);
                     }
                 }
             }
         }
 
         if image_map.is_empty() {
-            log::debug!("EpubParser: No images found in this chapter");
+            println!("EpubParser: No images found in this chapter");
             return Ok(html.to_string());
         }
 
-        log::debug!("EpubParser: Converted {} images to base64", image_map.len());
+        println!("EpubParser: Converted {} images to base64", image_map.len());
 
         // 检查HTML中是否有img标签
         let img_count = img_regex.find_iter(html).count();
-        log::debug!(
+        println!(
             "EpubParser: Found {} img tags in HTML before replacement",
             img_count
         );
@@ -285,7 +285,7 @@ impl EpubParser {
                     image_map.get(file_name)
                 })
             {
-                log::debug!(
+                println!(
                     "EpubParser: Embedding image: {} ({}KB base64)",
                     original_src,
                     data_url.len() / 1024
@@ -304,12 +304,12 @@ impl EpubParser {
                     );
                 } else {
                     // 如果都不匹配，说明可能有特殊格式，记录日志
-                    log::warn!("EpubParser: Unusual img tag format: {}", full_tag);
+                    println!("EpubParser: Unusual img tag format: {}", full_tag);
                     return full_tag.to_string();
                 }
             }
 
-            log::warn!("EpubParser: Image not found in archive: {}", original_src);
+            println!("EpubParser: Image not found in archive: {}", original_src);
             full_tag.to_string()
         });
 
@@ -317,7 +317,7 @@ impl EpubParser {
 
         // 验证替换结果
         let result_img_count = img_regex.find_iter(&result_str).count();
-        log::info!(
+        println!(
             "EpubParser: Image replacement complete - {} img tags remain, original had {}",
             result_img_count,
             img_count
@@ -326,7 +326,7 @@ impl EpubParser {
         // 检查是否有不完整的img标签
         let img_open_count = result_str.matches("<img").count();
         if img_open_count != result_img_count {
-            log::warn!(
+            println!(
                 "EpubParser: WARNING - Found {} '<img' but only {} complete img tags!",
                 img_open_count,
                 result_img_count
@@ -361,7 +361,7 @@ impl EpubParser {
                 all_css.push_str(&content);
                 all_css.push('\n');
 
-                log::info!("EpubParser: Extracted CSS: {}", name);
+                println!("EpubParser: Extracted CSS: {}", name);
             }
         }
 
@@ -382,10 +382,10 @@ impl EpubParser {
             class_styles.insert(class_name, properties);
         }
 
-        log::info!("EpubParser: Parsed {} CSS class rules", class_styles.len());
+        println!("EpubParser: Parsed {} CSS class rules", class_styles.len());
 
         if class_styles.is_empty() {
-            log::debug!("EpubParser: No CSS class rules found to inline");
+            println!("EpubParser: No CSS class rules found to inline");
             return html.to_string();
         }
 
@@ -439,7 +439,7 @@ impl EpubParser {
         let preserve_regex = match Regex::new(&preserve_pattern) {
             Ok(r) => r,
             Err(e) => {
-                log::warn!("EpubParser: Failed to compile preserve_regex: {}", e);
+                println!("EpubParser: Failed to compile preserve_regex: {}", e);
                 Regex::new(r"(<img\b[^>]*\/?>)|(<br\b[^>]*\/?>)|(<hr\b[^>]*\/?>)").unwrap()
             }
         };
@@ -628,13 +628,13 @@ impl EpubParser {
                                 match compressed {
                                     Ok(_) => {
                                         cover_path = Some(out_path.to_string_lossy().to_string());
-                                        log::info!(
+                                        println!(
                                             "EpubParser: Cover compressed and saved: {:?}",
                                             out_path
                                         );
                                     }
                                     Err(e) => {
-                                        log::warn!(
+                                        println!(
                                             "EpubParser: Cover compression failed ({}), saving raw",
                                             e
                                         );
@@ -648,8 +648,8 @@ impl EpubParser {
                                     }
                                 }
                             }
-                            Ok(_) => log::warn!("EpubParser: Cover file is empty, skipping"),
-                            Err(e) => log::warn!("EpubParser: Failed to read cover: {}", e),
+                            Ok(_) => println!("EpubParser: Cover file is empty, skipping"),
+                            Err(e) => println!("EpubParser: Failed to read cover: {}", e),
                         }
                     }
                 }

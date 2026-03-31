@@ -17,29 +17,29 @@ impl TxtParser {
         let start_time = Instant::now();
 
         let path = path.as_ref();
-        log::info!("[TxtParser] Starting to parse: {:?}", path);
+        println!("[TxtParser] Starting to parse: {:?}", path);
 
         let open_start = Instant::now();
         let mut file = File::open(path).context("Failed to open txt file")?;
-        log::debug!("[TxtParser] File opened in {:?}", open_start.elapsed());
+        println!("[TxtParser] File opened in {:?}", open_start.elapsed());
 
         // 读取文件内容
-        log::debug!("[TxtParser] Reading file into memory...");
+        println!("[TxtParser] Reading file into memory...");
         let read_start = Instant::now();
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)
             .context("Failed to read txt file")?;
-        log::info!(
+        println!(
             "[TxtParser] Read {} bytes in {:?}",
             buffer.len(),
             read_start.elapsed()
         );
 
         // 先尝试 UTF-8，无效或存在替换字符时尝试回退到其他常见编码
-        log::debug!("[TxtParser] Decoding content...");
+        println!("[TxtParser] Decoding content...");
         let decode_start = Instant::now();
         let content = Self::robust_decode(&buffer);
-        log::info!(
+        println!(
             "[TxtParser] Decoded {} chars in {:?}",
             content.len(),
             decode_start.elapsed()
@@ -49,17 +49,17 @@ impl TxtParser {
         let novel_id = format!("{:x}", md5::compute(path.to_string_lossy().as_bytes()));
 
         // 尝试自动识别章节
-        log::info!("[TxtParser] Detecting chapters...");
+        println!("[TxtParser] Detecting chapters...");
         let chapter_detect_start = Instant::now();
         let chapters = Self::detect_chapters(&novel_id, &content);
-        log::info!(
+        println!(
             "[TxtParser] Detected {} chapters in {:?}",
             chapters.len(),
             chapter_detect_start.elapsed()
         );
 
         let total_time = start_time.elapsed();
-        log::info!("[TxtParser] Total parse time: {:?}", total_time);
+        println!("[TxtParser] Total parse time: {:?}", total_time);
 
         Ok(NovelContent { novel_id, chapters })
     }
@@ -84,7 +84,7 @@ impl TxtParser {
             if let Ok(re) = Regex::new(pattern) {
                 let matches: Vec<_> = re.find_iter(content).collect();
                 if !matches.is_empty() {
-                    log::info!(
+                    println!(
                         "[TxtParser] Pattern matched {} times: {}",
                         matches.len(),
                         pattern
@@ -99,7 +99,7 @@ impl TxtParser {
 
         // 如果没找到章节，返回整篇文章
         if chapter_positions.is_empty() {
-            log::info!(
+            println!(
                 "[TxtParser] No chapters detected, using full text (content length: {} chars)",
                 content.len()
             );
@@ -129,7 +129,7 @@ impl TxtParser {
             deduplicated.push((*pos, title.clone()));
         }
 
-        log::info!(
+        println!(
             "[TxtParser] After deduplication: {} chapters (from {} raw matches)",
             deduplicated.len(),
             chapter_positions.len()
@@ -137,7 +137,7 @@ impl TxtParser {
 
         // 限制章节数量，避免过度拆分（提高到5000，支持超长小说）
         if deduplicated.len() > 5000 {
-            log::warn!(
+            println!(
                 "[TxtParser] Too many chapters detected ({}), using full text",
                 deduplicated.len()
             );
@@ -153,7 +153,7 @@ impl TxtParser {
 
         let mut chapters = Vec::new();
 
-        log::info!(
+        println!(
             "[TxtParser] Creating {} chapter objects...",
             chapter_positions.len()
         );
@@ -192,20 +192,20 @@ impl TxtParser {
         let start = Instant::now();
 
         // 优先尝试直接作为 UTF-8（最快）
-        log::debug!("[TxtParser] Trying UTF-8...");
+        println!("[TxtParser] Trying UTF-8...");
         if let Ok(s) = std::str::from_utf8(buffer) {
-            log::info!(
+            println!(
                 "[TxtParser] UTF-8 decode succeeded in {:?}",
                 start.elapsed()
             );
             return s.to_string();
         }
-        log::debug!("[TxtParser] UTF-8 failed, trying detector...");
+        println!("[TxtParser] UTF-8 failed, trying detector...");
 
         // UTF-8 失败，尝试使用检测器
         let detect_start = Instant::now();
         let enc = Self::detect_encoding(buffer);
-        log::debug!(
+        println!(
             "[TxtParser] Detected encoding: {} in {:?}",
             enc.name(),
             detect_start.elapsed()
@@ -215,14 +215,14 @@ impl TxtParser {
 
         // 如果检测的编码解码成功且没有替换字符，直接返回
         if !had_errors && !decoded.contains('\u{FFFD}') {
-            log::info!(
+            println!(
                 "[TxtParser] Decoded with {} in {:?}",
                 enc.name(),
                 start.elapsed()
             );
             return decoded.to_string();
         }
-        log::debug!("[TxtParser] Detected encoding had errors, trying fallbacks...");
+        println!("[TxtParser] Detected encoding had errors, trying fallbacks...");
 
         // 仅在检测失败时才尝试常见编码（大多数情况不会到达这里）
         let fallbacks: [&'static Encoding; 2] = [
@@ -233,7 +233,7 @@ impl TxtParser {
         for fb in &fallbacks {
             let (s, _, _) = fb.decode(buffer);
             if !s.contains('\u{FFFD}') {
-                log::info!(
+                println!(
                     "[TxtParser] Fallback decode succeeded with {} in {:?}",
                     fb.name(),
                     start.elapsed()
@@ -243,7 +243,7 @@ impl TxtParser {
         }
 
         // 最后使用lossy转换（总是成功）
-        log::warn!("[TxtParser] All encodings failed, using lossy conversion");
+        println!("[TxtParser] All encodings failed, using lossy conversion");
         String::from_utf8_lossy(buffer).to_string()
     }
 

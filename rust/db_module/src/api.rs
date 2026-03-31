@@ -13,11 +13,15 @@ fn get_db_instance() -> &'static Arc<Mutex<Option<Arc<DbStorage>>>> {
 /// 初始化数据库
 #[frb(sync)]
 pub fn db_init(db_path: String) -> DbResult<String> {
+    let mut guard = get_db_instance().lock().unwrap();
+    if guard.is_some() {
+        // 已初始化（由本模块或其他 Rust 模块首次调用），幂等返回，避免替换已注册好表的 storage
+        return Ok("Database already initialized".to_string());
+    }
     let storage =
         DbStorage::new(&db_path).map_err(|e| format!("Failed to create database: {}", e))?;
 
-    let storage = Arc::new(storage);
-    *get_db_instance().lock().unwrap() = Some(storage);
+    *guard = Some(Arc::new(storage));
 
     println!("Database initialized at: {}", db_path);
 

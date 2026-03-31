@@ -177,6 +177,9 @@ class LanTransferService {
   DateTime? _lastEmptyDevicesSelfCheckAt;
 
   Future<void> _ensureRustReady() async {
+    // Already initialized by main.dart (or a prior call); skip to avoid "init twice" error.
+    if (RustLib.instance.initialized) return;
+
     final existing = _rustInitFuture;
     if (existing != null) {
       await existing;

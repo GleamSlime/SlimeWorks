@@ -6,6 +6,149 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::scanner::MediaFolderScanner;
 use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind};
 
+// ── Cover thumbnail cache ─────────────────────────────────────────────────────
+static THUMB_CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+fn thumb_cache_dir() -> &'static std::path::PathBuf {
+    THUMB_CACHE_DIR.get_or_init(|| {
+        let dir = std::path::Path::new(&app_data_base())
+            .join("SlimeWorks")
+            .join("cover_thumb_cache");
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    })
+}
+
+/// Generate (or retrieve from disk cache) a JPEG thumbnail for `file_path`
+/// resized to `width` px (aspect-preserving). Returns the path to the cached
+/// thumbnail, or `None` if the original file is not a supported image or
+/// ffmpeg/image processing fails.
+pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
+    // ① quick extension check
+    let lower = file_path.to_lowercase();
+    let is_image = lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".png")
+        || lower.ends_with(".webp")
+        || lower.ends_with(".bmp")
+        || lower.ends_with(".gif")
+        || lower.ends_with(".heic")
+        || lower.ends_with(".heif")
+        || lower.ends_with(".avif");
+    if !is_image {
+        println!("[thumb] skip non-image: {}", file_path);
+        return None;
+    }
+
+    // ② derive a stable cache key from path + target width
+    let key = format!("{}_w{}", path_key(&file_path), width);
+    let cache_path = thumb_cache_dir().join(format!("{}.jpg", key));
+
+    // 记录原始文件大小（调试用）
+    let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+
+    // ③ disk cache hit — verify the file is non-empty
+    if cache_path.exists() {
+        if let Ok(meta) = std::fs::metadata(&cache_path) {
+            if meta.len() > 0 {
+                println!(
+                    "[thumb] cache-hit | src={} | orig={}B | cached={}B | w={}",
+                    file_path, orig_size, meta.len(), width
+                );
+                return Some(cache_path.to_string_lossy().into_owned());
+            }
+        }
+        // zero-byte artefact from a previous failed write — remove and regenerate
+        let _ = std::fs::remove_file(&cache_path);
+    }
+
+    let t0 = std::time::Instant::now();
+    println!("[thumb] generate | src={} | orig={}B | w={}", file_path, orig_size, width);
+
+    // ④ try ffmpeg first (fastest, supports HEIC/AVIF via system codecs)
+    if try_ffmpeg_resize(&file_path, &cache_path, width, t0, orig_size) {
+        return Some(cache_path.to_string_lossy().into_owned());
+    }
+
+    // ⑤ fallback: pure-Rust `image` crate (supports JPEG/PNG/WebP/BMP/GIF)
+    if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
+        return Some(cache_path.to_string_lossy().into_owned());
+    }
+
+    println!("[thumb] all methods failed | src={} | w={} | elapsed={:?}", file_path, width, t0.elapsed());
+    None
+}
+
+fn try_ffmpeg_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+    let ok = std::process::Command::new("ffmpeg")
+        .args([
+            "-i",
+            src,
+            "-vf",
+            &format!("scale={}:-1", width),
+            "-q:v",
+            "3",
+            "-frames:v",
+            "1",
+            "-y",
+            &dst.to_string_lossy(),
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
+    if success {
+        let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+        let ratio = if orig_size > 0 { thumb_size * 100 / orig_size } else { 0 };
+        println!(
+            "[thumb] ffmpeg OK | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
+            orig_size, thumb_size, ratio, width, t0.elapsed()
+        );
+    } else {
+        println!("[thumb] ffmpeg failed | src={} | elapsed={:?}", src, t0.elapsed());
+    }
+    success
+}
+
+fn try_rust_image_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+    let bytes = match std::fs::read(src) {
+        Ok(b) => b,
+        Err(e) => {
+            println!("[thumb] rust-image read failed | src={} | err={}", src, e);
+            return false;
+        },
+    };
+    let img = match image::load_from_memory(&bytes) {
+        Ok(i) => i,
+        Err(e) => {
+            println!("[thumb] rust-image decode failed | src={} | err={}", src, e);
+            return false;
+        },
+    };
+    let orig_w = img.width();
+    let orig_h = img.height();
+    let target_w = if width < orig_w { width } else { orig_w };
+    let target_h = ((orig_h as f64) * (target_w as f64) / (orig_w as f64)) as u32;
+    let resized = img.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
+    match resized.save_with_format(dst, image::ImageFormat::Jpeg) {
+        Ok(_) => {
+            let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+            let ratio = if orig_size > 0 { thumb_size * 100 / orig_size } else { 0 };
+            println!(
+                "[thumb] rust-image OK | orig={}x{} | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
+                orig_w, orig_h, orig_size, thumb_size, ratio, width, t0.elapsed()
+            );
+            dst.exists() && thumb_size > 0
+        }
+        Err(e) => {
+            println!("[thumb] rust-image save failed | src={} | err={} | elapsed={:?}", src, e, t0.elapsed());
+            false
+        }
+    }
+}
+
 static MEDIA_COLLECTIONS: OnceLock<Arc<Mutex<Vec<MediaCollection>>>> = OnceLock::new();
 static MEDIA_ITEMS: OnceLock<Arc<Mutex<Vec<MediaItem>>>> = OnceLock::new();
 static MEDIA_FOLDERS: OnceLock<Arc<Mutex<Vec<MediaFolder>>>> = OnceLock::new();
@@ -49,14 +192,14 @@ fn thumbnail_cache_dir() -> std::path::PathBuf {
 pub fn initialize_db() -> Result<(), String> {
     let result = DB_INIT_RESULT.get_or_init(|| {
         let path = default_db_path();
-        log::info!("[media_db] Initializing DB at: {}", path);
+        println!("[media_db] Initializing DB at: {}", path);
         match db_module::db_init(path) {
             Ok(_) => {
-                log::info!("[media_db] DB initialized successfully");
+                println!("[media_db] DB initialized successfully");
                 None
             }
             Err(e) => {
-                log::error!("[media_db] DB init failed: {}", e);
+                println!("[media_db] DB init failed: {}", e);
                 Some(e)
             }
         }
@@ -330,19 +473,19 @@ fn upsert_collection_from_folder(
     folder: &Path,
     recursive: bool,
 ) -> Result<MediaCollection, String> {
-    log::debug!(
+    println!(
         "[media_scan] upsert_collection_from_folder: {:?} (recursive={})",
         folder,
         recursive
     );
     if !folder.exists() || !folder.is_dir() {
         let err = format!("Path is not a directory: {:?}", folder);
-        log::warn!("[media_scan] {}", err);
+        println!("[media_scan] {}", err);
         return Err(err);
     }
 
     let normalized_path = normalize_folder_path(folder)?;
-    log::debug!("[media_scan] normalized_path = {:?}", normalized_path);
+    println!("[media_scan] normalized_path = {:?}", normalized_path);
 
     let existing = {
         let collections = get_collections()
@@ -361,14 +504,14 @@ fn upsert_collection_from_folder(
 
     let items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
         .map_err(|error| error.to_string())?;
-    log::debug!(
+    println!(
         "[media_scan] collect_media_items returned {} items for {:?}",
         items.len(),
         folder
     );
     if items.is_empty() {
         let err = format!("No media found in {:?}", folder);
-        log::warn!("[media_scan] {}", err);
+        println!("[media_scan] {}", err);
         return Err(err);
     }
 
@@ -385,7 +528,7 @@ fn upsert_collection_from_folder(
         }
         for item in &items {
             if let Err(error) = persist_item(item) {
-                log::warn!(
+                println!(
                     "[media_scan] persist_item failed for {:?}: {}",
                     item.file_path,
                     error
@@ -429,7 +572,7 @@ fn upsert_collection_from_folder(
         }
     }
     persist_collection(&updated_collection)?;
-    log::debug!(
+    println!(
         "[media_scan] collection persisted: id={} title={:?} item_count={}",
         updated_collection.id,
         updated_collection.title,
@@ -645,39 +788,39 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
 
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {
     let root = Path::new(&folder_path);
-    log::info!("[media_scan] scan_media_folders called: {:?}", root);
-    log::info!(
+    println!("[media_scan] scan_media_folders called: {:?}", root);
+    println!(
         "[media_scan] root.exists()={} root.is_dir()={}",
         root.exists(),
         root.is_dir()
     );
     let directories = MediaFolderScanner::scan_media_directories(root).map_err(|error| {
-        log::error!("[media_scan] scan_media_directories error: {}", error);
+        println!("[media_scan] scan_media_directories error: {}", error);
         error.to_string()
     })?;
-    log::info!(
+    println!(
         "[media_scan] scan_media_directories found {} dirs with media under {:?}",
         directories.len(),
         root
     );
     for (i, dir) in directories.iter().enumerate() {
-        log::info!("[media_scan]   dir[{}] = {:?}", i, dir);
+        println!("[media_scan]   dir[{}] = {:?}", i, dir);
     }
     let mut collections = Vec::new();
     for directory in &directories {
         match upsert_collection_from_folder(directory, false) {
             Ok(collection) => {
-                log::info!(
+                println!(
                     "scan_media_folders: imported '{}' from {:?}",
                     collection.title,
                     directory
                 );
                 collections.push(collection);
             }
-            Err(error) => log::warn!("scan_media_folders: failed {:?}: {}", directory, error),
+            Err(error) => println!("scan_media_folders: failed {:?}: {}", directory, error),
         }
     }
-    log::info!(
+    println!(
         "scan_media_folders: result {}/{} collections imported",
         collections.len(),
         directories.len()

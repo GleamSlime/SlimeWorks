@@ -1627,6 +1627,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "db_module",
+ "env_logger 0.10.2",
  "image",
  "log",
  "serde",

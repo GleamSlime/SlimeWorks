@@ -82,7 +82,7 @@ pub struct MediaFolderScanner;
 impl MediaFolderScanner {
     pub fn scan_media_directories<P: AsRef<Path>>(root: P) -> Result<Vec<PathBuf>> {
         let root = root.as_ref();
-        log::debug!("[media_scan] scan_media_directories: root={:?}", root);
+        println!("[media_scan] scan_media_directories: root={:?}", root);
         if !root.exists() {
             return Err(anyhow::anyhow!("Directory does not exist: {:?}", root));
         }
@@ -99,7 +99,7 @@ impl MediaFolderScanner {
             let entry = match entry {
                 Ok(value) => value,
                 Err(error) => {
-                    log::warn!("Failed to read directory entry: {}", error);
+                    println!("Failed to read directory entry: {}", error);
                     continue;
                 }
             };
@@ -113,11 +113,11 @@ impl MediaFolderScanner {
                     let found = read_dir.filter_map(Result::ok).any(|child| {
                         child.path().is_file() && Self::is_supported_media_file(&child.path())
                     });
-                    log::debug!("[media_scan] dir {:?} has_media={}", entry.path(), found);
+                    println!("[media_scan] dir {:?} has_media={}", entry.path(), found);
                     found
                 }
                 Err(error) => {
-                    log::warn!(
+                    println!(
                         "Skipping unreadable directory {:?}: {}",
                         entry.path(),
                         error
@@ -156,7 +156,7 @@ impl MediaFolderScanner {
                 let entry = match entry {
                     Ok(value) => value,
                     Err(error) => {
-                        log::warn!("Failed to read media entry: {}", error);
+                        println!("Failed to read media entry: {}", error);
                         continue;
                     }
                 };
@@ -180,7 +180,7 @@ impl MediaFolderScanner {
                 let entry = match entry {
                     Ok(value) => value,
                     Err(error) => {
-                        log::warn!("Failed to read media entry: {}", error);
+                        println!("Failed to read media entry: {}", error);
                         continue;
                     }
                 };
@@ -193,7 +193,7 @@ impl MediaFolderScanner {
         }
 
         media_paths.sort();
-        log::debug!(
+        println!(
             "[media_scan] collect_media_items: found {} media files in {:?}",
             media_paths.len(),
             folder
@@ -202,7 +202,7 @@ impl MediaFolderScanner {
         for (index, path) in media_paths.iter().enumerate() {
             match build_media_item(collection_id, index as i32, path) {
                 Ok(item) => items.push(item),
-                Err(error) => log::warn!("Skipping media file {:?}: {}", path, error),
+                Err(error) => println!("Skipping media file {:?}: {}", path, error),
             }
         }
         Ok(items)

@@ -83,7 +83,7 @@ pub fn get_app_data_dir() -> PathBuf {
     } else {
         let path = std::env::temp_dir().join(app_name);
         let _ = std::fs::create_dir_all(&path);
-        log::warn!("[AppData] Using temp directory as fallback: {:?}", path);
+        println!("[AppData] Using temp directory as fallback: {:?}", path);
         path
     }
 }
@@ -109,7 +109,7 @@ fn get_library() -> &'static Arc<Mutex<Vec<NovelMetadata>>> {
         let db_path = get_app_data_dir().join("db.redb");
         let db_path_str = db_path.to_string_lossy().to_string();
 
-        log::info!("[NovelLibrary] Database path: {}", db_path_str);
+        println!("[NovelLibrary] Database path: {}", db_path_str);
 
         let _ = db_module::db_init(db_path_str.clone());
         let _ = db_module::db_register_table("novels".to_string());
@@ -162,12 +162,12 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
     if let Ok(exe) = maybe_exe {
         if let Some(parent) = exe.parent() {
             let p = parent.join("tag_keyword.json");
-            log::info!("[Tag] checking override file at {:?}", p);
+            println!("[Tag] checking override file at {:?}", p);
             if p.exists() {
                 match std::fs::read_to_string(&p) {
                     Ok(s) => match serde_json::from_str::<HashMap<String, Vec<String>>>(&s) {
                         Ok(map) => {
-                            log::info!(
+                            println!(
                                 "[Tag] loaded override tag_keyword.json from {:?} ({} keys)",
                                 p,
                                 map.len(),
@@ -175,7 +175,7 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
                             return map;
                         }
                         Err(e) => {
-                            log::warn!(
+                            println!(
                                 "[Tag] failed to parse override tag_keyword.json at {:?}: {}",
                                 p,
                                 e
@@ -183,7 +183,7 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
                         }
                     },
                     Err(e) => {
-                        log::warn!(
+                        println!(
                             "[Tag] failed to read override tag_keyword.json at {:?}: {}",
                             p,
                             e
@@ -191,24 +191,24 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
                     }
                 }
             } else {
-                log::info!("[Tag] no override file at {:?}", p);
+                println!("[Tag] no override file at {:?}", p);
             }
         }
     } else {
-        log::info!("[Tag] current_exe() failed: {:?}", maybe_exe.err());
+        println!("[Tag] current_exe() failed: {:?}", maybe_exe.err());
     }
 
     // 使用内嵌默认规则
     match serde_json::from_str::<HashMap<String, Vec<String>>>(DEFAULT_TAG_KEYWORDS) {
         Ok(map) => {
-            log::info!(
+            println!(
                 "[Tag] loaded embedded default tag_keyword.json ({} keys)",
                 map.len(),
             );
             map
         }
         Err(e) => {
-            log::warn!("[Tag] failed to parse embedded DEFAULT_TAG_KEYWORDS: {}", e);
+            println!("[Tag] failed to parse embedded DEFAULT_TAG_KEYWORDS: {}", e);
             HashMap::new()
         }
     }
@@ -235,11 +235,11 @@ fn sample_file_raw(file_path: &str) -> String {
                             acc.push('\n');
                         }
                     }
-                    log::info!("[Tag] txt sample_len={} for {}", acc.len(), file_path);
+                    println!("[Tag] txt sample_len={} for {}", acc.len(), file_path);
                     acc.to_lowercase()
                 }
                 Err(e) => {
-                    log::warn!("[Tag] TxtParser failed for {}: {}", file_path, e);
+                    println!("[Tag] TxtParser failed for {}: {}", file_path, e);
                     String::new()
                 }
             }
@@ -284,8 +284,8 @@ fn apply_tag_keywords(novel: &mut NovelMetadata) {
     }
     let sample = sample_file_raw(&novel.file_path);
     // 调试日志：输出规则预览和样本片段，方便排查匹配失败原因
-    log::info!("[Tag] rules_keys={:?}", rules.keys().collect::<Vec<_>>());
-    log::info!(
+    println!("[Tag] rules_keys={:?}", rules.keys().collect::<Vec<_>>());
+    println!(
         "[Tag] sample_len={} snippet={}",
         sample.len(),
         sample.chars().take(200).collect::<String>(),
@@ -298,7 +298,7 @@ fn apply_tag_keywords(novel: &mut NovelMetadata) {
         for kw in keywords {
             let kw_l = kw.to_lowercase();
             if sample.contains(kw_l.as_str()) {
-                log::info!(
+                println!(
                     "[Tag] matched tag='{}' keyword='{}' for file={} ",
                     tag,
                     kw,
@@ -367,7 +367,7 @@ pub fn add_novel(file_paths: Vec<String>) -> Result<Vec<NovelMetadata>, String> 
                 added.push(novel);
             }
             Err(e) => {
-                log::warn!("[Novel] Failed to add {}: {}", path, e);
+                println!("[Novel] Failed to add {}: {}", path, e);
                 continue;
             }
         }
@@ -425,8 +425,8 @@ pub fn remove_novel_with_file(novel_id: String) -> Result<bool, String> {
     if removed {
         if let Some(path) = file_path {
             match std::fs::remove_file(&path) {
-                Ok(_) => log::info!("[Novel] Deleted file: {}", path),
-                Err(e) => log::warn!("[Novel] Failed to delete file {}: {}", path, e),
+                Ok(_) => println!("[Novel] Deleted file: {}", path),
+                Err(e) => println!("[Novel] Failed to delete file {}: {}", path, e),
             }
         }
     }
@@ -458,13 +458,13 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     });
 
     let start_time = Instant::now();
-    log::info!("[Novel] Starting to load novel: {}", file_path);
+    println!("[Novel] Starting to load novel: {}", file_path);
 
     let path = PathBuf::from(&file_path);
 
-    log::info!("[Novel] Checking file metadata...");
+    println!("[Novel] Checking file metadata...");
     let metadata = fs::metadata(&path).map_err(|e| {
-        log::error!("[Novel] Failed to read file metadata: {}", e);
+        println!("[Novel] Failed to read file metadata: {}", e);
         format!("Failed to read file metadata: {}", e)
     })?;
     let modified = metadata
@@ -472,29 +472,29 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
         .map_err(|e| format!("Failed to get file modified time: {}", e))?;
     let modified_time: DateTime<Utc> = modified.into();
     let file_size = metadata.len();
-    log::info!(
+    println!(
         "[Novel] File size: {} bytes, modified: {:?}",
         file_size,
         modified_time,
     );
 
     {
-        log::info!("[Novel] Checking cache...");
+        println!("[Novel] Checking cache...");
         let cache = get_content_cache().lock().map_err(|e| e.to_string())?;
         if let Some((cached_content, cached_time)) = cache.get(&file_path) {
             if cached_time >= &modified_time {
                 let elapsed = start_time.elapsed();
-                log::info!(
+                println!(
                     "[Novel] Cache hit! Returned in {:?}, chapters: {}",
                     elapsed,
                     cached_content.chapters.len(),
                 );
                 return Ok(cached_content.clone());
             } else {
-                log::info!("[Novel] Cache expired (file modified), will re-parse");
+                println!("[Novel] Cache expired (file modified), will re-parse");
             }
         } else {
-            log::info!("[Novel] Cache miss, will parse file");
+            println!("[Novel] Cache miss, will parse file");
         }
     }
 
@@ -503,15 +503,15 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
         .and_then(|e| e.to_str())
         .ok_or_else(|| "Invalid file extension".to_string())?;
 
-    log::info!("[Novel] Parsing {} file...", ext);
+    println!("[Novel] Parsing {} file...", ext);
     let parse_start = Instant::now();
     let content = match ext.to_lowercase().as_str() {
         "txt" => {
             let result = crate::parser::TxtParser::parse(&path).map_err(|e: anyhow::Error| {
-                log::error!("[Novel] TXT parse failed: {}", e);
+                println!("[Novel] TXT parse failed: {}", e);
                 e.to_string()
             })?;
-            log::info!(
+            println!(
                 "[Novel] TXT parsed in {:?}, chapters: {}",
                 parse_start.elapsed(),
                 result.chapters.len(),
@@ -520,10 +520,10 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
         }
         "epub" => {
             let result = crate::parser::EpubParser::parse(&path).map_err(|e: anyhow::Error| {
-                log::error!("[Novel] EPUB parse failed: {}", e);
+                println!("[Novel] EPUB parse failed: {}", e);
                 e.to_string()
             })?;
-            log::info!(
+            println!(
                 "[Novel] EPUB parsed in {:?}, chapters: {}",
                 parse_start.elapsed(),
                 result.chapters.len(),
@@ -534,17 +534,17 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     };
 
     {
-        log::info!("[Novel] Updating cache...");
+        println!("[Novel] Updating cache...");
         let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
         cache.insert(file_path.clone(), (content.clone(), modified_time));
-        log::info!(
+        println!(
             "[Novel] Cache updated, total cached novels: {}",
             cache.len(),
         );
     }
 
     let total_elapsed = start_time.elapsed();
-    log::info!("[Novel] Total load time: {:?}", total_elapsed);
+    println!("[Novel] Total load time: {:?}", total_elapsed);
     Ok(content)
 }
 
@@ -552,7 +552,7 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
 pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<String, String> {
     use std::path::PathBuf;
 
-    log::info!(
+    println!(
         "[Novel] Getting chapter {} from {}",
         chapter_index,
         file_path,
@@ -567,14 +567,14 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<St
     match ext.to_lowercase().as_str() {
         "epub" => {
             // EPUB: 按需加载章节内容和图片
-            log::info!("[Novel] Loading EPUB chapter {} on-demand", chapter_index);
+            println!("[Novel] Loading EPUB chapter {} on-demand", chapter_index);
             let result = crate::parser::EpubParser::get_chapter_content(&path, chapter_index)
                 .map_err(|e| {
-                    log::error!("[Novel] Failed to load EPUB chapter: {}", e);
+                    println!("[Novel] Failed to load EPUB chapter: {}", e);
                     e.to_string()
                 })?;
 
-            log::info!(
+            println!(
                 "[Novel] EPUB chapter {} loaded, length: {} chars",
                 chapter_index,
                 result.len(),
@@ -583,7 +583,7 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<St
         }
         "txt" => {
             // TXT: 从缓存中获取（已在parse时全部加载）
-            log::info!("[Novel] Loading TXT chapter {} from cache", chapter_index);
+            println!("[Novel] Loading TXT chapter {} from cache", chapter_index);
             let content = get_novel_content(file_path)?;
 
             let result = content
@@ -591,14 +591,14 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<St
                 .get(chapter_index)
                 .and_then(|ch| ch.content.clone())
                 .ok_or_else(|| {
-                    log::error!(
+                    println!(
                         "[Novel] Chapter {} not found or has no content",
                         chapter_index
                     );
                     format!("Chapter {} not found or has no content", chapter_index)
                 })?;
 
-            log::info!(
+            println!(
                 "[Novel] TXT chapter {} loaded, length: {} chars",
                 chapter_index,
                 result.len(),

@@ -73,7 +73,7 @@ pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchM
     match ext.to_lowercase().as_str() {
         "epub" => {
             // EPUB: 按需加载每一章节内容
-            log::debug!(
+            println!(
                 "[Search] Searching in EPUB, {} chapters",
                 content.chapters.len()
             );
@@ -84,7 +84,7 @@ pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchM
                     match crate::parser::EpubParser::get_chapter_content(&path, chapter.index) {
                         Ok(content) => content,
                         Err(e) => {
-                            log::warn!("[Search] Failed to load chapter {}: {}", chapter.index, e);
+                            println!("[Search] Failed to load chapter {}: {}", chapter.index, e);
                             continue;
                         }
                     };
@@ -96,7 +96,7 @@ pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchM
         }
         "txt" => {
             // TXT: 从缓存中获取（已在parse时全部加载）
-            log::debug!(
+            println!(
                 "[Search] Searching in TXT, {} chapters",
                 content.chapters.len()
             );

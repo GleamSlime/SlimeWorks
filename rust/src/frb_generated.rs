@@ -1332,6 +1332,40 @@ fn wire__crate__api__media_collection__get_all_collection_stats_impl(
         },
     )
 }
+fn wire__crate__api__media_collection__ensure_cover_thumbnail_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ensure_cover_thumbnail",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_file_path = <String>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = crate::api::media_collection::ensure_cover_thumbnail(
+                    api_file_path,
+                    api_width,
+                );
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__novel_reader__get_all_folders_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -7143,6 +7177,11 @@ fn pde_ffi_dispatcher_sync_impl(
         137 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
         138 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
         141 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__media_collection__ensure_cover_thumbnail_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }

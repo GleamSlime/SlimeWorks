@@ -156,6 +156,6 @@ pub async fn register_all_handlers() -> anyhow::Result<()> {
     )
     .await?;
 
-    log::info!("novel_reader: Registered 5 HTTP bridge handlers");
+    println!("novel_reader: Registered 5 HTTP bridge handlers");
     Ok(())
 }

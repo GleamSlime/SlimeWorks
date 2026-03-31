@@ -1,8 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 class MediaFolderCard extends StatelessWidget {
@@ -48,6 +52,8 @@ class MediaFolderCard extends StatelessWidget {
         if (onTransfer != null)
           const PopupMenuItem<String>(value: 'transfer', child: Text('转移集合到...')),
         const PopupMenuItem<String>(value: 'delete', child: Text('删除文件夹')),
+        if (PlatformUtil.isMobile)
+          const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
       ],
     );
     if (action == 'rename') {
@@ -56,6 +62,8 @@ class MediaFolderCard extends StatelessWidget {
       onTransfer?.call();
     } else if (action == 'delete') {
       onDelete();
+    } else if (action == 'select') {
+      onLongPress();
     }
   }
 
@@ -66,7 +74,10 @@ class MediaFolderCard extends StatelessWidget {
     final hasCover = resolvedCover != null && resolvedCover.isNotEmpty;
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onLongPress,
+      onLongPress: PlatformUtil.isMobile ? null : onLongPress,
+      onLongPressStart: PlatformUtil.isMobile
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
       onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
       child: Card(
         elevation: 0,
@@ -92,9 +103,35 @@ class MediaFolderCard extends StatelessWidget {
                 ),
               ),
               child: hasCover
-                  ? (resolvedCover.startsWith('http')
-                        ? Image.network(resolvedCover, fit: BoxFit.cover)
-                        : Image.file(File(resolvedCover), fit: BoxFit.cover))
+                  ? (() {
+                      final cacheW = resolvedCover.startsWith('http')
+                          ? null
+                          : () {
+                              final prefs = getIt.isRegistered<MediaPrefsService>()
+                                  ? getIt.get<MediaPrefsService>()
+                                  : null;
+                              final w = prefs?.localPreviewWidth.value ?? 480;
+                              return w > 0 ? w : null;
+                            }();
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          resolvedCover.startsWith('http')
+                              ? Image.network(resolvedCover, fit: BoxFit.cover)
+                              : Image.file(
+                                  File(resolvedCover),
+                                  fit: BoxFit.cover,
+                                  cacheWidth: cacheW,
+                                ),
+                          if (kDebugMode)
+                            Positioned(
+                              right: 4,
+                              bottom: 4,
+                              child: DebugImageSizeBadge(src: resolvedCover),
+                            ),
+                        ],
+                      );
+                    }())
                   : Center(
                       child: Icon(
                         Icons.folder_rounded,

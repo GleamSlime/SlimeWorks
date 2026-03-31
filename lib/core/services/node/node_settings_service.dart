@@ -4,13 +4,19 @@ import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide FormData, MultipartFile;
+import 'package:get_it/get_it.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 
 import 'node_models.dart';
+
+part 'node_http_handler.dart';
+part 'node_media_handler.dart';
 
 class NodeSettingsService extends GetxService {
   static const String _keyRemoteNodes = 'node_remote_nodes';
@@ -51,6 +57,13 @@ class NodeSettingsService extends GetxService {
   final Map<String, Future<Map<String, dynamic>>> _inFlightNodeCalls =
       <String, Future<Map<String, dynamic>>>{};
 
+  /// 熔断节点集合：本次运行期间验证失败的节点，不再自动请求。
+  final Set<String> _circuitBreakedNodes = <String>{};
+
+  /// 已缩放图片的内存缓存（key = cacheKey，最多 120 条，LRU 淘汰）。
+  final Map<String, Uint8List> _resizedBytesCache = {};
+  static const _kBytesCacheMax = 120;
+
   Future<void> init() async {
     if (_isInitialized) {
       return;
@@ -65,6 +78,17 @@ class NodeSettingsService extends GetxService {
     }
 
     _isInitialized = true;
+    // 启动后台节点连通性检测，不阻塞应用启动
+    Future.delayed(const Duration(milliseconds: 200), refreshNodeConnectivity).ignore();
+  }
+
+  /// 是否已熔断（本次运行期间不再自动请求）
+  bool isNodeCircuitBreaked(String nodeId) => _circuitBreakedNodes.contains(nodeId);
+
+  /// 重置熔断状态，供用户在设置页面手动重试。
+  void resetNodeCircuitBreaker(String nodeId) {
+    _circuitBreakedNodes.remove(nodeId);
+    nodeConnectivityError[nodeId] = '';
   }
 
   List<NodeEndpoint> get enabledRemoteNodes {
@@ -143,6 +167,8 @@ class NodeSettingsService extends GetxService {
       nodeConnectivityError[nodeId] = '节点已禁用';
       return;
     }
+    // 手动检测时先清除熔断状态，允许重新连接
+    _circuitBreakedNodes.remove(nodeId);
 
     try {
       await _callNode(node: node, action: 'list_novels', params: const <String, dynamic>{});
@@ -245,6 +271,20 @@ class NodeSettingsService extends GetxService {
     final response = await _callNode(
       node: node,
       action: 'list_media_folders',
+      params: const <String, dynamic>{},
+    );
+
+    final data = response['data'];
+    if (data is! List) {
+      return <Map<String, dynamic>>[];
+    }
+    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchNodeSmartFolders(NodeEndpoint node) async {
+    final response = await _callNode(
+      node: node,
+      action: 'list_smart_folders',
       params: const <String, dynamic>{},
     );
 
@@ -419,16 +459,73 @@ class NodeSettingsService extends GetxService {
     );
   }
 
-  String buildNodeMediaUrl({required String nodeId, required String filePath}) {
+  String buildNodeMediaUrl({
+    required String nodeId,
+    required String filePath,
+    int? thumbnailWidth,
+    bool isCover = false,
+  }) {
     final node = getNodeById(nodeId);
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
     }
     final normalized = _normalizeBaseUrl(node.apiBaseUrl);
-    final uri = Uri.parse(
-      '$normalized/node/media',
-    ).replace(queryParameters: <String, String>{'path': filePath});
+    final params = <String, String>{'path': filePath};
+    if (thumbnailWidth != null && thumbnailWidth > 0) {
+      params['width'] = thumbnailWidth.toString();
+    }
+    if (isCover) {
+      params['mode'] = 'cover';
+    }
+    final uri = Uri.parse('$normalized/node/media').replace(queryParameters: params);
     return uri.toString();
+  }
+
+  String buildNodeUploadUrl(String nodeId) {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final normalized = _normalizeBaseUrl(node.apiBaseUrl);
+    return '$normalized/node/upload';
+  }
+
+  /// 上传本地文件到远程节点的媒体库。
+  /// [localPath] 本地文件路径，[collectionId] 可选目标集合（null 则扫描创建）。
+  Future<Map<String, dynamic>> uploadMediaToNode({
+    required String nodeId,
+    required String localPath,
+    String? collectionId,
+  }) async {
+    if (_circuitBreakedNodes.contains(nodeId)) {
+      throw StateError('节点已熔断: $nodeId，请在设置中手动重试');
+    }
+    final uploadUrl = buildNodeUploadUrl(nodeId);
+    final file = File(localPath);
+    final filename = localPath.split('/').last;
+    final formData = FormData.fromMap(<String, dynamic>{
+      'file': await MultipartFile.fromFile(localPath, filename: filename),
+      'filename': filename,
+      if (collectionId != null && collectionId.isNotEmpty) 'collection_id': collectionId,
+    });
+    final txBytes = await file.length();
+    try {
+      final resp = await _dio.post<Map<String, dynamic>>(
+        uploadUrl,
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 120),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+      final body = resp.data ?? <String, dynamic>{};
+      _recordAppTraffic(txBytes: txBytes, rxBytes: 256);
+      if (body['success'] == true) {
+        return Map<String, dynamic>.from(body['data'] as Map? ?? <String, dynamic>{});
+      }
+      throw Exception((body['error'] ?? '上传失败').toString());
+    } on DioException catch (e) {
+      _logger.error('媒体上传失败: $nodeId | $filename', error: e);
+      rethrow;
+    }
   }
 
   Future<List<Map<String, dynamic>>> searchNodeNovels(NodeEndpoint node, String keyword) async {
@@ -601,6 +698,10 @@ class NodeSettingsService extends GetxService {
     required String action,
     required Map<String, dynamic> params,
   }) async {
+    // 熔断检查：本次运行期间不再自动请求已熔断节点
+    if (_circuitBreakedNodes.contains(node.id)) {
+      throw StateError('节点已熔断: ${node.name}，请在设置中手动重试');
+    }
     final sanitizedParams = _sanitizeJsonMap(params);
     final requestPayload = <String, dynamic>{'action': action, 'params': sanitizedParams};
     final callKey = _buildNodeCallKey(node.id, action, sanitizedParams);
@@ -659,7 +760,51 @@ class NodeSettingsService extends GetxService {
       error: error,
       stackTrace: lastStackTrace,
     );
+
+    // 如果是网络超时/断开，做一次快速探测；探测也失败则熔断
+    final isNetworkTimeout =
+        error is DioException &&
+        (error.type == DioExceptionType.connectionTimeout ||
+            error.type == DioExceptionType.connectionError ||
+            error.type == DioExceptionType.receiveTimeout ||
+            error.type == DioExceptionType.sendTimeout);
+    if (isNetworkTimeout && !_circuitBreakedNodes.contains(node.id)) {
+      final probeOk = await _quickProbeNode(node);
+      if (!probeOk) {
+        _circuitBreakedNodes.add(node.id);
+        nodeConnectivityError[node.id] = '节点已熔断（多次超时），请在设置中手动重试';
+        _logger.info('节点已熔断: ${node.name}');
+      }
+    }
+
     throw error;
+  }
+
+  /// 快速探测节点是否可达（bypass 熔断检查，用于验证重试）。
+  /// 返回 true 表示节点有响应（无论业务是否成功）。
+  Future<bool> _quickProbeNode(NodeEndpoint node) async {
+    final url = _candidateNodeCallUrls(node.apiBaseUrl).firstOrNull;
+    if (url == null) return false;
+    try {
+      await _dio.post<dynamic>(
+        url,
+        data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+        options: Options(
+          connectTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+          sendTimeout: const Duration(seconds: 4),
+        ),
+      );
+      return true;
+    } on DioException catch (e) {
+      // 只有连接层失败才判定为不可达
+      return e.type != DioExceptionType.connectionTimeout &&
+          e.type != DioExceptionType.connectionError &&
+          e.type != DioExceptionType.receiveTimeout &&
+          e.type != DioExceptionType.sendTimeout;
+    } catch (_) {
+      return false;
+    }
   }
 
   String _buildNodeCallKey(String nodeId, String action, Map<String, dynamic> params) {
@@ -906,458 +1051,5 @@ class NodeSettingsService extends GetxService {
 
     values.add('http://127.0.0.1:${localNodePort.value}/node/call');
     localNodeApiList.assignAll(values.toSet().toList()..sort());
-  }
-
-  Future<void> _handleRequest(HttpRequest request) async {
-    request.response.headers.contentType = ContentType.json;
-    int requestBytes = 0;
-
-    void writeJsonResponse(Map<String, dynamic> data) {
-      final body = jsonEncode(_sanitizeJsonValue(data));
-      _recordAppTraffic(txBytes: utf8.encode(body).length, rxBytes: requestBytes);
-      request.response.write(body);
-    }
-
-    if (request.method == 'GET' && request.uri.path == '/health') {
-      request.response.statusCode = HttpStatus.ok;
-      writeJsonResponse(<String, dynamic>{
-        'success': true,
-        'data': <String, dynamic>{'name': localNodeName.value, 'port': localNodePort.value},
-      });
-      await request.response.close();
-      return;
-    }
-
-    if (request.method == 'GET' && request.uri.path == '/node/media') {
-      await _serveMediaFile(request);
-      return;
-    }
-
-    if (request.method != 'POST' || request.uri.path != '/node/call') {
-      request.response.statusCode = HttpStatus.notFound;
-      writeJsonResponse(<String, dynamic>{'success': false, 'error': 'Not Found'});
-      await request.response.close();
-      return;
-    }
-
-    try {
-      final body = await utf8.decoder.bind(request).join();
-      requestBytes = utf8.encode(body).length;
-      final payload = jsonDecode(body);
-      if (payload is! Map<String, dynamic>) {
-        throw const FormatException('Invalid payload');
-      }
-
-      final action = (payload['action'] ?? '').toString();
-      final params = payload['params'];
-      final mapParams = params is Map ? Map<String, dynamic>.from(params) : <String, dynamic>{};
-
-      final data = await _dispatchAction(action, mapParams);
-      request.response.statusCode = HttpStatus.ok;
-      writeJsonResponse(<String, dynamic>{'success': true, 'data': data});
-    } catch (e, st) {
-      _logger.error('节点请求处理失败', error: e, stackTrace: st);
-      request.response.statusCode = HttpStatus.ok;
-      writeJsonResponse(<String, dynamic>{'success': false, 'error': e.toString()});
-    }
-
-    await request.response.close();
-  }
-
-  Future<dynamic> _dispatchAction(String action, Map<String, dynamic> params) async {
-    switch (action) {
-      case 'list_novels':
-        final chapterCountMap = await _loadLocalChapterCountMap();
-        final folderNameMap = await _loadFolderNameMap();
-        final novels = rust_api.getAllNovels();
-        return novels
-            .map(
-              (n) =>
-                  _novelToJson(n, chapterCountMap: chapterCountMap, folderNameMap: folderNameMap),
-            )
-            .toList();
-      case 'list_media_collections':
-        final collections = media_api.getAllMediaCollections();
-        return collections.map(_mediaCollectionToJson).toList();
-      case 'list_media_folders':
-        final folders = media_api.getAllMediaFolders();
-        return folders.map(_mediaFolderToJson).toList();
-      case 'get_media_collection_items':
-        final collectionId = (params['collection_id'] ?? '').toString();
-        final items = media_api.getMediaCollectionItems(collectionId: collectionId);
-        return items.map(_mediaItemToJson).toList();
-      case 'create_media_folder':
-        final name = (params['name'] ?? '').toString();
-        final folder = media_api.createMediaFolder(name: name);
-        _emitLibraryMutation();
-        return _mediaFolderToJson(folder);
-      case 'create_child_media_folder':
-        final name = (params['name'] ?? '').toString();
-        final parentId = (params['parent_id'] ?? '').toString();
-        final folder = media_api.createChildMediaFolder(name: name, parentId: parentId);
-        _emitLibraryMutation();
-        return _mediaFolderToJson(folder);
-      case 'rename_media_folder':
-        final folderId = (params['folder_id'] ?? '').toString();
-        final name = (params['name'] ?? '').toString();
-        media_api.renameMediaFolder(folderId: folderId, name: name);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'delete_media_folder':
-        final folderId = (params['folder_id'] ?? '').toString();
-        media_api.deleteMediaFolder(folderId: folderId);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'scan_media_folders':
-        final folderPath = (params['folder_path'] ?? '').toString();
-        final collections = await media_api.scanMediaFolders(folderPath: folderPath);
-        _emitLibraryMutation();
-        return collections.map(_mediaCollectionToJson).toList();
-      case 'import_media_folder':
-        final folderPath = (params['folder_path'] ?? '').toString();
-        final collection = await media_api.importMediaFolder(folderPath: folderPath);
-        _emitLibraryMutation();
-        return _mediaCollectionToJson(collection);
-      case 'rename_media_collection':
-        final collectionId = (params['collection_id'] ?? '').toString();
-        final title = (params['title'] ?? '').toString();
-        media_api.renameMediaCollection(collectionId: collectionId, title: title);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'delete_media_collection':
-        final collectionId = (params['collection_id'] ?? '').toString();
-        media_api.deleteMediaCollection(collectionId: collectionId);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'move_media_collection_to_folder':
-        final collectionId = (params['collection_id'] ?? '').toString();
-        final folderIdValue = params['folder_id'];
-        final folderId = folderIdValue == null ? null : folderIdValue.toString();
-        media_api.moveMediaCollectionToFolder(collectionId: collectionId, folderId: folderId);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'search_all_novels':
-        final keyword = (params['keyword'] ?? '').toString();
-        if (keyword.isEmpty) {
-          return <Map<String, dynamic>>[];
-        }
-        final chapterCountMap = await _loadLocalChapterCountMap();
-        final folderNameMap = await _loadFolderNameMap();
-        final result = await rust_api.searchInAllNovels(keyword: keyword);
-        return result
-            .map(
-              (r) => _novelToJson(
-                r.novel,
-                chapterCountMap: chapterCountMap,
-                folderNameMap: folderNameMap,
-              ),
-            )
-            .toList();
-      case 'search_in_novel':
-        final filePath = (params['file_path'] ?? '').toString();
-        final keyword = (params['keyword'] ?? '').toString();
-        final matches = await rust_api.searchInNovel(filePath: filePath, keyword: keyword);
-        return matches
-            .map(
-              (m) => <String, dynamic>{
-                'chapter_index': m.chapterIndex,
-                'chapter_title': m.chapterTitle,
-                'position': m.position,
-                'snippet': m.snippet,
-              },
-            )
-            .toList();
-      case 'get_novel_content':
-        final filePath = (params['file_path'] ?? '').toString();
-        final content = await rust_api.getNovelContent(filePath: filePath);
-        return <String, dynamic>{
-          'novel_id': content.novelId,
-          'chapters': content.chapters
-              .map(
-                (c) => <String, dynamic>{
-                  'id': c.id,
-                  'title': c.title,
-                  'content': c.content,
-                  'index': c.index.toString(),
-                },
-              )
-              .toList(),
-        };
-      case 'get_chapter_content':
-        final filePath = (params['file_path'] ?? '').toString();
-        final chapterIndex = (params['chapter_index'] as num?)?.toInt() ?? 0;
-        return await rust_api.getChapterContent(
-          filePath: filePath,
-          chapterIndex: BigInt.from(chapterIndex),
-        );
-      case 'delete_novel':
-        final novelId = (params['novel_id'] ?? '').toString();
-        rust_api.removeNovel(novelId: novelId);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'update_novel_tags':
-        final novelId = (params['novel_id'] ?? '').toString();
-        final tags = (params['tags'] as List<dynamic>? ?? <dynamic>[])
-            .map((e) => e.toString())
-            .where((e) => e.trim().isNotEmpty)
-            .toList();
-        rust_api.updateNovelTags(novelId: novelId, tags: tags);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'set_novel_favorite':
-        final novelId = (params['novel_id'] ?? '').toString();
-        final isFavorite = params['is_favorite'] == true;
-        rust_api.setNovelFavorite(novelId: novelId, isFavorite: isFavorite);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'update_novel_info':
-        final novelId = (params['novel_id'] ?? '').toString();
-        final tags = (params['tags'] as List<dynamic>? ?? <dynamic>[])
-            .map((e) => e.toString())
-            .where((e) => e.trim().isNotEmpty)
-            .toList();
-        final hasFavorite = params.containsKey('is_favorite');
-        final isFavorite = params['is_favorite'] == true;
-        if (hasFavorite) {
-          rust_api.setNovelFavorite(novelId: novelId, isFavorite: isFavorite);
-        }
-        rust_api.updateNovelInfo(
-          novelId: novelId,
-          title: params['title']?.toString(),
-          author: params['author']?.toString(),
-          notes: params['notes']?.toString(),
-          tags: params.containsKey('tags') ? tags : null,
-        );
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'move_novel_to_folder':
-        final novelId = (params['novel_id'] ?? '').toString();
-        final dynamic folderIdValue = params['folder_id'];
-        final folderId = folderIdValue == null ? null : folderIdValue.toString();
-        rust_api.moveNovelToFolder(novelId: novelId, folderId: folderId);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      case 'update_novel_cover_base64':
-        final novelId = (params['novel_id'] ?? '').toString();
-        final imageBase64 = (params['image_base64'] ?? '').toString();
-        final ext = (params['image_ext'] ?? 'png').toString();
-        if (novelId.isEmpty || imageBase64.isEmpty) {
-          throw ArgumentError('novel_id or image_base64 is empty');
-        }
-        final bytes = base64Decode(imageBase64);
-        final tempPath = await _writeTempImage(bytes, ext);
-        await rust_api.updateNovelCover(novelId: novelId, imagePath: tempPath);
-        _emitLibraryMutation();
-        return <String, dynamic>{'ok': true};
-      default:
-        throw UnsupportedError('Unsupported action: $action');
-    }
-  }
-
-  String _extractImageExt(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpg';
-    if (lower.endsWith('.webp')) return 'webp';
-    return 'png';
-  }
-
-  Future<String> _writeTempImage(Uint8List bytes, String ext) async {
-    final dir = await Directory.systemTemp.createTemp('slime_node_cover_');
-    final file = File('${dir.path}${Platform.pathSeparator}cover.$ext');
-    await file.writeAsBytes(bytes, flush: true);
-    return file.path;
-  }
-
-  Future<Map<String, int>> _loadLocalChapterCountMap() async {
-    try {
-      final appData = Platform.environment['APPDATA'] ?? Platform.environment['HOME'];
-      final base = appData != null
-          ? '$appData${Platform.pathSeparator}slimeworks'
-          : Directory.systemTemp.path;
-      final path = '$base${Platform.pathSeparator}chapter_counts.json';
-      final file = File(path);
-      if (!file.existsSync()) {
-        return <String, int>{};
-      }
-      final raw = await file.readAsString();
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return <String, int>{};
-      }
-
-      final map = <String, int>{};
-      decoded.forEach((key, value) {
-        if (value is int) {
-          map[key] = value;
-        } else if (value is num) {
-          map[key] = value.toInt();
-        }
-      });
-      return map;
-    } catch (e) {
-      _logger.log('读取章节缓存失败: $e', name: 'NodeSettings');
-      return <String, int>{};
-    }
-  }
-
-  Future<Map<String, String>> _loadFolderNameMap() async {
-    try {
-      final list = rust_api.getAllFolders();
-      return {for (final f in list) f.id: f.name};
-    } catch (e) {
-      _logger.log('读取目录映射失败: $e', name: 'NodeSettings');
-      return <String, String>{};
-    }
-  }
-
-  String? _encodeCoverBase64(String? coverPath) {
-    if (coverPath == null || coverPath.isEmpty) {
-      return null;
-    }
-    try {
-      final file = File(coverPath);
-      if (!file.existsSync()) {
-        return null;
-      }
-      final size = file.lengthSync();
-      if (size > 256 * 1024) {
-        return null;
-      }
-      return base64Encode(file.readAsBytesSync());
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Map<String, dynamic> _mediaCollectionToJson(media_api.MediaCollection collection) {
-    return <String, dynamic>{
-      'id': collection.id,
-      'title': collection.title,
-      'folder_path': collection.folderPath,
-      'folder_id': collection.folderId,
-      'cover_path': collection.coverPath,
-      'item_count': collection.itemCount.toString(),
-      'created_at': collection.createdAt,
-      'updated_at': collection.updatedAt,
-    };
-  }
-
-  Map<String, dynamic> _mediaFolderToJson(media_api.MediaFolder folder) {
-    return <String, dynamic>{
-      'id': folder.id,
-      'name': folder.name,
-      'created_at': folder.createdAt,
-      'order': folder.order,
-      'parent_id': folder.parentId,
-    };
-  }
-
-  Map<String, dynamic> _mediaItemToJson(media_api.MediaItem item) {
-    return <String, dynamic>{
-      'id': item.id,
-      'collection_id': item.collectionId,
-      'title': item.title,
-      'file_path': item.filePath,
-      'kind': item.kind.name,
-      'file_size': item.fileSize.toString(),
-      'modified_at': item.modifiedAt,
-      'width': item.width,
-      'height': item.height,
-      'duration_ms': item.durationMs?.toString(),
-      'order': item.order,
-    };
-  }
-
-  Future<void> _serveMediaFile(HttpRequest request) async {
-    final filePath = request.uri.queryParameters['path'];
-    if (filePath == null || filePath.isEmpty) {
-      request.response.statusCode = HttpStatus.badRequest;
-      request.response.write('missing path');
-      await request.response.close();
-      return;
-    }
-
-    final file = File(filePath);
-    if (!file.existsSync()) {
-      request.response.statusCode = HttpStatus.notFound;
-      request.response.write('file not found');
-      await request.response.close();
-      return;
-    }
-
-    final stat = await file.stat();
-    final totalLength = stat.size;
-    request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
-    request.response.headers.contentType = _guessMediaContentType(filePath);
-
-    final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
-    if (rangeHeader != null) {
-      final match = RegExp(r'bytes=(\d*)-(\d*)').firstMatch(rangeHeader);
-      if (match != null) {
-        final start = int.tryParse(match.group(1) ?? '') ?? 0;
-        final end = int.tryParse(match.group(2) ?? '') ?? (totalLength - 1);
-        final boundedEnd = end.clamp(start, totalLength - 1);
-        request.response.statusCode = HttpStatus.partialContent;
-        request.response.headers.set(
-          HttpHeaders.contentRangeHeader,
-          'bytes $start-$boundedEnd/$totalLength',
-        );
-        request.response.contentLength = boundedEnd - start + 1;
-        await request.response.addStream(file.openRead(start, boundedEnd + 1));
-        await request.response.close();
-        return;
-      }
-    }
-
-    request.response.statusCode = HttpStatus.ok;
-    request.response.contentLength = totalLength;
-    await request.response.addStream(file.openRead());
-    await request.response.close();
-  }
-
-  ContentType _guessMediaContentType(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) return ContentType('image', 'png');
-    if (lower.endsWith('.webp')) return ContentType('image', 'webp');
-    if (lower.endsWith('.gif')) return ContentType('image', 'gif');
-    if (lower.endsWith('.bmp')) return ContentType('image', 'bmp');
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return ContentType('image', 'jpeg');
-    if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) return ContentType('video', 'mp4');
-    if (lower.endsWith('.mov')) return ContentType('video', 'quicktime');
-    if (lower.endsWith('.webm')) return ContentType('video', 'webm');
-    if (lower.endsWith('.mkv')) return ContentType('video', 'x-matroska');
-    if (lower.endsWith('.avi')) return ContentType('video', 'x-msvideo');
-    return ContentType.binary;
-  }
-
-  Map<String, dynamic> _novelToJson(
-    rust_api.NovelMetadata novel, {
-    required Map<String, int> chapterCountMap,
-    required Map<String, String> folderNameMap,
-  }) {
-    final coverBase64 = _encodeCoverBase64(novel.coverPath);
-    final coverExt = _extractImageExt(novel.coverPath ?? '');
-    return <String, dynamic>{
-      'id': novel.id,
-      'title': novel.title,
-      'author': novel.author,
-      'file_path': novel.filePath,
-      'format': novel.format.name,
-      'file_size': novel.fileSize.toString(),
-      'modified_at': novel.modifiedAt.toString(),
-      'added_at': novel.addedAt.toString(),
-      'progress': novel.progress,
-      'last_read_at': novel.lastReadAt?.toString(),
-      'cover_path': novel.coverPath,
-      'cover_base64': coverBase64,
-      'cover_ext': coverExt,
-      'folder_id': novel.folderId,
-      'folder_name': novel.folderId == null ? null : folderNameMap[novel.folderId],
-      'chapter_count': chapterCountMap[novel.id],
-      'custom_order': novel.customOrder,
-      'is_favorite': novel.isFavorite,
-      'tags': novel.tags,
-      'notes': novel.notes,
-    };
   }
 }

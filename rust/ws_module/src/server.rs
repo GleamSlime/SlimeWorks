@@ -63,7 +63,7 @@ impl WsServer {
             .await
             .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
 
-        log::info!("WebSocket server listening on {}", addr);
+        println!("WebSocket server listening on {}", addr);
 
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         let clients = Arc::new(Mutex::new(HashMap::new()));
@@ -89,17 +89,17 @@ impl WsServer {
                     result = listener.accept() => {
                         match result {
                             Ok((stream, addr)) => {
-                                log::info!("New connection from: {}", addr);
+                                println!("New connection from: {}", addr);
                                 let clients = clients_clone.clone();
                                 tokio::spawn(handle_connection(stream, addr.to_string(), clients));
                             }
                             Err(e) => {
-                                log::error!("Failed to accept connection: {}", e);
+                                println!("Failed to accept connection: {}", e);
                             }
                         }
                     }
                     _ = shutdown_rx.recv() => {
-                        log::info!("Server shutdown signal received");
+                        println!("Server shutdown signal received");
                         break;
                     }
                 }
@@ -121,7 +121,7 @@ impl WsServer {
                 for (client_id, handle) in clients_guard.iter_mut() {
                     // 检查鉴权超时
                     if handle.info.is_auth_timeout(AUTH_TIMEOUT_SECS) {
-                        log::warn!("Client {} auth timeout, closing connection", client_id);
+                        println!("Client {} auth timeout, closing connection", client_id);
                         let _ = handle.sender.send(Message::Close(None)).await;
                         to_remove.push(client_id.clone());
                         continue;
@@ -129,7 +129,7 @@ impl WsServer {
 
                     // 检查心跳超时
                     if handle.info.is_heartbeat_timeout(HEARTBEAT_TIMEOUT_SECS) {
-                        log::warn!("Client {} heartbeat timeout, closing connection", client_id);
+                        println!("Client {} heartbeat timeout, closing connection", client_id);
                         let _ = handle.sender.send(Message::Close(None)).await;
                         to_remove.push(client_id.clone());
                     }
@@ -161,7 +161,7 @@ impl WsServer {
                 let _ = client_handle.sender.send(Message::Close(None)).await;
             }
 
-            log::info!("WebSocket server stopped");
+            println!("WebSocket server stopped");
             Ok(())
         } else {
             Err("Server is not running".to_string())
@@ -185,7 +185,7 @@ impl WsServer {
                         if let Some(client_handle) = clients.get(client_id) {
                             let msg = Message::Text(payload.to_string().into());
                             if let Err(e) = client_handle.sender.send(msg).await {
-                                log::error!(
+                                println!(
                                     "Failed to send routed message to client {}: {}",
                                     client_id,
                                     e
@@ -202,14 +202,14 @@ impl WsServer {
                 if let Some(client_id) = message.strip_prefix("DISCONNECT:") {
                     if let Some(client_handle) = clients_mut.remove(client_id) {
                         let _ = client_handle.sender.send(Message::Close(None)).await;
-                        log::info!("Disconnected and removed client {}", client_id);
+                        println!("Disconnected and removed client {}", client_id);
                     } else {
                         return Err(format!("Client {} not found", client_id));
                     }
                 }
             } else if message == "GET_CLIENTS" {
                 // 收到 GET_CLIENTS 请求，返回客户端列表的 JSON
-                log::info!("GET_CLIENTS command received via wsServerBroadcast");
+                println!("GET_CLIENTS command received via wsServerBroadcast");
                 // 也写入临时调试文件，便于排查运行时日志是否被捕获
                 if let Ok(mut f) = OpenOptions::new()
                     .create(true)
@@ -227,7 +227,7 @@ impl WsServer {
                 match serde_json::to_string(&client_list) {
                     Ok(json_str) => {
                         // 向所有客户端广播（UI 会接收并解析）
-                        log::info!("Broadcasting CLIENTS_LIST to {} clients", client_list.len());
+                        println!("Broadcasting CLIENTS_LIST to {} clients", client_list.len());
                         if let Ok(mut f) = OpenOptions::new()
                             .create(true)
                             .append(true)
@@ -244,7 +244,7 @@ impl WsServer {
                         let msg = Message::Text(response.into());
                         for (client_id, client_handle) in clients.iter() {
                             if let Err(e) = client_handle.sender.send(msg.clone()).await {
-                                log::error!("Failed to send client list to {}: {}", client_id, e);
+                                println!("Failed to send client list to {}: {}", client_id, e);
                             }
                         }
                     }
@@ -256,7 +256,7 @@ impl WsServer {
                 let msg = Message::Text(message.clone().into());
                 for (client_id, client_handle) in clients.iter() {
                     if let Err(e) = client_handle.sender.send(msg.clone()).await {
-                        log::error!("Failed to send message to client {}: {}", client_id, e);
+                        println!("Failed to send message to client {}: {}", client_id, e);
                     }
                 }
             }
@@ -294,7 +294,7 @@ impl WsServer {
             if let Some(client_handle) = clients.get(&client_id) {
                 let _ = client_handle.sender.send(Message::Close(None)).await;
                 clients.remove(&client_id);
-                log::info!("Disconnected client: {}", client_id);
+                println!("Disconnected client: {}", client_id);
                 Ok(())
             } else {
                 Err(format!("Client {} not found", client_id))
@@ -350,12 +350,12 @@ async fn handle_connection(
     let ws_stream = match accept_async(stream).await {
         Ok(ws) => ws,
         Err(e) => {
-            log::error!("WebSocket handshake failed for {}: {}", client_id, e);
+            println!("WebSocket handshake failed for {}: {}", client_id, e);
             return;
         }
     };
 
-    log::info!("WebSocket connection established: {}", client_id);
+    println!("WebSocket connection established: {}", client_id);
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let (tx, mut rx) = mpsc::channel::<Message>(100);
@@ -395,7 +395,7 @@ async fn handle_connection(
     let send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if let Err(e) = ws_sender.send(msg).await {
-                log::error!("Failed to send message: {}", e);
+                println!("Failed to send message: {}", e);
                 break;
             }
         }
@@ -410,7 +410,7 @@ async fn handle_connection(
                 Ok(msg) => {
                     match msg {
                         Message::Text(text) => {
-                            log::info!("Received text from {}: {}", client_id_clone, text);
+                            println!("Received text from {}: {}", client_id_clone, text);
 
                             // 尝试解析消息类型
                             if text.starts_with("AUTH:") {
@@ -419,14 +419,14 @@ async fn handle_connection(
                                 if let Some(handle) = clients_guard.get_mut(&client_id_clone) {
                                     handle.info.authenticated = true;
                                     handle.info.update_heartbeat();
-                                    log::info!("Client {} authenticated", client_id_clone);
+                                    println!("Client {} authenticated", client_id_clone);
                                 }
                             } else if text == "PING" || text == "ping" {
                                 // 处理心跳消息
                                 let mut clients_guard = clients_clone.lock().await;
                                 if let Some(handle) = clients_guard.get_mut(&client_id_clone) {
                                     handle.info.update_heartbeat();
-                                    log::debug!("Client {} heartbeat updated", client_id_clone);
+                                    println!("Client {} heartbeat updated", client_id_clone);
                                 }
                             } else {
                                 // 普通消息，更新心跳
@@ -437,7 +437,7 @@ async fn handle_connection(
                             }
                         }
                         Message::Binary(data) => {
-                            log::info!(
+                            println!(
                                 "Received binary from {}: {} bytes",
                                 client_id_clone,
                                 data.len()
@@ -456,14 +456,14 @@ async fn handle_connection(
                             }
                         }
                         Message::Close(_) => {
-                            log::info!("Client {} closed connection", client_id_clone);
+                            println!("Client {} closed connection", client_id_clone);
                             break;
                         }
                         _ => {}
                     }
                 }
                 Err(e) => {
-                    log::error!("Error receiving message from {}: {}", client_id_clone, e);
+                    println!("Error receiving message from {}: {}", client_id_clone, e);
                     break;
                 }
             }
@@ -482,5 +482,5 @@ async fn handle_connection(
         clients_guard.remove(&client_id);
     }
 
-    log::info!("Client {} disconnected", client_id);
+    println!("Client {} disconnected", client_id);
 }

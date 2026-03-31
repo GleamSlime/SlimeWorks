@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 class MediaItemTile extends StatefulWidget {
@@ -14,6 +16,7 @@ class MediaItemTile extends StatefulWidget {
     this.onRequestScrubFrames,
     this.onOpenFolder,
     this.onDeleteFile,
+    this.onSaveToGallery,
     this.fixedHeight,
   });
 
@@ -29,6 +32,9 @@ class MediaItemTile extends StatefulWidget {
 
   /// 删除该文件（本地）。
   final VoidCallback? onDeleteFile;
+
+  /// 保存图片到相册（移动端）。
+  final VoidCallback? onSaveToGallery;
 
   /// 瀑布流模式下由外部指定的固定高度（null = 填满格子）。
   final double? fixedHeight;
@@ -89,6 +95,11 @@ class _MediaItemTileState extends State<MediaItemTile> {
   }
 
   Future<void> _showContextMenu(BuildContext context, Offset globalPosition) async {
+    final hasActions =
+        widget.onOpenFolder != null ||
+        widget.onDeleteFile != null ||
+        widget.onSaveToGallery != null;
+    if (!hasActions) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final local = overlay.globalToLocal(globalPosition);
     final overlaySize = overlay.size;
@@ -101,12 +112,15 @@ class _MediaItemTileState extends State<MediaItemTile> {
       items: [
         if (widget.onOpenFolder != null)
           const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
+        if (widget.onSaveToGallery != null)
+          const PopupMenuItem<String>(value: 'save', child: Text('保存到相册')),
         if (widget.onDeleteFile != null)
           const PopupMenuItem<String>(value: 'delete', child: Text('删除文件')),
       ],
     );
     if (!mounted) return;
     if (action == 'open_folder') widget.onOpenFolder?.call();
+    if (action == 'save') widget.onSaveToGallery?.call();
     if (action == 'delete') widget.onDeleteFile?.call();
   }
 
@@ -117,9 +131,16 @@ class _MediaItemTileState extends State<MediaItemTile> {
     // src 始终是 jpg 帧路径或 null（视频不再传入 .mp4 路径），或图片文件路径
     final showCoverAnyway = src != null && src.isNotEmpty;
 
+    final hasMenuActions =
+        widget.onOpenFolder != null ||
+        widget.onDeleteFile != null ||
+        widget.onSaveToGallery != null;
     final tile = GestureDetector(
       onTap: widget.onTap,
-      onSecondaryTapDown: (widget.onOpenFolder != null || widget.onDeleteFile != null)
+      onSecondaryTapDown: hasMenuActions
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
+      onLongPressStart: (PlatformUtil.isMobile && hasMenuActions)
           ? (details) => _showContextMenu(context, details.globalPosition)
           : null,
       child: MouseRegion(
@@ -149,6 +170,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
           child: Stack(
             fit: StackFit.expand,
             children: [
+              // 视频封面
               DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -160,10 +182,18 @@ class _MediaItemTileState extends State<MediaItemTile> {
                     ],
                   ),
                 ),
-                child: showCoverAnyway && src != null
-                    ? (src.startsWith('http')
+                child: showCoverAnyway
+                    ? (src!.startsWith('http')
                           ? Image.network(src, fit: BoxFit.cover)
-                          : Image.file(File(src), fit: BoxFit.cover))
+                          : Image.file(
+                              File(src),
+                              fit: BoxFit.cover,
+                              // 在解码阶段缩放，减少内存占用和加载时间
+                              cacheWidth: () {
+                                final w = getIt<MediaPrefsService>().localPreviewWidth.value;
+                                return w > 0 ? w : null;
+                              }(),
+                            ))
                     : Center(
                         child: Icon(
                           Icons.smart_display_rounded,
