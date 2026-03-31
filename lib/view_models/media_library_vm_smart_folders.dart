@@ -39,10 +39,41 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   }
 
   /// 将 [fromId] 集合重新排序到 [toId] 的位置。
+  /// 使用未经收藏过滤的完整集合列表以避免 showFavoritesOnly 时排序丢失。
   Future<void> reorderCollection(String fromId, String toId) async {
-    final orderKey = currentFolderId.value ?? 'root';
-    final cols = currentCollections;
-    final ids = cols.map((c) => c.id).toList();
+    final folderId = currentFolderId.value;
+    final orderKey = folderId ?? 'root';
+
+    // 始终使用完整（未过滤收藏）的集合列表构建排序 ID 列表，防止 showFavoritesOnly=true 时保存不完整
+    final List<String> ids;
+    if (folderId != null && isSmartFolder(folderId)) {
+      final sf = getSmartFolder(folderId);
+      ids = sf == null
+          ? currentCollections.map((c) => c.id).toList()
+          : mergedCollections
+              .where((c) => collectionMatchesSmartFolder(sf, c))
+              .map((c) => c.id)
+              .toList();
+    } else {
+      ids = mergedCollections
+          .where((c) => c.folderId == folderId)
+          .map((c) => c.id)
+          .toList();
+    }
+
+    // 应用当前已有的自定义排序作为基准
+    final existing = _collectionOrders[orderKey];
+    if (existing != null && existing.isNotEmpty) {
+      ids.sort((a, b) {
+        final ai = existing.indexOf(a);
+        final bi = existing.indexOf(b);
+        if (ai == -1 && bi == -1) return 0;
+        if (ai == -1) return 1;
+        if (bi == -1) return -1;
+        return ai.compareTo(bi);
+      });
+    }
+
     final fromIdx = ids.indexOf(fromId);
     final toIdx = ids.indexOf(toId);
     if (fromIdx == -1 || toIdx == -1 || fromIdx == toIdx) return;
@@ -51,6 +82,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     _collectionOrders[orderKey] = ids;
     collectionOrderVersion.value++;
     await _saveCollectionOrder(orderKey);
+    logger.i('reorderCollection: $orderKey -> saved ${ids.length} items');
   }
 
   // ── 智能文件夹 CRUD ───────────────────────────────────────────────────────

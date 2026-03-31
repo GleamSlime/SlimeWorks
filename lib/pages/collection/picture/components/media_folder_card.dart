@@ -117,11 +117,16 @@ class MediaFolderCard extends StatelessWidget {
                         fit: StackFit.expand,
                         children: [
                           resolvedCover.startsWith('http')
-                              ? Image.network(resolvedCover, fit: BoxFit.cover)
+                              ? Image.network(
+                                  resolvedCover,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const _FolderPlaceholder(),
+                                )
                               : Image.file(
                                   File(resolvedCover),
                                   fit: BoxFit.cover,
                                   cacheWidth: cacheW,
+                                  errorBuilder: (_, __, ___) => const _FolderPlaceholder(),
                                 ),
                           if (kDebugMode)
                             Positioned(
@@ -224,6 +229,34 @@ class MediaFolderCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FolderPlaceholder extends StatelessWidget {
+  const _FolderPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.colorScheme.primary.withAlpha(42),
+            theme.colorScheme.secondary.withAlpha(28),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.folder_off_outlined,
+          size: 48,
+          color: theme.colorScheme.primary.withAlpha(150),
         ),
       ),
     );

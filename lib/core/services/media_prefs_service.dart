@@ -139,18 +139,41 @@ class MediaPrefsService {
     await prefs.setInt(_keyLocalPreviewWidth, localPreviewWidth.value);
   }
 
-  /// 计算缩略图缓存目录大小（字节）。
+  /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。
+  /// 路径结构：<AppSupport>/SlimeWorks/library/media/{thumbnails,covers}
+  Future<List<Directory>> getCacheDirs() async {
+    final appDir = await getApplicationSupportDirectory();
+    // 兼容旧路径（直接在 appDir 下）和新路径（library/media 子目录）
+    final base = '${appDir.path}${Platform.pathSeparator}';
+    return [
+      Directory('${base}library${Platform.pathSeparator}media${Platform.pathSeparator}thumbnails'),
+      Directory('${base}library${Platform.pathSeparator}media${Platform.pathSeparator}covers'),
+      // 旧路径保留用于计算（不再写入，但可能存在旧缓存文件）
+      Directory('${base}thumbnails'),
+      Directory('${base}cover_thumb_cache'),
+    ];
+  }
+
+  /// 返回对用户展示的权威缓存根目录（新结构）。
+  Future<Directory> getMediaCacheBaseDir() async {
+    final appDir = await getApplicationSupportDirectory();
+    return Directory(
+      '${appDir.path}${Platform.pathSeparator}library${Platform.pathSeparator}media',
+    );
+  }
+
+  /// 计算所有缩略图缓存目录大小（字节），包含旧路径兼容计算。
   Future<int> calcCacheSizeBytes() async {
     try {
-      final appDir = await getApplicationSupportDirectory();
-      final cacheDir = Directory('${appDir.path}${Platform.pathSeparator}thumbnails');
-      if (!cacheDir.existsSync()) return 0;
       int total = 0;
-      await for (final entity in cacheDir.list(recursive: true, followLinks: false)) {
-        if (entity is File) {
-          try {
-            total += entity.lengthSync();
-          } catch (_) {}
+      for (final dir in await getCacheDirs()) {
+        if (!dir.existsSync()) continue;
+        await for (final entity in dir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            try {
+              total += entity.lengthSync();
+            } catch (_) {}
+          }
         }
       }
       return total;
@@ -160,13 +183,13 @@ class MediaPrefsService {
     }
   }
 
-  /// 清空缩略图缓存目录。
+  /// 清空所有缓存目录（含旧路径）。
   Future<void> clearCache() async {
     try {
-      final appDir = await getApplicationSupportDirectory();
-      final cacheDir = Directory('${appDir.path}${Platform.pathSeparator}thumbnails');
-      if (cacheDir.existsSync()) {
-        await cacheDir.delete(recursive: true);
+      for (final dir in await getCacheDirs()) {
+        if (dir.existsSync()) {
+          await dir.delete(recursive: true);
+        }
       }
       debugPrint('[MediaPrefs] 缓存已清除');
     } catch (e) {

@@ -122,8 +122,17 @@ class SmartFolderCard extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       src.startsWith('http')
-                          ? Image.network(src, fit: BoxFit.cover)
-                          : Image.file(File(src), fit: BoxFit.cover, cacheWidth: cacheW),
+                          ? Image.network(
+                              src,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const _SmartPlaceholder(),
+                            )
+                          : Image.file(
+                              File(src),
+                              fit: BoxFit.cover,
+                              cacheWidth: cacheW,
+                              errorBuilder: (_, __, ___) => const _SmartPlaceholder(),
+                            ),
                       if (kDebugMode)
                         Positioned(right: 4, bottom: 4, child: DebugImageSizeBadge(src: src)),
                     ],
@@ -234,6 +243,34 @@ class SmartFolderCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SmartPlaceholder extends StatelessWidget {
+  const _SmartPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.colorScheme.tertiary.withAlpha(42),
+            theme.colorScheme.primary.withAlpha(28),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.auto_awesome_outlined,
+          size: 48,
+          color: theme.colorScheme.tertiary.withAlpha(150),
         ),
       ),
     );

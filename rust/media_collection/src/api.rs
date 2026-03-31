@@ -13,7 +13,9 @@ fn thumb_cache_dir() -> &'static std::path::PathBuf {
     THUMB_CACHE_DIR.get_or_init(|| {
         let dir = std::path::Path::new(&app_data_base())
             .join("SlimeWorks")
-            .join("cover_thumb_cache");
+            .join("library")
+            .join("media")
+            .join("covers");
         let _ = std::fs::create_dir_all(&dir);
         dir
     })
@@ -182,6 +184,8 @@ fn default_db_path() -> String {
 fn thumbnail_cache_dir() -> std::path::PathBuf {
     let dir = std::path::Path::new(&app_data_base())
         .join("SlimeWorks")
+        .join("library")
+        .join("media")
         .join("thumbnails");
     let _ = std::fs::create_dir_all(&dir);
     dir

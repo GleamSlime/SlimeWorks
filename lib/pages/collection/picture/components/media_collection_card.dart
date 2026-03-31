@@ -126,25 +126,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
 
   Widget _buildCoverImage(String? src, ThemeData theme) {
     if (src == null || src.isEmpty) {
-      return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.primary.withAlpha(42),
-              theme.colorScheme.secondary.withAlpha(28),
-            ],
-          ),
-        ),
-        child: Center(
-          child: Icon(
-            Icons.collections_outlined,
-            size: scaleW(48),
-            color: theme.colorScheme.primary.withAlpha(180),
-          ),
-        ),
-      );
+      return _CollectionPlaceholder(icon: Icons.collections_outlined);
     }
     final cacheW = () {
       if (src.startsWith('http')) return null;
@@ -158,13 +140,20 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       fit: StackFit.expand,
       children: [
         src.startsWith('http')
-            ? Image.network(src, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+            ? Image.network(
+                src,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) => _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+              )
             : Image.file(
                 File(src),
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
                 cacheWidth: cacheW,
+                errorBuilder: (_, __, ___) => _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               ),
         if (kDebugMode)
           Positioned(
@@ -484,6 +473,36 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 集合/文件夹封面为空或加载失败时显示的默认占位图标。
+class _CollectionPlaceholder extends StatelessWidget {
+  const _CollectionPlaceholder({required this.icon});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.colorScheme.primary.withAlpha(42),
+            theme.colorScheme.secondary.withAlpha(28),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          icon,
+          size: 48,
+          color: theme.colorScheme.primary.withAlpha(150),
         ),
       ),
     );

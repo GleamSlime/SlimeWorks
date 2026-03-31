@@ -46,11 +46,22 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
+    // 移动端进入沉浸全屏（隐藏状态栏 + 导航栏）
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    // 退出时恢复系统 UI
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+        overlays: SystemUiOverlay.values,
+      );
+    }
     super.dispose();
   }
 

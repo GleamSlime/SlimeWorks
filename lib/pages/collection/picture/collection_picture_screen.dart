@@ -1230,7 +1230,9 @@ class _CollectionPictureScreenState
   }
 
   Widget _buildCollectionDetail(BuildContext context) {
-    if (viewModel.isLoadingItems.value) {
+    final isLoading = viewModel.isLoadingItems.value;
+    if (viewModel.currentItems.isEmpty && isLoading) {
+      // 仅在完全没数据时才显示全局 spinner；有数据时立即展示并在顶部显示进度条。
       return const Center(child: CircularProgressIndicator());
     }
     if (viewModel.currentItems.isEmpty) {
@@ -1241,7 +1243,9 @@ class _CollectionPictureScreenState
     final isRemote = viewModel.isRemoteCollection(collectionId);
     final sortedItems = viewModel.sortedCurrentItems;
 
-    return MasonryMediaGrid(
+    return Stack(
+      children: [
+        MasonryMediaGrid(
       items: sortedItems,
       collectionId: collectionId,
       isRemote: isRemote,
@@ -1261,6 +1265,16 @@ class _CollectionPictureScreenState
         );
       },
       onConfirmDelete: _confirmDeleteItemFile,
+        ),
+        // 有数据但仍在加载更多时，顶部显示细进度条（不阻塞内容交互）
+        if (isLoading)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+      ],
     );
   }
 

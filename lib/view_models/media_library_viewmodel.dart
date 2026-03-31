@@ -4,8 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter/material.dart';import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -159,6 +158,12 @@ class MediaLibraryViewModel extends BaseViewModel {
   Worker? _nodeMutationWorker;
   Future<void>? _refreshAllFuture;
 
+  /// 集合文件夹自动扫描定时器（每 30 秒后台轮询）。
+  Timer? _folderWatchTimer;
+
+  /// 上次扫描时各集合的 item 数量快照，用于判断是否有新增。
+  final _collectionItemCountSnapshot = <String, int>{};
+
   @override
   Future<void> onInitAsync() async {
     debugPrint('[MediaLibrary] onInitAsync: isInitialized=$isInitialized');
@@ -197,12 +202,17 @@ class MediaLibraryViewModel extends BaseViewModel {
     debugPrint(
       '[MediaLibrary] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
     );
+    // 启动集合文件夹自动扫描定时器（每 30 秒轮询）
+    _folderWatchTimer?.cancel();
+    _folderWatchTimer = Timer.periodic(const Duration(seconds: 30), (_) => _pollCollectionFolders());
   }
 
   @override
   void onClose() {
     _nodeMutationWorker?.dispose();
     _nodeMutationWorker = null;
+    _folderWatchTimer?.cancel();
+    _folderWatchTimer = null;
     super.onClose();
   }
 
@@ -618,12 +628,15 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   String? buildSmartFolderCoverSource(SmartFolder sf) {
-    // 使用 collectionMatchesSmartFolder 以支持远程集合
-    final firstMatch = mergedCollections.firstWhereOrNull(
-      (c) => collectionMatchesSmartFolder(sf, c),
-    );
-    if (firstMatch == null) return null;
-    return buildCollectionCoverSource(firstMatch);
+    // 订阅排序版本：集合拖拽重排后封面随之更新
+    collectionOrderVersion.value;
+    // 过滤后应用自定义排序（与 currentCollections 一致），保证封面反映用户拖拽位置
+    final filtered = mergedCollections
+        .where((c) => collectionMatchesSmartFolder(sf, c))
+        .toList(growable: false);
+    final sorted = _applySortOrder(List.of(filtered), sf.id);
+    if (sorted.isEmpty) return null;
+    return buildCollectionCoverSource(sorted.first);
   }
 
   /// 返回最多 [_kHoverScrubFrames] 个均匀采样的封面路径，用于集合卡片悬停预览。
@@ -830,6 +843,53 @@ class MediaLibraryViewModel extends BaseViewModel {
         .whenComplete(() {
           isLoadingRemote.value = false;
         });
+  }
+
+  /// 后台轮询：检查本地集合文件夹是否有新增/删除的文件，有则静默增量更新。
+  Future<void> _pollCollectionFolders() async {
+    // 只处理本地集合，跳过远程
+    final localCols = collections.toList(growable: false);
+    bool anyChanged = false;
+    for (final col in localCols) {
+      try {
+        final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount;
+        // 使用 Rust FFI 同步读取当前磁盘文件数量（不更新 DB，仅统计）
+        final dir = Directory(col.folderPath);
+        if (!dir.existsSync()) continue;
+        final exts = {
+          'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif',
+          'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', 'wmv', 'ts',
+        };
+        int count = 0;
+        await for (final e in dir.list(recursive: false, followLinks: false)) {
+          if (e is File) {
+            final ext = e.path.split('.').last.toLowerCase();
+            if (exts.contains(ext)) count++;
+          }
+        }
+        _collectionItemCountSnapshot[col.id] = count;
+        if (count != prev) {
+          debugPrint('[MediaLibrary] 检测到文件夹变化: ${col.title} prev=$prev now=$count，触发增量扫描');
+          // 增量重新导入该集合（Rust side 会应用差量更新）
+          await compute(
+            (String fp) => media_api.importMediaFolder(folderPath: fp),
+            col.folderPath,
+          );
+          anyChanged = true;
+        }
+      } catch (e) {
+        debugPrint('[MediaLibrary] _pollCollectionFolders 集合 ${col.id} 检查失败: $e');
+      }
+    }
+    if (anyChanged) {
+      // 静默刷新集合列表，不影响当前已打开的集合详情页
+      await loadCollections();
+      // 若当前打开的集合恰好有变化，则同步刷新详情
+      if (currentCollectionId.value != null &&
+          !isRemoteCollection(currentCollectionId.value!)) {
+        await loadCurrentCollectionItems();
+      }
+    }
   }
 
   Future<void> loadFolders() async {

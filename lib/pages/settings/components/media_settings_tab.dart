@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
@@ -17,6 +18,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
   bool _loading = true;
   int _cacheSizeBytes = 0;
   bool _clearing = false;
+  String _cachePath = '';
 
   @override
   void initState() {
@@ -28,9 +30,11 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
     _prefs = getIt<MediaPrefsService>();
     await _prefs.init();
     final sz = await _prefs.calcCacheSizeBytes();
+    final cacheDir = await _prefs.getMediaCacheBaseDir();
     if (!mounted) return;
     setState(() {
       _cacheSizeBytes = sz;
+      _cachePath = cacheDir.path;
       _loading = false;
     });
   }
@@ -47,6 +51,28 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('缓存已清除'), duration: Duration(seconds: 2)));
+  }
+
+  Future<void> _openCachePath() async {
+    final dir = Directory(_cachePath);
+    if (!dir.existsSync()) {
+      await dir.create(recursive: true);
+    }
+    if (Platform.isMacOS) {
+      await Process.run('open', [_cachePath]);
+    } else if (Platform.isWindows) {
+      await Process.run('explorer', [_cachePath]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [_cachePath]);
+    } else {
+      // 移动端：复制路径
+      await Clipboard.setData(ClipboardData(text: _cachePath));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('路径已复制')),
+        );
+      }
+    }
   }
 
   String _formatBytes(int bytes) {
@@ -392,11 +418,38 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '删除所有已生成的视频帧缓存，下次打开集合时将重新生成。',
+                      '删除所有已生成的视频帧缓存和封面缩略图，下次打开集合时将重新生成。',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withAlpha(120),
                       ),
                     ),
+                    if (_cachePath.isNotEmpty) ...[  
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: _openCachePath,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.folder_outlined,
+                              size: 13,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                _cachePath,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

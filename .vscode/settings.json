@@ -25,7 +25,8 @@
     "Desktop",
     "Windows",
     "IOS",
-    "ALL"
+    "ALL",
+    "MacOS & IOS"
   ],
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",

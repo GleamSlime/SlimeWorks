@@ -13,7 +13,7 @@ class SettingsPage extends StatelessWidget {
     final tabs = [
       _SettingsTab(label: '主体设置', content: const ThemeSettingsTab()),
       _SettingsTab(label: '节点设置', content: const NodeSettingsTab()),
-      _SettingsTab(label: '媒体设置', content: const MediaSettingsTab()),
+      _SettingsTab(label: '资源库', content: const _ResourcesSettingsTab()),
       _SettingsTab(label: 'Ollama 设置', content: const OllamaSettingsTab()),
       _SettingsTab(
         label: '账户设置',
@@ -36,6 +36,36 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         body: TabBarView(children: tabs.map((tab) => tab.content).toList()),
+      ),
+    );
+  }
+}
+
+/// 「资源库」二级设置页，包含「媒体设置」和「书籍设置」两个嵌套 Tab。
+class _ResourcesSettingsTab extends StatelessWidget {
+  const _ResourcesSettingsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(text: '媒体设置'),
+              Tab(text: '书籍设置'),
+            ],
+          ),
+          const Expanded(
+            child: TabBarView(
+              children: [
+                MediaSettingsTab(),
+                SettingsTabPlaceholder(title: '书籍设置'),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
