@@ -125,13 +125,15 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
         final start = int.tryParse(match.group(1) ?? '') ?? 0;
         final end = int.tryParse(match.group(2) ?? '') ?? (totalLength - 1);
         final boundedEnd = end.clamp(start, totalLength - 1);
+        final rangeLength = boundedEnd - start + 1;
         request.response.statusCode = HttpStatus.partialContent;
         request.response.headers.set(
           HttpHeaders.contentRangeHeader,
           'bytes $start-$boundedEnd/$totalLength',
         );
-        request.response.contentLength = boundedEnd - start + 1;
+        request.response.contentLength = rangeLength;
         await request.response.addStream(file.openRead(start, boundedEnd + 1));
+        _recordAppTraffic(txBytes: rangeLength, rxBytes: 0);
         await request.response.close();
         return;
       }
@@ -140,6 +142,7 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     request.response.statusCode = HttpStatus.ok;
     request.response.contentLength = totalLength;
     await request.response.addStream(file.openRead());
+    _recordAppTraffic(txBytes: totalLength, rxBytes: 0);
     await request.response.close();
   }
 
@@ -202,14 +205,19 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     request.response.headers.contentType = contentType;
     request.response.contentLength = bytes.length;
     request.response.add(bytes);
+    // 记录向客户端发出的流量（上行）
+    _recordAppTraffic(txBytes: bytes.length, rxBytes: 0);
     request.response.close().ignore();
   }
 
   Future<void> _writeFileResponse(HttpRequest request, File file, ContentType contentType) async {
+    final fileLen = file.lengthSync();
     request.response.statusCode = HttpStatus.ok;
     request.response.headers.contentType = contentType;
-    request.response.contentLength = file.lengthSync();
+    request.response.contentLength = fileLen;
     await request.response.addStream(file.openRead());
+    // 记录向客户端发出的流量（上行）
+    _recordAppTraffic(txBytes: fileLen, rxBytes: 0);
     await request.response.close();
   }
 

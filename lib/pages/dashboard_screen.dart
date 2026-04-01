@@ -85,37 +85,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace48),
-                Wrap(
-                  spacing: AppTheme.metrics.kSpace12,
-                  runSpacing: AppTheme.metrics.kSpace12,
-                  children: [
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.memory,
-                      title: 'CPU',
-                      value: _snapshot == null
-                          ? '--'
-                          : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
-                    ),
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.storage,
-                      title: '内存',
-                      value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
-                    ),
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.download,
-                      title: '下行',
-                      value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
-                    ),
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.upload,
-                      title: '上行',
-                      value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
-                    ),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: Wrap(
+                    spacing: AppTheme.metrics.kSpace12,
+                    runSpacing: AppTheme.metrics.kSpace12,
+                    children: [
+                      _buildMetricCard(
+                        context,
+                        icon: Icons.memory,
+                        title: 'CPU',
+                        value: _snapshot == null
+                            ? '--'
+                            : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
+                      ),
+                      _buildMetricCard(
+                        context,
+                        icon: Icons.storage,
+                        title: '内存',
+                        value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
+                      ),
+                      _buildMetricCard(
+                        context,
+                        icon: Icons.download,
+                        title: '下行',
+                        value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
+                      ),
+                      _buildMetricCard(
+                        context,
+                        icon: Icons.upload,
+                        title: '上行',
+                        value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
+                      ),
+                    ],
+                  ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace24),
               ],
@@ -195,7 +198,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
   }) {
     return Container(
-      width: scaleW(180).clamp(140.0, 240.0),
+      width: ((MediaQuery.of(context).size.width - scaleW(36)) / 2).clamp(70.0, 200.0),
       padding: EdgeInsets.symmetric(
         horizontal: AppTheme.metrics.kSpace12,
         vertical: AppTheme.metrics.kSpace10,

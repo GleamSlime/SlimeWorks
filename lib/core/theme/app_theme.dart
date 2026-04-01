@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
-import 'package:slime_works/main.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
@@ -13,6 +13,96 @@ class AppTheme {
   AppTheme._();
 
   static ThemeMode themeMode = ThemeMode.system;
+
+  // ── 响应式主题状态（ThemeSettingsTab 写入，MyApp.build 读取）──────────────
+  static final Rx<ThemeMode> themeModeObs = ThemeMode.system.obs;
+  static final Rx<Color> accentColorObs = LightColors.primary.obs;
+  static final RxDouble fontScaleObs = 1.0.obs;
+
+  static const String _themeModeKey = 'theme_mode';
+  static const String _accentColorKey = 'accent_color';
+  static const String _fontScaleKey = 'font_scale';
+
+  /// 启动时从持久化存储加载主题配置（仅加载输入参数，不触发 ScreenUtil）。
+  static Future<void> loadSavedTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final modeIdx = (prefs.getInt(_themeModeKey) ?? ThemeMode.system.index)
+          .clamp(0, ThemeMode.values.length - 1);
+      themeModeObs.value = ThemeMode.values[modeIdx];
+      final accentValue = prefs.getInt(_accentColorKey);
+      if (accentValue != null) accentColorObs.value = Color(accentValue);
+      fontScaleObs.value = (prefs.getDouble(_fontScaleKey) ?? 1.0).clamp(0.5, 2.0);
+    } catch (_) {}
+  }
+
+  /// 根据当前 accent 和 fontScale 构建亮色主题（须在 ScreenUtil 初始化后调用）。
+  static ThemeData buildCustomLight(Color accent, double fontScale) =>
+      _applyCustomization(lightTheme, accent, fontScale);
+
+  /// 根据当前 accent 和 fontScale 构建暗色主题（须在 ScreenUtil 初始化后调用）。
+  static ThemeData buildCustomDark(Color accent, double fontScale) =>
+      _applyCustomization(darkTheme, accent, fontScale);
+
+  static ThemeData _applyCustomization(ThemeData base, Color accent, double scale) {
+    final scaledText = _scaleTextTheme(base.textTheme, scale);
+    final scaledPrimary = _scaleTextTheme(base.primaryTextTheme, scale);
+    final cs = base.colorScheme.copyWith(
+      primary: accent,
+      secondary: accent,
+      onPrimary: _contrastColor(accent),
+    );
+    return base.copyWith(
+      colorScheme: cs,
+      primaryColor: accent,
+      appBarTheme: base.appBarTheme.copyWith(backgroundColor: cs.surface),
+      tabBarTheme: base.tabBarTheme.copyWith(
+        indicator: UnderlineTabIndicator(borderSide: BorderSide(color: accent, width: 3)),
+        labelColor: cs.onSurface,
+        unselectedLabelColor: cs.onSurface.withValues(alpha: 0.55),
+      ),
+      textTheme: scaledText,
+      primaryTextTheme: scaledPrimary,
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: accent,
+          foregroundColor: _contrastColor(accent),
+        ),
+      ),
+      sliderTheme: base.sliderTheme.copyWith(
+        thumbColor: accent,
+        activeTrackColor: accent,
+      ),
+    );
+  }
+
+  static TextTheme _scaleTextTheme(TextTheme t, double scale) {
+    return t.copyWith(
+      displayLarge: _scaleStyle(t.displayLarge, scale),
+      displayMedium: _scaleStyle(t.displayMedium, scale),
+      displaySmall: _scaleStyle(t.displaySmall, scale),
+      headlineLarge: _scaleStyle(t.headlineLarge, scale),
+      headlineMedium: _scaleStyle(t.headlineMedium, scale),
+      headlineSmall: _scaleStyle(t.headlineSmall, scale),
+      titleLarge: _scaleStyle(t.titleLarge, scale),
+      titleMedium: _scaleStyle(t.titleMedium, scale),
+      titleSmall: _scaleStyle(t.titleSmall, scale),
+      bodyLarge: _scaleStyle(t.bodyLarge, scale),
+      bodyMedium: _scaleStyle(t.bodyMedium, scale),
+      bodySmall: _scaleStyle(t.bodySmall, scale),
+      labelLarge: _scaleStyle(t.labelLarge, scale),
+      labelMedium: _scaleStyle(t.labelMedium, scale),
+      labelSmall: _scaleStyle(t.labelSmall, scale),
+    );
+  }
+
+  static TextStyle? _scaleStyle(TextStyle? s, double scale) {
+    if (s?.fontSize == null) return s;
+    return s!.copyWith(fontSize: s.fontSize! * scale);
+  }
+
+  static Color _contrastColor(Color c) =>
+      c.computeLuminance() > 0.5 ? Colors.black : Colors.white;
 
   static ThemeMetrics metrics = ThemeMetrics();
   static RxInt metricsVersion = 0.obs;

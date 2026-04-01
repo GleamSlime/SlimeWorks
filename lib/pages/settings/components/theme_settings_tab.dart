@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_text_styles.dart';
@@ -37,39 +36,10 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   @override
   void initState() {
     super.initState();
-    _loadSavedSettings();
-  }
-
-  Future<void> _loadSavedSettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // 加载主题模式
-      final themeModeIndex = prefs.getInt(_themeModeKey) ?? ThemeMode.system.index;
-      setState(() {
-        _themeMode = ThemeMode.values[themeModeIndex];
-      });
-
-      // 加载强调色
-      final accentColorValue = prefs.getInt(_accentColorKey) ?? LightColors.primary.toARGB32();
-      setState(() {
-        _accentColor = Color(accentColorValue);
-      });
-
-      // 加载字体缩放
-      final fontScale = prefs.getDouble(_fontScaleKey) ?? 1.0;
-      setState(() {
-        _fontScale = fontScale;
-      });
-
-      // 应用加载的设置
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _applyTheme();
-      });
-    } catch (e) {
-      // 如果加载失败，使用默认设置
-      // 加载主题设置失败: $e
-    }
+    // AppTheme 在 main() 中已提前加载持久化配置，直接从响应式变量读取即可
+    _themeMode = AppTheme.themeModeObs.value;
+    _accentColor = AppTheme.accentColorObs.value;
+    _fontScale = AppTheme.fontScaleObs.value;
   }
 
   Future<void> _saveThemeMode(ThemeMode mode) async {
@@ -92,7 +62,6 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     setState(() {
       _themeMode = mode;
     });
-    Get.changeThemeMode(mode);
     _saveThemeMode(mode);
     _applyTheme();
   }
@@ -111,93 +80,10 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   void _applyTheme() {
-    final brightness = _resolveBrightness();
-    final baseTheme = brightness == Brightness.dark ? AppTheme.darkTheme : AppTheme.lightTheme;
-    final updatedTheme = _buildCustomTheme(baseTheme, _accentColor, _fontScale);
-    Get.changeTheme(updatedTheme);
-  }
-
-  Brightness _resolveBrightness() {
-    switch (_themeMode) {
-      case ThemeMode.light:
-        return Brightness.light;
-      case ThemeMode.dark:
-        return Brightness.dark;
-      case ThemeMode.system:
-        return MediaQuery.platformBrightnessOf(context);
-    }
-  }
-
-  ThemeData _buildCustomTheme(ThemeData base, Color accentColor, double scale) {
-    final scaledTextTheme = _scaleTextTheme(base.textTheme, scale);
-    final scaledPrimaryTextTheme = _scaleTextTheme(base.primaryTextTheme, scale);
-    final colorScheme = base.colorScheme.copyWith(
-      primary: accentColor,
-      secondary: accentColor,
-      primaryContainer: accentColor.withValues(
-        alpha: (accentColor.a * 255.0).round().clamp(0, 255).toDouble(),
-      ),
-      onPrimary: _getContrastColor(accentColor),
-    );
-    return base.copyWith(
-      colorScheme: colorScheme,
-      primaryColor: accentColor,
-      appBarTheme: base.appBarTheme.copyWith(backgroundColor: colorScheme.surface),
-      tabBarTheme: base.tabBarTheme.copyWith(
-        indicator: UnderlineTabIndicator(borderSide: BorderSide(color: accentColor, width: 3)),
-        labelColor: colorScheme.onSurface,
-        unselectedLabelColor: colorScheme.onSurface.withValues(
-          alpha: (colorScheme.onSurface.a * 255.0 * 0.55).round().clamp(0, 255).toDouble(),
-        ),
-      ),
-      textTheme: scaledTextTheme,
-      primaryTextTheme: scaledPrimaryTextTheme,
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: _getContrastColor(accentColor),
-        ),
-      ),
-      sliderTheme: base.sliderTheme.copyWith(
-        thumbColor: accentColor,
-        activeTrackColor: accentColor,
-      ),
-    );
-  }
-
-  TextTheme _scaleTextTheme(TextTheme textTheme, double scale) {
-    return textTheme.copyWith(
-      displayLarge: _scaleTextStyle(textTheme.displayLarge, scale),
-      displayMedium: _scaleTextStyle(textTheme.displayMedium, scale),
-      displaySmall: _scaleTextStyle(textTheme.displaySmall, scale),
-      headlineLarge: _scaleTextStyle(textTheme.headlineLarge, scale),
-      headlineMedium: _scaleTextStyle(textTheme.headlineMedium, scale),
-      headlineSmall: _scaleTextStyle(textTheme.headlineSmall, scale),
-      titleLarge: _scaleTextStyle(textTheme.titleLarge, scale),
-      titleMedium: _scaleTextStyle(textTheme.titleMedium, scale),
-      titleSmall: _scaleTextStyle(textTheme.titleSmall, scale),
-      bodyLarge: _scaleTextStyle(textTheme.bodyLarge, scale),
-      bodyMedium: _scaleTextStyle(textTheme.bodyMedium, scale),
-      bodySmall: _scaleTextStyle(textTheme.bodySmall, scale),
-      labelLarge: _scaleTextStyle(textTheme.labelLarge, scale),
-      labelMedium: _scaleTextStyle(textTheme.labelMedium, scale),
-      labelSmall: _scaleTextStyle(textTheme.labelSmall, scale),
-    );
-  }
-
-  TextStyle? _scaleTextStyle(TextStyle? style, double scale) {
-    if (style == null) {
-      return null;
-    }
-    final fontSize = style.fontSize;
-    if (fontSize == null) {
-      return style;
-    }
-    return style.copyWith(fontSize: fontSize * scale);
-  }
-
-  Color _getContrastColor(Color color) {
-    return color.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    // 更新 AppTheme 响应式变量 — MyApp.build 中的 Obx 监听这些变量并重建 MaterialApp
+    AppTheme.themeModeObs.value = _themeMode;
+    AppTheme.accentColorObs.value = _accentColor;
+    AppTheme.fontScaleObs.value = _fontScale;
   }
 
   String _themeModeLabel(ThemeMode mode) {
@@ -252,7 +138,13 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
               ),
           ],
         ),
-        child: isSelected ? Icon(Icons.check, color: _getContrastColor(color), size: 28) : null,
+        child: isSelected
+            ? Icon(
+                Icons.check,
+                color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                size: 28,
+              )
+            : null,
       ),
     );
   }

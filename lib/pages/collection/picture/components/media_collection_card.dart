@@ -30,6 +30,7 @@ class MediaCollectionCard extends StatefulWidget {
     required this.onOpenFolder,
     required this.onToggleFavorite,
     this.onDeleteFolder,
+    this.onDeleteNodeFiles,
     this.hoverCoverSources,
     this.onHoverEnter,
     this.onRequestVideoFrame,
@@ -51,6 +52,9 @@ class MediaCollectionCard extends StatefulWidget {
   final VoidCallback onOpenFolder;
   final VoidCallback onToggleFavorite;
   final VoidCallback? onDeleteFolder;
+
+  /// 删除节点本地文件回调（仅远程集合时有意义）。
+  final VoidCallback? onDeleteNodeFiles;
 
   /// 悬停预览封面列表，可为空或 null。
   final List<String?>? hoverCoverSources;
@@ -80,6 +84,13 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   /// 3s 阈值是否已达到（预取已触发）。
   bool _hoverPreviewActive = false;
 
+  // ── 移动端滑动预览状态 ──────────────────────────────────────────────────────
+  /// 移动端是否处于滑动预览激活状态。
+  bool _swipePreviewActive = false;
+
+  /// 滑动预览当前进度 [0,1]，映射到 hoverCoverSources 索引。
+  double _swipeFraction = 0.5;
+
   static const Duration _kAnimDur = Duration(milliseconds: 200);
   static const Curve _kAnimCurve = Curves.easeOut;
 
@@ -97,17 +108,20 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
-  /// 根据悬停位置返回当前应显示的封面路径。
+  /// 根据悬停/滑动位置返回当前应显示的封面路径。
   /// 优先级：实时视频帧 > hoverCoverSources > coverSource。
   String? _activeDisplaySource() {
-    if (!_hovering) return widget.coverSource;
+    final isActive = _hovering || _swipePreviewActive;
+    if (!isActive) return widget.coverSource;
     // 实时视频帧优先
     if (_realtimeVideoFrame != null && _realtimeVideoFrame!.isNotEmpty) {
       return _realtimeVideoFrame;
     }
     final sources = widget.hoverCoverSources;
     if (sources == null || sources.isEmpty) return widget.coverSource;
-    final fraction = _cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0.0;
+    final fraction = _swipePreviewActive
+        ? _swipeFraction
+        : (_cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0.0);
     final count = sources.length;
     final idx = count == 1 ? 0 : (fraction * (count - 1)).round().clamp(0, count - 1);
     final src = sources[idx];
@@ -181,6 +195,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         const PopupMenuItem<String>(value: 'delete', child: Text('删除集合')),
         if (widget.onDeleteFolder != null)
           const PopupMenuItem<String>(value: 'delete_folder', child: Text('删除文件夹')),
+        if (widget.isRemote && widget.onDeleteNodeFiles != null)
+          const PopupMenuItem<String>(value: 'delete_node_files', child: Text('删除节点本地文件')),
         if (PlatformUtil.isMobile)
           const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
       ],
@@ -198,6 +214,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       widget.onDelete();
     } else if (action == 'delete_folder') {
       widget.onDeleteFolder?.call();
+    } else if (action == 'delete_node_files') {
+      widget.onDeleteNodeFiles?.call();
     } else if (action == 'select') {
       widget.onLongPress();
     }
@@ -219,6 +237,42 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
             ? (details) => _showContextMenu(context, details.globalPosition)
             : null,
         onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
+        // ── 移动端水平滑动预览 ──────────────────────────────────────────────
+        onHorizontalDragStart:
+            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            ? (d) {
+                // 触发预取（对应鼠标 onHoverEnter）
+                if (!_hoverPreviewActive) {
+                  _hoverPreviewActive = true;
+                  widget.onHoverEnter?.call();
+                }
+                setState(() {
+                  _swipePreviewActive = true;
+                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
+                });
+              }
+            : null,
+        onHorizontalDragUpdate:
+            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            ? (d) {
+                if (!_swipePreviewActive) return;
+                setState(() {
+                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
+                });
+              }
+            : null,
+        onHorizontalDragEnd:
+            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            ? (_) {
+                setState(() => _swipePreviewActive = false);
+              }
+            : null,
+        onHorizontalDragCancel:
+            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            ? () {
+                setState(() => _swipePreviewActive = false);
+              }
+            : null,
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
           onEnter: (_) {
@@ -267,15 +321,15 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // ── 全封面背景图（hover 时微缩放）────────────────────
+                    // ── 全封面背景图（hover/swipe 时微缩放）────────────────
                     AnimatedScale(
-                      scale: _hovering ? 1.05 : 1.0,
+                      scale: (_hovering || _swipePreviewActive) ? 1.05 : 1.0,
                       duration: _kAnimDur,
                       curve: _kAnimCurve,
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 120),
                         child: KeyedSubtree(
-                          key: ValueKey(widget.coverSource),
+                          key: ValueKey(displaySource),
                           child: _buildCoverImage(displaySource, theme),
                         ),
                       ),
@@ -400,7 +454,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                     ),
 
                     // ── 悬停预览进度条————————————————————————————
-                    if (_hovering &&
+                    if ((_hovering || _swipePreviewActive) &&
                         !widget.isSelecting &&
                         widget.hoverCoverSources != null &&
                         widget.hoverCoverSources!.length > 1)
@@ -409,7 +463,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                         right: 0,
                         bottom: 0,
                         child: LinearProgressIndicator(
-                          value: _cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0,
+                          value: _swipePreviewActive
+                              ? _swipeFraction
+                              : (_cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0),
                           minHeight: scaleW(3),
                           backgroundColor: Colors.white24,
                           valueColor: const AlwaysStoppedAnimation<Color>(Colors.white70),
@@ -451,7 +507,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                             curve: _kAnimCurve,
                             child: Text(
                               widget.collection.title,
-                              maxLines: _hovering ? 2 : 1,
+                              maxLines: _hovering ? 5 : 4,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.white,

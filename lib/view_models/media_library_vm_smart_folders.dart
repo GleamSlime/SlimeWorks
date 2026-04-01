@@ -172,9 +172,34 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     List<String> targetFolderIds = const [],
     SmartFolderRegexTarget regexTarget = SmartFolderRegexTarget.collectionName,
     SmartFolderFileType fileTypeFilter = SmartFolderFileType.all,
+    String? targetNodeId,
   }) async {
     final normalized = name.trim();
     if (normalized.isEmpty) return;
+
+    // 若指定远程节点，则在节点上创建并重新拉取该节点的完整智能文件夹列表
+    if (targetNodeId != null) {
+      try {
+        await nodeSettingsService.callNodeAction(
+          nodeId: targetNodeId,
+          action: 'create_smart_folder',
+          params: {
+            'name': normalized,
+            'regex_pattern': pattern.trim(),
+            'target_folder_ids': targetFolderIds,
+            'regex_target': regexTarget.name,
+            'file_type_filter': fileTypeFilter.name,
+          },
+        );
+        // 重新拉取该节点的所有数据（含最新智能文件夹）
+        await refreshRemoteLibrary();
+        showSnack('成功', '已在节点上创建智能文件夹');
+      } catch (e) {
+        showSnack('错误', '在节点上创建智能文件夹失败: $e');
+      }
+      return;
+    }
+
     final id =
         '${MediaLibraryViewModel._smartFolderPrefix}${DateTime.now().millisecondsSinceEpoch}';
     final sf = SmartFolder(

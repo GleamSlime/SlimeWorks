@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,8 @@ class MediaFolderCard extends StatelessWidget {
     required this.isRemote,
     required this.nodeName,
     this.onTransfer,
+    this.onPullToLocal,
+    this.onDeleteNodeFiles,
   });
 
   final media_api.MediaFolder folder;
@@ -36,6 +39,8 @@ class MediaFolderCard extends StatelessWidget {
   final bool isRemote;
   final String? nodeName;
   final VoidCallback? onTransfer;
+  final VoidCallback? onPullToLocal;
+  final VoidCallback? onDeleteNodeFiles;
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -51,6 +56,10 @@ class MediaFolderCard extends StatelessWidget {
         const PopupMenuItem<String>(value: 'rename', child: Text('重命名文件夹')),
         if (onTransfer != null)
           const PopupMenuItem<String>(value: 'transfer', child: Text('转移集合到...')),
+        if (isRemote && onPullToLocal != null)
+          const PopupMenuItem<String>(value: 'pull_to_local', child: Text('拉取到本地')),
+        if (isRemote && onDeleteNodeFiles != null)
+          const PopupMenuItem<String>(value: 'delete_node_files', child: Text('删除节点本地文件')),
         const PopupMenuItem<String>(value: 'delete', child: Text('删除文件夹')),
         if (PlatformUtil.isMobile)
           const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
@@ -60,6 +69,10 @@ class MediaFolderCard extends StatelessWidget {
       onRename();
     } else if (action == 'transfer') {
       onTransfer?.call();
+    } else if (action == 'pull_to_local') {
+      onPullToLocal?.call();
+    } else if (action == 'delete_node_files') {
+      onDeleteNodeFiles?.call();
     } else if (action == 'delete') {
       onDelete();
     } else if (action == 'select') {
@@ -157,21 +170,28 @@ class MediaFolderCard extends StatelessWidget {
             Positioned(
               left: appMetrics.kSpace10,
               top: appMetrics.kSpace10,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: appMetrics.kSpace8,
-                  vertical: appMetrics.kSpace4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(120),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$collectionCount 个集合',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: appMetrics.fontSize10,
-                    fontWeight: FontWeight.w600,
+              child: RepaintBoundary(
+                child: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: appMetrics.kSpace8,
+                        vertical: appMetrics.kSpace4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(120),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$collectionCount 个集合',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: appMetrics.fontSize10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -200,32 +220,38 @@ class MediaFolderCard extends StatelessWidget {
                 ),
               ),
             Positioned(
-              left: appMetrics.kSpace12,
-              right: appMetrics.kSpace12,
-              bottom: appMetrics.kSpace12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    folder.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: appMetrics.fontSize16,
-                      fontWeight: FontWeight.w700,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: appMetrics.kSpace10,
+                  vertical: appMetrics.kSpace10,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      folder.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: appMetrics.fontSize16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: appMetrics.kSpace4),
-                  Text(
-                    '点击进入文件夹',
-                    style: TextStyle(
-                      color: Colors.white.withAlpha(210),
-                      fontSize: appMetrics.fontSize12,
+                    SizedBox(height: appMetrics.kSpace4),
+                    Text(
+                      '点击进入文件夹',
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(210),
+                        fontSize: appMetrics.fontSize12,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],

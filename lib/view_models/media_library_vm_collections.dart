@@ -232,11 +232,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (normalized.isEmpty) {
           throw ArgumentError('请输入节点目录路径');
         }
+        // 在异步扫描前同步捕获目标文件夹 ID，避免因后台刷新导致 effectiveFolderId 变为 null
+        final targetFolderRawId = _resolveRemoteTargetFolderId(nodeId);
         final payloads = await nodeSettingsService.scanNodeMediaFolders(
           nodeId: nodeId,
           folderPath: normalized,
         );
-        final targetFolderRawId = _resolveRemoteTargetFolderId(nodeId);
         if (targetFolderRawId != null) {
           for (final payload in payloads) {
             final rawId = _stringOrNull(payload['id']);
@@ -301,11 +302,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (normalized.isEmpty) {
           throw ArgumentError('请输入节点目录路径');
         }
+        // 在异步导入前同步捕获目标文件夹 ID
+        final targetFolderRawId = _resolveRemoteTargetFolderId(nodeId);
         final payload = await nodeSettingsService.importNodeMediaFolder(
           nodeId: nodeId,
           folderPath: normalized,
         );
-        final targetFolderRawId = _resolveRemoteTargetFolderId(nodeId);
         final rawId = payload == null ? null : _stringOrNull(payload['id']);
         if (targetFolderRawId != null && rawId != null && rawId.isNotEmpty) {
           await nodeSettingsService.moveNodeMediaCollectionToFolder(
@@ -618,5 +620,187 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       await deleteFolder(folderId);
     }
     exitSelection();
+  }
+
+  /// 将远程文件夹中的所有集合文件拉取到用户指定的本地目录。
+  Future<void> pullRemoteFolderToLocal(String folderId) async {
+    final nodeId = getRemoteFolderNodeId(folderId);
+    if (nodeId == null) {
+      showSnack('错误', '远程文件夹映射不存在');
+      return;
+    }
+
+    final localDir = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择拉取目标目录');
+    if (localDir == null || localDir.isEmpty) return;
+
+    final folderCollections = mergedCollections
+        .where((c) => c.folderId == folderId && isRemoteCollection(c.id))
+        .toList();
+
+    if (folderCollections.isEmpty) {
+      showSnack('提示', '该远程文件夹暂无集合');
+      return;
+    }
+
+    isScanning.value = true;
+    int successFiles = 0;
+    int failFiles = 0;
+
+    for (int ci = 0; ci < folderCollections.length; ci++) {
+      final collection = folderCollections[ci];
+      final rawCollectionId = getRemoteRawCollectionId(collection.id);
+      if (rawCollectionId == null) continue;
+
+      final safeTitle = collection.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final collectionDir = Directory('$localDir/$safeTitle');
+      await collectionDir.create(recursive: true);
+
+      scanStatusText.value = '拉取集合 ${ci + 1}/${folderCollections.length}: ${collection.title}';
+      try {
+        final items = await nodeSettingsService.fetchNodeMediaCollectionItems(
+          nodeId: nodeId,
+          collectionId: rawCollectionId,
+        );
+        for (int ii = 0; ii < items.length; ii++) {
+          final item = items[ii];
+          final filePath = (item['file_path'] ?? '').toString();
+          if (filePath.isEmpty) {
+            failFiles++;
+            continue;
+          }
+          final filename = filePath.split('/').last.split('\\').last;
+          final savePath = '${collectionDir.path}/$filename';
+          scanStatusText.value = '下载 ${collection.title} · $filename (${ii + 1}/${items.length})';
+          try {
+            await nodeSettingsService.downloadNodeFileTo(
+              nodeId: nodeId,
+              filePath: filePath,
+              savePath: savePath,
+            );
+            successFiles++;
+          } catch (_) {
+            failFiles++;
+          }
+        }
+      } catch (e) {
+        showSnack('错误', '获取集合 ${collection.title} 失败: $e');
+      }
+    }
+
+    isScanning.value = false;
+    scanStatusText.value = '';
+
+    if (failFiles == 0) {
+      showSnack('完成', '已拉取 $successFiles 个文件到 $localDir');
+    } else {
+      showSnack('部分完成', '成功 $successFiles 个，失败 $failFiles 个');
+    }
+  }
+
+  /// 删除远程节点上某个集合的本地物理文件。
+  /// 若删除数 ≥ 集合资源数，则同时从库中移除集合记录并清理缓存；
+  /// 若所属文件夹因此变为空，也一并删除文件夹。
+  Future<void> deleteNodeLocalFilesForCollection(String collectionId) async {
+    final nodeId = getRemoteNodeId(collectionId);
+    final rawId = getRemoteRawCollectionId(collectionId);
+    if (nodeId == null || rawId == null) {
+      showSnack('错误', '远程集合映射不存在');
+      return;
+    }
+
+    final collection = mergedCollections.firstWhereOrNull((c) => c.id == collectionId);
+    final knownItemCount = collection?.itemCount.toInt() ?? 0;
+    final folderId = collection?.folderId;
+
+    try {
+      isScanning.value = true;
+      final deleted = await nodeSettingsService.deleteNodeCollectionLocalFiles(
+        nodeId: nodeId,
+        rawCollectionId: rawId,
+      );
+
+      if (deleted > 0 && deleted >= knownItemCount) {
+        // 全部文件已删，清理图片缓存
+        _invalidateCollectionMediaCache(collectionId);
+        // 从节点 DB 和本地 UI 移除集合记录
+        await deleteCollection(collectionId);
+        // 检查所属文件夹是否因此变空
+        if (folderId != null) {
+          final remaining = mergedCollections.where((c) => c.folderId == folderId).length;
+          if (remaining == 0) {
+            await deleteFolder(folderId);
+            showSnack('完成', '已删除全部文件，集合及空文件夹已移除');
+          } else {
+            showSnack('完成', '已删除全部文件，集合已从库中移除');
+          }
+        } else {
+          showSnack('完成', '已删除全部文件，集合已从库中移除');
+        }
+      } else {
+        showSnack('完成', '已删除节点上 $deleted 个文件');
+      }
+    } catch (e) {
+      showSnack('错误', '删除节点本地文件失败: $e');
+    } finally {
+      isScanning.value = false;
+    }
+  }
+
+  /// 清除某集合相关的本地图片内存缓存（Flutter imageCache + viewmodel 封面缓存）。
+  void _invalidateCollectionMediaCache(String collectionId) {
+    _collectionVideoThumbnails.remove(collectionId);
+    _asyncCoverVersion.value++;
+    // 清除 Flutter 网络图片内存缓存（集合的远程封面 URL 均在其中）
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+  }
+
+  /// 删除远程节点上某个文件夹内所有集合的本地物理文件。
+  /// 每个集合全部删完后自动移除集合记录；文件夹变空后自动删除文件夹。
+  Future<void> deleteNodeLocalFilesForFolder(String folderId) async {
+    final nodeId = getRemoteFolderNodeId(folderId);
+    if (nodeId == null) {
+      showSnack('错误', '远程文件夹映射不存在');
+      return;
+    }
+
+    final folderCollections = mergedCollections
+        .where((c) => c.folderId == folderId && isRemoteCollection(c.id))
+        .toList();
+
+    if (folderCollections.isEmpty) {
+      showSnack('提示', '该远程文件夹暂无集合');
+      return;
+    }
+
+    isScanning.value = true;
+    int totalDeleted = 0;
+    int fullyCleanedCount = 0;
+    for (final collection in folderCollections) {
+      final rawId = getRemoteRawCollectionId(collection.id);
+      if (rawId == null) continue;
+      try {
+        final deleted = await nodeSettingsService.deleteNodeCollectionLocalFiles(
+          nodeId: nodeId,
+          rawCollectionId: rawId,
+        );
+        totalDeleted += deleted;
+        if (deleted > 0 && deleted >= (collection.itemCount.toInt())) {
+          _invalidateCollectionMediaCache(collection.id);
+          await deleteCollection(collection.id);
+          fullyCleanedCount++;
+        }
+      } catch (_) {}
+    }
+
+    // 若文件夹现在已空则一并删除
+    final stillInFolder = mergedCollections.where((c) => c.folderId == folderId).length;
+    if (stillInFolder == 0) {
+      await deleteFolder(folderId);
+      showSnack('完成', '已从节点删除 $totalDeleted 个文件，文件夹已清空并移除');
+    } else {
+      showSnack('完成', '已从节点删除 $totalDeleted 个文件（$fullyCleanedCount 个集合已移除）');
+    }
+    isScanning.value = false;
   }
 }

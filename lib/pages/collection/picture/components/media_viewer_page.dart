@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
@@ -13,6 +14,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:media_kit_video/media_kit_video_controls/media_kit_video_controls.dart'
     as media_controls;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:slime_works/core/index.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -35,112 +39,315 @@ class MediaViewerPage extends StatefulWidget {
   State<MediaViewerPage> createState() => _MediaViewerPageState();
 }
 
-class _MediaViewerPageState extends State<MediaViewerPage> {
-  late final PageController _pageController;
+class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderStateMixin {
   int _currentIndex = 0;
 
-  /// 累计滑动偏移，超阈值才翻页（避免误触）
+  // ── 跟手拖动状态 ─────────────────────────────────────────────────────────
+  // 当前正在拖动时的像素偏移（horizontal drag → dx≠0，vertical drag → dy≠0）
+  double _dragOffset = 0.0;
+  bool _isDraggingH = false; // true = 水平拖动，false = 垂直拖动
+  bool _isDragging = false;
+
+  // 松手后的弹性动画
+  late AnimationController _snapCtrl;
+  late Animation<double> _snapAnim;
+  double _snapFrom = 0.0;
+  double _snapTo = 0.0;
+
+  // 松手提交时的目标页（null = 弹回原页）
+  int? _pendingIndex;
+
+  // 上一页和下一页 widget 缓存，避免切换时重建
+  // 不变式：_currPageWidget 始终对应 _currentIndex，邻页 null 时在 build() 懒建
+  Widget? _prevPageWidget;
+  Widget? _currPageWidget;
+  Widget? _nextPageWidget;
+
+  // 鼠标滚轮/触摸板累积
   double _scrollAccum = 0.0;
   static const double _kScrollThreshold = 60.0;
+  static const double _kDragCommitFraction = 0.3; // 拖动超过屏幕 30% 即提交
+
+  // ── 沉浸模式 ──────────────────────────────────────────────────────────────
+  bool _uiVisible = true;
+  Timer? _immersiveTimer;
+
+  // ── 图片缩放状态（缩放时禁用外层翻页手势）────────────────────────────────
+  bool _imageIsZoomed = false;
+  static const Duration _kImmersiveDelay = Duration(seconds: 10);
+
+  void _resetImmersiveTimer() {
+    _immersiveTimer?.cancel();
+    if (!_uiVisible) {
+      setState(() => _uiVisible = true);
+    }
+    _immersiveTimer = Timer(_kImmersiveDelay, () {
+      if (mounted) setState(() => _uiVisible = false);
+    });
+  }
+
+  void _toggleUi() {
+    _immersiveTimer?.cancel();
+    setState(() => _uiVisible = !_uiVisible);
+    if (_uiVisible) {
+      _immersiveTimer = Timer(_kImmersiveDelay, () {
+        if (mounted) setState(() => _uiVisible = false);
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
-    // 移动端进入沉浸全屏（隐藏状态栏 + 导航栏）
+    _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+    _snapCtrl.addListener(_onSnapTick);
+    _snapCtrl.addStatusListener(_onSnapStatus);
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      Future.microtask(() => windowManager.setFullScreen(true));
     }
+    // 启动沉浸模式计时器
+    _resetImmersiveTimer();
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
-    // 退出时恢复系统 UI
+    _immersiveTimer?.cancel();
+    _snapCtrl.dispose();
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.edgeToEdge,
         overlays: SystemUiOverlay.values,
       );
+    } else {
+      Future.microtask(() => windowManager.setFullScreen(false));
     }
     super.dispose();
   }
 
-  void _jump(int delta) {
-    final next = (_currentIndex + delta).clamp(0, widget.items.length - 1);
-    if (next == _currentIndex) return;
-    _pageController.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-    );
+  // ── 弹性动画回调 ─────────────────────────────────────────────────────────
+
+  void _onSnapTick() {
+    if (_snapCtrl.isAnimating) {
+      setState(() {
+        _dragOffset = _snapFrom + (_snapTo - _snapFrom) * _snapAnim.value;
+      });
+    }
   }
 
-  /// 触摸板 / 鼠标滚轮：离散事件直接翻页，触摸板累积翻页。
+  void _onSnapStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      // 动画完成：旋转复用已渲染的邻页，避免重建闪烁
+      final pending = _pendingIndex;
+      // 翻页后重置缩放状态（新页面默认未缩放）
+      _imageIsZoomed = false;
+      setState(() {
+        if (pending != null) {
+          if (pending == _currentIndex + 1) {
+            // 前进：next → curr，curr → prev，next 置 null 懒建
+            _prevPageWidget = _currPageWidget;
+            _currPageWidget = _nextPageWidget;
+            _nextPageWidget = null;
+          } else if (pending == _currentIndex - 1) {
+            // 后退：prev → curr，curr → next，prev 置 null 懒建
+            _nextPageWidget = _currPageWidget;
+            _currPageWidget = _prevPageWidget;
+            _prevPageWidget = null;
+          } else {
+            // 非相邻跳转：全部清空重建
+            _prevPageWidget = null;
+            _currPageWidget = null;
+            _nextPageWidget = null;
+          }
+          _currentIndex = pending;
+        }
+        _dragOffset = 0.0;
+        _isDragging = false;
+        _pendingIndex = null;
+      });
+    }
+  }
+
+  // ── 即时跳转（键盘 / 滚轮，不需要跟手） ──────────────────────────────────
+
+  void _jumpInstant(int delta, {bool horizontal = false}) {
+    if (_snapCtrl.isAnimating) _snapCtrl.stop();
+    final next = (_currentIndex + delta).clamp(0, widget.items.length - 1);
+    if (next == _currentIndex) return;
+    final size = MediaQuery.sizeOf(context);
+    final screenExtent = horizontal ? size.width : size.height;
+    _isDraggingH = horizontal;
+    _isDragging = true;
+    _snapFrom = 0.0;
+    _snapTo = delta < 0 ? screenExtent : -screenExtent;
+    _pendingIndex = next;
+    _snapAnim = CurvedAnimation(parent: _snapCtrl, curve: Curves.easeOutCubic);
+    // 非相邻跳转时清空邻页缓存，确保 build() 重建正确的邻页
+    if (delta.abs() > 1) {
+      _prevPageWidget = null;
+      _nextPageWidget = null;
+    }
+    _snapCtrl.forward(from: 0.0);
+    setState(() {});
+  }
+
+  // ── 拖动手势 ─────────────────────────────────────────────────────────────
+
+  void _onDragStart({required bool horizontal}) {
+    if (_snapCtrl.isAnimating) _snapCtrl.stop();
+    _isDraggingH = horizontal;
+    _isDragging = true;
+    _dragOffset = 0.0;
+    _pendingIndex = null;
+    setState(() {});
+  }
+
+  void _onDragUpdate(double delta) {
+    if (!_isDragging) return;
+    setState(() => _dragOffset += delta);
+  }
+
+  void _onDragEnd(double velocity, double screenExtent) {
+    if (!_isDragging) return;
+    final frac = _dragOffset / screenExtent;
+    int? next;
+    // 正 offset = 当前页右移/下移 = "往回翻"（看上一项）
+    if (_dragOffset > 0 && (frac > _kDragCommitFraction || velocity > 400) && _currentIndex > 0) {
+      next = _currentIndex - 1;
+    } else if (_dragOffset < 0 &&
+        (-frac > _kDragCommitFraction || velocity < -400) &&
+        _currentIndex < widget.items.length - 1) {
+      next = _currentIndex + 1;
+    }
+
+    _snapFrom = _dragOffset;
+    if (next != null) {
+      // 提交：动画到屏幕边缘
+      _snapTo = _dragOffset > 0 ? screenExtent : -screenExtent;
+      _pendingIndex = next;
+    } else {
+      // 弹回原位
+      _snapTo = 0.0;
+      _pendingIndex = null;
+    }
+    _snapAnim = CurvedAnimation(
+      parent: _snapCtrl,
+      curve: next != null ? Curves.easeOutCubic : Curves.easeOutBack,
+    );
+    _snapCtrl.forward(from: 0.0);
+  }
+
+  // ── 鼠标滚轮 ─────────────────────────────────────────────────────────────
+
   void _handlePointerScroll(PointerScrollEvent event) {
+    if (_isDragging) return;
+    _resetImmersiveTimer();
     final dy = event.scrollDelta.dy;
     if (dy.abs() >= 100) {
       _scrollAccum = 0;
-      _jump(dy > 0 ? 1 : -1);
+      _jumpInstant(dy > 0 ? 1 : -1);
       return;
     }
     _scrollAccum += dy;
     if (_scrollAccum.abs() >= _kScrollThreshold) {
-      _jump(_scrollAccum > 0 ? 1 : -1);
+      _jumpInstant(_scrollAccum > 0 ? 1 : -1);
       _scrollAccum = 0;
     }
   }
 
-  /// 子页面（图片 / 视频）反馈的垂直滑动偏移量，统一处理翻页逻辑。
-  /// [dy] 正 = 手指向下 → 上一项；负 = 手指向上 → 下一项。
+  // ── 子页面垂直滑动回调（图片缩放后用 onSwipeDelta 代替 drag）────────────
+
   void _handleSwipeDelta(double dy) {
+    // 图片缩放模式下不跟手，只累积阈值翻页
     _scrollAccum -= dy;
     if (_scrollAccum.abs() >= _kScrollThreshold) {
-      _jump(_scrollAccum > 0 ? 1 : -1);
+      _jumpInstant(_scrollAccum > 0 ? 1 : -1);
       _scrollAccum = 0;
     }
   }
 
-  /// 将当前图片保存到系统相册。
+  // ── 页面构建 ─────────────────────────────────────────────────────────────
+
+  Widget _buildPageContent(BuildContext context, int index) {
+    if (index < 0 || index >= widget.items.length) {
+      return const SizedBox.expand();
+    }
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    final item = widget.items[index];
+    final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
+    if (item.kind == media_api.MediaKind.video || item.kind == media_api.MediaKind.audio) {
+      return _VideoPreview(
+        source: source,
+        title: item.title,
+        // 音频文件尝试异步取封面；视频用文件路径本身（原生层可提取帧）
+        coverSource: null,
+        onSwipeDelta: _handleSwipeDelta,
+        onSwipeEnd: () => _scrollAccum = 0,
+        isAudio: item.kind == media_api.MediaKind.audio,
+      );
+    }
+    if (source == null || source.isEmpty) {
+      return const Center(
+        child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
+      );
+    }
+    return _ImageViewer(
+      source: source,
+      onSwipeDelta: _handleSwipeDelta,
+      onSwipeEnd: () => _scrollAccum = 0,
+      onSave: isMobile ? () => _saveCurrentItem(context) : null,
+      onZoomChanged: (zoomed) {
+        if (_imageIsZoomed != zoomed) setState(() => _imageIsZoomed = zoomed);
+      },
+    );
+  }
+
+  // ── 将当前图片保存到系统相册 ──────────────────────────────────────────────
+
   Future<void> _saveCurrentItem(BuildContext context) async {
     final item = widget.items[_currentIndex];
-    if (item.kind != media_api.MediaKind.image) return;    // 保存时始终用原图（不传 isCover）
+    if (item.kind != media_api.MediaKind.image) return;
     final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (source == null || source.isEmpty) return;
 
-    // 最多请求 3 次权限
-    const maxAttempts = 3;
-    bool hasAccess = false;
-    try {
-      hasAccess = await Gal.hasAccess(toAlbum: true);
-    } catch (_) {}
-    for (int attempt = 0; !hasAccess && attempt < maxAttempts; attempt++) {
-      try {
-        hasAccess = await Gal.requestAccess(toAlbum: true);
-      } catch (_) {}
-      if (!hasAccess && attempt < maxAttempts - 1) {
-        await Future<void>.delayed(const Duration(milliseconds: 400));
+    // 使用 permission_handler 授权，完全绕开 Gal.requestAccess（iOS native 冲突根源）
+    if (Platform.isAndroid || Platform.isIOS) {
+      final permission = Platform.isIOS
+          ? Permission
+                .photosAddOnly // 只需写入，对应 NSPhotoLibraryAddUsageDescription
+          : Permission.photos;
+
+      var status = await permission.status;
+      if (status.isDenied) {
+        status = await permission.request();
       }
-    }
-    if (!hasAccess) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('没有相册写入权限，请在系统设置中手动授权'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (status.isPermanentlyDenied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('相册权限被拒绝，请在系统设置中手动开启'),
+              action: SnackBarAction(label: '去设置', onPressed: openAppSettings),
+            ),
+          );
+        }
+        return;
       }
-      return;
+      if (!status.isGranted && !status.isLimited) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('没有相册写入权限')));
+        }
+        return;
+      }
     }
 
+    if (!mounted) return;
     EasyLoading.show(status: '正在保存...');
     File? tmpFile;
     try {
       String localPath;
       if (source.startsWith('http')) {
-        // 带 30s 超时，避免卡死
         final resp = await http.get(Uri.parse(source)).timeout(const Duration(seconds: 30));
         final tmpDir = await getTemporaryDirectory();
         final ext = source.split('?').first.split('.').last.toLowerCase();
@@ -153,8 +360,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
       } else {
         localPath = source;
       }
-      // Gal.putImage 需在主线程调用，用 microtask 确保
-      await Future.microtask(() => Gal.putImage(localPath));
+      await Gal.putImage(localPath);
       EasyLoading.showSuccess('已保存到相册');
     } catch (e) {
       EasyLoading.showError('保存失败: $e');
@@ -165,9 +371,47 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.items[_currentIndex];
+    final size = MediaQuery.sizeOf(context);
     final isMobile = Platform.isAndroid || Platform.isIOS;
+    final item = widget.items[_currentIndex];
     final isImage = item.kind == media_api.MediaKind.image;
+
+    // 懒填充：只建还没构建的槽，已有的直接复用
+    _currPageWidget ??= _buildPageContent(context, _currentIndex);
+    if (_currentIndex > 0) {
+      _prevPageWidget ??= _buildPageContent(context, _currentIndex - 1);
+    } else {
+      _prevPageWidget = null;
+    }
+    if (_currentIndex < widget.items.length - 1) {
+      _nextPageWidget ??= _buildPageContent(context, _currentIndex + 1);
+    } else {
+      _nextPageWidget = null;
+    }
+
+    // 判断当前拖动轴和方向，决定邻页应放在哪里
+    final offset = _isDragging ? _dragOffset : 0.0;
+    final screenExtent = _isDraggingH ? size.width : size.height;
+
+    // 邻页相对于当前页的基准偏移（单位：像素）
+    // 上一页在左/上（-screenExtent），下一页在右/下（+screenExtent）
+    // 手指右划 offset>0 → current 右移，prev 从左进：-screenExtent + offset → 趋近 0 ✓
+    // 手指左划 offset<0 → current 左移，next 从右进：+screenExtent + offset → 趋近 0 ✓
+    final prevBase = -screenExtent;
+    final nextBase = screenExtent;
+
+    Widget buildPositioned(Widget? page, double base) {
+      if (page == null) return const SizedBox.shrink();
+      final dx = _isDraggingH ? (base + offset) : 0.0;
+      final dy = _isDraggingH ? 0.0 : (base + offset);
+      return Positioned.fill(
+        child: Transform.translate(offset: Offset(dx, dy), child: page),
+      );
+    }
+
+    final currDx = _isDraggingH ? offset : 0.0;
+    final currDy = _isDraggingH ? 0.0 : offset;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Focus(
@@ -179,58 +423,71 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
             return KeyEventResult.handled;
           }
           if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-            _jump(-1);
+            _jumpInstant(-1);
             return KeyEventResult.handled;
           }
           if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            _jump(1);
+            _jumpInstant(1);
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            _jumpInstant(-1, horizontal: true);
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _jumpInstant(1, horizontal: true);
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
         },
         child: Stack(
           children: [
-            // ── 全屏翻页器 ──────────────────────────────────────────────────
-            Listener(
-              onPointerSignal: (event) {
-                if (event is PointerScrollEvent) _handlePointerScroll(event);
-              },
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: widget.items.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                  _scrollAccum = 0;
+            // ── 跟手拖动层 ──────────────────────────────────────────────────
+            Positioned.fill(
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) _handlePointerScroll(event);
                 },
-                itemBuilder: (context, index) {
-                  final currentItem = widget.items[index];
-                  final source = widget.viewModel.buildMediaSource(
-                    currentItem,
-                    collectionId: widget.collectionId,
-                  );
-                  if (currentItem.kind == media_api.MediaKind.video ||
-                      currentItem.kind == media_api.MediaKind.audio) {
-                    return _VideoPreview(
-                      source: source,
-                      onSwipeDelta: _handleSwipeDelta,
-                      onSwipeEnd: () => _scrollAccum = 0,
-                      isAudio: currentItem.kind == media_api.MediaKind.audio,
-                    );
-                  }
-                  if (source == null || source.isEmpty) {
-                    return const Center(
-                      child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
-                    );
-                  }
-                  return _ImageViewer(
-                    source: source,
-                    onSwipeDelta: _handleSwipeDelta,
-                    onSwipeEnd: () => _scrollAccum = 0,
-                    onSave: isMobile ? () => _saveCurrentItem(context) : null,
-                  );
-                },
+                child: GestureDetector(
+                  // 移动端：水平拖动（图片缩放时禁用，由 _ImageViewer 内部处理平移）
+                  onHorizontalDragStart: (isMobile && !_imageIsZoomed)
+                      ? (_) => _onDragStart(horizontal: true)
+                      : null,
+                  onHorizontalDragUpdate: (isMobile && !_imageIsZoomed)
+                      ? (d) => _onDragUpdate(d.delta.dx)
+                      : null,
+                  onHorizontalDragEnd: (isMobile && !_imageIsZoomed)
+                      ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dx, size.width)
+                      : null,
+                  // 移动端：垂直拖动（图片缩放时禁用）
+                  onVerticalDragStart: (isMobile && !_imageIsZoomed)
+                      ? (_) => _onDragStart(horizontal: false)
+                      : null,
+                  onVerticalDragUpdate: (isMobile && !_imageIsZoomed)
+                      ? (d) => _onDragUpdate(d.delta.dy)
+                      : null,
+                  onVerticalDragEnd: (isMobile && !_imageIsZoomed)
+                      ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dy, size.height)
+                      : null,
+                  // 单击空白区域切换 UI 可见性
+                  onTap: _toggleUi,
+                  child: ClipRect(
+                    child: Stack(
+                      children: [
+                        // 邻页（在当前页下方，被 offset 带出）
+                        buildPositioned(_prevPageWidget, prevBase),
+                        buildPositioned(_nextPageWidget, nextBase),
+                        // 当前页
+                        Positioned.fill(
+                          child: Transform.translate(
+                            offset: Offset(currDx, currDy),
+                            child: _currPageWidget ?? const SizedBox.shrink(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
 
@@ -239,19 +496,75 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
               bottom: MediaQuery.paddingOf(context).bottom + 24,
               left: 16,
               right: 16,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _GlassChip(label: '${_currentIndex + 1} / ${widget.items.length}'),
-                  _FloatingActionMenu(
-                    canGoPrev: _currentIndex > 0,
-                    canGoNext: _currentIndex < widget.items.length - 1,
-                    onSave: isImage ? () => _saveCurrentItem(context) : null,
-                    onPrev: () => _jump(-1),
-                    onNext: () => _jump(1),
+              child: AnimatedOpacity(
+                opacity: _uiVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: IgnorePointer(
+                  ignoring: !_uiVisible,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _GlassChip(current: _currentIndex, total: widget.items.length),
+                      _FloatingActionMenu(
+                        canGoPrev: _currentIndex > 0,
+                        canGoNext: _currentIndex < widget.items.length - 1,
+                        onSave: isImage ? () => _saveCurrentItem(context) : null,
+                        onPrev: () => _jumpInstant(-1),
+                        onNext: () => _jumpInstant(1),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+            ),
+
+            // ── 左上角：返回按钮 + 文件名 ────────────────────────────────────
+            Positioned(
+              top: MediaQuery.viewPaddingOf(context).top + scaleW(4),
+              left: appMetrics.kSpace4,
+              right: appMetrics.kSpace4,
+              child: AnimatedOpacity(
+                opacity: _uiVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: IgnorePointer(
+                  ignoring: !_uiVisible,
+                  child: Row(
+                    children: [
+                      _GlassIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: '返回',
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: appMetrics.kSpace10,
+                                vertical: appMetrics.kSpace10,
+                              ),
+                              color: Colors.black.withOpacity(0.42),
+                              child: Text(
+                                widget.items[_currentIndex].title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -295,12 +608,28 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
-// ── 玻璃计数标签 ────────────────────────────────────────────────────────────
+// ── 玻璃计数标签（带滚动动画） ──────────────────────────────────────────────
 
-class _GlassChip extends StatelessWidget {
-  const _GlassChip({required this.label});
+class _GlassChip extends StatefulWidget {
+  const _GlassChip({required this.current, required this.total});
 
-  final String label;
+  final int current;
+  final int total;
+
+  @override
+  State<_GlassChip> createState() => _GlassChipState();
+}
+
+class _GlassChipState extends State<_GlassChip> {
+  bool _goingForward = true;
+
+  @override
+  void didUpdateWidget(_GlassChip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current != widget.current) {
+      _goingForward = widget.current > oldWidget.current;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +640,39 @@ class _GlassChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           color: Colors.black.withOpacity(0.42),
-          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          // 固定宽度避免数字变化时容器宽度跳动
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 只有当前数字有滚动动画
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, animation) {
+                  final isIncoming = child.key == ValueKey(widget.current);
+                  final begin = isIncoming
+                      ? Offset(0, _goingForward ? 1.0 : -1.0)
+                      : Offset(0, _goingForward ? -1.0 : 1.0);
+                  final pos = Tween<Offset>(
+                    begin: begin,
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                  return ClipRect(
+                    child: SlideTransition(position: pos, child: child),
+                  );
+                },
+                child: Text(
+                  '${widget.current + 1}',
+                  key: ValueKey(widget.current),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ),
+              // 总数静止，无动画
+              Text(
+                ' / ${widget.total}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -485,6 +846,7 @@ class _ImageViewer extends StatefulWidget {
     required this.onSwipeDelta,
     required this.onSwipeEnd,
     this.onSave,
+    this.onZoomChanged,
   });
 
   final String source;
@@ -495,6 +857,9 @@ class _ImageViewer extends StatefulWidget {
 
   /// 移动端长按时触发保存。
   final VoidCallback? onSave;
+
+  /// 图片缩放状态变化时回调（true = 已缩放/变换，false = 恢复原样）。
+  final void Function(bool isZoomed)? onZoomChanged;
 
   @override
   State<_ImageViewer> createState() => _ImageViewerState();
@@ -511,6 +876,13 @@ class _ImageViewerState extends State<_ImageViewer> {
   double _baseScale = 1.0;
   double _baseRotation = 0.0;
   double _baseOffsetX = 0.0;
+
+  static String _fmtBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
   double _baseOffsetY = 0.0;
   double _startFocalX = 0.0;
   double _startFocalY = 0.0;
@@ -525,6 +897,7 @@ class _ImageViewerState extends State<_ImageViewer> {
       _offsetX = 0.0;
       _offsetY = 0.0;
     });
+    widget.onZoomChanged?.call(false);
   }
 
   void _onScaleStart(ScaleStartDetails d) {
@@ -566,6 +939,16 @@ class _ImageViewerState extends State<_ImageViewer> {
       _offsetX = _baseOffsetX + focalDx;
       _offsetY = _baseOffsetY + focalDy;
     });
+    // 通知父级缩放状态（避免重复通知）
+    final nowZoomed = _isTransformed;
+    final wasZoomed =
+        _baseScale > 1.02 ||
+        _baseRotation.abs() > 0.05 ||
+        _baseOffsetX.abs() > 5 ||
+        _baseOffsetY.abs() > 5;
+    if (nowZoomed != wasZoomed) {
+      widget.onZoomChanged?.call(nowZoomed);
+    }
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
@@ -590,25 +973,68 @@ class _ImageViewerState extends State<_ImageViewer> {
               builder: (context, constraints) {
                 final w = constraints.maxWidth;
                 final h = constraints.maxHeight;
-                final imgWidget = src.startsWith('http')
-                    ? Image.network(
-                        src,
-                        fit: BoxFit.contain,
-                        width: w,
-                        height: h,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
-                        ),
-                      )
-                    : Image.file(
-                        File(src),
-                        fit: BoxFit.contain,
-                        width: w,
-                        height: h,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
+                final Widget imgWidget;
+                if (src.startsWith('http')) {
+                  imgWidget = Image.network(
+                    src,
+                    fit: BoxFit.contain,
+                    width: w,
+                    height: h,
+                    loadingBuilder: (_, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      final total = loadingProgress.expectedTotalBytes;
+                      final loaded = loadingProgress.cumulativeBytesLoaded;
+                      final pct = total != null ? loaded / total : null;
+                      String label;
+                      if (total != null) {
+                        final pctInt = (pct! * 100).toStringAsFixed(0);
+                        label = '${_fmtBytes(loaded)} / ${_fmtBytes(total)} ($pctInt%)';
+                      } else {
+                        label = _fmtBytes(loaded);
+                      }
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              value: pct,
+                              color: Colors.white70,
+                              strokeWidth: 2.5,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              label,
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                          ],
                         ),
                       );
+                    },
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
+                    ),
+                  );
+                } else {
+                  imgWidget = Image.file(
+                    File(src),
+                    fit: BoxFit.contain,
+                    width: w,
+                    height: h,
+                    frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded || frame != null) return child;
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          child,
+                          const CircularProgressIndicator(color: Colors.white70, strokeWidth: 2.5),
+                        ],
+                      );
+                    },
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
+                    ),
+                  );
+                }
                 return Transform.translate(
                   offset: Offset(_offsetX, _offsetY),
                   child: Transform(
@@ -630,13 +1056,20 @@ class _ImageViewerState extends State<_ImageViewer> {
             left: 0,
             right: 0,
             child: Center(
-              child: FilledButton.icon(
-                onPressed: _reset,
-                icon: const Icon(Icons.zoom_out_map_rounded, size: 18),
-                label: const Text('复原'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white24,
-                  foregroundColor: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: FilledButton.icon(
+                    onPressed: _reset,
+                    icon: const Icon(Icons.zoom_out_map_rounded, size: 18),
+                    label: const Text('复原'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.black.withAlpha(42),
+                      foregroundColor: Colors.white,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -654,13 +1087,22 @@ class _VideoPreview extends StatefulWidget {
     required this.onSwipeDelta,
     required this.onSwipeEnd,
     this.isAudio = false,
+    this.title,
+    this.coverSource,
   });
 
   final String? source;
   final void Function(double dy) onSwipeDelta;
   final VoidCallback onSwipeEnd;
+
   /// 是否为纯音频（无视频轨道），显示音乐占位背景
   final bool isAudio;
+
+  /// 媒体标题（用于系统播放控件显示）
+  final String? title;
+
+  /// 封面图路径或 URL（用于系统播放控件显示）
+  final String? coverSource;
 
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
@@ -670,6 +1112,9 @@ class _VideoPreviewState extends State<_VideoPreview> {
   Player? _player;
   VideoController? _videoController;
   BoxFit _videoFit = BoxFit.contain;
+
+  /// 原生 Media Session / Now Playing 通道（iOS + Android）
+  static const _mediaChannel = MethodChannel('slime_works/media_session');
 
   @override
   void initState() {
@@ -681,12 +1126,59 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.loop);
+    // 通知系统 Now Playing 信息（封面 + 标题）
+    _updateNowPlaying();
   }
 
   @override
   void dispose() {
     _player?.dispose();
     super.dispose();
+  }
+
+  /// 把封面图读成字节并通过 MethodChannel 发给原生层，由原生层更新
+  /// MPNowPlayingInfoCenter (iOS) 或 MediaSession (Android)。
+  Future<void> _updateNowPlaying() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      Uint8List? artBytes;
+      final cover = widget.coverSource;
+      if (cover != null && cover.isNotEmpty) {
+        if (cover.startsWith('http')) {
+          final resp = await http.get(Uri.parse(cover)).timeout(const Duration(seconds: 10));
+          if (resp.statusCode == 200) artBytes = resp.bodyBytes;
+        } else {
+          final f = File(cover);
+          if (f.existsSync()) artBytes = await f.readAsBytes();
+        }
+      }
+      await _mediaChannel.invokeMethod<void>('setNowPlaying', {
+        'title': widget.title ?? '',
+        'artist': '',
+        'artwork': artBytes,
+      });
+    } catch (_) {
+      // 非致命：系统控件显示默认信息即可
+    }
+  }
+
+  /// 请求进入画中画（Picture-in-Picture）模式。
+  Future<void> _enterPip(BuildContext context) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      final supported = await _mediaChannel.invokeMethod<bool>('isPipSupported') ?? false;
+      if (!supported) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('当前设备不支持画中画')));
+        }
+        return;
+      }
+      await _mediaChannel.invokeMethod<void>('enterPip');
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('无法进入画中画模式')));
+      }
+    }
   }
 
   @override
@@ -699,48 +1191,53 @@ class _VideoPreviewState extends State<_VideoPreview> {
       );
     }
     final isMobile = Platform.isAndroid || Platform.isIOS;
-    // Use viewPadding (physical screen insets) rather than padding so safe-area
-    // margins remain correct even while in immersiveSticky mode where system
-    // padding reports 0.
     final viewPad = MediaQuery.viewPaddingOf(context);
-    final topInset = isMobile ? viewPad.top : 0.0;
     final bottomInset = isMobile ? viewPad.bottom : 0.0;
-    // Gesture overlay 保留区域 = 控制栏高度(80) + 安全区底部
-    final controlsHeight = 80.0 + bottomInset;
 
+    // 底部控制栏：进度指示器 + 弹簧 + [速度, 适应, 音量, 窗口, 全屏]
+    // 控制栏已离开屏幕最底端，会有额外 margin
+    final bottomBar = [
+      const media_controls.MaterialPositionIndicator(),
+      const Spacer(),
+      _VideoSpeedButton(player: player),
+      _VideoFitButton(
+        currentFit: _videoFit,
+        onToggle: () =>
+            setState(() => _videoFit = _videoFit == BoxFit.contain ? BoxFit.cover : BoxFit.contain),
+      ),
+      _VideoVolumeButton(player: player),
+      // 窗口播放（画中画）
+      if (isMobile)
+        IconButton(
+          tooltip: '画中画',
+          icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: 22),
+          onPressed: () => _enterPip(context),
+        ),
+      const media_controls.MaterialFullscreenButton(),
+    ];
+
+    // 按钮栏高度来自 media_kit_video 默认值（56），进度条紧贴其上方
+    const double _buttonBarH = 56.0;
     final videoWidget = media_controls.MaterialVideoControlsTheme(
       normal: media_controls.MaterialVideoControlsThemeData(
-        // 顶部工具栏增加：播放速度、画面适应、音量控制
-        topButtonBar: [
-          _VideoSpeedButton(player: player),
-          _VideoFitButton(
-            currentFit: _videoFit,
-            onToggle: () => setState(
-              () => _videoFit = _videoFit == BoxFit.contain ? BoxFit.cover : BoxFit.contain,
-            ),
-          ),
-          _VideoVolumeButton(player: player),
-        ],
-        // 顶部安全区（刘海/状态栏）保护：确保控制按钮不被遮挡
-        topButtonBarMargin: EdgeInsets.only(
-          top: topInset + 4,
-          left: 8,
-          right: 8,
-        ),
-        // 底部控制栏增加安全距离，确保在手机底部系统导航栏上方
-        bottomButtonBarMargin: EdgeInsets.only(
-          bottom: bottomInset + 4,
-          left: 8,
-          right: 8,
-        ),
+        // 顶部工具栏清空，按钮全部移到底部
+        topButtonBar: const [],
+        topButtonBarMargin: EdgeInsets.zero,
+        // 进度条位于按钮栏正上方
+        seekBarMargin: EdgeInsets.only(bottom: bottomInset + 16 + _buttonBarH, left: 8, right: 8),
+        // 底部控制栏：上移 + 安全区保护
+        bottomButtonBar: bottomBar,
+        bottomButtonBarMargin: EdgeInsets.only(bottom: bottomInset + 16, left: 8, right: 8),
       ),
       fullscreen: const media_controls.MaterialVideoControlsThemeData(),
       child: Video(controller: controller, fit: _videoFit),
     );
 
+    // 控制栏高度估算 = 进度条(48) + 按钮行(48) + 底部安全区 + 上移量
+    final controlsHeight = 96.0 + bottomInset + 16;
+
     return Stack(
       children: [
-        // 音频模式：显示音乐占位背景
         if (widget.isAudio)
           Positioned.fill(
             child: Container(
@@ -751,18 +1248,49 @@ class _VideoPreviewState extends State<_VideoPreview> {
                   end: Alignment.bottomRight,
                 ),
               ),
-              child: const Column(
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.music_note_rounded, color: Colors.white38, size: 96),
-                  SizedBox(height: 16),
-                  Text('音频播放中', style: TextStyle(color: Colors.white54, fontSize: 16)),
+                  // 封面图（若有）
+                  if (widget.coverSource != null && widget.coverSource!.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: widget.coverSource!.startsWith('http')
+                          ? Image.network(
+                              widget.coverSource!,
+                              width: 180,
+                              height: 180,
+                              fit: BoxFit.cover,
+                            )
+                          : Image.file(
+                              File(widget.coverSource!),
+                              width: 180,
+                              height: 180,
+                              fit: BoxFit.cover,
+                            ),
+                    )
+                  else
+                    const Icon(Icons.music_note_rounded, color: Colors.white38, size: 96),
+                  const SizedBox(height: 16),
+                  if (widget.title != null && widget.title!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        widget.title!,
+                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else
+                    const Text('音频播放中', style: TextStyle(color: Colors.white54, fontSize: 16)),
                 ],
               ),
             ),
           ),
         videoWidget,
-        // 顶部滑动区（48px），Flutter Widget 层在平台视图之上，可接收手势
+        // 顶部滑动透传区（48px）
         Positioned(
           top: 0,
           left: 0,
@@ -774,7 +1302,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             onVerticalDragEnd: (_) => widget.onSwipeEnd(),
           ),
         ),
-        // 中间区域（避开底部控制栏）也注册滑动手势
+        // 中间区域（避开底部控制栏）
         Positioned(
           top: 48,
           left: 0,

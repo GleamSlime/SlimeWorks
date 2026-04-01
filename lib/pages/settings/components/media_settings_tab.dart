@@ -466,6 +466,42 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           ),
         ),
 
+        const SizedBox(height: 12),
+
+        // ── 缓存大小上限 ────────────────────────────────────────────────────
+        Obx(() {
+          final limitBytes = _prefs.cacheLimitBytes.value;
+          return _SettingsCard(
+            theme: theme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('缓存大小上限', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  '超出上限时，将自动删除最旧的缓存文件，直到缓存降至上限的 50%（每次生成预览图后 1 分钟触发检查）。',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(120),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final preset in MediaPrefsService.cacheLimitPresets)
+                      ChoiceChip(
+                        label: Text(preset.label),
+                        selected: limitBytes == preset.value,
+                        onSelected: (_) => _prefs.setCacheLimitBytes(preset.value),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }),
+
         if (!Platform.isWindows && !Platform.isMacOS)
           Padding(
             padding: const EdgeInsets.only(top: 12),

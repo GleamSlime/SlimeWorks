@@ -36,6 +36,7 @@ class MediaPrefsService {
   static const _keyRemoteCoverWidth = 'media_remote_cover_width';
   static const _keyRemoteImageWidth = 'media_remote_image_width';
   static const _keyLocalPreviewWidth = 'media_local_preview_width';
+  static const _keyCacheLimitBytes = 'media_cache_limit_bytes';
 
   /// 质量等级 1-5 (默认 3)。
   final quality = 3.obs;
@@ -52,6 +53,19 @@ class MediaPrefsService {
   /// 本地图片列表缩略图解码宽度(px)，0 表示原图，默认 480px。
   /// Flutter Image 的 cacheWidth 参数，在解码阶段缩放，无需写临时文件。
   final localPreviewWidth = 480.obs;
+
+  /// 缓存大小上限（字节），0 表示不限制，默认 1 GB。
+  final cacheLimitBytes = (1 * 1024 * 1024 * 1024).obs;
+
+  /// 缓存大小上限预设列表。
+  static const cacheLimitPresets = [
+    (label: '512 MB', value: 512 * 1024 * 1024),
+    (label: '1 GB', value: 1 * 1024 * 1024 * 1024),
+    (label: '2 GB', value: 2 * 1024 * 1024 * 1024),
+    (label: '5 GB', value: 5 * 1024 * 1024 * 1024),
+    (label: '10 GB', value: 10 * 1024 * 1024 * 1024),
+    (label: '无限制', value: 0),
+  ];
 
   /// 远程封面宽度预设列表。
   static const remoteCoverWidthPresets = [
@@ -104,6 +118,7 @@ class MediaPrefsService {
     remoteCoverWidth.value = prefs.getInt(_keyRemoteCoverWidth) ?? 240;
     remoteImageWidth.value = prefs.getInt(_keyRemoteImageWidth) ?? 0;
     localPreviewWidth.value = prefs.getInt(_keyLocalPreviewWidth) ?? 480;
+    cacheLimitBytes.value = prefs.getInt(_keyCacheLimitBytes) ?? (1 * 1024 * 1024 * 1024);
   }
 
   Future<void> setQuality(int v) async {
@@ -137,6 +152,13 @@ class MediaPrefsService {
     localPreviewWidth.value = v < 0 ? 0 : v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyLocalPreviewWidth, localPreviewWidth.value);
+  }
+
+  /// 设置缓存大小上限（字节），0 表示不限制。
+  Future<void> setCacheLimitBytes(int v) async {
+    cacheLimitBytes.value = v < 0 ? 0 : v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyCacheLimitBytes, cacheLimitBytes.value);
   }
 
   /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。
@@ -194,6 +216,54 @@ class MediaPrefsService {
       debugPrint('[MediaPrefs] 缓存已清除');
     } catch (e) {
       debugPrint('[MediaPrefs] clearCache error: $e');
+    }
+  }
+
+  /// 检查缓存大小，若超过 [cacheLimitBytes] 则删除最旧的文件，删到上限的 50%。
+  /// [cacheLimitBytes] 为 0 时跳过检查。
+  Future<void> trimCacheToLimit() async {
+    final limitBytes = cacheLimitBytes.value;
+    if (limitBytes <= 0) return; // 0 = 无限制
+
+    try {
+      // 收集所有缓存文件及其修改时间
+      final files = <({File file, DateTime modified, int size})>[];
+      int totalBytes = 0;
+
+      for (final dir in await getCacheDirs()) {
+        if (!dir.existsSync()) continue;
+        await for (final entity in dir.list(recursive: true, followLinks: false)) {
+          if (entity is! File) continue;
+          try {
+            final stat = entity.statSync();
+            files.add((file: entity, modified: stat.modified, size: stat.size));
+            totalBytes += stat.size;
+          } catch (_) {}
+        }
+      }
+
+      if (totalBytes <= limitBytes) return; // 未超限，无需清理
+
+      // 按修改时间升序（最旧的在前）
+      files.sort((a, b) => a.modified.compareTo(b.modified));
+
+      final targetBytes = limitBytes ~/ 2; // 删到 50%
+      int deletedBytes = 0;
+
+      for (final entry in files) {
+        if (totalBytes - deletedBytes <= targetBytes) break;
+        try {
+          entry.file.deleteSync();
+          deletedBytes += entry.size;
+        } catch (_) {}
+      }
+
+      debugPrint(
+        '[MediaPrefs] trimCacheToLimit: 删除 ${(deletedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
+        '  (剩余 ${((totalBytes - deletedBytes) / 1024 / 1024).toStringAsFixed(1)} MB)',
+      );
+    } catch (e) {
+      debugPrint('[MediaPrefs] trimCacheToLimit error: $e');
     }
   }
 }

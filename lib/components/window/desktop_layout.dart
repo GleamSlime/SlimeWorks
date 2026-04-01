@@ -309,7 +309,10 @@ class _MobileLayoutState extends State<MobileLayout> {
                   children: [
                     AnimatedScale(
                       scale: sidebarExpandScale,
-                      duration: const Duration(milliseconds: 120),
+                      duration: sidebarExpandScale == 1.0 || sidebarExpandScale == 0.9
+                          ? const Duration(milliseconds: 200)
+                          : Duration.zero,
+                      curve: Curves.easeOutCubic,
                       child: widget.child,
                     ),
                     CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),

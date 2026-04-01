@@ -31,11 +31,15 @@ class _ThumbTask {
 /// - [prioritize]：将已有任务移到队首；若任务不存在则新建并插入队首。
 /// - [cancel]：标记任务取消，正在执行中的任务不中断但结果会被忽略。
 /// - [cancelGroup]：批量取消一批 key。
+/// - [onTaskComplete]：每次任务完成（无论成功/取消/异常）时调用的回调。
 class VideoThumbQueue {
   VideoThumbQueue({int concurrency = 2}) : concurrency = concurrency;
 
   int concurrency;
   int _running = 0;
+
+  /// 每次任务完成后调用（可用于防抖触发缓存清理等）。
+  VoidCallback? onTaskComplete;
 
   final _queue = ListQueue<_ThumbTask>();
 
@@ -126,6 +130,7 @@ class VideoThumbQueue {
           .whenComplete(() {
             _running--;
             debugPrint('[Queue] 执行完毕 key=${task.key} running=$_running');
+            onTaskComplete?.call();
             _tick();
           });
     }

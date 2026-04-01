@@ -686,9 +686,11 @@ class MobileSidebarState extends State<MobileSidebar> {
     double maskOpacity = 0.0;
     if (_isDragging) {
       maskOpacity = (_dragOffset / widget.targetWidth).clamp(0.0, 1.0);
-      sidebarExpandScale = (1 - maskOpacity).clamp(0.9, 1.0);
+      // 线性跟随手指：拖出 0%→100% 时内容缩放 1.0→0.9，缩放与侧边栏同步完成
+      sidebarExpandScale = 1.0 - 0.1 * maskOpacity;
     } else if (widget.isExpanded) {
-      maskOpacity = 1;
+      maskOpacity = 1.0;
+      sidebarExpandScale = 0.9;
     }
 
     if (sidebarExpandScale != desktopScreen.sidebarExpandScale.value) {

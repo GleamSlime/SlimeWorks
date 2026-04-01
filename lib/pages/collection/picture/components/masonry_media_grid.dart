@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/core/index.dart';
-import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -26,6 +25,8 @@ class MasonryMediaGrid extends StatefulWidget {
     required this.columnCount,
     required this.onOpenViewer,
     required this.onConfirmDelete,
+    this.onConfirmDeleteNodeLocalFile,
+    this.lastViewedItemId,
   });
 
   final List<media_api.MediaItem> items;
@@ -36,6 +37,12 @@ class MasonryMediaGrid extends StatefulWidget {
   final void Function(int index) onOpenViewer;
   final Future<void> Function(media_api.MediaItem) onConfirmDelete;
 
+  /// 删除节点本地文件的确认回调（仅远程集合需要）。
+  final Future<void> Function(media_api.MediaItem)? onConfirmDeleteNodeLocalFile;
+
+  /// 从预览返回后应高亮并滚动到的资源 ID。
+  final String? lastViewedItemId;
+
   @override
   State<MasonryMediaGrid> createState() => MasonryMediaGridState();
 }
@@ -44,6 +51,15 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   final _scrollController = ScrollController();
   // 缓存每张已加载图片的宽高比，key 为 source
   final Map<String, double> _aspectRatios = {};
+
+  /// 每个 tile 的 GlobalKey（key = item.id），用于滚动定位。
+  final Map<String, GlobalKey> _itemKeys = {};
+
+  /// 高亮消退的定时器。
+  Timer? _highlightTimer;
+
+  /// 当前需要高亮的 item ID（从 lastViewedItemId 初始化，显示后自动清除）。
+  String? _highlightId;
 
   /// 当前已渲染的 item 数量（逐行递增，产生横向加载效果）。
   int _visibleCount = 0;
@@ -58,17 +74,55 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   @override
   void initState() {
     super.initState();
+    _highlightId = widget.lastViewedItemId;
     _scheduleReveal();
+    if (_highlightId != null) {
+      // 等待首批 tiles 渲染后滚动到高亮项，并在 2.5s 后消退高亮
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToHighlighted();
+        _highlightTimer = Timer(const Duration(milliseconds: 25000), () {
+          if (mounted) setState(() => _highlightId = null);
+          widget.viewModel.lastViewedItemId.value = null;
+        });
+      });
+    }
   }
 
   @override
   void didUpdateWidget(MasonryMediaGrid old) {
     super.didUpdateWidget(old);
+    // 外部传入新的高亮 ID（如从 Viewer 返回后重建 widget）
+    if (widget.lastViewedItemId != null &&
+        widget.lastViewedItemId != old.lastViewedItemId &&
+        widget.lastViewedItemId != _highlightId) {
+      _highlightTimer?.cancel();
+      setState(() => _highlightId = widget.lastViewedItemId);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToHighlighted();
+        _highlightTimer = Timer(const Duration(milliseconds: 25000), () {
+          if (mounted) setState(() => _highlightId = null);
+          widget.viewModel.lastViewedItemId.value = null;
+        });
+      });
+    }
     if (old.items.length != widget.items.length || old.columnCount != widget.columnCount) {
       _revealTimer?.cancel();
       setState(() => _visibleCount = 0);
       _scheduleReveal();
+      // 清理已不在列表中的 GlobalKey，避免 map 无限增长
+      final currentIds = widget.items.map((i) => i.id).toSet();
+      _itemKeys.removeWhere((id, _) => !currentIds.contains(id));
     }
+  }
+
+  void _scrollToHighlighted() {
+    final id = _highlightId;
+    if (id == null) return;
+    final key = _itemKeys[id];
+    if (key == null) return;
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(ctx, alignment: 0.3, duration: const Duration(milliseconds: 400));
   }
 
   void _scheduleReveal() {
@@ -103,6 +157,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   @override
   void dispose() {
     _revealTimer?.cancel();
+    _highlightTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -119,7 +174,9 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   }
 
   Widget _buildTile(media_api.MediaItem item, int globalIndex, double colWidth) {
-    // 缩略图走「远程封面清晰度」，预览全图需另行调用 buildMediaSource(isCover:false)
+    // 注册 GlobalKey 以便 scrollToHighlighted 定位
+    final tileKey = _itemKeys.putIfAbsent(item.id, GlobalKey.new);
+
     final source = widget.viewModel.buildMediaSource(item, isCover: true);
     final isVideo = item.kind == media_api.MediaKind.video;
     final isAudio = item.kind == media_api.MediaKind.audio;
@@ -150,8 +207,9 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       }
     }
 
-    return MediaItemTile(
-      key: ValueKey(item.id),
+    final isHighlighted = item.id == _highlightId;
+    final tile = MediaItemTile(
+      key: tileKey,
       item: item,
       source: source,
       fixedHeight: tileHeight,
@@ -159,15 +217,62 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       onRequestScrubFrames: (isVideo && !widget.isRemote)
           ? () => widget.viewModel.getVideoScrubFrames(item.filePath)
           : null,
-      onRequestAudioCover: (isAudio && !widget.isRemote)
-          ? () => widget.viewModel.getAudioCoverSource(item.filePath)
+      // 远程音频：widget.source 已经是 mode=cover URL，onRequestAudioCover 置 null
+      // 令 _displaySource 直接返回 source，无需额外异步；本地音频走 ffmpeg 提取路径。
+      onRequestAudioCover: isAudio
+          ? (widget.isRemote ? null : () => widget.viewModel.getAudioCoverSource(item.filePath))
           : null,
       onOpenFolder: widget.isRemote ? null : () => widget.viewModel.openItemInFolder(item),
       onDeleteFile: widget.isRemote ? null : () => widget.onConfirmDelete(item),
+      onDeleteNodeLocalFile: widget.isRemote
+          ? () => widget.onConfirmDeleteNodeLocalFile?.call(item)
+          : null,
+      deleteNodeLocalFileLabel: widget.isRemote ? '删除节点本地文件' : null,
       // 移动端图片支持保存到相册（本地和远程均支持）
       onSaveToGallery: (PlatformUtil.isMobile && !isVideo && !isAudio)
           ? () => saveToGallery(context, source)
           : null,
+    );
+
+    if (!isHighlighted) return tile;
+    // 高亮边框（主色 0.5 不透明度）
+    return Stack(
+      children: [
+        tile,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: isHighlighted ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 400),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(scaleW(11)),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
+                    width: 3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 带入场动画（淡入 + 向上滑入）的 tile 包装器。
+  /// 每次 tile 首次插入 widget 树时，TweenAnimationBuilder 会从 0→1 播放一次。
+  Widget _buildAnimatedTile(media_api.MediaItem item, int globalIndex, double colWidth) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('anim_$globalIndex'),
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 480),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value.clamp(0.0, 1.0),
+        child: Transform.translate(offset: Offset(0, 28 * (1 - value)), child: child),
+      ),
+      child: _buildTile(item, globalIndex, colWidth),
     );
   }
 
@@ -266,7 +371,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
                     children: [
                       for (int i = 0; i < columns[c].length; i++) ...[
                         if (i > 0) SizedBox(height: spacing),
-                        _buildTile(widget.items[columns[c][i]], columns[c][i], colWidth),
+                        _buildAnimatedTile(widget.items[columns[c][i]], columns[c][i], colWidth),
                       ],
                     ],
                   ),

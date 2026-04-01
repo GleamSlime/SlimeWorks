@@ -45,6 +45,7 @@ enum MediaItemSortOrder {
 }
 
 enum CollectionSortOrder {
+  combinedSort,
   dateUpdated,
   nameAsc,
   nameDesc,
@@ -54,6 +55,7 @@ enum CollectionSortOrder {
   sizeAsc;
 
   String get label => switch (this) {
+    combinedSort => '综合排序',
     dateUpdated => '最近更新',
     nameAsc => '名称 A→Z',
     nameDesc => '名称 Z→A',
@@ -91,6 +93,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   final scanStatusText = ''.obs;
   final isLoadingItems = false.obs;
 
+  /// 远程集合加载进度（0.0~1.0），null 表示未开始或无进度信息可用。
+  final itemLoadProgress = Rxn<double>();
+
   /// 远程节点数据是否正在后台异步加载中。
   final isLoadingRemote = false.obs;
   final currentFolderId = RxnString();
@@ -100,6 +105,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// Emits a non-null value whenever the screen should jump its scroll controller
   /// to the given offset. The screen resets this to null after consuming it.
   final scrollRestoreTarget = Rxn<double>();
+
+  /// 最后预览的资源 ID（从 Viewer 返回后高亮展示并滚动到该位置）。
+  final lastViewedItemId = RxnString();
 
   /// Per-browse-level scroll offset memory: key = folderId (null = root)
   final _browseScrollOffsets = <String?, double>{};
@@ -165,6 +173,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 集合文件夹自动扫描定时器（每 30 秒后台轮询）。
   Timer? _folderWatchTimer;
 
+  /// 缩略图生成后触发缓存清理的防抖定时器（1 分钟后执行）。
+  Timer? _trimCacheTimer;
+
   /// 上次扫描时各集合的 item 数量快照，用于判断是否有新增。
   final _collectionItemCountSnapshot = <String, int>{};
 
@@ -180,6 +191,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       _coverQueue.concurrency = v;
       _scrubQueue.concurrency = v;
     });
+
+    // 缩略图生成完成后，防抖 1 分钟触发一次缓存大小检查
+    void scheduleTrimCache() {
+      _trimCacheTimer?.cancel();
+      _trimCacheTimer = Timer(const Duration(minutes: 1), () {
+        mediaPrefs.trimCacheToLimit();
+      });
+    }
+
+    _coverQueue.onTaskComplete = scheduleTrimCache;
+    _scrubQueue.onTaskComplete = scheduleTrimCache;
 
     // 无论是否已初始化都重建 worker（onClose 后 worker 会被置 null）
     _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) async {
@@ -220,6 +242,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _nodeMutationWorker = null;
     _folderWatchTimer?.cancel();
     _folderWatchTimer = null;
+    _trimCacheTimer?.cancel();
+    _trimCacheTimer = null;
     super.onClose();
   }
 
@@ -390,6 +414,35 @@ class MediaLibraryViewModel extends BaseViewModel {
     String orderKey,
   ) {
     final sort = collectionSortOrder.value;
+    if (sort == CollectionSortOrder.combinedSort) {
+      // 先按创建时间升序排列（文件创建顺序）作为基准
+      final result = [...list];
+      result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      // 再叠加拖拽自定义排序：保留拖拽指定的相对位置，未设定的按创建时间顺序填入
+      final customOrder = _collectionOrders[orderKey];
+      if (customOrder != null && customOrder.isNotEmpty) {
+        logger.d(
+          '_applySortOrder: combinedSort orderKey=$orderKey applying ${customOrder.length}-item custom order',
+        );
+        result.sort((a, b) {
+          final ai = customOrder.indexOf(a.id);
+          final bi = customOrder.indexOf(b.id);
+          // 两者都有自定义位置：按拖拽顺序
+          if (ai != -1 && bi != -1) return ai.compareTo(bi);
+          // 只有 a 有自定义位置：a 前置
+          if (ai != -1) return -1;
+          // 只有 b 有自定义位置：b 前置
+          if (bi != -1) return 1;
+          // 两者均无自定义位置：保持创建时间顺序（已 stable 排好）
+          return 0;
+        });
+      } else {
+        logger.d(
+          '_applySortOrder: combinedSort orderKey=$orderKey NO custom order, using createdAt',
+        );
+      }
+      return result;
+    }
     if (sort != CollectionSortOrder.dateUpdated) {
       final result = [...list];
       switch (sort) {
@@ -415,27 +468,16 @@ class MediaLibraryViewModel extends BaseViewModel {
           );
         case CollectionSortOrder.dateUpdated:
           break;
+        case CollectionSortOrder.combinedSort:
+          break;
       }
       return result;
     }
-    // Default: apply custom drag order
-    final customOrder = _collectionOrders[orderKey];
-    if (customOrder == null || customOrder.isEmpty) {
-      logger.d('_applySortOrder: orderKey=$orderKey NO custom order, using default');
-      return list;
-    }
-    logger.d(
-      '_applySortOrder: orderKey=$orderKey applying ${customOrder.length}-item order to ${list.length} collections',
-    );
-    list.sort((a, b) {
-      final ai = customOrder.indexOf(a.id);
-      final bi = customOrder.indexOf(b.id);
-      if (ai == -1 && bi == -1) return 0;
-      if (ai == -1) return 1;
-      if (bi == -1) return -1;
-      return ai.compareTo(bi);
-    });
-    return list;
+    // dateUpdated：按 updatedAt 降序排列，不应用拖拽顺序
+    final result = [...list];
+    result.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    logger.d('_applySortOrder: dateUpdated orderKey=$orderKey sorted by updatedAt desc');
+    return result;
   }
 
   List<MediaLibraryItem> get visibleItems {
@@ -508,6 +550,28 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
     await loadCurrentCollectionItems();
     showSnack('\u6210\u529f', '\u6587\u4ef6\u5df2\u5220\u9664');
+  }
+
+  /// 删除远程节点上的媒体文件（保留集合记录，仅删除节点本地磁盘上的物理文件）。
+  Future<void> deleteRemoteItemLocalFile(media_api.MediaItem item) async {
+    final collectionId = currentCollectionId.value ?? item.collectionId;
+    final nodeId = getRemoteNodeId(collectionId);
+    final rawCollectionId = getRemoteRawCollectionId(collectionId);
+    if (nodeId == null || rawCollectionId == null) {
+      showSnack('错误', '找不到对应的远程节点信息');
+      return;
+    }
+    try {
+      await nodeSettingsService.callNodeAction(
+        nodeId: nodeId,
+        action: 'delete_media_item_local_file',
+        params: {'item_id': item.id, 'collection_id': rawCollectionId},
+      );
+      await loadCurrentCollectionItems();
+      showSnack('成功', '节点本地文件已删除');
+    } catch (e) {
+      showSnack('错误', '删除节点文件失败: $e');
+    }
   }
 
   bool isRemoteCollection(String collectionId) => remoteCollectionNodeId.containsKey(collectionId);
@@ -1073,6 +1137,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
 
     isLoadingItems.value = true;
+    itemLoadProgress.value = null;
     try {
       if (isRemoteCollection(collectionId)) {
         final nodeId = getRemoteNodeId(collectionId);
@@ -1083,6 +1148,9 @@ class MediaLibraryViewModel extends BaseViewModel {
         final payloads = await nodeSettingsService.fetchNodeMediaCollectionItems(
           nodeId: nodeId,
           collectionId: rawId,
+          onReceiveProgress: (count, total) {
+            if (total > 0) itemLoadProgress.value = count / total;
+          },
         );
         currentItems.assignAll(payloads.map((payload) => _buildRemoteItem(payload, collectionId)));
       } else {
@@ -1093,6 +1161,7 @@ class MediaLibraryViewModel extends BaseViewModel {
       showSnack('错误', '加载集合内容失败: $error');
     } finally {
       isLoadingItems.value = false;
+      itemLoadProgress.value = null;
     }
   }
 

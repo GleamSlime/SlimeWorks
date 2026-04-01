@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final tabs = [
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderStateMixin {
+  late final List<_SettingsTab> _tabs;
+  late final TabController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = [
       _SettingsTab(label: '主体设置', content: const ThemeSettingsTab()),
       _SettingsTab(label: '节点设置', content: const NodeSettingsTab()),
       _SettingsTab(label: '资源库', content: const _ResourcesSettingsTab()),
@@ -24,18 +36,31 @@ class SettingsPage extends StatelessWidget {
         content: const SettingsTabPlaceholder(title: '通知设置'),
       ),
     ];
+    _controller = TabController(length: _tabs.length, vsync: this);
+  }
 
-    return DefaultTabController(
-      length: tabs.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('设置'),
-          bottom: TabBar(
-            isScrollable: true,
-            tabs: tabs.map((tab) => Tab(text: tab.label)).toList(),
-          ),
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScreenChrome(
+      data: ScreenChromeData(
+        title: '设置',
+        toolbarHeight: AppTheme.metrics.kSpace48,
+        toolbar: TabBar(
+          controller: _controller,
+          isScrollable: true,
+          dividerHeight: 0,
+          tabs: _tabs.map((tab) => Tab(text: tab.label)).toList(),
         ),
-        body: TabBarView(children: tabs.map((tab) => tab.content).toList()),
+      ),
+      child: TabBarView(
+        controller: _controller,
+        children: _tabs.map((tab) => tab.content).toList(),
       ),
     );
   }
@@ -56,6 +81,7 @@ class _ResourcesSettingsTab extends StatelessWidget {
               Tab(text: '媒体设置'),
               Tab(text: '书籍设置'),
             ],
+            dividerHeight: 0,
           ),
           const Expanded(
             child: TabBarView(

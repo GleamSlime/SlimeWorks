@@ -44,6 +44,9 @@ Future<void> main() async {
   // 在 UI 启动前完成 NodeSettingsService 初始化，避免 ViewModel 与 _postAppInit 并发竞争
   await getIt<NodeSettingsService>().init();
 
+  // 提前加载持久化主题配置（仅解析输入参数，不依赖 ScreenUtil）
+  await AppTheme.loadSavedTheme();
+
   // 运行应用
   runApp(const MyApp());
 
@@ -84,8 +87,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // 观察 AppTheme.metricsVersion，确保在重置度量后重建应用树
+      // 观察响应式主题参数与度量版本，任一变化时重建 MaterialApp
       final _ = AppTheme.metricsVersion.value;
+      final themeMode = AppTheme.themeModeObs.value;
+      final accentColor = AppTheme.accentColorObs.value;
+      final fontScale = AppTheme.fontScaleObs.value;
       return ScreenUtilInit(
         designSize: isDesktop
             ? desktopScreen.isMobile.value
@@ -102,10 +108,10 @@ class MyApp extends StatelessWidget {
             // GoRouter 配置
             routerConfig: goRouter,
 
-            // 主题配置
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: AppTheme.themeMode,
+            // 主题配置（在 ScreenUtil 构建完成后计算，保证 scaleW 可用）
+            theme: AppTheme.buildCustomLight(accentColor, fontScale),
+            darkTheme: AppTheme.buildCustomDark(accentColor, fontScale),
+            themeMode: themeMode,
 
             // 国际化配置
             locale: const Locale('zh', 'CN'),

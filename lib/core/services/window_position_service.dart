@@ -119,30 +119,19 @@ class WindowPositionService extends GetxService {
     }
   }
 
-  /// 检查位置是否有效（是否在任何屏幕范围内）
+  /// 检查位置是否有效（兼容多屏幕，允许窗口在任意屏幕上）
   Future<bool> _isPositionValid(double x, double y, double width, double height) async {
-    try {
-      final screenBounds = await _getScreenBounds();
-      if (screenBounds == null) return false;
-
-      // 检查窗口至少有一部分在屏幕内
-      final windowRect = Rect.fromLTWH(x, y, width, height);
-
-      // 确保窗口中心点在屏幕范围内（允许一些容差）
-      final center = windowRect.center;
-
-      // 扩展屏幕边界检查，允许窗口部分在屏幕外（多屏幕场景）
-      // 只要窗口的右下角或左上角在合理范围内即可
-      return center.dx >= -width / 2 &&
-          center.dx <= screenBounds.right + width / 2 &&
-          center.dy >= -height / 2 &&
-          center.dy <= screenBounds.bottom + height / 2;
-    } catch (e) {
-      if (kDebugMode) {
-        print('检查位置有效性失败: $e');
-      }
+    // 只做基础合理性检查：坐标值在可接受范围内（-8000 ~ 20000 覆盖绝大多数多屏桌面布局）
+    const double kMinCoord = -8000;
+    const double kMaxCoord = 20000;
+    if (x < kMinCoord || x > kMaxCoord || y < kMinCoord || y > kMaxCoord) {
       return false;
     }
+    // 窗口尺寸合理性
+    if (width < 100 || height < 100 || width > 10000 || height > 10000) {
+      return false;
+    }
+    return true;
   }
 
   /// 清除保存的位置信息

@@ -298,17 +298,33 @@ class NodeSettingsService extends GetxService {
   Future<List<Map<String, dynamic>>> fetchNodeMediaCollectionItems({
     required String nodeId,
     required String collectionId,
+    ProgressCallback? onReceiveProgress,
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
     }
 
-    final response = await _callNode(
-      node: node,
-      action: 'get_media_collection_items',
-      params: <String, dynamic>{'collection_id': collectionId},
-    );
+    final Map<String, dynamic> response;
+    if (onReceiveProgress != null) {
+      // 需要报告进度时直接走 _performNodeCall，绕过去重缓存
+      final payload = <String, dynamic>{
+        'action': 'get_media_collection_items',
+        'params': _sanitizeJsonMap(<String, dynamic>{'collection_id': collectionId}),
+      };
+      response = await _performNodeCall(
+        node: node,
+        action: 'get_media_collection_items',
+        requestPayload: payload,
+        onReceiveProgress: onReceiveProgress,
+      );
+    } else {
+      response = await _callNode(
+        node: node,
+        action: 'get_media_collection_items',
+        params: <String, dynamic>{'collection_id': collectionId},
+      );
+    }
 
     final data = response['data'];
     if (data is! List) {
@@ -337,6 +353,23 @@ class NodeSettingsService extends GetxService {
       return <Map<String, dynamic>>[];
     }
     return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// 列举节点上 [path] 目录下的一级子目录路径列表。
+  Future<List<String>> listNodeDirectories({
+    required String nodeId,
+    required String path,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'list_directories',
+      params: <String, dynamic>{'path': path},
+    );
+    final data = response['data'];
+    if (data is! List) return <String>[];
+    return data.whereType<String>().toList();
   }
 
   Future<Map<String, dynamic>?> importNodeMediaFolder({
@@ -528,6 +561,39 @@ class NodeSettingsService extends GetxService {
     }
   }
 
+  /// 删除节点上某个集合的本地物理文件（不删除数据库记录）。
+  Future<int> deleteNodeCollectionLocalFiles({
+    required String nodeId,
+    required String rawCollectionId,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'delete_collection_local_files',
+      params: <String, dynamic>{'collection_id': rawCollectionId},
+    );
+    final data = response['data'];
+    if (data is Map) {
+      return (data['deleted'] as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  }
+
+  /// 从节点下载单个文件到本地指定路径。
+  Future<void> downloadNodeFileTo({
+    required String nodeId,
+    required String filePath,
+    required String savePath,
+  }) async {
+    final url = buildNodeMediaUrl(nodeId: nodeId, filePath: filePath);
+    await _dio.download(
+      url,
+      savePath,
+      options: Options(receiveTimeout: const Duration(minutes: 10)),
+    );
+  }
+
   Future<List<Map<String, dynamic>>> searchNodeNovels(NodeEndpoint node, String keyword) async {
     final response = await _callNode(
       node: node,
@@ -693,6 +759,21 @@ class NodeSettingsService extends GetxService {
     );
   }
 
+  // ── 通用节点调用（供 ViewModel 直接使用） ────────────────────────────────
+
+  /// 向指定节点发起任意 action 调用，返回 response data。
+  Future<Map<String, dynamic>> callNodeAction({
+    required String nodeId,
+    required String action,
+    Map<String, dynamic> params = const {},
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+    return _callNode(node: node, action: action, params: params);
+  }
+
   Future<Map<String, dynamic>> _callNode({
     required NodeEndpoint node,
     required String action,
@@ -716,7 +797,7 @@ class NodeSettingsService extends GetxService {
       if (identical(_inFlightNodeCalls[callKey], future)) {
         _inFlightNodeCalls.remove(callKey);
       }
-    });
+    }).ignore();
     return future;
   }
 
@@ -724,6 +805,7 @@ class NodeSettingsService extends GetxService {
     required NodeEndpoint node,
     required String action,
     required Map<String, dynamic> requestPayload,
+    ProgressCallback? onReceiveProgress,
   }) async {
     final candidateUrls = _candidateNodeCallUrls(node.apiBaseUrl);
     final txBytes = _estimatePayloadBytes(requestPayload);
@@ -733,7 +815,11 @@ class NodeSettingsService extends GetxService {
     for (int index = 0; index < candidateUrls.length; index++) {
       final url = candidateUrls[index];
       try {
-        final response = await _dio.post<Map<String, dynamic>>(url, data: requestPayload);
+        final response = await _dio.post<Map<String, dynamic>>(
+          url,
+          data: requestPayload,
+          onReceiveProgress: onReceiveProgress,
+        );
         final body = response.data ?? <String, dynamic>{};
         _recordAppTraffic(txBytes: txBytes, rxBytes: _estimatePayloadBytes(body));
         if (body['success'] == true) {

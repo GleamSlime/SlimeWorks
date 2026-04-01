@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/components/dialogs/confirm_dialog.dart';
+import 'package:slime_works/components/dialogs/node_directory_picker.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
@@ -34,9 +36,11 @@ class _CollectionPictureScreenState
     extends BasePageState<MediaLibraryViewModel, CollectionPictureScreen> {
   Offset? _selectionBoxStart;
   Offset? _selectionBoxEnd;
-  final GlobalKey _gridKey = GlobalKey();
+  // 每次导航时重新生成，确保 AnimatedSwitcher 过渡期间新旧页有不同 GlobalKey
+  GlobalKey _gridKey = GlobalKey();
   int _detailColumnCount = 3;
-  late final ScrollController _scrollController;
+  // 同样每次导航时重建，避免 AnimatedSwitcher 过渡期间两个 GridView 同时 attach 同一个 controller
+  late ScrollController _scrollController;
 
   /// 文件/文件夹正被拖入窗口（桌面端）。
   bool _isDraggingFiles = false;
@@ -44,6 +48,10 @@ class _CollectionPictureScreenState
   /// true when MediaViewerPage is pushed on top; used to redirect the back
   /// button in the action bar to close the viewer instead of exiting the collection.
   bool _viewerActive = false;
+
+  /// 导航方向：true = 向前（进入子页），false = 向后（返回上级）。
+  bool _navForward = true;
+
   late final MediaLibraryViewModel _persistentViewModel = Get.put(
     MediaLibraryViewModel(),
     permanent: true,
@@ -53,6 +61,87 @@ class _CollectionPictureScreenState
   MediaLibraryViewModel createViewModel() => _persistentViewModel;
 
   Worker? _scrollRestoreWorker;
+
+  // ── 导航包装方法（同时设置动画方向） ─────────────────────────────────────
+
+  /// 导航时重建 [_scrollController]，并同步保存当前滚动位置到 viewModel。
+  void _replaceScrollController() {
+    if (_scrollController.hasClients) {
+      viewModel.savedScrollOffset.value = _scrollController.offset;
+    }
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _enterFolder(String id) {
+    setState(() {
+      _navForward = true;
+      _gridKey = GlobalKey();
+    });
+    _replaceScrollController();
+    viewModel.enterFolder(id);
+  }
+
+  void _exitFolder() {
+    setState(() {
+      _navForward = false;
+      _gridKey = GlobalKey();
+    });
+    _replaceScrollController();
+    viewModel.exitFolder();
+  }
+
+  void _enterCollection(String id) {
+    setState(() {
+      _navForward = true;
+      _gridKey = GlobalKey();
+    });
+    _replaceScrollController();
+    viewModel.enterCollection(id);
+  }
+
+  void _exitCollection() {
+    setState(() {
+      _navForward = false;
+      _gridKey = GlobalKey();
+    });
+    _replaceScrollController();
+    viewModel.exitCollection();
+  }
+
+  void _exitToRoot() {
+    setState(() {
+      _navForward = false;
+      _gridKey = GlobalKey();
+    });
+    _replaceScrollController();
+    viewModel.exitToRoot();
+  }
+
+  /// 当前页面内容的唯一标识 key（切换时触发 AnimatedSwitcher 动画）。
+  String get _pageContentKey {
+    final folderId = viewModel.currentFolderId.value ?? 'root';
+    final collectionId = viewModel.currentCollectionId.value;
+    if (collectionId != null) return 'detail_$collectionId';
+    return 'browse_$folderId';
+  }
+
+  /// 方向感知的滑动切换过渡效果。
+  Widget _buildPageTransition(Widget child, Animation<double> animation) {
+    final isIncoming = (child.key as ValueKey<String>?)?.value == _pageContentKey;
+    final dir = _navForward ? 1.0 : -1.0;
+    final tween = isIncoming
+        ? Tween<Offset>(begin: Offset(dir, 0), end: Offset.zero)
+        : Tween<Offset>(begin: Offset.zero, end: Offset(-dir, 0));
+    return ClipRect(
+      child: SlideTransition(
+        position: tween.animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -124,10 +213,8 @@ class _CollectionPictureScreenState
       final inDetail = viewModel.isInDetail;
       final showBack = inDetail || viewModel.currentFolderId.value != null;
       return ScreenChromeData(
-        title: inDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
-        titleWidget: (!inDetail && viewModel.currentFolderTrail.isNotEmpty)
-            ? _buildBreadcrumb(context)
-            : null,
+        // title: inDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
+        titleWidget: toolbar,
         leading: showBack
             ? SizedBox(
                 width: AppTheme.metrics.kSpace48,
@@ -135,15 +222,15 @@ class _CollectionPictureScreenState
                   icon: const Icon(Icons.arrow_back_rounded),
                   onPressed: () {
                     if (inDetail)
-                      viewModel.exitCollection();
+                      _exitCollection();
                     else
-                      viewModel.exitFolder();
+                      _exitFolder();
                   },
                 ),
               )
             : null,
         toolbarHeight: AppTheme.metrics.kSpace48,
-        toolbar: toolbar,
+        // toolbar: toolbar,
       );
     }
 
@@ -189,12 +276,31 @@ class _CollectionPictureScreenState
             return KeyEventResult.ignored;
           },
           child: Obx(() {
+            final pageKey = _pageContentKey;
+            final pageContent = !viewModel.isInDetail
+                ? _buildBrowseGrid(context)
+                : _buildCollectionDetail(context);
             final body = Column(
               children: [
                 Expanded(
-                  child: !viewModel.isInDetail
-                      ? _buildBrowseGrid(context)
-                      : _buildCollectionDetail(context),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    transitionBuilder: (child, animation) {
+                      // 每个过渡子 widget 加实色背景，防止滑动期间透出底层内容
+                      return ColoredBox(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        child: _buildPageTransition(child, animation),
+                      );
+                    },
+                    layoutBuilder: (currentChild, previousChildren) => Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ...previousChildren.map((c) => Positioned.fill(child: c)),
+                        if (currentChild != null) Positioned.fill(child: currentChild),
+                      ],
+                    ),
+                    child: KeyedSubtree(key: ValueKey(pageKey), child: pageContent),
+                  ),
                 ),
                 if (viewModel.isSelecting.value)
                   MediaSelectionBar(
@@ -294,9 +400,9 @@ class _CollectionPictureScreenState
                         if (_viewerActive) {
                           Navigator.of(context).maybePop();
                         } else if (inDetail) {
-                          viewModel.exitCollection();
+                          _exitCollection();
                         } else {
-                          viewModel.exitFolder();
+                          _exitFolder();
                         }
                       },
                     ),
@@ -500,7 +606,7 @@ class _CollectionPictureScreenState
         children: [
           TextButton(
             onPressed: () {
-              viewModel.exitToRoot();
+              _exitToRoot();
             },
             child: const Text('媒体库'),
           ),
@@ -508,7 +614,7 @@ class _CollectionPictureScreenState
           for (int index = 0; index < trail.length; index++) ...[
             Icon(Icons.chevron_right_rounded, size: scaleW(18)),
             TextButton(
-              onPressed: () => viewModel.enterFolder(trail[index].id),
+              onPressed: () => _enterFolder(trail[index].id),
               child: Text(trail[index].name),
             ),
           ],
@@ -598,13 +704,42 @@ class _CollectionPictureScreenState
                       },
                     ),
                   SizedBox(height: appMetrics.kSpace12),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: '节点文件夹路径',
-                      hintText: '/Users/demo/Pictures',
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: '节点文件夹路径',
+                            hintText: '/Users/demo/Pictures',
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: appMetrics.kSpace8),
+                      Tooltip(
+                        message: '浏览节点目录',
+                        child: IconButton(
+                          icon: const Icon(Icons.folder_open_rounded),
+                          onPressed: () async {
+                            final picked = await showDialog<String>(
+                              context: context,
+                              builder: (_) => NodeDirectoryPicker(
+                                nodeId: selectedNodeId,
+                                nodeSettingsService: viewModel.nodeSettingsService,
+                                initialPath: controller.text.trim().isEmpty
+                                    ? '/'
+                                    : controller.text.trim(),
+                              ),
+                            );
+                            if (picked != null) {
+                              setState(() => controller.text = picked);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               );
@@ -717,6 +852,9 @@ class _CollectionPictureScreenState
     final selectedFolderIds = <String>{}; // empty = 全部集合
     var regexTarget = SmartFolderRegexTarget.collectionName;
     var fileTypeFilter = SmartFolderFileType.all;
+    // 目标节点：null = 本机，非空 = 指定远程节点
+    String? targetNodeId;
+    final enabledNodes = viewModel.enabledRemoteNodes;
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -734,30 +872,49 @@ class _CollectionPictureScreenState
                       autofocus: true,
                       decoration: const InputDecoration(labelText: '文件夹名称', hintText: '例：我的收藏'),
                     ),
-                    SizedBox(height: appMetrics.kSpace12),
-                    const Text('目标文件夹（可多选，空选则匹配全部集合）'),
-                    SizedBox(height: appMetrics.kSpace4),
-                    if (snapshotFolders.isEmpty)
-                      const Text('（暂无文件夹）', style: TextStyle(color: Colors.grey))
-                    else
-                      Wrap(
-                        spacing: appMetrics.kSpace8,
-                        runSpacing: appMetrics.kSpace4,
-                        children: [
-                          for (final f in snapshotFolders)
-                            FilterChip(
-                              label: Text(f.name),
-                              selected: selectedFolderIds.contains(f.id),
-                              onSelected: (v) => setState(() {
-                                if (v) {
-                                  selectedFolderIds.add(f.id);
-                                } else {
-                                  selectedFolderIds.remove(f.id);
-                                }
-                              }),
-                            ),
+                    // 远程节点选择（有可用节点时显示）
+                    if (enabledNodes.isNotEmpty) ...[
+                      SizedBox(height: appMetrics.kSpace12),
+                      DropdownButtonFormField<String?>(
+                        value: targetNodeId,
+                        decoration: const InputDecoration(labelText: '创建位置'),
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('本机')),
+                          ...enabledNodes.map(
+                            (node) =>
+                                DropdownMenuItem<String?>(value: node.id, child: Text(node.name)),
+                          ),
                         ],
+                        onChanged: (v) => setState(() => targetNodeId = v),
                       ),
+                    ],
+                    // 本机模式才显示目标文件夹选择（远程节点无法引用本机文件夹ID）
+                    if (targetNodeId == null) ...[
+                      SizedBox(height: appMetrics.kSpace12),
+                      const Text('目标文件夹（可多选，空选则匹配全部集合）'),
+                      SizedBox(height: appMetrics.kSpace4),
+                      if (snapshotFolders.isEmpty)
+                        const Text('（暂无文件夹）', style: TextStyle(color: Colors.grey))
+                      else
+                        Wrap(
+                          spacing: appMetrics.kSpace8,
+                          runSpacing: appMetrics.kSpace4,
+                          children: [
+                            for (final f in snapshotFolders)
+                              FilterChip(
+                                label: Text(f.name),
+                                selected: selectedFolderIds.contains(f.id),
+                                onSelected: (v) => setState(() {
+                                  if (v) {
+                                    selectedFolderIds.add(f.id);
+                                  } else {
+                                    selectedFolderIds.remove(f.id);
+                                  }
+                                }),
+                              ),
+                          ],
+                        ),
+                    ],
                     SizedBox(height: appMetrics.kSpace12),
                     // 正则匹配目标
                     const Text('正则匹配目标'),
@@ -809,6 +966,7 @@ class _CollectionPictureScreenState
                       targetFolderIds: selectedFolderIds.toList(),
                       regexTarget: regexTarget,
                       fileTypeFilter: fileTypeFilter,
+                      targetNodeId: targetNodeId,
                     );
                   },
                   child: const Text('创建'),
@@ -964,25 +1122,13 @@ class _CollectionPictureScreenState
   }
 
   Future<void> _confirmDeleteSmartFolder(String id, String name) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('删除智能文件夹'),
-          content: Text('确定删除"$name"？集合本身不受影响，仅删除此筛选规则。'),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
-            FilledButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await viewModel.deleteSmartFolder(id);
-              },
-              child: const Text('删除'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '删除智能文件夹',
+      message: '确定删除"$name"？集合本身不受影响，仅删除此筛选规则。',
+      confirmLabel: '删除',
     );
+    if (confirmed) await viewModel.deleteSmartFolder(id);
   }
 
   /// 显示远程节点集合的路径信息（不可本地打开，仅供参考）。
@@ -1093,7 +1239,7 @@ class _CollectionPictureScreenState
                 viewModel.toggleSelection(folder.id);
                 return;
               }
-              viewModel.enterFolder(folder.id);
+              _enterFolder(folder.id);
             },
             onLongPress: () => viewModel.enterSelection(folder.id),
             onRename: () => _showRenameFolderDialog(folder.id, folder.name),
@@ -1101,6 +1247,12 @@ class _CollectionPictureScreenState
             onTransfer: viewModel.isRemoteFolder(folder.id)
                 ? null
                 : () => viewModel.transferFolderCollections(folderId: folder.id),
+            onPullToLocal: viewModel.isRemoteFolder(folder.id)
+                ? () => viewModel.pullRemoteFolderToLocal(folder.id)
+                : null,
+            onDeleteNodeFiles: viewModel.isRemoteFolder(folder.id)
+                ? () => _confirmDeleteNodeLocalFilesForFolder(folder.id, folder.name)
+                : null,
           );
           if (viewModel.isRemoteFolder(folder.id)) return folderCard;
           return DragTarget<String>(
@@ -1131,7 +1283,7 @@ class _CollectionPictureScreenState
                 viewModel.toggleSelection(sf.id);
                 return;
               }
-              viewModel.enterFolder(sf.id);
+              _enterFolder(sf.id);
             },
             onLongPress: () => viewModel.enterSelection(sf.id),
             // 远程智能文件夹不允许本地编辑/删除/转移
@@ -1177,7 +1329,7 @@ class _CollectionPictureScreenState
               viewModel.toggleSelection(collection.id);
               return;
             }
-            viewModel.enterCollection(collection.id);
+            _enterCollection(collection.id);
           },
           onLongPress: () => viewModel.enterSelection(collection.id),
           onRename: () => _showRenameDialog(collection.id, collection.title),
@@ -1193,10 +1345,17 @@ class _CollectionPictureScreenState
                   collection.folderPath,
                   collection.title,
                 ),
+          onDeleteNodeFiles: viewModel.isRemoteCollection(collection.id)
+              ? () => _confirmDeleteNodeLocalFilesForCollection(collection.id, collection.title)
+              : null,
           onToggleFavorite: () => viewModel.toggleFavorite(collection.id),
         );
         // Local collections: draggable (to folder) + DragTarget (from other collections for reorder)
+        // 仅在「综合排序」模式下启用拖拽重排序
         if (viewModel.isRemoteCollection(collection.id)) return collectionCard;
+        final isCombinedSort =
+            viewModel.collectionSortOrder.value == CollectionSortOrder.combinedSort;
+        if (!isCombinedSort) return collectionCard;
         final draggable = Draggable<String>(
           data: collection.id,
           feedback: Material(
@@ -1300,7 +1459,36 @@ class _CollectionPictureScreenState
   Widget _buildCollectionDetail(BuildContext context) {
     final isLoading = viewModel.isLoadingItems.value;
     if (viewModel.currentItems.isEmpty && isLoading) {
-      // 仅在完全没数据时才显示全局 spinner；有数据时立即展示并在顶部显示进度条。
+      // 远程集合：显示带百分比的圆形进度环
+      final collectionId = viewModel.currentCollectionId.value ?? '';
+      if (viewModel.isRemoteCollection(collectionId)) {
+        return Obx(() {
+          final progress = viewModel.itemLoadProgress.value;
+          final percent = progress != null ? '${(progress * 100).toInt()}%' : null;
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(value: progress, strokeWidth: 5),
+                      if (percent != null)
+                        Text(percent, style: Theme.of(context).textTheme.labelMedium),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('正在加载远程资源…', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          );
+        });
+      }
+      // 本地集合：普通 spinner
       return const Center(child: CircularProgressIndicator());
     }
     if (viewModel.currentItems.isEmpty) {
@@ -1319,15 +1507,35 @@ class _CollectionPictureScreenState
           isRemote: isRemote,
           viewModel: viewModel,
           columnCount: _detailColumnCount,
+          lastViewedItemId: viewModel.lastViewedItemId.value,
           onOpenViewer: (index) {
             if (collectionId.isEmpty) return;
+            // 记录当前预览的资源 ID，返回后高亮并滚动到该位置
+            if (index >= 0 && index < sortedItems.length) {
+              viewModel.lastViewedItemId.value = sortedItems[index].id;
+            }
             final isMobile = Platform.isAndroid || Platform.isIOS;
-            final route = MaterialPageRoute<void>(
-              builder: (_) => MediaViewerPage(
+            // 自定义淡入放大过渡动画 — opaque:true 防止动画期间透出底层内容
+            final route = PageRouteBuilder<void>(
+              opaque: true,
+              barrierColor: Colors.black,
+              pageBuilder: (_, __, ___) => MediaViewerPage(
                 items: sortedItems,
                 initialIndex: index,
                 collectionId: collectionId,
                 viewModel: viewModel,
+              ),
+              transitionDuration: const Duration(milliseconds: 280),
+              reverseTransitionDuration: const Duration(milliseconds: 240),
+              transitionsBuilder: (_, animation, __, child) => FadeTransition(
+                opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+                child: ScaleTransition(
+                  scale: Tween<double>(
+                    begin: 0.93,
+                    end: 1.0,
+                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                  child: child,
+                ),
               ),
             );
             if (isMobile) {
@@ -1348,6 +1556,7 @@ class _CollectionPictureScreenState
             }
           },
           onConfirmDelete: _confirmDeleteItemFile,
+          onConfirmDeleteNodeLocalFile: isRemote ? _confirmDeleteNodeLocalItemFile : null,
         ),
         // 有数据但仍在加载更多时，顶部显示细进度条（不阻塞内容交互）
         if (isLoading)
@@ -1357,24 +1566,26 @@ class _CollectionPictureScreenState
   }
 
   Future<void> _confirmDeleteItemFile(media_api.MediaItem item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除文件'),
-        content: Text('确定要删除「${item.title}」吗？\n此操作不可恢复，文件将从磁盘永久删除。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '删除文件',
+      message: '确定要删除「${item.title}」吗？\n此操作不可恢复，文件将从磁盘永久删除。',
+      confirmLabel: '删除',
+      confirmColor: Theme.of(context).colorScheme.error,
     );
-    if (confirmed == true) {
-      await viewModel.deleteItemFile(item);
-    }
+    if (confirmed) await viewModel.deleteItemFile(item);
+  }
+
+  Future<void> _confirmDeleteNodeLocalItemFile(media_api.MediaItem item) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '删除节点本地文件',
+      message: '确定要删除节点上「${item.title}」的本地文件吗？\n'
+          '此操作将从节点磁盘永久删除该文件，集合记录保留。',
+      confirmLabel: '删除',
+      confirmColor: Theme.of(context).colorScheme.error,
+    );
+    if (confirmed) await viewModel.deleteRemoteItemLocalFile(item);
   }
 
   void _updateSelectionByBox() {
@@ -1656,5 +1867,29 @@ class _CollectionPictureScreenState
         );
       },
     );
+  }
+
+  Future<void> _confirmDeleteNodeLocalFilesForFolder(String folderId, String folderName) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '删除节点本地文件',
+      message: '此操作将永久删除远程节点上"$folderName"文件夹内所有集合的本地文件，且不可恢复。\n\n'
+          '集合数据库记录保留，仅删除物理文件。确定继续吗？',
+      confirmLabel: '删除文件',
+      confirmColor: Theme.of(context).colorScheme.error,
+    );
+    if (confirmed) await viewModel.deleteNodeLocalFilesForFolder(folderId);
+  }
+
+  Future<void> _confirmDeleteNodeLocalFilesForCollection(String collectionId, String title) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '删除节点本地文件',
+      message: '此操作将永久删除远程节点上"$title"集合的本地文件，且不可恢复。\n\n'
+          '集合数据库记录保留，仅删除物理文件。确定继续吗？',
+      confirmLabel: '删除文件',
+      confirmColor: Theme.of(context).colorScheme.error,
+    );
+    if (confirmed) await viewModel.deleteNodeLocalFilesForCollection(collectionId);
   }
 }

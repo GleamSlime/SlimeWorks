@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -17,6 +18,8 @@ class MediaItemTile extends StatefulWidget {
     this.onRequestAudioCover,
     this.onOpenFolder,
     this.onDeleteFile,
+    this.onDeleteNodeLocalFile,
+    this.deleteNodeLocalFileLabel,
     this.onSaveToGallery,
     this.fixedHeight,
   });
@@ -36,6 +39,12 @@ class MediaItemTile extends StatefulWidget {
 
   /// 删除该文件（本地）。
   final VoidCallback? onDeleteFile;
+
+  /// 删除节点本地文件（远程资源）。
+  final VoidCallback? onDeleteNodeLocalFile;
+
+  /// 节点本地文件删除按钮的文案，默认为「删除节点本地文件」。
+  final String? deleteNodeLocalFileLabel;
 
   /// 保存图片到相册（移动端）。
   final VoidCallback? onSaveToGallery;
@@ -133,6 +142,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
     final hasActions =
         widget.onOpenFolder != null ||
         widget.onDeleteFile != null ||
+        widget.onDeleteNodeLocalFile != null ||
         widget.onSaveToGallery != null;
     if (!hasActions) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -150,13 +160,19 @@ class _MediaItemTileState extends State<MediaItemTile> {
         if (widget.onSaveToGallery != null)
           const PopupMenuItem<String>(value: 'save', child: Text('保存到相册')),
         if (widget.onDeleteFile != null)
-          const PopupMenuItem<String>(value: 'delete', child: Text('删除文件')),
+          const PopupMenuItem<String>(value: 'delete', child: Text('删除本地文件')),
+        if (widget.onDeleteNodeLocalFile != null)
+          PopupMenuItem<String>(
+            value: 'delete_node_local',
+            child: Text(widget.deleteNodeLocalFileLabel ?? '删除节点本地文件'),
+          ),
       ],
     );
     if (!mounted) return;
     if (action == 'open_folder') widget.onOpenFolder?.call();
     if (action == 'save') widget.onSaveToGallery?.call();
     if (action == 'delete') widget.onDeleteFile?.call();
+    if (action == 'delete_node_local') widget.onDeleteNodeLocalFile?.call();
   }
 
   @override
@@ -169,6 +185,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
     final hasMenuActions =
         widget.onOpenFolder != null ||
         widget.onDeleteFile != null ||
+        widget.onDeleteNodeLocalFile != null ||
         widget.onSaveToGallery != null;
     final tile = GestureDetector(
       onTap: widget.onTap,
@@ -292,41 +309,46 @@ class _MediaItemTileState extends State<MediaItemTile> {
                 bottom: (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
                     ? scaleW(3)
                     : 0,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(color: Colors.black.withAlpha(132)),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: appMetrics.kSpace10,
-                      vertical: appMetrics.kSpace8,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            widget.item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: appMetrics.fontSize12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                child: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: Colors.black.withAlpha(132)),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: appMetrics.kSpace8,
+                          vertical: appMetrics.kSpace4,
                         ),
-                        if ((_isAudio || _isVideo) &&
-                            widget.item.durationMs != null &&
-                            widget.item.durationMs! > BigInt.zero) ...[
-                          SizedBox(width: appMetrics.kSpace4),
-                          Text(
-                            _formatDuration(widget.item.durationMs!),
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: appMetrics.fontSize10,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: appMetrics.fontSize12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ],
+                            if ((_isAudio || _isVideo) &&
+                                widget.item.durationMs != null &&
+                                widget.item.durationMs! > BigInt.zero) ...[
+                              SizedBox(width: appMetrics.kSpace4),
+                              Text(
+                                _formatDuration(widget.item.durationMs!),
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: appMetrics.fontSize10,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

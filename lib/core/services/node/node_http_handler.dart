@@ -10,9 +10,12 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
     int requestBytes = 0;
 
     void writeJsonResponse(Map<String, dynamic> data) {
-      final body = jsonEncode(_sanitizeJsonValue(data));
-      _recordAppTraffic(txBytes: utf8.encode(body).length, rxBytes: requestBytes);
-      request.response.write(body);
+      final bodyStr = jsonEncode(_sanitizeJsonValue(data));
+      final bodyBytes = utf8.encode(bodyStr);
+      _recordAppTraffic(txBytes: bodyBytes.length, rxBytes: requestBytes);
+      // 明确设置 Content-Length，客户端 Dio 才能正确上报接收进度百分比
+      request.response.contentLength = bodyBytes.length;
+      request.response.add(bodyBytes);
     }
 
     if (request.method == 'GET' && request.uri.path == '/health') {
@@ -100,6 +103,22 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
       case 'list_media_folders':
         final folders = media_api.getAllMediaFolders();
         return folders.map(_mediaFolderToJson).toList();
+      case 'list_directories':
+        // 列举指定路径下的一级子目录，供客户端展示树状目录选择器
+        try {
+          final dirPath = (params['path'] ?? '/').toString();
+          final dir = Directory(dirPath);
+          if (!dir.existsSync()) return <String>[];
+          final entries = dir
+              .listSync()
+              .whereType<Directory>()
+              .map((d) => d.path)
+              .toList()
+            ..sort();
+          return entries;
+        } catch (_) {
+          return <String>[];
+        }
       case 'list_smart_folders':
         // 将本机的智能文件夹列表暴露给远程节点客户端
         try {
@@ -113,6 +132,35 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
           }
         } catch (_) {}
         return <dynamic>[];
+      case 'create_smart_folder':
+        // 在节点本机创建智能文件夹，返回创建后的完整智能文件夹列表
+        try {
+          final dir = await getApplicationSupportDirectory();
+          final sfFile = File('${dir.path}/smart_folders_data.json');
+          final List<dynamic> existingList;
+          if (await sfFile.exists()) {
+            final raw = await sfFile.readAsString();
+            existingList = raw.isNotEmpty ? (jsonDecode(raw) as List<dynamic>) : <dynamic>[];
+          } else {
+            existingList = <dynamic>[];
+          }
+          final newSf = {
+            'id': 'sf_${DateTime.now().millisecondsSinceEpoch}',
+            'name': (params['name'] ?? '').toString(),
+            'regexPattern': (params['regex_pattern'] ?? '').toString(),
+            'targetFolderIds': (params['target_folder_ids'] is List)
+                ? params['target_folder_ids']
+                : <dynamic>[],
+            'regexTarget': (params['regex_target'] ?? 'collectionName').toString(),
+            'fileTypeFilter': (params['file_type_filter'] ?? 'all').toString(),
+          };
+          existingList.add(newSf);
+          await sfFile.parent.create(recursive: true);
+          await sfFile.writeAsString(jsonEncode(existingList));
+          return existingList;
+        } catch (e) {
+          throw StateError('创建智能文件夹失败: $e');
+        }
       case 'get_media_collection_items':
         final collectionId = (params['collection_id'] ?? '').toString();
         final items = media_api.getMediaCollectionItems(collectionId: collectionId);
@@ -160,6 +208,42 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
         media_api.deleteMediaCollection(collectionId: collectionId);
         _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
+      case 'delete_collection_local_files':
+        final deleteCollectionId = (params['collection_id'] ?? '').toString();
+        final deleteItems = media_api.getMediaCollectionItems(collectionId: deleteCollectionId);
+        int deletedCount = 0;
+        for (final item in deleteItems) {
+          try {
+            final f = File(item.filePath);
+            if (await f.exists()) {
+              await f.delete();
+              deletedCount++;
+            }
+          } catch (_) {}
+        }
+        return <String, dynamic>{'deleted': deletedCount};
+      case 'delete_media_item_local_file':
+        final deleteItemId = (params['item_id'] ?? '').toString();
+        final deleteCollId = (params['collection_id'] ?? '').toString();
+        final itemsForDelete = media_api.getMediaCollectionItems(collectionId: deleteCollId);
+        final targetItem = itemsForDelete.where((i) => i.id == deleteItemId).firstOrNull;
+        if (targetItem != null) {
+          try {
+            final f = File(targetItem.filePath);
+            if (await f.exists()) await f.delete();
+          } catch (_) {}
+          // 重新导入集合目录以同步 DB
+          try {
+            await media_api.importMediaFolder(
+              folderPath: targetItem.filePath
+                  .split('/')
+                  .take(targetItem.filePath.split('/').length - 1)
+                  .join('/'),
+            );
+          } catch (_) {}
+          _emitLibraryMutation();
+        }
+        return <String, dynamic>{'ok': targetItem != null};
       case 'move_media_collection_to_folder':
         final collectionId = (params['collection_id'] ?? '').toString();
         final folderIdValue = params['folder_id'];
@@ -463,6 +547,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
       final fileBytes = parsed['file'] as Uint8List?;
       final filename =
           (parsed['filename'] as String?) ?? 'upload_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // ignore: unused_local_variable
       final collectionId = parsed['collection_id'] as String?;
 
       if (fileBytes == null || fileBytes.isEmpty) {
