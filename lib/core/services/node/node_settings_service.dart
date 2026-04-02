@@ -356,10 +356,7 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 列举节点上 [path] 目录下的一级子目录路径列表。
-  Future<List<String>> listNodeDirectories({
-    required String nodeId,
-    required String path,
-  }) async {
+  Future<List<String>> listNodeDirectories({required String nodeId, required String path}) async {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
     final response = await _callNode(

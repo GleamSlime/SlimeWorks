@@ -171,3 +171,116 @@ pub struct TransferEvent {
     pub message: Option<String>,
     pub timestamp: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_device_info() -> DeviceInfo {
+        DeviceInfo {
+            device_id: "dev-001".to_string(),
+            device_name: "MacBook Air".to_string(),
+            device_type: "macOS".to_string(),
+            ip_address: "192.168.1.10".to_string(),
+            port: 8765,
+            discovered_at: "2024-01-01T00:00:00Z".to_string(),
+            is_online: true,
+        }
+    }
+
+    // ── DeviceInfo serde ───────────────────────────────────────────────────
+
+    #[test]
+    fn device_info_serializes_round_trip() {
+        let device = make_device_info();
+        let json = serde_json::to_string(&device).expect("serialize");
+        let restored: DeviceInfo = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.device_id, device.device_id);
+        assert_eq!(restored.ip_address, device.ip_address);
+        assert_eq!(restored.port, device.port);
+        assert!(restored.is_online);
+    }
+
+    // ── TransferType serde ─────────────────────────────────────────────────
+
+    #[test]
+    fn transfer_type_serializes_and_deserializes() {
+        for kind in &[TransferType::File, TransferType::Text, TransferType::Image, TransferType::Video] {
+            let json = serde_json::to_string(kind).expect("serialize");
+            let restored: TransferType = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(&restored, kind);
+        }
+    }
+
+    // ── TransferStatus serde ───────────────────────────────────────────────
+
+    #[test]
+    fn transfer_status_serializes_and_deserializes() {
+        let statuses = [
+            TransferStatus::Pending,
+            TransferStatus::Accepted,
+            TransferStatus::Rejected,
+            TransferStatus::Transferring,
+            TransferStatus::Completed,
+            TransferStatus::Failed,
+            TransferStatus::Cancelled,
+        ];
+        for status in &statuses {
+            let json = serde_json::to_string(status).expect("serialize");
+            let restored: TransferStatus = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(&restored, status);
+        }
+    }
+
+    // ── TransferRequest serde ──────────────────────────────────────────────
+
+    #[test]
+    fn transfer_request_text_round_trip() {
+        let req = TransferRequest {
+            transfer_id: "tid-1".to_string(),
+            sender_device_id: "dev-001".to_string(),
+            sender_device_name: "Test".to_string(),
+            transfer_type: TransferType::Text,
+            file_name: None,
+            file_size: None,
+            text_content: Some("Hello, world!".to_string()),
+        };
+        let json = serde_json::to_string(&req).expect("serialize");
+        let restored: TransferRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.transfer_id, req.transfer_id);
+        assert_eq!(restored.text_content.as_deref(), Some("Hello, world!"));
+        assert!(restored.file_name.is_none());
+    }
+
+    #[test]
+    fn transfer_request_file_round_trip() {
+        let req = TransferRequest {
+            transfer_id: "tid-2".to_string(),
+            sender_device_id: "dev-001".to_string(),
+            sender_device_name: "Test".to_string(),
+            transfer_type: TransferType::File,
+            file_name: Some("photo.jpg".to_string()),
+            file_size: Some(1024 * 1024),
+            text_content: None,
+        };
+        let json = serde_json::to_string(&req).expect("serialize");
+        let restored: TransferRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.file_name.as_deref(), Some("photo.jpg"));
+        assert_eq!(restored.file_size, Some(1024 * 1024));
+    }
+
+    // ── TransferResponse serde ─────────────────────────────────────────────
+
+    #[test]
+    fn transfer_response_accepted_round_trip() {
+        let resp = TransferResponse {
+            transfer_id: "tid-1".to_string(),
+            accepted: true,
+            receiver_device_id: "dev-002".to_string(),
+        };
+        let json = serde_json::to_string(&resp).expect("serialize");
+        let restored: TransferResponse = serde_json::from_str(&json).expect("deserialize");
+        assert!(restored.accepted);
+        assert_eq!(restored.receiver_device_id, "dev-002");
+    }
+}

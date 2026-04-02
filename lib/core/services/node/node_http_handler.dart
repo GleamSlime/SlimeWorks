@@ -109,12 +109,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
           final dirPath = (params['path'] ?? '/').toString();
           final dir = Directory(dirPath);
           if (!dir.existsSync()) return <String>[];
-          final entries = dir
-              .listSync()
-              .whereType<Directory>()
-              .map((d) => d.path)
-              .toList()
-            ..sort();
+          final entries = dir.listSync().whereType<Directory>().map((d) => d.path).toList()..sort();
           return entries;
         } catch (_) {
           return <String>[];
@@ -160,6 +155,55 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
           return existingList;
         } catch (e) {
           throw StateError('创建智能文件夹失败: $e');
+        }
+      case 'update_smart_folder':
+        // 更新节点本机指定智能文件夹，通过 id 定位后更新字段
+        try {
+          final dir = await getApplicationSupportDirectory();
+          final sfFile = File('${dir.path}/smart_folders_data.json');
+          final List<dynamic> existingList;
+          if (await sfFile.exists()) {
+            final raw = await sfFile.readAsString();
+            existingList = raw.isNotEmpty ? (jsonDecode(raw) as List<dynamic>) : <dynamic>[];
+          } else {
+            existingList = <dynamic>[];
+          }
+          final targetId = (params['id'] ?? '').toString();
+          final idx = existingList.indexWhere((e) => (e as Map<String, dynamic>)['id'] == targetId);
+          if (idx == -1) throw StateError('智能文件夹不存在: $targetId');
+          existingList[idx] = {
+            'id': targetId,
+            'name': (params['name'] ?? '').toString(),
+            'regexPattern': (params['regex_pattern'] ?? '').toString(),
+            'targetFolderIds': (params['target_folder_ids'] is List)
+                ? params['target_folder_ids']
+                : <dynamic>[],
+            'regexTarget': (params['regex_target'] ?? 'collectionName').toString(),
+            'fileTypeFilter': (params['file_type_filter'] ?? 'all').toString(),
+          };
+          await sfFile.writeAsString(jsonEncode(existingList));
+          return existingList;
+        } catch (e) {
+          throw StateError('更新智能文件夹失败: $e');
+        }
+      case 'delete_smart_folder':
+        // 删除节点本机指定智能文件夹
+        try {
+          final dir = await getApplicationSupportDirectory();
+          final sfFile = File('${dir.path}/smart_folders_data.json');
+          final List<dynamic> existingList;
+          if (await sfFile.exists()) {
+            final raw = await sfFile.readAsString();
+            existingList = raw.isNotEmpty ? (jsonDecode(raw) as List<dynamic>) : <dynamic>[];
+          } else {
+            existingList = <dynamic>[];
+          }
+          final targetId = (params['id'] ?? '').toString();
+          existingList.removeWhere((e) => (e as Map<String, dynamic>)['id'] == targetId);
+          await sfFile.writeAsString(jsonEncode(existingList));
+          return <String, dynamic>{'ok': true};
+        } catch (e) {
+          throw StateError('删除智能文件夹失败: $e');
         }
       case 'get_media_collection_items':
         final collectionId = (params['collection_id'] ?? '').toString();

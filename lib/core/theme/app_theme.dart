@@ -27,8 +27,10 @@ class AppTheme {
   static Future<void> loadSavedTheme() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final modeIdx = (prefs.getInt(_themeModeKey) ?? ThemeMode.system.index)
-          .clamp(0, ThemeMode.values.length - 1);
+      final modeIdx = (prefs.getInt(_themeModeKey) ?? ThemeMode.system.index).clamp(
+        0,
+        ThemeMode.values.length - 1,
+      );
       themeModeObs.value = ThemeMode.values[modeIdx];
       final accentValue = prefs.getInt(_accentColorKey);
       if (accentValue != null) accentColorObs.value = Color(accentValue);
@@ -69,10 +71,7 @@ class AppTheme {
           foregroundColor: _contrastColor(accent),
         ),
       ),
-      sliderTheme: base.sliderTheme.copyWith(
-        thumbColor: accent,
-        activeTrackColor: accent,
-      ),
+      sliderTheme: base.sliderTheme.copyWith(thumbColor: accent, activeTrackColor: accent),
     );
   }
 
@@ -101,8 +100,7 @@ class AppTheme {
     return s!.copyWith(fontSize: s.fontSize! * scale);
   }
 
-  static Color _contrastColor(Color c) =>
-      c.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  static Color _contrastColor(Color c) => c.computeLuminance() > 0.5 ? Colors.black : Colors.white;
 
   static ThemeMetrics metrics = ThemeMetrics();
   static RxInt metricsVersion = 0.obs;

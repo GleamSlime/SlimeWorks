@@ -21,5 +21,8 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 log = "0.4"
 env_logger = "0.10"
 
+[dev-dependencies]
+tempfile = "3"
+
 [lib]
 crate-type = ["staticlib", "rlib"]

@@ -52,8 +52,7 @@ class _ConfirmDialogState extends State<ConfirmDialog> {
     return KeyboardListener(
       focusNode: _focusNode,
       onKeyEvent: (event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.enter) {
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
           _confirm();
         }
       },
@@ -61,10 +60,7 @@ class _ConfirmDialogState extends State<ConfirmDialog> {
         title: Text(widget.title),
         content: widget.message != null ? Text(widget.message!) : null,
         actions: [
-          TextButton(
-            onPressed: _cancel,
-            child: Text(widget.cancelLabel),
-          ),
+          TextButton(onPressed: _cancel, child: Text(widget.cancelLabel)),
           FilledButton(
             onPressed: _confirm,
             style: widget.confirmColor != null
@@ -88,14 +84,14 @@ Future<bool> showConfirmDialog(
   Color? confirmColor,
 }) async {
   return await showDialog<bool>(
-    context: context,
-    builder: (ctx) => ConfirmDialog(
-      title: title,
-      message: message,
-      confirmLabel: confirmLabel,
-      cancelLabel: cancelLabel,
-      confirmColor: confirmColor,
-    ),
-  ) ??
+        context: context,
+        builder: (ctx) => ConfirmDialog(
+          title: title,
+          message: message,
+          confirmLabel: confirmLabel,
+          cancelLabel: cancelLabel,
+          confirmColor: confirmColor,
+        ),
+      ) ??
       false;
 }

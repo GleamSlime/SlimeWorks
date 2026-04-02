@@ -108,9 +108,9 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                   Expanded(
                     child: Text(
                       _currentPath,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -122,55 +122,42 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-                            child: Text(
-                              _error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
+                  ? Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : _entries.isEmpty
+                  ? Center(child: Text('此目录下没有子目录', style: Theme.of(context).textTheme.bodySmall))
+                  : ListView.builder(
+                      itemCount: _entries.length,
+                      itemBuilder: (context, index) {
+                        final entry = _entries[index];
+                        final name = entry.split(RegExp(r'[/\\]')).last;
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.folder_rounded, size: 20),
+                          title: Text(name),
+                          subtitle: Text(
+                            entry,
+                            style: Theme.of(context).textTheme.labelSmall,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        )
-                      : _entries.isEmpty
-                          ? Center(
-                              child: Text(
-                                '此目录下没有子目录',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: _entries.length,
-                              itemBuilder: (context, index) {
-                                final entry = _entries[index];
-                                final name = entry.split(RegExp(r'[/\\]')).last;
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(
-                                    Icons.folder_rounded,
-                                    size: 20,
-                                  ),
-                                  title: Text(name),
-                                  subtitle: Text(
-                                    entry,
-                                    style: Theme.of(context).textTheme.labelSmall,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  onTap: () => _navigateTo(entry),
-                                );
-                              },
-                            ),
+                          onTap: () => _navigateTo(entry),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_currentPath),
           child: const Text('选择此目录'),

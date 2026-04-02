@@ -254,4 +254,71 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       exitToRoot();
     }
   }
+
+  /// 解析 'smart-folder:remote:nodeId:rawId' 返回 (nodeId, rawId)。
+  (String nodeId, String rawId)? _parseRemoteSmartFolderId(String id) {
+    const prefix = 'smart-folder:remote:';
+    if (!id.startsWith(prefix)) return null;
+    final suffix = id.substring(prefix.length);
+    final sep = suffix.indexOf(':');
+    if (sep <= 0) return null;
+    return (suffix.substring(0, sep), suffix.substring(sep + 1));
+  }
+
+  /// 编辑远程节点上的智能文件夹，更新完成后刷新远程数据。
+  Future<void> editRemoteSmartFolder(
+    String id, {
+    required String name,
+    required String pattern,
+    required List<String> targetFolderIds,
+    SmartFolderRegexTarget regexTarget = SmartFolderRegexTarget.collectionName,
+    SmartFolderFileType fileTypeFilter = SmartFolderFileType.all,
+  }) async {
+    final parsed = _parseRemoteSmartFolderId(id);
+    if (parsed == null) {
+      showSnack('错误', '无效的远程智能文件夹 ID');
+      return;
+    }
+    final (nodeId, rawId) = parsed;
+    try {
+      await nodeSettingsService.callNodeAction(
+        nodeId: nodeId,
+        action: 'update_smart_folder',
+        params: {
+          'id': rawId,
+          'name': name.trim(),
+          'regex_pattern': pattern.trim(),
+          'target_folder_ids': targetFolderIds,
+          'regex_target': regexTarget.name,
+          'file_type_filter': fileTypeFilter.name,
+        },
+      );
+      await refreshRemoteLibrary();
+      showSnack('成功', '远程智能文件夹已更新');
+    } catch (e) {
+      showSnack('错误', '更新远程智能文件夹失败: $e');
+    }
+  }
+
+  /// 删除远程节点上的智能文件夹，删除完成后刷新远程数据。
+  Future<void> deleteRemoteSmartFolder(String id) async {
+    final parsed = _parseRemoteSmartFolderId(id);
+    if (parsed == null) {
+      showSnack('错误', '无效的远程智能文件夹 ID');
+      return;
+    }
+    final (nodeId, rawId) = parsed;
+    try {
+      await nodeSettingsService.callNodeAction(
+        nodeId: nodeId,
+        action: 'delete_smart_folder',
+        params: {'id': rawId},
+      );
+      await refreshRemoteLibrary();
+      if (currentFolderId.value == id) exitToRoot();
+      showSnack('成功', '远程智能文件夹已删除');
+    } catch (e) {
+      showSnack('错误', '删除远程智能文件夹失败: $e');
+    }
+  }
 }

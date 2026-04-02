@@ -4,6 +4,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/components/dialogs/confirm_dialog.dart';
 import 'package:slime_works/components/dialogs/node_directory_picker.dart';
@@ -652,15 +653,24 @@ class _CollectionPictureScreenState
         viewModel.showSnack('错误', '远程文件夹映射不存在');
         return;
       }
-      await _showNodeFolderDialog(scanMode: scanMode, fixedNodeId: nodeId);
+      // 在打开对话框前同步捕获原始文件夹 ID，确保即使对话框关闭后状态发生变化也能正确定位
+      final rawFolderId = viewModel.getRemoteRawFolderId(activeRemoteFolderId);
+      await _showNodeFolderDialog(
+        scanMode: scanMode,
+        fixedNodeId: nodeId,
+        targetRawFolderId: rawFolderId,
+      );
       return;
     }
 
     if (!Platform.isAndroid && !Platform.isIOS) {
+      // 在打开文件选择器前同步捕获当前本地文件夹上下文，
+      // 避免异步 scanFolder 内部读取响应式状态时因时序问题丢失文件夹归属。
+      final localFolderId = viewModel.effectiveFolderId;
       if (scanMode) {
-        await viewModel.scanFolder();
+        await viewModel.scanFolder(localTargetFolderId: localFolderId);
       } else {
-        await viewModel.importFolder();
+        await viewModel.importFolder(localTargetFolderId: localFolderId);
       }
       return;
     }
@@ -672,9 +682,25 @@ class _CollectionPictureScreenState
     await _showNodeFolderDialog(scanMode: scanMode);
   }
 
-  Future<void> _showNodeFolderDialog({required bool scanMode, String? fixedNodeId}) async {
+  Future<void> _showNodeFolderDialog({
+    required bool scanMode,
+    String? fixedNodeId,
+    String? targetRawFolderId,
+  }) async {
+    if (viewModel.enabledRemoteNodes.isEmpty) {
+      viewModel.showSnack('提示', '没有可用节点');
+      return;
+    }
     String selectedNodeId = fixedNodeId ?? viewModel.enabledRemoteNodes.first.id;
-    final controller = TextEditingController();
+    // 当用户切换节点时，targetRawFolderId 失效（非当前文件夹的节点）
+    String? activeTargetRawFolderId = targetRawFolderId;
+
+    // 从 SharedPreferences 加载该节点上次使用的路径
+    final prefs = await SharedPreferences.getInstance();
+    final savedPath = prefs.getString('node_scan_path_$selectedNodeId') ?? '';
+    final controller = TextEditingController(text: savedPath);
+
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -686,23 +712,30 @@ class _CollectionPictureScreenState
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (fixedNodeId == null)
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedNodeId,
-                      decoration: const InputDecoration(labelText: '目标节点'),
-                      items: viewModel.enabledRemoteNodes
-                          .map(
-                            (node) =>
-                                DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
+                  DropdownButtonFormField<String>(
+                    value: selectedNodeId,
+                    decoration: const InputDecoration(labelText: '目标节点'),
+                    items: viewModel.enabledRemoteNodes
+                        .map(
+                          (node) =>
+                              DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        selectedNodeId = value;
+                        // 切换节点时：目标文件夹上下文失效，并加载该节点的历史路径
+                        if (value != fixedNodeId) {
+                          activeTargetRawFolderId = null;
+                        } else {
+                          activeTargetRawFolderId = targetRawFolderId;
                         }
-                        setState(() => selectedNodeId = value);
-                      },
-                    ),
+                        final nodePath = prefs.getString('node_scan_path_$value') ?? '';
+                        controller.text = nodePath;
+                      });
+                    },
+                  ),
                   SizedBox(height: appMetrics.kSpace12),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -723,14 +756,13 @@ class _CollectionPictureScreenState
                         child: IconButton(
                           icon: const Icon(Icons.folder_open_rounded),
                           onPressed: () async {
+                            final currentPath = controller.text.trim();
                             final picked = await showDialog<String>(
                               context: context,
                               builder: (_) => NodeDirectoryPicker(
                                 nodeId: selectedNodeId,
                                 nodeSettingsService: viewModel.nodeSettingsService,
-                                initialPath: controller.text.trim().isEmpty
-                                    ? '/'
-                                    : controller.text.trim(),
+                                initialPath: currentPath.isEmpty ? '/' : currentPath,
                               ),
                             );
                             if (picked != null) {
@@ -749,11 +781,24 @@ class _CollectionPictureScreenState
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
+                final path = controller.text.trim();
                 Navigator.of(context).pop();
+                // 持久化本次选择的路径
+                if (path.isNotEmpty) {
+                  await prefs.setString('node_scan_path_$selectedNodeId', path);
+                }
                 if (scanMode) {
-                  await viewModel.scanFolder(nodeId: selectedNodeId, folderPath: controller.text);
+                  await viewModel.scanFolder(
+                    nodeId: selectedNodeId,
+                    folderPath: path,
+                    targetRawFolderId: activeTargetRawFolderId,
+                  );
                 } else {
-                  await viewModel.importFolder(nodeId: selectedNodeId, folderPath: controller.text);
+                  await viewModel.importFolder(
+                    nodeId: selectedNodeId,
+                    folderPath: path,
+                    targetRawFolderId: activeTargetRawFolderId,
+                  );
                 }
               },
               child: const Text('执行'),
@@ -1006,7 +1051,7 @@ class _CollectionPictureScreenState
     );
   }
 
-  Future<void> _showEditSmartFolderDialog(SmartFolder sf) async {
+  Future<void> _showEditSmartFolderDialog(SmartFolder sf, {bool isRemote = false}) async {
     // 确保文件夹列表是最新的
     await viewModel.loadFolders();
     // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
@@ -1102,14 +1147,25 @@ class _CollectionPictureScreenState
                 FilledButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
-                    await viewModel.editSmartFolder(
-                      sf.id,
-                      name: nameCtrl.text,
-                      pattern: patternCtrl.text,
-                      targetFolderIds: selectedFolderIds.toList(),
-                      regexTarget: regexTarget,
-                      fileTypeFilter: fileTypeFilter,
-                    );
+                    if (isRemote) {
+                      await viewModel.editRemoteSmartFolder(
+                        sf.id,
+                        name: nameCtrl.text,
+                        pattern: patternCtrl.text,
+                        targetFolderIds: selectedFolderIds.toList(),
+                        regexTarget: regexTarget,
+                        fileTypeFilter: fileTypeFilter,
+                      );
+                    } else {
+                      await viewModel.editSmartFolder(
+                        sf.id,
+                        name: nameCtrl.text,
+                        pattern: patternCtrl.text,
+                        targetFolderIds: selectedFolderIds.toList(),
+                        regexTarget: regexTarget,
+                        fileTypeFilter: fileTypeFilter,
+                      );
+                    }
                   },
                   child: const Text('确定'),
                 ),
@@ -1129,6 +1185,17 @@ class _CollectionPictureScreenState
       confirmLabel: '删除',
     );
     if (confirmed) await viewModel.deleteSmartFolder(id);
+  }
+
+  /// 确认删除远程节点上的智能文件夹。
+  Future<void> _confirmDeleteRemoteSmartFolder(String id, String name) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '删除远程智能文件夹',
+      message: '确定删除节点上的"$name"？此操作将从节点上永久删除该筛选规则，集合本身不受影响。',
+      confirmLabel: '删除',
+    );
+    if (confirmed) await viewModel.deleteRemoteSmartFolder(id);
   }
 
   /// 显示远程节点集合的路径信息（不可本地打开，仅供参考）。
@@ -1286,10 +1353,12 @@ class _CollectionPictureScreenState
               _enterFolder(sf.id);
             },
             onLongPress: () => viewModel.enterSelection(sf.id),
-            // 远程智能文件夹不允许本地编辑/删除/转移
+            // 远程智能文件夹：不允许本地重命名/转移，但可以通过节点 API 编辑和删除
             onRename: isRemoteSf ? null : () => _showRenameSmartFolderDialog(sf.id, sf.name),
-            onEdit: isRemoteSf ? null : () => _showEditSmartFolderDialog(sf),
-            onDelete: isRemoteSf ? null : () => _confirmDeleteSmartFolder(sf.id, sf.name),
+            onEdit: () => _showEditSmartFolderDialog(sf, isRemote: isRemoteSf),
+            onDelete: () => isRemoteSf
+                ? _confirmDeleteRemoteSmartFolder(sf.id, sf.name)
+                : _confirmDeleteSmartFolder(sf.id, sf.name),
             onTransfer: isRemoteSf
                 ? null
                 : () => viewModel.transferFolderCollections(smartFolderId: sf.id),
@@ -1580,7 +1649,8 @@ class _CollectionPictureScreenState
     final confirmed = await showConfirmDialog(
       context,
       title: '删除节点本地文件',
-      message: '确定要删除节点上「${item.title}」的本地文件吗？\n'
+      message:
+          '确定要删除节点上「${item.title}」的本地文件吗？\n'
           '此操作将从节点磁盘永久删除该文件，集合记录保留。',
       confirmLabel: '删除',
       confirmColor: Theme.of(context).colorScheme.error,
@@ -1873,7 +1943,8 @@ class _CollectionPictureScreenState
     final confirmed = await showConfirmDialog(
       context,
       title: '删除节点本地文件',
-      message: '此操作将永久删除远程节点上"$folderName"文件夹内所有集合的本地文件，且不可恢复。\n\n'
+      message:
+          '此操作将永久删除远程节点上"$folderName"文件夹内所有集合的本地文件，且不可恢复。\n\n'
           '集合数据库记录保留，仅删除物理文件。确定继续吗？',
       confirmLabel: '删除文件',
       confirmColor: Theme.of(context).colorScheme.error,
@@ -1885,7 +1956,8 @@ class _CollectionPictureScreenState
     final confirmed = await showConfirmDialog(
       context,
       title: '删除节点本地文件',
-      message: '此操作将永久删除远程节点上"$title"集合的本地文件，且不可恢复。\n\n'
+      message:
+          '此操作将永久删除远程节点上"$title"集合的本地文件，且不可恢复。\n\n'
           '集合数据库记录保留，仅删除物理文件。确定继续吗？',
       confirmLabel: '删除文件',
       confirmColor: Theme.of(context).colorScheme.error,

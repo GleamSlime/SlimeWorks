@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
+
+/// 折线图历史点数量（每秒采样 1 次，保留 60 秒）
+const int _kHistoryLength = 60;
 
 /// 概览页面
 class DashboardScreen extends StatefulWidget {
@@ -22,6 +26,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _appRxKbps = 0;
   double _appTxKbps = 0;
 
+  /// 历史数据缓冲区（CPU%、内存MB、下行kbps、上行kbps）
+  final List<double> _cpuHistory = [];
+  final List<double> _memHistory = [];
+  final List<double> _rxHistory = [];
+  final List<double> _txHistory = [];
+
   @override
   void initState() {
     super.initState();
@@ -37,15 +47,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  void _appendHistory(List<double> buf, double value) {
+    buf.add(value);
+    if (buf.length > _kHistoryLength) buf.removeAt(0);
+  }
+
   void _refreshResourceSnapshot() {
     try {
       final next = rust_sys.getSystemResourceSnapshot();
       _nodeSettingsService.syncTrafficDisplayNow();
       if (!mounted) return;
+      final rxKbps = _nodeSettingsService.appRxKbps.value;
+      final txKbps = _nodeSettingsService.appTxKbps.value;
       setState(() {
         _snapshot = next;
-        _appRxKbps = _nodeSettingsService.appRxKbps.value;
-        _appTxKbps = _nodeSettingsService.appTxKbps.value;
+        _appRxKbps = rxKbps;
+        _appTxKbps = txKbps;
+        _appendHistory(_cpuHistory, next.cpuUsagePercent);
+        _appendHistory(_memHistory, next.memoryUsedMb.toDouble());
+        _appendHistory(_rxHistory, rxKbps);
+        _appendHistory(_txHistory, txKbps);
       });
     } catch (_) {}
   }
@@ -98,24 +119,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         value: _snapshot == null
                             ? '--'
                             : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
+                        history: _cpuHistory,
+                        chartColor: Colors.blue,
                       ),
                       _buildMetricCard(
                         context,
                         icon: Icons.storage,
                         title: '内存',
                         value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
+                        history: _memHistory,
+                        chartColor: Colors.orange,
                       ),
                       _buildMetricCard(
                         context,
                         icon: Icons.download,
                         title: '下行',
                         value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
+                        history: _rxHistory,
+                        chartColor: Colors.green,
                       ),
                       _buildMetricCard(
                         context,
                         icon: Icons.upload,
                         title: '上行',
                         value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
+                        history: _txHistory,
+                        chartColor: Colors.purple,
                       ),
                     ],
                   ),
@@ -196,6 +225,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required IconData icon,
     required String title,
     required String value,
+    required List<double> history,
+    required Color chartColor,
   }) {
     return Container(
       width: ((MediaQuery.of(context).size.width - scaleW(36)) / 2).clamp(70.0, 200.0),
@@ -207,24 +238,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: AppTheme.metrics.kSpace16),
-          SizedBox(width: AppTheme.metrics.kSpace8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.bodySmall),
-                Text(
-                  value,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
+          // 顶部：图标 + 当前值
+          Row(
+            children: [
+              Icon(icon, size: AppTheme.metrics.kSpace16),
+              SizedBox(width: AppTheme.metrics.kSpace8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      value,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppTheme.metrics.kSpace8),
+          // 底部：迷你折线图
+          SizedBox(
+            height: scaleW(36).clamp(28.0, 48.0),
+            child: _SparklineChart(data: List<double>.from(history), color: chartColor),
           ),
         ],
       ),
@@ -243,7 +287,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
       ),
       child: InkWell(
         onTap: () {
@@ -261,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: AppTheme.metrics.kSpace48,
                 height: AppTheme.metrics.kSpace48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, size: AppTheme.metrics.kSpace24, color: color),
@@ -294,4 +338,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+}
+
+/// 迷你折线图（Sparkline），通过 [CustomPainter] 绘制渐变填充面积图。
+class _SparklineChart extends StatelessWidget {
+  const _SparklineChart({required this.data, required this.color});
+
+  final List<double> data;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _SparklinePainter(data: data, color: color),
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter({required this.data, required this.color});
+
+  final List<double> data;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+
+    final maxVal = data.reduce(math.max);
+    // 至少保留一个非零上限，防止全零时除以零
+    final scale = maxVal > 0 ? maxVal : 1.0;
+
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [color.withAlpha(80), color.withAlpha(0)],
+      ).createShader(Offset.zero & size)
+      ..style = PaintingStyle.fill;
+
+    final linePath = Path();
+    final fillPath = Path();
+
+    final step = size.width / (data.length - 1);
+
+    for (int i = 0; i < data.length; i++) {
+      final x = i * step;
+      final y = size.height - (data[i] / scale) * size.height;
+      if (i == 0) {
+        linePath.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        linePath.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+    }
+
+    // 完成填充路径
+    fillPath.lineTo((data.length - 1) * step, size.height);
+    fillPath.close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(linePath, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) => old.data != data || old.color != color;
 }

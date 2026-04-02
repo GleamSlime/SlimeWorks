@@ -239,3 +239,159 @@ impl MediaFolderScanner {
             .is_some()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn make_temp_dir() -> TempDir {
+        tempfile::Builder::new()
+            .prefix("media_test_")
+            .tempdir()
+            .expect("create temp dir")
+    }
+
+    // ── is_supported_media_file ────────────────────────────────────────────
+
+    #[test]
+    fn supported_media_files_are_recognised() {
+        for name in &["photo.jpg", "clip.mp4", "track.flac", "img.png"] {
+            let path = PathBuf::from(name);
+            assert!(
+                MediaFolderScanner::is_supported_media_file(&path),
+                "{name} should be recognised as a media file"
+            );
+        }
+    }
+
+    #[test]
+    fn non_media_files_are_rejected() {
+        for name in &["doc.pdf", "archive.zip", "script.sh", "README.md", "no_ext"] {
+            let path = PathBuf::from(name);
+            assert!(
+                !MediaFolderScanner::is_supported_media_file(&path),
+                "{name} should not be recognised as a media file"
+            );
+        }
+    }
+
+    // ── is_hidden_path ─────────────────────────────────────────────────────
+
+    #[test]
+    fn hidden_dot_paths_are_detected() {
+        assert!(is_hidden_path(Path::new(".hidden")));
+        assert!(is_hidden_path(Path::new("/some/dir/.hidden/file.jpg")));
+        assert!(is_hidden_path(Path::new("._resource_fork.jpg")));
+    }
+
+    #[test]
+    fn visible_paths_are_not_hidden() {
+        assert!(!is_hidden_path(Path::new("visible")));
+        assert!(!is_hidden_path(Path::new("/users/photos/vacation.jpg")));
+    }
+
+    // ── scan_media_directories ─────────────────────────────────────────────
+
+    #[test]
+    fn scan_finds_directory_with_images() {
+        let root = make_temp_dir();
+        let photo_dir = root.path().join("photos");
+        fs::create_dir(&photo_dir).unwrap();
+        fs::write(photo_dir.join("img.jpg"), b"fake-jpeg").unwrap();
+
+        let dirs = MediaFolderScanner::scan_media_directories(root.path()).unwrap();
+        assert!(
+            dirs.contains(&photo_dir),
+            "Expected photo_dir in results: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn scan_skips_directory_with_only_non_media_files() {
+        let root = make_temp_dir();
+        let docs_dir = root.path().join("docs");
+        fs::create_dir(&docs_dir).unwrap();
+        fs::write(docs_dir.join("readme.txt"), b"text").unwrap();
+
+        let dirs = MediaFolderScanner::scan_media_directories(root.path()).unwrap();
+        assert!(
+            !dirs.contains(&docs_dir),
+            "docs dir should not appear when it has no media files"
+        );
+    }
+
+    #[test]
+    fn scan_skips_hidden_directories() {
+        let root = make_temp_dir();
+        let hidden_dir = root.path().join(".hidden_photos");
+        fs::create_dir(&hidden_dir).unwrap();
+        fs::write(hidden_dir.join("photo.jpg"), b"fake").unwrap();
+
+        let dirs = MediaFolderScanner::scan_media_directories(root.path()).unwrap();
+        assert!(
+            !dirs.contains(&hidden_dir),
+            "Hidden directories should be skipped"
+        );
+    }
+
+    #[test]
+    fn scan_returns_error_for_nonexistent_path() {
+        let result = MediaFolderScanner::scan_media_directories("/nonexistent/path/xyz");
+        assert!(result.is_err(), "Expected an error for non-existent path");
+    }
+
+    #[test]
+    fn scan_returns_error_for_file_path() {
+        let root = make_temp_dir();
+        let file_path = root.path().join("file.txt");
+        fs::write(&file_path, b"data").unwrap();
+
+        let result = MediaFolderScanner::scan_media_directories(&file_path);
+        assert!(result.is_err(), "Expected error when path is a file");
+    }
+
+    // ── collect_media_items ────────────────────────────────────────────────
+
+    #[test]
+    fn collect_non_recursive_returns_only_direct_files() {
+        let root = make_temp_dir();
+        fs::write(root.path().join("top.jpg"), b"fake").unwrap();
+        let sub = root.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("nested.jpg"), b"fake").unwrap();
+
+        let items = MediaFolderScanner::collect_media_items("col-1", root.path(), false).unwrap();
+        // Non-recursive: only direct children of root
+        assert_eq!(items.len(), 1, "Expected only top-level file, got {items:?}");
+        assert!(items[0].file_path.contains("top.jpg"));
+    }
+
+    #[test]
+    fn collect_recursive_includes_nested_files() {
+        let root = make_temp_dir();
+        fs::write(root.path().join("top.jpg"), b"fake").unwrap();
+        let sub = root.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("nested.png"), b"fake").unwrap();
+
+        let items = MediaFolderScanner::collect_media_items("col-2", root.path(), true).unwrap();
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn collect_assigns_correct_collection_id() {
+        let root = make_temp_dir();
+        fs::write(root.path().join("img.jpg"), b"fake").unwrap();
+
+        let items = MediaFolderScanner::collect_media_items("my-col", root.path(), false).unwrap();
+        assert_eq!(items[0].collection_id, "my-col");
+    }
+
+    #[test]
+    fn collect_returns_error_for_nonexistent_path() {
+        let result = MediaFolderScanner::collect_media_items("c", Path::new("/no/such/dir"), false);
+        assert!(result.is_err());
+    }
+}

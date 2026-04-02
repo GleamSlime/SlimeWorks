@@ -68,7 +68,9 @@ class WindowPositionService extends GetxService {
     }
 
     if (kDebugMode) {
-      print('保存窗口位置: x=${position.dx}, y=${position.dy}, width=${size.width}, height=${size.height}');
+      print(
+        '保存窗口位置: x=${position.dx}, y=${position.dy}, width=${size.width}, height=${size.height}',
+      );
     }
   }
 
@@ -110,7 +112,12 @@ class WindowPositionService extends GetxService {
       final physicalSize = view.physicalSize;
       final devicePixelRatio = view.devicePixelRatio;
 
-      return Rect.fromLTWH(0, 0, physicalSize.width / devicePixelRatio, physicalSize.height / devicePixelRatio);
+      return Rect.fromLTWH(
+        0,
+        0,
+        physicalSize.width / devicePixelRatio,
+        physicalSize.height / devicePixelRatio,
+      );
     } catch (e) {
       if (kDebugMode) {
         print('获取屏幕边界失败: $e');

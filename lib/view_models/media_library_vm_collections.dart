@@ -223,7 +223,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
   // ── 集合扫描/导入 ────────────────────────────────────────────────────────
 
-  Future<void> scanFolder({String? folderPath, String? nodeId}) async {
+  /// [localTargetFolderId]：由 UI 层在调用前明确捕获的本地文件夹 ID，
+  /// 避免在异步方法内部读取响应式状态时因时序问题导致丢失文件夹上下文。
+  Future<void> scanFolder({
+    String? folderPath,
+    String? nodeId,
+    String? targetRawFolderId,
+    String? localTargetFolderId,
+  }) async {
     try {
       isScanning.value = true;
       scanStatusText.value = '扫描中...';
@@ -232,20 +239,21 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (normalized.isEmpty) {
           throw ArgumentError('请输入节点目录路径');
         }
-        // 在异步扫描前同步捕获目标文件夹 ID，避免因后台刷新导致 effectiveFolderId 变为 null
-        final targetFolderRawId = _resolveRemoteTargetFolderId(nodeId);
+        // 优先使用调用方直接传入的目标文件夹 ID（由 UI 层在打开对话框前从当前文件夹捕获），
+        // 避免通过全局状态推断时因节点切换或刷新导致丢失文件夹上下文。
+        final resolvedTargetRawId = targetRawFolderId ?? _resolveRemoteTargetFolderId(nodeId);
         final payloads = await nodeSettingsService.scanNodeMediaFolders(
           nodeId: nodeId,
           folderPath: normalized,
         );
-        if (targetFolderRawId != null) {
+        if (resolvedTargetRawId != null) {
           for (final payload in payloads) {
             final rawId = _stringOrNull(payload['id']);
             if (rawId == null || rawId.isEmpty) continue;
             await nodeSettingsService.moveNodeMediaCollectionToFolder(
               nodeId: nodeId,
               collectionId: rawId,
-              folderId: targetFolderRawId,
+              folderId: resolvedTargetRawId,
             );
           }
         }
@@ -259,7 +267,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         throw UnsupportedError('移动端请通过节点路径导入');
       }
 
-      final targetFolderId = effectiveFolderId;
+      // 优先使用调用方传入的文件夹 ID，兜底读取当前响应式状态
+      final targetFolderId = localTargetFolderId ?? effectiveFolderId;
       final selectedPath = await FilePicker.platform.getDirectoryPath();
       if (selectedPath == null || selectedPath.isEmpty) {
         scanStatusText.value = '';
@@ -268,22 +277,29 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
       scanStatusText.value = '扫描中...';
       final imported = await media_api.scanMediaFolders(folderPath: selectedPath);
-      scanStatusText.value = '导入中...';
+      if (imported.isEmpty) {
+        await loadCollections();
+        scanStatusText.value = '';
+        showSnack('提示', '未发现媒体集合，请确认目录内含有图片或视频文件（支持 jpg/png/heic/mp4 等格式）');
+        return;
+      }
       if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
-        for (final collection in imported) {
+        // 分批归档并逐步刷新进度
+        for (int i = 0; i < imported.length; i++) {
+          scanStatusText.value = '归档 ${i + 1}/${imported.length}...';
           media_api.moveMediaCollectionToFolder(
-            collectionId: collection.id,
+            collectionId: imported[i].id,
             folderId: targetFolderId,
           );
+          // 每处理 5 条或最后一条时让出事件循环，使 UI 可见进度更新
+          if (i % 5 == 4 || i == imported.length - 1) {
+            await Future.delayed(Duration.zero);
+          }
         }
       }
       await loadCollections();
       scanStatusText.value = '';
-      if (imported.isEmpty) {
-        showSnack('提示', '未发现媒体集合，请确认目录内含有图片或视频文件（支持 jpg/png/heic/mp4 等格式）');
-      } else {
-        showSnack('成功', '扫描完成，共导入 ${imported.length} 个集合');
-      }
+      showSnack('成功', '扫描完成，共导入 ${imported.length} 个集合');
     } catch (error) {
       scanStatusText.value = '';
       showSnack('错误', '扫描目录失败: $error');
@@ -293,7 +309,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
-  Future<void> importFolder({String? folderPath, String? nodeId}) async {
+  /// [localTargetFolderId]：由 UI 层在调用前明确捕获的本地文件夹 ID，
+  /// 避免在异步方法内部读取响应式状态时因时序问题导致丢失文件夹上下文。
+  Future<void> importFolder({
+    String? folderPath,
+    String? nodeId,
+    String? targetRawFolderId,
+    String? localTargetFolderId,
+  }) async {
     try {
       isScanning.value = true;
       scanStatusText.value = '导入中...';
@@ -302,18 +325,18 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (normalized.isEmpty) {
           throw ArgumentError('请输入节点目录路径');
         }
-        // 在异步导入前同步捕获目标文件夹 ID
-        final targetFolderRawId = _resolveRemoteTargetFolderId(nodeId);
+        // 优先使用调用方直接传入的目标文件夹 ID
+        final resolvedTargetRawId = targetRawFolderId ?? _resolveRemoteTargetFolderId(nodeId);
         final payload = await nodeSettingsService.importNodeMediaFolder(
           nodeId: nodeId,
           folderPath: normalized,
         );
         final rawId = payload == null ? null : _stringOrNull(payload['id']);
-        if (targetFolderRawId != null && rawId != null && rawId.isNotEmpty) {
+        if (resolvedTargetRawId != null && rawId != null && rawId.isNotEmpty) {
           await nodeSettingsService.moveNodeMediaCollectionToFolder(
             nodeId: nodeId,
             collectionId: rawId,
-            folderId: targetFolderRawId,
+            folderId: resolvedTargetRawId,
           );
         }
         await refreshRemoteLibrary();
@@ -326,7 +349,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         throw UnsupportedError('移动端请通过节点路径导入');
       }
 
-      final targetFolderId = effectiveFolderId;
+      // 优先使用调用方传入的文件夹 ID，兜底读取当前响应式状态
+      final targetFolderId = localTargetFolderId ?? effectiveFolderId;
       final selectedPath = await FilePicker.platform.getDirectoryPath();
       if (selectedPath == null || selectedPath.isEmpty) {
         scanStatusText.value = '';

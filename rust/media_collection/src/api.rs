@@ -990,3 +990,93 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
     delete_collection_from_db(&collection_id);
     Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    // ── default_collection_title ───────────────────────────────────────────
+
+    #[test]
+    fn default_title_uses_folder_name() {
+        let path = Path::new("/some/深夜影院");
+        assert_eq!(default_collection_title(path), "深夜影院");
+    }
+
+    #[test]
+    fn default_title_uses_plain_directory_name() {
+        let path = Path::new("/Users/user/Pictures/Vacation");
+        assert_eq!(default_collection_title(path), "Vacation");
+    }
+
+    #[test]
+    fn default_title_trims_whitespace() {
+        // 使用 OsStr 路径模拟名称带空格的目录
+        let path = Path::new("/tmp/ test ");
+        // file_name 返回整个 " test " 字符串，trim 后应为 "test"
+        assert_eq!(default_collection_title(path), "test");
+    }
+
+    #[test]
+    fn default_title_fallback_when_empty() {
+        // 根路径无 file_name
+        let path = Path::new("/");
+        assert_eq!(default_collection_title(path), "未命名集合");
+    }
+
+    // ── pick_cover_path ────────────────────────────────────────────────────
+
+    fn make_item(id: &str, kind: MediaKind, path: &str) -> MediaItem {
+        use chrono::Utc;
+        MediaItem {
+            id: id.to_string(),
+            collection_id: "col".to_string(),
+            title: id.to_string(),
+            file_path: path.to_string(),
+            kind,
+            file_size: 0,
+            modified_at: Utc::now(),
+            width: None,
+            height: None,
+            duration_ms: None,
+            order: 0,
+        }
+    }
+
+    #[test]
+    fn pick_cover_prefers_first_image_over_video() {
+        let items = vec![
+            make_item("v1", MediaKind::Video, "/a/b/clip.mp4"),
+            make_item("i1", MediaKind::Image, "/a/b/cover.jpg"),
+        ];
+        assert_eq!(pick_cover_path(&items), Some("/a/b/cover.jpg".to_string()));
+    }
+
+    #[test]
+    fn pick_cover_falls_back_to_first_item_when_no_image() {
+        let items = vec![
+            make_item("v1", MediaKind::Video, "/a/b/clip.mp4"),
+            make_item("v2", MediaKind::Video, "/a/b/clip2.mp4"),
+        ];
+        assert_eq!(pick_cover_path(&items), Some("/a/b/clip.mp4".to_string()));
+    }
+
+    #[test]
+    fn pick_cover_returns_none_for_empty_list() {
+        assert_eq!(pick_cover_path(&[]), None);
+    }
+
+    // ── normalize_folder_path（无文件系统依赖的分支）─────────────────────
+
+    #[test]
+    fn normalize_folder_path_returns_string_without_error() {
+        // 路径不存在时，canonicalize 会失败，函数应回退到原始路径字符串
+        let path = Path::new("/nonexistent/path/slime_test_8675309");
+        let result = normalize_folder_path(path);
+        assert!(result.is_ok());
+        let s = result.unwrap();
+        // 应包含路径末段
+        assert!(s.contains("slime_test_8675309"), "got: {s}");
+    }
+}
