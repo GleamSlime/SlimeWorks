@@ -1,10 +1,11 @@
 part of 'node_settings_service.dart';
 
-/// HTTP 请求处理和 API 动作分发逻辑（服务端侧）。
-/// 通过 extension 挂载到 [NodeSettingsService]，共享同一库内私有成员访问权。
+/// HTTP 请求处理和 API 动作分发逻辑（服务端侧）已迁移到 Rust node_server 模块。
+/// 保留此文件中的代码作为历史参考，HTTP 服务现在由 Rust 的 start_node_server 负责。
 extension _NodeHttpHandlerExt on NodeSettingsService {
   // ── 请求入口 ─────────────────────────────────────────────────────────────
 
+  // ignore: unused_element
   Future<void> _handleRequest(HttpRequest request) async {
     request.response.headers.contentType = ContentType.json;
     int requestBytes = 0;
@@ -45,6 +46,8 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
       await request.response.close();
       return;
     }
+
+    nodeRequestCount.value++;
 
     try {
       final body = await utf8.decoder.bind(request).join();
@@ -152,6 +155,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
           existingList.add(newSf);
           await sfFile.parent.create(recursive: true);
           await sfFile.writeAsString(jsonEncode(existingList));
+          _emitLibraryMutation();
           return existingList;
         } catch (e) {
           throw StateError('创建智能文件夹失败: $e');
@@ -182,6 +186,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
             'fileTypeFilter': (params['file_type_filter'] ?? 'all').toString(),
           };
           await sfFile.writeAsString(jsonEncode(existingList));
+          _emitLibraryMutation();
           return existingList;
         } catch (e) {
           throw StateError('更新智能文件夹失败: $e');
@@ -201,6 +206,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
           final targetId = (params['id'] ?? '').toString();
           existingList.removeWhere((e) => (e as Map<String, dynamic>)['id'] == targetId);
           await sfFile.writeAsString(jsonEncode(existingList));
+          _emitLibraryMutation();
           return <String, dynamic>{'ok': true};
         } catch (e) {
           throw StateError('删除智能文件夹失败: $e');

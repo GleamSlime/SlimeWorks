@@ -158,10 +158,7 @@ void main() {
       });
 
       test('多文件：只要存在一个匹配即返回 true', () {
-        expect(
-          folder.matchesFileNames(['/a/no_match.jpg', '/b/IMG_999.png']),
-          isTrue,
-        );
+        expect(folder.matchesFileNames(['/a/no_match.jpg', '/b/IMG_999.png']), isTrue);
       });
 
       test('fileTypeFilter=images 过滤掉视频文件', () {

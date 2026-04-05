@@ -32,3 +32,10 @@ serde_json = "1.0"
 log = "0.4"
 anyhow = "1.0"
 lazy_static = "1.5"
+
+# 节点协议服务器需要的依赖
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+regex = "1"

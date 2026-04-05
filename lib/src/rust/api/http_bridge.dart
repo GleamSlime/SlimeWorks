@@ -24,3 +24,26 @@ String callHandler({
 /// 初始化HTTP Bridge（注册所有接口）
 bool initHttpBridge() =>
     RustLib.instance.api.crateApiHttpBridgeInitHttpBridge();
+
+/// 启动本地节点服务器（仅桌面端）
+///
+/// - host: 监听地址，通常为 "0.0.0.0"
+/// - port: 监听端口，默认 17888
+/// - name: 节点名称
+void startNodeServer({
+  required String host,
+  required int port,
+  required String name,
+}) => RustLib.instance.api.crateApiHttpBridgeStartNodeServer(
+  host: host,
+  port: port,
+  name: name,
+);
+
+/// 停止本地节点服务器
+void stopNodeServer() =>
+    RustLib.instance.api.crateApiHttpBridgeStopNodeServer();
+
+/// 检查节点服务器是否在运行
+bool isNodeServerRunning() =>
+    RustLib.instance.api.crateApiHttpBridgeIsNodeServerRunning();

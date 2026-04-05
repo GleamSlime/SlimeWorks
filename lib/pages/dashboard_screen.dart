@@ -26,11 +26,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _appRxKbps = 0;
   double _appTxKbps = 0;
 
-  /// 历史数据缓冲区（CPU%、内存MB、下行kbps、上行kbps）
+  /// 历史数据缓冲区（CPU%、内存MB、下行kbps、上行kbps、节点请求数/s）
   final List<double> _cpuHistory = [];
   final List<double> _memHistory = [];
   final List<double> _rxHistory = [];
   final List<double> _txHistory = [];
+  final List<double> _reqHistory = [];
+  int _lastNodeRequestCount = 0;
 
   @override
   void initState() {
@@ -59,14 +61,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       final rxKbps = _nodeSettingsService.appRxKbps.value;
       final txKbps = _nodeSettingsService.appTxKbps.value;
+      final reqCount = _nodeSettingsService.nodeRequestCount.value;
+      final reqDelta = (reqCount - _lastNodeRequestCount).clamp(0, 999999).toDouble();
       setState(() {
         _snapshot = next;
         _appRxKbps = rxKbps;
         _appTxKbps = txKbps;
+        _lastNodeRequestCount = reqCount;
         _appendHistory(_cpuHistory, next.cpuUsagePercent);
         _appendHistory(_memHistory, next.memoryUsedMb.toDouble());
         _appendHistory(_rxHistory, rxKbps);
         _appendHistory(_txHistory, txKbps);
+        _appendHistory(_reqHistory, reqDelta);
       });
     } catch (_) {}
   }
@@ -146,6 +152,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         history: _txHistory,
                         chartColor: Colors.purple,
                       ),
+                      if (_nodeSettingsService.isLocalServerRunning)
+                        _buildMetricCard(
+                          context,
+                          icon: Icons.hub,
+                          title: '节点请求数',
+                          value: _nodeSettingsService.nodeRequestCount.value.toString(),
+                          history: _reqHistory,
+                          chartColor: Colors.teal,
+                        ),
                     ],
                   ),
                 ),

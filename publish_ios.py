@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
 """
 iOS 一键构建并发布到蒲公英脚本
+
+完整流程（推荐）：
+  flutter build ios --release --no-codesign
+  → xcodebuild archive → xcodebuild exportArchive（生成 IPA）→ 上传蒲公英
+
 用法：
+  # 完整构建并上传（xcodebuild archive→export，效果等价于 Xcode 产品→Archive→Distribute App→Release Testing）
+  python3 publish_ios.py --use-xcodebuild -desc="1. 新功能\n2. Bug 修复"
+
+  # 从已有 .xcarchive 直接 export + 上传（上次已 archive 但未 export 时）
+  python3 publish_ios.py --from-archive build/ios/archive/Runner.xcarchive -desc="修复版"
+
+  # 构建并上传（优先 flutter build ipa，失败自动切换到 xcodebuild）
+  python3 publish_ios.py -desc="1. 新功能\n2. Bug 修复"
+
   # 仅上传已有 IPA（不重新构建）
   python3 publish_ios.py --ipa-only -desc="xxx"
 
-  # 构建并上传（使用 flutter build ipa，自动兜底 xcodebuild）
-  python3 publish_ios.py -desc="1. 新功能\n2. Bug 修复"
-
-  # 强制使用 xcodebuild
-  python3 publish_ios.py --use-xcodebuild --team-id XXXXXXXXXX
-
   # 仅构建，不上传
-  python3 publish_ios.py --build-only -desc="测试版本"
+  python3 publish_ios.py --build-only
 """
 
 import os
@@ -139,15 +147,22 @@ def upload_to_pgyer(ipa_path: str, description: str) -> bool:
         return False
 
 
-def create_export_options_plist(team_id: str = "") -> str:
-    """生成 ExportOptions.plist"""
+def create_export_options_plist(team_id: str = "", method: str = "release-testing") -> str:
+    """生成 ExportOptions.plist
+    
+    method 可选值:
+      release-testing  — 蒲公英等内测分发（默认）
+      ad-hoc           — Ad Hoc
+      app-store        — App Store Connect
+      development      — 开发调试
+    """
     team_field = f"    <key>teamID</key>\n    <string>{team_id}</string>\n" if team_id else ""
     content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>release-testing</string>
+    <string>{method}</string>
 {team_field}    <key>signingStyle</key>
     <string>automatic</string>
     <key>stripSwiftSymbols</key>
@@ -161,13 +176,76 @@ def create_export_options_plist(team_id: str = "") -> str:
 </dict>
 </plist>"""
     path = "ios/ExportOptions.plist"
+    os.makedirs("ios", exist_ok=True)
     with open(path, "w") as f:
         f.write(content)
+    print(f"\033[0;36;40m ExportOptions.plist 已生成：{path}（method={method}）\033[0m")
     return path
 
 
-def build_with_xcodebuild(team_id: str = "", bundle_id: str = "") -> bool:
-    """完整 xcodebuild Archive → Export 流程"""
+def export_archive_to_ipa(
+    archive_path: str,
+    ipa_dir: str,
+    team_id: str = "",
+    method: str = "release-testing",
+    original_dir: str | None = None,
+) -> str | None:
+    """从 .xcarchive 导出 IPA，返回生成的 IPA 路径，失败返回 None。
+
+    该步骤对应 Xcode 中 Archive 后点击 Distribute App → Release Testing 的流程。
+    """
+    if original_dir is None:
+        original_dir = os.getcwd()
+
+    os.makedirs(ipa_dir, exist_ok=True)
+    plist_path = create_export_options_plist(team_id, method)
+
+    # plist 路径相对于项目根目录，exportArchive 从 ios/ 内调用时需要带 ../
+    abs_plist = os.path.abspath(plist_path)
+    abs_archive = os.path.abspath(archive_path)
+    abs_ipa_dir = os.path.abspath(ipa_dir)
+
+    export_parts = [
+        "xcodebuild -exportArchive",
+        f"-archivePath \"{abs_archive}\"",
+        f"-exportPath \"{abs_ipa_dir}\"",
+        f"-exportOptionsPlist \"{abs_plist}\"",
+        "-allowProvisioningUpdates",
+    ]
+    export_cmd = " \\\n    ".join(export_parts)
+    print(f"\033[0;36;40m 执行 exportArchive:\n{export_cmd}\033[0m")
+
+    if os.system(export_cmd) != 0:
+        print("\033[0;31;40m IPA 导出失败！\033[0m")
+        print("\033[0;33;40m 常见原因：\033[0m")
+        print("\033[0;33;40m  1. 证书/Provisioning Profile 未配置或已过期\033[0m")
+        print("\033[0;33;40m  2. method 与证书类型不匹配（蒲公英需用 release-testing 或 ad-hoc）\033[0m")
+        print("\033[0;33;40m  3. 可先在 Xcode 中执行 Product → Archive → Distribute App 确认能通过\033[0m")
+        return None
+
+    # 查找并统一命名 IPA
+    ipa_files = [f for f in os.listdir(abs_ipa_dir) if f.endswith(".ipa")]
+    if not ipa_files:
+        print(f"\033[0;31;40m 未找到 IPA 文件，导出目录：{abs_ipa_dir}\033[0m")
+        return None
+
+    src = os.path.join(abs_ipa_dir, ipa_files[0])
+    dst = os.path.join(abs_ipa_dir, os.path.basename(IPA_PATH))
+    if src != dst:
+        os.rename(src, dst)
+    size_mb = os.path.getsize(dst) / 1024 / 1024
+    print(f"\033[0;32;40m IPA 已生成：{dst}（{size_mb:.1f} MB）\033[0m")
+    return dst
+
+
+def build_with_xcodebuild(team_id: str = "", bundle_id: str = "", method: str = "release-testing") -> bool:
+    """完整 flutter build ios → xcodebuild archive → exportArchive 流程
+
+    等价于在 Xcode 中依次执行：
+      1. Product → Build（flutter build ios --no-codesign）
+      2. Product → Archive
+      3. Organizer → Distribute App → Release Testing → Export
+    """
     original_dir = os.getcwd()
     ios_dir = os.path.join(original_dir, "ios")
 
@@ -181,9 +259,9 @@ def build_with_xcodebuild(team_id: str = "", bundle_id: str = "") -> bool:
     if os.system("pod install") != 0:
         print("\033[0;33;40m pod install 警告，继续...\033[0m")
 
+    # archive 路径放在 ios/ 内，xcodebuild 从 ios/ 目录执行更稳定
     archive_path = "build/Runner.xcarchive"
     ipa_dir = os.path.join(original_dir, "build/ios/ipa")
-    os.makedirs(ipa_dir, exist_ok=True)
     os.makedirs("build", exist_ok=True)
 
     archive_parts = [
@@ -200,39 +278,18 @@ def build_with_xcodebuild(team_id: str = "", bundle_id: str = "") -> bool:
     if bundle_id:
         archive_parts.append(f"PRODUCT_BUNDLE_IDENTIFIER={bundle_id}")
 
-    print("\033[0;36;40m 步骤 3/4：xcodebuild archive\033[0m")
+    print("\033[0;36;40m 步骤 3/4：xcodebuild archive（等价于 Xcode Product → Archive）\033[0m")
     if os.system(" \\\n    ".join(archive_parts)) != 0:
-        print("\033[0;31;40m Archive 失败！请检查证书和 Bundle ID 配置。\033[0m")
-        os.chdir(original_dir)
-        return False
-
-    plist_path = create_export_options_plist(team_id)
-    export_parts = [
-        "xcodebuild -exportArchive",
-        f"-archivePath {archive_path}",
-        f"-exportPath {ipa_dir}",
-        f"-exportOptionsPlist ../{plist_path}",
-        "-allowProvisioningUpdates",
-        "-quiet",
-    ]
-    print("\033[0;36;40m 步骤 4/4：xcodebuild exportArchive\033[0m")
-    if os.system(" \\\n    ".join(export_parts)) != 0:
-        print("\033[0;31;40m IPA 导出失败！\033[0m")
+        print("\033[0;31;40m Archive 失败！请检查证书和 Bundle ID 配置，或先在 Xcode 中手动 Archive 一次\033[0m")
         os.chdir(original_dir)
         return False
 
     os.chdir(original_dir)
-    # 查找并重命名 IPA
-    ipa_files = [f for f in os.listdir(ipa_dir) if f.endswith(".ipa")]
-    if not ipa_files:
-        print(f"\033[0;31;40m 未找到 IPA 文件，导出目录：{ipa_dir}\033[0m")
-        return False
-    src = os.path.join(ipa_dir, ipa_files[0])
-    dst = os.path.join(ipa_dir, os.path.basename(IPA_PATH))
-    if src != dst:
-        os.rename(src, dst)
-    print(f"\033[0;32;40m IPA 已生成：{dst}（{os.path.getsize(dst) / 1024 / 1024:.1f} MB）\033[0m")
-    return True
+
+    print(f"\033[0;36;40m 步骤 4/4：xcodebuild exportArchive（等价于 Distribute App → {method}）\033[0m")
+    abs_archive = os.path.join(ios_dir, archive_path)
+    ipa_file = export_archive_to_ipa(abs_archive, ipa_dir, team_id, method, original_dir)
+    return ipa_file is not None
 
 
 def build_with_flutter(bundle_id: str = "") -> bool:
@@ -283,7 +340,12 @@ def parse_args():
     p.add_argument("-desc", "--description", default="优化体验，修复已知问题")
     p.add_argument("--ipa-only", action="store_true", help="跳过构建，直接上传已有 IPA")
     p.add_argument("--build-only", action="store_true", help="仅构建，不上传")
-    p.add_argument("--use-xcodebuild", action="store_true", help="强制使用 xcodebuild 构建")
+    p.add_argument("--use-xcodebuild", action="store_true", help="强制使用 xcodebuild archive+export 构建")
+    p.add_argument("--from-archive", default="", metavar="PATH",
+                   help="跳过构建，从已有 .xcarchive 直接 exportArchive 生成 IPA（例：ios/build/Runner.xcarchive）")
+    p.add_argument("--export-method", default="release-testing",
+                   choices=["release-testing", "ad-hoc", "app-store", "development"],
+                   help="IPA 导出方式（默认: release-testing，适用于蒲公英）")
     p.add_argument("--team-id", default="", help="Apple Developer Team ID")
     p.add_argument("--bundle-id", default="", help="Bundle Identifier")
     p.add_argument("--ipa-path", default="", help=f"IPA 路径（默认：{IPA_PATH}）")
@@ -298,10 +360,22 @@ def main():
 
     update_version_numbers()
 
-    if not args.ipa_only:
+    if args.from_archive:
+        # ── 模式 A：从已有 .xcarchive 直接 export（跳过 flutter build + xcodebuild archive）──
+        print("\033[0;36;40m\n=== 从已有 Archive Export IPA ===\033[0m")
+        ipa_dir = os.path.join(os.getcwd(), "build/ios/ipa")
+        ipa_file = export_archive_to_ipa(
+            args.from_archive, ipa_dir, team_id, args.export_method
+        )
+        if ipa_file is None:
+            print("\033[0;31;40m Export 失败，退出。\033[0m")
+            sys.exit(1)
+        ipa_path = ipa_file
+    elif not args.ipa_only:
+        # ── 模式 B：完整构建 ──
         print("\033[0;36;40m\n=== 开始 iOS 构建 ===\033[0m")
         ok = (
-            build_with_xcodebuild(team_id, bundle_id)
+            build_with_xcodebuild(team_id, bundle_id, args.export_method)
             if args.use_xcodebuild
             else build_with_flutter(bundle_id)
         )

@@ -77,6 +77,11 @@ class _CollectionPictureScreenState
   }
 
   void _enterFolder(String id) {
+    // 关闭可能打开中的右键菜单
+    Navigator.of(
+      context,
+      rootNavigator: false,
+    ).popUntil((route) => route.settings.name != null || route.isFirst);
     setState(() {
       _navForward = true;
       _gridKey = GlobalKey();
@@ -86,6 +91,10 @@ class _CollectionPictureScreenState
   }
 
   void _exitFolder() {
+    Navigator.of(
+      context,
+      rootNavigator: false,
+    ).popUntil((route) => route.settings.name != null || route.isFirst);
     setState(() {
       _navForward = false;
       _gridKey = GlobalKey();
@@ -296,7 +305,11 @@ class _CollectionPictureScreenState
                     layoutBuilder: (currentChild, previousChildren) => Stack(
                       fit: StackFit.expand,
                       children: [
-                        ...previousChildren.map((c) => Positioned.fill(child: c)),
+                        ...previousChildren.map(
+                          (c) => Positioned.fill(
+                            child: TickerMode(enabled: false, child: IgnorePointer(child: c)),
+                          ),
+                        ),
                         if (currentChild != null) Positioned.fill(child: currentChild),
                       ],
                     ),

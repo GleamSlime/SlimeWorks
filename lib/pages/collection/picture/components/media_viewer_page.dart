@@ -16,7 +16,6 @@ import 'package:media_kit_video/media_kit_video_controls/media_kit_video_control
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:slime_works/core/index.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -76,7 +75,10 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   bool _imageIsZoomed = false;
   static const Duration _kImmersiveDelay = Duration(seconds: 10);
 
+  bool get _isMobile => Platform.isAndroid || Platform.isIOS;
+
   void _resetImmersiveTimer() {
+    if (!_isMobile) return; // PC 端 UI 永久可见
     _immersiveTimer?.cancel();
     if (!_uiVisible) {
       setState(() => _uiVisible = true);
@@ -87,6 +89,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   }
 
   void _toggleUi() {
+    if (!_isMobile) return; // PC 端点击不隐藏 UI
     _immersiveTimer?.cancel();
     setState(() => _uiVisible = !_uiVisible);
     if (_uiVisible) {
@@ -105,11 +108,10 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     _snapCtrl.addStatusListener(_onSnapStatus);
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    } else {
-      Future.microtask(() => windowManager.setFullScreen(true));
+      // 移动端启动沉浸计时器
+      _resetImmersiveTimer();
     }
-    // 启动沉浸模式计时器
-    _resetImmersiveTimer();
+    // PC 端：不进入系统全屏，路由本身已覆盖全部应用区域；UI 永久可见，无需计时器
   }
 
   @override
@@ -121,8 +123,6 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
         SystemUiMode.edgeToEdge,
         overlays: SystemUiOverlay.values,
       );
-    } else {
-      Future.microtask(() => windowManager.setFullScreen(false));
     }
     super.dispose();
   }

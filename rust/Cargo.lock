@@ -1153,12 +1153,17 @@ name = "http_bridge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
+ "chrono",
  "hyper 0.14.32",
  "lazy_static",
  "log",
+ "regex",
  "serde",
  "serde_json",
  "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -2328,12 +2333,14 @@ name = "rust_lib_slime_works"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "db_module",
  "dotenv",
  "env_logger 0.11.8",
  "flutter_rust_bridge",
  "http_bridge",
+ "hyper 0.14.32",
  "lan_transfer",
  "lazy_static",
  "libloading",
@@ -2342,11 +2349,13 @@ dependencies = [
  "media_collection",
  "module_manager",
  "novel_reader",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
  "sysinfo",
  "tokio",
+ "url",
  "winapi",
  "ws_module",
 ]

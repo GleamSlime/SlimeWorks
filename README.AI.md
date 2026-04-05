@@ -1,4 +1,4 @@
-- 此项目基于FRB(Flutter 3.41.0、Dart 3.11.0、rustc 1.92.0)
+- 此项目基于FRB(Flutter 3.41.0、Dart 3.11.0、rustc 1.92.0)，Flutter只进行UI和UI相关逻辑，复杂的逻辑处理计算及数据库等需要在RUST层完成
 - 项目支持 桌面端/服务端(MacOS、Windows)，客户端/移动端(IOS、Android)
 - 应用包含模块管理系统，所以RUST中分为动态加载(仅桌面端)和静态链接
 - 如果需求有创建新的模块参考目录如下

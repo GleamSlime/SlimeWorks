@@ -15,52 +15,77 @@ List<MediaCollection> getAllMediaCollections() =>
 List<MediaFolder> getAllMediaFolders() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaFolders();
 
-List<MediaFolder> getChildMediaFolders({required String parentId}) =>
-    RustLib.instance.api.crateApiMediaCollectionGetChildMediaFolders(parentId: parentId);
+List<MediaFolder> getChildMediaFolders({required String parentId}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionGetChildMediaFolders(parentId: parentId);
 
 List<MediaItem> getMediaCollectionItems({required String collectionId}) =>
-    RustLib.instance.api.crateApiMediaCollectionGetMediaCollectionItems(collectionId: collectionId);
+    RustLib.instance.api.crateApiMediaCollectionGetMediaCollectionItems(
+      collectionId: collectionId,
+    );
 
 Future<MediaCollection> importMediaFolder({required String folderPath}) =>
-    RustLib.instance.api.crateApiMediaCollectionImportMediaFolder(folderPath: folderPath);
+    RustLib.instance.api.crateApiMediaCollectionImportMediaFolder(
+      folderPath: folderPath,
+    );
 
 Future<List<MediaCollection>> scanMediaFolders({required String folderPath}) =>
-    RustLib.instance.api.crateApiMediaCollectionScanMediaFolders(folderPath: folderPath);
+    RustLib.instance.api.crateApiMediaCollectionScanMediaFolders(
+      folderPath: folderPath,
+    );
 
 MediaFolder createMediaFolder({required String name}) =>
     RustLib.instance.api.crateApiMediaCollectionCreateMediaFolder(name: name);
 
-MediaFolder createChildMediaFolder({required String name, required String parentId}) => RustLib
-    .instance
-    .api
-    .crateApiMediaCollectionCreateChildMediaFolder(name: name, parentId: parentId);
+MediaFolder createChildMediaFolder({
+  required String name,
+  required String parentId,
+}) => RustLib.instance.api.crateApiMediaCollectionCreateChildMediaFolder(
+  name: name,
+  parentId: parentId,
+);
 
-bool renameMediaCollection({required String collectionId, required String title}) => RustLib
-    .instance
-    .api
-    .crateApiMediaCollectionRenameMediaCollection(collectionId: collectionId, title: title);
+bool renameMediaCollection({
+  required String collectionId,
+  required String title,
+}) => RustLib.instance.api.crateApiMediaCollectionRenameMediaCollection(
+  collectionId: collectionId,
+  title: title,
+);
 
-bool moveMediaCollectionToFolder({required String collectionId, String? folderId}) =>
-    RustLib.instance.api.crateApiMediaCollectionMoveMediaCollectionToFolder(
-      collectionId: collectionId,
-      folderId: folderId,
-    );
+bool moveMediaCollectionToFolder({
+  required String collectionId,
+  String? folderId,
+}) => RustLib.instance.api.crateApiMediaCollectionMoveMediaCollectionToFolder(
+  collectionId: collectionId,
+  folderId: folderId,
+);
 
 bool renameMediaFolder({required String folderId, required String name}) =>
-    RustLib.instance.api.crateApiMediaCollectionRenameMediaFolder(folderId: folderId, name: name);
+    RustLib.instance.api.crateApiMediaCollectionRenameMediaFolder(
+      folderId: folderId,
+      name: name,
+    );
 
-bool deleteMediaFolder({required String folderId}) =>
-    RustLib.instance.api.crateApiMediaCollectionDeleteMediaFolder(folderId: folderId);
+bool deleteMediaFolder({required String folderId}) => RustLib.instance.api
+    .crateApiMediaCollectionDeleteMediaFolder(folderId: folderId);
 
-bool deleteMediaCollection({required String collectionId}) =>
-    RustLib.instance.api.crateApiMediaCollectionDeleteMediaCollection(collectionId: collectionId);
+bool deleteMediaCollection({required String collectionId}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionDeleteMediaCollection(collectionId: collectionId);
 
-/// Generate (or serve from disk cache) a JPEG thumbnail for [filePath] at
-/// [width] pixels wide.  Tries ffmpeg first (handles HEIC/AVIF), then falls
-/// back to pure-Rust `image` crate.  Returns the cached thumbnail file path,
-/// or `null` on failure.
-String? ensureCoverThumbnail({required String filePath, required int width}) => RustLib.instance.api
-    .crateApiMediaCollectionEnsureCoverThumbnail(filePath: filePath, width: width);
+/// Generate (or serve from disk cache) a JPEG thumbnail for `file_path` at
+/// `width` pixels wide.  Returns the path to the cached thumbnail, or `None`
+/// on failure (unsupported format, decode error, etc.).
+/// Resolution strategy: ffmpeg first (supports HEIC/AVIF), then pure-Rust
+/// `image` crate as fallback.
+String? ensureCoverThumbnail({required String filePath, required int width}) =>
+    RustLib.instance.api.crateApiMediaCollectionEnsureCoverThumbnail(
+      filePath: filePath,
+      width: width,
+    );
 
 /// Return size + file-path list for every local collection in one pass.
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
@@ -80,7 +105,8 @@ class CollectionStats {
   });
 
   @override
-  int get hashCode => collectionId.hashCode ^ totalSize.hashCode ^ filePaths.hashCode;
+  int get hashCode =>
+      collectionId.hashCode ^ totalSize.hashCode ^ filePaths.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -156,7 +182,11 @@ class MediaFolder {
 
   @override
   int get hashCode =>
-      id.hashCode ^ name.hashCode ^ createdAt.hashCode ^ order.hashCode ^ parentId.hashCode;
+      id.hashCode ^
+      name.hashCode ^
+      createdAt.hashCode ^
+      order.hashCode ^
+      parentId.hashCode;
 
   @override
   bool operator ==(Object other) =>

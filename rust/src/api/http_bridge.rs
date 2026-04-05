@@ -55,3 +55,27 @@ pub fn init_http_bridge() -> Result<bool, String> {
         Ok(true)
     })
 }
+
+// ── 节点服务器 API ─────────────────────────────────────────────────────────
+
+/// 启动本地节点服务器（仅桌面端）
+/// 
+/// - host: 监听地址，通常为 "0.0.0.0"
+/// - port: 监听端口，默认 17888
+/// - name: 节点名称
+#[frb(sync)]
+pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), String> {
+    crate::node_server::start_node_server(host, port, name)
+}
+
+/// 停止本地节点服务器
+#[frb(sync)]
+pub fn stop_node_server() -> Result<(), String> {
+    crate::node_server::stop_node_server()
+}
+
+/// 检查节点服务器是否在运行
+#[frb(sync)]
+pub fn is_node_server_running() -> bool {
+    crate::node_server::is_node_server_running()
+}

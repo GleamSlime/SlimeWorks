@@ -145,14 +145,15 @@ class _MediaItemTileState extends State<MediaItemTile> {
         widget.onDeleteNodeLocalFile != null ||
         widget.onSaveToGallery != null;
     if (!hasActions) return;
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final local = overlay.globalToLocal(globalPosition);
-    final overlaySize = overlay.size;
+    if (!mounted) return;
+    final screenSize = MediaQuery.sizeOf(context);
     final action = await showMenu<String>(
       context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromLTWH(local.dx, local.dy, 1, 1),
-        Offset.zero & overlaySize,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        screenSize.width - globalPosition.dx,
+        screenSize.height - globalPosition.dy,
       ),
       items: [
         if (widget.onOpenFolder != null)
@@ -235,7 +236,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                   ),
                 ),
                 child: showCoverAnyway
-                    ? (src!.startsWith('http')
+                    ? (src.startsWith('http')
                           ? Image.network(
                               src,
                               fit: BoxFit.cover,

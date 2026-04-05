@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/src/rust/api/http_bridge.dart' as http_bridge_api;
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 
@@ -32,6 +33,7 @@ class NodeSettingsService extends GetxService {
   final RxMap<String, String> nodeConnectivityError = <String, String>{}.obs;
   final RxDouble appRxKbps = 0.0.obs;
   final RxDouble appTxKbps = 0.0.obs;
+  final RxInt nodeRequestCount = 0.obs;
   final RxInt libraryMutationTick = 0.obs;
   final RxBool localNodeEnabled = false.obs;
   final RxString localNodeName = '本机节点'.obs;
@@ -39,7 +41,7 @@ class NodeSettingsService extends GetxService {
   final RxList<String> localNodeApiList = <String>[].obs;
 
   SharedPreferences? _prefs;
-  HttpServer? _server;
+  // 服务器实例已迁移到 Rust 管理，不再需要 Dart 端的 HttpServer
   final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 6),
@@ -204,19 +206,20 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
-    if (_server != null) {
+    // 检查 Rust 服务器是否已在运行
+    if (http_bridge_api.isNodeServerRunning()) {
+      _logger.info('节点服务已在运行');
       return;
     }
 
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, localNodePort.value);
-      _server!.listen(
-        _handleRequest,
-        onError: (Object e, StackTrace st) {
-          _logger.error('节点服务监听出错', error: e, stackTrace: st);
-        },
+      // 调用 Rust 启动节点服务器
+      http_bridge_api.startNodeServer(
+        host: '0.0.0.0',
+        port: localNodePort.value,
+        name: localNodeName.value,
       );
-      _logger.info('节点服务已启动: ${localNodePort.value}');
+      _logger.info('节点服务已启动 (Rust): ${localNodePort.value}');
     } catch (e, st) {
       _logger.error('启动节点服务失败', error: e, stackTrace: st);
       rethrow;
@@ -224,18 +227,20 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> stopLocalNodeServer() async {
-    final server = _server;
-    _server = null;
-    if (server == null) {
+    if (!http_bridge_api.isNodeServerRunning()) {
       return;
     }
 
-    await server.close(force: true);
-    _logger.info('节点服务已停止');
+    try {
+      http_bridge_api.stopNodeServer();
+      _logger.info('节点服务已停止');
+    } catch (e, st) {
+      _logger.error('停止节点服务失败', error: e, stackTrace: st);
+    }
   }
 
   bool get isLocalServerRunning {
-    return _server != null;
+    return http_bridge_api.isNodeServerRunning();
   }
 
   Future<List<Map<String, dynamic>>> fetchNodeNovels(NodeEndpoint node) async {
