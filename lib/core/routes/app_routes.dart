@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -142,6 +144,10 @@ class AppRoutes {
 
   /// 构建带过渡动画的页面
   static Page<dynamic> buildPage(BuildContext context, GoRouterState state, Widget child) {
+    // iOS 上使用 CupertinoPage，保留原生左滑返回手势
+    if (Platform.isIOS) {
+      return CupertinoPage(key: state.pageKey, child: BindingWidget(child: child));
+    }
     return CustomTransitionPage(
       key: state.pageKey,
       transitionDuration: const Duration(milliseconds: 220),

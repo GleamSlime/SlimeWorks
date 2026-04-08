@@ -22,13 +22,11 @@ class DeviceList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: devices.length,
-      separatorBuilder: (context, index) => SizedBox(height: AppTheme.metrics.kSpace12),
+      separatorBuilder: (context, index) => SizedBox(height: AppTheme.metrics.kSpace8),
       itemBuilder: (context, index) {
         final device = devices[index];
         final isSelected = selectedDevice?.deviceId == device.deviceId;
@@ -36,13 +34,10 @@ class DeviceList extends StatelessWidget {
         return FutureBuilder<bool>(
           future: isTrustedDevice(device.deviceId),
           builder: (context, snapshot) {
-            final isTrusted = snapshot.data ?? false;
-
             return _DeviceCard(
               device: device,
               isSelected: isSelected,
-              isTrusted: isTrusted,
-              isDark: isDark,
+              isTrusted: snapshot.data ?? false,
               onTap: () => onDeviceSelected(device),
               onTrust: () => onDeviceTrust(device),
             );
@@ -58,7 +53,6 @@ class _DeviceCard extends StatelessWidget {
   final DeviceInfo device;
   final bool isSelected;
   final bool isTrusted;
-  final bool isDark;
   final VoidCallback onTap;
   final VoidCallback onTrust;
 
@@ -66,50 +60,57 @@ class _DeviceCard extends StatelessWidget {
     required this.device,
     required this.isSelected,
     required this.isTrusted,
-    required this.isDark,
     required this.onTap,
     required this.onTrust,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final isDark = Get.isDarkMode;
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace16,
+          vertical: AppTheme.metrics.kSpace12,
+        ),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDark
-                    ? DarkColors.primary.withValues(alpha: 0.2)
-                    : LightColors.primary.withValues(alpha: 0.1))
+              ? primaryColor.withValues(alpha: 0.12)
               : (isDark ? DarkColors.background1 : LightColors.background1),
           border: Border.all(
             color: isSelected
-                ? (isDark ? DarkColors.primary : LightColors.primary)
+                ? primaryColor.withValues(alpha: 0.6)
                 : (isDark ? DarkColors.white10 : LightColors.black10),
-            width: isSelected ? 2 : 1,
+            width: isSelected ? 1.5 : 1,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           children: [
-            // 设备图标
+            // 设备图标容器
             Container(
-              width: scaleW(48),
-              height: scaleW(48),
+              width: scaleW(44),
+              height: scaleW(44),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.white10 : LightColors.black10,
+                color: isSelected
+                    ? primaryColor.withValues(alpha: 0.18)
+                    : (isDark ? DarkColors.white10 : LightColors.black10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 _getDeviceIcon(device.deviceType),
-                size: scaleW(24),
-                color: isDark ? DarkColors.white80 : LightColors.black80,
+                size: scaleW(22),
+                color: isSelected
+                    ? primaryColor
+                    : (isDark ? DarkColors.white80 : LightColors.black80),
               ),
             ),
 
-            SizedBox(width: AppTheme.metrics.kSpace16),
+            SizedBox(width: AppTheme.metrics.kSpace12),
 
             // 设备信息
             Expanded(
@@ -118,31 +119,44 @@ class _DeviceCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(
+                      Flexible(
                         child: Text(
                           device.deviceName,
-                          style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold),
+                          style: AppTextStyles.body1(
+                            fontWeight: AppFontWeights.semiBold,
+                            color: isSelected
+                                ? primaryColor
+                                : (isDark ? DarkColors.white100 : LightColors.black100),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isTrusted)
+                      if (isTrusted) ...[
+                        SizedBox(width: AppTheme.metrics.kSpace8),
                         Container(
                           padding: EdgeInsets.symmetric(
                             horizontal: AppTheme.metrics.kSpace8,
-                            vertical: AppTheme.metrics.kSpace4,
+                            vertical: AppTheme.metrics.kSpace2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.green.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text('已信任', style: AppTextStyles.caption(color: Colors.green)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.verified_user, size: scaleW(10), color: Colors.green),
+                              SizedBox(width: scaleW(3)),
+                              Text('已信任', style: AppTextStyles.caption(color: Colors.green)),
+                            ],
+                          ),
                         ),
+                      ],
                     ],
                   ),
-
-                  SizedBox(height: AppTheme.metrics.kSpace4),
-
+                  SizedBox(height: AppTheme.metrics.kSpace2),
                   Text(
-                    '${device.deviceType} • ${device.ipAddress}:${device.port}',
+                    '${device.deviceType} · ${device.ipAddress}',
                     style: AppTextStyles.caption(
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
@@ -151,11 +165,40 @@ class _DeviceCard extends StatelessWidget {
               ),
             ),
 
-            SizedBox(width: AppTheme.metrics.kSpace16),
-
-            // 信任按钮
-            if (!isTrusted)
-              IconButton(onPressed: onTrust, icon: const Icon(Icons.security), tooltip: '信任此设备'),
+            // 操作按钮区域
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isTrusted)
+                  GestureDetector(
+                    onTap: onTrust,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace8,
+                        vertical: AppTheme.metrics.kSpace4,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: isDark ? DarkColors.white20 : LightColors.black20,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '信任',
+                        style: AppTextStyles.caption(
+                          color: isDark ? DarkColors.white80 : LightColors.black80,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (isSelected)
+                  Padding(
+                    padding: EdgeInsets.only(top: isTrusted ? 0 : AppTheme.metrics.kSpace4),
+                    child: Icon(Icons.check_circle, size: scaleW(20), color: primaryColor),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -164,15 +207,16 @@ class _DeviceCard extends StatelessWidget {
 
   IconData _getDeviceIcon(String deviceType) {
     switch (deviceType.toLowerCase()) {
-      case 'windows':
-        return Icons.computer;
-      case 'macos':
-        return Icons.laptop_mac;
       case 'ios':
-      case 'ipad':
+      case 'iphone':
         return Icons.phone_iphone;
       case 'android':
         return Icons.phone_android;
+      case 'macos':
+      case 'mac':
+        return Icons.laptop_mac;
+      case 'windows':
+        return Icons.laptop_windows;
       default:
         return Icons.devices;
     }

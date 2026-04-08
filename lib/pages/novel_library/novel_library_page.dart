@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
@@ -56,9 +58,9 @@ class NovelLibraryPage extends StatelessWidget {
     final controller = Get.put(NovelLibraryViewModel());
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('书籍库'),
+    return ScreenChrome(
+      data: ScreenChromeData(
+        title: '书籍库',
         actions: [
           IconButton(
             icon: const Icon(Icons.folder_open),
@@ -96,377 +98,385 @@ class NovelLibraryPage extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: EdgeInsets.all(isNarrow ? 12 : 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 扫描状态提示
-            Obx(
-              () => controller.isScanning.value
-                  ? Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(context).primaryColor,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '正在扫描书籍文件...',
-                            style: TextStyle(
-                              color: Theme.of(context).primaryColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-
-            // 清空书籍进度提示
-            Obx(
-              () => controller.isClearingNovels.value
-                  ? Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            '正在清空所有书籍...',
-                            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-
-            // 搜索进度条
-            Obx(
-              () => controller.isSearching.value
-                  ? Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  value: controller.searchProgress.value,
-                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+      child: Scaffold(
+        body: Padding(
+          padding: EdgeInsets.all(isNarrow ? 12 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 扫描状态提示
+              Obx(
+                () => controller.isScanning.value
+                    ? Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).primaryColor,
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  '正在搜索书籍内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%（${controller.searchCompleted.value} / ${controller.searchTotal.value}）',
-                                  style: const TextStyle(
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              Obx(
-                                () => controller.isCancelling.value
-                                    ? const Padding(
-                                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        child: SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        ),
-                                      )
-                                    : TextButton.icon(
-                                        onPressed: () => controller.cancelSearch(),
-                                        icon: const Icon(Icons.cancel, size: 18),
-                                        label: const Text('取消'),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.red,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: controller.searchProgress.value,
-                            backgroundColor: Colors.grey[300],
-                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-
-            // 书籍数量统计
-            Obx(
-              () => controller.novels.isNotEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Row(
-                        children: [
-                          Text(
-                            '共 ${controller.novels.length} 本书籍',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
                             ),
-                          ),
-                          if (controller.searchQuery.value.isNotEmpty)
+                            const SizedBox(width: 12),
                             Text(
-                              ' （搜索到 ${controller.filteredNovels.length} 本）',
+                              '正在扫描书籍文件...',
                               style: TextStyle(
-                                fontSize: 14,
                                 color: Theme.of(context).primaryColor,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
 
-            // 搜索栏
-            Obx(
-              () => controller.novels.isNotEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  onChanged: (value) {
-                                    controller.searchQuery.value = value;
-                                    // 按名字搜索时实时更新
-                                    if (!controller.searchByContent.value) {
-                                      // 无需额外操作，filteredNovels 会自动更新
-                                    }
-                                  },
-                                  onSubmitted: (value) {
-                                    if (controller.searchByContent.value && value.isNotEmpty) {
-                                      controller.searchInContent(value);
-                                    }
-                                  },
-                                  decoration: InputDecoration(
-                                    hintText: controller.searchByContent.value
-                                        ? '搜索书籍内容...'
-                                        : '搜索书籍名字...',
-                                    prefixIcon: const Icon(Icons.search),
-                                    suffixIcon: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (controller.searchQuery.value.isNotEmpty)
-                                          IconButton(
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              controller.searchQuery.value = '';
-                                              controller.contentSearchResults.clear();
-                                            },
-                                          ),
-                                        if (controller.searchByContent.value &&
-                                            controller.searchQuery.value.isNotEmpty)
-                                          IconButton(
-                                            icon: const Icon(Icons.search),
-                                            onPressed: () => controller.searchInContent(
-                                              controller.searchQuery.value,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
+              // 清空书籍进度提示
+              Obx(
+                () => controller.isClearingNovels.value
+                    ? Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              '正在清空所有书籍...',
+                              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+
+              // 搜索进度条
+              Obx(
+                () => controller.isSearching.value
+                    ? Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    value: controller.searchProgress.value,
+                                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    '正在搜索书籍内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%（${controller.searchCompleted.value} / ${controller.searchTotal.value}）',
+                                    style: const TextStyle(
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
+                                Obx(
+                                  () => controller.isCancelling.value
+                                      ? const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          child: SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        )
+                                      : TextButton.icon(
+                                          onPressed: () => controller.cancelSearch(),
+                                          icon: const Icon(Icons.cancel, size: 18),
+                                          label: const Text('取消'),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.red,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            LinearProgressIndicator(
+                              value: controller.searchProgress.value,
+                              backgroundColor: Colors.grey[300],
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+
+              // 书籍数量统计
+              Obx(
+                () => controller.novels.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          children: [
+                            Text(
+                              '共 ${controller.novels.length} 本书籍',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Text('搜索模式: ', style: TextStyle(fontSize: 14)),
-                              ChoiceChip(
-                                label: const Text('按名字'),
-                                selected: !controller.searchByContent.value,
-                                onSelected: (selected) {
-                                  if (selected) {
-                                    controller.searchByContent.value = false;
-                                    controller.contentSearchResults.clear();
-                                  }
-                                },
+                            ),
+                            if (controller.searchQuery.value.isNotEmpty)
+                              Text(
+                                ' （搜索到 ${controller.filteredNovels.length} 本）',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context).primaryColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                              const SizedBox(width: 8),
-                              ChoiceChip(
-                                label: const Text('按内容'),
-                                selected: controller.searchByContent.value,
-                                onSelected: (selected) {
-                                  if (selected) {
-                                    controller.searchByContent.value = true;
-                                    if (controller.searchQuery.value.isNotEmpty) {
-                                      controller.searchInContent(controller.searchQuery.value);
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+
+              // 搜索栏
+              Obx(
+                () => controller.novels.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    onChanged: (value) {
+                                      controller.searchQuery.value = value;
+                                      // 按名字搜索时实时更新
+                                      if (!controller.searchByContent.value) {
+                                        // 无需额外操作，filteredNovels 会自动更新
+                                      }
+                                    },
+                                    onSubmitted: (value) {
+                                      if (controller.searchByContent.value && value.isNotEmpty) {
+                                        controller.searchInContent(value);
+                                      }
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: controller.searchByContent.value
+                                          ? '搜索书籍内容...'
+                                          : '搜索书籍名字...',
+                                      prefixIcon: const Icon(Icons.search),
+                                      suffixIcon: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (controller.searchQuery.value.isNotEmpty)
+                                            IconButton(
+                                              icon: const Icon(Icons.clear),
+                                              onPressed: () {
+                                                controller.searchQuery.value = '';
+                                                controller.contentSearchResults.clear();
+                                              },
+                                            ),
+                                          if (controller.searchByContent.value &&
+                                              controller.searchQuery.value.isNotEmpty)
+                                            IconButton(
+                                              icon: const Icon(Icons.search),
+                                              onPressed: () => controller.searchInContent(
+                                                controller.searchQuery.value,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Text('搜索模式: ', style: TextStyle(fontSize: 14)),
+                                ChoiceChip(
+                                  label: const Text('按名字'),
+                                  selected: !controller.searchByContent.value,
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      controller.searchByContent.value = false;
+                                      controller.contentSearchResults.clear();
                                     }
-                                  }
-                                },
-                              ),
-                            ],
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ChoiceChip(
+                                  label: const Text('按内容'),
+                                  selected: controller.searchByContent.value,
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      controller.searchByContent.value = true;
+                                      if (controller.searchQuery.value.isNotEmpty) {
+                                        controller.searchInContent(controller.searchQuery.value);
+                                      }
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+
+              // 书籍列表
+              Expanded(
+                child: Obx(() {
+                  final displayNovels = controller.filteredNovels;
+
+                  if (controller.novels.isEmpty) {
+                    return _buildEmptyView(context, isNarrow);
+                  }
+
+                  if (displayNovels.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          Text(
+                            '没有找到匹配的书籍',
+                            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                           ),
                         ],
                       ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
+                    );
+                  }
 
-            // 书籍列表
-            Expanded(
-              child: Obx(() {
-                final displayNovels = controller.filteredNovels;
-
-                if (controller.novels.isEmpty) {
-                  return _buildEmptyView(context, isNarrow);
-                }
-
-                if (displayNovels.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text('没有找到匹配的书籍', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
-                      ],
+                  return GridView.builder(
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: isNarrow ? 150 : 200,
+                      childAspectRatio: 0.65,
+                      crossAxisSpacing: isNarrow ? 12 : 16,
+                      mainAxisSpacing: isNarrow ? 12 : 16,
                     ),
-                  );
-                }
-
-                return GridView.builder(
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: isNarrow ? 150 : 200,
-                    childAspectRatio: 0.65,
-                    crossAxisSpacing: isNarrow ? 12 : 16,
-                    mainAxisSpacing: isNarrow ? 12 : 16,
-                  ),
-                  itemCount: displayNovels.length,
-                  itemBuilder: (context, index) {
-                    final novel = displayNovels[index];
-                    return Draggable<NovelMetadata>(
-                      data: novel,
-                      feedback: Material(
-                        elevation: 8,
-                        child: Opacity(
-                          opacity: 0.8,
-                          child: SizedBox(
-                            width: isNarrow ? 150 : 200,
-                            child: NovelCard(
-                              title: novel.title,
-                              author: novel.author ?? '未知作者',
-                              coverPath: novel.coverPath,
-                              format: novel.format.toString().split('.').last.toUpperCase(),
-                              progress: novel.progress,
-                              onTap: () {},
-                              onDelete: () {},
+                    itemCount: displayNovels.length,
+                    itemBuilder: (context, index) {
+                      final novel = displayNovels[index];
+                      return Draggable<NovelMetadata>(
+                        data: novel,
+                        feedback: Material(
+                          elevation: 8,
+                          child: Opacity(
+                            opacity: 0.8,
+                            child: SizedBox(
+                              width: isNarrow ? 150 : 200,
+                              child: NovelCard(
+                                title: novel.title,
+                                author: novel.author ?? '未知作者',
+                                coverPath: novel.coverPath,
+                                format: novel.format.toString().split('.').last.toUpperCase(),
+                                progress: novel.progress,
+                                onTap: () {},
+                                onDelete: () {},
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.3,
-                        child: NovelCard(
-                          title: novel.title,
-                          author: novel.author ?? '未知作者',
-                          coverPath: novel.coverPath,
-                          format: novel.format.toString().split('.').last.toUpperCase(),
-                          progress: novel.progress,
-                          onTap: () {},
-                          onDelete: () {},
+                        childWhenDragging: Opacity(
+                          opacity: 0.3,
+                          child: NovelCard(
+                            title: novel.title,
+                            author: novel.author ?? '未知作者',
+                            coverPath: novel.coverPath,
+                            format: novel.format.toString().split('.').last.toUpperCase(),
+                            progress: novel.progress,
+                            onTap: () {},
+                            onDelete: () {},
+                          ),
                         ),
-                      ),
-                      child: DragTarget<NovelMetadata>(
-                        onWillAccept: (data) => data != null && data.id != novel.id,
-                        onAccept: (draggedNovel) {
-                          // 重新排序：将拖拽的书籍移动到目标位置
-                          final draggedIndex = displayNovels.indexWhere(
-                            (n) => n.id == draggedNovel.id,
-                          );
-                          if (draggedIndex != -1 && draggedIndex != index) {
-                            controller.reorderItems(draggedIndex, index);
-                          }
-                        },
-                        builder: (context, candidateData, rejectedData) {
-                          return GestureDetector(
-                            onSecondaryTapDown: (details) {
-                              _showNovelContextMenu(context, novel, details.globalPosition);
-                            },
-                            child: NovelCard(
-                              title: novel.title,
-                              author: novel.author ?? '未知作者',
-                              coverPath: novel.coverPath,
-                              format: novel.format.toString().split('.').last.toUpperCase(),
-                              progress: novel.progress,
-                              onTap: () async {
-                                NovelReaderRoute($extra: novel).go(context);
-                                controller.loadNovels();
+                        child: DragTarget<NovelMetadata>(
+                          onWillAccept: (data) => data != null && data.id != novel.id,
+                          onAccept: (draggedNovel) {
+                            // 重新排序：将拖拽的书籍移动到目标位置
+                            final draggedIndex = displayNovels.indexWhere(
+                              (n) => n.id == draggedNovel.id,
+                            );
+                            if (draggedIndex != -1 && draggedIndex != index) {
+                              controller.reorderItems(draggedIndex, index);
+                            }
+                          },
+                          builder: (context, candidateData, rejectedData) {
+                            return GestureDetector(
+                              onSecondaryTapDown: (details) {
+                                _showNovelContextMenu(context, novel, details.globalPosition);
                               },
-                              onDelete: () => controller.deleteNovel(novel.id),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                );
-              }),
-            ),
-          ],
+                              child: NovelCard(
+                                title: novel.title,
+                                author: novel.author ?? '未知作者',
+                                coverPath: novel.coverPath,
+                                format: novel.format.toString().split('.').last.toUpperCase(),
+                                progress: novel.progress,
+                                onTap: () async {
+                                  NovelReaderRoute($extra: novel).go(context);
+                                  controller.loadNovels();
+                                },
+                                onDelete: () => controller.deleteNovel(novel.id),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  );
+                }),
+              ),
+            ],
+          ),
         ),
       ),
     );

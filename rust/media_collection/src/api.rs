@@ -1,13 +1,42 @@
 use chrono::Utc;
+use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::scanner::MediaFolderScanner;
 use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind};
 
 // ── Cover thumbnail cache ─────────────────────────────────────────────────────
 static THUMB_CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+/// 限制并发缩略图生成数量（每次生成可能启动 ffmpeg 子进程，防止 FD/CPU 爆炸）
+const MAX_CONCURRENT_THUMBS: usize = 4;
+static THUMB_PERMITS: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
+
+fn acquire_thumb_permit() {
+    let (lock, cvar) = THUMB_PERMITS.get_or_init(|| (Mutex::new(0), Condvar::new()));
+    let mut count = cvar
+        .wait_while(lock.lock().unwrap(), |c| *c >= MAX_CONCURRENT_THUMBS)
+        .unwrap();
+    *count += 1;
+}
+
+fn release_thumb_permit() {
+    let (lock, cvar) = THUMB_PERMITS.get_or_init(|| (Mutex::new(0), Condvar::new()));
+    let mut count = lock.lock().unwrap();
+    *count -= 1;
+    cvar.notify_one();
+}
+
+/// RAII 守卫，确保信号量在任意返回路径上均自动释放
+struct ThumbPermit;
+impl Drop for ThumbPermit {
+    fn drop(&mut self) {
+        release_thumb_permit();
+    }
+}
 
 fn thumb_cache_dir() -> &'static std::path::PathBuf {
     THUMB_CACHE_DIR.get_or_init(|| {
@@ -61,7 +90,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         || lower.ends_with(".aiff")
         || lower.ends_with(".alac");
     if !is_image && !is_video && !is_audio {
-        println!("[thumb] skip non-visual: {}", file_path);
+        debug!("[thumb] skip non-visual: {}", file_path);
         return None;
     }
 
@@ -76,7 +105,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     if cache_path.exists() {
         if let Ok(meta) = std::fs::metadata(&cache_path) {
             if meta.len() > 0 {
-                println!(
+                debug!(
                     "[thumb] cache-hit | src={} | orig={}B | cached={}B | w={}",
                     file_path, orig_size, meta.len(), width
                 );
@@ -87,15 +116,19 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         let _ = std::fs::remove_file(&cache_path);
     }
 
-    let t0 = std::time::Instant::now();
-    println!("[thumb] generate | src={} | orig={}B | w={}", file_path, orig_size, width);
+    // ④ 取获并发信号量，限制同时运行的缩略图生成任务数
+    acquire_thumb_permit();
+    let _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
 
-    // ④ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
+    let t0 = std::time::Instant::now();
+    info!("[thumb] generate | src={} | orig={}B | w={}", file_path, orig_size, width);
+
+    // ⑤ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
     if is_video {
         if try_ffmpeg_video_frame(&file_path, &cache_path, width, t0, orig_size) {
             return Some(cache_path.to_string_lossy().into_owned());
         }
-        println!("[thumb] video frame extraction failed | src={}", file_path);
+        warn!("[thumb] video frame extraction failed | src={}", file_path);
         return None;
     }
 
@@ -104,7 +137,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         if try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
             return Some(cache_path.to_string_lossy().into_owned());
         }
-        println!("[thumb] audio has no embedded cover art | src={}", file_path);
+        debug!("[thumb] audio has no embedded cover art | src={}", file_path);
         return None;
     }
 
@@ -118,7 +151,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
-    println!("[thumb] all methods failed | src={} | w={} | elapsed={:?}", file_path, width, t0.elapsed());
+    warn!("[thumb] all methods failed | src={} | w={} | elapsed={:?}", file_path, width, t0.elapsed());
     None
 }
 
@@ -143,13 +176,13 @@ fn try_ffmpeg_audio_cover(src: &str, dst: &std::path::Path, width: u32, t0: std:
     let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
-        println!(
+        debug!(
             "[thumb] audio-cover OK | orig={}B | thumb={}B | w={} | elapsed={:?}",
             orig_size, thumb_size, width, t0.elapsed()
         );
     } else {
         if dst.exists() { let _ = std::fs::remove_file(dst); }
-        println!("[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}", src, t0.elapsed());
+        debug!("[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}", src, t0.elapsed());
     }
     success
 }
@@ -175,7 +208,7 @@ fn try_ffmpeg_video_frame(src: &str, dst: &std::path::Path, width: u32, t0: std:
         let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
         if success {
             let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
-            println!(
+            debug!(
                 "[thumb] ffmpeg video-frame OK | ss={} | orig={}B | thumb={}B | w={} | elapsed={:?}",
                 seek_secs, orig_size, thumb_size, width, t0.elapsed()
             );
@@ -184,7 +217,7 @@ fn try_ffmpeg_video_frame(src: &str, dst: &std::path::Path, width: u32, t0: std:
         // Remove zero-byte artifact before retrying
         if dst.exists() { let _ = std::fs::remove_file(dst); }
     }
-    println!("[thumb] ffmpeg video-frame failed | src={} | elapsed={:?}", src, t0.elapsed());
+    warn!("[thumb] ffmpeg video-frame failed | src={} | elapsed={:?}", src, t0.elapsed());
     false
 }
 
@@ -211,12 +244,12 @@ fn try_ffmpeg_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
         let ratio = if orig_size > 0 { thumb_size * 100 / orig_size } else { 0 };
-        println!(
+        debug!(
             "[thumb] ffmpeg OK | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
             orig_size, thumb_size, ratio, width, t0.elapsed()
         );
     } else {
-        println!("[thumb] ffmpeg failed | src={} | elapsed={:?}", src, t0.elapsed());
+        debug!("[thumb] ffmpeg failed | src={} | elapsed={:?}", src, t0.elapsed());
     }
     success
 }
@@ -225,14 +258,14 @@ fn try_rust_image_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::
     let bytes = match std::fs::read(src) {
         Ok(b) => b,
         Err(e) => {
-            println!("[thumb] rust-image read failed | src={} | err={}", src, e);
+            warn!("[thumb] rust-image read failed | src={} | err={}", src, e);
             return false;
         },
     };
     let img = match image::load_from_memory(&bytes) {
         Ok(i) => i,
         Err(e) => {
-            println!("[thumb] rust-image decode failed | src={} | err={}", src, e);
+            warn!("[thumb] rust-image decode failed | src={} | err={}", src, e);
             return false;
         },
     };
@@ -245,21 +278,27 @@ fn try_rust_image_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::
         Ok(_) => {
             let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
             let ratio = if orig_size > 0 { thumb_size * 100 / orig_size } else { 0 };
-            println!(
+            debug!(
                 "[thumb] rust-image OK | orig={}x{} | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
                 orig_w, orig_h, orig_size, thumb_size, ratio, width, t0.elapsed()
             );
             dst.exists() && thumb_size > 0
         }
         Err(e) => {
-            println!("[thumb] rust-image save failed | src={} | err={} | elapsed={:?}", src, e, t0.elapsed());
+            warn!("[thumb] rust-image save failed | src={} | err={} | elapsed={:?}", src, e, t0.elapsed());
             false
         }
     }
 }
 
 static MEDIA_COLLECTIONS: OnceLock<Arc<Mutex<Vec<MediaCollection>>>> = OnceLock::new();
-static MEDIA_ITEMS: OnceLock<Arc<Mutex<Vec<MediaItem>>>> = OnceLock::new();
+/// MEDIA_ITEMS 使用可清除模式：OnceLock 持有 Mutex，Mutex 持有 Option<Vec>。
+/// - None  = 未加载（首次或被 release_items_from_memory 清除后）
+/// - Some  = 已从数据库加载到内存
+/// 通过 release_items_from_memory() 可将 Option 设为 None，Vec 被 drop，内存立刻归还给 OS。
+static MEDIA_ITEMS: OnceLock<Mutex<Option<Vec<MediaItem>>>> = OnceLock::new();
+/// 最近一次访问 MEDIA_ITEMS 的 Unix 时间戳（秒）。供空闲检测使用。
+static LAST_MEDIA_ITEMS_ACCESS_SECS: AtomicU64 = AtomicU64::new(0);
 static MEDIA_FOLDERS: OnceLock<Arc<Mutex<Vec<MediaFolder>>>> = OnceLock::new();
 /// Caches the DB initialization result: None = success, Some(msg) = failure.
 static DB_INIT_RESULT: OnceLock<Option<String>> = OnceLock::new();
@@ -303,14 +342,14 @@ fn thumbnail_cache_dir() -> std::path::PathBuf {
 pub fn initialize_db() -> Result<(), String> {
     let result = DB_INIT_RESULT.get_or_init(|| {
         let path = default_db_path();
-        println!("[media_db] Initializing DB at: {}", path);
+        info!("[media_db] Initializing DB at: {}", path);
         match db_module::db_init(path) {
             Ok(_) => {
-                println!("[media_db] DB initialized successfully");
+                info!("[media_db] DB initialized successfully");
                 None
             }
             Err(e) => {
-                println!("[media_db] DB init failed: {}", e);
+                info!("[media_db] DB init failed: {}", e);
                 Some(e)
             }
         }
@@ -497,22 +536,72 @@ fn get_collections() -> &'static Arc<Mutex<Vec<MediaCollection>>> {
     })
 }
 
-fn get_items() -> &'static Arc<Mutex<Vec<MediaItem>>> {
+/// 返回 MEDIA_ITEMS 静态 Mutex 的引用。
+/// OnceLock 保证 Mutex 本身只初始化一次；其内 Option<Vec> 可随时清空再重载。
+fn items_mutex() -> &'static Mutex<Option<Vec<MediaItem>>> {
     MEDIA_ITEMS.get_or_init(|| {
         ensure_db_initialized();
-        let items = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(item_table_name());
+        Mutex::new(None) // 不立即加载，懒加载以节省启动内存
+    })
+}
+
+/// 若 guard 中的 Option 为 None，则从数据库中加载所有条目到内存；
+/// 同时记录访问时间戳供空闲检测使用。
+fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
+    // 更新最近访问时间戳
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    LAST_MEDIA_ITEMS_ACCESS_SECS.store(now_secs, Ordering::Relaxed);
+
+    if items.is_none() {
+        let mut data = Vec::new();
         if let Ok(records) = db_module::db_list_all(item_table_name()) {
-            if let Ok(mut guard) = items.lock() {
-                for record in records {
-                    if let Ok(item) = serde_json::from_str::<MediaItem>(&record.value) {
-                        guard.push(item);
-                    }
+            for record in records {
+                if let Ok(item) = serde_json::from_str::<MediaItem>(&record.value) {
+                    data.push(item);
                 }
             }
         }
-        items
-    })
+        info!("[media_cache] 从数据库加载媒体条目到内存，共 {} 条", data.len());
+        *items = Some(data);
+    }
+}
+
+/// 将 MEDIA_ITEMS 内存缓存清空（设回 None），Vec 被 drop，内存立即归还给 OS。
+/// 下次调用 items_mutex() 后仍可通过 ensure_items_loaded 重新从 DB 加载。
+pub fn release_items_from_memory() {
+    if let Some(mutex) = MEDIA_ITEMS.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let count = guard.as_ref().map(|v| v.len()).unwrap_or(0);
+            if count > 0 {
+                *guard = None;
+                LAST_MEDIA_ITEMS_ACCESS_SECS.store(0, Ordering::Relaxed);
+                info!("[media_cache] 已释放媒体条目内存缓存，共 {} 条", count);
+            }
+        }
+    }
+}
+
+/// 若距最近一次访问超过 idle_threshold_secs 秒且缓存非空，则自动释放内存。
+/// 供节点服务器空闲检测线程调用。返回是否触发了释放操作。
+pub fn check_and_release_if_idle(idle_threshold_secs: u64) -> bool {
+    let last_access = LAST_MEDIA_ITEMS_ACCESS_SECS.load(Ordering::Relaxed);
+    if last_access == 0 {
+        return false; // 未曾加载过，无需释放
+    }
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if now_secs.saturating_sub(last_access) > idle_threshold_secs {
+        release_items_from_memory();
+        true
+    } else {
+        false
+    }
 }
 
 fn get_folders() -> &'static Arc<Mutex<Vec<MediaFolder>>> {
@@ -584,19 +673,19 @@ fn upsert_collection_from_folder(
     folder: &Path,
     recursive: bool,
 ) -> Result<MediaCollection, String> {
-    println!(
+    debug!(
         "[media_scan] upsert_collection_from_folder: {:?} (recursive={})",
         folder,
         recursive
     );
     if !folder.exists() || !folder.is_dir() {
         let err = format!("Path is not a directory: {:?}", folder);
-        println!("[media_scan] {}", err);
+        debug!("[media_scan] {}", err);
         return Err(err);
     }
 
     let normalized_path = normalize_folder_path(folder)?;
-    println!("[media_scan] normalized_path = {:?}", normalized_path);
+    debug!("[media_scan] normalized_path = {:?}", normalized_path);
 
     let existing = {
         let collections = get_collections()
@@ -615,19 +704,21 @@ fn upsert_collection_from_folder(
 
     let items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
         .map_err(|error| error.to_string())?;
-    println!(
+    debug!(
         "[media_scan] collect_media_items returned {} items for {:?}",
         items.len(),
         folder
     );
     if items.is_empty() {
         let err = format!("No media found in {:?}", folder);
-        println!("[media_scan] {}", err);
+        debug!("[media_scan] {}", err);
         return Err(err);
     }
 
     {
-        let mut stored_items = get_items().lock().map_err(|error| error.to_string())?;
+        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+        ensure_items_loaded(&mut guard);
+        let stored_items = guard.as_mut().unwrap();
         let removed_ids = stored_items
             .iter()
             .filter(|item| item.collection_id == collection_id)
@@ -639,7 +730,7 @@ fn upsert_collection_from_folder(
         }
         for item in &items {
             if let Err(error) = persist_item(item) {
-                println!(
+                debug!(
                     "[media_scan] persist_item failed for {:?}: {}",
                     item.file_path,
                     error
@@ -683,7 +774,7 @@ fn upsert_collection_from_folder(
         }
     }
     persist_collection(&updated_collection)?;
-    println!(
+    debug!(
         "[media_scan] collection persisted: id={} title={:?} item_count={}",
         updated_collection.id,
         updated_collection.title,
@@ -852,7 +943,9 @@ pub fn get_all_media_collections() -> Result<Vec<MediaCollection>, String> {
 }
 
 pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem>, String> {
-    let items = get_items().lock().map_err(|error| error.to_string())?;
+    let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+    ensure_items_loaded(&mut guard);
+    let items = guard.as_ref().unwrap();
     let mut result = items
         .iter()
         .filter(|item| item.collection_id == collection_id)
@@ -877,7 +970,9 @@ pub struct CollectionStats {
 
 /// Return size + file-path list for every collection in one pass over MEDIA_ITEMS.
 pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
-    let items = get_items().lock().map_err(|e| e.to_string())?;
+    let mut guard = items_mutex().lock().map_err(|e| e.to_string())?;
+    ensure_items_loaded(&mut guard);
+    let items = guard.as_ref().unwrap();
     let mut map: HashMap<String, CollectionStats> = HashMap::new();
     for item in items.iter() {
         let entry = map
@@ -899,39 +994,39 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
 
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {
     let root = Path::new(&folder_path);
-    println!("[media_scan] scan_media_folders called: {:?}", root);
-    println!(
+    debug!("[media_scan] scan_media_folders called: {:?}", root);
+    debug!(
         "[media_scan] root.exists()={} root.is_dir()={}",
         root.exists(),
         root.is_dir()
     );
     let directories = MediaFolderScanner::scan_media_directories(root).map_err(|error| {
-        println!("[media_scan] scan_media_directories error: {}", error);
+        debug!("[media_scan] scan_media_directories error: {}", error);
         error.to_string()
     })?;
-    println!(
+    debug!(
         "[media_scan] scan_media_directories found {} dirs with media under {:?}",
         directories.len(),
         root
     );
     for (i, dir) in directories.iter().enumerate() {
-        println!("[media_scan]   dir[{}] = {:?}", i, dir);
+        debug!("[media_scan]   dir[{}] = {:?}", i, dir);
     }
     let mut collections = Vec::new();
     for directory in &directories {
         match upsert_collection_from_folder(directory, false) {
             Ok(collection) => {
-                println!(
+                debug!(
                     "scan_media_folders: imported '{}' from {:?}",
                     collection.title,
                     directory
                 );
                 collections.push(collection);
             }
-            Err(error) => println!("scan_media_folders: failed {:?}: {}", directory, error),
+            Err(error) => debug!("scan_media_folders: failed {:?}: {}", directory, error),
         }
     }
-    println!(
+    debug!(
         "scan_media_folders: result {}/{} collections imported",
         collections.len(),
         directories.len()
@@ -975,7 +1070,9 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
     }
 
     {
-        let mut items = get_items().lock().map_err(|error| error.to_string())?;
+        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+        ensure_items_loaded(&mut guard);
+        let items = guard.as_mut().unwrap();
         let removed_ids = items
             .iter()
             .filter(|item| item.collection_id == collection_id)

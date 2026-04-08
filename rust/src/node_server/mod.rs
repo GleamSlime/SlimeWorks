@@ -19,9 +19,24 @@ pub use types::*;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
+
+// 全局共享的多线程 tokio runtime，避免每次请求都创建/销毁 runtime 导致内存碎片
+// 使用 multi-thread runtime 保证多个连接线程可并发调用 block_on
+use std::sync::OnceLock;
+static SHARED_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+fn shared_runtime() -> &'static tokio::runtime::Runtime {
+    SHARED_RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("build node-server tokio runtime")
+    })
+}
 
 // ── 公开配置 ─────────────────────────────────────────────────────────────────
 
@@ -55,6 +70,10 @@ lazy_static::lazy_static! {
     static ref NODE_SERVER: Mutex<Option<NodeServerHandle>> = Mutex::new(None);
 }
 
+/// 最大并发连接数，防止 FD 耗尽
+const MAX_CONNECTIONS: usize = 30;
+static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+
 // ── 辅助 ─────────────────────────────────────────────────────────────────────
 
 fn kill_process_on_port(port: u16) {
@@ -78,7 +97,15 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         .ok();
 
     let peer = stream.peer_addr().ok();
-    let mut reader = BufReader::new(stream.try_clone().expect("clone stream"));
+    // try_clone 失败通常意味着 FD 已耗尽，安全返回即可
+    let cloned = match stream.try_clone() {
+        Ok(s) => s,
+        Err(e) => {
+            println!("[node-conn] stream clone failed (fd exhausted?): {}", e);
+            return;
+        }
+    };
+    let mut reader = BufReader::new(cloned);
 
     // 读请求行
     let mut request_line = String::new();
@@ -96,6 +123,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
 
     // 读 headers
     let mut content_length: usize = 0;
+    let mut range_header: Option<String> = None;
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
@@ -108,6 +136,8 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         let lower = line.to_lowercase();
         if lower.starts_with("content-length:") {
             content_length = line[15..].trim().parse().unwrap_or(0);
+        } else if lower.starts_with("range:") {
+            range_header = Some(line[6..].trim().to_string());
         }
     }
 
@@ -132,18 +162,12 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             let req_str = String::from_utf8_lossy(&body).to_string();
             match serde_json::from_str::<types::NodeRequest>(&req_str) {
                 Ok(node_req) => {
-                    // 用 tokio runtime 调用异步 handler
-                    let result = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .map_err(|e| e.to_string())
-                        .and_then(|rt| {
-                            rt.block_on(handlers::dispatch_action(
-                                &node_req.action,
-                                node_req.params,
-                                &config,
-                            ))
-                        });
+                    // 复用全局共享的 tokio runtime，避免每次请求创建/销毁 runtime
+                    let result = shared_runtime().block_on(handlers::dispatch_action(
+                        &node_req.action,
+                        node_req.params,
+                        &config,
+                    ));
                     match result {
                         Ok(data) => (200, types::NodeResponse::success(data).to_json()),
                         Err(e) => (500, types::NodeResponse::error(e).to_json()),
@@ -156,28 +180,68 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         ("GET", "/node/media") => {
             // 提取 query string（不依赖 hyper）
             let query = path.splitn(2, '?').nth(1).unwrap_or("").to_string();
-            let result = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| e.to_string())
-                .and_then(|rt| {
-                    rt.block_on(media_handler::handle_media_query(&query))
-                });
-            match result {
-                Ok(response_bytes) => {
-                    let content_type = media_handler::guess_media_content_type(
-                        query.split('&').find_map(|p| p.strip_prefix("path=")).unwrap_or("")
-                    );
-                    let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
-                        content_type,
-                        response_bytes.len()
-                    );
+            let file_path = query.split('&')
+                .find_map(|p| p.strip_prefix("path="))
+                .map(|p| {
+                    url::form_urlencoded::parse(format!("path={}", p).as_bytes())
+                        .find(|(k, _)| k == "path")
+                        .map(|(_, v)| v.into_owned())
+                        .unwrap_or_else(|| p.to_string())
+                })
+                .unwrap_or_default();
+            let is_cover = query.split('&').any(|p| p == "mode=cover");
+            let has_width = query.split('&').any(|p| p.starts_with("width=") && p.len() > 6);
+
+            // 非 Range 请求且是图片/封面模式 → 走缩略图生成（原逻辑）
+            if range_header.is_none() && (is_cover || has_width || media_handler::is_image_path(&file_path)) {
+                let result = shared_runtime().block_on(media_handler::handle_media_query(&query));
+                match result {
+                    Ok(response_bytes) => {
+                        let content_type = media_handler::guess_media_content_type(&file_path);
+                        let header = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                            content_type,
+                            response_bytes.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&response_bytes);
+                        return;
+                    }
+                    Err(e) => {
+                        let err_body = format!("media error: {}", e);
+                        let header = format!(
+                            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                            err_body.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(err_body.as_bytes());
+                        return;
+                    }
+                }
+            }
+
+            // 视频/音频文件：支持 Range 请求的流式分发
+            match media_handler::serve_media_file_with_range(&file_path, range_header.as_deref()) {
+                Ok((status, headers, body_bytes)) => {
+                    let mut header = format!("HTTP/1.1 {}\r\n", status);
+                    for (k, v) in &headers {
+                        header.push_str(&format!("{}: {}\r\n", k, v));
+                    }
+                    header.push_str("Access-Control-Allow-Origin: *\r\n\r\n");
                     let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(&response_bytes);
+                    let _ = stream.write_all(&body_bytes);
                     return;
                 }
-                Err(e) => (500, types::NodeResponse::error(e).to_json()),
+                Err(e) => {
+                    let err_body = format!("media error: {}", e);
+                    let header = format!(
+                        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                        err_body.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(err_body.as_bytes());
+                    return;
+                }
             }
         }
 
@@ -242,10 +306,21 @@ pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), St
                                 break;
                             }
                             let cfg = Arc::clone(&config);
-                            std::thread::Builder::new()
+                            // 限制最大并发连接数，防止 FD 耗尽
+                            if ACTIVE_CONNECTIONS.fetch_add(1, Ordering::Relaxed) >= MAX_CONNECTIONS {
+                                ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
+                                drop(stream);
+                                continue;
+                            }
+                            let spawn_result = std::thread::Builder::new()
                                 .name("node-conn".into())
-                                .spawn(move || handle_connection(stream, cfg))
-                                .ok();
+                                .spawn(move || {
+                                    handle_connection(stream, cfg);
+                                    ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
+                                });
+                            if spawn_result.is_err() {
+                                ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
+                            }
                         }
                         Err(_) => {
                             if running.load(Ordering::SeqCst) {
@@ -258,6 +333,27 @@ pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), St
             .map_err(|e| format!("启动线程失败: {}", e))?;
     }
 
+    // 空闲内存清理线程：每分钟检测一次，若媒体条目缓存超过 5 分钟未访问则自动释放
+    {
+        let running = Arc::clone(&running);
+        std::thread::Builder::new()
+            .name("node-idle-cleanup".into())
+            .spawn(move || {
+                const IDLE_THRESHOLD_SECS: u64 = 5 * 60; // 5 分钟无访问则释放
+                const CHECK_INTERVAL_SECS: u64 = 60;      // 每分钟检测一次
+                while running.load(Ordering::Relaxed) {
+                    std::thread::sleep(std::time::Duration::from_secs(CHECK_INTERVAL_SECS));
+                    if !running.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if media_collection::api::check_and_release_if_idle(IDLE_THRESHOLD_SECS) {
+                        println!("[node-server] 媒体条目缓存空闲超过 {}s，已自动释放", IDLE_THRESHOLD_SECS);
+                    }
+                }
+            })
+            .ok(); // 线程创建失败不影响主逻辑
+    }
+
     *guard = Some(NodeServerHandle { running, port });
     Ok(())
 }
@@ -268,6 +364,8 @@ pub fn stop_node_server() -> Result<(), String> {
         old.running.store(false, Ordering::SeqCst);
         let _ = std::net::TcpStream::connect(format!("127.0.0.1:{}", old.port));
     }
+    // 节点停止后立即释放媒体条目内存缓存，避免闲置时占用大量内存
+    media_collection::api::release_items_from_memory();
     Ok(())
 }
 

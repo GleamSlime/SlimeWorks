@@ -256,7 +256,24 @@ class _CollectionPictureScreenState
   @override
   Widget buildContent(BuildContext context) {
     return Obx(
-      () => ScreenChrome(
+      () {
+        // 当处于文件夹或集合内时，拦截系统返回手势（Android 返回键 / iOS 左划），
+        // 退回到上一层浏览内容而非退出整个媒体库页面。
+        final inFolder = viewModel.currentFolderId.value != null;
+        final inCollection = viewModel.isInDetail;
+        final hasInternalBackLevel = inFolder || inCollection;
+        return PopScope(
+          canPop: !hasInternalBackLevel,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) {
+              if (inCollection) {
+                _exitCollection();
+              } else if (inFolder) {
+                _exitFolder();
+              }
+            }
+          },
+          child: ScreenChrome(
         data: _buildScreenChromeData(context),
         child: Focus(
           autofocus: true,
@@ -375,7 +392,9 @@ class _CollectionPictureScreenState
             );
           }),
         ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -1427,6 +1446,9 @@ class _CollectionPictureScreenState
                   collection.folderPath,
                   collection.title,
                 ),
+          onPullToLocal: viewModel.isRemoteCollection(collection.id)
+              ? () => viewModel.pullRemoteCollectionToLocal(collection.id)
+              : null,
           onDeleteNodeFiles: viewModel.isRemoteCollection(collection.id)
               ? () => _confirmDeleteNodeLocalFilesForCollection(collection.id, collection.title)
               : null,

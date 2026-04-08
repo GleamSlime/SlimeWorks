@@ -27,7 +27,7 @@ pub fn lan_transfer_init() -> Result<()> {
 }
 
 /// 创建并启动传输管理器
-pub async fn lan_transfer_start(port: u16) -> Result<()> {
+pub async fn lan_transfer_start(port: u16, save_dir: String) -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
 
     if manager_guard.is_some() {
@@ -35,14 +35,50 @@ pub async fn lan_transfer_start(port: u16) -> Result<()> {
         return Ok(());
     }
 
-    info!("lan_transfer_start begin, port={}", port);
+    info!("lan_transfer_start begin, port={}, save_dir={}", port, save_dir);
+
+    // 加载或创建持久化设备 ID，确保换网络/重启 App 后设备 ID 不变
+    let device_id = load_or_create_device_id(&save_dir).await;
+    crate::discovery::DiscoveryService::set_persistent_device_id(device_id).await;
 
     let manager = LanTransferManager::new(port).await?;
+    manager.set_save_dir(save_dir).await;
     manager.start().await?;
 
     *manager_guard = Some(manager);
 
     Ok(())
+}
+
+/// 从 <save_dir>/device_id.txt 加载设备 ID；文件不存在则生成新 UUID 并持久化。
+async fn load_or_create_device_id(save_dir: &str) -> String {
+    use std::path::Path;
+    use tokio::fs;
+    use uuid::Uuid;
+
+    let dir = Path::new(save_dir);
+    let id_file = dir.join("device_id.txt");
+
+    // 尝试读取已有 ID
+    if let Ok(content) = fs::read_to_string(&id_file).await {
+        let id = content.trim().to_string();
+        if !id.is_empty() {
+            info!("已加载持久化设备 ID: {}", id);
+            return id;
+        }
+    }
+
+    // 首次：生成新 UUID 并写入文件
+    let new_id = Uuid::new_v4().to_string();
+    if let Err(e) = fs::create_dir_all(dir).await {
+        warn!("创建互传目录失败: {}", e);
+    }
+    if let Err(e) = fs::write(&id_file, &new_id).await {
+        warn!("写入设备 ID 文件失败: {}", e);
+    } else {
+        info!("已生成并保存新设备 ID: {}", new_id);
+    }
+    new_id
 }
 
 /// 停止传输管理器
@@ -73,23 +109,44 @@ pub async fn lan_transfer_get_local_device(port: u16) -> Result<String> {
 }
 
 /// 获取已发现的设备列表
+/// 若设备列表为空，在后台触发 fallback 子网扫描（非阻塞，避免卡住 Dart UI）
 pub async fn lan_transfer_get_devices() -> Result<Vec<String>> {
-    let manager_guard = MANAGER.read().await;
+    use crate::discovery::DiscoveryService;
+    let local_device_id = DiscoveryService::get_device_id();
 
-    if let Some(manager) = manager_guard.as_ref() {
-        let mut devices = manager.get_discovered_devices().await;
-        if devices.is_empty() {
-            let _ = manager.refresh_devices_fallback_scan().await;
-            devices = manager.get_discovered_devices().await;
+    // 先取当前设备列表并序列化，释放读锁后再决定是否触发后台扫描
+    let (result, need_fallback) = {
+        let manager_guard = MANAGER.read().await;
+        if let Some(manager) = manager_guard.as_ref() {
+            let devices = manager.get_discovered_devices().await;
+            // 过滤本机（Mac 上 mDNS 可能会把自己也加进来）
+            let devices: Vec<_> = devices
+                .into_iter()
+                .filter(|d| d.device_id != local_device_id)
+                .collect();
+            let is_empty = devices.is_empty();
+            info!("lan_transfer_get_devices count={}", devices.len());
+            let serialized: Result<Vec<String>> = devices
+                .iter()
+                .map(|d| serde_json::to_string(d).map_err(|e| anyhow::anyhow!(e)))
+                .collect();
+            (serialized, is_empty)
+        } else {
+            return Err(anyhow::anyhow!("Manager not started"));
         }
-        info!("lan_transfer_get_devices count={}", devices.len());
-        devices
-            .iter()
-            .map(|d| serde_json::to_string(d).map_err(|e| anyhow::anyhow!(e)))
-            .collect()
-    } else {
-        Err(anyhow::anyhow!("Manager not started"))
+    }; // manager_guard 在此释放
+
+    // 若无设备，在后台触发 fallback 扫描，不阻塞本次调用
+    if need_fallback {
+        tokio::spawn(async {
+            let guard = MANAGER.read().await;
+            if let Some(mgr) = guard.as_ref() {
+                let _ = mgr.refresh_devices_fallback_scan().await;
+            }
+        });
     }
+
+    result
 }
 
 /// 发送文本消息

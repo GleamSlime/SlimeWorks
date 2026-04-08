@@ -1,0 +1,1 @@
+flutter clean && cd rust && cargo clean && flutter pub get && cd ../ && flutter_rust_bridge_codegen generate && flutter packages pub run build_runner build --delete-conflicting-outputs

@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 
-/// 待处理请求组件
+/// 待处理请求列表（用于 BottomSheet 展示）
 class PendingRequests extends StatelessWidget {
   final List<TransferItem> requests;
   final Function(String) onAccept;
@@ -22,31 +22,80 @@ class PendingRequests extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Get.isDarkMode;
 
-    return ListView.separated(
-      shrinkWrap: true,
-      itemCount: requests.length,
-      separatorBuilder: (context, index) => SizedBox(height: AppTheme.metrics.kSpace12),
-      itemBuilder: (context, index) {
-        final request = requests[index];
-        return _PendingRequestCard(
-          request: request,
-          isDark: isDark,
-          onAccept: () => onAccept(request.transferId),
-          onReject: () => onReject(request.transferId),
-          onTrust: () {
-            final device = DeviceInfo(
-              deviceId: request.senderDeviceId,
-              deviceName: request.senderDeviceName,
-              deviceType: 'Unknown',
-              ipAddress: '',
-              port: 0,
-              discoveredAt: DateTime.now().toIso8601String(),
-              isOnline: true,
-            );
-            onTrust(device);
-          },
-        );
-      },
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 顶部拖拽指示条
+        Center(
+          child: Container(
+            margin: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
+            width: scaleW(36),
+            height: scaleW(4),
+            decoration: BoxDecoration(
+              color: isDark ? DarkColors.white20 : LightColors.black20,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.metrics.kSpace20,
+            AppTheme.metrics.kSpace16,
+            AppTheme.metrics.kSpace20,
+            AppTheme.metrics.kSpace8,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.download_outlined,
+                color: isDark ? DarkColors.primary : LightColors.primary,
+                size: scaleW(22),
+              ),
+              SizedBox(width: AppTheme.metrics.kSpace8),
+              Expanded(
+                child: Text(
+                  '收到传输请求 (${requests.length})',
+                  style: AppTextStyles.h6(fontWeight: AppFontWeights.semiBold),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Flexible(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: EdgeInsets.fromLTRB(
+              AppTheme.metrics.kSpace16,
+              0,
+              AppTheme.metrics.kSpace16,
+              AppTheme.metrics.kSpace24,
+            ),
+            itemCount: requests.length,
+            separatorBuilder: (_, x) => SizedBox(height: AppTheme.metrics.kSpace8),
+            itemBuilder: (context, index) {
+              final request = requests[index];
+              return _PendingRequestCard(
+                request: request,
+                isDark: isDark,
+                onAccept: () => onAccept(request.transferId),
+                onReject: () => onReject(request.transferId),
+                onTrust: () {
+                  final device = DeviceInfo(
+                    deviceId: request.senderDeviceId,
+                    deviceName: request.senderDeviceName,
+                    deviceType: 'Unknown',
+                    ipAddress: '',
+                    port: 0,
+                    discoveredAt: DateTime.now().toIso8601String(),
+                    isOnline: true,
+                  );
+                  onTrust(device);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -76,35 +125,44 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = widget.isDark ? DarkColors.primary : LightColors.primary;
+
     return Container(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       decoration: BoxDecoration(
         color: widget.isDark ? DarkColors.background1 : LightColors.background1,
         border: Border.all(color: widget.isDark ? DarkColors.white10 : LightColors.black10),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 发送信息头部
           Row(
             children: [
-              Icon(
-                _getTypeIcon(widget.request.transferType),
-                size: scaleW(32),
-                color: widget.isDark ? DarkColors.primary : LightColors.primary,
+              Container(
+                width: scaleW(40),
+                height: scaleW(40),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  _getTypeIcon(widget.request.transferType),
+                  size: scaleW(20),
+                  color: primaryColor,
+                ),
               ),
-
               SizedBox(width: AppTheme.metrics.kSpace12),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       widget.request.senderDeviceName,
-                      style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold),
+                      style: AppTextStyles.body2(fontWeight: AppFontWeights.semiBold),
                     ),
-                    SizedBox(height: AppTheme.metrics.kSpace4),
+                    SizedBox(height: AppTheme.metrics.kSpace2),
                     Text(
                       '请求发送${_getTypeText(widget.request.transferType)}',
                       style: AppTextStyles.caption(
@@ -117,77 +175,104 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
             ],
           ),
 
-          SizedBox(height: AppTheme.metrics.kSpace12),
-
-          // 内容信息
-          if (widget.request.fileName != null)
-            Text('文件: ${widget.request.fileName}', style: AppTextStyles.body2())
-          else if (widget.request.textContent != null)
+          // 内容预览
+          if (widget.request.fileName != null || widget.request.textContent != null) ...[
+            SizedBox(height: AppTheme.metrics.kSpace10),
             Container(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace12,
+                vertical: AppTheme.metrics.kSpace8,
+              ),
               decoration: BoxDecoration(
-                color: widget.isDark ? DarkColors.white20 : LightColors.black20,
-                borderRadius: BorderRadius.circular(12),
+                color: widget.isDark ? DarkColors.white10 : LightColors.black10,
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                widget.request.textContent!,
-                style: AppTextStyles.body2(),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-          // 文件大小
-          if (widget.request.fileSize != null) ...[
-            SizedBox(height: AppTheme.metrics.kSpace4),
-            Text(
-              '大小: ${_formatFileSize(widget.request.fileSize!)}',
-              style: AppTextStyles.caption(
-                color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.request.fileName ?? widget.request.textContent ?? '',
+                      style: AppTextStyles.caption(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (widget.request.fileSize != null) ...[
+                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    Text(
+                      _formatFileSize(widget.request.fileSize!),
+                      style: AppTextStyles.caption(
+                        color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
 
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          SizedBox(height: AppTheme.metrics.kSpace12),
 
-          // 信任选项
-          CheckboxListTile(
-            value: _trustDevice,
-            onChanged: (value) => setState(() => _trustDevice = value ?? false),
-            title: Text('信任此设备', style: AppTextStyles.body2()),
-            subtitle: Text(
-              '自动接受来自此设备的传输',
-              style: AppTextStyles.caption(
-                color: widget.isDark ? DarkColors.white80 : LightColors.black80,
-              ),
+          // 信任选项（精简样式）
+          GestureDetector(
+            onTap: () => setState(() => _trustDevice = !_trustDevice),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: scaleW(20),
+                  height: scaleW(20),
+                  child: Checkbox(
+                    value: _trustDevice,
+                    onChanged: (v) => setState(() => _trustDevice = v ?? false),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace8),
+                Text(
+                  '信任此设备（下次自动接收）',
+                  style: AppTextStyles.caption(
+                    color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+                  ),
+                ),
+              ],
             ),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
           ),
 
           SizedBox(height: AppTheme.metrics.kSpace12),
 
           // 操作按钮
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(
-                onPressed: () {
-                  widget.onReject();
-                },
-                child: const Text('拒绝'),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: widget.onReject,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red, width: 0.8),
+                    padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('拒绝'),
+                ),
               ),
-
               SizedBox(width: AppTheme.metrics.kSpace8),
-
-              ElevatedButton(
-                onPressed: () {
-                  if (_trustDevice) {
-                    widget.onTrust();
-                  }
-                  widget.onAccept();
-                },
-                child: const Text('接受'),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (_trustDevice) widget.onTrust();
+                    widget.onAccept();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('接受'),
+                ),
               ),
             ],
           ),
@@ -199,13 +284,13 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
   IconData _getTypeIcon(TransferType type) {
     switch (type) {
       case TransferType.file:
-        return Icons.insert_drive_file;
+        return Icons.insert_drive_file_outlined;
       case TransferType.text:
-        return Icons.text_fields;
+        return Icons.text_snippet_outlined;
       case TransferType.image:
-        return Icons.image;
+        return Icons.image_outlined;
       case TransferType.video:
-        return Icons.video_library;
+        return Icons.video_file_outlined;
     }
   }
 

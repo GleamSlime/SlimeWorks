@@ -11,8 +11,11 @@ void lanTransferInit() =>
     RustLib.instance.api.crateApiLanTransferLanTransferInit();
 
 /// 创建并启动传输管理器
-Future<void> lanTransferStart({required int port}) =>
-    RustLib.instance.api.crateApiLanTransferLanTransferStart(port: port);
+Future<void> lanTransferStart({required int port, required String saveDir}) =>
+    RustLib.instance.api.crateApiLanTransferLanTransferStart(
+      port: port,
+      saveDir: saveDir,
+    );
 
 /// 停止传输管理器
 Future<void> lanTransferStop() =>

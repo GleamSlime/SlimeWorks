@@ -62,9 +62,14 @@ class NodeSettingsService extends GetxService {
   /// 熔断节点集合：本次运行期间验证失败的节点，不再自动请求。
   final Set<String> _circuitBreakedNodes = <String>{};
 
-  /// 已缩放图片的内存缓存（key = cacheKey，最多 120 条，LRU 淘汰）。
+  /// 已缩放图片的内存缓存（key = cacheKey，LRU 淘汰，总字节上限 80MB）。
   final Map<String, Uint8List> _resizedBytesCache = {};
-  static const _kBytesCacheMax = 120;
+
+  /// 当前缓存总字节数，用于 LRU 淘汰判断。
+  int _resizedBytesCacheSize = 0;
+
+  /// 缓存总字节上限：80MB，防止大量远程封面导致内存飙升。
+  static const int _kBytesCacheMaxBytes = 80 * 1024 * 1024;
 
   Future<void> init() async {
     if (_isInitialized) {

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -708,11 +707,14 @@ class MobileSidebarState extends State<MobileSidebar> {
               Positioned(
                 left: 0,
                 top: 0,
-                bottom: 0,
-                width: scaleW(15), // 边缘检测区域宽度（缩小避免遮挡左侧按钮）
+                // bottom: 0,
+                width: scaleW(12), // 边缘检测区域宽度（缩小避免遮挡左侧按钮）
+                height: scaleH(140),
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onHorizontalDragStart: (details) {
+                    // 若当前有子页面（可返回），不拦截手势，让 Navigator 处理返回
+                    if (Navigator.of(context).canPop()) return;
                     setState(() {
                       _isDragging = true;
                       _dragOffset = 0;
@@ -745,11 +747,12 @@ class MobileSidebarState extends State<MobileSidebar> {
                       });
                     }
                   },
+                  // child: Container(color: Colors.red),
                   child: Container(color: Colors.transparent),
                 ),
               ),
 
-            // 背景遮罩层
+            // 背景遮罩层（不使用 BackdropFilter 以避免移动端卡顿）
             if (widget.isExpanded || _isDragging)
               Positioned.fill(
                 child: GestureDetector(
@@ -759,15 +762,8 @@ class MobileSidebarState extends State<MobileSidebar> {
                       widget.controller.closeSidebar();
                     }
                   },
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 4 * maskOpacity, sigmaY: 4 * maskOpacity),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).hintColor.withAlpha(((255 * maskOpacity) * 0.4).toInt()),
-                      ),
-                    ),
+                  child: Container(
+                    color: Colors.black.withAlpha(((255 * maskOpacity) * 0.4).toInt()),
                   ),
                 ),
               ),

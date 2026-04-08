@@ -4,6 +4,9 @@ use std::convert::Infallible;
 use std::fs;
 use std::path::Path;
 
+/// 视频/音频流式传输的单次切片上限（2MB）
+const VIDEO_CHUNK_SIZE: u64 = 2 * 1024 * 1024;
+
 /// 处理媒体文件请求 GET /node/media
 pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     let query = req.uri().query().unwrap_or("");
@@ -60,12 +63,19 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
         }
     }
 
-    // 处理 Range 请求
+    // 处理 Range 请求（视频/音频流式切片）
     if let Some(ref range) = range_header {
         return serve_range_request(path, range, total_length, &content_type);
     }
 
-    // 返回完整文件
+    // 视频/音频文件：无 Range 请求时主动返回 206 首切片（促使客户端改用 Range 请求）
+    // 这样视频播放器可以立即开始播放而无需等待整个文件传输完毕
+    if is_video_file(&file_path) || is_audio_file(&file_path) {
+        let end = (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1));
+        return serve_range_request(path, &format!("bytes=0-{}", end), total_length, &content_type);
+    }
+
+    // 图片/普通文件：直接读取返回（通常体积小，不必切片）
     match fs::read(path) {
         Ok(bytes) => Ok(Response::builder()
             .status(StatusCode::OK)
@@ -123,13 +133,16 @@ async fn serve_resized_cover(file_path: &str, width: u32) -> Result<Response<Bod
     }
 }
 
-/// 处理 Range 请求
+/// 处理 Range 请求：使用文件 seek 只读取所需字节范围，避免将整个大文件载入内存
+/// 同时限制单次响应体积（VIDEO_CHUNK_SIZE），让视频播放器通过多个 Range 请求流式播放
 fn serve_range_request(
     path: &Path,
     range: &str,
     total_length: u64,
     content_type: &str,
 ) -> Result<Response<Body>, Infallible> {
+    use std::io::{Read, Seek, SeekFrom};
+
     // 解析 Range: bytes=start-end
     let re = regex::Regex::new(r"bytes=(\d*)-(\d*)").unwrap();
     if let Some(captures) = re.captures(range) {
@@ -137,37 +150,65 @@ fn serve_range_request(
             .get(1)
             .and_then(|m| m.as_str().parse().ok())
             .unwrap_or(0);
-        let end: u64 = captures
+        let requested_end: u64 = captures
             .get(2)
             .and_then(|m| m.as_str().parse().ok())
             .unwrap_or(total_length.saturating_sub(1));
 
-        let bounded_end = end.min(total_length.saturating_sub(1));
-        let range_length = bounded_end - start + 1;
+        let bounded_end = requested_end.min(total_length.saturating_sub(1));
+        // 对视频/音频限制单次切片大小，防止一次性传输超大文件
+        let capped_end = if is_av_content_type(content_type) {
+            bounded_end.min(start + VIDEO_CHUNK_SIZE - 1)
+        } else {
+            bounded_end
+        };
+        let range_length = (capped_end - start + 1) as usize;
 
-        match fs::read(path) {
-            Ok(bytes) => {
-                let slice = bytes[(start as usize)..=(bounded_end as usize)].to_vec();
-                Ok(Response::builder()
-                    .status(StatusCode::PARTIAL_CONTENT)
-                    .header("Content-Type", content_type)
-                    .header("Content-Length", range_length.to_string())
-                    .header(
-                        "Content-Range",
-                        format!("bytes {}-{}/{}", start, bounded_end, total_length),
-                    )
-                    .header("Accept-Ranges", "bytes")
-                    .body(Body::from(slice))
-                    .unwrap())
+        // 打开文件并 seek 到 start，只读取所需字节
+        let mut file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => {
+                return Ok(error_plain(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to open file",
+                ));
             }
-            Err(_) => Ok(error_plain(
+        };
+
+        if file.seek(SeekFrom::Start(start)).is_err() {
+            return Ok(error_plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to read file",
-            )),
+                "failed to seek in file",
+            ));
         }
+
+        let mut buffer = vec![0u8; range_length];
+        if file.read_exact(&mut buffer).is_err() {
+            return Ok(error_plain(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to read file range",
+            ));
+        }
+
+        Ok(Response::builder()
+            .status(StatusCode::PARTIAL_CONTENT)
+            .header("Content-Type", content_type)
+            .header("Content-Length", range_length.to_string())
+            .header(
+                "Content-Range",
+                format!("bytes {}-{}/{}", start, capped_end, total_length),
+            )
+            .header("Accept-Ranges", "bytes")
+            .body(Body::from(buffer))
+            .unwrap())
     } else {
         Ok(error_plain(StatusCode::BAD_REQUEST, "invalid range header"))
     }
+}
+
+/// 判断 Content-Type 是否为视频/音频（需要切片限制）
+fn is_av_content_type(ct: &str) -> bool {
+    ct.starts_with("video/") || ct.starts_with("audio/")
 }
 
 /// 创建纯文本错误响应
@@ -231,14 +272,27 @@ fn is_image_file(path: &str) -> bool {
     IMAGE_EXTS.iter().any(|ext| lower.ends_with(ext))
 }
 
-/// 判断是否是音频/视频文件
-fn is_av_file(path: &str) -> bool {
-    const AV_EXTS: [&str; 20] = [
+/// 判断是否是视频文件
+fn is_video_file(path: &str) -> bool {
+    const VIDEO_EXTS: [&str; 9] = [
         "mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "flv", "ts",
+    ];
+    let lower = path.to_lowercase();
+    VIDEO_EXTS.iter().any(|ext| lower.ends_with(*ext))
+}
+
+/// 判断是否是音频文件
+fn is_audio_file(path: &str) -> bool {
+    const AUDIO_EXTS: [&str; 11] = [
         "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "ape", "aiff", "alac",
     ];
     let lower = path.to_lowercase();
-    AV_EXTS.iter().any(|ext| lower.ends_with(*ext))
+    AUDIO_EXTS.iter().any(|ext| lower.ends_with(*ext))
+}
+
+/// 判断是否是音频/视频文件（统一判断）
+fn is_av_file(path: &str) -> bool {
+    is_video_file(path) || is_audio_file(path)
 }
 
 /// 简单媒体请求处理器（不依赖 hyper Request）。
@@ -282,4 +336,72 @@ pub async fn handle_media_query(query: &str) -> Result<Vec<u8>, String> {
     }
 
     std::fs::read(path).map_err(|e| format!("read file failed: {}", e))
+}
+
+/// 判断文件路径是否为图片（公开，供 mod.rs 调用）。
+pub fn is_image_path(path: &str) -> bool {
+    is_image_file(path)
+}
+
+/// 支持 Range 请求的文件服务（供无 hyper 的原生 TCP 服务器调用）。
+/// 返回 (状态行, 头部 key-value 列表, 响应体字节)。
+/// 单次最大返回 VIDEO_CHUNK_SIZE，视频播放器通过多次 Range 请求流式拉取。
+pub fn serve_media_file_with_range(
+    file_path: &str,
+    range: Option<&str>,
+) -> Result<(String, Vec<(String, String)>, Vec<u8>), String> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let path = std::path::Path::new(file_path);
+    if !path.exists() {
+        return Err(format!("file not found: {}", file_path));
+    }
+    let metadata = std::fs::metadata(path).map_err(|e| format!("metadata error: {}", e))?;
+    let total_length = metadata.len();
+    let content_type = guess_media_content_type(file_path);
+
+    // 解析 Range 头，例如 "bytes=0-1048575"
+    let (start, end_requested) = if let Some(range_str) = range {
+        let re = regex::Regex::new(r"bytes=(\d*)-(\d*)").unwrap();
+        if let Some(caps) = re.captures(range_str) {
+            let s: u64 = caps.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
+            let e: u64 = caps
+                .get(2)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(total_length.saturating_sub(1));
+            (s, e)
+        } else {
+            (0, total_length.saturating_sub(1))
+        }
+    } else {
+        // 无 Range 时主动返回首个切片，促使播放器转用 Range 请求
+        (0, (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)))
+    };
+
+    let bounded_end = end_requested.min(total_length.saturating_sub(1));
+    // 对视频/音频限制单次最大传输量，防止将整个大文件载入内存
+    let is_av = is_video_file(file_path) || is_audio_file(file_path);
+    let capped_end = if is_av {
+        bounded_end.min(start + VIDEO_CHUNK_SIZE - 1)
+    } else {
+        bounded_end
+    };
+    let range_length = (capped_end - start + 1) as usize;
+
+    let mut file = std::fs::File::open(path).map_err(|e| format!("open file failed: {}", e))?;
+    file.seek(SeekFrom::Start(start)).map_err(|e| format!("seek failed: {}", e))?;
+    let mut buffer = vec![0u8; range_length];
+    file.read_exact(&mut buffer).map_err(|e| format!("read failed: {}", e))?;
+
+    let status = if range.is_some() { "206 Partial Content" } else { "206 Partial Content" };
+    let headers = vec![
+        ("Content-Type".to_string(), content_type),
+        ("Content-Length".to_string(), range_length.to_string()),
+        (
+            "Content-Range".to_string(),
+            format!("bytes {}-{}/{}", start, capped_end, total_length),
+        ),
+        ("Accept-Ranges".to_string(), "bytes".to_string()),
+    ];
+    Ok((status.to_string(), headers, buffer))
 }

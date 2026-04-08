@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:get_it/get_it.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/lan_transfer.dart' as rust_api;
 import 'package:slime_works/src/rust/frb_generated.dart';
@@ -56,7 +57,16 @@ class DeviceInfo {
 enum TransferType { file, text, image, video }
 
 /// 传输状�?
-enum TransferStatus { pending, accepted, rejected, transferring, completed, failed, cancelled }
+enum TransferStatus {
+  pending,
+  accepted,
+  rejected,
+  transferring,
+  completed,
+  failed,
+  cancelled,
+  queued,
+}
 
 /// 传输项模�?
 class TransferItem {
@@ -64,6 +74,9 @@ class TransferItem {
   final String senderDeviceId;
   final String senderDeviceName;
   final String receiverDeviceId;
+
+  /// 接收方设备名称（本地队列发送时保存，Rust 侧无此字段）
+  final String? receiverDeviceName;
   final TransferType transferType;
   final String? fileName;
   final int? fileSize;
@@ -80,6 +93,7 @@ class TransferItem {
     required this.senderDeviceId,
     required this.senderDeviceName,
     required this.receiverDeviceId,
+    this.receiverDeviceName,
     required this.transferType,
     this.fileName,
     this.fileSize,
@@ -92,12 +106,52 @@ class TransferItem {
     this.errorMessage,
   });
 
+  /// 浅拷贝，只替换指定字段
+  TransferItem copyWith({
+    String? transferId,
+    String? senderDeviceId,
+    String? senderDeviceName,
+    String? receiverDeviceId,
+    String? receiverDeviceName,
+    TransferType? transferType,
+    Object? fileName = _sentinel,
+    Object? fileSize = _sentinel,
+    Object? textContent = _sentinel,
+    Object? filePath = _sentinel,
+    TransferStatus? status,
+    double? progress,
+    String? createdAt,
+    String? updatedAt,
+    Object? errorMessage = _sentinel,
+  }) {
+    return TransferItem(
+      transferId: transferId ?? this.transferId,
+      senderDeviceId: senderDeviceId ?? this.senderDeviceId,
+      senderDeviceName: senderDeviceName ?? this.senderDeviceName,
+      receiverDeviceId: receiverDeviceId ?? this.receiverDeviceId,
+      receiverDeviceName: receiverDeviceName ?? this.receiverDeviceName,
+      transferType: transferType ?? this.transferType,
+      fileName: fileName == _sentinel ? this.fileName : fileName as String?,
+      fileSize: fileSize == _sentinel ? this.fileSize : fileSize as int?,
+      textContent: textContent == _sentinel ? this.textContent : textContent as String?,
+      filePath: filePath == _sentinel ? this.filePath : filePath as String?,
+      status: status ?? this.status,
+      progress: progress ?? this.progress,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      errorMessage: errorMessage == _sentinel ? this.errorMessage : errorMessage as String?,
+    );
+  }
+
+  static const Object _sentinel = Object();
+
   factory TransferItem.fromJson(Map<String, dynamic> json) {
     return TransferItem(
       transferId: json['transfer_id'] as String,
       senderDeviceId: json['sender_device_id'] as String,
       senderDeviceName: json['sender_device_name'] as String,
       receiverDeviceId: json['receiver_device_id'] as String,
+      receiverDeviceName: json['receiver_device_name'] as String?,
       transferType: _parseTransferType(json['transfer_type'] as String),
       fileName: json['file_name'] as String?,
       fileSize: json['file_size'] as int?,
@@ -142,9 +196,65 @@ class TransferItem {
         return TransferStatus.failed;
       case 'Cancelled':
         return TransferStatus.cancelled;
+      case 'Queued':
+        return TransferStatus.queued;
       default:
         return TransferStatus.pending;
     }
+  }
+
+  static String _transferTypeToString(TransferType type) {
+    switch (type) {
+      case TransferType.file:
+        return 'File';
+      case TransferType.text:
+        return 'Text';
+      case TransferType.image:
+        return 'Image';
+      case TransferType.video:
+        return 'Video';
+    }
+  }
+
+  static String _transferStatusToString(TransferStatus status) {
+    switch (status) {
+      case TransferStatus.pending:
+        return 'Pending';
+      case TransferStatus.accepted:
+        return 'Accepted';
+      case TransferStatus.rejected:
+        return 'Rejected';
+      case TransferStatus.transferring:
+        return 'Transferring';
+      case TransferStatus.completed:
+        return 'Completed';
+      case TransferStatus.failed:
+        return 'Failed';
+      case TransferStatus.cancelled:
+        return 'Cancelled';
+      case TransferStatus.queued:
+        return 'Queued';
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'transfer_id': transferId,
+      'sender_device_id': senderDeviceId,
+      'sender_device_name': senderDeviceName,
+      'receiver_device_id': receiverDeviceId,
+      'receiver_device_name': receiverDeviceName,
+      'transfer_type': _transferTypeToString(transferType),
+      'file_name': fileName,
+      'file_size': fileSize,
+      'text_content': textContent,
+      'file_path': filePath,
+      'status': _transferStatusToString(status),
+      'progress': progress,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+      'error_message': errorMessage,
+    };
   }
 }
 
@@ -227,7 +337,10 @@ class LanTransferService {
       await _ensureRustReady();
       logger.i('LAN Transfer start begin, port=$port');
       rust_api.lanTransferInit();
-      await rust_api.lanTransferStart(port: port);
+      // 获取 documents 目录才能在 iOS 等移动端保存文件
+      final docsDir = await getApplicationDocumentsDirectory();
+      final saveDir = '${docsDir.path}/LanTransfer';
+      await rust_api.lanTransferStart(port: port, saveDir: saveDir);
       _isRunning = true;
 
       // 定期刷新设备列表
@@ -237,17 +350,32 @@ class LanTransferService {
       await runSelfCheck(reason: 'start-service-success');
     } catch (e) {
       if (_isAddressInUseError(e)) {
-        logger.i('Port $port is in use, try restart once after stop');
+        logger.i('Port $port is in use, try restart with stop + retry');
         try {
           await rust_api.lanTransferStop();
         } catch (_) {}
 
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        await rust_api.lanTransferStart(port: port);
-        _isRunning = true;
-        _startDeviceRefresh();
-        logger.i('LAN Transfer service restarted on port $port');
-        await runSelfCheck(reason: 'start-service-restarted');
+        // 移动端 OS 释放端口可能需要更长时间，多次重试并递增等待间隔
+        final retryDelays = const [400, 800, 1500];
+        final docsDir = await getApplicationDocumentsDirectory();
+        final saveDir = '${docsDir.path}/LanTransfer';
+        for (int attempt = 0; attempt < retryDelays.length; attempt++) {
+          await Future<void>.delayed(Duration(milliseconds: retryDelays[attempt]));
+          try {
+            await rust_api.lanTransferStart(port: port, saveDir: saveDir);
+            _isRunning = true;
+            _startDeviceRefresh();
+            logger.i('LAN Transfer service restarted on port $port (attempt ${attempt + 1})');
+            await runSelfCheck(reason: 'start-service-restarted');
+            return;
+          } catch (retryErr) {
+            if (!_isAddressInUseError(retryErr) || attempt >= retryDelays.length - 1) {
+              logger.e('LAN Transfer restart attempt ${attempt + 1} failed: $retryErr');
+              rethrow;
+            }
+            logger.info('Port $port still in use, retrying (attempt ${attempt + 1})...');
+          }
+        }
         return;
       }
 

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/pages/lan_transfer/components/device_list.dart';
 import 'package:slime_works/pages/lan_transfer/components/transfer_actions.dart';
-import 'package:slime_works/pages/lan_transfer/components/transfer_history.dart';
+import 'package:slime_works/pages/lan_transfer/components/transfer_chat.dart';
 import 'package:slime_works/pages/lan_transfer/components/pending_requests.dart';
 import 'package:slime_works/pages/lan_transfer/components/scanning_animation.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
 
-/// 局域网传输页面
+/// 局域网互传页面
 class LanTransferScreen extends BasePage<LanTransferViewModel> {
   const LanTransferScreen({super.key});
 
@@ -18,225 +21,1105 @@ class LanTransferScreen extends BasePage<LanTransferViewModel> {
 
 class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTransferScreen> {
   @override
-  String get title => '局域网传输';
+  String get title => '互传';
 
   @override
   LanTransferViewModel createViewModel() => LanTransferViewModel();
 
   @override
+  bool get showAppBar => false;
+
+  @override
   bool get enableNetworkMonitoring => true;
+
+  /// 防止「附近设备」弹层被多次创建
+  bool _isDeviceSheetOpen = false;
 
   @override
   Future<void> onNetworkReconnected() async {
     await viewModel.startService();
-    await viewModel.refreshDevices();
+    if (viewModel.isScanning.value) await viewModel.refreshDevices();
+  }
+
+  ScreenChromeData _buildScreenChromeData(BuildContext context) {
+    final isDark = Get.isDarkMode;
+
+    return ScreenChromeData(
+      title: '互传',
+      toolbarHeight: AppTheme.metrics.kSpace48,
+      leading: Obx(() {
+        final isRunning = viewModel.isServiceRunning.value;
+
+        // 服务启停
+        return GestureDetector(
+          onTap: isRunning ? viewModel.stopService : viewModel.startService,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace10,
+              vertical: AppTheme.metrics.kSpace4,
+            ),
+            decoration: BoxDecoration(
+              color: isRunning
+                  ? Colors.red.withValues(alpha: 0.1)
+                  : Colors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              isRunning ? '停止' : '启动',
+              style: AppTextStyles.caption(color: isRunning ? Colors.red : Colors.green),
+            ),
+          ),
+        );
+      }),
+      actions: [
+        Obx(() {
+          final isScanning = viewModel.isScanning.value;
+          final deviceCount = viewModel.discoveredDevices.length;
+
+          return GestureDetector(
+            onTap: () => _showDeviceSheet(context),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace10,
+                vertical: AppTheme.metrics.kSpace4,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? DarkColors.background2 : LightColors.background2,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isScanning)
+                    SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: isDark ? DarkColors.primary : LightColors.primary,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.devices,
+                      size: 14,
+                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                    ),
+                  SizedBox(width: AppTheme.metrics.kSpace4),
+                  Text(
+                    deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
+                    style: AppTextStyles.caption(
+                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                    ),
+                  ),
+                  SizedBox(width: AppTheme.metrics.kSpace4),
+                  Icon(
+                    Icons.expand_more,
+                    size: 14,
+                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+      bottomBar: Obx(() {
+        final isRunning = viewModel.isServiceRunning.value;
+        final local = viewModel.localDevice.value;
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.metrics.kSpace10,
+            vertical: AppTheme.metrics.kSpace4,
+          ),
+          margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace4),
+          decoration: BoxDecoration(
+            color: isDark ? DarkColors.background2 : LightColors.background2,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isRunning ? Colors.green : Colors.grey,
+                ),
+              ),
+              SizedBox(width: AppTheme.metrics.kSpace4),
+              Text(
+                local != null ? local.ipAddress : '未连接',
+                style: AppTextStyles.caption(
+                  color: isDark ? DarkColors.white80 : LightColors.black80,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+      // toolbar: _LanTransferToolbar(
+      //   viewModel: viewModel,
+      //   onOpenDeviceSheet: () => _showDeviceSheet(context),
+      // ),
+    );
+  }
+
+  /// 弹出「附近设备」浮层面板
+  void _showDeviceSheet(BuildContext context) {
+    // 防止重复弹出
+    if (_isDeviceSheetOpen) return;
+    _isDeviceSheetOpen = true;
+    // 打开时自动开始搜索
+    if (!viewModel.isScanning.value) {
+      viewModel.startScanning();
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Get.isDarkMode ? DarkColors.background1 : LightColors.white100,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        builder: (_, scrollController) => _DeviceSheetContent(
+          viewModel: viewModel,
+          scrollController: scrollController,
+          onDeviceSelected: (device) {
+            Navigator.of(ctx).pop();
+            _navigateToChat(context, device: device);
+          },
+        ),
+      ),
+    ).whenComplete(() => _isDeviceSheetOpen = false);
+  }
+
+  /// 进入与指定对端设备的聊天页面
+  void _navigateToChat(
+    BuildContext context, {
+    DeviceInfo? device,
+    String? peerDeviceId,
+    String? peerDeviceName,
+  }) {
+    final id = peerDeviceId ?? device?.deviceId ?? '';
+    final name = peerDeviceName ?? device?.deviceName ?? '未知设备';
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _LanChatPage(
+          viewModel: viewModel,
+          peerDeviceId: id,
+          peerDeviceName: name,
+          initialDevice: device,
+        ),
+      ),
+    );
+  }
+
+  /// 显示会话列表的长按/右键菜单
+  void _showPeerContextMenu(
+    BuildContext context, {
+    required String deviceId,
+    required String deviceName,
+    required bool isPinned,
+    Offset? tapPosition,
+  }) {
+    final isDark = Get.isDarkMode;
+    // 桌面端（或提供了坐标时）使用弹出式菜单，移动端使用 BottomSheet
+    final isDesktopLike =
+        tapPosition != null ||
+        (!GetPlatform.isMobile && !GetPlatform.isAndroid && !GetPlatform.isIOS);
+
+    if (isDesktopLike && tapPosition != null) {
+      showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          tapPosition.dx,
+          tapPosition.dy,
+          tapPosition.dx + 1,
+          tapPosition.dy + 1,
+        ),
+        items: [
+          PopupMenuItem(
+            value: 'pin',
+            child: Row(
+              children: [
+                Icon(
+                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  size: 16,
+                  color: isDark ? DarkColors.primary : LightColors.primary,
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace8),
+                Text(isPinned ? '取消置顶' : '置顶会话'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'delete_history',
+            child: Row(
+              children: [
+                const Icon(Icons.delete_outline, size: 16, color: Colors.orange),
+                SizedBox(width: AppTheme.metrics.kSpace8),
+                const Text('删除历史', style: TextStyle(color: Colors.orange)),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'delete_all',
+            child: Row(
+              children: [
+                const Icon(Icons.delete_sweep_outlined, size: 16, color: Colors.red),
+                SizedBox(width: AppTheme.metrics.kSpace8),
+                const Text('删除会话及文件', style: TextStyle(color: Colors.red)),
+              ],
+            ),
+          ),
+        ],
+      ).then((value) {
+        if (value == 'pin') {
+          if (isPinned) {
+            viewModel.unpinPeer(deviceId);
+          } else {
+            viewModel.pinPeer(deviceId);
+          }
+        } else if (value == 'delete_history') {
+          viewModel.deleteHistoryForPeer(deviceId);
+        } else if (value == 'delete_all') {
+          viewModel.deleteConversationForPeer(deviceId);
+        }
+      });
+      return;
+    }
+
+    // 移动端 BottomSheet
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? DarkColors.background2 : LightColors.white100,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
+              decoration: BoxDecoration(
+                color: isDark ? DarkColors.white20 : LightColors.black20,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace16,
+                vertical: AppTheme.metrics.kSpace12,
+              ),
+              child: Text(
+                deviceName,
+                style: AppTextStyles.body2(fontWeight: AppFontWeights.semiBold),
+              ),
+            ),
+            Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
+            // 置顶 / 取消置顶
+            ListTile(
+              leading: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                color: isDark ? DarkColors.primary : LightColors.primary,
+              ),
+              title: Text(
+                isPinned ? '取消置顶' : '置顶会话',
+                style: TextStyle(color: isDark ? DarkColors.white80 : LightColors.black80),
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                if (isPinned) {
+                  viewModel.unpinPeer(deviceId);
+                } else {
+                  viewModel.pinPeer(deviceId);
+                }
+              },
+            ),
+            // 删除历史
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.orange),
+              title: const Text('删除历史', style: TextStyle(color: Colors.orange)),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                viewModel.deleteHistoryForPeer(deviceId);
+              },
+            ),
+            // 删除会话及文件
+            ListTile(
+              leading: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+              title: const Text('删除会话及文件', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                viewModel.deleteConversationForPeer(deviceId);
+              },
+            ),
+            SizedBox(height: AppTheme.metrics.kSpace8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget buildContent(BuildContext context) {
     return Obx(() {
-      // 待处理的请求弹窗
-      if (viewModel.pendingRequests.isNotEmpty) {
+      // 有待处理请求时弹出 BottomSheet（防止重复弹出）
+      final pending = viewModel.pendingRequests;
+      if (pending.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showPendingRequestDialog(context);
+          _showPendingRequestSheet(context);
         });
       }
 
-      return SingleChildScrollView(
-        padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 标题和状态
-            _buildHeader(context),
-
-            SizedBox(height: AppTheme.metrics.kSpace24),
-
-            // 扫描动画和设备列表
-            _buildDeviceSection(context),
-
-            SizedBox(height: AppTheme.metrics.kSpace24),
-
-            // 传输操作区域（选中设备后显示）
-            if (viewModel.selectedDevice.value != null) ...[
-              TransferActions(viewModel: viewModel),
-              SizedBox(height: AppTheme.metrics.kSpace24),
-            ],
-
-            // 传输历史
-            _buildTransferHistorySection(context),
-          ],
+      return ScreenChrome(
+        data: _buildScreenChromeData(context),
+        child: _PeerListSection(
+          viewModel: viewModel,
+          onNavigateToChat: (id, name) =>
+              _navigateToChat(context, peerDeviceId: id, peerDeviceName: name),
+          onContextMenu: _showPeerContextMenu,
         ),
       );
     });
   }
 
-  /// 构建页面头部
-  Widget _buildHeader(BuildContext context) {
-    final isDark = Get.isDarkMode;
+  /// 展示收到传输请求的 BottomSheet
+  void _showPendingRequestSheet(BuildContext context) {
+    if (viewModel.pendingRequests.isEmpty) return;
+    for (final req in viewModel.pendingRequests) {
+      viewModel.markRequestHandled(req.transferId);
+    }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '局域网传输',
-              style: AppTextStyles.h4(color: isDark ? DarkColors.white100 : LightColors.black100),
-            ),
-            SizedBox(height: AppTheme.metrics.kSpace8),
-            Obx(() {
-              final localDevice = viewModel.localDevice.value;
-              if (localDevice == null) {
-                return Text(
-                  '正在初始化...',
-                  style: AppTextStyles.body2(
-                    color: isDark ? DarkColors.white80 : LightColors.black80,
-                  ),
-                );
-              }
-
-              return Text(
-                '本机: ${localDevice.deviceName} (${localDevice.deviceType})',
-                style: AppTextStyles.body2(
-                  color: isDark ? DarkColors.white80 : LightColors.black80,
-                ),
-              );
-            }),
-          ],
-        ),
-
-        // 服务控制按钮
-        Obx(() {
-          final isRunning = viewModel.isServiceRunning.value;
-          return ElevatedButton.icon(
-            onPressed: isRunning ? viewModel.stopService : viewModel.startService,
-            icon: Icon(isRunning ? Icons.stop : Icons.play_arrow),
-            label: Text(isRunning ? '停止服务' : '启动服务'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isRunning ? Colors.red : Colors.green,
-              foregroundColor: Colors.white,
-            ),
-          );
-        }),
-      ],
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Get.isDarkMode ? DarkColors.background1 : LightColors.white100,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => PendingRequests(
+        requests: viewModel.pendingRequests.toList(),
+        onAccept: (id) {
+          viewModel.acceptTransfer(id);
+          if (viewModel.pendingRequests.isEmpty) Navigator.of(ctx).pop();
+        },
+        onReject: (id) {
+          viewModel.rejectTransfer(id);
+          if (viewModel.pendingRequests.isEmpty) Navigator.of(ctx).pop();
+        },
+        onTrust: viewModel.addTrustedDevice,
+      ),
     );
   }
+}
 
-  /// 构建设备区域
-  Widget _buildDeviceSection(BuildContext context) {
+// ─────────────────────────────────────────────────────────────────────────────
+// ScreenChromeData 工具栏
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 工具栏：显示本机状态 + 设备数量徽章 + 服务开关
+class _LanTransferToolbar extends StatelessWidget {
+  final LanTransferViewModel viewModel;
+  final VoidCallback onOpenDeviceSheet;
+
+  const _LanTransferToolbar({required this.viewModel, required this.onOpenDeviceSheet});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Get.isDarkMode;
+
+    return Obx(() {
+      final isRunning = viewModel.isServiceRunning.value;
+      final isScanning = viewModel.isScanning.value;
+      final local = viewModel.localDevice.value;
+      final deviceCount = viewModel.discoveredDevices.length;
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 本机简要信息
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace10,
+              vertical: AppTheme.metrics.kSpace4,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? DarkColors.background2 : LightColors.background2,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isRunning ? Colors.green : Colors.grey,
+                  ),
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace4),
+                Text(
+                  local != null ? local.ipAddress : '未连接',
+                  style: AppTextStyles.caption(
+                    color: isDark ? DarkColors.white80 : LightColors.black80,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(width: AppTheme.metrics.kSpace8),
+
+          // 附近设备 → 点击弹出设备浮层
+          GestureDetector(
+            onTap: onOpenDeviceSheet,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace10,
+                vertical: AppTheme.metrics.kSpace4,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? DarkColors.background2 : LightColors.background2,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isScanning)
+                    SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: isDark ? DarkColors.primary : LightColors.primary,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.devices,
+                      size: 14,
+                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                    ),
+                  SizedBox(width: AppTheme.metrics.kSpace4),
+                  Text(
+                    deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
+                    style: AppTextStyles.caption(
+                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                    ),
+                  ),
+                  SizedBox(width: AppTheme.metrics.kSpace4),
+                  Icon(
+                    Icons.expand_more,
+                    size: 14,
+                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          SizedBox(width: AppTheme.metrics.kSpace8),
+
+          // 服务启停
+          GestureDetector(
+            onTap: isRunning ? viewModel.stopService : viewModel.startService,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace10,
+                vertical: AppTheme.metrics.kSpace4,
+              ),
+              decoration: BoxDecoration(
+                color: isRunning
+                    ? Colors.red.withValues(alpha: 0.1)
+                    : Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                isRunning ? '停止' : '启动',
+                style: AppTextStyles.caption(color: isRunning ? Colors.red : Colors.green),
+              ),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 附近设备浮层（BottomSheet 内容）
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DeviceSheetContent extends StatelessWidget {
+  final LanTransferViewModel viewModel;
+  final ScrollController scrollController;
+  final Function(DeviceInfo) onDeviceSelected;
+
+  const _DeviceSheetContent({
+    required this.viewModel,
+    required this.scrollController,
+    required this.onDeviceSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Get.isDarkMode;
+
     return Obx(() {
       final isScanning = viewModel.isScanning.value;
       final devices = viewModel.discoveredDevices;
 
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('发现的设备 (${devices.length})', style: AppTextStyles.h5()),
-              if (isScanning)
-                TextButton.icon(
-                  onPressed: viewModel.stopScanning,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('停止扫描'),
-                )
-              else
-                TextButton.icon(
-                  onPressed: viewModel.startScanning,
-                  icon: const Icon(Icons.search),
-                  label: const Text('开始扫描'),
-                ),
-            ],
+          // 拖拽手柄
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
+              decoration: BoxDecoration(
+                color: isDark ? DarkColors.white20 : LightColors.black20,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
 
-          SizedBox(height: AppTheme.metrics.kSpace16),
-
-          // 扫描动画
-          if (isScanning && devices.isEmpty)
-            const ScanningAnimation()
-          // 设备列表
-          else if (devices.isNotEmpty)
-            DeviceList(
-              devices: devices,
-              selectedDevice: viewModel.selectedDevice.value,
-              onDeviceSelected: viewModel.selectDevice,
-              onDeviceTrust: viewModel.addTrustedDevice,
-              isTrustedDevice: viewModel.isTrustedDevice,
-            )
-          else
-            Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
-                child: Text(
-                  '未发现设备\n请确保设备在同一局域网内',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.body2(
-                    color: Get.isDarkMode ? DarkColors.white80 : LightColors.black80,
+          // 标题行
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppTheme.metrics.kSpace16,
+              AppTheme.metrics.kSpace12,
+              AppTheme.metrics.kSpace12,
+              AppTheme.metrics.kSpace8,
+            ),
+            child: Row(
+              children: [
+                Text('附近设备', style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold)),
+                if (devices.isNotEmpty) ...[
+                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppTheme.metrics.kSpace8,
+                      vertical: AppTheme.metrics.kSpace2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark ? DarkColors.white10 : LightColors.black10,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('${devices.length}', style: AppTextStyles.caption()),
                   ),
+                ],
+                const Spacer(),
+                // 扫描控制按钮
+                GestureDetector(
+                  onTap: viewModel.toggleScanning,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppTheme.metrics.kSpace10,
+                      vertical: AppTheme.metrics.kSpace8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isScanning
+                          ? Colors.orange.withValues(alpha: 0.1)
+                          : (isDark ? DarkColors.primary : LightColors.primary).withValues(
+                              alpha: 0.1,
+                            ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isScanning)
+                          SizedBox(
+                            width: scaleW(12),
+                            height: scaleW(12),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Colors.orange,
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.radar,
+                            size: scaleW(14),
+                            color: isDark ? DarkColors.primary : LightColors.primary,
+                          ),
+                        SizedBox(width: AppTheme.metrics.kSpace4),
+                        Text(
+                          isScanning ? '搜索中' : '搜索',
+                          style: AppTextStyles.caption(
+                            color: isScanning
+                                ? Colors.orange
+                                : (isDark ? DarkColors.primary : LightColors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
+
+          // 内容区
+          Expanded(
+            child: isScanning && devices.isEmpty
+                ? const Center(child: ScanningAnimation())
+                : devices.isNotEmpty
+                ? ListView.separated(
+                    controller: scrollController,
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                    itemCount: devices.length,
+                    separatorBuilder: (_, _) => SizedBox(height: AppTheme.metrics.kSpace8),
+                    itemBuilder: (ctx, i) {
+                      final device = devices[i];
+                      return DeviceList(
+                        devices: [device],
+                        selectedDevice: viewModel.selectedDevice.value,
+                        onDeviceSelected: onDeviceSelected,
+                        onDeviceTrust: viewModel.addTrustedDevice,
+                        isTrustedDevice: viewModel.isTrustedDevice,
+                      );
+                    },
+                  )
+                : Center(
+                    child: _EmptyDevicesPlaceholder(
+                      isServiceRunning: viewModel.isServiceRunning.value,
+                      onStartScan: viewModel.startScanning,
+                    ),
+                  ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+/// 无设备时的占位图
+class _EmptyDevicesPlaceholder extends StatelessWidget {
+  final bool isServiceRunning;
+  final VoidCallback onStartScan;
+
+  const _EmptyDevicesPlaceholder({required this.isServiceRunning, required this.onStartScan});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Get.isDarkMode;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.wifi_off,
+            size: scaleW(40),
+            color: isDark ? DarkColors.white40 : LightColors.black40,
+          ),
+          SizedBox(height: AppTheme.metrics.kSpace12),
+          Text(
+            '点击「搜索」发现附近设备',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80),
+          ),
+          SizedBox(height: AppTheme.metrics.kSpace16),
+          GestureDetector(
+            onTap: onStartScan,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace20,
+                vertical: AppTheme.metrics.kSpace10,
+              ),
+              decoration: BoxDecoration(
+                color: (isDark ? DarkColors.primary : LightColors.primary).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '开始搜索',
+                style: AppTextStyles.body2(
+                  color: isDark ? DarkColors.primary : LightColors.primary,
                 ),
               ),
             ),
-        ],
-      );
-    });
-  }
-
-  /// 构建传输历史区域
-  Widget _buildTransferHistorySection(BuildContext context) {
-    return Obx(() {
-      final history = viewModel.transferHistory;
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('传输历史 (${history.length})', style: AppTextStyles.h5()),
-
-          SizedBox(height: AppTheme.metrics.kSpace16),
-
-          if (history.isEmpty)
-            Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
-                child: Text(
-                  '暂无传输记录',
-                  style: AppTextStyles.body2(
-                    color: Get.isDarkMode ? DarkColors.white80 : LightColors.black80,
-                  ),
-                ),
-              ),
-            )
-          else
-            TransferHistory(items: history, onCancel: viewModel.cancelTransfer),
-        ],
-      );
-    });
-  }
-
-  /// 显示待处理请求对话框
-  void _showPendingRequestDialog(BuildContext context) {
-    if (viewModel.pendingRequests.isEmpty) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('收到传输请求'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: PendingRequests(
-            requests: viewModel.pendingRequests,
-            onAccept: viewModel.acceptTransfer,
-            onReject: viewModel.rejectTransfer,
-            onTrust: viewModel.addTrustedDevice,
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('关闭')),
         ],
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 对端设备列表（主屏传输记录入口）
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PeerListSection extends StatelessWidget {
+  final LanTransferViewModel viewModel;
+  final void Function(String deviceId, String deviceName) onNavigateToChat;
+  final void Function(
+    BuildContext ctx, {
+    required String deviceId,
+    required String deviceName,
+    required bool isPinned,
+    Offset? tapPosition,
+  })
+  onContextMenu;
+
+  const _PeerListSection({
+    required this.viewModel,
+    required this.onNavigateToChat,
+    required this.onContextMenu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Get.isDarkMode;
+
+    return Obx(() {
+      final peers = viewModel.transferHistoryPeers;
+
+      if (peers.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.forum_outlined,
+                size: scaleW(52),
+                color: isDark ? DarkColors.white20 : LightColors.black20,
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace16),
+              Text(
+                '暂无会话',
+                style: AppTextStyles.body1(
+                  color: isDark ? DarkColors.white40 : LightColors.black40,
+                ),
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace8),
+              Text(
+                '点击「附近设备」开始',
+                style: AppTextStyles.body2(
+                  color: isDark ? DarkColors.white20 : LightColors.black20,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView.separated(
+        padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
+        itemCount: peers.length,
+        separatorBuilder: (_, _) => Divider(
+          height: 1,
+          indent: scaleW(72),
+          color: isDark ? DarkColors.white10 : LightColors.black10,
+        ),
+        itemBuilder: (ctx, i) {
+          final peer = peers[i];
+          return _PeerListItem(
+            deviceId: peer.deviceId,
+            deviceName: peer.deviceName,
+            lastItem: peer.lastItem,
+            isPinned: peer.isPinned,
+            isDark: isDark,
+            onTap: () => onNavigateToChat(peer.deviceId, peer.deviceName),
+            onContextMenu: ({Offset? tapPosition}) => onContextMenu(
+              ctx,
+              deviceId: peer.deviceId,
+              deviceName: peer.deviceName,
+              isPinned: peer.isPinned,
+              tapPosition: tapPosition,
+            ),
+          );
+        },
+      );
+    });
+  }
+}
+
+/// 单个对端设备行
+class _PeerListItem extends StatelessWidget {
+  final String deviceId;
+  final String deviceName;
+  final dynamic lastItem; // TransferItem
+  final bool isPinned;
+  final bool isDark;
+  final VoidCallback onTap;
+  final void Function({Offset? tapPosition}) onContextMenu;
+
+  const _PeerListItem({
+    required this.deviceId,
+    required this.deviceName,
+    required this.lastItem,
+    required this.isPinned,
+    required this.isDark,
+    required this.onTap,
+    required this.onContextMenu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final String preview = _buildPreview();
+    final String timeStr = _formatTime(lastItem.createdAt as String);
+
+    return Material(
+      color: Colors.transparent,
+      child: GestureDetector(
+        onSecondaryTapUp: (details) => onContextMenu(tapPosition: details.globalPosition),
+        onLongPress: () => onContextMenu(),
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(5),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace16,
+              vertical: AppTheme.metrics.kSpace12,
+            ),
+            child: Row(
+              children: [
+                // 头像
+                Container(
+                  width: scaleW(48),
+                  height: scaleW(48),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(_deviceIcon(deviceName), size: scaleW(22), color: primaryColor),
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace12),
+                // 文本区
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (isPinned) ...[
+                            Icon(
+                              Icons.push_pin,
+                              size: scaleW(12),
+                              color: isDark ? DarkColors.white40 : LightColors.black40,
+                            ),
+                            SizedBox(width: AppTheme.metrics.kSpace4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              deviceName,
+                              style: AppTextStyles.body2(fontWeight: AppFontWeights.semiBold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: AppTheme.metrics.kSpace8),
+                          Text(
+                            timeStr,
+                            style: AppTextStyles.caption(
+                              color: isDark ? DarkColors.white40 : LightColors.black40,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: AppTheme.metrics.kSpace4),
+                      Text(
+                        preview,
+                        style: AppTextStyles.caption(
+                          color: isDark ? DarkColors.white40 : LightColors.black40,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace8),
+                Icon(
+                  Icons.chevron_right,
+                  size: scaleW(18),
+                  color: isDark ? DarkColors.white20 : LightColors.black20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _buildPreview() {
+    final item = lastItem;
+    try {
+      if (item.transferType == TransferType.text && item.textContent != null) {
+        return item.textContent as String;
+      }
+      if (item.fileName != null) return '[文件] ${item.fileName}';
+    } catch (_) {}
+    return '';
+  }
+
+  String _formatTime(String dateStr) {
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    final hm = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (day == today) return hm;
+    if (day == today.subtract(const Duration(days: 1))) return '昨天';
+    return '${dt.month}/${dt.day}';
+  }
+
+  IconData _deviceIcon(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('iphone') || lower.contains('ios')) return Icons.phone_iphone;
+    if (lower.contains('ipad')) return Icons.tablet_mac;
+    if (lower.contains('mac')) return Icons.laptop_mac;
+    if (lower.contains('android')) return Icons.phone_android;
+    if (lower.contains('windows')) return Icons.desktop_windows;
+    return Icons.devices;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 与指定设备的聊天页
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LanChatPage extends StatefulWidget {
+  final LanTransferViewModel viewModel;
+  final String peerDeviceId;
+  final String peerDeviceName;
+
+  /// 若从「附近设备」直接进入，传入 DeviceInfo 并自动选中
+  final DeviceInfo? initialDevice;
+
+  const _LanChatPage({
+    required this.viewModel,
+    required this.peerDeviceId,
+    required this.peerDeviceName,
+    this.initialDevice,
+  });
+
+  @override
+  State<_LanChatPage> createState() => _LanChatPageState();
+}
+
+class _LanChatPageState extends State<_LanChatPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 进入聊天页时，如果对端在线则自动选中
+    final device =
+        widget.initialDevice ??
+        widget.viewModel.discoveredDevices.firstWhereOrNull(
+          (d) => d.deviceId == widget.peerDeviceId,
+        );
+    if (device != null) {
+      widget.viewModel.selectDevice(device);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.viewModel.unselectDevice();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Get.isDarkMode;
+    final bg = isDark ? DarkColors.background5 : LightColors.background5;
+    return ScreenChrome(
+      data: ScreenChromeData(
+        // title: widget.peerDeviceName,
+        titleWidget: _buildChatTitleWidget(context),
+        toolbarHeight: AppTheme.metrics.kSpace48,
+        leading: IconButton(
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints(minWidth: scaleW(32), minHeight: scaleW(32)),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            size: scaleW(18),
+            color: isDark ? DarkColors.white80 : LightColors.black80,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      child: Container(
+        color: bg,
+        child: Column(
+          children: [
+            Expanded(
+              child: Obx(() {
+                final localId = widget.viewModel.localDevice.value?.deviceId ?? '';
+                final localName = widget.viewModel.localDevice.value?.deviceName ?? '我';
+                final items = widget.viewModel.transferHistoryForPeer(widget.peerDeviceId);
+                return TransferChatView(
+                  items: items,
+                  localDeviceId: localId,
+                  localDeviceName: localName,
+                  peerDeviceId: widget.peerDeviceId,
+                  onCancel: (id) => widget.viewModel.cancelTransfer(id),
+                  onDelete: (id) => widget.viewModel.deleteTransferItem(id),
+                  onDeleteWithFile: (id) =>
+                      widget.viewModel.deleteTransferItem(id, deleteFile: true),
+                  onRetry: (id) => widget.viewModel.retryTransfer(id),
+                );
+              }),
+            ),
+            // 发送底栏：始终显示（即使对端离线也支持排队发送）
+            TransferActions(
+              viewModel: widget.viewModel,
+              peerDeviceId: widget.peerDeviceId,
+              peerDeviceName: widget.peerDeviceName,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatTitleWidget(BuildContext context) {
+    return Obx(() {
+      final isOnline = widget.viewModel.discoveredDevices.any(
+        (d) => d.deviceId == widget.peerDeviceId,
+      );
+      // 使用 IntrinsicWidth 包裹，避免 Expanded 在桌面端 ScrollView 无界宽度下崩溃
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.peerDeviceName,
+            style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(width: AppTheme.metrics.kSpace8),
+          // 在线状态指示点
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isOnline ? Colors.green : Colors.grey,
+            ),
+          ),
+        ],
+      );
+    });
   }
 }

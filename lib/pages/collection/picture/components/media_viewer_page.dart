@@ -278,11 +278,16 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     final item = widget.items[index];
     final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (item.kind == media_api.MediaKind.video || item.kind == media_api.MediaKind.audio) {
+      // 构建封面 URL：本地视频用文件路径，远程视频用节点封面 URL（mode=cover）
+      final coverSource = widget.viewModel.buildMediaSource(
+        item,
+        collectionId: widget.collectionId,
+        isCover: true,
+      );
       return _VideoPreview(
         source: source,
         title: item.title,
-        // 音频文件尝试异步取封面；视频用文件路径本身（原生层可提取帧）
-        coverSource: null,
+        coverSource: coverSource,
         onSwipeDelta: _handleSwipeDelta,
         onSwipeEnd: () => _scrollAccum = 0,
         isAudio: item.kind == media_api.MediaKind.audio,

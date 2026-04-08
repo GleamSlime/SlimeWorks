@@ -89,6 +89,11 @@ impl LanTransferManager {
         }
     }
 
+    /// 设置文件保存目录（从 Dart 注入 documents 路径）
+    pub async fn set_save_dir(&self, dir: String) {
+        self.transfer.read().await.set_save_dir(dir).await;
+    }
+
     /// 获取已发现的设备列表
     pub async fn get_discovered_devices(&self) -> Vec<DeviceInfo> {
         self.discovery.read().await.get_discovered_devices().await

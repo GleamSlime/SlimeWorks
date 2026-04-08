@@ -106,7 +106,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace16),
                 Text(
-                  '这是一个功能强大的 macOS 和 Windows 桌面应用',
+                  // '这是一个功能强大的 macOS 和 Windows 桌面应用',
+                  '',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),

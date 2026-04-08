@@ -372,7 +372,10 @@ abstract class RustLibApi extends BaseApi {
     required String text,
   });
 
-  Future<void> crateApiLanTransferLanTransferStart({required int port});
+  Future<void> crateApiLanTransferLanTransferStart({
+    required int port,
+    required String saveDir,
+  });
 
   Future<void> crateApiLanTransferLanTransferStop();
 
@@ -3151,12 +3154,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiLanTransferLanTransferStart({required int port}) {
+  Future<void> crateApiLanTransferLanTransferStart({
+    required int port,
+    required String saveDir,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_16(port, serializer);
+          sse_encode_String(saveDir, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3169,14 +3176,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiLanTransferLanTransferStartConstMeta,
-        argValues: [port],
+        argValues: [port, saveDir],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiLanTransferLanTransferStartConstMeta =>
-      const TaskConstMeta(debugName: "lan_transfer_start", argNames: ["port"]);
+      const TaskConstMeta(
+        debugName: "lan_transfer_start",
+        argNames: ["port", "saveDir"],
+      );
 
   @override
   Future<void> crateApiLanTransferLanTransferStop() {

@@ -5,6 +5,8 @@ library;
 /// 移动端：只能创建客户端
 
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/websocket_manager.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
 import 'dart:async';
@@ -196,7 +198,9 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
               }
               try {
                 final List<dynamic> jsonList = json.decode(jsonStr);
-                final clients = jsonList.map((item) => ClientInfo.fromJson(item as Map<String, dynamic>)).toList();
+                final clients = jsonList
+                    .map((item) => ClientInfo.fromJson(item as Map<String, dynamic>))
+                    .toList();
                 if (mounted) {
                   setState(() {
                     _clients = clients;
@@ -318,180 +322,236 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('WebSocket 测试')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 服务器配置
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _hostController,
-                    decoration: const InputDecoration(labelText: '主机', border: OutlineInputBorder()),
+    return ScreenChrome(
+      data: const ScreenChromeData(title: 'WebSocket 测试'),
+      child: Scaffold(
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 服务器配置
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _hostController,
+                      decoration: const InputDecoration(
+                        labelText: '主机',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _portController,
-                    decoration: const InputDecoration(labelText: '端口', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 100,
+                    child: TextField(
+                      controller: _portController,
+                      decoration: const InputDecoration(
+                        labelText: '端口',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-            // 服务器控制（仅 PC 端）
-            if (_wsManager.isServerSupported) ...[
+              // 服务器控制（仅 PC 端）
+              if (_wsManager.isServerSupported) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text('服务器控制', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _server == null ? _createServer : null,
+                              child: const Text('创建服务器'),
+                            ),
+                            ElevatedButton(
+                              onPressed: _server != null && !_isServerRunning ? _startServer : null,
+                              child: const Text('启动'),
+                            ),
+                            ElevatedButton(
+                              onPressed: _server != null && _isServerRunning ? _stopServer : null,
+                              child: const Text('停止'),
+                            ),
+                          ],
+                        ),
+                        if (_isServerRunning) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '在线客户端: $_clientCount',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  onPressed: _updateClients,
+                                  tooltip: '刷新列表',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text('客户端列表:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Container(
+                            height: 150,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: _clients.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      '暂无客户端连接',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    itemCount: _clients.length,
+                                    itemBuilder: (context, index) {
+                                      final client = _clients[index];
+                                      final connectedTime = DateTime.fromMillisecondsSinceEpoch(
+                                        client.connectedAt * 1000,
+                                      );
+                                      final duration = DateTime.now().difference(connectedTime);
+                                      final isSelected = _selectedClientId == client.id;
+
+                                      return ListTile(
+                                        dense: true,
+                                        selected: isSelected,
+                                        title: Text(
+                                          '${client.address} ${client.authenticated ? "✓" : "✗"}',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        subtitle: Text(
+                                          '连接时长: ${duration.inMinutes}分${duration.inSeconds % 60}秒',
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                        trailing: IconButton(
+                                          icon: const Icon(Icons.close, size: 16),
+                                          onPressed: () => _disconnectClientById(client.id),
+                                          tooltip: '断开连接',
+                                        ),
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedClientId = isSelected ? null : client.id;
+                                          });
+                                        },
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // 客户端控制
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('服务器控制', style: Theme.of(context).textTheme.titleMedium),
+                      Text('客户端控制', style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         children: [
-                          ElevatedButton(onPressed: _server == null ? _createServer : null, child: const Text('创建服务器')),
-                          ElevatedButton(onPressed: _server != null && !_isServerRunning ? _startServer : null, child: const Text('启动')),
-                          ElevatedButton(onPressed: _server != null && _isServerRunning ? _stopServer : null, child: const Text('停止')),
+                          ElevatedButton(
+                            onPressed: _client == null ? _createClient : null,
+                            child: const Text('创建客户端'),
+                          ),
+                          ElevatedButton(
+                            onPressed: _client != null && !_isClientConnected
+                                ? _connectClient
+                                : null,
+                            child: const Text('连接'),
+                          ),
+                          ElevatedButton(
+                            onPressed: _client != null && _isClientConnected
+                                ? _disconnectClient
+                                : null,
+                            child: const Text('断开'),
+                          ),
                         ],
                       ),
-                      if (_isServerRunning) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Row(
-                            children: [
-                              Text('在线客户端: $_clientCount', style: Theme.of(context).textTheme.bodyMedium),
-                              const SizedBox(width: 8),
-                              IconButton(icon: const Icon(Icons.refresh, size: 16), onPressed: _updateClients, tooltip: '刷新列表'),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('客户端列表:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Container(
-                          height: 150,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: _clients.isEmpty
-                              ? const Center(
-                                  child: Text('暂无客户端连接', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                )
-                              : ListView.builder(
-                                  itemCount: _clients.length,
-                                  itemBuilder: (context, index) {
-                                    final client = _clients[index];
-                                    final connectedTime = DateTime.fromMillisecondsSinceEpoch(client.connectedAt * 1000);
-                                    final duration = DateTime.now().difference(connectedTime);
-                                    final isSelected = _selectedClientId == client.id;
-
-                                    return ListTile(
-                                      dense: true,
-                                      selected: isSelected,
-                                      title: Text('${client.address} ${client.authenticated ? "✓" : "✗"}', style: const TextStyle(fontSize: 12)),
-                                      subtitle: Text('连接时长: ${duration.inMinutes}分${duration.inSeconds % 60}秒', style: const TextStyle(fontSize: 10)),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.close, size: 16),
-                                        onPressed: () => _disconnectClientById(client.id),
-                                        tooltip: '断开连接',
-                                      ),
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedClientId = isSelected ? null : client.id;
-                                        });
-                                      },
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-            ],
 
-            // 客户端控制
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('客户端控制', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ElevatedButton(onPressed: _client == null ? _createClient : null, child: const Text('创建客户端')),
-                        ElevatedButton(onPressed: _client != null && !_isClientConnected ? _connectClient : null, child: const Text('连接')),
-                        ElevatedButton(onPressed: _client != null && _isClientConnected ? _disconnectClient : null, child: const Text('断开')),
-                      ],
+              // 消息发送
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: const InputDecoration(
+                        labelText: '消息',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) {
+                        if (_wsManager.isServerSupported && _isServerRunning) {
+                          _broadcastMessage();
+                        } else if (_isClientConnected) {
+                          _sendMessage();
+                        }
+                      },
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_wsManager.isServerSupported && _isServerRunning)
+                    ElevatedButton(onPressed: _broadcastMessage, child: const Text('广播')),
+                  if (_isClientConnected)
+                    ElevatedButton(onPressed: _sendMessage, child: const Text('发送')),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // 消息发送
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: const InputDecoration(labelText: '消息', border: OutlineInputBorder()),
-                    onSubmitted: (_) {
-                      if (_wsManager.isServerSupported && _isServerRunning) {
-                        _broadcastMessage();
-                      } else if (_isClientConnected) {
-                        _sendMessage();
-                      }
+              // 日志
+              Text('日志', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: ListView.builder(
+                    reverse: true,
+                    itemCount: _logs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        child: Text(
+                          _logs[index],
+                          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                        ),
+                      );
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (_wsManager.isServerSupported && _isServerRunning) ElevatedButton(onPressed: _broadcastMessage, child: const Text('广播')),
-                if (_isClientConnected) ElevatedButton(onPressed: _sendMessage, child: const Text('发送')),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // 日志
-            Text('日志', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: ListView.builder(
-                  reverse: true,
-                  itemCount: _logs.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                      child: Text(_logs[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                    );
-                  },
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

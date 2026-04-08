@@ -57,7 +57,11 @@ class AppTheme {
     return base.copyWith(
       colorScheme: cs,
       primaryColor: accent,
-      appBarTheme: base.appBarTheme.copyWith(backgroundColor: cs.surface),
+      appBarTheme: base.appBarTheme.copyWith(
+        backgroundColor: cs.surface,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+      ),
       tabBarTheme: base.tabBarTheme.copyWith(
         indicator: UnderlineTabIndicator(borderSide: BorderSide(color: accent, width: 3)),
         labelColor: cs.onSurface,
@@ -131,6 +135,8 @@ class AppTheme {
         backgroundColor: LightColors.background1,
         foregroundColor: LightColors.black100,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
         titleTextStyle: AppTextStyles.h6(
           color: LightColors.black100,
@@ -253,6 +259,8 @@ class AppTheme {
         backgroundColor: DarkColors.background1,
         foregroundColor: DarkColors.white100,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
         titleTextStyle: AppTextStyles.h6(
           color: DarkColors.white100,

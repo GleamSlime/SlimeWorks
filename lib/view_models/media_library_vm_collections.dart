@@ -721,6 +721,70 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
+  /// 将单个远程集合的所有文件拉取到用户指定的本地目录。
+  Future<void> pullRemoteCollectionToLocal(String collectionId) async {
+    final nodeId = getRemoteNodeId(collectionId);
+    final rawCollectionId = getRemoteRawCollectionId(collectionId);
+    if (nodeId == null || rawCollectionId == null) {
+      showSnack('错误', '远程集合映射不存在');
+      return;
+    }
+
+    final collection = mergedCollections.firstWhereOrNull((c) => c.id == collectionId);
+    final title = collection?.title ?? '未命名集合';
+
+    final localDir = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择拉取目标目录');
+    if (localDir == null || localDir.isEmpty) return;
+
+    final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final collectionDir = Directory('$localDir${Platform.pathSeparator}$safeTitle');
+    await collectionDir.create(recursive: true);
+
+    isScanning.value = true;
+    int successFiles = 0;
+    int failFiles = 0;
+
+    try {
+      final items = await nodeSettingsService.fetchNodeMediaCollectionItems(
+        nodeId: nodeId,
+        collectionId: rawCollectionId,
+      );
+
+      for (int ii = 0; ii < items.length; ii++) {
+        final item = items[ii];
+        final filePath = (item['file_path'] ?? '').toString();
+        if (filePath.isEmpty) {
+          failFiles++;
+          continue;
+        }
+        final filename = filePath.split('/').last.split('\\').last;
+        final savePath = '${collectionDir.path}${Platform.pathSeparator}$filename';
+        scanStatusText.value = '下载 $title · $filename (${ii + 1}/${items.length})';
+        try {
+          await nodeSettingsService.downloadNodeFileTo(
+            nodeId: nodeId,
+            filePath: filePath,
+            savePath: savePath,
+          );
+          successFiles++;
+        } catch (_) {
+          failFiles++;
+        }
+      }
+    } catch (e) {
+      showSnack('错误', '获取集合 $title 失败: $e');
+    } finally {
+      isScanning.value = false;
+      scanStatusText.value = '';
+    }
+
+    if (failFiles == 0) {
+      showSnack('完成', '已拉取 $successFiles 个文件到 ${collectionDir.path}');
+    } else {
+      showSnack('部分完成', '成功 $successFiles 个，失败 $failFiles 个');
+    }
+  }
+
   /// 删除远程节点上某个集合的本地物理文件。
   /// 若删除数 ≥ 集合资源数，则同时从库中移除集合记录并清理缓存；
   /// 若所属文件夹因此变为空，也一并删除文件夹。

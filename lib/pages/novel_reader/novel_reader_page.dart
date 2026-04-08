@@ -384,8 +384,8 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     }
 
     // 桌面端布局
-    return Scaffold(
-      appBar: AppBar(
+    return ScreenChrome(
+      data: ScreenChromeData(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -396,7 +396,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
             }
           },
         ),
-        title: Row(
+        titleWidget: Row(
           children: [
             _buildHeroCover(32),
             const SizedBox(width: 8),
@@ -441,68 +441,70 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           }),
         ],
       ),
-      body: Row(
-        children: [
-          // 章节列表侧边栏（可调节宽度）
-          Obx(() {
-            final showList = controller.showChapterList.value;
-            final width = controller.chapterListWidth.value;
+      child: Scaffold(
+        body: Row(
+          children: [
+            // 章节列表侧边栏（可调节宽度）
+            Obx(() {
+              final showList = controller.showChapterList.value;
+              final width = controller.chapterListWidth.value;
 
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: showList ? width : 0,
-              child: showList
-                  ? Row(
-                      children: [
-                        // 章节列表内容
-                        Expanded(child: ChapterList(controller: controller)),
-                        // 可拖动的分隔条
-                        MouseRegion(
-                          cursor: SystemMouseCursors.resizeColumn,
-                          child: GestureDetector(
-                            onHorizontalDragUpdate: (details) {
-                              final newWidth = width + details.delta.dx;
-                              // 限制宽度范围：200-600
-                              controller.chapterListWidth.value = newWidth.clamp(200.0, 600.0);
-                            },
-                            child: Container(
-                              width: 8,
-                              color: Colors.transparent,
-                              child: Center(
-                                child: Container(width: 2, color: Theme.of(context).dividerColor),
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: showList ? width : 0,
+                child: showList
+                    ? Row(
+                        children: [
+                          // 章节列表内容
+                          Expanded(child: ChapterList(controller: controller)),
+                          // 可拖动的分隔条
+                          MouseRegion(
+                            cursor: SystemMouseCursors.resizeColumn,
+                            child: GestureDetector(
+                              onHorizontalDragUpdate: (details) {
+                                final newWidth = width + details.delta.dx;
+                                // 限制宽度范围：200-600
+                                controller.chapterListWidth.value = newWidth.clamp(200.0, 600.0);
+                              },
+                              child: Container(
+                                width: 8,
+                                color: Colors.transparent,
+                                child: Center(
+                                  child: Container(width: 2, color: Theme.of(context).dividerColor),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    )
-                  : null,
-            );
-          }),
+                        ],
+                      )
+                    : null,
+              );
+            }),
 
-          // 主阅读区域
-          Expanded(
-            child: Column(
-              children: [
-                ReaderToolbar(controller: controller),
-                const Divider(height: 1),
-                Expanded(
-                  child: Obx(() {
-                    if (controller.isLoading.value) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+            // 主阅读区域
+            Expanded(
+              child: Column(
+                children: [
+                  ReaderToolbar(controller: controller),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: Obx(() {
+                      if (controller.isLoading.value) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                    if (controller.errorMessage.value.isNotEmpty) {
-                      return _buildErrorView();
-                    }
+                      if (controller.errorMessage.value.isNotEmpty) {
+                        return _buildErrorView();
+                      }
 
-                    return ReaderContent(controller: controller);
-                  }),
-                ),
-              ],
+                      return ReaderContent(controller: controller);
+                    }),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -166,7 +166,18 @@ class _DesktopTopBar extends StatelessWidget {
         child: Row(
           spacing: appMetrics.kSpace12,
           children: [
-            if (chrome.hasLeading) Expanded(child: chrome.leading!),
+            if (chrome.hasLeading) chrome.leading!,
+            // if (chrome.title != null || chrome.titleWidget != null)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child:
+                    chrome.titleWidget ??
+                    (chrome.title != null
+                        ? Text(chrome.title!, style: Theme.of(context).textTheme.titleMedium)
+                        : const SizedBox.shrink()),
+              ),
+            ),
             if (!chrome.hasLeading) const Spacer(),
             if (chrome.hasActions)
               Row(
@@ -405,6 +416,12 @@ class _MobileChromeOverlay extends StatelessWidget {
                             title: chrome.titleWidget ?? Text(title),
                             actions: chrome.hasActions ? chrome.actions : null,
                             actionsPadding: EdgeInsets.zero,
+                            bottom: chrome.bottomBar != null
+                                ? PreferredSize(
+                                    preferredSize: Size.fromHeight(bottomHeight),
+                                    child: chrome.bottomBar!,
+                                  )
+                                : null,
                           ),
                         ),
                       ),
@@ -458,6 +475,10 @@ class _MobileBottomOverlay extends StatelessWidget {
     final double safeBottom = MediaQuery.paddingOf(context).bottom;
     final double totalHeight = bottomBarHeight + safeBottom;
     final ThemeData theme = Theme.of(context);
+
+    debugPrint(
+      'Building MobileBottomOverlay: showBottomBar=$showBottomBar, isImmersiveMode=$isImmersiveMode, totalHeight=$totalHeight',
+    );
 
     return Positioned(
       left: 0,

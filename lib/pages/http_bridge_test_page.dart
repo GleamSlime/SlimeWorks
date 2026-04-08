@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/src/rust/api/http_bridge.dart';
 
 /// HTTP Bridge 测试页面 - 类似 Postman
@@ -184,9 +186,9 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.of(context).size.width < 800;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('HTTP Bridge 测试工具'),
+    return ScreenChrome(
+      data: ScreenChromeData(
+        title: 'HTTP Bridge 测试工具',
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline),
@@ -195,7 +197,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
           ),
         ],
       ),
-      body: isNarrow ? _buildNarrowLayout() : _buildWideLayout(),
+      child: Scaffold(body: isNarrow ? _buildNarrowLayout() : _buildWideLayout()),
     );
   }
 

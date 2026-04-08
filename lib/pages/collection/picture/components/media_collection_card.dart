@@ -30,6 +30,7 @@ class MediaCollectionCard extends StatefulWidget {
     required this.onOpenFolder,
     required this.onToggleFavorite,
     this.onDeleteFolder,
+    this.onPullToLocal,
     this.onDeleteNodeFiles,
     this.hoverCoverSources,
     this.onHoverEnter,
@@ -52,6 +53,9 @@ class MediaCollectionCard extends StatefulWidget {
   final VoidCallback onOpenFolder;
   final VoidCallback onToggleFavorite;
   final VoidCallback? onDeleteFolder;
+
+  /// 拉取集合文件到本地回调（仅远程集合时有意义）。
+  final VoidCallback? onPullToLocal;
 
   /// 删除节点本地文件回调（仅远程集合时有意义）。
   final VoidCallback? onDeleteNodeFiles;
@@ -176,14 +180,18 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
     if (!mounted) return;
-    final screenSize = MediaQuery.sizeOf(context);
+    // 将全局坐标转为 Overlay 的本地坐标，正确处理侧边栏等布局偏移
+    final overlayState = Overlay.of(context);
+    final overlayBox = overlayState.context.findRenderObject()! as RenderBox;
+    final localPos = overlayBox.globalToLocal(globalPosition);
+    final overlaySize = overlayBox.size;
     final action = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        screenSize.width - globalPosition.dx,
-        screenSize.height - globalPosition.dy,
+        localPos.dx,
+        localPos.dy,
+        overlaySize.width - localPos.dx,
+        overlaySize.height - localPos.dy,
       ),
       items: [
         const PopupMenuItem<String>(value: 'rename', child: Text('重命名集合')),
@@ -193,6 +201,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         if (widget.isRemote)
           const PopupMenuItem<String>(value: 'open_folder', child: Text('查看远程路径')),
         PopupMenuItem<String>(value: 'favorite', child: Text(widget.isFavorited ? '取消收藏' : '收藏')),
+        if (widget.isRemote && widget.onPullToLocal != null)
+          const PopupMenuItem<String>(value: 'pull_to_local', child: Text('拉取到本地')),
         const PopupMenuItem<String>(value: 'delete', child: Text('删除集合')),
         if (widget.onDeleteFolder != null)
           const PopupMenuItem<String>(value: 'delete_folder', child: Text('删除文件夹')),
@@ -211,6 +221,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       widget.onOpenFolder();
     } else if (action == 'favorite') {
       widget.onToggleFavorite();
+    } else if (action == 'pull_to_local') {
+      widget.onPullToLocal?.call();
     } else if (action == 'delete') {
       widget.onDelete();
     } else if (action == 'delete_folder') {

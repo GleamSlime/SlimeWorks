@@ -48,7 +48,9 @@ abstract class BaseViewModel extends GetxController {
 
   void setLoading(bool loading) {
     _isLoading = loading;
-    update();
+    try {
+      if (!isClosed) update();
+    } catch (_) {}
   }
 
   /// 错误信息
@@ -57,11 +59,15 @@ abstract class BaseViewModel extends GetxController {
 
   void setError(String? error) {
     _errorMessage = error;
-    update();
+    try {
+      if (!isClosed) update();
+    } catch (_) {}
   }
 
   void clearError() {
     _errorMessage = null;
-    update();
+    try {
+      if (!isClosed) update();
+    } catch (_) {}
   }
 }

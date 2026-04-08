@@ -41,6 +41,10 @@ Future<void> main() async {
   // 初始化 media_kit（视频播放）
   MediaKit.ensureInitialized();
 
+  // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满），
+  // 设为 80MB 缓解远程媒体库浏览时内存持续增长问题。
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 80 * 1024 * 1024;
+
   // 在 UI 启动前完成 NodeSettingsService 初始化，避免 ViewModel 与 _postAppInit 并发竞争
   await getIt<NodeSettingsService>().init();
 

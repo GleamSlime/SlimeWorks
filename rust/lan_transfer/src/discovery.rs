@@ -22,9 +22,13 @@ const SERVICE_TYPE: &str = "_slimeworks-lan._tcp.local.";
 const SERVICE_NAME_PREFIX: &str = "SlimeWorks-";
 
 lazy_static! {
-    static ref DEVICE_ID: String = Uuid::new_v4().to_string();
+    /// 运行时生成的临时 ID（仅在持久化 ID 未被设置时兜底使用）
+    static ref FALLBACK_DEVICE_ID: String = Uuid::new_v4().to_string();
     static ref DEVICE_NAME: String = get_device_name();
     static ref DEVICE_TYPE: String = get_device_type();
+    /// 持久化设备 ID（从文件加载或首次随机生成后写入文件）
+    static ref PERSISTENT_DEVICE_ID: tokio::sync::RwLock<Option<String>> =
+        tokio::sync::RwLock::new(None);
 }
 
 /// 获取设备名称
@@ -85,9 +89,21 @@ impl DiscoveryService {
         })
     }
 
-    /// 获取本机设备ID
+    /// 获取本机设备ID（优先使用持久化 ID，回退到本次运行随机 ID）
     pub fn get_device_id() -> String {
-        DEVICE_ID.clone()
+        // 尝试同步读取（在异步环境下可能阻塞，短暂即可）
+        if let Ok(guard) = PERSISTENT_DEVICE_ID.try_read() {
+            if let Some(id) = guard.as_ref() {
+                return id.clone();
+            }
+        }
+        FALLBACK_DEVICE_ID.clone()
+    }
+
+    /// 设置持久化设备 ID（由 api.rs 在服务启动前从文件加载后调用）
+    pub async fn set_persistent_device_id(id: String) {
+        let mut guard = PERSISTENT_DEVICE_ID.write().await;
+        *guard = Some(id);
     }
 
     /// 获取本机设备名称
@@ -113,9 +129,10 @@ impl DiscoveryService {
 
     /// 开始广播服务
     pub fn start_broadcast(&self) -> Result<()> {
-        let service_name = format!("{}{}", SERVICE_NAME_PREFIX, DEVICE_ID.clone());
+        let device_id = Self::get_device_id();
+        let service_name = format!("{}{}", SERVICE_NAME_PREFIX, device_id);
         // Host name 使用 ASCII，避免设备名中的空格或非 ASCII 导致 Bonjour 兼容问题。
-        let host_name = format!("slimeworks-{}.local.", DEVICE_ID.replace('-', ""));
+        let host_name = format!("slimeworks-{}.local.", device_id.replace('-', ""));
         let local_ips = collect_local_ips()?;
         info!(
             "mDNS broadcast register: service_name={}, host_name={}, port={}, ips={:?}",
@@ -124,7 +141,7 @@ impl DiscoveryService {
 
         let properties: Option<std::collections::HashMap<String, String>> = Some(
             vec![
-                ("device_id".to_string(), DEVICE_ID.to_string()),
+                ("device_id".to_string(), device_id.to_string()),
                 ("device_name".to_string(), DEVICE_NAME.to_string()),
                 ("device_type".to_string(), DEVICE_TYPE.to_string()),
             ]
@@ -174,7 +191,7 @@ impl DiscoveryService {
                             .to_string();
 
                         // 忽略自己
-                        if device_id == *DEVICE_ID {
+                        if device_id == DiscoveryService::get_device_id() {
                             continue;
                         }
 
@@ -270,7 +287,8 @@ impl DiscoveryService {
         devices.values().cloned().collect()
     }
 
-    /// mDNS 发现为空时，主动扫描同网段设备（不依赖 multicast entitlement）
+    /// mDNS 发现为空时，主动扫描所有局域网子网设备（不依赖 multicast entitlement）
+    /// 支持 iOS 多网卡（WiFi + 蜂窝），每个子网独立扫描
     pub async fn refresh_devices_fallback_scan(&self) -> Result<()> {
         {
             let mut last_scan = self.last_fallback_scan.write().await;
@@ -283,55 +301,83 @@ impl DiscoveryService {
             *last_scan = Some(now);
         }
 
-        let local_ipv4 = collect_primary_ipv4()?;
-        let octets = local_ipv4.octets();
-        let prefix = format!("{}.{}.{}.", octets[0], octets[1], octets[2]);
+        // 收集所有局域网 IPv4，对每个子网扫描（iOS 可能同时有 WiFi 和蜂窝接口）
+        let local_ips = collect_all_local_ipv4s();
+        if local_ips.is_empty() {
+            return Err(anyhow!("No active IPv4 interface found"));
+        }
+
+        // 按 /24 子网去重，只扫描每个子网一次
+        let mut subnets_seen = std::collections::HashSet::new();
+        let subnets: Vec<(Ipv4Addr, String)> = local_ips
+            .into_iter()
+            .filter_map(|v4| {
+                let octets = v4.octets();
+                let prefix = format!("{}.{}.{}.", octets[0], octets[1], octets[2]);
+                if subnets_seen.insert(prefix.clone()) {
+                    Some((v4, prefix))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         let probe = HeartbeatPayload {
-            device_id: DEVICE_ID.to_string(),
+            device_id: Self::get_device_id(),
             device_name: DEVICE_NAME.to_string(),
             device_type: DEVICE_TYPE.to_string(),
             port: self.service_port,
         };
 
-        let mut join_set = JoinSet::new();
-        for host in 1..=254u8 {
-            let target_ip = format!("{}{}", prefix, host);
-            if target_ip == local_ipv4.to_string() {
-                continue;
-            }
+        let mut total_found = 0usize;
+        for (local_ip, prefix) in &subnets {
+            let mut join_set = JoinSet::new();
+            for host in 1..=254u8 {
+                let target_ip = format!("{}{}", prefix, host);
+                if target_ip == local_ip.to_string() {
+                    continue;
+                }
 
-            if join_set.len() >= 48 {
-                if let Some(joined) = join_set.join_next().await {
-                    if let Ok(Some(device)) = joined {
-                        self.save_discovered_device(device).await;
+                // 控制并发数，避免 iOS 连接数过多
+                if join_set.len() >= 64 {
+                    if let Some(joined) = join_set.join_next().await {
+                        if let Ok(Some(device)) = joined {
+                            self.save_discovered_device(device).await;
+                        }
                     }
                 }
+
+                let payload = probe.clone();
+                let port = self.service_port;
+                join_set.spawn(async move {
+                    probe_device_by_heartbeat(target_ip, port, payload).await
+                });
             }
 
-            let payload = probe.clone();
-            let port = self.service_port;
-            join_set
-                .spawn(async move { probe_device_by_heartbeat(target_ip, port, payload).await });
-        }
-
-        let mut found = 0usize;
-        while let Some(joined) = join_set.join_next().await {
-            if let Ok(Some(device)) = joined {
-                found += 1;
-                self.save_discovered_device(device).await;
+            let mut found = 0usize;
+            while let Some(joined) = join_set.join_next().await {
+                if let Ok(Some(device)) = joined {
+                    found += 1;
+                    self.save_discovered_device(device).await;
+                }
             }
+            total_found += found;
+            info!(
+                "Fallback scan done: subnet={}, local_ip={}, found={} (port={})",
+                prefix, local_ip, found, self.service_port
+            );
         }
 
         info!(
-            "Fallback subnet scan done: local_ip={}, found={} (port={})",
-            local_ipv4, found, self.service_port
+            "Fallback scan total: subnets={}, total_found={}",
+            subnets.len(),
+            total_found
         );
         Ok(())
     }
 
     async fn save_discovered_device(&self, device: DeviceInfo) {
-        if device.device_id == *DEVICE_ID {
+        if device.device_id == DiscoveryService::get_device_id() {
             return;
         }
 
@@ -397,8 +443,25 @@ fn collect_primary_ipv4() -> Result<Ipv4Addr> {
             }
         }
     }
-
     Err(anyhow!("No active IPv4 interface found"))
+}
+
+/// 收集所有非 loopback 的局域网 IPv4 地址（支持 iOS 多网卡：WiFi + 蜂窝业务接口）
+fn collect_all_local_ipv4s() -> Vec<Ipv4Addr> {
+    match get_if_addrs() {
+        Ok(ifaces) => ifaces
+            .into_iter()
+            .filter_map(|iface| {
+                if let IpAddr::V4(v4) = iface.ip() {
+                    if !v4.is_loopback() && !v4.is_unspecified() {
+                        return Some(v4);
+                    }
+                }
+                None
+            })
+            .collect(),
+        Err(_) => vec![],
+    }
 }
 
 async fn probe_device_by_heartbeat(

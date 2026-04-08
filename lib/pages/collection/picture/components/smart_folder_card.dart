@@ -40,14 +40,18 @@ class SmartFolderCard extends StatelessWidget {
   final String? nodeName;
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
-    final screenSize = MediaQuery.sizeOf(context);
+    // 将全局坐标转为 Overlay 的本地坐标，正确处理侧边栏等布局偏移
+    final overlayState = Overlay.of(context);
+    final overlayBox = overlayState.context.findRenderObject()! as RenderBox;
+    final localPos = overlayBox.globalToLocal(globalPosition);
+    final overlaySize = overlayBox.size;
     final action = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        screenSize.width - globalPosition.dx,
-        screenSize.height - globalPosition.dy,
+        localPos.dx,
+        localPos.dy,
+        overlaySize.width - localPos.dx,
+        overlaySize.height - localPos.dy,
       ),
       items: [
         if (onRename != null) const PopupMenuItem<String>(value: 'rename', child: Text('重命名')),

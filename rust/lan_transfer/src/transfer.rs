@@ -3,21 +3,66 @@ use crate::types::*;
 use anyhow::{anyhow, Result};
 use async_channel::{Receiver, Sender};
 use chrono::Utc;
-use log::{debug, error, info, warn};
-use serde_json;
+use log::{error, info, warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-const CHUNK_SIZE: usize = 64 * 1024; // 64KB chunks
-const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB max message
+const CHUNK_SIZE: usize = 256 * 1024; // 256KB 分块
+const MAX_JSON_MSG: usize = 32 * 1024 * 1024; // 32MB JSON 上限（支持超大文本）
+const USER_ACCEPT_TIMEOUT_SECS: u64 = 120; // 用户响应传输请求超时（秒）
+
+// ── 底层 I/O 帧化工具 ──────────────────────────────────────────────────────
+
+/// 写入一帧：[4B 大端 len][payload]；len=0 表示 EOF
+async fn write_frame(stream: &mut TcpStream, data: &[u8]) -> Result<()> {
+    let len = data.len() as u32;
+    stream.write_all(&len.to_be_bytes()).await?;
+    if !data.is_empty() {
+        stream.write_all(data).await?;
+    }
+    stream.flush().await?;
+    Ok(())
+}
+
+/// 读取一帧；返回空 Vec 表示 EOF
+async fn read_frame(stream: &mut TcpStream, max_size: usize) -> Result<Vec<u8>> {
+    let mut len_buf = [0u8; 4];
+    stream.read_exact(&mut len_buf).await?;
+    let msg_len = u32::from_be_bytes(len_buf) as usize;
+    if msg_len == 0 {
+        return Ok(vec![]);
+    }
+    if msg_len > max_size {
+        return Err(anyhow!("帧太大: {} 字节（最大 {}）", msg_len, max_size));
+    }
+    let mut buf = vec![0u8; msg_len];
+    stream.read_exact(&mut buf).await?;
+    Ok(buf)
+}
+
+/// 发送 JSON 序列化的 TransferMessage
+async fn send_msg(stream: &mut TcpStream, msg: &TransferMessage) -> Result<()> {
+    let bytes = serde_json::to_vec(msg)?;
+    write_frame(stream, &bytes).await
+}
+
+/// 接收 JSON 序列化的 TransferMessage
+async fn recv_msg(stream: &mut TcpStream) -> Result<TransferMessage> {
+    let buf = read_frame(stream, MAX_JSON_MSG).await?;
+    if buf.is_empty() {
+        return Err(anyhow!("收到空消息帧（连接已关闭）"));
+    }
+    Ok(serde_json::from_slice(&buf)?)
+}
+
+// ── 传输服务 ───────────────────────────────────────────────────────────────
 
 /// 传输服务
 pub struct TransferService {
@@ -26,6 +71,10 @@ pub struct TransferService {
     device_name: String,
     transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
     trusted_devices: Arc<RwLock<HashMap<String, TrustedDevice>>>,
+    /// 等待用户接受/拒绝的通道：transfer_id → oneshot::Sender<bool>
+    pending_accept: Arc<RwLock<HashMap<String, oneshot::Sender<bool>>>>,
+    /// 接收文件保存目录（由 Dart 注入 path_provider 的 documents 路径）
+    save_dir: Arc<RwLock<String>>,
     event_sender: Sender<TransferEvent>,
     event_receiver: Receiver<TransferEvent>,
     listener: Option<TcpListener>,
@@ -37,23 +86,32 @@ impl TransferService {
     /// 创建新的传输服务
     pub async fn new(port: u16, device_id: String, device_name: String) -> Result<Self> {
         let listener = bind_listener_with_recovery(port).await?;
-
         let (event_sender, event_receiver) = async_channel::unbounded();
-
-        info!("Transfer service listening on port {}", port);
-
+        let save_dir = std::env::temp_dir()
+            .to_str()
+            .unwrap_or("/tmp")
+            .to_string();
+        info!("传输服务已创建，端口 {}", port);
         Ok(Self {
             port,
             device_id,
             device_name,
             transfers: Arc::new(RwLock::new(HashMap::new())),
             trusted_devices: Arc::new(RwLock::new(HashMap::new())),
+            pending_accept: Arc::new(RwLock::new(HashMap::new())),
+            save_dir: Arc::new(RwLock::new(save_dir)),
             event_sender,
             event_receiver,
             listener: Some(listener),
             listen_task: None,
             stop_signal: None,
         })
+    }
+
+    /// 设置文件保存目录（由 Dart 注入 path_provider 的 documents 路径）
+    pub async fn set_save_dir(&self, dir: String) {
+        info!("文件保存目录: {}", dir);
+        *self.save_dir.write().await = dir;
     }
 
     /// 开始监听连接
@@ -65,11 +123,13 @@ impl TransferService {
         let listener = self
             .listener
             .take()
-            .ok_or_else(|| anyhow!("Listener already taken"))?;
+            .ok_or_else(|| anyhow!("监听器不可用"))?;
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
         let transfers = self.transfers.clone();
         let trusted_devices = self.trusted_devices.clone();
+        let pending_accept = self.pending_accept.clone();
+        let save_dir = self.save_dir.clone();
         let event_sender = self.event_sender.clone();
         let device_id = self.device_id.clone();
         let device_name = self.device_name.clone();
@@ -79,15 +139,16 @@ impl TransferService {
             loop {
                 tokio::select! {
                     _ = &mut stop_rx => {
-                        info!("Transfer listener received stop signal");
+                        info!("传输监听器收到停止信号");
                         break;
                     }
                     result = listener.accept() => {
                         match result {
                             Ok((stream, addr)) => {
-                                debug!("New connection from: {}", addr);
                                 let transfers = transfers.clone();
                                 let trusted_devices = trusted_devices.clone();
+                                let pending_accept = pending_accept.clone();
+                                let save_dir = save_dir.clone();
                                 let event_sender = event_sender.clone();
                                 let device_id = device_id.clone();
                                 let device_name = device_name.clone();
@@ -97,6 +158,8 @@ impl TransferService {
                                         stream,
                                         transfers,
                                         trusted_devices,
+                                        pending_accept,
+                                        save_dir,
                                         event_sender,
                                         device_id,
                                         device_name,
@@ -104,25 +167,31 @@ impl TransferService {
                                     )
                                     .await
                                     {
-                                        error!("Error handling connection: {}", e);
+                                        let msg = e.to_string();
+                                        if !msg.contains("connection reset")
+                                            && !msg.contains("unexpected eof")
+                                            && !msg.contains("broken pipe")
+                                        {
+                                            error!("处理连接 {} 错误: {}", addr, e);
+                                        }
                                     }
                                 });
                             }
                             Err(e) => {
-                                error!("Failed to accept connection: {}", e);
+                                error!("接受连接失败: {}", e);
                                 tokio::time::sleep(Duration::from_millis(50)).await;
                             }
                         }
                     }
                 }
             }
-            info!("Transfer listener stopped");
+            info!("传输监听器已停止");
         });
 
         self.stop_signal = Some(stop_tx);
         self.listen_task = Some(handle);
 
-        info!("Started listening for incoming transfers");
+        info!("已开始监听传入连接");
         Ok(())
     }
 
@@ -136,10 +205,10 @@ impl TransferService {
             match tokio::time::timeout(Duration::from_secs(2), handle).await {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => {
-                    warn!("Transfer listener task ended with join error: {}", e);
+                    warn!("传输监听任务异常: {}", e);
                 }
                 Err(_) => {
-                    warn!("Timed out waiting for transfer listener to stop; aborting task");
+                    warn!("等待传输监听任务超时");
                 }
             }
         }
@@ -168,11 +237,11 @@ impl TransferService {
             text_content: Some(text.clone()),
         };
 
-        let transfer_item = TransferItem {
+        let item = TransferItem {
             transfer_id: transfer_id.clone(),
             sender_device_id: self.device_id.clone(),
             sender_device_name: self.device_name.clone(),
-            receiver_device_id: target_device_id.clone(),
+            receiver_device_id: target_device_id,
             transfer_type: TransferType::Text,
             file_name: None,
             file_size: None,
@@ -185,42 +254,25 @@ impl TransferService {
             error_message: None,
         };
 
-        // 保存传输项
         self.transfers
             .write()
             .await
-            .insert(transfer_id.clone(), transfer_item.clone());
+            .insert(transfer_id.clone(), item);
 
-        // 连接并发送请求
-        let transfers = self.transfers.clone();
-        let event_sender = self.event_sender.clone();
-        let tid = transfer_id.clone();
-
-        tokio::spawn(async move {
-            if let Err(e) = send_transfer_request(
-                target_ip,
-                target_port,
-                request,
-                transfers.clone(),
-                event_sender.clone(),
-            )
-            .await
-            {
-                error!("Failed to send text: {}", e);
-
-                // 更新状态为失败
-                if let Some(item) = transfers.write().await.get_mut(&tid) {
-                    item.status = TransferStatus::Failed;
-                    item.error_message = Some(e.to_string());
-                    item.updated_at = Utc::now().to_rfc3339();
-                }
-            }
-        });
+        Self::spawn_send(
+            target_ip,
+            target_port,
+            request,
+            None,
+            self.transfers.clone(),
+            self.event_sender.clone(),
+            transfer_id.clone(),
+        );
 
         Ok(transfer_id)
     }
 
-    /// 发送文件
+    /// 发送文件（图片/视频/普通文件统一入口）
     pub async fn send_file(
         &self,
         target_ip: String,
@@ -228,23 +280,20 @@ impl TransferService {
         target_device_id: String,
         file_path: String,
     ) -> Result<String> {
-        let transfer_id = Uuid::new_v4().to_string();
         let path = Path::new(&file_path);
 
         if !path.exists() {
-            return Err(anyhow!("File does not exist: {}", file_path));
+            return Err(anyhow!("文件不存在: {}", file_path));
         }
 
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
-            .ok_or_else(|| anyhow!("Invalid file name"))?
+            .ok_or_else(|| anyhow!("无效文件名"))?
             .to_string();
 
-        let metadata = tokio::fs::metadata(&file_path).await?;
-        let file_size = metadata.len();
+        let file_size = tokio::fs::metadata(&file_path).await?.len();
 
-        // 判断文件类型
         let transfer_type = if is_image(&file_name) {
             TransferType::Image
         } else if is_video(&file_name) {
@@ -252,6 +301,8 @@ impl TransferService {
         } else {
             TransferType::File
         };
+
+        let transfer_id = Uuid::new_v4().to_string();
 
         let request = TransferRequest {
             transfer_id: transfer_id.clone(),
@@ -263,11 +314,11 @@ impl TransferService {
             text_content: None,
         };
 
-        let transfer_item = TransferItem {
+        let item = TransferItem {
             transfer_id: transfer_id.clone(),
             sender_device_id: self.device_id.clone(),
             sender_device_name: self.device_name.clone(),
-            receiver_device_id: target_device_id.clone(),
+            receiver_device_id: target_device_id,
             transfer_type,
             file_name: Some(file_name),
             file_size: Some(file_size),
@@ -280,61 +331,78 @@ impl TransferService {
             error_message: None,
         };
 
-        // 保存传输项
         self.transfers
             .write()
             .await
-            .insert(transfer_id.clone(), transfer_item.clone());
+            .insert(transfer_id.clone(), item);
 
-        // 连接并发送请求
-        let transfers = self.transfers.clone();
-        let event_sender = self.event_sender.clone();
-        let tid = transfer_id.clone();
+        Self::spawn_send(
+            target_ip,
+            target_port,
+            request,
+            Some(file_path),
+            self.transfers.clone(),
+            self.event_sender.clone(),
+            transfer_id.clone(),
+        );
 
+        Ok(transfer_id)
+    }
+
+    /// 启动异步发送任务（do_send 保持 TCP 连接直到传输完毕）
+    fn spawn_send(
+        target_ip: String,
+        target_port: u16,
+        request: TransferRequest,
+        file_path: Option<String>,
+        transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
+        event_sender: Sender<TransferEvent>,
+        transfer_id: String,
+    ) {
         tokio::spawn(async move {
-            if let Err(e) = send_transfer_request(
+            if let Err(e) = do_send(
                 target_ip,
                 target_port,
                 request,
+                file_path,
                 transfers.clone(),
                 event_sender.clone(),
             )
             .await
             {
-                error!("Failed to send file: {}", e);
-
-                // 更新状态为失败
-                if let Some(item) = transfers.write().await.get_mut(&tid) {
+                error!("发送失败 {}: {}", transfer_id, e);
+                let mut t = transfers.write().await;
+                if let Some(item) = t.get_mut(&transfer_id) {
                     item.status = TransferStatus::Failed;
                     item.error_message = Some(e.to_string());
                     item.updated_at = Utc::now().to_rfc3339();
-                }
-            } else {
-                // 等待响应后开始传输文件
-                // 这里简化处理，实际应该等待accept响应
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-                if let Some(item) = transfers.read().await.get(&tid) {
-                    if item.status == TransferStatus::Accepted {
-                        // 重新连接并发送文件数据
-                        // 这里需要实现文件分块传输
-                    }
+                    let _ = event_sender
+                        .send(TransferEvent {
+                            event_type: EventType::TransferFailed,
+                            device_info: None,
+                            transfer_item: Some(item.clone()),
+                            message: Some(e.to_string()),
+                            timestamp: Utc::now().to_rfc3339(),
+                        })
+                        .await;
                 }
             }
         });
-
-        Ok(transfer_id)
     }
 
-    /// 接受传输
+    /// 接受传输（接收方操作）
     pub async fn accept_transfer(&self, transfer_id: String) -> Result<()> {
-        let mut transfers = self.transfers.write().await;
+        // 若 handle_connection 正在等待用户操作，通过 channel 通知接受
+        if let Some(tx) = self.pending_accept.write().await.remove(&transfer_id) {
+            let _ = tx.send(true);
+        }
 
-        if let Some(item) = transfers.get_mut(&transfer_id) {
-            item.status = TransferStatus::Accepted;
-            item.updated_at = Utc::now().to_rfc3339();
-
-            // 发送事件
+        let mut t = self.transfers.write().await;
+        if let Some(item) = t.get_mut(&transfer_id) {
+            if item.status == TransferStatus::Pending {
+                item.status = TransferStatus::Accepted;
+                item.updated_at = Utc::now().to_rfc3339();
+            }
             let _ = self
                 .event_sender
                 .send(TransferEvent {
@@ -345,23 +413,22 @@ impl TransferService {
                     timestamp: Utc::now().to_rfc3339(),
                 })
                 .await;
-
-            info!("Transfer accepted: {}", transfer_id);
-            Ok(())
-        } else {
-            Err(anyhow!("Transfer not found: {}", transfer_id))
+            info!("传输已接受: {}", transfer_id);
         }
+        Ok(())
     }
 
-    /// 拒绝传输
+    /// 拒绝传输（接收方操作）
     pub async fn reject_transfer(&self, transfer_id: String) -> Result<()> {
-        let mut transfers = self.transfers.write().await;
+        // 通知等待中的 handle_connection 拒绝
+        if let Some(tx) = self.pending_accept.write().await.remove(&transfer_id) {
+            let _ = tx.send(false);
+        }
 
-        if let Some(item) = transfers.get_mut(&transfer_id) {
+        let mut t = self.transfers.write().await;
+        if let Some(item) = t.get_mut(&transfer_id) {
             item.status = TransferStatus::Rejected;
             item.updated_at = Utc::now().to_rfc3339();
-
-            // 发送事件
             let _ = self
                 .event_sender
                 .send(TransferEvent {
@@ -372,23 +439,21 @@ impl TransferService {
                     timestamp: Utc::now().to_rfc3339(),
                 })
                 .await;
-
-            info!("Transfer rejected: {}", transfer_id);
-            Ok(())
-        } else {
-            Err(anyhow!("Transfer not found: {}", transfer_id))
+            info!("传输已拒绝: {}", transfer_id);
         }
+        Ok(())
     }
 
     /// 取消传输
     pub async fn cancel_transfer(&self, transfer_id: String) -> Result<()> {
-        let mut transfers = self.transfers.write().await;
+        if let Some(tx) = self.pending_accept.write().await.remove(&transfer_id) {
+            let _ = tx.send(false);
+        }
 
-        if let Some(item) = transfers.get_mut(&transfer_id) {
+        let mut t = self.transfers.write().await;
+        if let Some(item) = t.get_mut(&transfer_id) {
             item.status = TransferStatus::Cancelled;
             item.updated_at = Utc::now().to_rfc3339();
-
-            // 发送事件
             let _ = self
                 .event_sender
                 .send(TransferEvent {
@@ -399,11 +464,10 @@ impl TransferService {
                     timestamp: Utc::now().to_rfc3339(),
                 })
                 .await;
-
-            info!("Transfer cancelled: {}", transfer_id);
+            info!("传输已取消: {}", transfer_id);
             Ok(())
         } else {
-            Err(anyhow!("Transfer not found: {}", transfer_id))
+            Err(anyhow!("传输不存在: {}", transfer_id))
         }
     }
 
@@ -457,12 +521,13 @@ impl TransferService {
 async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
     let addr = format!("0.0.0.0:{}", port);
     match TcpListener::bind(&addr).await {
-        Ok(listener) => Ok(listener),
+        Ok(listener) => return Ok(listener),
         Err(first_err) => {
             if first_err.kind() != std::io::ErrorKind::AddrInUse {
                 return Err(anyhow!("Failed to bind to port {}: {}", port, first_err));
             }
 
+            // 桌面端：尝试强杀占用进程后重试
             #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
             {
                 if force_kill_port_process(port) {
@@ -472,6 +537,21 @@ async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
                     );
                     tokio::time::sleep(Duration::from_millis(250)).await;
                     if let Ok(listener) = TcpListener::bind(&addr).await {
+                        return Ok(listener);
+                    }
+                }
+            }
+
+            // 移动端（iOS/Android）无法 kill 进程，等待 OS 释放端口后多次重试
+            // 这通常发生在 App 被杀死又快速重启时端口处于 TIME_WAIT 状态
+            #[cfg(any(target_os = "ios", target_os = "android"))]
+            {
+                warn!("Port {} in use on mobile, waiting for OS to release (TIME_WAIT)...", port);
+                let retry_delays_ms: &[u64] = &[600, 1200, 2000];
+                for &delay in retry_delays_ms {
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
+                    if let Ok(listener) = TcpListener::bind(&addr).await {
+                        info!("Port {} bind succeeded after {}ms delay", port, delay);
                         return Ok(listener);
                     }
                 }
@@ -578,47 +658,172 @@ fn force_kill_port_process(port: u16) -> bool {
     killed_any
 }
 
+// ── 核心发送流程（持有 TCP 连接直到传输完毕）─────────────────────────────
+
+/// 执行完整发送流程：建立 TCP 连接 → 发送请求 → 等待接受响应 → 发送文件 → 完成
+async fn do_send(
+    target_ip: String,
+    target_port: u16,
+    request: TransferRequest,
+    file_path: Option<String>,
+    transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
+    event_sender: Sender<TransferEvent>,
+) -> Result<()> {
+    let tid = request.transfer_id.clone();
+
+    // 1. 连接（12 秒超时）
+    let mut stream = tokio::time::timeout(
+        Duration::from_secs(12),
+        TcpStream::connect(format!("{}:{}", target_ip, target_port)),
+    )
+    .await
+    .map_err(|_| anyhow!("连接超时"))?
+    .map_err(|e| anyhow!("连接失败: {}", e))?;
+
+    info!("已连接到 {}:{}, 发送请求 {}", target_ip, target_port, tid);
+
+    // 2. 发送 TransferRequest
+    send_msg(
+        &mut stream,
+        &TransferMessage {
+            message_type: MessageType::TransferRequest,
+            payload: serde_json::to_string(&request)?,
+            timestamp: Utc::now().to_rfc3339(),
+        },
+    )
+    .await?;
+
+    // 3. 等待 TransferResponse（最多 150 秒，接收方可能要等用户操作）
+    let resp_buf = tokio::time::timeout(
+        Duration::from_secs(150),
+        read_frame(&mut stream, MAX_JSON_MSG),
+    )
+    .await
+    .map_err(|_| anyhow!("等待接受响应超时（150秒）"))?
+    .map_err(|e| anyhow!("读取响应失败: {}", e))?;
+
+    if resp_buf.is_empty() {
+        return Err(anyhow!("接收到空响应帧"));
+    }
+
+    let resp_msg: TransferMessage = serde_json::from_slice(&resp_buf)?;
+    if !matches!(resp_msg.message_type, MessageType::TransferResponse) {
+        return Err(anyhow!(
+            "期望 TransferResponse，收到 {:?}",
+            resp_msg.message_type
+        ));
+    }
+    let response: TransferResponse = serde_json::from_str(&resp_msg.payload)?;
+
+    if !response.accepted {
+        let mut t = transfers.write().await;
+        if let Some(item) = t.get_mut(&tid) {
+            item.status = TransferStatus::Rejected;
+            item.updated_at = Utc::now().to_rfc3339();
+            let _ = event_sender
+                .send(TransferEvent {
+                    event_type: EventType::TransferRejected,
+                    device_info: None,
+                    transfer_item: Some(item.clone()),
+                    message: None,
+                    timestamp: Utc::now().to_rfc3339(),
+                })
+                .await;
+        }
+        info!("传输被拒绝: {}", tid);
+        return Ok(());
+    }
+
+    // 4. 已接受 → 传输中
+    {
+        let mut t = transfers.write().await;
+        if let Some(item) = t.get_mut(&tid) {
+            item.status = TransferStatus::Transferring;
+            item.updated_at = Utc::now().to_rfc3339();
+            let _ = event_sender
+                .send(TransferEvent {
+                    event_type: EventType::TransferAccepted,
+                    device_info: None,
+                    transfer_item: Some(item.clone()),
+                    message: None,
+                    timestamp: Utc::now().to_rfc3339(),
+                })
+                .await;
+        }
+    }
+
+    // 5. 发送文件数据（仅文件/图片/视频类型）
+    if let Some(fp) = file_path {
+        stream_file_to(&mut stream, &fp, &tid, &transfers, &event_sender)
+            .await
+            .map_err(|e| anyhow!("发送文件数据失败: {}", e))?;
+    }
+
+    // 6. 发送 TransferComplete
+    send_msg(
+        &mut stream,
+        &TransferMessage {
+            message_type: MessageType::TransferComplete,
+            payload: tid.clone(),
+            timestamp: Utc::now().to_rfc3339(),
+        },
+    )
+    .await?;
+
+    // 7. 标记完成
+    {
+        let mut t = transfers.write().await;
+        if let Some(item) = t.get_mut(&tid) {
+            item.status = TransferStatus::Completed;
+            item.progress = 100.0;
+            item.updated_at = Utc::now().to_rfc3339();
+            let _ = event_sender
+                .send(TransferEvent {
+                    event_type: EventType::TransferCompleted,
+                    device_info: None,
+                    transfer_item: Some(item.clone()),
+                    message: None,
+                    timestamp: Utc::now().to_rfc3339(),
+                })
+                .await;
+        }
+    }
+
+    info!("传输发送完成: {}", tid);
+    Ok(())
+}
+
+// ── 接收方连接处理 ─────────────────────────────────────────────────────────
+
 /// 处理传入连接
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     mut stream: TcpStream,
     transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
     trusted_devices: Arc<RwLock<HashMap<String, TrustedDevice>>>,
+    pending_accept: Arc<RwLock<HashMap<String, oneshot::Sender<bool>>>>,
+    save_dir: Arc<RwLock<String>>,
     event_sender: Sender<TransferEvent>,
     device_id: String,
     device_name: String,
     listen_port: u16,
 ) -> Result<()> {
-    // 读取消息长度（4字节）
-    let mut len_buf = [0u8; 4];
-    stream.read_exact(&mut len_buf).await?;
-    let msg_len = u32::from_be_bytes(len_buf) as usize;
+    // 读取第一条消息（30 秒超时）
+    let msg = tokio::time::timeout(Duration::from_secs(30), recv_msg(&mut stream))
+        .await
+        .map_err(|_| anyhow!("等待首消息超时"))?
+        .map_err(|e| anyhow!("读取消息失败: {}", e))?;
 
-    if msg_len > MAX_MESSAGE_SIZE {
-        return Err(anyhow!("Message too large: {} bytes", msg_len));
-    }
-
-    // 读取消息内容
-    let mut msg_buf = vec![0u8; msg_len];
-    stream.read_exact(&mut msg_buf).await?;
-
-    let msg_str = String::from_utf8(msg_buf)?;
-    let message: TransferMessage = serde_json::from_str(&msg_str)?;
-
-    match message.message_type {
+    match msg.message_type {
+        // ── 心跳探测 ──────────────────────────────────────────────────────
         MessageType::Heartbeat => {
-            let request: HeartbeatPayload = serde_json::from_str(&message.payload)?;
-            debug!(
-                "Heartbeat probe from {} ({})",
-                request.device_name, request.device_id
-            );
-
             let local_ip = stream
                 .local_addr()
-                .map(|addr| addr.ip().to_string())
+                .map(|a| a.ip().to_string())
                 .unwrap_or_else(|_| "127.0.0.1".to_string());
 
             let response_device = DeviceInfo {
-                device_id: device_id,
+                device_id,
                 device_name,
                 device_type: DiscoveryService::get_device_type(),
                 ip_address: local_ip,
@@ -626,91 +831,329 @@ async fn handle_connection(
                 discovered_at: Utc::now().to_rfc3339(),
                 is_online: true,
             };
-
-            let response_message = TransferMessage {
-                message_type: MessageType::Heartbeat,
-                payload: serde_json::to_string(&response_device)?,
-                timestamp: Utc::now().to_rfc3339(),
-            };
-            let response_bytes = serde_json::to_vec(&response_message)?;
-            let response_len = response_bytes.len() as u32;
-            stream.write_all(&response_len.to_be_bytes()).await?;
-            stream.write_all(&response_bytes).await?;
-            stream.flush().await?;
+            send_msg(
+                &mut stream,
+                &TransferMessage {
+                    message_type: MessageType::Heartbeat,
+                    payload: serde_json::to_string(&response_device)?,
+                    timestamp: Utc::now().to_rfc3339(),
+                },
+            )
+            .await?;
         }
+
+        // ── 传输请求 ───────────────────────────────────────────────────────
         MessageType::TransferRequest => {
-            let request: TransferRequest = serde_json::from_str(&message.payload)?;
+            let request: TransferRequest = serde_json::from_str(&msg.payload)?;
+            let tid = request.transfer_id.clone();
+            let is_trusted = trusted_devices
+                .read()
+                .await
+                .contains_key(&request.sender_device_id);
+
+            // 初始化接收方传输记录
+            let initial_status = if is_trusted {
+                TransferStatus::Accepted
+            } else {
+                TransferStatus::Pending
+            };
 
             let transfer_item = TransferItem {
-                transfer_id: request.transfer_id.clone(),
+                transfer_id: tid.clone(),
                 sender_device_id: request.sender_device_id.clone(),
                 sender_device_name: request.sender_device_name.clone(),
-                receiver_device_id: device_id,
+                receiver_device_id: device_id.clone(),
                 transfer_type: request.transfer_type.clone(),
                 file_name: request.file_name.clone(),
                 file_size: request.file_size,
                 text_content: request.text_content.clone(),
                 file_path: None,
-                status: TransferStatus::Pending,
+                status: initial_status,
                 progress: 0.0,
                 created_at: Utc::now().to_rfc3339(),
                 updated_at: Utc::now().to_rfc3339(),
                 error_message: None,
             };
 
-            // 保存传输项
             transfers
                 .write()
                 .await
-                .insert(request.transfer_id.clone(), transfer_item.clone());
+                .insert(tid.clone(), transfer_item.clone());
 
-            // 发送事件
-            let _ = event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferRequestReceived,
-                    device_info: None,
-                    transfer_item: Some(transfer_item),
-                    message: None,
+            // 判断是否接受
+            let accepted = if is_trusted {
+                info!(
+                    "信任设备自动接受: {} from {}",
+                    tid, request.sender_device_name
+                );
+                let _ = event_sender
+                    .send(TransferEvent {
+                        event_type: EventType::TransferAccepted,
+                        device_info: None,
+                        transfer_item: Some(transfer_item.clone()),
+                        message: None,
+                        timestamp: Utc::now().to_rfc3339(),
+                    })
+                    .await;
+                true
+            } else {
+                // 发送待处理事件，等待用户操作
+                let _ = event_sender
+                    .send(TransferEvent {
+                        event_type: EventType::TransferRequestReceived,
+                        device_info: None,
+                        transfer_item: Some(transfer_item.clone()),
+                        message: None,
+                        timestamp: Utc::now().to_rfc3339(),
+                    })
+                    .await;
+
+                let (accept_tx, accept_rx) = oneshot::channel::<bool>();
+                pending_accept
+                    .write()
+                    .await
+                    .insert(tid.clone(), accept_tx);
+
+                match tokio::time::timeout(
+                    Duration::from_secs(USER_ACCEPT_TIMEOUT_SECS),
+                    accept_rx,
+                )
+                .await
+                {
+                    Ok(Ok(v)) => {
+                        info!("用户{}传输 {}", if v { "接受" } else { "拒绝" }, tid);
+                        v
+                    }
+                    _ => {
+                        info!("传输请求超时自动拒绝: {}", tid);
+                        pending_accept.write().await.remove(&tid);
+                        false
+                    }
+                }
+            };
+
+            // 回应发送方（同一 TCP 连接）
+            let response = TransferResponse {
+                transfer_id: tid.clone(),
+                accepted,
+                receiver_device_id: device_id.clone(),
+            };
+            send_msg(
+                &mut stream,
+                &TransferMessage {
+                    message_type: MessageType::TransferResponse,
+                    payload: serde_json::to_string(&response)?,
                     timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
+                },
+            )
+            .await?;
 
-            info!("Received transfer request: {}", request.transfer_id);
+            if !accepted {
+                let mut t = transfers.write().await;
+                if let Some(item) = t.get_mut(&tid) {
+                    item.status = TransferStatus::Rejected;
+                    item.updated_at = Utc::now().to_rfc3339();
+                    let _ = event_sender
+                        .send(TransferEvent {
+                            event_type: EventType::TransferRejected,
+                            device_info: None,
+                            transfer_item: Some(item.clone()),
+                            message: None,
+                            timestamp: Utc::now().to_rfc3339(),
+                        })
+                        .await;
+                }
+                return Ok(());
+            }
+
+            // 更新为传输中
+            {
+                let mut t = transfers.write().await;
+                if let Some(item) = t.get_mut(&tid) {
+                    item.status = TransferStatus::Transferring;
+                    item.updated_at = Utc::now().to_rfc3339();
+                }
+            }
+
+            // 接收文件数据（仅文件/图片/视频类型）
+            let is_file_transfer = matches!(
+                request.transfer_type,
+                TransferType::File | TransferType::Image | TransferType::Video
+            );
+
+            let saved_path = if is_file_transfer {
+                if let Some(file_name) = &request.file_name {
+                    let dir = save_dir.read().await.clone();
+                    let save_path = format!("{}/{}", dir, file_name);
+                    match receive_file_from_stream(
+                        &mut stream,
+                        &save_path,
+                        &tid,
+                        request.file_size,
+                        &transfers,
+                        &event_sender,
+                    )
+                    .await
+                    {
+                        Ok(()) => Some(save_path),
+                        Err(e) => {
+                            error!("接收文件失败 {}: {}", tid, e);
+                            let mut t = transfers.write().await;
+                            if let Some(item) = t.get_mut(&tid) {
+                                item.status = TransferStatus::Failed;
+                                item.error_message = Some(e.to_string());
+                                item.updated_at = Utc::now().to_rfc3339();
+                            }
+                            return Err(e);
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // 等待发送方的 TransferComplete 消息（30 秒）
+            let _ =
+                tokio::time::timeout(Duration::from_secs(30), recv_msg(&mut stream)).await;
+
+            // 标记完成
+            {
+                let mut t = transfers.write().await;
+                if let Some(item) = t.get_mut(&tid) {
+                    item.status = TransferStatus::Completed;
+                    item.progress = 100.0;
+                    item.updated_at = Utc::now().to_rfc3339();
+                    if let Some(path) = saved_path {
+                        item.file_path = Some(path);
+                    }
+                    let _ = event_sender
+                        .send(TransferEvent {
+                            event_type: EventType::TransferCompleted,
+                            device_info: None,
+                            transfer_item: Some(item.clone()),
+                            message: None,
+                            timestamp: Utc::now().to_rfc3339(),
+                        })
+                        .await;
+                }
+            }
+
+            info!("传输接收完成: {}", tid);
         }
+
         _ => {
-            warn!("Unhandled message type: {:?}", message.message_type);
+            warn!("未处理的消息类型: {:?}", msg.message_type);
         }
     }
 
     Ok(())
 }
 
-/// 发送传输请求
-async fn send_transfer_request(
-    target_ip: String,
-    target_port: u16,
-    request: TransferRequest,
-    transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
-    event_sender: Sender<TransferEvent>,
+// ── 文件流式传输工具 ────────────────────────────────────────────────────────
+
+/// 将本地文件流式发送到 stream（EOF 后发送 0 长度帧）
+async fn stream_file_to(
+    stream: &mut TcpStream,
+    file_path: &str,
+    transfer_id: &str,
+    transfers: &Arc<RwLock<HashMap<String, TransferItem>>>,
+    _event_sender: &Sender<TransferEvent>,
 ) -> Result<()> {
-    let mut stream = TcpStream::connect(format!("{}:{}", target_ip, target_port)).await?;
+    use tokio::fs::File;
+    let mut file = File::open(file_path)
+        .await
+        .map_err(|e| anyhow!("打开文件失败 {}: {}", file_path, e))?;
+    let total_size = tokio::fs::metadata(file_path)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut bytes_sent: u64 = 0;
+    let mut last_update = std::time::Instant::now();
 
-    let message = TransferMessage {
-        message_type: MessageType::TransferRequest,
-        payload: serde_json::to_string(&request)?,
-        timestamp: Utc::now().to_rfc3339(),
-    };
+    loop {
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        write_frame(stream, &buf[..n]).await?;
+        bytes_sent += n as u64;
 
-    let msg_bytes = serde_json::to_vec(&message)?;
-    let msg_len = msg_bytes.len() as u32;
+        // 每 500ms 更新一次进度
+        if last_update.elapsed().as_millis() >= 500 || bytes_sent == total_size {
+            let progress = if total_size > 0 {
+                (bytes_sent as f64 / total_size as f64 * 100.0).min(99.0)
+            } else {
+                50.0
+            };
+            let mut t = transfers.write().await;
+            if let Some(item) = t.get_mut(transfer_id) {
+                item.progress = progress;
+                item.updated_at = Utc::now().to_rfc3339();
+            }
+            drop(t);
+            last_update = std::time::Instant::now();
+        }
+    }
 
-    // 发送消息长度
-    stream.write_all(&msg_len.to_be_bytes()).await?;
-    // 发送消息内容
-    stream.write_all(&msg_bytes).await?;
-    stream.flush().await?;
+    // 发送 EOF 标记（长度为 0 的帧）
+    write_frame(stream, &[]).await?;
+    info!("文件流发送完成: {} ({} bytes)", file_path, bytes_sent);
+    Ok(())
+}
 
-    info!("Sent transfer request: {}", request.transfer_id);
+/// 从 stream 接收文件数据并保存到磁盘
+async fn receive_file_from_stream(
+    stream: &mut TcpStream,
+    save_path: &str,
+    transfer_id: &str,
+    file_size: Option<u64>,
+    transfers: &Arc<RwLock<HashMap<String, TransferItem>>>,
+    _event_sender: &Sender<TransferEvent>,
+) -> Result<()> {
+    use tokio::fs::File;
+    if let Some(parent) = Path::new(save_path).parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let mut file = File::create(save_path)
+        .await
+        .map_err(|e| anyhow!("创建文件失败 {}: {}", save_path, e))?;
+    let mut bytes_received: u64 = 0;
+    let mut last_update = std::time::Instant::now();
+
+    loop {
+        // 每帧最大 CHUNK_SIZE + 4KB 余量
+        let chunk = read_frame(stream, CHUNK_SIZE + 4096).await?;
+        if chunk.is_empty() {
+            break; // EOF 标记
+        }
+        file.write_all(&chunk).await?;
+        bytes_received += chunk.len() as u64;
+
+        if last_update.elapsed().as_millis() >= 500 {
+            let progress = if let Some(total) = file_size {
+                if total > 0 {
+                    (bytes_received as f64 / total as f64 * 100.0).min(99.0)
+                } else {
+                    50.0
+                }
+            } else {
+                50.0
+            };
+            let mut t = transfers.write().await;
+            if let Some(item) = t.get_mut(transfer_id) {
+                item.progress = progress;
+                item.updated_at = Utc::now().to_rfc3339();
+            }
+            drop(t);
+            last_update = std::time::Instant::now();
+        }
+    }
+
+    file.flush().await?;
+    info!("文件接收完成: {} ({} bytes)", save_path, bytes_received);
     Ok(())
 }
 

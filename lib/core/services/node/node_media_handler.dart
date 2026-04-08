@@ -192,12 +192,29 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     await _writeFileResponse(request, original, _guessMediaContentType(filePath));
   }
 
-  /// LRU 淘汰：超过上限时移除最老的条目。
+  /// LRU 淘汰：超过总字节上限时逐步移除最老的条目，防止内存持续增长。
   void _putToMemoryCache(String key, Uint8List bytes) {
-    if (_resizedBytesCache.length >= NodeSettingsService._kBytesCacheMax) {
-      _resizedBytesCache.remove(_resizedBytesCache.keys.first);
+    // 若该 key 已存在，先移除旧值
+    final existing = _resizedBytesCache[key];
+    if (existing != null) {
+      _resizedBytesCacheSize -= existing.length;
+      _resizedBytesCache.remove(key);
+    }
+    // 超过字节上限时按 LRU 顺序逐条淘汰
+    while (_resizedBytesCacheSize + bytes.length > NodeSettingsService._kBytesCacheMaxBytes &&
+        _resizedBytesCache.isNotEmpty) {
+      final oldest = _resizedBytesCache.keys.first;
+      _resizedBytesCacheSize -= _resizedBytesCache[oldest]!.length;
+      _resizedBytesCache.remove(oldest);
     }
     _resizedBytesCache[key] = bytes;
+    _resizedBytesCacheSize += bytes.length;
+  }
+
+  /// 清除所有内存缓存（节点断开时调用，释放内存）。
+  void clearMemoryCache() {
+    _resizedBytesCache.clear();
+    _resizedBytesCacheSize = 0;
   }
 
   void _writeBytesResponse(HttpRequest request, Uint8List bytes, ContentType contentType) {
