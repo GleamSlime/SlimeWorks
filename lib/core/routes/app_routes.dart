@@ -24,6 +24,7 @@ import 'package:slime_works/pages/websocket_test_page.dart';
 import 'package:slime_works/pages/http_bridge_test_page.dart';
 import 'package:slime_works/pages/settings/settings_page.dart';
 import 'package:slime_works/pages/lan_transfer/lan_transfer_screen.dart';
+import 'package:slime_works/pages/lan_transfer/lan_chat_screen.dart';
 
 part 'app_routes.g.dart';
 
@@ -92,6 +93,7 @@ class AppRoutes {
       const DistributedRoute(),
       const RequestHostRoute(),
       const LanTransferRoute(),
+      LanChatRoute(peerId: '', peerName: ''),
 
       const GooeyDemoRoute(),
       const ViewModelDemoRoute(),
@@ -146,7 +148,10 @@ class AppRoutes {
   static Page<dynamic> buildPage(BuildContext context, GoRouterState state, Widget child) {
     // iOS 上使用 CupertinoPage，保留原生左滑返回手势
     if (Platform.isIOS) {
-      return CupertinoPage(key: state.pageKey, child: BindingWidget(child: child));
+      return CupertinoPage(
+        key: state.pageKey,
+        child: BindingWidget(child: child),
+      );
     }
     return CustomTransitionPage(
       key: state.pageKey,

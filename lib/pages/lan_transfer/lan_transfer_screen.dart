@@ -3,10 +3,9 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/pages/lan_transfer/components/device_list.dart';
-import 'package:slime_works/pages/lan_transfer/components/transfer_actions.dart';
-import 'package:slime_works/pages/lan_transfer/components/transfer_chat.dart';
 import 'package:slime_works/pages/lan_transfer/components/pending_requests.dart';
 import 'package:slime_works/pages/lan_transfer/components/scanning_animation.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
@@ -200,7 +199,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     ).whenComplete(() => _isDeviceSheetOpen = false);
   }
 
-  /// 进入与指定对端设备的聊天页面
+  /// 进入与指定对端设备的聊天页面（GoRouter TypedGoRoute push）
   void _navigateToChat(
     BuildContext context, {
     DeviceInfo? device,
@@ -209,16 +208,8 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
   }) {
     final id = peerDeviceId ?? device?.deviceId ?? '';
     final name = peerDeviceName ?? device?.deviceName ?? '未知设备';
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => _LanChatPage(
-          viewModel: viewModel,
-          peerDeviceId: id,
-          peerDeviceName: name,
-          initialDevice: device,
-        ),
-      ),
-    );
+    // 通过 TypedGoRoute push，支持 iOS 左划返回手势
+    LanChatRoute(peerId: id, peerName: name).push<void>(context);
   }
 
   /// 显示会话列表的长按/右键菜单
@@ -992,134 +983,5 @@ class _PeerListItem extends StatelessWidget {
     if (lower.contains('android')) return Icons.phone_android;
     if (lower.contains('windows')) return Icons.desktop_windows;
     return Icons.devices;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 与指定设备的聊天页
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LanChatPage extends StatefulWidget {
-  final LanTransferViewModel viewModel;
-  final String peerDeviceId;
-  final String peerDeviceName;
-
-  /// 若从「附近设备」直接进入，传入 DeviceInfo 并自动选中
-  final DeviceInfo? initialDevice;
-
-  const _LanChatPage({
-    required this.viewModel,
-    required this.peerDeviceId,
-    required this.peerDeviceName,
-    this.initialDevice,
-  });
-
-  @override
-  State<_LanChatPage> createState() => _LanChatPageState();
-}
-
-class _LanChatPageState extends State<_LanChatPage> {
-  @override
-  void initState() {
-    super.initState();
-    // 进入聊天页时，如果对端在线则自动选中
-    final device =
-        widget.initialDevice ??
-        widget.viewModel.discoveredDevices.firstWhereOrNull(
-          (d) => d.deviceId == widget.peerDeviceId,
-        );
-    if (device != null) {
-      widget.viewModel.selectDevice(device);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.viewModel.unselectDevice();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-    final bg = isDark ? DarkColors.background5 : LightColors.background5;
-    return ScreenChrome(
-      data: ScreenChromeData(
-        // title: widget.peerDeviceName,
-        titleWidget: _buildChatTitleWidget(context),
-        toolbarHeight: AppTheme.metrics.kSpace48,
-        leading: IconButton(
-          padding: EdgeInsets.zero,
-          constraints: BoxConstraints(minWidth: scaleW(32), minHeight: scaleW(32)),
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            size: scaleW(18),
-            color: isDark ? DarkColors.white80 : LightColors.black80,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      child: Container(
-        color: bg,
-        child: Column(
-          children: [
-            Expanded(
-              child: Obx(() {
-                final localId = widget.viewModel.localDevice.value?.deviceId ?? '';
-                final localName = widget.viewModel.localDevice.value?.deviceName ?? '我';
-                final items = widget.viewModel.transferHistoryForPeer(widget.peerDeviceId);
-                return TransferChatView(
-                  items: items,
-                  localDeviceId: localId,
-                  localDeviceName: localName,
-                  peerDeviceId: widget.peerDeviceId,
-                  onCancel: (id) => widget.viewModel.cancelTransfer(id),
-                  onDelete: (id) => widget.viewModel.deleteTransferItem(id),
-                  onDeleteWithFile: (id) =>
-                      widget.viewModel.deleteTransferItem(id, deleteFile: true),
-                  onRetry: (id) => widget.viewModel.retryTransfer(id),
-                );
-              }),
-            ),
-            // 发送底栏：始终显示（即使对端离线也支持排队发送）
-            TransferActions(
-              viewModel: widget.viewModel,
-              peerDeviceId: widget.peerDeviceId,
-              peerDeviceName: widget.peerDeviceName,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatTitleWidget(BuildContext context) {
-    return Obx(() {
-      final isOnline = widget.viewModel.discoveredDevices.any(
-        (d) => d.deviceId == widget.peerDeviceId,
-      );
-      // 使用 IntrinsicWidth 包裹，避免 Expanded 在桌面端 ScrollView 无界宽度下崩溃
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            widget.peerDeviceName,
-            style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          SizedBox(width: AppTheme.metrics.kSpace8),
-          // 在线状态指示点
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isOnline ? Colors.green : Colors.grey,
-            ),
-          ),
-        ],
-      );
-    });
   }
 }

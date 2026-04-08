@@ -435,10 +435,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
         horizontal: AppTheme.metrics.kSpace12,
         vertical: AppTheme.metrics.kSpace10,
       ),
-      child: SelectableText(
-        item.textContent ?? '',
-        style: AppTextStyles.body2(color: textColor),
-      ),
+      child: SelectableText(item.textContent ?? '', style: AppTextStyles.body2(color: textColor)),
     );
   }
 
@@ -588,12 +585,13 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.broken_image_outlined, size: scaleW(20), color: textColor.withValues(alpha: 0.5)),
-          SizedBox(width: AppTheme.metrics.kSpace8),
-          Text(
-            '文件已移除',
-            style: AppTextStyles.caption(color: textColor.withValues(alpha: 0.6)),
+          Icon(
+            Icons.broken_image_outlined,
+            size: scaleW(20),
+            color: textColor.withValues(alpha: 0.5),
           ),
+          SizedBox(width: AppTheme.metrics.kSpace8),
+          Text('文件已移除', style: AppTextStyles.caption(color: textColor.withValues(alpha: 0.6))),
         ],
       ),
     );

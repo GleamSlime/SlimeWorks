@@ -24,3 +24,20 @@ class LanTransferRoute extends AppRouteData with $LanTransferRoute {
     return AppRoutes.buildPage(context, state, const LanTransferScreen());
   }
 }
+
+/// 局域网聊天页路由（与指定设备的传输会话）
+/// [peerId] 对端设备 ID，[peerName] 对端设备名称（均作为 URL query 参数传递）
+@TypedGoRoute<LanChatRoute>(path: '/lan-chat')
+class LanChatRoute extends GoRouteData with $LanChatRoute {
+  final String peerId;
+  final String peerName;
+
+  const LanChatRoute({required this.peerId, required this.peerName});
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return MaterialPage(
+      child: LanChatScreen(peerDeviceId: peerId, peerDeviceName: peerName),
+    );
+  }
+}

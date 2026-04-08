@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cue/cue.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -255,147 +256,145 @@ class _CollectionPictureScreenState
 
   @override
   Widget buildContent(BuildContext context) {
-    return Obx(
-      () {
-        // 当处于文件夹或集合内时，拦截系统返回手势（Android 返回键 / iOS 左划），
-        // 退回到上一层浏览内容而非退出整个媒体库页面。
-        final inFolder = viewModel.currentFolderId.value != null;
-        final inCollection = viewModel.isInDetail;
-        final hasInternalBackLevel = inFolder || inCollection;
-        return PopScope(
-          canPop: !hasInternalBackLevel,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) {
-              if (inCollection) {
-                _exitCollection();
-              } else if (inFolder) {
-                _exitFolder();
-              }
+    return Obx(() {
+      // 当处于文件夹或集合内时，拦截系统返回手势（Android 返回键 / iOS 左划），
+      // 退回到上一层浏览内容而非退出整个媒体库页面。
+      final inFolder = viewModel.currentFolderId.value != null;
+      final inCollection = viewModel.isInDetail;
+      final hasInternalBackLevel = inFolder || inCollection;
+      return PopScope(
+        canPop: !hasInternalBackLevel,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) {
+            if (inCollection) {
+              _exitCollection();
+            } else if (inFolder) {
+              _exitFolder();
             }
-          },
-          child: ScreenChrome(
-        data: _buildScreenChromeData(context),
-        child: Focus(
-          autofocus: true,
-          onKeyEvent: (node, event) {
-            if (event is! KeyDownEvent || viewModel.isInDetail) {
+          }
+        },
+        child: ScreenChrome(
+          data: _buildScreenChromeData(context),
+          child: Focus(
+            autofocus: true,
+            onKeyEvent: (node, event) {
+              if (event is! KeyDownEvent || viewModel.isInDetail) {
+                return KeyEventResult.ignored;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.escape && viewModel.isSelecting.value) {
+                viewModel.exitSelection();
+                return KeyEventResult.handled;
+              }
+              if ((HardwareKeyboard.instance.isControlPressed ||
+                      HardwareKeyboard.instance.isMetaPressed) &&
+                  event.logicalKey == LogicalKeyboardKey.keyA) {
+                if (!viewModel.isSelecting.value) {
+                  viewModel.isSelecting.value = true;
+                }
+                viewModel.toggleSelectAll();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.delete &&
+                  viewModel.isSelecting.value &&
+                  viewModel.selectedIds.isNotEmpty) {
+                _confirmDeleteSelected(context);
+                return KeyEventResult.handled;
+              }
               return KeyEventResult.ignored;
-            }
-            if (event.logicalKey == LogicalKeyboardKey.escape && viewModel.isSelecting.value) {
-              viewModel.exitSelection();
-              return KeyEventResult.handled;
-            }
-            if ((HardwareKeyboard.instance.isControlPressed ||
-                    HardwareKeyboard.instance.isMetaPressed) &&
-                event.logicalKey == LogicalKeyboardKey.keyA) {
-              if (!viewModel.isSelecting.value) {
-                viewModel.isSelecting.value = true;
-              }
-              viewModel.toggleSelectAll();
-              return KeyEventResult.handled;
-            }
-            if (event.logicalKey == LogicalKeyboardKey.delete &&
-                viewModel.isSelecting.value &&
-                viewModel.selectedIds.isNotEmpty) {
-              _confirmDeleteSelected(context);
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
-          child: Obx(() {
-            final pageKey = _pageContentKey;
-            final pageContent = !viewModel.isInDetail
-                ? _buildBrowseGrid(context)
-                : _buildCollectionDetail(context);
-            final body = Column(
-              children: [
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    transitionBuilder: (child, animation) {
-                      // 每个过渡子 widget 加实色背景，防止滑动期间透出底层内容
-                      return ColoredBox(
-                        color: Theme.of(context).scaffoldBackgroundColor,
-                        child: _buildPageTransition(child, animation),
-                      );
-                    },
-                    layoutBuilder: (currentChild, previousChildren) => Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ...previousChildren.map(
-                          (c) => Positioned.fill(
-                            child: TickerMode(enabled: false, child: IgnorePointer(child: c)),
-                          ),
-                        ),
-                        if (currentChild != null) Positioned.fill(child: currentChild),
-                      ],
-                    ),
-                    child: KeyedSubtree(key: ValueKey(pageKey), child: pageContent),
-                  ),
-                ),
-                if (viewModel.isSelecting.value)
-                  MediaSelectionBar(
-                    selectedCount: viewModel.selectedIds.length,
-                    onDelete: () => _confirmDeleteSelected(context),
-                    onCancel: viewModel.exitSelection,
-                  ),
-              ],
-            );
-            // 仅桌面端启用文件拖拽导入
-            if (Platform.isAndroid || Platform.isIOS) return body;
-            return DropTarget(
-              onDragEntered: (_) => setState(() => _isDraggingFiles = true),
-              onDragExited: (_) => setState(() => _isDraggingFiles = false),
-              onDragDone: (detail) {
-                setState(() => _isDraggingFiles = false);
-                viewModel.importDroppedPaths(detail.files.map((f) => f.path).toList());
-              },
-              child: Stack(
+            },
+            child: Obx(() {
+              final pageKey = _pageContentKey;
+              final pageContent = !viewModel.isInDetail
+                  ? _buildBrowseGrid(context)
+                  : _buildCollectionDetail(context);
+              final body = Column(
                 children: [
-                  body,
-                  if (_isDraggingFiles)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withAlpha(40),
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2,
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      transitionBuilder: (child, animation) {
+                        // 每个过渡子 widget 加实色背景，防止滑动期间透出底层内容
+                        return ColoredBox(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          child: _buildPageTransition(child, animation),
+                        );
+                      },
+                      layoutBuilder: (currentChild, previousChildren) => Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ...previousChildren.map(
+                            (c) => Positioned.fill(
+                              child: TickerMode(enabled: false, child: IgnorePointer(child: c)),
                             ),
                           ),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.folder_open_rounded,
-                                  size: 64,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  '松开以导入媒体',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          if (currentChild != null) Positioned.fill(child: currentChild),
+                        ],
+                      ),
+                      child: KeyedSubtree(key: ValueKey(pageKey), child: pageContent),
+                    ),
+                  ),
+                  if (viewModel.isSelecting.value)
+                    MediaSelectionBar(
+                      selectedCount: viewModel.selectedIds.length,
+                      onDelete: () => _confirmDeleteSelected(context),
+                      onCancel: viewModel.exitSelection,
+                    ),
+                ],
+              );
+              // 仅桌面端启用文件拖拽导入
+              if (Platform.isAndroid || Platform.isIOS) return body;
+              return DropTarget(
+                onDragEntered: (_) => setState(() => _isDraggingFiles = true),
+                onDragExited: (_) => setState(() => _isDraggingFiles = false),
+                onDragDone: (detail) {
+                  setState(() => _isDraggingFiles = false);
+                  viewModel.importDroppedPaths(detail.files.map((f) => f.path).toList());
+                },
+                child: Stack(
+                  children: [
+                    body,
+                    if (_isDraggingFiles)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withAlpha(40),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2,
+                              ),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.folder_open_rounded,
+                                    size: 64,
                                     color: Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    '松开以导入媒体',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          }),
-        ),
+                  ],
+                ),
+              );
+            }),
           ),
-        );
-      },
-    );
+        ),
+      );
+    });
   }
 
   Widget _buildActionBar(BuildContext context) {
@@ -1324,6 +1323,9 @@ class _CollectionPictureScreenState
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
+        // 最多为前 20 个卡片添加入场动画，超出部分不设延迟避免卡顿
+        final delay = index < 20 ? (index * 30).clamp(0, 400) : 0;
+        Widget buildCard() {
         if (item is MediaLibraryFolderItem) {
           final folder = item.folder;
           final folderCard = MediaFolderCard(
@@ -1490,6 +1492,18 @@ class _CollectionPictureScreenState
           onAcceptWithDetails: (d) => viewModel.reorderCollection(d.data, collection.id),
           builder: (ctx, candidateData, _) =>
               _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: draggable),
+        );
+        } // end buildCard
+        return Cue.onMount(
+          motion: .smooth(),
+          child: Actor(
+            delay: Duration(milliseconds: delay),
+            acts: [
+              .fadeIn(),
+              .slideY(from: 0.12),
+            ],
+            child: buildCard(),
+          ),
         );
       },
     );

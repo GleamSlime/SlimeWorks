@@ -249,6 +249,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.0.2"
+  cue:
+    dependency: "direct main"
+    description:
+      name: cue
+      sha256: "6583a994df25f99b893a0369ca8a70e7dc80ec9db7c9c7589dc69f811bc98830"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.1.1"
   dart_style:
     dependency: transitive
     description:
