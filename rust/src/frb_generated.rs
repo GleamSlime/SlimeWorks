@@ -2989,13 +2989,17 @@ fn wire__crate__api__lan_transfer__lan_transfer_start_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_port = <u16>::sse_decode(&mut deserializer);
             let api_save_dir = <String>::sse_decode(&mut deserializer);
+            let api_pre_trusted_json = <Vec<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok =
-                            crate::api::lan_transfer::lan_transfer_start(api_port, api_save_dir)
-                                .await?;
+                        let output_ok = crate::api::lan_transfer::lan_transfer_start(
+                            api_port,
+                            api_save_dir,
+                            api_pre_trusted_json,
+                        )
+                        .await?;
                         Ok(output_ok)
                     })()
                     .await,

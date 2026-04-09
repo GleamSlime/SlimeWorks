@@ -16,11 +16,7 @@ class LanChatScreen extends StatefulWidget {
   /// 对端设备名称（显示用）
   final String peerDeviceName;
 
-  const LanChatScreen({
-    super.key,
-    required this.peerDeviceId,
-    required this.peerDeviceName,
-  });
+  const LanChatScreen({super.key, required this.peerDeviceId, required this.peerDeviceName});
 
   @override
   State<LanChatScreen> createState() => _LanChatScreenState();
@@ -34,9 +30,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
   void initState() {
     super.initState();
     // 进入聊天页时，如果对端在线则自动选中以便发送文件
-    final device = _vm.discoveredDevices.firstWhereOrNull(
-      (d) => d.deviceId == widget.peerDeviceId,
-    );
+    final device = _vm.discoveredDevices.firstWhereOrNull((d) => d.deviceId == widget.peerDeviceId);
     if (device != null) {
       _vm.selectDevice(device);
     }
@@ -103,9 +97,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
 
   Widget _buildChatTitleWidget(BuildContext context) {
     return Obx(() {
-      final isOnline = _vm.discoveredDevices.any(
-        (d) => d.deviceId == widget.peerDeviceId,
-      );
+      final isOnline = _vm.discoveredDevices.any((d) => d.deviceId == widget.peerDeviceId);
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [

@@ -476,9 +476,9 @@ class _MobileBottomOverlay extends StatelessWidget {
     final double totalHeight = bottomBarHeight + safeBottom;
     final ThemeData theme = Theme.of(context);
 
-    debugPrint(
-      'Building MobileBottomOverlay: showBottomBar=$showBottomBar, isImmersiveMode=$isImmersiveMode, totalHeight=$totalHeight',
-    );
+    // debugPrint(
+    //   'Building MobileBottomOverlay: showBottomBar=$showBottomBar, isImmersiveMode=$isImmersiveMode, totalHeight=$totalHeight',
+    // );
 
     return Positioned(
       left: 0,

@@ -53,6 +53,13 @@ class _TransferChatViewState extends State<TransferChatView> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // 首次渲染后立即跳转到底部（不动画）
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initialScrollToBottom());
+  }
+
+  void _initialScrollToBottom() {
+    if (!mounted || !_scrollController.hasClients) return;
+    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
   void _onScroll() {
@@ -70,17 +77,16 @@ class _TransferChatViewState extends State<TransferChatView> {
     super.didUpdateWidget(oldWidget);
     // 新消息到来时，只有用户处于底部（没有手动向上滚动）才自动滚到底部
     if (widget.items.length != oldWidget.items.length && !_isUserScrolledUp) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-    }
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      // 等内容布局完成后再滚动，避免 maxScrollExtent 还未更新导致弹起
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     }
   }
 
@@ -137,7 +143,13 @@ class _TransferChatViewState extends State<TransferChatView> {
             child: GestureDetector(
               onTap: () {
                 setState(() => _isUserScrolledUp = false);
-                _scrollToBottom();
+                if (_scrollController.hasClients) {
+                  _scrollController.animateTo(
+                    _scrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                  );
+                }
               },
               child: Container(
                 padding: EdgeInsets.symmetric(
@@ -450,50 +462,63 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
     Widget content() {
       if (hasLocal && item.transferType == TransferType.image) {
         final file = File(item.filePath!);
-        if (!file.existsSync()) return _buildMissingFileHint(textColor);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    _ImagePreviewPage(filePath: file.path, title: item.fileName ?? '图片'),
+        if (!file.existsSync()) {
+          // 发送方才显示"文件已移除"；接收方如果路径无效则回落到默认文件气泡
+          if (isSelf) return _buildMissingFileHint(textColor);
+          // Fall through to default file row for received items
+        } else {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      _ImagePreviewPage(filePath: file.path, title: item.fileName ?? '图片'),
+                ),
               ),
+              child: Image.file(file, fit: BoxFit.cover, width: scaleW(220), height: scaleW(160)),
             ),
-            child: Image.file(file, fit: BoxFit.cover, width: scaleW(220), height: scaleW(160)),
-          ),
-        );
+          );
+        }
       }
 
       if (hasLocal && item.transferType == TransferType.video) {
         final file = File(item.filePath!);
-        if (!file.existsSync()) return _buildMissingFileHint(textColor);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    _VideoPreviewPage(filePath: file.path, title: item.fileName ?? '视频'),
+        if (!file.existsSync()) {
+          if (isSelf) return _buildMissingFileHint(textColor);
+          // Fall through to default file row for received items
+        } else {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      _VideoPreviewPage(filePath: file.path, title: item.fileName ?? '视频'),
+                ),
+              ),
+              child: Stack(
+                children: [
+                  // thumbnail: let VideoPlayer build first frame lazily
+                  SizedBox(
+                    width: scaleW(220),
+                    height: scaleW(140),
+                    child: VideoPlayerWidgetThumbnail(path: file.path),
+                  ),
+                  Positioned.fill(
+                    child: Center(
+                      child: Icon(
+                        Icons.play_circle_outline,
+                        size: scaleW(48),
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Stack(
-              children: [
-                // thumbnail: let VideoPlayer build first frame lazily
-                SizedBox(
-                  width: scaleW(220),
-                  height: scaleW(140),
-                  child: VideoPlayerWidgetThumbnail(path: file.path),
-                ),
-                Positioned.fill(
-                  child: Center(
-                    child: Icon(Icons.play_circle_outline, size: scaleW(48), color: Colors.white70),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+          );
+        }
       }
 
       // 默认文件行（可点击分享）
@@ -603,17 +628,17 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
       TransferStatus.completed => Icon(Icons.done_all, size: scaleW(14), color: Colors.lightBlue),
       TransferStatus.failed => GestureDetector(
         onTap: () {
-          final errMsg = item.errorMessage;
-          if (errMsg != null && errMsg.isNotEmpty) {
-            Get.snackbar(
-              '发送失败',
-              errMsg,
-              duration: const Duration(seconds: 5),
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: Colors.red.withValues(alpha: 0.85),
-              colorText: Colors.white,
-            );
-          }
+          final errMsg = (item.errorMessage != null && item.errorMessage!.isNotEmpty)
+              ? item.errorMessage!
+              : '发送失败（原因未知，可能是对方离线或网络异常）';
+          Get.snackbar(
+            '发送失败',
+            errMsg,
+            duration: const Duration(seconds: 5),
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red.withValues(alpha: 0.85),
+            colorText: Colors.white,
+          );
         },
         child: Icon(Icons.error_outline, size: scaleW(14), color: Colors.red),
       ),

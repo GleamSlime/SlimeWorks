@@ -27,7 +27,14 @@ pub fn lan_transfer_init() -> Result<()> {
 }
 
 /// 创建并启动传输管理器
-pub async fn lan_transfer_start(port: u16, save_dir: String) -> Result<()> {
+///
+/// [pre_trusted_json] 为可选的已持久化信任设备 JSON 列表（每项为 `{"device_id":…,"device_name":…}` 的 JSON 字符串），
+/// 在 TCP 监听开始前注入，彻底消除"服务启动 → Dart 注入"窗口期内信任设备无法识别的竞态问题。
+pub async fn lan_transfer_start(
+    port: u16,
+    save_dir: String,
+    pre_trusted_json: Vec<String>,
+) -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
 
     if manager_guard.is_some() {
@@ -35,7 +42,7 @@ pub async fn lan_transfer_start(port: u16, save_dir: String) -> Result<()> {
         return Ok(());
     }
 
-    info!("lan_transfer_start begin, port={}, save_dir={}", port, save_dir);
+    info!("lan_transfer_start begin, port={}, save_dir={}, pre_trusted={}", port, save_dir, pre_trusted_json.len());
 
     // 加载或创建持久化设备 ID，确保换网络/重启 App 后设备 ID 不变
     let device_id = load_or_create_device_id(&save_dir).await;
@@ -43,6 +50,22 @@ pub async fn lan_transfer_start(port: u16, save_dir: String) -> Result<()> {
 
     let manager = LanTransferManager::new(port).await?;
     manager.set_save_dir(save_dir).await;
+
+    // 在 TCP 监听启动前注入预加载的信任设备，确保第一个连接就能被正确识别
+    for json_str in &pre_trusted_json {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+            let id = val.get("device_id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let name = val.get("device_name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            if !id.is_empty() {
+                if let Err(e) = manager.add_trusted_device(id.clone(), name).await {
+                    warn!("预注入信任设备失败 {}: {}", id, e);
+                } else {
+                    info!("预注入信任设备: {}", id);
+                }
+            }
+        }
+    }
+
     manager.start().await?;
 
     *manager_guard = Some(manager);

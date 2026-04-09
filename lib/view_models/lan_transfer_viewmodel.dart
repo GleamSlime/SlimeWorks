@@ -28,6 +28,9 @@ class LanTransferViewModel extends BaseViewModel {
   /// 本机设备 ID 持久化键（跨 session 保持稳定，避免 localDevice 未加载时分组出错）
   static const String _kLocalDeviceIdKey = 'lan_transfer_local_device_id';
 
+  /// 信任设备持久化键（Dart 层备份，防止 Rust 重启后丢失信任状态）
+  static const String _kTrustedDevicesKey = 'lan_transfer_trusted_devices';
+
   // 服务状态
   final RxBool isServiceRunning = false.obs;
   // 默认不扫描，用户手动触发
@@ -83,11 +86,25 @@ class LanTransferViewModel extends BaseViewModel {
       setLoading(true);
       _logger.i('Start LAN service requested');
 
+      // ① 在 Rust 监听器启动之前先从 SharedPreferences 读取持久化的信任设备列表。
+      //    通过 preTrustedJson 参数直接传入 lanTransferStart，确保在第一个 TCP 连接到来前
+      //    信任设备已注册，完全消除「服务启动 → 信任注入」窗口期的竞态问题。
+      final preloadedTrusted = await _readTrustedDevicesFromPrefs();
+      final preTrustedJson = preloadedTrusted
+          .map((d) => json.encode({'device_id': d.deviceId, 'device_name': d.deviceName}))
+          .toList();
+
       if (!_service.isRunning) {
-        await _service.startService();
+        await _service.startService(preTrustedJson: preTrustedJson);
       }
 
       isServiceRunning.value = true;
+
+      // ② 同步 Dart 层信任列表（服务内已注入完毕，仅更新 Dart 内存状态）
+      if (preloadedTrusted.isNotEmpty) {
+        trustedDevices.value = preloadedTrusted;
+        _logger.i('预加载信任设备 ${preloadedTrusted.length} 条（已随 lanTransferStart 注入 Rust）');
+      }
 
       // 获取本机设备信息
       localDevice.value = await _service.getLocalDevice();
@@ -98,8 +115,11 @@ class LanTransferViewModel extends BaseViewModel {
         await prefs.setString(_kLocalDeviceIdKey, _cachedLocalDeviceId);
       }
 
-      // 加载信任设备
+      // 从 Rust 同步最新信任列表（以 Rust 为准，补全可能因并发写入而遗漏的条目）
       await loadTrustedDevices();
+
+      // 如果 Rust 中仍缺少持久化设备，补充注册（Rust 曾因重启清空时的补偿逻辑）
+      await _loadPersistedTrustedDevices();
 
       // 加载持久化的传输历史（先显示缓存数据）
       await _loadPersistedHistory();
@@ -116,8 +136,10 @@ class LanTransferViewModel extends BaseViewModel {
       // 加载持久化的置顶会话
       await _loadPersistedPinnedPeers();
 
-      // 启动定时刷新
+      // 启动定时刷新，并自动开始扫描（确保会话列表中设备在线状态实时更新）
+      isScanning.value = true;
       _startAutoRefresh();
+      unawaited(refreshDevices()); // 立即执行一次，无需等待首个 3s 定时器
 
       await _service.runSelfCheck(reason: 'viewmodel-start-service');
     } catch (e) {
@@ -306,15 +328,21 @@ class LanTransferViewModel extends BaseViewModel {
         for (final item in transferHistory) item.transferId: item,
       };
       for (final item in transfers) {
-        // 跳过用户已手动删除的条目
+        // 跳过用户已手动删除的条目（_deletedIds 是唯一可靠的删除标记）
         if (_deletedIds.contains(item.transferId)) continue;
         merged[item.transferId] = item;
       }
       // 同时过滤掉持久化里可能残留的已删除条目
       _deletedIds.forEach(merged.remove);
 
-      // 按创建时间降序排列
-      final sorted = merged.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // 按创建时间降序排列（使用 DateTime.parse 支持不同时区的正确比较）
+      final sorted = merged.values.toList()
+        ..sort((a, b) {
+          final ta = DateTime.tryParse(a.createdAt);
+          final tb = DateTime.tryParse(b.createdAt);
+          if (ta == null || tb == null) return b.createdAt.compareTo(a.createdAt);
+          return tb.compareTo(ta);
+        });
 
       transferHistory.value = sorted;
 
@@ -460,22 +488,42 @@ class LanTransferViewModel extends BaseViewModel {
     return transferHistory.where((item) {
       final peerId = item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
       return peerId == peerDeviceId;
-    }).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    }).toList()..sort((a, b) {
+      // 使用 DateTime.parse 进行时区感知比较，避免不同设备因时区不同而排序错误
+      final ta = DateTime.tryParse(a.createdAt);
+      final tb = DateTime.tryParse(b.createdAt);
+      if (ta == null || tb == null) return a.createdAt.compareTo(b.createdAt);
+      return ta.compareTo(tb);
+    });
   }
 
-  /// 加载待处理的请求（已信任设备的请求不会进入此列表，因 Rust 层已自动 accept）
+  /// 加载待处理的请求；来自已信任设备的请求在 Dart 层也自动 accept，不打扰用户
   Future<void> loadPendingRequests() async {
     try {
       final transfers = await _service.getTransfers();
       final localDeviceId = localDevice.value?.deviceId;
+      final trustedIds = trustedDevices.map((d) => d.deviceId).toSet();
 
-      // 筛选发送给本机且状态为pending的请求
-      final newPending = transfers
+      // 筛选发送给本机且状态为 pending 的请求
+      final allPending = transfers
           .where((t) => t.receiverDeviceId == localDeviceId && t.status == TransferStatus.pending)
           .toList();
 
-      // 只保留尚未弹窗过的请求，避免重复弹出
-      final filtered = newPending.where((t) => !_shownRequestIds.contains(t.transferId)).toList();
+      // 自动 accept 来自信任设备的待处理请求（Dart 层兜底，防 Rust 未持久化信任信息）
+      for (final t in allPending) {
+        if (trustedIds.contains(t.senderDeviceId) && !_shownRequestIds.contains(t.transferId)) {
+          _shownRequestIds.add(t.transferId);
+          unawaited(_service.acceptTransfer(t.transferId));
+        }
+      }
+
+      // 只保留尚未弹窗过、且非信任设备的请求，避免重复弹出
+      final filtered = allPending
+          .where(
+            (t) =>
+                !_shownRequestIds.contains(t.transferId) && !trustedIds.contains(t.senderDeviceId),
+          )
+          .toList();
       pendingRequests.value = filtered;
     } catch (e) {
       handleError(e, '加载待处理请求失败');
@@ -496,11 +544,12 @@ class LanTransferViewModel extends BaseViewModel {
     }
   }
 
-  /// 添加信任设备
+  /// 添加信任设备（同时持久化到 Dart 层，防止 Rust 重启后遗忘）
   Future<void> addTrustedDevice(DeviceInfo device) async {
     try {
       await _service.addTrustedDevice(device.deviceId, device.deviceName);
       await loadTrustedDevices();
+      await _persistTrustedDevices();
       showSuccess('已添加信任设备');
     } catch (e) {
       handleError(e, '添加信任设备失败');
@@ -512,6 +561,7 @@ class LanTransferViewModel extends BaseViewModel {
     try {
       await _service.removeTrustedDevice(deviceId);
       await loadTrustedDevices();
+      await _persistTrustedDevices();
       showSuccess('已移除信任设备');
     } catch (e) {
       handleError(e, '移除信任设备失败');
@@ -556,7 +606,17 @@ class LanTransferViewModel extends BaseViewModel {
 
   /// 删除与某对端的所有历史记录（不删除文件）
   Future<void> deleteHistoryForPeer(String peerDeviceId) async {
-    final localId = localDevice.value?.deviceId ?? '';
+    final localId = localDevice.value?.deviceId ?? _cachedLocalDeviceId;
+    // 先从 Rust 拉一次最新记录，确保 Rust 内存中还未加载到 Dart 的条目也被纳入删除集
+    try {
+      final freshTransfers = await _service.getTransfers();
+      for (final item in freshTransfers) {
+        final peerId =
+            item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
+        if (peerId == peerDeviceId) _deletedIds.add(item.transferId);
+      }
+    } catch (_) {}
+    // 清除 Dart 本地缓存
     final toDelete = transferHistory.where((item) {
       final peerId = item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
       return peerId == peerDeviceId;
@@ -568,7 +628,6 @@ class LanTransferViewModel extends BaseViewModel {
       final peerId = item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
       return peerId == peerDeviceId;
     });
-    // 取消该对端的离线任务
     _cancelOfflineJobsForPeer(peerDeviceId);
     await _persistHistory();
     await _persistDeletedIds();
@@ -576,7 +635,17 @@ class LanTransferViewModel extends BaseViewModel {
 
   /// 删除与某对端的所有记录及文件
   Future<void> deleteConversationForPeer(String peerDeviceId) async {
-    final localId = localDevice.value?.deviceId ?? '';
+    final localId = localDevice.value?.deviceId ?? _cachedLocalDeviceId;
+    // 先从 Rust 拉取最新记录，确保 Rust 内存中未加载条目也被纳入删除集
+    try {
+      final freshTransfers = await _service.getTransfers();
+      for (final item in freshTransfers) {
+        final peerId =
+            item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
+        if (peerId == peerDeviceId) _deletedIds.add(item.transferId);
+      }
+    } catch (_) {}
+    // 删除本地文件并清理 Dart 缓存
     final toDelete = transferHistory.where((item) {
       final peerId = item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
       return peerId == peerDeviceId;
@@ -610,7 +679,7 @@ class LanTransferViewModel extends BaseViewModel {
       showError('本机设备信息未就绪');
       return;
     }
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String(); // 使用 UTC，确保跨设备时间戳可比较
     final tempId = _generateLocalId();
 
     // 立即创建本地记录并持久化
@@ -650,7 +719,7 @@ class LanTransferViewModel extends BaseViewModel {
       showError('本机设备信息未就绪');
       return;
     }
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String(); // 使用 UTC，确保跨设备时间戳可比较
     final tempId = _generateLocalId();
     final fileName = filePath.split('/').last;
     final file = File(filePath);
@@ -746,6 +815,7 @@ class LanTransferViewModel extends BaseViewModel {
       await loadTransferHistory();
     } catch (e) {
       _updateLocalItem(tempId, status: TransferStatus.failed, errorMessage: e.toString());
+      showError('发送文本失败：${e.toString()}');
       _logger.error('发送文本失败', error: e);
     }
   }
@@ -766,6 +836,7 @@ class LanTransferViewModel extends BaseViewModel {
       await loadTransferHistory();
     } catch (e) {
       _updateLocalItem(tempId, status: TransferStatus.failed, errorMessage: e.toString());
+      showError('发送文件失败：${e.toString()}');
       _logger.error('发送文件失败', error: e);
     }
   }
@@ -911,6 +982,69 @@ class LanTransferViewModel extends BaseViewModel {
       _logger.error('持久化置顶会话失败', error: e);
     }
   }
+
+  /// 从 SharedPreferences 同步读取持久化的信任设备列表（用于服务启动前预加载）
+  Future<List<TrustedDevice>> _readTrustedDevicesFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_kTrustedDevicesKey);
+      if (jsonStr == null || jsonStr.isEmpty) return [];
+      final list = (json.decode(jsonStr) as List<dynamic>)
+          .map((e) => TrustedDevice.fromJson(e as Map<String, dynamic>))
+          .toList();
+      _logger.i('预读信任设备列表 ${list.length} 条');
+      return list;
+    } catch (e) {
+      _logger.error('预读信任设备列表失败', error: e);
+      return [];
+    }
+  }
+
+  /// 从 SharedPreferences 加载 Dart 层持久化的信任设备，并将缺失的重新注册到 Rust
+  Future<void> _loadPersistedTrustedDevices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_kTrustedDevicesKey);
+      if (jsonStr == null || jsonStr.isEmpty) return;
+      final list = (json.decode(jsonStr) as List<dynamic>)
+          .map((e) => TrustedDevice.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final existingIds = trustedDevices.map((d) => d.deviceId).toSet();
+      for (final d in list) {
+        // 将 Rust 中不存在的信任设备重新注册（防止 Rust 重启后丢失）
+        if (!existingIds.contains(d.deviceId)) {
+          try {
+            await _service.addTrustedDevice(d.deviceId, d.deviceName);
+          } catch (_) {}
+          trustedDevices.add(d);
+        }
+      }
+      _logger.i('已恢复 ${list.length} 条 Dart 持久化信任设备');
+    } catch (e) {
+      _logger.error('加载 Dart 持久化信任设备失败', error: e);
+    }
+  }
+
+  /// 将信任设备列表持久化到 Dart 层 SharedPreferences
+  Future<void> _persistTrustedDevices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = trustedDevices
+          .map(
+            (d) => {
+              'device_id': d.deviceId,
+              'device_name': d.deviceName,
+              'trusted_at': d.trustedAt,
+            },
+          )
+          .toList();
+      await prefs.setString(_kTrustedDevicesKey, json.encode(list));
+    } catch (e) {
+      _logger.error('持久化信任设备失败', error: e);
+    }
+  }
+
+
 
   /// 启动自动刷新
   void _startAutoRefresh() {

@@ -16,8 +16,14 @@ pub fn lan_transfer_init() -> Result<()> {
 }
 
 /// 创建并启动传输管理器
-pub async fn lan_transfer_start(port: u16, save_dir: String) -> Result<()> {
-    lan_transfer::lan_transfer_start(port, save_dir).await
+///
+/// [pre_trusted_json] 为预加载的信任设备 JSON 列表，在 TCP 监听开始前注入，避免竞态信任遗漏。
+pub async fn lan_transfer_start(
+    port: u16,
+    save_dir: String,
+    pre_trusted_json: Vec<String>,
+) -> Result<()> {
+    lan_transfer::lan_transfer_start(port, save_dir, pre_trusted_json).await
 }
 
 /// 停止传输管理器

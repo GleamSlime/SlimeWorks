@@ -9,7 +9,9 @@ class DeviceList extends StatelessWidget {
   final DeviceInfo? selectedDevice;
   final Function(DeviceInfo) onDeviceSelected;
   final Function(DeviceInfo) onDeviceTrust;
-  final Future<bool> Function(String) isTrustedDevice;
+
+  /// 同步判断设备是否已信任（使用已加载的 trustedDevices 列表，避免 FutureBuilder 每次重建都重置）
+  final bool Function(String deviceId) isTrustedDevice;
 
   const DeviceList({
     super.key,
@@ -30,18 +32,14 @@ class DeviceList extends StatelessWidget {
       itemBuilder: (context, index) {
         final device = devices[index];
         final isSelected = selectedDevice?.deviceId == device.deviceId;
+        final isTrusted = isTrustedDevice(device.deviceId);
 
-        return FutureBuilder<bool>(
-          future: isTrustedDevice(device.deviceId),
-          builder: (context, snapshot) {
-            return _DeviceCard(
-              device: device,
-              isSelected: isSelected,
-              isTrusted: snapshot.data ?? false,
-              onTap: () => onDeviceSelected(device),
-              onTrust: () => onDeviceTrust(device),
-            );
-          },
+        return _DeviceCard(
+          device: device,
+          isSelected: isSelected,
+          isTrusted: isTrusted,
+          onTap: () => onDeviceSelected(device),
+          onTrust: () => onDeviceTrust(device),
         );
       },
     );

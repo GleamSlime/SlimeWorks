@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cue/cue.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,16 +14,12 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
-import 'package:slime_works/pages/collection/picture/components/media_collection_card.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
-import 'package:slime_works/pages/collection/picture/components/media_folder_card.dart';
-import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
+import 'package:slime_works/pages/collection/picture/components/media_browse_grid.dart';
+import 'package:slime_works/pages/collection/picture/components/media_collection_detail.dart';
 import 'package:slime_works/pages/collection/picture/components/media_selection_bar.dart';
-import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/pages/collection/picture/components/picture_library_toolbar.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
-import 'package:slime_works/pages/collection/picture/components/smart_folder_card.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
 
 class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
@@ -36,10 +31,6 @@ class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
 
 class _CollectionPictureScreenState
     extends BasePageState<MediaLibraryViewModel, CollectionPictureScreen> {
-  Offset? _selectionBoxStart;
-  Offset? _selectionBoxEnd;
-  // 每次导航时重新生成，确保 AnimatedSwitcher 过渡期间新旧页有不同 GlobalKey
-  GlobalKey _gridKey = GlobalKey();
   int _detailColumnCount = 3;
   // 同样每次导航时重建，避免 AnimatedSwitcher 过渡期间两个 GridView 同时 attach 同一个 controller
   late ScrollController _scrollController;
@@ -83,10 +74,7 @@ class _CollectionPictureScreenState
       context,
       rootNavigator: false,
     ).popUntil((route) => route.settings.name != null || route.isFirst);
-    setState(() {
-      _navForward = true;
-      _gridKey = GlobalKey();
-    });
+    setState(() => _navForward = true);
     _replaceScrollController();
     viewModel.enterFolder(id);
   }
@@ -96,37 +84,25 @@ class _CollectionPictureScreenState
       context,
       rootNavigator: false,
     ).popUntil((route) => route.settings.name != null || route.isFirst);
-    setState(() {
-      _navForward = false;
-      _gridKey = GlobalKey();
-    });
+    setState(() => _navForward = false);
     _replaceScrollController();
     viewModel.exitFolder();
   }
 
   void _enterCollection(String id) {
-    setState(() {
-      _navForward = true;
-      _gridKey = GlobalKey();
-    });
+    setState(() => _navForward = true);
     _replaceScrollController();
     viewModel.enterCollection(id);
   }
 
   void _exitCollection() {
-    setState(() {
-      _navForward = false;
-      _gridKey = GlobalKey();
-    });
+    setState(() => _navForward = false);
     _replaceScrollController();
     viewModel.exitCollection();
   }
 
   void _exitToRoot() {
-    setState(() {
-      _navForward = false;
-      _gridKey = GlobalKey();
-    });
+    setState(() => _navForward = false);
     _replaceScrollController();
     viewModel.exitToRoot();
   }
@@ -262,6 +238,7 @@ class _CollectionPictureScreenState
       final inFolder = viewModel.currentFolderId.value != null;
       final inCollection = viewModel.isInDetail;
       final hasInternalBackLevel = inFolder || inCollection;
+
       return PopScope(
         canPop: !hasInternalBackLevel,
         onPopInvokedWithResult: (didPop, _) {
@@ -305,8 +282,8 @@ class _CollectionPictureScreenState
             child: Obx(() {
               final pageKey = _pageContentKey;
               final pageContent = !viewModel.isInDetail
-                  ? _buildBrowseGrid(context)
-                  : _buildCollectionDetail(context);
+                  ? _buildBrowseGridWidget(context)
+                  : _buildCollectionDetailWidget(context);
               final body = Column(
                 children: [
                   Expanded(
@@ -342,7 +319,35 @@ class _CollectionPictureScreenState
                 ],
               );
               // 仅桌面端启用文件拖拽导入
-              if (Platform.isAndroid || Platform.isIOS) return body;
+              if (Platform.isAndroid || Platform.isIOS) {
+                // 移动端：有内部导航层级时，在左边缘叠加一个右滑返回手势区域。
+                // 补偿 PopScope 在 iOS CupertinoPage 中只拦截 Android 返回键的不足。
+                if (!hasInternalBackLevel) return body;
+                return Stack(
+                  children: [
+                    body,
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 24,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragEnd: (details) {
+                          if ((details.primaryVelocity ?? 0) > 200) {
+                            if (inCollection) {
+                              _exitCollection();
+                            } else if (inFolder) {
+                              _exitFolder();
+                            }
+                          }
+                        },
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ],
+                );
+              }
               return DropTarget(
                 onDragEntered: (_) => setState(() => _isDraggingFiles = true),
                 onDragExited: (_) => setState(() => _isDraggingFiles = false),
@@ -1266,420 +1271,48 @@ class _CollectionPictureScreenState
     return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
-  /// Wraps [child] in a colored overlay ring when a draggable is hovering over it.
-  Widget _buildDropHighlight(
-    BuildContext context, {
-    required bool highlighted,
-    required Widget child,
-  }) {
-    if (!highlighted) return child;
-    final color = Theme.of(context).colorScheme.primary;
-    return Stack(
-      children: [
-        child,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: appMetrics.radius8,
-                border: Border.all(color: color, width: scaleW(3)),
-                color: color.withAlpha(40),
-              ),
-            ),
-          ),
-        ),
-      ],
+
+  /// 浏览网格视图（首页列表 / 文件夹内列表），由 [MediaBrowseGridView] 实现。
+  Widget _buildBrowseGridWidget(BuildContext context) {
+    return MediaBrowseGridView(
+      viewModel: viewModel,
+      scrollController: _scrollController,
+      onEnterFolder: _enterFolder,
+      onEnterCollection: _enterCollection,
+      onRenameFolderDialog: _showRenameFolderDialog,
+      onConfirmDeleteFolder: _confirmDeleteFolder,
+      onRenameSmartFolderDialog: _showRenameSmartFolderDialog,
+      onEditSmartFolder: (sf, {bool isRemote = false}) =>
+          _showEditSmartFolderDialog(sf, isRemote: isRemote),
+      onDeleteSmartFolder: (id, name, {bool isRemote = false}) => isRemote
+          ? _confirmDeleteRemoteSmartFolder(id, name)
+          : _confirmDeleteSmartFolder(id, name),
+      onRenameCollection: _showRenameDialog,
+      onDeleteCollection: _confirmDeleteSingle,
+      onMoveCollection: _showMoveCollectionDialog,
+      onOpenFolder: (path, {bool isRemote = false}) => isRemote
+          ? _showRemotePathDialog(path)
+          : _openFolderInExplorer(path),
+      onDeleteCollectionFolder: (id, path, title) =>
+          _confirmDeleteCollectionFolder(id, path, title),
+      onDeleteNodeLocalFilesForFolder: _confirmDeleteNodeLocalFilesForFolder,
+      onDeleteNodeLocalFilesForCollection: _confirmDeleteNodeLocalFilesForCollection,
     );
   }
 
-  Widget _buildBrowseGrid(BuildContext context) {
-    final items = viewModel.visibleItems;
-    if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.perm_media_outlined, size: scaleW(64), color: Theme.of(context).hintColor),
-            SizedBox(height: appMetrics.kSpace12),
-            Text(
-              viewModel.currentFolderId.value == null ? '媒体库为空，使用上方操作导入集合' : '当前文件夹为空',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      );
-    }
-
-    final grid = GridView.builder(
-      key: _gridKey,
-      controller: _scrollController,
-      padding: EdgeInsets.all(appMetrics.kSpace12),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: scaleW(220),
-        childAspectRatio: 0.68,
-        mainAxisSpacing: appMetrics.kSpace12,
-        crossAxisSpacing: appMetrics.kSpace12,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        // 最多为前 20 个卡片添加入场动画，超出部分不设延迟避免卡顿
-        final delay = index < 20 ? (index * 30).clamp(0, 400) : 0;
-        Widget buildCard() {
-        if (item is MediaLibraryFolderItem) {
-          final folder = item.folder;
-          final folderCard = MediaFolderCard(
-            folder: folder,
-            coverSource: viewModel.buildFolderCoverSource(folder),
-            collectionCount: viewModel.collectionCountInFolder(folder.id),
-            isSelected: viewModel.selectedIds.contains(folder.id),
-            isRemote: viewModel.isRemoteFolder(folder.id),
-            nodeName: viewModel.getRemoteFolderNodeName(folder.id),
-            onTap: () {
-              if (viewModel.isSelecting.value) {
-                viewModel.toggleSelection(folder.id);
-                return;
-              }
-              _enterFolder(folder.id);
-            },
-            onLongPress: () => viewModel.enterSelection(folder.id),
-            onRename: () => _showRenameFolderDialog(folder.id, folder.name),
-            onDelete: () => _confirmDeleteFolder(folder.id, folder.name),
-            onTransfer: viewModel.isRemoteFolder(folder.id)
-                ? null
-                : () => viewModel.transferFolderCollections(folderId: folder.id),
-            onPullToLocal: viewModel.isRemoteFolder(folder.id)
-                ? () => viewModel.pullRemoteFolderToLocal(folder.id)
-                : null,
-            onDeleteNodeFiles: viewModel.isRemoteFolder(folder.id)
-                ? () => _confirmDeleteNodeLocalFilesForFolder(folder.id, folder.name)
-                : null,
-          );
-          if (viewModel.isRemoteFolder(folder.id)) return folderCard;
-          return DragTarget<String>(
-            onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
-            onAcceptWithDetails: (d) => viewModel.moveCollectionToFolder(d.data, folder.id),
-            builder: (ctx, candidateData, _) =>
-                _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: folderCard),
-          );
-        }
-
-        if (item is MediaLibrarySmartFolderItem) {
-          final sf = item.smartFolder;
-          final isRemoteSf = viewModel.isRemoteSmartFolder(sf.id);
-          final nodeId = viewModel.remoteSmartFolderNodeId(sf.id);
-          final nodeName = nodeId != null
-              ? (viewModel.nodeSettingsService.getNodeById(nodeId)?.name ?? nodeId)
-              : null;
-          final sfCard = SmartFolderCard(
-            smartFolder: sf,
-            coverSource: viewModel.buildSmartFolderCoverSource(sf),
-            matchCount: viewModel.mergedCollections
-                .where((c) => viewModel.collectionMatchesSmartFolder(sf, c))
-                .length,
-            isSelected: viewModel.selectedIds.contains(sf.id),
-            nodeName: nodeName,
-            onTap: () {
-              if (viewModel.isSelecting.value) {
-                viewModel.toggleSelection(sf.id);
-                return;
-              }
-              _enterFolder(sf.id);
-            },
-            onLongPress: () => viewModel.enterSelection(sf.id),
-            // 远程智能文件夹：不允许本地重命名/转移，但可以通过节点 API 编辑和删除
-            onRename: isRemoteSf ? null : () => _showRenameSmartFolderDialog(sf.id, sf.name),
-            onEdit: () => _showEditSmartFolderDialog(sf, isRemote: isRemoteSf),
-            onDelete: () => isRemoteSf
-                ? _confirmDeleteRemoteSmartFolder(sf.id, sf.name)
-                : _confirmDeleteSmartFolder(sf.id, sf.name),
-            onTransfer: isRemoteSf
-                ? null
-                : () => viewModel.transferFolderCollections(smartFolderId: sf.id),
-          );
-          if (isRemoteSf) return sfCard;
-          final targetId = sf.targetFolderIds.length == 1 ? sf.targetFolderIds.first : null;
-          if (targetId == null) return sfCard;
-          return DragTarget<String>(
-            onWillAcceptWithDetails: (d) => !viewModel.isRemoteCollection(d.data),
-            onAcceptWithDetails: (d) => viewModel.moveCollectionToFolder(d.data, targetId),
-            builder: (ctx, candidateData, _) =>
-                _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: sfCard),
-          );
-        }
-
-        final collection = (item as MediaLibraryCollectionItem).collection;
-        final collectionCard = MediaCollectionCard(
-          collection: collection,
-          coverSource: viewModel.buildCollectionCoverSource(collection),
-          isSelected: viewModel.selectedIds.contains(collection.id),
-          isSelecting: viewModel.isSelecting.value,
-          isRemote: viewModel.isRemoteCollection(collection.id),
-          nodeName: viewModel.getRemoteNodeName(collection.id),
-          totalSize: viewModel.getCollectionTotalSize(collection.id),
-          isFavorited: viewModel.isFavorite(collection.id),
-          hoverCoverSources: viewModel.isRemoteCollection(collection.id)
-              ? null
-              : viewModel.buildCollectionHoverSources(collection),
-          onHoverEnter: viewModel.isRemoteCollection(collection.id)
-              ? null
-              : () => viewModel.prefetchCollectionVideoFrames(collection.id),
-          onRequestVideoFrame: viewModel.isRemoteCollection(collection.id)
-              ? null
-              : (fraction) => viewModel.getCollectionVideoFrameAtFraction(collection.id, fraction),
-          onTap: () {
-            if (viewModel.isSelecting.value) {
-              viewModel.toggleSelection(collection.id);
-              return;
-            }
-            _enterCollection(collection.id);
-          },
-          onLongPress: () => viewModel.enterSelection(collection.id),
-          onRename: () => _showRenameDialog(collection.id, collection.title),
-          onDelete: () => _confirmDeleteSingle(collection.id, collection.title),
-          onMove: () => _showMoveCollectionDialog(collection.id, collection.folderId),
-          onOpenFolder: viewModel.isRemoteCollection(collection.id)
-              ? () => _showRemotePathDialog(collection.folderPath)
-              : () => _openFolderInExplorer(collection.folderPath),
-          onDeleteFolder: viewModel.isRemoteCollection(collection.id)
-              ? null
-              : () => _confirmDeleteCollectionFolder(
-                  collection.id,
-                  collection.folderPath,
-                  collection.title,
-                ),
-          onPullToLocal: viewModel.isRemoteCollection(collection.id)
-              ? () => viewModel.pullRemoteCollectionToLocal(collection.id)
+  /// 集合详情视图（集合内的媒体列表），由 [MediaCollectionDetailView] 实现。
+  Widget _buildCollectionDetailWidget(BuildContext context) {
+    return MediaCollectionDetailView(
+      viewModel: viewModel,
+      columnCount: _detailColumnCount,
+      onConfirmDelete: _confirmDeleteItemFile,
+      onConfirmDeleteNodeLocalFile:
+          viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? '')
+              ? _confirmDeleteNodeLocalItemFile
               : null,
-          onDeleteNodeFiles: viewModel.isRemoteCollection(collection.id)
-              ? () => _confirmDeleteNodeLocalFilesForCollection(collection.id, collection.title)
-              : null,
-          onToggleFavorite: () => viewModel.toggleFavorite(collection.id),
-        );
-        // Local collections: draggable (to folder) + DragTarget (from other collections for reorder)
-        // 仅在「综合排序」模式下启用拖拽重排序
-        if (viewModel.isRemoteCollection(collection.id)) return collectionCard;
-        final isCombinedSort =
-            viewModel.collectionSortOrder.value == CollectionSortOrder.combinedSort;
-        if (!isCombinedSort) return collectionCard;
-        final draggable = Draggable<String>(
-          data: collection.id,
-          feedback: Material(
-            elevation: 8,
-            borderRadius: appMetrics.radius8,
-            child: SizedBox(
-              width: scaleW(160),
-              height: scaleW(60),
-              child: Padding(
-                padding: EdgeInsets.all(appMetrics.kSpace12),
-                child: Text(
-                  collection.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ),
-          ),
-          childWhenDragging: Opacity(opacity: 0.3, child: collectionCard),
-          child: collectionCard,
-        );
-        return DragTarget<String>(
-          onWillAcceptWithDetails: (d) =>
-              d.data != collection.id &&
-              !viewModel.isRemoteCollection(d.data) &&
-              viewModel.mergedCollections.any((c) => c.id == d.data),
-          onAcceptWithDetails: (d) => viewModel.reorderCollection(d.data, collection.id),
-          builder: (ctx, candidateData, _) =>
-              _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: draggable),
-        );
-        } // end buildCard
-        return Cue.onMount(
-          motion: .smooth(),
-          child: Actor(
-            delay: Duration(milliseconds: delay),
-            acts: [
-              .fadeIn(),
-              .slideY(from: 0.12),
-            ],
-            child: buildCard(),
-          ),
-        );
+      onViewerStateChanged: (active) {
+        if (mounted) setState(() => _viewerActive = active);
       },
-    );
-
-    if (Platform.isAndroid || Platform.isIOS) {
-      return Stack(
-        children: [
-          grid,
-          // 远程节点异步加载中时，顶部显示一个细小的进度条
-          Obx(
-            () => viewModel.isLoadingRemote.value
-                ? const Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: LinearProgressIndicator(minHeight: 2),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      );
-    }
-
-    return GestureDetector(
-      onPanStart: (details) {
-        setState(() {
-          _selectionBoxStart = details.localPosition;
-          _selectionBoxEnd = details.localPosition;
-        });
-      },
-      onPanUpdate: (details) {
-        setState(() => _selectionBoxEnd = details.localPosition);
-        _updateSelectionByBox();
-      },
-      onPanEnd: (_) {
-        setState(() {
-          _selectionBoxStart = null;
-          _selectionBoxEnd = null;
-        });
-      },
-      child: Stack(
-        children: [
-          grid,
-          if (_selectionBoxStart != null && _selectionBoxEnd != null)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: SelectionBoxPainter(
-                  start: _selectionBoxStart!,
-                  end: _selectionBoxEnd!,
-                  color: Theme.of(context).colorScheme.primary.withAlpha(48),
-                  borderColor: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-          // 远程节点异步加载中时，顶部细进度条
-          Obx(
-            () => viewModel.isLoadingRemote.value
-                ? const Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: LinearProgressIndicator(minHeight: 2),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCollectionDetail(BuildContext context) {
-    final isLoading = viewModel.isLoadingItems.value;
-    if (viewModel.currentItems.isEmpty && isLoading) {
-      // 远程集合：显示带百分比的圆形进度环
-      final collectionId = viewModel.currentCollectionId.value ?? '';
-      if (viewModel.isRemoteCollection(collectionId)) {
-        return Obx(() {
-          final progress = viewModel.itemLoadProgress.value;
-          final percent = progress != null ? '${(progress * 100).toInt()}%' : null;
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(value: progress, strokeWidth: 5),
-                      if (percent != null)
-                        Text(percent, style: Theme.of(context).textTheme.labelMedium),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('正在加载远程资源…', style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          );
-        });
-      }
-      // 本地集合：普通 spinner
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (viewModel.currentItems.isEmpty) {
-      return Center(child: Text('该集合暂无可预览媒体', style: Theme.of(context).textTheme.bodyMedium));
-    }
-
-    final collectionId = viewModel.currentCollectionId.value ?? '';
-    final isRemote = viewModel.isRemoteCollection(collectionId);
-    final sortedItems = viewModel.sortedCurrentItems;
-
-    return Stack(
-      children: [
-        MasonryMediaGrid(
-          items: sortedItems,
-          collectionId: collectionId,
-          isRemote: isRemote,
-          viewModel: viewModel,
-          columnCount: _detailColumnCount,
-          lastViewedItemId: viewModel.lastViewedItemId.value,
-          onOpenViewer: (index) {
-            if (collectionId.isEmpty) return;
-            // 记录当前预览的资源 ID，返回后高亮并滚动到该位置
-            if (index >= 0 && index < sortedItems.length) {
-              viewModel.lastViewedItemId.value = sortedItems[index].id;
-            }
-            final isMobile = Platform.isAndroid || Platform.isIOS;
-            // 自定义淡入放大过渡动画 — opaque:true 防止动画期间透出底层内容
-            final route = PageRouteBuilder<void>(
-              opaque: true,
-              barrierColor: Colors.black,
-              pageBuilder: (_, __, ___) => MediaViewerPage(
-                items: sortedItems,
-                initialIndex: index,
-                collectionId: collectionId,
-                viewModel: viewModel,
-              ),
-              transitionDuration: const Duration(milliseconds: 280),
-              reverseTransitionDuration: const Duration(milliseconds: 240),
-              transitionsBuilder: (_, animation, __, child) => FadeTransition(
-                opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
-                child: ScaleTransition(
-                  scale: Tween<double>(
-                    begin: 0.93,
-                    end: 1.0,
-                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-                  child: child,
-                ),
-              ),
-            );
-            if (isMobile) {
-              // 移动端：推到根 Navigator，使预览页覆盖整个 AppBar/chrome 层。
-              Navigator.of(context, rootNavigator: true).push(route);
-            } else {
-              // 桌面端：推到内层 Navigator，并记录 _viewerActive 以重定向操作栏返回按钮。
-              // 用 addPostFrameCallback 延迟 setState，避免在 push 帧内触发
-              // _dependents.isEmpty 断言。
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _viewerActive = true);
-              });
-              Navigator.of(context).push(route).whenComplete(() {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _viewerActive = false);
-                });
-              });
-            }
-          },
-          onConfirmDelete: _confirmDeleteItemFile,
-          onConfirmDeleteNodeLocalFile: isRemote ? _confirmDeleteNodeLocalItemFile : null,
-        ),
-        // 有数据但仍在加载更多时，顶部显示细进度条（不阻塞内容交互）
-        if (isLoading)
-          const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator(minHeight: 2)),
-      ],
     );
   }
 
@@ -1705,49 +1338,6 @@ class _CollectionPictureScreenState
       confirmColor: Theme.of(context).colorScheme.error,
     );
     if (confirmed) await viewModel.deleteRemoteItemLocalFile(item);
-  }
-
-  void _updateSelectionByBox() {
-    if (_selectionBoxStart == null || _selectionBoxEnd == null) {
-      return;
-    }
-
-    final selectionRect = Rect.fromPoints(_selectionBoxStart!, _selectionBoxEnd!);
-    final gridRenderBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
-    if (gridRenderBox == null) {
-      return;
-    }
-
-    final items = viewModel.visibleItems;
-    final newSelection = <String>{};
-    final maxCrossAxisExtent = scaleW(250);
-    final spacing = appMetrics.kSpace12;
-    final padding = appMetrics.kSpace12;
-    final gridWidth = gridRenderBox.size.width - 2 * padding;
-    final crossAxisCount = (gridWidth / (maxCrossAxisExtent + spacing)).floor();
-    if (crossAxisCount <= 0) {
-      return;
-    }
-    final itemWidth = (gridWidth - (crossAxisCount - 1) * spacing) / crossAxisCount;
-    final itemHeight = itemWidth / 0.78;
-
-    for (int index = 0; index < items.length; index++) {
-      final row = index ~/ crossAxisCount;
-      final column = index % crossAxisCount;
-      final left = padding + column * (itemWidth + spacing);
-      final top = padding + row * (itemHeight + spacing);
-      final itemRect = Rect.fromLTWH(left, top, itemWidth, itemHeight);
-      if (selectionRect.overlaps(itemRect)) {
-        newSelection.add(items[index].id);
-      }
-    }
-
-    if (newSelection.isEmpty) {
-      viewModel.exitSelection();
-      return;
-    }
-    viewModel.isSelecting.value = true;
-    viewModel.selectedIds.assignAll(newSelection);
   }
 
   Future<void> _showRenameDialog(String collectionId, String currentTitle) async {

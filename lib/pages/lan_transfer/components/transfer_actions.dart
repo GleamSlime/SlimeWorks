@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
 
@@ -257,36 +260,56 @@ class _TransferActionsState extends State<TransferActions> {
   }
 
   Future<void> _pickAndSendFile() async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
-      await widget.viewModel.sendFileToDevice(
-        widget.peerDeviceId,
-        widget.peerDeviceName,
-        result.files.single.path!,
-      );
+    // iOS 上部分来源无路径，需同时请求字节数据作为兜底
+    final result = await FilePicker.platform.pickFiles(withData: Platform.isIOS);
+    if (result == null) return;
+    final path = await _resolveFilePath(result.files.single);
+    if (path == null) {
+      Get.snackbar('无法发送', '未能获取文件路径，请重试或选择其他文件', snackPosition: SnackPosition.BOTTOM);
+      return;
     }
+    await widget.viewModel.sendFileToDevice(widget.peerDeviceId, widget.peerDeviceName, path);
   }
 
   Future<void> _pickAndSendImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result != null && result.files.single.path != null) {
-      await widget.viewModel.sendFileToDevice(
-        widget.peerDeviceId,
-        widget.peerDeviceName,
-        result.files.single.path!,
-      );
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: Platform.isIOS);
+    if (result == null) return;
+    final path = await _resolveFilePath(result.files.single);
+    if (path == null) {
+      Get.snackbar('无法发送', '未能获取图片路径，iOS 设备请确认已授权相册访问', snackPosition: SnackPosition.BOTTOM);
+      return;
     }
+    await widget.viewModel.sendFileToDevice(widget.peerDeviceId, widget.peerDeviceName, path);
   }
 
   Future<void> _pickAndSendVideo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video);
-    if (result != null && result.files.single.path != null) {
-      await widget.viewModel.sendFileToDevice(
-        widget.peerDeviceId,
-        widget.peerDeviceName,
-        result.files.single.path!,
-      );
+    final result = await FilePicker.platform.pickFiles(type: FileType.video, withData: Platform.isIOS);
+    if (result == null) return;
+    final path = await _resolveFilePath(result.files.single);
+    if (path == null) {
+      Get.snackbar('无法发送', '未能获取视频路径，iOS 设备请确认已授权相册访问', snackPosition: SnackPosition.BOTTOM);
+      return;
     }
+    await widget.viewModel.sendFileToDevice(widget.peerDeviceId, widget.peerDeviceName, path);
+  }
+
+  /// 解析 [PlatformFile] 的可用路径。
+  ///
+  /// iOS 上通过 PHPicker 选取的文件有时 [PlatformFile.path] 为 null，
+  /// 但 [PlatformFile.bytes] 可用；此时将字节写入临时目录并返回路径。
+  Future<String?> _resolveFilePath(PlatformFile file) async {
+    // 优先使用直接路径
+    if (file.path != null) return file.path;
+    // iOS 兜底：将字节写入临时文件
+    if (file.bytes != null && file.bytes!.isNotEmpty) {
+      try {
+        final dir = await getTemporaryDirectory();
+        final tempFile = File('${dir.path}/${file.name}');
+        await tempFile.writeAsBytes(file.bytes!);
+        return tempFile.path;
+      } catch (_) {}
+    }
+    return null;
   }
 
   Future<void> _sendText() async {

@@ -309,7 +309,13 @@ class LanTransferService {
   }
 
   /// 启动服务
-  Future<void> startService({int port = kDefaultPort}) async {
+  ///
+  /// [preTrustedJson] 为已持久化的信任设备 JSON 列表（每项形如 `{"device_id":"…","device_name":"…"}`），
+  /// 在 TCP 监听开始前注入 Rust，避免连接请求在信任设备尚未注册时到达的竞态问题。
+  Future<void> startService({
+    int port = kDefaultPort,
+    List<String> preTrustedJson = const [],
+  }) async {
     if (_isRunning) {
       logger.d('LAN Transfer service already running');
       return;
@@ -320,7 +326,7 @@ class LanTransferService {
       return;
     }
 
-    _pendingStart = _startServiceInternal(port: port);
+    _pendingStart = _startServiceInternal(port: port, preTrustedJson: preTrustedJson);
     try {
       await _pendingStart;
     } finally {
@@ -328,7 +334,10 @@ class LanTransferService {
     }
   }
 
-  Future<void> _startServiceInternal({required int port}) async {
+  Future<void> _startServiceInternal({
+    required int port,
+    List<String> preTrustedJson = const [],
+  }) async {
     if (_pendingStop != null) {
       await _pendingStop;
     }
@@ -340,7 +349,11 @@ class LanTransferService {
       // 获取 documents 目录才能在 iOS 等移动端保存文件
       final docsDir = await getApplicationDocumentsDirectory();
       final saveDir = '${docsDir.path}/LanTransfer';
-      await rust_api.lanTransferStart(port: port, saveDir: saveDir);
+      await rust_api.lanTransferStart(
+        port: port,
+        saveDir: saveDir,
+        preTrustedJson: preTrustedJson,
+      );
       _isRunning = true;
 
       // 定期刷新设备列表
@@ -362,7 +375,11 @@ class LanTransferService {
         for (int attempt = 0; attempt < retryDelays.length; attempt++) {
           await Future<void>.delayed(Duration(milliseconds: retryDelays[attempt]));
           try {
-            await rust_api.lanTransferStart(port: port, saveDir: saveDir);
+            await rust_api.lanTransferStart(
+              port: port,
+              saveDir: saveDir,
+              preTrustedJson: preTrustedJson,
+            );
             _isRunning = true;
             _startDeviceRefresh();
             logger.i('LAN Transfer service restarted on port $port (attempt ${attempt + 1})');

@@ -105,11 +105,27 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
         });
       });
     }
-    if (old.items.length != widget.items.length || old.columnCount != widget.columnCount) {
+    if (old.collectionId != widget.collectionId || old.columnCount != widget.columnCount) {
+      // 切换了集合或列数变化：先立即显示前几行（避免空白闪烁），再继续逐行展开动画
       _revealTimer?.cancel();
-      setState(() => _visibleCount = 0);
+      _itemKeys.clear();
+      final initialCount = widget.items.isEmpty
+          ? 0
+          : (widget.columnCount * 2).clamp(0, widget.items.length);
+      setState(() => _visibleCount = initialCount);
+      // 下一帧继续展开剩余内容
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _revealNextBatch();
+      });
+    } else if (_visibleCount < widget.items.length) {
+      // 同一集合内条目增加（如分页加载）：继续展示，不重置
+      _revealTimer?.cancel();
       _scheduleReveal();
-      // 清理已不在列表中的 GlobalKey，避免 map 无限增长
+      // 清理已不在列表中的 GlobalKey
+      final currentIds = widget.items.map((i) => i.id).toSet();
+      _itemKeys.removeWhere((id, _) => !currentIds.contains(id));
+    } else if (old.items.length > widget.items.length) {
+      // 条目减少（删除）：直接收缩，清理缓存
       final currentIds = widget.items.map((i) => i.id).toSet();
       _itemKeys.removeWhere((id, _) => !currentIds.contains(id));
     }

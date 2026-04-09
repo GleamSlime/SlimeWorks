@@ -571,6 +571,8 @@ class _DeviceSheetContent extends StatelessWidget {
     return Obx(() {
       final isScanning = viewModel.isScanning.value;
       final devices = viewModel.discoveredDevices;
+      // 订阅 trustedDevices 变化，确保信任状态更新后列表重建
+      final _ = viewModel.trustedDevices.length;
 
       return Column(
         children: [
@@ -683,7 +685,9 @@ class _DeviceSheetContent extends StatelessWidget {
                         selectedDevice: viewModel.selectedDevice.value,
                         onDeviceSelected: onDeviceSelected,
                         onDeviceTrust: viewModel.addTrustedDevice,
-                        isTrustedDevice: viewModel.isTrustedDevice,
+                        // 同步检查已加载的 trustedDevices，避免 FutureBuilder 每帧重建都先显示未信任
+                        isTrustedDevice: (id) =>
+                            viewModel.trustedDevices.any((t) => t.deviceId == id),
                       );
                     },
                   )

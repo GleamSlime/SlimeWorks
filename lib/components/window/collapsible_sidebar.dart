@@ -6,6 +6,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
+import 'package:slime_works/components/buttons/cue_pressable.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -426,20 +427,19 @@ class CollapsibleSidebar extends StatelessWidget {
                 horizontal: isExpanded ? AppTheme.metrics.kSpace10 : AppTheme.metrics.kSpace12,
                 vertical: AppTheme.metrics.kSpace2,
               ),
-              child: Material(
-                color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
-                borderRadius: AppTheme.metrics.radius12,
-                child: InkWell(
-                  mouseCursor: SystemMouseCursors.click,
-                  onTap: () {
-                    if (item.hasChildren) {
-                      return controller.toggleItemExpanded(item.route.title);
-                    }
-
-                    _navigateAndMaybeClose(controller, item.route.location);
-                  },
-                  splashFactory: NoSplash.splashFactory,
-                  highlightColor: Colors.transparent,
+              child: CuePressable(
+                hoverScale: 1.03,
+                pressScale: 0.97,
+                onTap: () {
+                  if (item.hasChildren) {
+                    return controller.toggleItemExpanded(item.route.title);
+                  }
+                  _navigateAndMaybeClose(controller, item.route.location);
+                },
+                child: Material(
+                  color: isSelected
+                      ? theme.colorScheme.onSurface.withAlpha(25)
+                      : Colors.transparent,
                   borderRadius: AppTheme.metrics.radius12,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),

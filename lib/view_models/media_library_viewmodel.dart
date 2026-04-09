@@ -1136,7 +1136,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       return;
     }
 
-    isLoadingItems.value = true;
+    // isLoadingItems may already be true if coming from enterCollection; only set if not already
+    if (!isLoadingItems.value) isLoadingItems.value = true;
     itemLoadProgress.value = null;
     try {
       if (isRemoteCollection(collectionId)) {
@@ -1168,6 +1169,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   Future<void> enterCollection(String collectionId) async {
     // Snapshot scroll position for the current browse level before entering detail
     _browseScrollOffsets[currentFolderId.value] = savedScrollOffset.value;
+    // 先标记 loading，再更新 collectionId，避免 UI 先闪一次"集合为空"状态
+    currentItems.clear();
+    isLoadingItems.value = true;
     currentCollectionId.value = collectionId;
     exitSelection();
     await loadCurrentCollectionItems();

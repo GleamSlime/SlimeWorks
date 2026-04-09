@@ -11,11 +11,17 @@ void lanTransferInit() =>
     RustLib.instance.api.crateApiLanTransferLanTransferInit();
 
 /// 创建并启动传输管理器
-Future<void> lanTransferStart({required int port, required String saveDir}) =>
-    RustLib.instance.api.crateApiLanTransferLanTransferStart(
-      port: port,
-      saveDir: saveDir,
-    );
+///
+/// [pre_trusted_json] 为预加载的信任设备 JSON 列表，在 TCP 监听开始前注入，避免竞态信任遗漏。
+Future<void> lanTransferStart({
+  required int port,
+  required String saveDir,
+  required List<String> preTrustedJson,
+}) => RustLib.instance.api.crateApiLanTransferLanTransferStart(
+  port: port,
+  saveDir: saveDir,
+  preTrustedJson: preTrustedJson,
+);
 
 /// 停止传输管理器
 Future<void> lanTransferStop() =>
