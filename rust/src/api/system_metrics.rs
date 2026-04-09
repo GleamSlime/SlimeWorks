@@ -39,31 +39,30 @@ pub fn get_system_resource_snapshot() -> anyhow::Result<SystemResourceSnapshot> 
     system.refresh_cpu_usage();
     system.refresh_memory();
 
-    let (cpu_usage_percent, memory_used_mb, memory_total_mb) =
-        match sysinfo::get_current_pid() {
-            Ok(current_pid) => {
-                system.refresh_processes(ProcessesToUpdate::Some(&[current_pid]), true);
-                if let Some(process) = system.process(current_pid) {
-                    (
-                        process.cpu_usage() as f64,
-                        process.memory() / 1024 / 1024,
-                        process.virtual_memory() / 1024 / 1024,
-                    )
-                } else {
-                    // iOS 等环境可能拿不到当前进程，回退为设备级状态。
-                    (
-                        system.global_cpu_usage() as f64,
-                        system.used_memory() / 1024 / 1024,
-                        system.total_memory() / 1024 / 1024,
-                    )
-                }
+    let (cpu_usage_percent, memory_used_mb, memory_total_mb) = match sysinfo::get_current_pid() {
+        Ok(current_pid) => {
+            system.refresh_processes(ProcessesToUpdate::Some(&[current_pid]), true);
+            if let Some(process) = system.process(current_pid) {
+                (
+                    process.cpu_usage() as f64,
+                    process.memory() / 1024 / 1024,
+                    process.virtual_memory() / 1024 / 1024,
+                )
+            } else {
+                // iOS 等环境可能拿不到当前进程，回退为设备级状态。
+                (
+                    system.global_cpu_usage() as f64,
+                    system.used_memory() / 1024 / 1024,
+                    system.total_memory() / 1024 / 1024,
+                )
             }
-            Err(_) => (
-                system.global_cpu_usage() as f64,
-                system.used_memory() / 1024 / 1024,
-                system.total_memory() / 1024 / 1024,
-            ),
-        };
+        }
+        Err(_) => (
+            system.global_cpu_usage() as f64,
+            system.used_memory() / 1024 / 1024,
+            system.total_memory() / 1024 / 1024,
+        ),
+    };
 
     // sysinfo 暂不提供跨平台稳定的进程级网络上下行统计，先返回应用级占位值。
     let total_rx: u64 = 0;

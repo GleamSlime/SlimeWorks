@@ -30,8 +30,10 @@ pub async fn dispatch_action(
                 .map_err(|e| format!("获取媒体集合失败: {}", e))?;
             let stats = media_api::get_all_collection_stats()
                 .map_err(|e| format!("获取集合统计失败: {}", e))?;
-            let stats_map: std::collections::HashMap<_, _> =
-                stats.into_iter().map(|s| (s.collection_id.clone(), s)).collect();
+            let stats_map: std::collections::HashMap<_, _> = stats
+                .into_iter()
+                .map(|s| (s.collection_id.clone(), s))
+                .collect();
 
             let result: Vec<Value> = collections
                 .into_iter()
@@ -72,10 +74,7 @@ pub async fn dispatch_action(
         }
 
         "get_media_collection_items" => {
-            let collection_id = params["collection_id"]
-                .as_str()
-                .unwrap_or("")
-                .to_string();
+            let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
             let items = media_api::get_media_collection_items(collection_id)
                 .map_err(|e| format!("获取媒体项失败: {}", e))?;
             let result: Vec<Value> = items
@@ -235,11 +234,13 @@ pub async fn dispatch_action(
 
         // ── 小说操作 ─────────────────────────────────────────────────────────
         "list_novels" => {
-            let novels = novel_api::get_all_novels()
-                .map_err(|e| format!("获取小说列表失败: {}", e))?;
+            let novels =
+                novel_api::get_all_novels().map_err(|e| format!("获取小说列表失败: {}", e))?;
             let folders = novel_api::get_all_folders().unwrap_or_default();
-            let folder_map: std::collections::HashMap<_, _> =
-                folders.into_iter().map(|f| (f.id.clone(), f.name)).collect();
+            let folder_map: std::collections::HashMap<_, _> = folders
+                .into_iter()
+                .map(|f| (f.id.clone(), f.name))
+                .collect();
             let chapter_counts = load_chapter_count_map();
 
             let result: Vec<Value> = novels
@@ -283,8 +284,10 @@ pub async fn dispatch_action(
             let results = novel_api::search_in_all_novels(keyword.to_string())
                 .map_err(|e| format!("搜索小说失败: {}", e))?;
             let folders = novel_api::get_all_folders().unwrap_or_default();
-            let folder_map: std::collections::HashMap<_, _> =
-                folders.into_iter().map(|f| (f.id.clone(), f.name)).collect();
+            let folder_map: std::collections::HashMap<_, _> = folders
+                .into_iter()
+                .map(|f| (f.id.clone(), f.name))
+                .collect();
             let chapter_counts = load_chapter_count_map();
 
             let result: Vec<Value> = results
@@ -365,8 +368,7 @@ pub async fn dispatch_action(
 
         "delete_novel" => {
             let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
-            novel_api::remove_novel(novel_id)
-                .map_err(|e| format!("删除小说失败: {}", e))?;
+            novel_api::remove_novel(novel_id).map_err(|e| format!("删除小说失败: {}", e))?;
             Ok(json!({"ok": true}))
         }
 

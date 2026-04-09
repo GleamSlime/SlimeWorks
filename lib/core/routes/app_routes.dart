@@ -25,6 +25,10 @@ import 'package:slime_works/pages/http_bridge_test_page.dart';
 import 'package:slime_works/pages/settings/settings_page.dart';
 import 'package:slime_works/pages/lan_transfer/lan_transfer_screen.dart';
 import 'package:slime_works/pages/lan_transfer/lan_chat_screen.dart';
+import 'package:slime_works/pages/picacg/picacg_home_screen.dart';
+import 'package:slime_works/pages/picacg/picacg_comic_detail_screen.dart';
+import 'package:slime_works/pages/picacg/search/picacg_search_screen.dart';
+import 'package:slime_works/pages/picacg/reader/picacg_reader_screen.dart';
 
 part 'app_routes.g.dart';
 
@@ -39,6 +43,7 @@ part 'routes/collection_routes.dart';
 part 'routes/demo_routes.dart';
 part 'routes/capture_routers.dart';
 part 'routes/lan_transfer_routes.dart';
+part 'routes/picacg_routes.dart';
 
 // // 导航到 Dashboard
 // DashboardRoute().go(context);
@@ -97,6 +102,11 @@ class AppRoutes {
 
       const GooeyDemoRoute(),
       const ViewModelDemoRoute(),
+
+      const PicacgHomeRoute(),
+      const PicacgComicDetailRoute(comicId: ''),
+      const PicacgSearchRoute(),
+      PicacgReaderRoute(comicId: '', epsOrder: 0),
     ];
 
     router = GoRouter(

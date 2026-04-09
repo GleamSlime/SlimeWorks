@@ -187,8 +187,7 @@ impl WsServer {
                             if let Err(e) = client_handle.sender.send(msg).await {
                                 println!(
                                     "Failed to send routed message to client {}: {}",
-                                    client_id,
-                                    e
+                                    client_id, e
                                 );
                             }
                         } else {

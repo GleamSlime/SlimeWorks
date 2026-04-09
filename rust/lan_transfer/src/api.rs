@@ -42,7 +42,12 @@ pub async fn lan_transfer_start(
         return Ok(());
     }
 
-    info!("lan_transfer_start begin, port={}, save_dir={}, pre_trusted={}", port, save_dir, pre_trusted_json.len());
+    info!(
+        "lan_transfer_start begin, port={}, save_dir={}, pre_trusted={}",
+        port,
+        save_dir,
+        pre_trusted_json.len()
+    );
 
     // 加载或创建持久化设备 ID，确保换网络/重启 App 后设备 ID 不变
     let device_id = load_or_create_device_id(&save_dir).await;
@@ -54,8 +59,16 @@ pub async fn lan_transfer_start(
     // 在 TCP 监听启动前注入预加载的信任设备，确保第一个连接就能被正确识别
     for json_str in &pre_trusted_json {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
-            let id = val.get("device_id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let name = val.get("device_name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let id = val
+                .get("device_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let name = val
+                .get("device_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
             if !id.is_empty() {
                 if let Err(e) = manager.add_trusted_device(id.clone(), name).await {
                     warn!("预注入信任设备失败 {}: {}", id, e);

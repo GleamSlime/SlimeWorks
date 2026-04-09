@@ -53,9 +53,7 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
     let is_range_request = range_header.is_some();
 
     // 如果是图片或封面请求且不是 Range 请求，尝试返回缩略图
-    if !is_range_request
-        && (is_image_file(&file_path)
-            || (is_cover_mode && is_av_file(&file_path)))
+    if !is_range_request && (is_image_file(&file_path) || (is_cover_mode && is_av_file(&file_path)))
     {
         let final_width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
         if final_width > 0 {
@@ -72,7 +70,12 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
     // 这样视频播放器可以立即开始播放而无需等待整个文件传输完毕
     if is_video_file(&file_path) || is_audio_file(&file_path) {
         let end = (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1));
-        return serve_range_request(path, &format!("bytes=0-{}", end), total_length, &content_type);
+        return serve_range_request(
+            path,
+            &format!("bytes=0-{}", end),
+            total_length,
+            &content_type,
+        );
     }
 
     // 图片/普通文件：直接读取返回（通常体积小，不必切片）
@@ -322,7 +325,9 @@ pub async fn handle_media_query(query: &str) -> Result<Vec<u8>, String> {
     if is_cover_mode || is_image_file(file_path) {
         let width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
         if width > 0 {
-            if let Some(thumb_path) = media_collection::api::ensure_cover_thumbnail(file_path.to_string(), width) {
+            if let Some(thumb_path) =
+                media_collection::api::ensure_cover_thumbnail(file_path.to_string(), width)
+            {
                 if !thumb_path.is_empty() {
                     if let Ok(bytes) = std::fs::read(&thumb_path) {
                         return Ok(bytes);
@@ -364,7 +369,10 @@ pub fn serve_media_file_with_range(
     let (start, end_requested) = if let Some(range_str) = range {
         let re = regex::Regex::new(r"bytes=(\d*)-(\d*)").unwrap();
         if let Some(caps) = re.captures(range_str) {
-            let s: u64 = caps.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
+            let s: u64 = caps
+                .get(1)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(0);
             let e: u64 = caps
                 .get(2)
                 .and_then(|m| m.as_str().parse().ok())
@@ -375,7 +383,10 @@ pub fn serve_media_file_with_range(
         }
     } else {
         // 无 Range 时主动返回首个切片，促使播放器转用 Range 请求
-        (0, (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)))
+        (
+            0,
+            (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)),
+        )
     };
 
     let bounded_end = end_requested.min(total_length.saturating_sub(1));
@@ -389,11 +400,17 @@ pub fn serve_media_file_with_range(
     let range_length = (capped_end - start + 1) as usize;
 
     let mut file = std::fs::File::open(path).map_err(|e| format!("open file failed: {}", e))?;
-    file.seek(SeekFrom::Start(start)).map_err(|e| format!("seek failed: {}", e))?;
+    file.seek(SeekFrom::Start(start))
+        .map_err(|e| format!("seek failed: {}", e))?;
     let mut buffer = vec![0u8; range_length];
-    file.read_exact(&mut buffer).map_err(|e| format!("read failed: {}", e))?;
+    file.read_exact(&mut buffer)
+        .map_err(|e| format!("read failed: {}", e))?;
 
-    let status = if range.is_some() { "206 Partial Content" } else { "206 Partial Content" };
+    let status = if range.is_some() {
+        "206 Partial Content"
+    } else {
+        "206 Partial Content"
+    };
     let headers = vec![
         ("Content-Type".to_string(), content_type),
         ("Content-Length".to_string(), range_length.to_string()),

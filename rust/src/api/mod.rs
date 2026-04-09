@@ -4,14 +4,15 @@ pub mod http_bridge;
 pub mod lan_transfer;
 pub mod logger;
 // pub mod module_api;         // 已删除 - 依赖旧module_manager结构
+pub mod media_collection; // 媒体集合模块
 pub mod module_downloader;
 pub mod module_loader; // 旧 API（CaptureProxy相关）
 pub mod module_manager; // 新的统一模块管理系统（使用独立 crate）
-pub mod media_collection; // 媒体集合模块
 pub mod novel_reader; // 书籍阅读器模块
+pub mod picacg;
 pub mod simple;
 pub mod system_metrics;
-pub mod websocket; // WebSocket 模块
+pub mod websocket; // WebSocket 模块 // PicACG 漫画平台模块
 
 // 数据库模块
 pub use db_module::*;

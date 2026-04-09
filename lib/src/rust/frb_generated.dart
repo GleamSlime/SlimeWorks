@@ -12,6 +12,7 @@ import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
+import 'api/picacg.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
 import 'api/websocket.dart';
@@ -77,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -886523928;
+  int get rustContentHash => -1730251418;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -463,6 +464,115 @@ abstract class RustLibApi extends BaseApi {
     required String novelId,
     String? folderId,
   });
+
+  String crateApiPicacgPicacgBuildImageUrl({
+    required String fileServer,
+    required String path,
+  });
+
+  Future<Uint8List> crateApiPicacgPicacgFetchImage({
+    required String fileServer,
+    required String path,
+  });
+
+  Future<String> crateApiPicacgPicacgGetCategories();
+
+  Future<String> crateApiPicacgPicacgGetCollections();
+
+  Future<String> crateApiPicacgPicacgGetComicDetail({required String comicId});
+
+  Future<String> crateApiPicacgPicacgGetComicEps({
+    required String comicId,
+    required int page,
+  });
+
+  Future<String> crateApiPicacgPicacgGetComicRecommendations({
+    required String comicId,
+  });
+
+  Future<String> crateApiPicacgPicacgGetComicsByCategory({
+    required String category,
+    required int page,
+    required String sort,
+  });
+
+  Future<String> crateApiPicacgPicacgGetCommentChildren({
+    required String commentId,
+    required int page,
+  });
+
+  Future<String> crateApiPicacgPicacgGetComments({
+    required String comicId,
+    required int page,
+  });
+
+  Future<String> crateApiPicacgPicacgGetEpsPages({
+    required String comicId,
+    required int epsOrder,
+    required int page,
+  });
+
+  Future<String> crateApiPicacgPicacgGetFavourites({
+    required int page,
+    required String sort,
+  });
+
+  String crateApiPicacgPicacgGetImageServer();
+
+  Future<String> crateApiPicacgPicacgGetKeywords();
+
+  Future<String> crateApiPicacgPicacgGetRandomComics();
+
+  Future<String> crateApiPicacgPicacgGetRankings({required String timeType});
+
+  String crateApiPicacgPicacgGetToken();
+
+  Future<String> crateApiPicacgPicacgGetUserProfile();
+
+  void crateApiPicacgPicacgInit();
+
+  Future<String> crateApiPicacgPicacgLikeComment({required String commentId});
+
+  Future<String> crateApiPicacgPicacgLogin({
+    required String email,
+    required String password,
+  });
+
+  void crateApiPicacgPicacgLogout();
+
+  Future<String> crateApiPicacgPicacgPunchIn();
+
+  Future<String> crateApiPicacgPicacgSearchComics({
+    required String keyword,
+    required List<String> categories,
+    required int page,
+    required String sort,
+  });
+
+  Future<String> crateApiPicacgPicacgSendComment({
+    required String comicId,
+    required String content,
+  });
+
+  void crateApiPicacgPicacgSetChannel({
+    required int mode,
+    required String custom,
+  });
+
+  void crateApiPicacgPicacgSetImageServer({required String server});
+
+  void crateApiPicacgPicacgSetProxy({required String proxyUrl});
+
+  void crateApiPicacgPicacgSetToken({required String token});
+
+  Future<BigInt> crateApiPicacgPicacgTestChannel({
+    required int mode,
+    required String custom,
+  });
+
+  Future<String> crateApiPicacgPicacgToggleFavourite({required String comicId});
+
+  Future<String> crateApiPicacgPicacgToggleLike({required String comicId});
 
   void crateApiNovelReaderRemoveNovel({required String novelId});
 
@@ -3867,6 +3977,1009 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String crateApiPicacgPicacgBuildImageUrl({
+    required String fileServer,
+    required String path,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fileServer, serializer);
+          sse_encode_String(path, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 105,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgBuildImageUrlConstMeta,
+        argValues: [fileServer, path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgBuildImageUrlConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_build_image_url",
+        argNames: ["fileServer", "path"],
+      );
+
+  @override
+  Future<Uint8List> crateApiPicacgPicacgFetchImage({
+    required String fileServer,
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fileServer, serializer);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 106,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgFetchImageConstMeta,
+        argValues: [fileServer, path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgFetchImageConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_fetch_image",
+        argNames: ["fileServer", "path"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetCategories() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 107,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetCategoriesConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetCategoriesConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_categories", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgGetCollections() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 108,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetCollectionsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetCollectionsConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_collections", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgGetComicDetail({required String comicId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 109,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetComicDetailConstMeta,
+        argValues: [comicId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetComicDetailConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_comic_detail",
+        argNames: ["comicId"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetComicEps({
+    required String comicId,
+    required int page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          sse_encode_i_32(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 110,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetComicEpsConstMeta,
+        argValues: [comicId, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetComicEpsConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_comic_eps",
+        argNames: ["comicId", "page"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetComicRecommendations({
+    required String comicId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 111,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetComicRecommendationsConstMeta,
+        argValues: [comicId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetComicRecommendationsConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_comic_recommendations",
+        argNames: ["comicId"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetComicsByCategory({
+    required String category,
+    required int page,
+    required String sort,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(category, serializer);
+          sse_encode_i_32(page, serializer);
+          sse_encode_String(sort, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 112,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetComicsByCategoryConstMeta,
+        argValues: [category, page, sort],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetComicsByCategoryConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_comics_by_category",
+        argNames: ["category", "page", "sort"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetCommentChildren({
+    required String commentId,
+    required int page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(commentId, serializer);
+          sse_encode_i_32(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 113,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetCommentChildrenConstMeta,
+        argValues: [commentId, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetCommentChildrenConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_comment_children",
+        argNames: ["commentId", "page"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetComments({
+    required String comicId,
+    required int page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          sse_encode_i_32(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 114,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetCommentsConstMeta,
+        argValues: [comicId, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetCommentsConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_comments",
+        argNames: ["comicId", "page"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetEpsPages({
+    required String comicId,
+    required int epsOrder,
+    required int page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          sse_encode_i_32(epsOrder, serializer);
+          sse_encode_i_32(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 115,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetEpsPagesConstMeta,
+        argValues: [comicId, epsOrder, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetEpsPagesConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_eps_pages",
+        argNames: ["comicId", "epsOrder", "page"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgGetFavourites({
+    required int page,
+    required String sort,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_32(page, serializer);
+          sse_encode_String(sort, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 116,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetFavouritesConstMeta,
+        argValues: [page, sort],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetFavouritesConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_favourites",
+        argNames: ["page", "sort"],
+      );
+
+  @override
+  String crateApiPicacgPicacgGetImageServer() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 117,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetImageServerConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetImageServerConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_image_server", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgGetKeywords() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 118,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetKeywordsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetKeywordsConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_keywords", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgGetRandomComics() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 119,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetRandomComicsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetRandomComicsConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_random_comics", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgGetRankings({required String timeType}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(timeType, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 120,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetRankingsConstMeta,
+        argValues: [timeType],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetRankingsConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_get_rankings",
+        argNames: ["timeType"],
+      );
+
+  @override
+  String crateApiPicacgPicacgGetToken() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 121,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetTokenConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetTokenConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_token", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgGetUserProfile() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 122,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgGetUserProfileConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgGetUserProfileConstMeta =>
+      const TaskConstMeta(debugName: "picacg_get_user_profile", argNames: []);
+
+  @override
+  void crateApiPicacgPicacgInit() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 123,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgInitConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgInitConstMeta =>
+      const TaskConstMeta(debugName: "picacg_init", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgLikeComment({required String commentId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(commentId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 124,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgLikeCommentConstMeta,
+        argValues: [commentId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgLikeCommentConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_like_comment",
+        argNames: ["commentId"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgLogin({
+    required String email,
+    required String password,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(email, serializer);
+          sse_encode_String(password, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 125,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgLoginConstMeta,
+        argValues: [email, password],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgLoginConstMeta => const TaskConstMeta(
+    debugName: "picacg_login",
+    argNames: ["email", "password"],
+  );
+
+  @override
+  void crateApiPicacgPicacgLogout() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 126,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgLogoutConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgLogoutConstMeta =>
+      const TaskConstMeta(debugName: "picacg_logout", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgPunchIn() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 127,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgPunchInConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgPunchInConstMeta =>
+      const TaskConstMeta(debugName: "picacg_punch_in", argNames: []);
+
+  @override
+  Future<String> crateApiPicacgPicacgSearchComics({
+    required String keyword,
+    required List<String> categories,
+    required int page,
+    required String sort,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(keyword, serializer);
+          sse_encode_list_String(categories, serializer);
+          sse_encode_i_32(page, serializer);
+          sse_encode_String(sort, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 128,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgSearchComicsConstMeta,
+        argValues: [keyword, categories, page, sort],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgSearchComicsConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_search_comics",
+        argNames: ["keyword", "categories", "page", "sort"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgSendComment({
+    required String comicId,
+    required String content,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          sse_encode_String(content, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 129,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgSendCommentConstMeta,
+        argValues: [comicId, content],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgSendCommentConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_send_comment",
+        argNames: ["comicId", "content"],
+      );
+
+  @override
+  void crateApiPicacgPicacgSetChannel({
+    required int mode,
+    required String custom,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_32(mode, serializer);
+          sse_encode_String(custom, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 130,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgSetChannelConstMeta,
+        argValues: [mode, custom],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgSetChannelConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_set_channel",
+        argNames: ["mode", "custom"],
+      );
+
+  @override
+  void crateApiPicacgPicacgSetImageServer({required String server}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(server, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 131,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgSetImageServerConstMeta,
+        argValues: [server],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgSetImageServerConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_set_image_server",
+        argNames: ["server"],
+      );
+
+  @override
+  void crateApiPicacgPicacgSetProxy({required String proxyUrl}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(proxyUrl, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 132,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgSetProxyConstMeta,
+        argValues: [proxyUrl],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgSetProxyConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_set_proxy",
+        argNames: ["proxyUrl"],
+      );
+
+  @override
+  void crateApiPicacgPicacgSetToken({required String token}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(token, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 133,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPicacgPicacgSetTokenConstMeta,
+        argValues: [token],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgSetTokenConstMeta =>
+      const TaskConstMeta(debugName: "picacg_set_token", argNames: ["token"]);
+
+  @override
+  Future<BigInt> crateApiPicacgPicacgTestChannel({
+    required int mode,
+    required String custom,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_32(mode, serializer);
+          sse_encode_String(custom, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 134,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgTestChannelConstMeta,
+        argValues: [mode, custom],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgTestChannelConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_test_channel",
+        argNames: ["mode", "custom"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgToggleFavourite({
+    required String comicId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 135,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgToggleFavouriteConstMeta,
+        argValues: [comicId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgToggleFavouriteConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_toggle_favourite",
+        argNames: ["comicId"],
+      );
+
+  @override
+  Future<String> crateApiPicacgPicacgToggleLike({required String comicId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(comicId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 136,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPicacgPicacgToggleLikeConstMeta,
+        argValues: [comicId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPicacgPicacgToggleLikeConstMeta =>
+      const TaskConstMeta(
+        debugName: "picacg_toggle_like",
+        argNames: ["comicId"],
+      );
+
+  @override
   void crateApiNovelReaderRemoveNovel({required String novelId}) {
     return handler.executeSync(
       SyncTask(
@@ -3876,7 +4989,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 105,
+            funcId: 137,
           )!;
         },
         codec: SseCodec(
@@ -3903,7 +5016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 106,
+            funcId: 138,
           )!;
         },
         codec: SseCodec(
@@ -3937,7 +5050,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 107,
+            funcId: 139,
           )!;
         },
         codec: SseCodec(
@@ -3971,7 +5084,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 108,
+            funcId: 140,
           )!;
         },
         codec: SseCodec(
@@ -4005,7 +5118,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 109,
+            funcId: 141,
           )!;
         },
         codec: SseCodec(
@@ -4039,7 +5152,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 110,
+            funcId: 142,
           )!;
         },
         codec: SseCodec(
@@ -4071,7 +5184,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 111,
+            funcId: 143,
             port: port_,
           );
         },
@@ -4104,7 +5217,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 112,
+            funcId: 144,
           )!;
         },
         codec: SseCodec(
@@ -4138,7 +5251,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 113,
+            funcId: 145,
             port: port_,
           );
         },
@@ -4171,7 +5284,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 114,
+            funcId: 146,
             port: port_,
           );
         },
@@ -4206,7 +5319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 115,
+            funcId: 147,
             port: port_,
           );
         },
@@ -4241,7 +5354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 116,
+            funcId: 148,
             port: port_,
           );
         },
@@ -4276,7 +5389,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 117,
+            funcId: 149,
           )!;
         },
         codec: SseCodec(
@@ -4310,7 +5423,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 118,
+            funcId: 150,
           )!;
         },
         codec: SseCodec(
@@ -4346,7 +5459,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 119,
+            funcId: 151,
           )!;
         },
         codec: SseCodec(
@@ -4376,7 +5489,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 120,
+            funcId: 152,
           )!;
         },
         codec: SseCodec(
@@ -4405,7 +5518,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 121,
+            funcId: 153,
           )!;
         },
         codec: SseCodec(
@@ -4436,7 +5549,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 122,
+            funcId: 154,
           )!;
         },
         codec: SseCodec(
@@ -4470,7 +5583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 123,
+            funcId: 155,
             port: port_,
           );
         },
@@ -4511,7 +5624,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 124,
+            funcId: 156,
           )!;
         },
         codec: SseCodec(
@@ -4545,7 +5658,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 125,
+            funcId: 157,
           )!;
         },
         codec: SseCodec(
@@ -4579,7 +5692,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 126,
+            funcId: 158,
           )!;
         },
         codec: SseCodec(
@@ -4613,7 +5726,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 127,
+            funcId: 159,
           )!;
         },
         codec: SseCodec(
@@ -4647,7 +5760,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 128,
+            funcId: 160,
           )!;
         },
         codec: SseCodec(
@@ -4677,7 +5790,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 129,
+            funcId: 161,
           )!;
         },
         codec: SseCodec(
@@ -4704,7 +5817,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 130,
+            funcId: 162,
           )!;
         },
         codec: SseCodec(
@@ -4734,7 +5847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 131,
+            funcId: 163,
             port: port_,
           );
         },
@@ -4765,7 +5878,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 132,
+            funcId: 164,
             port: port_,
           );
         },
@@ -4801,7 +5914,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 133,
+            funcId: 165,
             port: port_,
           );
         },
@@ -4838,7 +5951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 134,
+            funcId: 166,
             port: port_,
           );
         },
@@ -4869,7 +5982,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 135,
+            funcId: 167,
           )!;
         },
         codec: SseCodec(
@@ -4902,7 +6015,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 136,
+            funcId: 168,
             port: port_,
           );
         },
@@ -4941,7 +6054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 137,
+            funcId: 169,
             port: port_,
           );
         },
@@ -4979,7 +6092,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 138,
+            funcId: 170,
             port: port_,
           );
         },
@@ -5013,7 +6126,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 139,
+            funcId: 171,
           )!;
         },
         codec: SseCodec(
@@ -5048,7 +6161,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 140,
+            funcId: 172,
           )!;
         },
         codec: SseCodec(
@@ -5081,7 +6194,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 141,
+            funcId: 173,
           )!;
         },
         codec: SseCodec(
@@ -5114,7 +6227,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 142,
+            funcId: 174,
           )!;
         },
         codec: SseCodec(
@@ -5151,7 +6264,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 143,
+            funcId: 175,
             port: port_,
           );
         },
@@ -5187,7 +6300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 144,
+            funcId: 176,
             port: port_,
           );
         },
@@ -5222,7 +6335,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 145,
+            funcId: 177,
           )!;
         },
         codec: SseCodec(
@@ -5256,7 +6369,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 146,
+            funcId: 178,
             port: port_,
           );
         },
@@ -5287,7 +6400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 147,
+            funcId: 179,
             port: port_,
           );
         },

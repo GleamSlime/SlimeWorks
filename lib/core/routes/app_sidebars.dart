@@ -6,3 +6,4 @@ part 'sidebars/collection_sidebar.dart';
 part 'sidebars/core_sidebar.dart';
 part 'sidebars/bottom_sidebar.dart';
 part 'sidebars/demo_sidebar.dart';
+part 'sidebars/picacg_sidebar.dart';

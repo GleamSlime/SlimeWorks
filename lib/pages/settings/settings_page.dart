@@ -7,6 +7,7 @@ import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/picacg_settings_tab.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -35,6 +36,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
         label: '通知设置',
         content: const SettingsTabPlaceholder(title: '通知设置'),
       ),
+      _SettingsTab(label: 'PicACG', content: const PicacgSettingsTab()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
   }

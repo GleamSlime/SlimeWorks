@@ -1,19 +1,18 @@
+mod handlers;
+mod media_handler;
 /// 节点服务器模块
-/// 
+///
 /// 提供本地节点 HTTP 服务，支持以下路由：
 /// - POST /node/call - 动作分发（调用 media_collection / novel_reader FFI 函数）
 /// - GET  /node/media - 媒体文件服务（含图片缩放、Range 请求）
 /// - POST /node/upload - 文件上传
 /// - GET  /health - 健康检查
-
 mod router;
-mod handlers;
-mod media_handler;
 mod types;
 
-pub use router::*;
 pub use handlers::dispatch_action;
 pub use media_handler::*;
+pub use router::*;
 pub use types::*;
 
 use std::io::{BufRead, BufReader, Write};
@@ -173,14 +172,18 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                         Err(e) => (500, types::NodeResponse::error(e).to_json()),
                     }
                 }
-                Err(e) => (400, types::NodeResponse::error(format!("解析请求失败: {}", e)).to_json()),
+                Err(e) => (
+                    400,
+                    types::NodeResponse::error(format!("解析请求失败: {}", e)).to_json(),
+                ),
             }
         }
 
         ("GET", "/node/media") => {
             // 提取 query string（不依赖 hyper）
             let query = path.splitn(2, '?').nth(1).unwrap_or("").to_string();
-            let file_path = query.split('&')
+            let file_path = query
+                .split('&')
                 .find_map(|p| p.strip_prefix("path="))
                 .map(|p| {
                     url::form_urlencoded::parse(format!("path={}", p).as_bytes())
@@ -190,10 +193,14 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                 })
                 .unwrap_or_default();
             let is_cover = query.split('&').any(|p| p == "mode=cover");
-            let has_width = query.split('&').any(|p| p.starts_with("width=") && p.len() > 6);
+            let has_width = query
+                .split('&')
+                .any(|p| p.starts_with("width=") && p.len() > 6);
 
             // 非 Range 请求且是图片/封面模式 → 走缩略图生成（原逻辑）
-            if range_header.is_none() && (is_cover || has_width || media_handler::is_image_path(&file_path)) {
+            if range_header.is_none()
+                && (is_cover || has_width || media_handler::is_image_path(&file_path))
+            {
                 let result = shared_runtime().block_on(media_handler::handle_media_query(&query));
                 match result {
                     Ok(response_bytes) => {
@@ -245,7 +252,10 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             }
         }
 
-        _ => (404, types::NodeResponse::error("Not Found".to_string()).to_json()),
+        _ => (
+            404,
+            types::NodeResponse::error("Not Found".to_string()).to_json(),
+        ),
     };
 
     let response = format!(
@@ -273,8 +283,9 @@ fn status_text(code: u16) -> &'static str {
 // ── 公开 API ─────────────────────────────────────────────────────────────────
 
 pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), String> {
-
-    let mut guard = NODE_SERVER.lock().map_err(|e| format!("获取锁失败: {}", e))?;
+    let mut guard = NODE_SERVER
+        .lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
 
     // 停旧服务
     if let Some(old) = guard.take() {
@@ -307,7 +318,8 @@ pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), St
                             }
                             let cfg = Arc::clone(&config);
                             // 限制最大并发连接数，防止 FD 耗尽
-                            if ACTIVE_CONNECTIONS.fetch_add(1, Ordering::Relaxed) >= MAX_CONNECTIONS {
+                            if ACTIVE_CONNECTIONS.fetch_add(1, Ordering::Relaxed) >= MAX_CONNECTIONS
+                            {
                                 ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
                                 drop(stream);
                                 continue;
@@ -340,14 +352,17 @@ pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), St
             .name("node-idle-cleanup".into())
             .spawn(move || {
                 const IDLE_THRESHOLD_SECS: u64 = 5 * 60; // 5 分钟无访问则释放
-                const CHECK_INTERVAL_SECS: u64 = 60;      // 每分钟检测一次
+                const CHECK_INTERVAL_SECS: u64 = 60; // 每分钟检测一次
                 while running.load(Ordering::Relaxed) {
                     std::thread::sleep(std::time::Duration::from_secs(CHECK_INTERVAL_SECS));
                     if !running.load(Ordering::Relaxed) {
                         break;
                     }
                     if media_collection::api::check_and_release_if_idle(IDLE_THRESHOLD_SECS) {
-                        println!("[node-server] 媒体条目缓存空闲超过 {}s，已自动释放", IDLE_THRESHOLD_SECS);
+                        println!(
+                            "[node-server] 媒体条目缓存空闲超过 {}s，已自动释放",
+                            IDLE_THRESHOLD_SECS
+                        );
                     }
                 }
             })
@@ -359,7 +374,9 @@ pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), St
 }
 
 pub fn stop_node_server() -> Result<(), String> {
-    let mut guard = NODE_SERVER.lock().map_err(|e| format!("获取锁失败: {}", e))?;
+    let mut guard = NODE_SERVER
+        .lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
     if let Some(old) = guard.take() {
         old.running.store(false, Ordering::SeqCst);
         let _ = std::net::TcpStream::connect(format!("127.0.0.1:{}", old.port));
@@ -372,6 +389,9 @@ pub fn stop_node_server() -> Result<(), String> {
 pub fn is_node_server_running() -> bool {
     NODE_SERVER
         .lock()
-        .map(|g| g.as_ref().map_or(false, |h| h.running.load(Ordering::SeqCst)))
+        .map(|g| {
+            g.as_ref()
+                .map_or(false, |h| h.running.load(Ordering::SeqCst))
+        })
         .unwrap_or(false)
 }

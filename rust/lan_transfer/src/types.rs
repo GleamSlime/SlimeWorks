@@ -205,7 +205,12 @@ mod tests {
 
     #[test]
     fn transfer_type_serializes_and_deserializes() {
-        for kind in &[TransferType::File, TransferType::Text, TransferType::Image, TransferType::Video] {
+        for kind in &[
+            TransferType::File,
+            TransferType::Text,
+            TransferType::Image,
+            TransferType::Video,
+        ] {
             let json = serde_json::to_string(kind).expect("serialize");
             let restored: TransferType = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(&restored, kind);

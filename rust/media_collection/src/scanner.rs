@@ -87,9 +87,12 @@ fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<Medi
 fn read_duration_ms(path: &Path) -> Option<u64> {
     let out = std::process::Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
             &path.to_string_lossy(),
         ])
         .stdout(std::process::Stdio::piped())
@@ -364,7 +367,11 @@ mod tests {
 
         let items = MediaFolderScanner::collect_media_items("col-1", root.path(), false).unwrap();
         // Non-recursive: only direct children of root
-        assert_eq!(items.len(), 1, "Expected only top-level file, got {items:?}");
+        assert_eq!(
+            items.len(),
+            1,
+            "Expected only top-level file, got {items:?}"
+        );
         assert!(items[0].file_path.contains("top.jpg"));
     }
 

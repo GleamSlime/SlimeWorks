@@ -59,6 +59,9 @@ http_bridge = { path = "http_bridge" }
 # 局域网传输模块（独立 crate）
 lan_transfer = { path = "lan_transfer" }
 
+# PicACG 漫画平台模块（独立 crate）
+picacg_module = { path = "picacg_module" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]

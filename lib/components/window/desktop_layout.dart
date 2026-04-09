@@ -22,6 +22,7 @@ class DesktopLayout extends StatefulWidget {
     return [
       coreSidebarGroup,
       collectionSidebarGroup,
+      picacgSidebarGroup,
       // 第一组：主要功能
       // SidebarGroup(
       //   items: [

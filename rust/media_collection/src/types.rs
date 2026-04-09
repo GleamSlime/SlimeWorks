@@ -75,7 +75,10 @@ mod tests {
 
     #[test]
     fn image_extensions_map_to_image_kind() {
-        for ext in &["jpg", "jpeg", "jfif", "png", "gif", "webp", "bmp", "avif", "heic", "heif", "tif", "tiff"] {
+        for ext in &[
+            "jpg", "jpeg", "jfif", "png", "gif", "webp", "bmp", "avif", "heic", "heif", "tif",
+            "tiff",
+        ] {
             assert_eq!(
                 MediaKind::from_extension(ext),
                 Some(MediaKind::Image),
@@ -86,7 +89,9 @@ mod tests {
 
     #[test]
     fn video_extensions_map_to_video_kind() {
-        for ext in &["mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "flv", "ts"] {
+        for ext in &[
+            "mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "flv", "ts",
+        ] {
             assert_eq!(
                 MediaKind::from_extension(ext),
                 Some(MediaKind::Video),
@@ -97,7 +102,9 @@ mod tests {
 
     #[test]
     fn audio_extensions_map_to_audio_kind() {
-        for ext in &["mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "ape", "aiff", "alac"] {
+        for ext in &[
+            "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "ape", "aiff", "alac",
+        ] {
             assert_eq!(
                 MediaKind::from_extension(ext),
                 Some(MediaKind::Audio),

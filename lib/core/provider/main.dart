@@ -7,6 +7,7 @@ import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/picacg_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -33,6 +34,9 @@ void getItInit() {
 
   // 媒体偏好设置服务
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
+
+  // PicACG 漫画平台服务
+  getIt.registerLazySingleton<PicacgService>(() => PicacgService());
 
   isInitialized = true;
 }

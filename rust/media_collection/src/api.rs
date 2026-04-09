@@ -2,8 +2,8 @@ use chrono::Utc;
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 use crate::scanner::MediaFolderScanner;
 use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind};
@@ -107,7 +107,10 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
             if meta.len() > 0 {
                 debug!(
                     "[thumb] cache-hit | src={} | orig={}B | cached={}B | w={}",
-                    file_path, orig_size, meta.len(), width
+                    file_path,
+                    orig_size,
+                    meta.len(),
+                    width
                 );
                 return Some(cache_path.to_string_lossy().into_owned());
             }
@@ -121,7 +124,10 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     let _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
 
     let t0 = std::time::Instant::now();
-    info!("[thumb] generate | src={} | orig={}B | w={}", file_path, orig_size, width);
+    info!(
+        "[thumb] generate | src={} | orig={}B | w={}",
+        file_path, orig_size, width
+    );
 
     // ⑤ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
     if is_video {
@@ -137,7 +143,10 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         if try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
             return Some(cache_path.to_string_lossy().into_owned());
         }
-        debug!("[thumb] audio has no embedded cover art | src={}", file_path);
+        debug!(
+            "[thumb] audio has no embedded cover art | src={}",
+            file_path
+        );
         return None;
     }
 
@@ -151,20 +160,36 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
-    warn!("[thumb] all methods failed | src={} | w={} | elapsed={:?}", file_path, width, t0.elapsed());
+    warn!(
+        "[thumb] all methods failed | src={} | w={} | elapsed={:?}",
+        file_path,
+        width,
+        t0.elapsed()
+    );
     None
 }
 
-fn try_ffmpeg_audio_cover(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+fn try_ffmpeg_audio_cover(
+    src: &str,
+    dst: &std::path::Path,
+    width: u32,
+    t0: std::time::Instant,
+    orig_size: u64,
+) -> bool {
     // Extract embedded album art from audio file using ffmpeg.
     // The artwork is stored as a video stream (stream 0:v:0) in most formats.
     let ok = std::process::Command::new("ffmpeg")
         .args([
-            "-i", src,
-            "-map", "0:v:0",
-            "-vf", &format!("scale={}:-1", width),
-            "-q:v", "3",
-            "-frames:v", "1",
+            "-i",
+            src,
+            "-map",
+            "0:v:0",
+            "-vf",
+            &format!("scale={}:-1", width),
+            "-q:v",
+            "3",
+            "-frames:v",
+            "1",
             "-y",
             &dst.to_string_lossy(),
         ])
@@ -178,25 +203,45 @@ fn try_ffmpeg_audio_cover(src: &str, dst: &std::path::Path, width: u32, t0: std:
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
         debug!(
             "[thumb] audio-cover OK | orig={}B | thumb={}B | w={} | elapsed={:?}",
-            orig_size, thumb_size, width, t0.elapsed()
+            orig_size,
+            thumb_size,
+            width,
+            t0.elapsed()
         );
     } else {
-        if dst.exists() { let _ = std::fs::remove_file(dst); }
-        debug!("[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}", src, t0.elapsed());
+        if dst.exists() {
+            let _ = std::fs::remove_file(dst);
+        }
+        debug!(
+            "[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}",
+            src,
+            t0.elapsed()
+        );
     }
     success
 }
 
-fn try_ffmpeg_video_frame(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+fn try_ffmpeg_video_frame(
+    src: &str,
+    dst: &std::path::Path,
+    width: u32,
+    t0: std::time::Instant,
+    orig_size: u64,
+) -> bool {
     // Try seeking to 3s first; if the output is empty/missing, fall back to t=0
     for seek_secs in &["00:00:03", "00:00:00"] {
         let ok = std::process::Command::new("ffmpeg")
             .args([
-                "-ss", seek_secs,
-                "-i", src,
-                "-vf", &format!("scale={}:-1", width),
-                "-q:v", "3",
-                "-frames:v", "1",
+                "-ss",
+                seek_secs,
+                "-i",
+                src,
+                "-vf",
+                &format!("scale={}:-1", width),
+                "-q:v",
+                "3",
+                "-frames:v",
+                "1",
                 "-y",
                 &dst.to_string_lossy(),
             ])
@@ -215,13 +260,25 @@ fn try_ffmpeg_video_frame(src: &str, dst: &std::path::Path, width: u32, t0: std:
             return true;
         }
         // Remove zero-byte artifact before retrying
-        if dst.exists() { let _ = std::fs::remove_file(dst); }
+        if dst.exists() {
+            let _ = std::fs::remove_file(dst);
+        }
     }
-    warn!("[thumb] ffmpeg video-frame failed | src={} | elapsed={:?}", src, t0.elapsed());
+    warn!(
+        "[thumb] ffmpeg video-frame failed | src={} | elapsed={:?}",
+        src,
+        t0.elapsed()
+    );
     false
 }
 
-fn try_ffmpeg_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+fn try_ffmpeg_resize(
+    src: &str,
+    dst: &std::path::Path,
+    width: u32,
+    t0: std::time::Instant,
+    orig_size: u64,
+) -> bool {
     let ok = std::process::Command::new("ffmpeg")
         .args([
             "-i",
@@ -243,31 +300,49 @@ fn try_ffmpeg_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time
     let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
-        let ratio = if orig_size > 0 { thumb_size * 100 / orig_size } else { 0 };
+        let ratio = if orig_size > 0 {
+            thumb_size * 100 / orig_size
+        } else {
+            0
+        };
         debug!(
             "[thumb] ffmpeg OK | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
-            orig_size, thumb_size, ratio, width, t0.elapsed()
+            orig_size,
+            thumb_size,
+            ratio,
+            width,
+            t0.elapsed()
         );
     } else {
-        debug!("[thumb] ffmpeg failed | src={} | elapsed={:?}", src, t0.elapsed());
+        debug!(
+            "[thumb] ffmpeg failed | src={} | elapsed={:?}",
+            src,
+            t0.elapsed()
+        );
     }
     success
 }
 
-fn try_rust_image_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::time::Instant, orig_size: u64) -> bool {
+fn try_rust_image_resize(
+    src: &str,
+    dst: &std::path::Path,
+    width: u32,
+    t0: std::time::Instant,
+    orig_size: u64,
+) -> bool {
     let bytes = match std::fs::read(src) {
         Ok(b) => b,
         Err(e) => {
             warn!("[thumb] rust-image read failed | src={} | err={}", src, e);
             return false;
-        },
+        }
     };
     let img = match image::load_from_memory(&bytes) {
         Ok(i) => i,
         Err(e) => {
             warn!("[thumb] rust-image decode failed | src={} | err={}", src, e);
             return false;
-        },
+        }
     };
     let orig_w = img.width();
     let orig_h = img.height();
@@ -277,7 +352,11 @@ fn try_rust_image_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::
     match resized.save_with_format(dst, image::ImageFormat::Jpeg) {
         Ok(_) => {
             let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
-            let ratio = if orig_size > 0 { thumb_size * 100 / orig_size } else { 0 };
+            let ratio = if orig_size > 0 {
+                thumb_size * 100 / orig_size
+            } else {
+                0
+            };
             debug!(
                 "[thumb] rust-image OK | orig={}x{} | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
                 orig_w, orig_h, orig_size, thumb_size, ratio, width, t0.elapsed()
@@ -285,7 +364,12 @@ fn try_rust_image_resize(src: &str, dst: &std::path::Path, width: u32, t0: std::
             dst.exists() && thumb_size > 0
         }
         Err(e) => {
-            warn!("[thumb] rust-image save failed | src={} | err={} | elapsed={:?}", src, e, t0.elapsed());
+            warn!(
+                "[thumb] rust-image save failed | src={} | err={} | elapsed={:?}",
+                src,
+                e,
+                t0.elapsed()
+            );
             false
         }
     }
@@ -565,7 +649,10 @@ fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
                 }
             }
         }
-        info!("[media_cache] 从数据库加载媒体条目到内存，共 {} 条", data.len());
+        info!(
+            "[media_cache] 从数据库加载媒体条目到内存，共 {} 条",
+            data.len()
+        );
         *items = Some(data);
     }
 }
@@ -675,8 +762,7 @@ fn upsert_collection_from_folder(
 ) -> Result<MediaCollection, String> {
     debug!(
         "[media_scan] upsert_collection_from_folder: {:?} (recursive={})",
-        folder,
-        recursive
+        folder, recursive
     );
     if !folder.exists() || !folder.is_dir() {
         let err = format!("Path is not a directory: {:?}", folder);
@@ -732,8 +818,7 @@ fn upsert_collection_from_folder(
             if let Err(error) = persist_item(item) {
                 debug!(
                     "[media_scan] persist_item failed for {:?}: {}",
-                    item.file_path,
-                    error
+                    item.file_path, error
                 );
             }
         }
@@ -776,9 +861,7 @@ fn upsert_collection_from_folder(
     persist_collection(&updated_collection)?;
     debug!(
         "[media_scan] collection persisted: id={} title={:?} item_count={}",
-        updated_collection.id,
-        updated_collection.title,
-        updated_collection.item_count
+        updated_collection.id, updated_collection.title, updated_collection.item_count
     );
     Ok(updated_collection)
 }
@@ -1018,8 +1101,7 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
             Ok(collection) => {
                 debug!(
                     "scan_media_folders: imported '{}' from {:?}",
-                    collection.title,
-                    directory
+                    collection.title, directory
                 );
                 collections.push(collection);
             }

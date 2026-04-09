@@ -71,3 +71,8 @@ flutter analyze
 flutter pub global run devtools
 
 TIPS: 修改完代码务必执行 flutter analyze 确保没有报错!
+
+
+## 项目模块拓展文档
+
+拓展文档在 docs/README.md，该文件可以快速引导了解到本项目下各个模块的功能，请按需读取

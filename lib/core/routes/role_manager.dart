@@ -29,6 +29,7 @@ enum Permission {
   accessWebSocketTest,
   accessCollection,
   accessDemo,
+  accessPicacg,
 }
 
 class RoleManager {
@@ -48,8 +49,15 @@ class RoleManager {
       Permission.accessThemePreview,
       Permission.accessHttpBridgeTest,
       Permission.accessWebSocketTest,
+      Permission.accessPicacg,
     ],
-    UserRole.editor: [Permission.viewDashboard, Permission.editContent, Permission.accessNovelLibrary, Permission.accessNovelReader],
+    UserRole.editor: [
+      Permission.viewDashboard,
+      Permission.editContent,
+      Permission.accessNovelLibrary,
+      Permission.accessNovelReader,
+      Permission.accessPicacg,
+    ],
     UserRole.guest: [Permission.viewDashboard],
     UserRole.developer: Permission.values,
   };

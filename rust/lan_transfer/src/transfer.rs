@@ -87,10 +87,7 @@ impl TransferService {
     pub async fn new(port: u16, device_id: String, device_name: String) -> Result<Self> {
         let listener = bind_listener_with_recovery(port).await?;
         let (event_sender, event_receiver) = async_channel::unbounded();
-        let save_dir = std::env::temp_dir()
-            .to_str()
-            .unwrap_or("/tmp")
-            .to_string();
+        let save_dir = std::env::temp_dir().to_str().unwrap_or("/tmp").to_string();
         info!("传输服务已创建，端口 {}", port);
         Ok(Self {
             port,
@@ -546,7 +543,10 @@ async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
             // 这通常发生在 App 被杀死又快速重启时端口处于 TIME_WAIT 状态
             #[cfg(any(target_os = "ios", target_os = "android"))]
             {
-                warn!("Port {} in use on mobile, waiting for OS to release (TIME_WAIT)...", port);
+                warn!(
+                    "Port {} in use on mobile, waiting for OS to release (TIME_WAIT)...",
+                    port
+                );
                 let retry_delays_ms: &[u64] = &[600, 1200, 2000];
                 for &delay in retry_delays_ms {
                     tokio::time::sleep(Duration::from_millis(delay)).await;
@@ -909,16 +909,10 @@ async fn handle_connection(
                     .await;
 
                 let (accept_tx, accept_rx) = oneshot::channel::<bool>();
-                pending_accept
-                    .write()
-                    .await
-                    .insert(tid.clone(), accept_tx);
+                pending_accept.write().await.insert(tid.clone(), accept_tx);
 
-                match tokio::time::timeout(
-                    Duration::from_secs(USER_ACCEPT_TIMEOUT_SECS),
-                    accept_rx,
-                )
-                .await
+                match tokio::time::timeout(Duration::from_secs(USER_ACCEPT_TIMEOUT_SECS), accept_rx)
+                    .await
                 {
                     Ok(Ok(v)) => {
                         info!("用户{}传输 {}", if v { "接受" } else { "拒绝" }, tid);
@@ -1015,8 +1009,7 @@ async fn handle_connection(
             };
 
             // 等待发送方的 TransferComplete 消息（30 秒）
-            let _ =
-                tokio::time::timeout(Duration::from_secs(30), recv_msg(&mut stream)).await;
+            let _ = tokio::time::timeout(Duration::from_secs(30), recv_msg(&mut stream)).await;
 
             // 标记完成
             {

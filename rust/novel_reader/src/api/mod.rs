@@ -1,4 +1,4 @@
-﻿mod api_metadata;
+mod api_metadata;
 mod api_search;
 
 pub use api_metadata::*;
@@ -177,16 +177,14 @@ fn load_tag_keyword_rules() -> HashMap<String, Vec<String>> {
                         Err(e) => {
                             println!(
                                 "[Tag] failed to parse override tag_keyword.json at {:?}: {}",
-                                p,
-                                e
+                                p, e
                             );
                         }
                     },
                     Err(e) => {
                         println!(
                             "[Tag] failed to read override tag_keyword.json at {:?}: {}",
-                            p,
-                            e
+                            p, e
                         );
                     }
                 }
@@ -300,9 +298,7 @@ fn apply_tag_keywords(novel: &mut NovelMetadata) {
             if sample.contains(kw_l.as_str()) {
                 println!(
                     "[Tag] matched tag='{}' keyword='{}' for file={} ",
-                    tag,
-                    kw,
-                    novel.file_path,
+                    tag, kw, novel.file_path,
                 );
                 tags.insert(tag.clone());
                 break;
@@ -474,8 +470,7 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     let file_size = metadata.len();
     println!(
         "[Novel] File size: {} bytes, modified: {:?}",
-        file_size,
-        modified_time,
+        file_size, modified_time,
     );
 
     {
@@ -554,8 +549,7 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<St
 
     println!(
         "[Novel] Getting chapter {} from {}",
-        chapter_index,
-        file_path,
+        chapter_index, file_path,
     );
 
     let path = PathBuf::from(&file_path);

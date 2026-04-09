@@ -349,9 +349,9 @@ impl DiscoveryService {
 
                 let payload = probe.clone();
                 let port = self.service_port;
-                join_set.spawn(async move {
-                    probe_device_by_heartbeat(target_ip, port, payload).await
-                });
+                join_set.spawn(
+                    async move { probe_device_by_heartbeat(target_ip, port, payload).await },
+                );
             }
 
             let mut found = 0usize;

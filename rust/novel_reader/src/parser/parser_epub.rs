@@ -319,8 +319,7 @@ impl EpubParser {
         let result_img_count = img_regex.find_iter(&result_str).count();
         println!(
             "EpubParser: Image replacement complete - {} img tags remain, original had {}",
-            result_img_count,
-            img_count
+            result_img_count, img_count
         );
 
         // 检查是否有不完整的img标签
@@ -328,8 +327,7 @@ impl EpubParser {
         if img_open_count != result_img_count {
             println!(
                 "EpubParser: WARNING - Found {} '<img' but only {} complete img tags!",
-                img_open_count,
-                result_img_count
+                img_open_count, result_img_count
             );
         }
 

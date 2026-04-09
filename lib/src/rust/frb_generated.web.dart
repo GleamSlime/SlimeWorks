@@ -15,6 +15,7 @@ import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
+import 'api/picacg.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
 import 'api/websocket.dart';

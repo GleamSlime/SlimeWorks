@@ -23,19 +23,13 @@ pub async fn route_request(
         }
 
         // 动作分发
-        (Method::POST, "/node/call") => {
-            handle_node_call(req, config).await
-        }
+        (Method::POST, "/node/call") => handle_node_call(req, config).await,
 
         // 媒体文件服务
-        (Method::GET, "/node/media") => {
-            super::media_handler::handle_media_request(req).await
-        }
+        (Method::GET, "/node/media") => super::media_handler::handle_media_request(req).await,
 
         // 文件上传
-        (Method::POST, "/node/upload") => {
-            super::handlers::handle_upload(req).await
-        }
+        (Method::POST, "/node/upload") => super::handlers::handle_upload(req).await,
 
         // 404
         _ => {
@@ -56,9 +50,10 @@ async fn handle_node_call(
     let whole_body = match hyper::body::to_bytes(req.into_body()).await {
         Ok(bytes) => bytes,
         Err(e) => {
-            return Ok(json_response(NodeResponse::error(
-                format!("读取请求体失败: {}", e)
-            )));
+            return Ok(json_response(NodeResponse::error(format!(
+                "读取请求体失败: {}",
+                e
+            ))));
         }
     };
 
@@ -66,9 +61,10 @@ async fn handle_node_call(
     let node_req: NodeRequest = match serde_json::from_slice(&whole_body) {
         Ok(req) => req,
         Err(e) => {
-            return Ok(json_response(NodeResponse::error(
-                format!("解析请求失败: {}", e)
-            )));
+            return Ok(json_response(NodeResponse::error(format!(
+                "解析请求失败: {}",
+                e
+            ))));
         }
     };
 
@@ -81,10 +77,9 @@ async fn handle_node_call(
 
 /// 创建 JSON 响应
 fn json_response(resp: NodeResponse) -> Response<Body> {
-    let body = serde_json::to_string(&resp).unwrap_or_else(|_| {
-        r#"{"success":false,"error":"JSON 序列化失败"}"#.to_string()
-    });
-    
+    let body = serde_json::to_string(&resp)
+        .unwrap_or_else(|_| r#"{"success":false,"error":"JSON 序列化失败"}"#.to_string());
+
     Response::builder()
         .header("Content-Type", "application/json; charset=utf-8")
         .body(Body::from(body))
