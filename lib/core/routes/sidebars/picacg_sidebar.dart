@@ -5,6 +5,6 @@ part of '../app_sidebars.dart';
 final SidebarGroup picacgSidebarGroup = SidebarGroup(
   id: 'picacg',
   sort: 50,
-  permission: Permission.accessPicacg,
-  items: [SidebarMenuItem(route: const PicacgHomeRoute())],
+  permission: Permission.accessPicAcg,
+  items: [SidebarMenuItem(route: const PicAcgHomeRoute())],
 );

@@ -27,6 +27,7 @@
 | 媒体库 | [docs/media_library.md](media_library.md) | `lib/pages/collection/picture/` · `rust/media_collection/` |
 | 书库 | [docs/novel_library.md](novel_library.md) | `lib/pages/collection/library/` · `rust/novel_reader/` |
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
+| PicACG 漫画 | [docs/picacg.md](picacg.md) | `lib/pages/picacg/` · `rust/picacg_module/` |
 
 ---
 

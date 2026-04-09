@@ -14,16 +14,16 @@ import 'package:slime_works/pages/picacg/picacg_favourites_screen.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 import 'package:slime_works/pages/picacg/view_models/picacg_home_viewmodel.dart';
 
-class PicacgHomeScreen extends BasePage<PicacgHomeViewModel> {
-  const PicacgHomeScreen({super.key});
+class PicAcgHomeScreen extends BasePage<PicAcgHomeViewModel> {
+  const PicAcgHomeScreen({super.key});
 
   @override
-  State<PicacgHomeScreen> createState() => _PicacgHomeScreenState();
+  State<PicAcgHomeScreen> createState() => _PicAcgHomeScreenState();
 }
 
-class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHomeScreen> {
+class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHomeScreen> {
   @override
-  PicacgHomeViewModel createViewModel() => PicacgHomeViewModel();
+  PicAcgHomeViewModel createViewModel() => PicAcgHomeViewModel();
 
   @override
   String? get title => 'PicACG';
@@ -33,7 +33,7 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
 
   @override
   Widget buildContent(BuildContext context) {
-    return GetBuilder<PicacgHomeViewModel>(
+    return GetBuilder<PicAcgHomeViewModel>(
       builder: (vm) {
         if (!vm.isLoggedIn) {
           return _buildLoginPrompt(context);
@@ -68,7 +68,7 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
             icon: const Icon(Icons.login),
             label: const Text('登录'),
             onPressed: () async {
-              final success = await showPicacgLoginDialog(context);
+              final success = await showPicAcgLoginDialog(context);
               if (success) {
                 await viewModel.onLoginSuccess();
               }
@@ -80,7 +80,7 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
   }
 
   /// 主页内容（已登录）
-  Widget _buildHomeContent(BuildContext context, PicacgHomeViewModel vm) {
+  Widget _buildHomeContent(BuildContext context, PicAcgHomeViewModel vm) {
     final theme = Theme.of(context);
     final metrics = appMetrics;
 
@@ -195,7 +195,7 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
   }
 
   /// 推荐集合（纵向列表每个集合）
-  Widget _buildCollections(BuildContext context, List<PicacgCollection> collections) {
+  Widget _buildCollections(BuildContext context, List<PicAcgCollection> collections) {
     final metrics = appMetrics;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,12 +216,12 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
               itemCount: collection.comics.length,
-              separatorBuilder: (_, __) => SizedBox(width: metrics.kSpace8),
+              separatorBuilder: (_, i) => SizedBox(width: metrics.kSpace8),
               itemBuilder: (ctx, i) {
                 final comic = collection.comics[i];
                 return SizedBox(
                   width: scaleW(120),
-                  child: PicacgComicCard(comic: comic, onTap: () => _goToDetail(context, comic.id)),
+                  child: PicAcgComicCard(comic: comic, onTap: () => _goToDetail(context, comic.id)),
                 );
               },
             ),
@@ -232,12 +232,12 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
   }
 
   /// 随机漫画网格
-  Widget _buildRandomComicsGrid(BuildContext context, List<PicacgComic> comics) {
+  Widget _buildRandomComicsGrid(BuildContext context, List<PicAcgComic> comics) {
     final crossAxisCount = PlatformUtil.isDesktop ? 6 : 3;
     return SliverGrid(
       delegate: SliverChildBuilderDelegate(
         (ctx, i) =>
-            PicacgComicCard(comic: comics[i], onTap: () => _goToDetail(context, comics[i].id)),
+            PicAcgComicCard(comic: comics[i], onTap: () => _goToDetail(context, comics[i].id)),
         childCount: comics.length,
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -251,16 +251,16 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
 
   /// 跳转到搜索页
   void _goToSearch(BuildContext context) {
-    const PicacgSearchRoute().push(context);
+    const PicAcgSearchRoute().push(context);
   }
 
   /// 跳转到漫画详情
   void _goToDetail(BuildContext context, String comicId) {
-    PicacgComicDetailRoute(comicId: comicId).push(context);
+    PicAcgComicDetailRoute(comicId: comicId).push(context);
   }
 
   /// 显示用户菜单
-  void _showUserMenu(BuildContext context, PicacgHomeViewModel vm) {
+  void _showUserMenu(BuildContext context, PicAcgHomeViewModel vm) {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -280,7 +280,7 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
                 Navigator.of(ctx).pop();
                 Navigator.of(
                   context,
-                ).push(MaterialPageRoute(builder: (_) => const PicacgFavouritesScreen()));
+                ).push(MaterialPageRoute(builder: (_) => const PicAcgFavouritesScreen()));
               },
             ),
             ListTile(
@@ -288,7 +288,7 @@ class _PicacgHomeScreenState extends BasePageState<PicacgHomeViewModel, PicacgHo
               title: const Text('退出登录'),
               onTap: () async {
                 Navigator.of(ctx).pop();
-                await getIt<PicacgService>().logout();
+                await getIt<PicAcgService>().logout();
                 vm.currentUser.value = null;
                 vm.collections.clear();
                 vm.randomComics.clear();

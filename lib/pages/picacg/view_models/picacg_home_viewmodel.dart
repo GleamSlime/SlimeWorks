@@ -6,17 +6,17 @@ import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 
-class PicacgHomeViewModel extends BaseViewModel {
-  final PicacgService _service = getIt<PicacgService>();
+class PicAcgHomeViewModel extends BaseViewModel {
+  final PicAcgService _service = getIt<PicAcgService>();
 
   /// 首页推荐集合
-  final RxList<PicacgCollection> collections = <PicacgCollection>[].obs;
+  final RxList<PicAcgCollection> collections = <PicAcgCollection>[].obs;
 
   /// 随机漫画
-  final RxList<PicacgComic> randomComics = <PicacgComic>[].obs;
+  final RxList<PicAcgComic> randomComics = <PicAcgComic>[].obs;
 
   /// 当前用户
-  Rx<PicacgUser?> currentUser = Rx<PicacgUser?>(null);
+  Rx<PicAcgUser?> currentUser = Rx<PicAcgUser?>(null);
 
   /// 是否已登录
   bool get isLoggedIn => _service.isLoggedIn;
@@ -34,8 +34,8 @@ class PicacgHomeViewModel extends BaseViewModel {
     setLoading(true);
     try {
       final results = await Future.wait([_service.getCollections(), _service.getRandomComics()]);
-      collections.value = results[0] as List<PicacgCollection>;
-      randomComics.value = results[1] as List<PicacgComic>;
+      collections.value = results[0] as List<PicAcgCollection>;
+      randomComics.value = results[1] as List<PicAcgComic>;
       clearError();
     } catch (e) {
       setError(e.toString());

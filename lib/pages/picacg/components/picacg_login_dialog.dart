@@ -4,28 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 
 /// 显示登录对话框
 ///
 /// 返回 true 表示登录成功
-Future<bool> showPicacgLoginDialog(BuildContext context) async {
+Future<bool> showPicAcgLoginDialog(BuildContext context) async {
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const _PicacgLoginDialog(),
+    builder: (_) => const _PicAcgLoginDialog(),
   );
   return result ?? false;
 }
 
-class _PicacgLoginDialog extends StatefulWidget {
-  const _PicacgLoginDialog();
+class _PicAcgLoginDialog extends StatefulWidget {
+  const _PicAcgLoginDialog();
 
   @override
-  State<_PicacgLoginDialog> createState() => _PicacgLoginDialogState();
+  State<_PicAcgLoginDialog> createState() => _PicAcgLoginDialogState();
 }
 
-class _PicacgLoginDialogState extends State<_PicacgLoginDialog> {
+class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -44,7 +43,7 @@ class _PicacgLoginDialogState extends State<_PicacgLoginDialog> {
   }
 
   Future<void> _loadSavedInputs() async {
-    final service = getIt<PicacgService>();
+    final service = getIt<PicAcgService>();
     final proxy = await service.getSavedProxy();
     final credentials = await service.getSavedLoginCredentials();
     if (mounted) {
@@ -69,7 +68,7 @@ class _PicacgLoginDialogState extends State<_PicacgLoginDialog> {
       _errorMessage = null;
     });
     try {
-      final service = getIt<PicacgService>();
+      final service = getIt<PicAcgService>();
       // 先更新代理配置
       final proxy = _proxyController.text.trim();
       await service.setProxy(proxy);

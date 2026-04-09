@@ -13,17 +13,17 @@ const String _kDefaultCdnIp = '104.18.227.172';
 /// - API 分流选择（直连 / 分流2 / 分流3 / US反代1 / US反代2 / 自定义IP）
 /// - 代理设置（无代理 / HTTP / SOCKS5）
 /// - 图片服务器选择
-class PicacgSettingsTab extends StatefulWidget {
-  const PicacgSettingsTab({super.key});
+class PicAcgSettingsTab extends StatefulWidget {
+  const PicAcgSettingsTab({super.key});
 
   @override
-  State<PicacgSettingsTab> createState() => _PicacgSettingsTabState();
+  State<PicAcgSettingsTab> createState() => _PicAcgSettingsTabState();
 }
 
-class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
-  late final PicacgService _service = getIt<PicacgService>();
+class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
+  late final PicAcgService _service = getIt<PicAcgService>();
 
-  PicacgChannelMode _channel = PicacgChannelMode.direct;
+  PicAcgChannelMode _channel = PicAcgChannelMode.direct;
   final TextEditingController _customIpCtrl = TextEditingController();
   final TextEditingController _proxyCtrl = TextEditingController();
 
@@ -31,7 +31,7 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
   bool _loading = true;
 
   /// 每个节点的测速结果：null=未测，-1=测速中，-2=不可达，>=0=延迟ms
-  final Map<PicacgChannelMode, int?> _latencyMap = {};
+  final Map<PicAcgChannelMode, int?> _latencyMap = {};
   bool _testingAll = false;
 
   static const List<String> _imageServers = [
@@ -70,8 +70,8 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
     super.dispose();
   }
 
-  Future<void> _applyChannel(PicacgChannelMode mode) async {
-    if (mode == PicacgChannelMode.cdnIp && _customIpCtrl.text.trim().isEmpty) {
+  Future<void> _applyChannel(PicAcgChannelMode mode) async {
+    if (mode == PicAcgChannelMode.cdnIp && _customIpCtrl.text.trim().isEmpty) {
       _customIpCtrl.text = _kDefaultCdnIp;
     }
     setState(() => _channel = mode);
@@ -83,12 +83,12 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
     if (_testingAll) return;
     setState(() {
       _testingAll = true;
-      for (final m in PicacgChannelMode.values) {
+      for (final m in PicAcgChannelMode.values) {
         _latencyMap[m] = -1; // 测速中
       }
     });
 
-    for (final mode in PicacgChannelMode.values) {
+    for (final mode in PicAcgChannelMode.values) {
       try {
         final ms = await _service.testChannel(mode, customIp: _customIpCtrl.text.trim());
         if (mounted) setState(() => _latencyMap[mode] = ms);
@@ -175,7 +175,7 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
                 ),
                 SizedBox(height: m.kSpace8),
                 // 每个节点 radio + 测速结果
-                for (final mode in PicacgChannelMode.values)
+                for (final mode in PicAcgChannelMode.values)
                   _ChannelRadioTile(
                     mode: mode,
                     groupValue: _channel,
@@ -185,7 +185,7 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
                 // CDN分流 自定义 IP 输入框
                 AnimatedSize(
                   duration: const Duration(milliseconds: 200),
-                  child: _channel == PicacgChannelMode.cdnIp
+                  child: _channel == PicAcgChannelMode.cdnIp
                       ? Padding(
                           padding: EdgeInsets.only(top: m.kSpace8, left: m.kSpace32),
                           child: Row(
@@ -203,7 +203,7 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
                               ),
                               SizedBox(width: m.kSpace8),
                               FilledButton.tonal(
-                                onPressed: () => _applyChannel(PicacgChannelMode.cdnIp),
+                                onPressed: () => _applyChannel(PicAcgChannelMode.cdnIp),
                                 child: const Text('应用'),
                               ),
                             ],
@@ -297,7 +297,7 @@ class _PicacgSettingsTabState extends State<PicacgSettingsTab> {
 // ─── 账号卡片 ─────────────────────────────────────────────────────────────────
 
 class _AccountCard extends StatelessWidget {
-  final PicacgService service;
+  final PicAcgService service;
   final VoidCallback onChanged;
 
   const _AccountCard({required this.service, required this.onChanged});
@@ -353,7 +353,7 @@ class _AccountCard extends StatelessWidget {
               icon: const Icon(Icons.login, size: 16),
               label: const Text('登录'),
               onPressed: () async {
-                final ok = await showPicacgLoginDialog(context);
+                final ok = await showPicAcgLoginDialog(context);
                 if (ok) onChanged();
               },
             ),
@@ -367,10 +367,10 @@ class _AccountCard extends StatelessWidget {
 // ─── 分流单选项 ───────────────────────────────────────────────────────────────
 
 class _ChannelRadioTile extends StatelessWidget {
-  final PicacgChannelMode mode;
-  final PicacgChannelMode groupValue;
+  final PicAcgChannelMode mode;
+  final PicAcgChannelMode groupValue;
   final int? latency; // null=未测, -1=测速中, -2=不可达, >=0=ms
-  final ValueChanged<PicacgChannelMode> onChanged;
+  final ValueChanged<PicAcgChannelMode> onChanged;
 
   const _ChannelRadioTile({
     required this.mode,
@@ -380,12 +380,12 @@ class _ChannelRadioTile extends StatelessWidget {
   });
 
   static const _subtitles = {
-    PicacgChannelMode.direct: '标准 DNS 解析，网络环境良好时使用',
-    PicacgChannelMode.channel2: 'IP 直连 104.21.91.145（Cloudflare 节点，推荐）',
-    PicacgChannelMode.channel3: 'IP 直连 188.114.98.153（Cloudflare 节点）',
-    PicacgChannelMode.cdnIp: '自定义 CDN IP，可填入获取的节点地址',
-    PicacgChannelMode.jpProxy: '反代节点 bika-api.jpacg.cc（JP）',
-    PicacgChannelMode.usProxy: '反代节点 bika2-api.jpacg.cc（US）',
+    PicAcgChannelMode.direct: '标准 DNS 解析，网络环境良好时使用',
+    PicAcgChannelMode.channel2: 'IP 直连 104.21.91.145（Cloudflare 节点，推荐）',
+    PicAcgChannelMode.channel3: 'IP 直连 188.114.98.153（Cloudflare 节点）',
+    PicAcgChannelMode.cdnIp: '自定义 CDN IP，可填入获取的节点地址',
+    PicAcgChannelMode.jpProxy: '反代节点 bika-api.jpacg.cc（JP）',
+    PicAcgChannelMode.usProxy: '反代节点 bika2-api.jpacg.cc（US）',
   };
 
   @override
@@ -413,7 +413,7 @@ class _ChannelRadioTile extends StatelessWidget {
       );
     }
 
-    return RadioListTile<PicacgChannelMode>(
+    return RadioListTile<PicAcgChannelMode>(
       title: Text(mode.label),
       subtitle: Text(_subtitles[mode] ?? ''),
       value: mode,

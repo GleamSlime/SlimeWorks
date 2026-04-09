@@ -3,14 +3,14 @@
 /// 与 Rust 侧 JSON 结构对应，使用 dart:convert 解析
 
 /// 图片资源
-class PicacgImage {
+class PicAcgImage {
   final String originalName;
   final String path;
   final String fileServer;
 
-  const PicacgImage({required this.originalName, required this.path, required this.fileServer});
+  const PicAcgImage({required this.originalName, required this.path, required this.fileServer});
 
-  factory PicacgImage.fromJson(Map<String, dynamic> json) => PicacgImage(
+  factory PicAcgImage.fromJson(Map<String, dynamic> json) => PicAcgImage(
     originalName: json['originalName'] as String? ?? '',
     path: json['path'] as String? ?? '',
     fileServer: json['fileServer'] as String? ?? '',
@@ -21,12 +21,12 @@ class PicacgImage {
 }
 
 /// 漫画信息
-class PicacgComic {
+class PicAcgComic {
   final String id;
   final String title;
   final String? author;
   final String? description;
-  final PicacgImage thumb;
+  final PicAcgImage thumb;
   final List<String> categories;
   final List<String> tags;
   final int epsCount;
@@ -36,7 +36,7 @@ class PicacgComic {
   final bool? isLiked;
   final bool? isFavourite;
 
-  const PicacgComic({
+  const PicAcgComic({
     required this.id,
     required this.title,
     this.author,
@@ -52,12 +52,12 @@ class PicacgComic {
     this.isFavourite,
   });
 
-  factory PicacgComic.fromJson(Map<String, dynamic> json) => PicacgComic(
+  factory PicAcgComic.fromJson(Map<String, dynamic> json) => PicAcgComic(
     id: json['_id'] as String? ?? '',
     title: json['title'] as String? ?? '',
     author: json['author'] as String?,
     description: json['description'] as String?,
-    thumb: PicacgImage.fromJson(json['thumb'] as Map<String, dynamic>? ?? {}),
+    thumb: PicAcgImage.fromJson(json['thumb'] as Map<String, dynamic>? ?? {}),
     categories: List<String>.from(json['categories'] as List? ?? []),
     tags: List<String>.from(json['tags'] as List? ?? []),
     epsCount: json['epsCount'] as int? ?? 0,
@@ -70,20 +70,20 @@ class PicacgComic {
 }
 
 /// 漫画章节
-class PicacgEps {
+class PicAcgEps {
   final String id;
   final String title;
   final int order;
   final String updatedAt;
 
-  const PicacgEps({
+  const PicAcgEps({
     required this.id,
     required this.title,
     required this.order,
     required this.updatedAt,
   });
 
-  factory PicacgEps.fromJson(Map<String, dynamic> json) => PicacgEps(
+  factory PicAcgEps.fromJson(Map<String, dynamic> json) => PicAcgEps(
     id: json['_id'] as String? ?? '',
     title: json['title'] as String? ?? '',
     order: json['order'] as int? ?? 1,
@@ -92,33 +92,33 @@ class PicacgEps {
 }
 
 /// 章节图片单页
-class PicacgPage {
+class PicAcgPage {
   final String id;
-  final PicacgImage media;
+  final PicAcgImage media;
 
-  const PicacgPage({required this.id, required this.media});
+  const PicAcgPage({required this.id, required this.media});
 
-  factory PicacgPage.fromJson(Map<String, dynamic> json) => PicacgPage(
+  factory PicAcgPage.fromJson(Map<String, dynamic> json) => PicAcgPage(
     id: json['_id'] as String? ?? '',
-    media: PicacgImage.fromJson(json['media'] as Map<String, dynamic>? ?? {}),
+    media: PicAcgImage.fromJson(json['media'] as Map<String, dynamic>? ?? {}),
   );
 }
 
 /// 分页信息
-class PicacgPagination {
+class PicAcgPagination {
   final int total;
   final int limit;
   final int page;
   final int pages;
 
-  const PicacgPagination({
+  const PicAcgPagination({
     required this.total,
     required this.limit,
     required this.page,
     required this.pages,
   });
 
-  factory PicacgPagination.fromJson(Map<String, dynamic> json) => PicacgPagination(
+  factory PicAcgPagination.fromJson(Map<String, dynamic> json) => PicAcgPagination(
     total: json['total'] as int? ?? 0,
     limit: json['limit'] as int? ?? 20,
     page: json['page'] as int? ?? 1,
@@ -127,19 +127,19 @@ class PicacgPagination {
 }
 
 /// 漫画列表（带分页）
-class PicacgComicList {
-  final List<PicacgComic> comics;
-  final PicacgPagination pagination;
+class PicAcgComicList {
+  final List<PicAcgComic> comics;
+  final PicAcgPagination pagination;
 
-  const PicacgComicList({required this.comics, required this.pagination});
+  const PicAcgComicList({required this.comics, required this.pagination});
 
-  factory PicacgComicList.fromJson(Map<String, dynamic> json) {
+  factory PicAcgComicList.fromJson(Map<String, dynamic> json) {
     final comicsJson = json['comics'] as Map<String, dynamic>?;
     final docs = comicsJson?['docs'] as List? ?? json['comics'] as List? ?? [];
     final paginationJson = comicsJson ?? json;
-    return PicacgComicList(
-      comics: docs.map((e) => PicacgComic.fromJson(e as Map<String, dynamic>)).toList(),
-      pagination: PicacgPagination(
+    return PicAcgComicList(
+      comics: docs.map((e) => PicAcgComic.fromJson(e as Map<String, dynamic>)).toList(),
+      pagination: PicAcgPagination(
         total: paginationJson['total'] as int? ?? 0,
         limit: paginationJson['limit'] as int? ?? 20,
         page: paginationJson['page'] as int? ?? 1,
@@ -150,19 +150,19 @@ class PicacgComicList {
 }
 
 /// 章节列表（带分页）
-class PicacgEpsList {
-  final List<PicacgEps> eps;
-  final PicacgPagination pagination;
+class PicAcgEpsList {
+  final List<PicAcgEps> eps;
+  final PicAcgPagination pagination;
 
-  const PicacgEpsList({required this.eps, required this.pagination});
+  const PicAcgEpsList({required this.eps, required this.pagination});
 
-  factory PicacgEpsList.fromJson(Map<String, dynamic> json) {
+  factory PicAcgEpsList.fromJson(Map<String, dynamic> json) {
     final epsJson = json['eps'] as Map<String, dynamic>?;
     final docs = epsJson?['docs'] as List? ?? json['eps'] as List? ?? [];
     final paginationJson = epsJson ?? json;
-    return PicacgEpsList(
-      eps: docs.map((e) => PicacgEps.fromJson(e as Map<String, dynamic>)).toList(),
-      pagination: PicacgPagination(
+    return PicAcgEpsList(
+      eps: docs.map((e) => PicAcgEps.fromJson(e as Map<String, dynamic>)).toList(),
+      pagination: PicAcgPagination(
         total: paginationJson['total'] as int? ?? 0,
         limit: paginationJson['limit'] as int? ?? 20,
         page: paginationJson['page'] as int? ?? 1,
@@ -173,19 +173,19 @@ class PicacgEpsList {
 }
 
 /// 图片页列表（带分页）
-class PicacgPageList {
-  final List<PicacgPage> pages;
-  final PicacgPagination pagination;
+class PicAcgPageList {
+  final List<PicAcgPage> pages;
+  final PicAcgPagination pagination;
 
-  const PicacgPageList({required this.pages, required this.pagination});
+  const PicAcgPageList({required this.pages, required this.pagination});
 
-  factory PicacgPageList.fromJson(Map<String, dynamic> json) {
+  factory PicAcgPageList.fromJson(Map<String, dynamic> json) {
     final pagesJson = json['pages'] as Map<String, dynamic>?;
     final docs = pagesJson?['docs'] as List? ?? json['pages'] as List? ?? [];
     final paginationJson = pagesJson ?? json;
-    return PicacgPageList(
-      pages: docs.map((e) => PicacgPage.fromJson(e as Map<String, dynamic>)).toList(),
-      pagination: PicacgPagination(
+    return PicAcgPageList(
+      pages: docs.map((e) => PicAcgPage.fromJson(e as Map<String, dynamic>)).toList(),
+      pagination: PicAcgPagination(
         total: paginationJson['total'] as int? ?? 0,
         limit: paginationJson['limit'] as int? ?? 40,
         page: paginationJson['page'] as int? ?? 1,
@@ -196,18 +196,18 @@ class PicacgPageList {
 }
 
 /// 用户信息
-class PicacgUser {
+class PicAcgUser {
   final String id;
   final String email;
   final String name;
   final String title;
   final String status;
-  final PicacgImage? avatar;
+  final PicAcgImage? avatar;
   final int level;
   final int exp;
   final bool isPunched;
 
-  const PicacgUser({
+  const PicAcgUser({
     required this.id,
     required this.email,
     required this.name,
@@ -219,16 +219,16 @@ class PicacgUser {
     required this.isPunched,
   });
 
-  factory PicacgUser.fromJson(Map<String, dynamic> json) {
+  factory PicAcgUser.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>? ?? json;
-    return PicacgUser(
+    return PicAcgUser(
       id: user['_id'] as String? ?? '',
       email: user['email'] as String? ?? '',
       name: user['name'] as String? ?? '',
       title: user['title'] as String? ?? '',
       status: user['status'] as String? ?? '',
       avatar: user['avatar'] != null
-          ? PicacgImage.fromJson(user['avatar'] as Map<String, dynamic>)
+          ? PicAcgImage.fromJson(user['avatar'] as Map<String, dynamic>)
           : null,
       level: user['level'] as int? ?? 0,
       exp: user['exp'] as int? ?? 0,
@@ -238,46 +238,46 @@ class PicacgUser {
 }
 
 /// 分类信息
-class PicacgCategory {
+class PicAcgCategory {
   final String title;
-  final PicacgImage? thumb;
+  final PicAcgImage? thumb;
   final bool active;
 
-  const PicacgCategory({required this.title, this.thumb, required this.active});
+  const PicAcgCategory({required this.title, this.thumb, required this.active});
 
-  factory PicacgCategory.fromJson(Map<String, dynamic> json) => PicacgCategory(
+  factory PicAcgCategory.fromJson(Map<String, dynamic> json) => PicAcgCategory(
     title: json['title'] as String? ?? '',
     thumb: json['thumb'] != null
-        ? PicacgImage.fromJson(json['thumb'] as Map<String, dynamic>)
+        ? PicAcgImage.fromJson(json['thumb'] as Map<String, dynamic>)
         : null,
     active: json['active'] as bool? ?? true,
   );
 }
 
 /// 首页推荐集合
-class PicacgCollection {
+class PicAcgCollection {
   final String title;
-  final List<PicacgComic> comics;
+  final List<PicAcgComic> comics;
 
-  const PicacgCollection({required this.title, required this.comics});
+  const PicAcgCollection({required this.title, required this.comics});
 
-  factory PicacgCollection.fromJson(Map<String, dynamic> json) => PicacgCollection(
+  factory PicAcgCollection.fromJson(Map<String, dynamic> json) => PicAcgCollection(
     title: json['title'] as String? ?? '',
     comics: (json['comics'] as List? ?? [])
-        .map((e) => PicacgComic.fromJson(e as Map<String, dynamic>))
+        .map((e) => PicAcgComic.fromJson(e as Map<String, dynamic>))
         .toList(),
   );
 }
 
 /// 评论用户简要信息
-class PicacgCommentUser {
+class PicAcgCommentUser {
   final String id;
   final String name;
   final String? title;
-  final PicacgImage? avatar;
+  final PicAcgImage? avatar;
   final int? level;
 
-  const PicacgCommentUser({
+  const PicAcgCommentUser({
     required this.id,
     required this.name,
     this.title,
@@ -285,28 +285,28 @@ class PicacgCommentUser {
     this.level,
   });
 
-  factory PicacgCommentUser.fromJson(Map<String, dynamic> json) => PicacgCommentUser(
+  factory PicAcgCommentUser.fromJson(Map<String, dynamic> json) => PicAcgCommentUser(
     id: json['_id'] as String? ?? '',
     name: json['name'] as String? ?? '',
     title: json['title'] as String?,
     avatar: json['avatar'] != null
-        ? PicacgImage.fromJson(json['avatar'] as Map<String, dynamic>)
+        ? PicAcgImage.fromJson(json['avatar'] as Map<String, dynamic>)
         : null,
     level: json['level'] as int?,
   );
 }
 
 /// 评论
-class PicacgComment {
+class PicAcgComment {
   final String id;
   final String content;
   final int totalComments;
   final int likesCount;
   final bool? isLiked;
   final String createdAt;
-  final PicacgCommentUser user;
+  final PicAcgCommentUser user;
 
-  const PicacgComment({
+  const PicAcgComment({
     required this.id,
     required this.content,
     required this.totalComments,
@@ -316,19 +316,19 @@ class PicacgComment {
     required this.user,
   });
 
-  factory PicacgComment.fromJson(Map<String, dynamic> json) => PicacgComment(
+  factory PicAcgComment.fromJson(Map<String, dynamic> json) => PicAcgComment(
     id: json['_id'] as String? ?? '',
     content: json['content'] as String? ?? '',
     totalComments: json['totalComments'] as int? ?? 0,
     likesCount: json['likesCount'] as int? ?? 0,
     isLiked: json['isLiked'] as bool?,
     createdAt: json['createdAt'] as String? ?? '',
-    user: PicacgCommentUser.fromJson(json['_user'] as Map<String, dynamic>? ?? {}),
+    user: PicAcgCommentUser.fromJson(json['_user'] as Map<String, dynamic>? ?? {}),
   );
 }
 
 /// 排序方式枚举
-enum PicacgSortOrder {
+enum PicAcgSortOrder {
   /// 最新发布
   dateDescending('dd'),
 
@@ -341,7 +341,7 @@ enum PicacgSortOrder {
   /// 最多观看
   viewDescending('vd');
 
-  const PicacgSortOrder(this.value);
+  const PicAcgSortOrder(this.value);
 
   final String value;
 }

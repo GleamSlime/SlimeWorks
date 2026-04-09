@@ -14,5 +14,5 @@ mod signature;
 mod types;
 
 pub use api::*;
-pub use client::PicacgClient;
+pub use client::PicAcgClient;
 pub use types::*;

@@ -103,10 +103,10 @@ class AppRoutes {
       const GooeyDemoRoute(),
       const ViewModelDemoRoute(),
 
-      const PicacgHomeRoute(),
-      const PicacgComicDetailRoute(comicId: ''),
-      const PicacgSearchRoute(),
-      PicacgReaderRoute(comicId: '', epsOrder: 0),
+      const PicAcgHomeRoute(),
+      const PicAcgComicDetailRoute(comicId: ''),
+      const PicAcgSearchRoute(),
+      PicAcgReaderRoute(comicId: '', epsOrder: 0),
     ];
 
     router = GoRouter(

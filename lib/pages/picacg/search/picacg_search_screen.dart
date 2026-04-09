@@ -1,105 +1,32 @@
+library;
+
 /// PicACG 搜索页面
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
-import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/picacg/components/picacg_comic_card.dart';
-import 'package:slime_works/pages/picacg/models/picacg_models.dart';
+import 'package:slime_works/pages/picacg/view_models/picacg_search_viewmodel.dart';
 
-/// 搜索 ViewModel
-class PicacgSearchViewModel extends BaseViewModel {
-  final PicacgService _service = getIt<PicacgService>();
-
-  final RxList<PicacgComic> results = <PicacgComic>[].obs;
-  final Rx<PicacgPagination?> pagination = Rx<PicacgPagination?>(null);
-  final RxBool isLoadingMore = false.obs;
-
-  String _keyword = '';
-  String _category = '';
-  int _currentPage = 1;
-  PicacgSortOrder _sort = PicacgSortOrder.dateDescending;
-
-  String get keyword => _keyword;
-  String get category => _category;
-  PicacgSortOrder get sort => _sort;
-
-  Future<void> search({
-    required String keyword,
-    String category = '',
-    PicacgSortOrder sort = PicacgSortOrder.dateDescending,
-  }) async {
-    _keyword = keyword;
-    _category = category;
-    _sort = sort;
-    _currentPage = 1;
-    results.clear();
-    setLoading(true);
-    try {
-      final list = await _service.searchComics(
-        keyword: keyword,
-        categories: category.isNotEmpty ? [category] : [],
-        page: 1,
-        sort: sort,
-      );
-      results.assignAll(list.comics);
-      pagination.value = list.pagination;
-      clearError();
-    } catch (e) {
-      setError(e.toString());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  Future<void> loadMore() async {
-    final p = pagination.value;
-    if (p == null || _currentPage >= p.pages) return;
-    isLoadingMore.value = true;
-    try {
-      _currentPage++;
-      final list = await _service.searchComics(
-        keyword: _keyword,
-        categories: _category.isNotEmpty ? [_category] : [],
-        page: _currentPage,
-        sort: _sort,
-      );
-      results.addAll(list.comics);
-      pagination.value = list.pagination;
-    } catch (e) {
-      _currentPage--;
-    } finally {
-      isLoadingMore.value = false;
-    }
-  }
-
-  bool get hasMore {
-    final p = pagination.value;
-    return p != null && _currentPage < p.pages;
-  }
-}
-
-class PicacgSearchScreen extends BasePage<PicacgSearchViewModel> {
-  const PicacgSearchScreen({super.key, this.keyword = '', this.category = ''});
+class PicAcgSearchScreen extends BasePage<PicAcgSearchViewModel> {
+  const PicAcgSearchScreen({super.key, this.keyword = '', this.category = ''});
 
   final String keyword;
   final String category;
 
   @override
-  State<PicacgSearchScreen> createState() => _PicacgSearchScreenState();
+  State<PicAcgSearchScreen> createState() => _PicAcgSearchScreenState();
 }
 
-class _PicacgSearchScreenState extends BasePageState<PicacgSearchViewModel, PicacgSearchScreen> {
+class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicAcgSearchScreen> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
 
   @override
-  PicacgSearchViewModel createViewModel() => PicacgSearchViewModel();
+  PicAcgSearchViewModel createViewModel() => PicAcgSearchViewModel();
 
   @override
   Future<void> onPageInit() async {
@@ -136,7 +63,6 @@ class _PicacgSearchScreenState extends BasePageState<PicacgSearchViewModel, Pica
   @override
   Widget buildContent(BuildContext context) {
     final theme = Theme.of(context);
-    final metrics = appMetrics;
 
     return Column(
       children: [
@@ -162,64 +88,68 @@ class _PicacgSearchScreenState extends BasePageState<PicacgSearchViewModel, Pica
         ),
 
         /// 结果区域
-        Expanded(
-          child: GetBuilder<PicacgSearchViewModel>(
-            builder: (vm) {
-              if (vm.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (vm.errorMessage != null) {
-                return Center(
-                  child: Text(
-                    vm.errorMessage!,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
-                  ),
-                );
-              }
-              if (vm.results.isEmpty && vm.keyword.isNotEmpty) {
-                return Center(
-                  child: Text(
-                    '没有找到相关漫画',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
-                );
-              }
-              if (vm.results.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              final crossAxisCount = PlatformUtil.isDesktop ? 6 : 3;
-              return GridView.builder(
-                controller: _scrollController,
-                padding: EdgeInsets.all(metrics.kSpace16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  mainAxisSpacing: scaleW(8),
-                  crossAxisSpacing: scaleW(8),
-                  childAspectRatio: 0.6,
-                ),
-                itemCount: vm.results.length + (vm.hasMore ? 1 : 0),
-                itemBuilder: (ctx, i) {
-                  if (i >= vm.results.length) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
-                  }
-                  final comic = vm.results[i];
-                  return PicacgComicCard(
-                    comic: comic,
-                    onTap: () => PicacgComicDetailRoute(comicId: comic.id).push(context),
-                  );
-                },
-              );
-            },
-          ),
-        ),
+        Expanded(child: _buildResults(context)),
       ],
     );
+  }
+
+  /// 搜索结果区域（使用 Obx 监听 RxList 变化，修复 loadMore 后列表不更新的问题）
+  Widget _buildResults(BuildContext context) {
+    final theme = Theme.of(context);
+    final metrics = appMetrics;
+
+    /// isLoading / errorMessage 由基类 GetBuilder 触发重建，此处直接读取
+    if (viewModel.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (viewModel.errorMessage != null) {
+      return Center(
+        child: Text(
+          viewModel.errorMessage!,
+          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+        ),
+      );
+    }
+
+    /// 列表数据由 Obx 监听，确保 loadMore 时新条目即时显示
+    return Obx(() {
+      if (viewModel.results.isEmpty && viewModel.keyword.isNotEmpty) {
+        return Center(
+          child: Text(
+            '没有找到相关漫画',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        );
+      }
+      if (viewModel.results.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      final crossAxisCount = PlatformUtil.isDesktop ? 6 : 3;
+      return GridView.builder(
+        controller: _scrollController,
+        padding: EdgeInsets.all(metrics.kSpace16),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          mainAxisSpacing: scaleW(8),
+          crossAxisSpacing: scaleW(8),
+          childAspectRatio: 0.6,
+        ),
+        itemCount: viewModel.results.length + (viewModel.hasMore ? 1 : 0),
+        itemBuilder: (ctx, i) {
+          if (i >= viewModel.results.length) {
+            return const Center(
+              child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()),
+            );
+          }
+          final comic = viewModel.results[i];
+          return PicAcgComicCard(
+            comic: comic,
+            onTap: () => PicAcgComicDetailRoute(comicId: comic.id).push(context),
+          );
+        },
+      );
+    });
   }
 }

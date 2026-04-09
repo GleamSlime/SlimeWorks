@@ -2,7 +2,7 @@
 use std::fmt;
 
 #[derive(Debug)]
-pub enum PicacgError {
+pub enum PicAcgError {
     /// 网络请求错误
     Network(String),
     /// JSON 解析错误
@@ -15,34 +15,34 @@ pub enum PicacgError {
     Other(String),
 }
 
-impl fmt::Display for PicacgError {
+impl fmt::Display for PicAcgError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PicacgError::Network(msg) => write!(f, "网络错误: {}", msg),
-            PicacgError::Parse(msg) => write!(f, "解析错误: {}", msg),
-            PicacgError::Api(code, msg) => write!(f, "API错误 [{}]: {}", code, msg),
-            PicacgError::Unauthorized => write!(f, "未登录或Token已过期"),
-            PicacgError::Other(msg) => write!(f, "错误: {}", msg),
+            PicAcgError::Network(msg) => write!(f, "网络错误: {}", msg),
+            PicAcgError::Parse(msg) => write!(f, "解析错误: {}", msg),
+            PicAcgError::Api(code, msg) => write!(f, "API错误 [{}]: {}", code, msg),
+            PicAcgError::Unauthorized => write!(f, "未登录或Token已过期"),
+            PicAcgError::Other(msg) => write!(f, "错误: {}", msg),
         }
     }
 }
 
-impl From<reqwest::Error> for PicacgError {
+impl From<reqwest::Error> for PicAcgError {
     fn from(e: reqwest::Error) -> Self {
-        PicacgError::Network(e.to_string())
+        PicAcgError::Network(e.to_string())
     }
 }
 
-impl From<serde_json::Error> for PicacgError {
+impl From<serde_json::Error> for PicAcgError {
     fn from(e: serde_json::Error) -> Self {
-        PicacgError::Parse(e.to_string())
+        PicAcgError::Parse(e.to_string())
     }
 }
 
-impl From<anyhow::Error> for PicacgError {
+impl From<anyhow::Error> for PicAcgError {
     fn from(e: anyhow::Error) -> Self {
-        PicacgError::Other(e.to_string())
+        PicAcgError::Other(e.to_string())
     }
 }
 
-pub type PicacgResult<T> = Result<T, PicacgError>;
+pub type PicAcgResult<T> = Result<T, PicAcgError>;

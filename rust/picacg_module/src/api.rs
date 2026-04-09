@@ -1,7 +1,7 @@
 /// PicACG FFI API
 ///
 /// 通过 flutter_rust_bridge 暴露给 Dart 层
-use crate::client::{ChannelMode, PicacgClient};
+use crate::client::{ChannelMode, PicAcgClient};
 use anyhow::{anyhow, Result};
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
@@ -9,7 +9,7 @@ use log::{info, warn};
 use serde_json::json;
 
 lazy_static! {
-    static ref CLIENT: PicacgClient = PicacgClient::new();
+    static ref CLIENT: PicAcgClient = PicAcgClient::new();
 }
 
 const DEFAULT_CDN_IP: &str = "104.18.227.172";
@@ -384,7 +384,7 @@ pub async fn picacg_like_comment(comment_id: String) -> Result<String> {
 
 #[frb(sync)]
 pub fn picacg_build_image_url(file_server: String, path: String) -> String {
-    PicacgClient::build_image_url(&file_server, &path, &CLIENT.get_image_server())
+    PicAcgClient::build_image_url(&file_server, &path, &CLIENT.get_image_server())
 }
 
 pub async fn picacg_fetch_image(file_server: String, path: String) -> Result<Vec<u8>> {

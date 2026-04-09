@@ -2,9 +2,9 @@ part of '../app_routes.dart';
 
 /// PicACG 漫画平台路由定义
 
-@TypedGoRoute<PicacgHomeRoute>(path: '/picacg')
-class PicacgHomeRoute extends AppRouteData with $PicacgHomeRoute {
-  const PicacgHomeRoute();
+@TypedGoRoute<PicAcgHomeRoute>(path: '/picacg')
+class PicAcgHomeRoute extends AppRouteData with $PicAcgHomeRoute {
+  const PicAcgHomeRoute();
 
   @override
   String get title => 'PicACG';
@@ -15,17 +15,17 @@ class PicacgHomeRoute extends AppRouteData with $PicacgHomeRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
 
-  static const Permission routePermission = Permission.accessPicacg;
+  static const Permission routePermission = Permission.accessPicAcg;
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, const PicacgHomeScreen());
+    return AppRoutes.buildPage(context, state, const PicAcgHomeScreen());
   }
 }
 
-@TypedGoRoute<PicacgComicDetailRoute>(path: '/picacg/comic/:comicId')
-class PicacgComicDetailRoute extends AppRouteData with $PicacgComicDetailRoute {
-  const PicacgComicDetailRoute({required this.comicId});
+@TypedGoRoute<PicAcgComicDetailRoute>(path: '/picacg/comic/:comicId')
+class PicAcgComicDetailRoute extends AppRouteData with $PicAcgComicDetailRoute {
+  const PicAcgComicDetailRoute({required this.comicId});
 
   final String comicId;
 
@@ -35,17 +35,17 @@ class PicacgComicDetailRoute extends AppRouteData with $PicacgComicDetailRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
 
-  static const Permission routePermission = Permission.accessPicacg;
+  static const Permission routePermission = Permission.accessPicAcg;
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, PicacgComicDetailScreen(comicId: comicId));
+    return AppRoutes.buildPage(context, state, PicAcgComicDetailScreen(comicId: comicId));
   }
 }
 
-@TypedGoRoute<PicacgSearchRoute>(path: '/picacg/search')
-class PicacgSearchRoute extends AppRouteData with $PicacgSearchRoute {
-  const PicacgSearchRoute({this.keyword = '', this.category = ''});
+@TypedGoRoute<PicAcgSearchRoute>(path: '/picacg/search')
+class PicAcgSearchRoute extends AppRouteData with $PicAcgSearchRoute {
+  const PicAcgSearchRoute({this.keyword = '', this.category = ''});
 
   final String keyword;
   final String category;
@@ -56,21 +56,21 @@ class PicacgSearchRoute extends AppRouteData with $PicacgSearchRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
 
-  static const Permission routePermission = Permission.accessPicacg;
+  static const Permission routePermission = Permission.accessPicAcg;
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return AppRoutes.buildPage(
       context,
       state,
-      PicacgSearchScreen(keyword: keyword, category: category),
+      PicAcgSearchScreen(keyword: keyword, category: category),
     );
   }
 }
 
-@TypedGoRoute<PicacgReaderRoute>(path: '/picacg/read/:comicId/:epsOrder')
-class PicacgReaderRoute extends AppRouteData with $PicacgReaderRoute {
-  const PicacgReaderRoute({required this.comicId, required this.epsOrder, this.epsTitle = ''});
+@TypedGoRoute<PicAcgReaderRoute>(path: '/picacg/read/:comicId/:epsOrder')
+class PicAcgReaderRoute extends AppRouteData with $PicAcgReaderRoute {
+  const PicAcgReaderRoute({required this.comicId, required this.epsOrder, this.epsTitle = ''});
 
   final String comicId;
   final int epsOrder;
@@ -82,14 +82,14 @@ class PicacgReaderRoute extends AppRouteData with $PicacgReaderRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
 
-  static const Permission routePermission = Permission.accessPicacg;
+  static const Permission routePermission = Permission.accessPicAcg;
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return AppRoutes.buildPage(
       context,
       state,
-      PicacgReaderScreen(comicId: comicId, epsOrder: epsOrder, epsTitle: epsTitle),
+      PicAcgReaderScreen(comicId: comicId, epsOrder: epsOrder, epsTitle: epsTitle),
     );
   }
 }

@@ -36,7 +36,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
         label: '通知设置',
         content: const SettingsTabPlaceholder(title: '通知设置'),
       ),
-      _SettingsTab(label: 'PicACG', content: const PicacgSettingsTab()),
+      _SettingsTab(label: 'PicACG', content: const PicAcgSettingsTab()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
   }

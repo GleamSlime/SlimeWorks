@@ -36,7 +36,7 @@ void getItInit() {
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
 
   // PicACG 漫画平台服务
-  getIt.registerLazySingleton<PicacgService>(() => PicacgService());
+  getIt.registerLazySingleton<PicAcgService>(() => PicAcgService());
 
   isInitialized = true;
 }

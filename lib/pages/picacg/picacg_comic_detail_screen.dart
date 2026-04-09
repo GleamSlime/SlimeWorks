@@ -1,70 +1,28 @@
+library;
+
 /// PicACG 漫画详情页
 
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
-import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
-import 'package:slime_works/pages/picacg/models/picacg_models.dart';
+import 'package:slime_works/pages/picacg/view_models/picacg_comic_detail_viewmodel.dart';
 
-/// 漫画详情 ViewModel
-class PicacgComicDetailViewModel extends BaseViewModel {
-  final PicacgService _service = getIt<PicacgService>();
-
-  PicacgComic? comic;
-  List<PicacgEps> eps = [];
-  PicacgPagination? epsPagination;
-  bool isFavourite = false;
-
-  Future<void> loadDetail(String comicId) async {
-    setLoading(true);
-    try {
-      final results = await Future.wait([
-        _service.getComicDetail(comicId),
-        _service.getComicEps(comicId, page: 1),
-      ]);
-      comic = results[0] as PicacgComic;
-      final epsList = results[1] as PicacgEpsList;
-      eps = epsList.eps;
-      epsPagination = epsList.pagination;
-      isFavourite = comic?.isFavourite ?? false;
-      clearError();
-    } catch (e) {
-      setError(e.toString());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  Future<void> toggleFavourite(String comicId) async {
-    try {
-      await _service.toggleFavourite(comicId);
-      isFavourite = !isFavourite;
-      update();
-    } catch (e) {
-      setError(e.toString());
-    }
-  }
-}
-
-class PicacgComicDetailScreen extends BasePage<PicacgComicDetailViewModel> {
-  const PicacgComicDetailScreen({super.key, required this.comicId});
+class PicAcgComicDetailScreen extends BasePage<PicAcgComicDetailViewModel> {
+  const PicAcgComicDetailScreen({super.key, required this.comicId});
 
   final String comicId;
 
   @override
-  State<PicacgComicDetailScreen> createState() => _PicacgComicDetailScreenState();
+  State<PicAcgComicDetailScreen> createState() => _PicAcgComicDetailScreenState();
 }
 
-class _PicacgComicDetailScreenState
-    extends BasePageState<PicacgComicDetailViewModel, PicacgComicDetailScreen> {
+class _PicAcgComicDetailScreenState
+    extends BasePageState<PicAcgComicDetailViewModel, PicAcgComicDetailScreen> {
   @override
-  PicacgComicDetailViewModel createViewModel() => PicacgComicDetailViewModel();
+  PicAcgComicDetailViewModel createViewModel() => PicAcgComicDetailViewModel();
 
   @override
   Future<void> onPageInit() async {
@@ -76,38 +34,35 @@ class _PicacgComicDetailScreenState
 
   @override
   Widget buildContent(BuildContext context) {
-    return GetBuilder<PicacgComicDetailViewModel>(
-      builder: (vm) {
-        if (vm.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (vm.errorMessage != null) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  vm.errorMessage!,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => viewModel.loadDetail(widget.comicId),
-                  child: const Text('重试'),
-                ),
-              ],
+    /// isLoading / errorMessage 由基类 GetBuilder 触发重建，此处直接读取
+    if (viewModel.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (viewModel.errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              viewModel.errorMessage!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
             ),
-          );
-        }
-        if (vm.comic == null) return const SizedBox.shrink();
-        return _buildDetail(context, vm);
-      },
-    );
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => viewModel.loadDetail(widget.comicId),
+              child: const Text('重试'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (viewModel.comic == null) return const SizedBox.shrink();
+    return _buildDetail(context, viewModel);
   }
 
-  Widget _buildDetail(BuildContext context, PicacgComicDetailViewModel vm) {
+  Widget _buildDetail(BuildContext context, PicAcgComicDetailViewModel vm) {
     final comic = vm.comic!;
     final theme = Theme.of(context);
     final metrics = appMetrics;
@@ -147,10 +102,10 @@ class _PicacgComicDetailScreenState
                   child: SizedBox(
                     width: scaleW(100),
                     height: scaleW(133),
-                    child: PicacgImageView(
+                    child: PicAcgImageView(
                       image: comic.thumb,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __) => const Icon(Icons.broken_image_outlined),
+                      errorBuilder: (_, e) => const Icon(Icons.broken_image_outlined),
                     ),
                   ),
                 ),
@@ -252,7 +207,7 @@ class _PicacgComicDetailScreenState
               final ep = vm.eps[i];
               return OutlinedButton(
                 onPressed: () {
-                  PicacgReaderRoute(
+                  PicAcgReaderRoute(
                     comicId: comic.id,
                     epsOrder: ep.order,
                     epsTitle: ep.title,

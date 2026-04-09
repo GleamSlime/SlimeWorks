@@ -5,8 +5,8 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 
-class PicacgImageView extends StatefulWidget {
-  const PicacgImageView({
+class PicAcgImageView extends StatefulWidget {
+  const PicAcgImageView({
     super.key,
     required this.image,
     this.fit = BoxFit.cover,
@@ -17,7 +17,7 @@ class PicacgImageView extends StatefulWidget {
     this.errorBuilder,
   });
 
-  final PicacgImage image;
+  final PicAcgImage image;
   final BoxFit fit;
   final double? width;
   final double? height;
@@ -26,11 +26,11 @@ class PicacgImageView extends StatefulWidget {
   final Widget Function(BuildContext context, Object? error)? errorBuilder;
 
   @override
-  State<PicacgImageView> createState() => _PicacgImageViewState();
+  State<PicAcgImageView> createState() => _PicAcgImageViewState();
 }
 
-class _PicacgImageViewState extends State<PicacgImageView> {
-  late final PicacgService _service = getIt<PicacgService>();
+class _PicAcgImageViewState extends State<PicAcgImageView> {
+  late final PicAcgService _service = getIt<PicAcgService>();
   late Future<Uint8List> _future;
 
   @override
@@ -40,7 +40,7 @@ class _PicacgImageViewState extends State<PicacgImageView> {
   }
 
   @override
-  void didUpdateWidget(covariant PicacgImageView oldWidget) {
+  void didUpdateWidget(covariant PicAcgImageView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.image.path != widget.image.path ||
         oldWidget.image.fileServer != widget.image.fileServer) {

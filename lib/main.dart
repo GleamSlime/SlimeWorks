@@ -43,7 +43,7 @@ Future<void> main() async {
   MediaKit.ensureInitialized();
 
   // 恢复 PicACG 登录态与网络配置
-  await getIt<PicacgService>().init();
+  await getIt<PicAcgService>().init();
 
   // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满），
   // 设为 80MB 缓解远程媒体库浏览时内存持续增长问题。

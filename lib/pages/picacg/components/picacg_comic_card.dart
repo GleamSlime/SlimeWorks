@@ -7,10 +7,10 @@ import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 
 /// 漫画网格卡片
-class PicacgComicCard extends StatelessWidget {
-  const PicacgComicCard({super.key, required this.comic, required this.onTap});
+class PicAcgComicCard extends StatelessWidget {
+  const PicAcgComicCard({super.key, required this.comic, required this.onTap});
 
-  final PicacgComic comic;
+  final PicAcgComic comic;
   final VoidCallback onTap;
 
   @override
@@ -79,26 +79,26 @@ class PicacgComicCard extends StatelessWidget {
 class _ComicCoverImage extends StatelessWidget {
   const _ComicCoverImage({required this.image});
 
-  final PicacgImage image;
+  final PicAcgImage image;
 
   @override
   Widget build(BuildContext context) {
-    return PicacgImageView(
+    return PicAcgImageView(
       image: image,
       fit: BoxFit.cover,
       loadingBuilder: (_) {
         return Center(child: CircularProgressIndicator(strokeWidth: 2));
       },
-      errorBuilder: (_, __) => const Center(child: Icon(Icons.broken_image_outlined, size: 32)),
+      errorBuilder: (_, e) => const Center(child: Icon(Icons.broken_image_outlined, size: 32)),
     );
   }
 }
 
 /// 漫画水平列表项（用于推荐区域）
-class PicacgComicListTile extends StatelessWidget {
-  const PicacgComicListTile({super.key, required this.comic, required this.onTap});
+class PicAcgComicListTile extends StatelessWidget {
+  const PicAcgComicListTile({super.key, required this.comic, required this.onTap});
 
-  final PicacgComic comic;
+  final PicAcgComic comic;
   final VoidCallback onTap;
 
   @override

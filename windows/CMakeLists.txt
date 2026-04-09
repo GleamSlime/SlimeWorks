@@ -2,6 +2,13 @@
 cmake_minimum_required(VERSION 3.14)
 project(slime_works LANGUAGES CXX)
 
+# Redirect install destination from "C:/Program Files/..." to build dir
+# to avoid requiring Administrator privileges during flutter run/build.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install"
+      CACHE PATH "Install path" FORCE)
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "slime_works")

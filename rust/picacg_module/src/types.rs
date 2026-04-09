@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// 代理类型
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum PicacgProxyType {
+pub enum PicAcgProxyType {
     None,
     Http,
     Socks5,
@@ -11,15 +11,15 @@ pub enum PicacgProxyType {
 
 /// 代理配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PicacgProxyConfig {
-    pub proxy_type: PicacgProxyType,
+pub struct PicAcgProxyConfig {
+    pub proxy_type: PicAcgProxyType,
     pub url: String,
 }
 
-impl Default for PicacgProxyConfig {
+impl Default for PicAcgProxyConfig {
     fn default() -> Self {
-        PicacgProxyConfig {
-            proxy_type: PicacgProxyType::None,
+        PicAcgProxyConfig {
+            proxy_type: PicAcgProxyType::None,
             url: String::new(),
         }
     }

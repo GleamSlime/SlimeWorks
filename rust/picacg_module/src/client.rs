@@ -9,7 +9,7 @@
 ///   在 reqwest 构建时通过 `.resolve()` 覆盖该域名的 DNS 解析。
 /// - US反代：将 BASE_URL 替换为境外反向代理节点域名（如 `https://bika-api.jpacg.cc`），
 ///   由代理节点转发请求。
-use crate::error::{PicacgError, PicacgResult};
+use crate::error::{PicAcgError, PicAcgResult};
 use crate::signature;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -99,19 +99,19 @@ impl Default for ClientState {
 }
 
 /// PicACG 客户端，线程安全（内部使用 `Arc<RwLock<>>` 保护状态）
-pub struct PicacgClient {
+pub struct PicAcgClient {
     state: Arc<RwLock<ClientState>>,
 }
 
-impl Default for PicacgClient {
+impl Default for PicAcgClient {
     fn default() -> Self {
-        PicacgClient {
+        PicAcgClient {
             state: Arc::new(RwLock::new(ClientState::default())),
         }
     }
 }
 
-impl PicacgClient {
+impl PicAcgClient {
     pub fn new() -> Self {
         Self::default()
     }
@@ -316,7 +316,7 @@ impl PicacgClient {
             || bytes.starts_with(b"BM")
     }
 
-    fn compose_image_url_for_channel(url: &str, channel: &ChannelMode) -> PicacgResult<String> {
+    fn compose_image_url_for_channel(url: &str, channel: &ChannelMode) -> PicAcgResult<String> {
         match channel {
             ChannelMode::ReverseProxy(base) => {
                 let proxy_base = match base.trim_end_matches('/') {
@@ -325,10 +325,10 @@ impl PicacgClient {
                     _ => return Ok(url.to_string()),
                 };
                 let parsed = Url::parse(url)
-                    .map_err(|e| PicacgError::Network(format!("图片URL无效 '{}': {}", url, e)))?;
+                    .map_err(|e| PicAcgError::Network(format!("图片URL无效 '{}': {}", url, e)))?;
                 let host = parsed
                     .host_str()
-                    .ok_or_else(|| PicacgError::Network(format!("图片URL缺少host: {}", url)))?;
+                    .ok_or_else(|| PicAcgError::Network(format!("图片URL缺少host: {}", url)))?;
                 let path = parsed.path().trim_start_matches('/');
                 let mut proxied = format!("{}/{}/{}", proxy_base, host, path);
                 if let Some(query) = parsed.query() {
@@ -355,7 +355,7 @@ impl PicacgClient {
     /// - authorization 设为空字符串（原项目 `header["authorization"] = ""`）
     /// - 无论 HTTP 状态码，只要收到响应即认为可达
     /// - 该方法不改变当前客户端状态
-    pub async fn test_connectivity(&self, mode: ChannelMode) -> PicacgResult<u64> {
+    pub async fn test_connectivity(&self, mode: ChannelMode) -> PicAcgResult<u64> {
         use std::time::Instant;
 
         let channel_desc = match &mode {
@@ -393,7 +393,7 @@ impl PicacgClient {
                     .map_err(|e| {
                         let msg = format!("节点[{}]连接失败: {}", channel_desc, e);
                         warn!("[PicACG测速] {}", msg);
-                        PicacgError::Network(msg)
+                        PicAcgError::Network(msg)
                     })
             }
         }?;
@@ -413,15 +413,15 @@ impl PicacgClient {
         headers: &[(String, String)],
         body: Option<&Value>,
         ip_str: &str,
-    ) -> PicacgResult<(u16, Value)> {
+    ) -> PicAcgResult<(u16, Value)> {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         let addr: SocketAddr = format!("{}:443", ip_str)
             .parse()
-            .map_err(|e| PicacgError::Network(format!("分流 IP 无效 '{}': {}", ip_str, e)))?;
+            .map_err(|e| PicAcgError::Network(format!("分流 IP 无效 '{}': {}", ip_str, e)))?;
         let uri: Uri = url
             .parse()
-            .map_err(|e| PicacgError::Network(format!("无效请求URL '{}': {}", url, e)))?;
+            .map_err(|e| PicAcgError::Network(format!("无效请求URL '{}': {}", url, e)))?;
         let sni_hostname = Self::sni_hostname_for_url(url).to_string();
 
         let tls = ClientConfig::builder()
@@ -438,7 +438,7 @@ impl PicacgClient {
             .https_only()
             .with_server_name_resolver(FixedServerNameResolver::new(
                 ServerName::try_from(sni_hostname)
-                    .map_err(|e| PicacgError::Network(format!("无效SNI域名: {}", e)))?,
+                    .map_err(|e| PicAcgError::Network(format!("无效SNI域名: {}", e)))?,
             ))
             .enable_all_versions()
             .wrap_connector(http);
@@ -449,7 +449,7 @@ impl PicacgClient {
         let request_body = match body {
             Some(value) => serde_json::to_vec(value)
                 .map(Bytes::from)
-                .map_err(|e| PicacgError::Parse(format!("请求体序列化失败: {}", e)))?,
+                .map_err(|e| PicAcgError::Parse(format!("请求体序列化失败: {}", e)))?,
             None => Bytes::new(),
         };
 
@@ -460,21 +460,21 @@ impl PicacgClient {
 
         let request = builder
             .body(Full::new(request_body))
-            .map_err(|e| PicacgError::Network(format!("构造请求失败: {}", e)))?;
+            .map_err(|e| PicAcgError::Network(format!("构造请求失败: {}", e)))?;
 
         let response: hyper::Response<hyper::body::Incoming> = client
             .request(request)
             .await
-            .map_err(|e| PicacgError::Network(format!("网络错误: {}", e)))?;
+            .map_err(|e| PicAcgError::Network(format!("网络错误: {}", e)))?;
         let status = response.status().as_u16();
         let body_bytes = response
             .into_body()
             .collect()
             .await
-            .map_err(|e| PicacgError::Network(format!("读取响应失败: {}", e)))?
+            .map_err(|e| PicAcgError::Network(format!("读取响应失败: {}", e)))?
             .to_bytes();
         let value: Value = serde_json::from_slice(&body_bytes).map_err(|e| {
-            PicacgError::Parse(format!(
+            PicAcgError::Parse(format!(
                 "响应解析失败: {} body={} ",
                 e,
                 String::from_utf8_lossy(&body_bytes)
@@ -483,18 +483,18 @@ impl PicacgClient {
         Ok((status, value))
     }
 
-    async fn download_bytes_via_fixed_ip(&self, url: &str, ip_str: &str) -> PicacgResult<Vec<u8>> {
+    async fn download_bytes_via_fixed_ip(&self, url: &str, ip_str: &str) -> PicAcgResult<Vec<u8>> {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         let addr: SocketAddr = format!("{}:443", ip_str)
             .parse()
-            .map_err(|e| PicacgError::Network(format!("图片分流 IP 无效 '{}': {}", ip_str, e)))?;
+            .map_err(|e| PicAcgError::Network(format!("图片分流 IP 无效 '{}': {}", ip_str, e)))?;
         let mut current_url = Url::parse(url)
-            .map_err(|e| PicacgError::Network(format!("无效图片URL '{}': {}", url, e)))?;
+            .map_err(|e| PicAcgError::Network(format!("无效图片URL '{}': {}", url, e)))?;
 
         for _ in 0..5 {
             let uri: Uri = current_url.as_str().parse().map_err(|e| {
-                PicacgError::Network(format!("无效图片URL '{}': {}", current_url, e))
+                PicAcgError::Network(format!("无效图片URL '{}': {}", current_url, e))
             })?;
             let sni_hostname = Self::sni_hostname_for_url(current_url.as_str()).to_string();
 
@@ -512,7 +512,7 @@ impl PicacgClient {
                 .https_only()
                 .with_server_name_resolver(FixedServerNameResolver::new(
                     ServerName::try_from(sni_hostname)
-                        .map_err(|e| PicacgError::Network(format!("无效图片SNI域名: {}", e)))?,
+                        .map_err(|e| PicAcgError::Network(format!("无效图片SNI域名: {}", e)))?,
                 ))
                 .enable_all_versions()
                 .wrap_connector(http);
@@ -527,11 +527,11 @@ impl PicacgClient {
                     "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
                 )
                 .body(Full::new(Bytes::new()))
-                .map_err(|e| PicacgError::Network(format!("构造图片请求失败: {}", e)))?;
+                .map_err(|e| PicAcgError::Network(format!("构造图片请求失败: {}", e)))?;
             let response: hyper::Response<hyper::body::Incoming> = client
                 .request(request)
                 .await
-                .map_err(|e| PicacgError::Network(format!("图片网络错误: {}", e)))?;
+                .map_err(|e| PicAcgError::Network(format!("图片网络错误: {}", e)))?;
             let status = response.status();
 
             if status.is_redirection() {
@@ -540,13 +540,13 @@ impl PicacgClient {
                     .get(hyper::header::LOCATION)
                     .and_then(|value| value.to_str().ok())
                     .ok_or_else(|| {
-                        PicacgError::Network(format!("图片重定向缺少 Location: {}", current_url))
+                        PicAcgError::Network(format!("图片重定向缺少 Location: {}", current_url))
                     })?;
                 current_url = if let Ok(next_url) = Url::parse(location) {
                     next_url
                 } else {
                     current_url.join(location).map_err(|e| {
-                        PicacgError::Network(format!("图片重定向地址无效 '{}': {}", location, e))
+                        PicAcgError::Network(format!("图片重定向地址无效 '{}': {}", location, e))
                     })?
                 };
                 debug!("[PicACG IMG] 跟随图片重定向 -> {}", current_url);
@@ -557,17 +557,17 @@ impl PicacgClient {
                 .into_body()
                 .collect()
                 .await
-                .map_err(|e| PicacgError::Network(format!("读取图片响应失败: {}", e)))?
+                .map_err(|e| PicAcgError::Network(format!("读取图片响应失败: {}", e)))?
                 .to_bytes();
             if status.as_u16() >= 400 {
-                return Err(PicacgError::Network(format!(
+                return Err(PicAcgError::Network(format!(
                     "图片请求失败 HTTP={} url={}",
                     status.as_u16(),
                     current_url
                 )));
             }
             if !Self::looks_like_image_bytes(&body) {
-                return Err(PicacgError::Network(format!(
+                return Err(PicAcgError::Network(format!(
                     "图片数据无效 url={}",
                     current_url
                 )));
@@ -575,10 +575,10 @@ impl PicacgClient {
             return Ok(body.to_vec());
         }
 
-        Err(PicacgError::Network(format!("图片重定向次数过多: {}", url)))
+        Err(PicAcgError::Network(format!("图片重定向次数过多: {}", url)))
     }
 
-    pub async fn fetch_image_bytes(&self, file_server: &str, path: &str) -> PicacgResult<Vec<u8>> {
+    pub async fn fetch_image_bytes(&self, file_server: &str, path: &str) -> PicAcgResult<Vec<u8>> {
         let (channel, image_server) = {
             let state = self.state.read();
             (state.channel.clone(), state.image_server.clone())
@@ -586,7 +586,7 @@ impl PicacgClient {
 
         let candidate_urls = Self::build_image_candidate_urls(file_server, path, &image_server);
         let client = self.build_client()?;
-        let mut last_error: Option<PicacgError> = None;
+        let mut last_error: Option<PicAcgError> = None;
 
         for raw_url in candidate_urls {
             let request_url = Self::compose_image_url_for_channel(&raw_url, &channel)?;
@@ -608,7 +608,7 @@ impl PicacgClient {
                         )
                         .send()
                         .await
-                        .map_err(|e| PicacgError::Network(format!("图片网络错误: {}", e)));
+                        .map_err(|e| PicAcgError::Network(format!("图片网络错误: {}", e)));
 
                     match response {
                         Ok(response) => {
@@ -619,15 +619,15 @@ impl PicacgClient {
                                 {
                                     Ok(bytes.to_vec())
                                 }
-                                Ok(bytes) if status >= 400 => Err(PicacgError::Network(format!(
+                                Ok(bytes) if status >= 400 => Err(PicAcgError::Network(format!(
                                     "图片请求失败 HTTP={} url={}",
                                     status, request_url
                                 ))),
-                                Ok(_) => Err(PicacgError::Network(format!(
+                                Ok(_) => Err(PicAcgError::Network(format!(
                                     "图片数据无效 url={}",
                                     request_url
                                 ))),
-                                Err(e) => Err(PicacgError::Network(format!("读取图片失败: {}", e))),
+                                Err(e) => Err(PicAcgError::Network(format!("读取图片失败: {}", e))),
                             }
                         }
                         Err(err) => Err(err),
@@ -648,7 +648,7 @@ impl PicacgClient {
         }
 
         Err(last_error
-            .unwrap_or_else(|| PicacgError::Network("图片请求失败：没有可用候选地址".to_string())))
+            .unwrap_or_else(|| PicAcgError::Network("图片请求失败：没有可用候选地址".to_string())))
     }
 
     /// 获取当前生效的 API 根 URL
@@ -659,7 +659,7 @@ impl PicacgClient {
         }
     }
 
-    fn build_client(&self) -> PicacgResult<Client> {
+    fn build_client(&self) -> PicAcgResult<Client> {
         self.build_client_with_channel(None)
     }
 
@@ -667,7 +667,7 @@ impl PicacgClient {
     pub fn build_client_with_channel(
         &self,
         override_channel: Option<&ChannelMode>,
-    ) -> PicacgResult<Client> {
+    ) -> PicAcgResult<Client> {
         let state = self.state.read();
         let proxy_url = state.proxy_url.clone();
         let channel = override_channel.unwrap_or(&state.channel).clone();
@@ -685,7 +685,7 @@ impl PicacgClient {
         if let ChannelMode::ChannelIp(ip_str) = &channel {
             let addr: SocketAddr = format!("{}:443", ip_str)
                 .parse()
-                .map_err(|e| PicacgError::Network(format!("分流 IP 无效 '{}': {}", ip_str, e)))?;
+                .map_err(|e| PicAcgError::Network(format!("分流 IP 无效 '{}': {}", ip_str, e)))?;
             builder = builder
                 .resolve(API_DOMAIN, addr)
                 // 旧项目同时映射 post-api.wikawika.xyz，避免部分接口或重定向走污染 DNS
@@ -696,17 +696,17 @@ impl PicacgClient {
         // 代理（分流时通常不需要代理，但保留兼容性）
         if !proxy_url.is_empty() {
             let proxy = reqwest::Proxy::all(&proxy_url)
-                .map_err(|e| PicacgError::Network(format!("代理配置无效: {}", e)))?;
+                .map_err(|e| PicAcgError::Network(format!("代理配置无效: {}", e)))?;
             builder = builder.proxy(proxy);
         }
 
         builder
             .build()
-            .map_err(|e| PicacgError::Network(e.to_string()))
+            .map_err(|e| PicAcgError::Network(e.to_string()))
     }
 
     /// GET 请求
-    pub async fn get(&self, path: &str) -> PicacgResult<Value> {
+    pub async fn get(&self, path: &str) -> PicAcgResult<Value> {
         let (token, channel, channel_desc) = {
             let s = self.state.read();
             let token = if s.token.is_empty() {
@@ -748,13 +748,13 @@ impl PicacgClient {
 
                 let resp = req.send().await.map_err(|e| {
                     warn!("[PicACG GET] 请求失败 path={} err={}", path, e);
-                    PicacgError::Network(format!("网络错误: {}", e))
+                    PicAcgError::Network(format!("网络错误: {}", e))
                 })?;
                 let status = resp.status().as_u16();
                 let body: Value = resp
                     .json()
                     .await
-                    .map_err(|e| PicacgError::Parse(e.to_string()))?;
+                    .map_err(|e| PicAcgError::Parse(e.to_string()))?;
                 Ok((status, body))
             }
         }?;
@@ -769,7 +769,7 @@ impl PicacgClient {
     }
 
     /// POST 请求
-    pub async fn post(&self, path: &str, body: Value) -> PicacgResult<Value> {
+    pub async fn post(&self, path: &str, body: Value) -> PicAcgResult<Value> {
         let (token, channel, channel_desc) = {
             let s = self.state.read();
             let token = if s.token.is_empty() {
@@ -811,13 +811,13 @@ impl PicacgClient {
 
                 let resp = req.send().await.map_err(|e| {
                     warn!("[PicACG POST] 请求失败 path={} err={}", path, e);
-                    PicacgError::Network(format!("网络错误: {}", e))
+                    PicAcgError::Network(format!("网络错误: {}", e))
                 })?;
                 let status = resp.status().as_u16();
                 let resp_body: Value = resp
                     .json()
                     .await
-                    .map_err(|e| PicacgError::Parse(e.to_string()))?;
+                    .map_err(|e| PicAcgError::Parse(e.to_string()))?;
                 Ok((status, resp_body))
             }
         }?;
@@ -832,7 +832,7 @@ impl PicacgClient {
     }
 
     /// PUT 请求
-    pub async fn put(&self, path: &str) -> PicacgResult<Value> {
+    pub async fn put(&self, path: &str) -> PicAcgResult<Value> {
         let (token, channel, channel_desc) = {
             let s = self.state.read();
             let token = if s.token.is_empty() {
@@ -874,13 +874,13 @@ impl PicacgClient {
 
                 let resp = req.send().await.map_err(|e| {
                     warn!("[PicACG PUT] 请求失败 path={} err={}", path, e);
-                    PicacgError::Network(format!("网络错误: {}", e))
+                    PicAcgError::Network(format!("网络错误: {}", e))
                 })?;
                 let status = resp.status().as_u16();
                 let resp_body: Value = resp
                     .json()
                     .await
-                    .map_err(|e| PicacgError::Parse(e.to_string()))?;
+                    .map_err(|e| PicAcgError::Parse(e.to_string()))?;
                 Ok((status, resp_body))
             }
         }?;
@@ -954,7 +954,7 @@ impl ServerCertVerifier for NoCertificateVerification {
     }
 }
 
-fn check_api_response(http_status: u16, body: Value) -> PicacgResult<Value> {
+fn check_api_response(http_status: u16, body: Value) -> PicAcgResult<Value> {
     let code = body
         .get("code")
         .and_then(|v| v.as_u64())
@@ -963,7 +963,7 @@ fn check_api_response(http_status: u16, body: Value) -> PicacgResult<Value> {
     if code == 200 {
         Ok(body)
     } else if code == 401 || http_status == 401 {
-        Err(PicacgError::Unauthorized)
+        Err(PicAcgError::Unauthorized)
     } else {
         let msg = body
             .get("message")
@@ -974,6 +974,6 @@ fn check_api_response(http_status: u16, body: Value) -> PicacgResult<Value> {
             "[PicACG API] 业务错误 http_status={} code={} message={}",
             http_status, code, msg
         );
-        Err(PicacgError::Api(code, msg))
+        Err(PicAcgError::Api(code, msg))
     }
 }
