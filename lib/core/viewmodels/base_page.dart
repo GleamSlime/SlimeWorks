@@ -241,12 +241,22 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
     _connectivitySub?.cancel();
     _connectivitySub = null;
 
-    // 触发 GetxController 的关闭回调
+    // 触发 GetxController 的关闭回调，并从 GetX 注册表中删除
     try {
       if (viewModelTag != null) {
         Get.delete<VM>(tag: viewModelTag, force: true);
       } else {
-        viewModel.onClose();
+        // 仅当注册的实例就是当前实例时才删除，避免影响其他页面
+        try {
+          final registered = Get.find<VM>();
+          if (identical(registered, viewModel)) {
+            Get.delete<VM>(force: true);
+          } else {
+            viewModel.onClose();
+          }
+        } catch (_) {
+          viewModel.onClose();
+        }
       }
     } catch (_) {}
     super.dispose();

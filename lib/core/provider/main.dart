@@ -8,6 +8,7 @@ import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
+import 'package:slime_works/core/services/picacg_download_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -37,6 +38,9 @@ void getItInit() {
 
   // PicACG 漫画平台服务
   getIt.registerLazySingleton<PicAcgService>(() => PicAcgService());
+
+  // PicACG 下载服务
+  getIt.registerLazySingleton<PicAcgDownloadService>(() => PicAcgDownloadService());
 
   isInitialized = true;
 }

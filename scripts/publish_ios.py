@@ -31,11 +31,11 @@ import argparse
 import requests
 
 # ── 请在此处填写你的密钥 ──────────────────────────────────────────────────
-PGYER_USER_KEY = ""          # 蒲公英 User Key（https://www.pgyer.com/account/api）
-PGYER_API_KEY  = ""          # 蒲公英 API Key
+PGYER_USER_KEY = "26d5078bcd28443c3554aae6a0812ee2"          # 蒲公英 User Key（https://www.pgyer.com/account/api）
+PGYER_API_KEY  = "23fcb3ecd9274b169866fcb9d621e061"          # 蒲公英 API Key
 TEAM_ID        = ""          # Apple Developer Team ID（留空则自动签名）
 BUNDLE_ID      = ""          # Bundle Identifier（留空则使用项目默认值）
-IPA_PATH       = "build/ios/ipa/slime_works.ipa"  # IPA 输出路径
+IPA_PATH       = "build/ios/ipa/史莱姆工坊.ipa"  # IPA 输出路径
 # ─────────────────────────────────────────────────────────────────────────
 
 

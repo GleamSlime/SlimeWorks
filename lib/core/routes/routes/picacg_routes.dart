@@ -93,3 +93,21 @@ class PicAcgReaderRoute extends AppRouteData with $PicAcgReaderRoute {
     );
   }
 }
+
+@TypedGoRoute<PicAcgDownloadsRoute>(path: '/picacg/downloads')
+class PicAcgDownloadsRoute extends AppRouteData with $PicAcgDownloadsRoute {
+  const PicAcgDownloadsRoute();
+
+  @override
+  String get title => '下载管理';
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+
+  static const Permission routePermission = Permission.accessPicAcg;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const PicAcgDownloadsScreen());
+  }
+}

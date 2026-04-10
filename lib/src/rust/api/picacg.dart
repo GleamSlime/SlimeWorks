@@ -7,21 +7,21 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// 初始化 PicACG 客户端
-void picacgInit() => RustLib.instance.api.crateApiPicAcgPicAcgInit();
+void picacgInit() => RustLib.instance.api.crateApiPicacgPicacgInit();
 
 /// 设置代理
 void picacgSetProxy({required String proxyUrl}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgSetProxy(proxyUrl: proxyUrl);
+    RustLib.instance.api.crateApiPicacgPicacgSetProxy(proxyUrl: proxyUrl);
 
 /// 直接写入 Token
 void picacgSetToken({required String token}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgSetToken(token: token);
+    RustLib.instance.api.crateApiPicacgPicacgSetToken(token: token);
 
 /// 获取当前 Token
-String picacgGetToken() => RustLib.instance.api.crateApiPicAcgPicAcgGetToken();
+String picacgGetToken() => RustLib.instance.api.crateApiPicacgPicacgGetToken();
 
 /// 登出并清除 Token
-void picacgLogout() => RustLib.instance.api.crateApiPicAcgPicAcgLogout();
+void picacgLogout() => RustLib.instance.api.crateApiPicacgPicacgLogout();
 
 /// 设置 API 分流模式
 /// - 0: 标准直连
@@ -30,46 +30,59 @@ void picacgLogout() => RustLib.instance.api.crateApiPicAcgPicAcgLogout();
 /// - 4: CDN分流 (自定义IP，默认 104.18.227.172)
 /// - 5: JP反代 (https://bika-api.jpacg.cc)
 /// - 6: US反代 (https://bika2-api.jpacg.cc)
-void picacgSetChannel({required int mode, required String custom}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgSetChannel(mode: mode, custom: custom);
+void picacgSetChannel({required int mode, required String custom}) => RustLib
+    .instance
+    .api
+    .crateApiPicacgPicacgSetChannel(mode: mode, custom: custom);
 
 /// 设置图片服务器（如 s3.picacomic.com / storage1.picacomic.com）
 void picacgSetImageServer({required String server}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgSetImageServer(server: server);
+    RustLib.instance.api.crateApiPicacgPicacgSetImageServer(server: server);
 
 /// 获取当前图片服务器
-String picacgGetImageServer() => RustLib.instance.api.crateApiPicAcgPicAcgGetImageServer();
+String picacgGetImageServer() =>
+    RustLib.instance.api.crateApiPicacgPicacgGetImageServer();
 
 /// 测试分流节点连通性，返回延迟(ms)
 Future<BigInt> picacgTestChannel({required int mode, required String custom}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgTestChannel(mode: mode, custom: custom);
+    RustLib.instance.api.crateApiPicacgPicacgTestChannel(
+      mode: mode,
+      custom: custom,
+    );
 
 /// 登录
 Future<String> picacgLogin({required String email, required String password}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgLogin(email: email, password: password);
+    RustLib.instance.api.crateApiPicacgPicacgLogin(
+      email: email,
+      password: password,
+    );
 
 /// 获取用户信息
-Future<String> picacgGetUserProfile() => RustLib.instance.api.crateApiPicAcgPicAcgGetUserProfile();
+Future<String> picacgGetUserProfile() =>
+    RustLib.instance.api.crateApiPicacgPicacgGetUserProfile();
 
 /// 每日签到
-Future<String> picacgPunchIn() => RustLib.instance.api.crateApiPicAcgPicAcgPunchIn();
+Future<String> picacgPunchIn() =>
+    RustLib.instance.api.crateApiPicacgPicacgPunchIn();
 
 /// 获取首页精选推荐
-Future<String> picacgGetCollections() => RustLib.instance.api.crateApiPicAcgPicAcgGetCollections();
+Future<String> picacgGetCollections() =>
+    RustLib.instance.api.crateApiPicacgPicacgGetCollections();
 
 /// 获取随机漫画
 Future<String> picacgGetRandomComics() =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetRandomComics();
+    RustLib.instance.api.crateApiPicacgPicacgGetRandomComics();
 
 /// 获取所有分类
-Future<String> picacgGetCategories() => RustLib.instance.api.crateApiPicAcgPicAcgGetCategories();
+Future<String> picacgGetCategories() =>
+    RustLib.instance.api.crateApiPicacgPicacgGetCategories();
 
 /// 按分类获取漫画列表
 Future<String> picacgGetComicsByCategory({
   required String category,
   required int page,
   required String sort,
-}) => RustLib.instance.api.crateApiPicAcgPicAcgGetComicsByCategory(
+}) => RustLib.instance.api.crateApiPicacgPicacgGetComicsByCategory(
   category: category,
   page: page,
   sort: sort,
@@ -81,7 +94,7 @@ Future<String> picacgSearchComics({
   required List<String> categories,
   required int page,
   required String sort,
-}) => RustLib.instance.api.crateApiPicAcgPicAcgSearchComics(
+}) => RustLib.instance.api.crateApiPicacgPicacgSearchComics(
   keyword: keyword,
   categories: categories,
   page: page,
@@ -89,30 +102,38 @@ Future<String> picacgSearchComics({
 );
 
 /// 热门搜索关键词
-Future<String> picacgGetKeywords() => RustLib.instance.api.crateApiPicAcgPicAcgGetKeywords();
+Future<String> picacgGetKeywords() =>
+    RustLib.instance.api.crateApiPicacgPicacgGetKeywords();
 
 /// 排行榜
 Future<String> picacgGetRankings({required String timeType}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetRankings(timeType: timeType);
+    RustLib.instance.api.crateApiPicacgPicacgGetRankings(timeType: timeType);
 
 /// 漫画详情
 Future<String> picacgGetComicDetail({required String comicId}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetComicDetail(comicId: comicId);
+    RustLib.instance.api.crateApiPicacgPicacgGetComicDetail(comicId: comicId);
 
 /// 漫画相关推荐
 Future<String> picacgGetComicRecommendations({required String comicId}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetComicRecommendations(comicId: comicId);
+    RustLib.instance.api.crateApiPicacgPicacgGetComicRecommendations(
+      comicId: comicId,
+    );
 
 /// 章节列表
-Future<String> picacgGetComicEps({required String comicId, required int page}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetComicEps(comicId: comicId, page: page);
+Future<String> picacgGetComicEps({
+  required String comicId,
+  required int page,
+}) => RustLib.instance.api.crateApiPicacgPicacgGetComicEps(
+  comicId: comicId,
+  page: page,
+);
 
 /// 章节图片
 Future<String> picacgGetEpsPages({
   required String comicId,
   required int epsOrder,
   required int page,
-}) => RustLib.instance.api.crateApiPicAcgPicAcgGetEpsPages(
+}) => RustLib.instance.api.crateApiPicacgPicacgGetEpsPages(
   comicId: comicId,
   epsOrder: epsOrder,
   page: page,
@@ -120,35 +141,63 @@ Future<String> picacgGetEpsPages({
 
 /// 收藏列表
 Future<String> picacgGetFavourites({required int page, required String sort}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetFavourites(page: page, sort: sort);
+    RustLib.instance.api.crateApiPicacgPicacgGetFavourites(
+      page: page,
+      sort: sort,
+    );
 
 /// 切换收藏状态
 Future<String> picacgToggleFavourite({required String comicId}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgToggleFavourite(comicId: comicId);
+    RustLib.instance.api.crateApiPicacgPicacgToggleFavourite(comicId: comicId);
 
 /// 切换点赞状态
 Future<String> picacgToggleLike({required String comicId}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgToggleLike(comicId: comicId);
+    RustLib.instance.api.crateApiPicacgPicacgToggleLike(comicId: comicId);
 
 /// 评论列表
-Future<String> picacgGetComments({required String comicId, required int page}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetComments(comicId: comicId, page: page);
+Future<String> picacgGetComments({
+  required String comicId,
+  required int page,
+}) => RustLib.instance.api.crateApiPicacgPicacgGetComments(
+  comicId: comicId,
+  page: page,
+);
 
 /// 子评论列表
-Future<String> picacgGetCommentChildren({required String commentId, required int page}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgGetCommentChildren(commentId: commentId, page: page);
+Future<String> picacgGetCommentChildren({
+  required String commentId,
+  required int page,
+}) => RustLib.instance.api.crateApiPicacgPicacgGetCommentChildren(
+  commentId: commentId,
+  page: page,
+);
 
 /// 发表评论
-Future<String> picacgSendComment({required String comicId, required String content}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgSendComment(comicId: comicId, content: content);
+Future<String> picacgSendComment({
+  required String comicId,
+  required String content,
+}) => RustLib.instance.api.crateApiPicacgPicacgSendComment(
+  comicId: comicId,
+  content: content,
+);
 
 /// 点赞评论
 Future<String> picacgLikeComment({required String commentId}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgLikeComment(commentId: commentId);
+    RustLib.instance.api.crateApiPicacgPicacgLikeComment(commentId: commentId);
 
 /// 构建完整图片 URL
-String picacgBuildImageUrl({required String fileServer, required String path}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgBuildImageUrl(fileServer: fileServer, path: path);
+String picacgBuildImageUrl({
+  required String fileServer,
+  required String path,
+}) => RustLib.instance.api.crateApiPicacgPicacgBuildImageUrl(
+  fileServer: fileServer,
+  path: path,
+);
 
-Future<Uint8List> picacgFetchImage({required String fileServer, required String path}) =>
-    RustLib.instance.api.crateApiPicAcgPicAcgFetchImage(fileServer: fileServer, path: path);
+Future<Uint8List> picacgFetchImage({
+  required String fileServer,
+  required String path,
+}) => RustLib.instance.api.crateApiPicacgPicacgFetchImage(
+  fileServer: fileServer,
+  path: path,
+);

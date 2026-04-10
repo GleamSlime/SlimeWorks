@@ -3,6 +3,7 @@ library;
 /// PicACG 阅读器 ViewModel
 
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
@@ -21,15 +22,35 @@ class PicAcgReaderViewModel extends BaseViewModel {
   /// 是否正在加载更多
   final RxBool isLoadingMore = false.obs;
 
-  /// 工具栏是否可见
-  final RxBool showToolbar = true.obs;
-
   /// 阅读器专属错误（独立于 BasePage 的 errorMessage，避免被 SnackBar 自动清除）
   final Rx<String?> readerError = Rx<String?>(null);
+
+  /// 章节列表（用于前后章节导航）
+  final RxList<PicAcgEps> epsList = <PicAcgEps>[].obs;
 
   String _comicId = '';
   int _epsOrder = 1;
   int _currentServerPage = 1;
+
+  /// 当前 eps 在列表中的索引（按 order 排序）
+  int get _currentEpsIndex => epsList.indexWhere((e) => e.order == _epsOrder);
+
+  /// 上一章（order 更小）
+  PicAcgEps? get prevEps {
+    final idx = _currentEpsIndex;
+    if (idx <= 0) return null;
+    return epsList[idx - 1];
+  }
+
+  /// 下一章（order 更大）
+  PicAcgEps? get nextEps {
+    final idx = _currentEpsIndex;
+    if (idx < 0 || idx >= epsList.length - 1) return null;
+    return epsList[idx + 1];
+  }
+
+  /// 当前章节序号
+  int get currentEpsOrder => _epsOrder;
 
   /// 格式化错误信息，截断过长的堆栈
   String _formatReaderError(Object error) {
@@ -50,7 +71,7 @@ class PicAcgReaderViewModel extends BaseViewModel {
     return '$shortened\n\n错误详情已截断，请重试或切换分流节点。';
   }
 
-  /// 加载章节图片（第一页）
+  /// 加载章节图片（第一页）兼加载章节列表
   Future<void> loadPages(String comicId, int epsOrder) async {
     _comicId = comicId;
     _epsOrder = epsOrder;
@@ -59,14 +80,76 @@ class PicAcgReaderViewModel extends BaseViewModel {
     readerError.value = null;
     setLoading(true);
     try {
-      final result = await _service.getEpsPages(comicId, epsOrder, page: 1);
-      pages.assignAll(result.pages);
-      pagination.value = result.pagination;
+      final results = await Future.wait([
+        _service.getEpsPages(comicId, epsOrder, page: 1),
+        if (epsList.isEmpty) _service.getComicEps(comicId, page: 1),
+      ]);
+      final pageList = results[0] as PicAcgPageList;
+      pages.assignAll(pageList.pages);
+      pagination.value = pageList.pagination;
+
+      if (epsList.isEmpty && results.length > 1) {
+        final epsList0 = results[1] as PicAcgEpsList;
+        epsList.assignAll(epsList0.eps);
+        _loadRestEps(comicId, epsList0.pagination);
+      }
+
+      // 记录阅读进度（章节标题用 epsList 中查找）
+      _saveProgress();
     } catch (e) {
       readerError.value = _formatReaderError(e);
     } finally {
       setLoading(false);
     }
+  }
+
+  /// 后台静默加载剩余章节页（不影响阅读）
+  Future<void> _loadRestEps(String comicId, PicAcgPagination firstPagination) async {
+    for (int page = 2; page <= firstPagination.pages; page++) {
+      try {
+        final more = await _service.getComicEps(comicId, page: page);
+        epsList.addAll(more.eps);
+      } catch (_) {
+        break;
+      }
+    }
+    // 按 order 升序排列（API 返回可能是降序）
+    epsList.sort((a, b) => a.order.compareTo(b.order));
+  }
+
+  /// 切换到另一章节（保留已加载的 epsList）
+  Future<void> switchEps(int epsOrder) async {
+    _epsOrder = epsOrder;
+    _currentServerPage = 1;
+    pages.clear();
+    readerError.value = null;
+    setLoading(true);
+    try {
+      final result = await _service.getEpsPages(_comicId, epsOrder, page: 1);
+      pages.assignAll(result.pages);
+      pagination.value = result.pagination;
+      _saveProgress();
+    } catch (e) {
+      readerError.value = _formatReaderError(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /// 保存阅读进度到 SharedPreferences
+  /// 格式：picacg_progress_{comicId} = '{epsOrder}:1:{epsTitle}'
+  Future<void> _saveProgress() async {
+    if (_comicId.isEmpty) return;
+    try {
+      final epsTitle =
+          epsList
+              .cast<PicAcgEps?>()
+              .firstWhere((e) => e?.order == _epsOrder, orElse: () => null)
+              ?.title ??
+          '第$_epsOrder话';
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('picacg_progress_$_comicId', '$_epsOrder:1:$epsTitle');
+    } catch (_) {}
   }
 
   /// 加载下一服务器分页
@@ -91,10 +174,5 @@ class PicAcgReaderViewModel extends BaseViewModel {
   bool get hasMore {
     final p = pagination.value;
     return p != null && _currentServerPage < p.pages;
-  }
-
-  /// 切换工具栏显示状态
-  void toggleToolbar() {
-    showToolbar.value = !showToolbar.value;
   }
 }

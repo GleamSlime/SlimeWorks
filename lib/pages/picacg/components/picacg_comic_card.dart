@@ -7,11 +7,47 @@ import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 
 /// 漫画网格卡片
-class PicAcgComicCard extends StatelessWidget {
+class PicAcgComicCard extends StatefulWidget {
   const PicAcgComicCard({super.key, required this.comic, required this.onTap});
 
   final PicAcgComic comic;
   final VoidCallback onTap;
+
+  @override
+  State<PicAcgComicCard> createState() => _PicAcgComicCardState();
+}
+
+class _PicAcgComicCardState extends State<PicAcgComicCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+      reverseDuration: const Duration(milliseconds: 200),
+      lowerBound: 0.92,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+    _scaleAnim = _controller;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails _) => _controller.reverse();
+  void _onTapUp(TapUpDetails _) {
+    _controller.forward();
+    widget.onTap();
+  }
+
+  void _onTapCancel() => _controller.forward();
 
   @override
   Widget build(BuildContext context) {
@@ -19,63 +55,69 @@ class PicAcgComicCard extends StatelessWidget {
     final metrics = appMetrics;
 
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.cardTheme.color,
-          borderRadius: BorderRadius.circular(metrics.kSpace12),
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withValues(alpha: 0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            /// 封面图片
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(metrics.kSpace12)),
-                child: _ComicCoverImage(image: comic.thumb),
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: _scaleAnim,
+        builder: (context, child) => Transform.scale(scale: _scaleAnim.value, child: child),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.cardTheme.color,
+            borderRadius: BorderRadius.circular(metrics.kSpace12),
+            boxShadow: [
+              BoxShadow(
+                color: theme.shadowColor.withValues(alpha: 0.12),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
-            ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              /// 封面图片
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(metrics.kSpace12)),
+                  child: _ComicCoverImage(image: widget.comic.thumb),
+                ),
+              ),
 
-            /// 标题
-            Padding(
-              padding: EdgeInsets.all(metrics.kSpace4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    comic.title,
-                    style: theme.textTheme.labelSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (comic.author != null && comic.author!.isNotEmpty)
+              /// 标题
+              Padding(
+                padding: EdgeInsets.all(metrics.kSpace4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      comic.author!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                        fontSize: 10,
-                      ),
-                      maxLines: 1,
+                      widget.comic.title,
+                      style: theme.textTheme.labelSmall,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                ],
+                    if (widget.comic.author != null && widget.comic.author!.isNotEmpty)
+                      Text(
+                        widget.comic.author!,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          fontSize: 10,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// 封面图片组件（带加载/错误状态）
+/// 封面图片组件（带加载/错误状态及淡入动效）
 class _ComicCoverImage extends StatelessWidget {
   const _ComicCoverImage({required this.image});
 
@@ -87,9 +129,15 @@ class _ComicCoverImage extends StatelessWidget {
       image: image,
       fit: BoxFit.cover,
       loadingBuilder: (_) {
-        return Center(child: CircularProgressIndicator(strokeWidth: 2));
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        );
       },
-      errorBuilder: (_, e) => const Center(child: Icon(Icons.broken_image_outlined, size: 32)),
+      errorBuilder: (_, e) => Container(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: const Center(child: Icon(Icons.broken_image_outlined, size: 32)),
+      ),
     );
   }
 }

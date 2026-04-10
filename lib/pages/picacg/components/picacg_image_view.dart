@@ -63,14 +63,20 @@ class _PicAcgImageViewState extends State<PicAcgImageView> {
               const Center(child: Icon(Icons.broken_image_outlined, size: 32));
         }
 
-        return Image.memory(
-          snapshot.data!,
-          width: widget.width,
-          height: widget.height,
-          fit: widget.fit,
-          alignment: widget.alignment,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+          builder: (_, value, child) => Opacity(opacity: value, child: child),
+          child: Image.memory(
+            snapshot.data!,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            alignment: widget.alignment,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+          ),
         );
       },
     );

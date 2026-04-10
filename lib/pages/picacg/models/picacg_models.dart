@@ -21,10 +21,28 @@ class PicAcgImage {
 }
 
 /// 漫画信息
+/// 漫画发布者（_creator 字段）
+class PicAcgCreator {
+  final String id;
+  final String name;
+  final PicAcgImage? avatar;
+
+  const PicAcgCreator({required this.id, required this.name, this.avatar});
+
+  factory PicAcgCreator.fromJson(Map<String, dynamic> json) => PicAcgCreator(
+    id: json['_id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    avatar: json['avatar'] != null
+        ? PicAcgImage.fromJson(json['avatar'] as Map<String, dynamic>)
+        : null,
+  );
+}
+
 class PicAcgComic {
   final String id;
   final String title;
   final String? author;
+  final String? chineseTeam;
   final String? description;
   final PicAcgImage thumb;
   final List<String> categories;
@@ -32,14 +50,21 @@ class PicAcgComic {
   final int epsCount;
   final int pagesCount;
   final int likesCount;
+  final int viewsCount;
+  final int commentsCount;
   final bool finished;
   final bool? isLiked;
   final bool? isFavourite;
+  final String? createdAt;
+  final String? updatedAt;
+  final int? shareId;
+  final PicAcgCreator? creator;
 
   const PicAcgComic({
     required this.id,
     required this.title,
     this.author,
+    this.chineseTeam,
     this.description,
     required this.thumb,
     required this.categories,
@@ -47,25 +72,40 @@ class PicAcgComic {
     required this.epsCount,
     required this.pagesCount,
     required this.likesCount,
+    this.viewsCount = 0,
+    this.commentsCount = 0,
     required this.finished,
     this.isLiked,
     this.isFavourite,
+    this.createdAt,
+    this.updatedAt,
+    this.shareId,
+    this.creator,
   });
 
   factory PicAcgComic.fromJson(Map<String, dynamic> json) => PicAcgComic(
     id: json['_id'] as String? ?? '',
     title: json['title'] as String? ?? '',
     author: json['author'] as String?,
+    chineseTeam: json['chineseTeam'] as String?,
     description: json['description'] as String?,
     thumb: PicAcgImage.fromJson(json['thumb'] as Map<String, dynamic>? ?? {}),
     categories: List<String>.from(json['categories'] as List? ?? []),
     tags: List<String>.from(json['tags'] as List? ?? []),
     epsCount: json['epsCount'] as int? ?? 0,
     pagesCount: json['pagesCount'] as int? ?? 0,
-    likesCount: json['likesCount'] as int? ?? 0,
+    likesCount: (json['totalLikes'] ?? json['likesCount']) as int? ?? 0,
+    viewsCount: (json['totalViews'] ?? json['viewsCount']) as int? ?? 0,
+    commentsCount: json['commentsCount'] as int? ?? 0,
     finished: json['finished'] as bool? ?? false,
     isLiked: json['isLiked'] as bool?,
     isFavourite: json['isFavourite'] as bool?,
+    createdAt: json['created_at'] as String?,
+    updatedAt: json['updated_at'] as String?,
+    shareId: json['id'] as int?,
+    creator: json['_creator'] != null
+        ? PicAcgCreator.fromJson(json['_creator'] as Map<String, dynamic>)
+        : null,
   );
 }
 

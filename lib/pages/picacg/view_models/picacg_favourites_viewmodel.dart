@@ -23,6 +23,7 @@ class PicAcgFavouritesViewModel extends BaseViewModel {
 
   int _currentPage = 1;
   PicAcgSortOrder _sort = PicAcgSortOrder.dateDescending;
+  bool _isRefreshing = false;
 
   PicAcgSortOrder get sort => _sort;
 
@@ -35,6 +36,8 @@ class PicAcgFavouritesViewModel extends BaseViewModel {
   /// 刷新收藏列表（可更换排序方式）
   @override
   Future<void> refresh({PicAcgSortOrder? sort}) async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
     _sort = sort ?? _sort;
     _currentPage = 1;
     comics.clear();
@@ -48,6 +51,7 @@ class PicAcgFavouritesViewModel extends BaseViewModel {
       setError(e.toString());
     } finally {
       setLoading(false);
+      _isRefreshing = false;
     }
   }
 

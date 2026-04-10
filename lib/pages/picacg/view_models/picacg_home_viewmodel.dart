@@ -21,6 +21,9 @@ class PicAcgHomeViewModel extends BaseViewModel {
   /// 是否已登录
   bool get isLoggedIn => _service.isLoggedIn;
 
+  /// 是否正在追加随机漫画
+  final RxBool isLoadingMoreRandom = false.obs;
+
   @override
   Future<void> onInitAsync() async {
     await super.onInitAsync();
@@ -41,6 +44,35 @@ class PicAcgHomeViewModel extends BaseViewModel {
       setError(e.toString());
     } finally {
       setLoading(false);
+    }
+  }
+
+  /// 滚动到底部时追加一批随机漫画
+  Future<void> loadMoreRandom() async {
+    if (!isLoggedIn) return;
+    if (isLoadingMoreRandom.value) return;
+    isLoadingMoreRandom.value = true;
+    try {
+      final more = await _service.getRandomComics();
+      randomComics.addAll(more);
+    } catch (_) {
+      // load-more 失败时静默忽略
+    } finally {
+      isLoadingMoreRandom.value = false;
+    }
+  }
+
+  /// 「换一批」：替换当前随机推荐，不影响全局加载状态
+  Future<void> refreshRandom() async {
+    if (!isLoggedIn) return;
+    if (isLoadingMoreRandom.value) return;
+    isLoadingMoreRandom.value = true;
+    try {
+      final fresh = await _service.getRandomComics();
+      randomComics.value = fresh;
+    } catch (_) {
+    } finally {
+      isLoadingMoreRandom.value = false;
     }
   }
 

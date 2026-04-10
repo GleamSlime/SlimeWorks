@@ -3,6 +3,7 @@
 /// 封装 Rust FFI 调用，提供高层业务 API
 /// 使用 GetIt 注入，全局单例
 
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -70,7 +71,10 @@ class PicAcgService {
 
   PicAcgUser? get currentUser => _currentUser;
 
-  final Map<String, Uint8List> _imageCache = {};
+  /// 图片字节 LRU 缓存，最多保留 [_kImageCacheMaxSize] 条
+  /// 使用 LinkedHashMap 保留访问顺序，容量超限时淘汰最久未用的条目
+  static const int _kImageCacheMaxSize = 400;
+  final LinkedHashMap<String, Uint8List> _imageCache = LinkedHashMap<String, Uint8List>();
 
   /// 初始化服务（从持久化存储恢复 Token、代理和分流配置）
   Future<void> init() async {
@@ -234,11 +238,17 @@ class PicAcgService {
 
   Future<Uint8List> fetchImageBytes(PicAcgImage image) async {
     final key = buildImageUrl(image);
-    final cached = _imageCache[key];
+    // LRU: remove-then-re-insert marks as most recently used
+    final cached = _imageCache.remove(key);
     if (cached != null) {
+      _imageCache[key] = cached;
       return cached;
     }
     final bytes = await rust.picacgFetchImage(fileServer: image.fileServer, path: image.path);
+    // Evict oldest entry when cache is full
+    if (_imageCache.length >= _kImageCacheMaxSize) {
+      _imageCache.remove(_imageCache.keys.first);
+    }
     _imageCache[key] = bytes;
     return bytes;
   }

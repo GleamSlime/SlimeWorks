@@ -724,7 +724,7 @@ impl PicAcgClient {
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
-        debug!("[PicACG GET] {} [{}]", url, channel_desc);
+        // debug!("[PicACG GET] {} [{}]", url, channel_desc);
 
         let auth_token = if path.starts_with("auth/") {
             None

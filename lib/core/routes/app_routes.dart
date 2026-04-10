@@ -29,6 +29,7 @@ import 'package:slime_works/pages/picacg/picacg_home_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_comic_detail_screen.dart';
 import 'package:slime_works/pages/picacg/search/picacg_search_screen.dart';
 import 'package:slime_works/pages/picacg/reader/picacg_reader_screen.dart';
+import 'package:slime_works/pages/picacg/picacg_downloads_screen.dart';
 
 part 'app_routes.g.dart';
 
@@ -107,6 +108,7 @@ class AppRoutes {
       const PicAcgComicDetailRoute(comicId: ''),
       const PicAcgSearchRoute(),
       PicAcgReaderRoute(comicId: '', epsOrder: 0),
+      const PicAcgDownloadsRoute(),
     ];
 
     router = GoRouter(

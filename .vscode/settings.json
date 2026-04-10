@@ -10,6 +10,7 @@
     "Getx",
     "Ollama",
     "pemfile",
+    "picacg",
     "processthreadsapi",
     "rcgen",
     "rustls",

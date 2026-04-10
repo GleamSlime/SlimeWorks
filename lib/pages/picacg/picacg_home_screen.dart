@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -22,6 +24,23 @@ class PicAcgHomeScreen extends BasePage<PicAcgHomeViewModel> {
 }
 
 class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHomeScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final RxBool _showBackToTop = false.obs;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(() {
+      _showBackToTop.value = _scrollController.offset > 600;
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   PicAcgHomeViewModel createViewModel() => PicAcgHomeViewModel();
 
@@ -31,14 +50,34 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
   @override
   bool get showAppBar => false;
 
+  ScreenChromeData _buildScreenChromeData(BuildContext context, PicAcgHomeViewModel vm) {
+    return ScreenChromeData(
+      title: 'PicACG',
+      actions: vm.isLoggedIn
+          ? [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '搜索',
+                onPressed: () => _goToSearch(context),
+              ),
+              IconButton(
+                icon: const Icon(Icons.account_circle_outlined),
+                tooltip: vm.currentUser.value?.name ?? '用户',
+                onPressed: () => _showUserMenu(context, vm),
+              ),
+            ]
+          : const <Widget>[],
+    );
+  }
+
   @override
   Widget buildContent(BuildContext context) {
     return GetBuilder<PicAcgHomeViewModel>(
       builder: (vm) {
-        if (!vm.isLoggedIn) {
-          return _buildLoginPrompt(context);
-        }
-        return _buildHomeContent(context, vm);
+        return ScreenChrome(
+          data: _buildScreenChromeData(context, vm),
+          child: vm.isLoggedIn ? _buildHomeContent(context, vm) : _buildLoginPrompt(context),
+        );
       },
     );
   }
@@ -84,83 +123,104 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
     final theme = Theme.of(context);
     final metrics = appMetrics;
 
-    return CustomScrollView(
-      slivers: [
-        /// 顶部 AppBar
-        SliverAppBar(
-          title: Row(
-            children: [
-              Text('PicACG', style: theme.textTheme.titleLarge),
-              const Spacer(),
+    return Stack(
+      children: [
+        NotificationListener<ScrollEndNotification>(
+          onNotification: (notification) {
+            if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 400) {
+              vm.loadMoreRandom();
+            }
+            return false;
+          },
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              /// 加载中
+              if (vm.isLoading)
+                const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+              /// 错误提示
+              else if (vm.errorMessage != null)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.cloud_off_outlined,
+                          size: scaleW(48),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
+                        SizedBox(height: metrics.kSpace12),
+                        Text(
+                          vm.errorMessage!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                        SizedBox(height: metrics.kSpace12),
+                        FilledButton(onPressed: vm.loadHomeData, child: const Text('重新加载')),
+                      ],
+                    ),
+                  ),
+                )
+              else ...[
+                /// 精选推荐
+                if (vm.collections.isNotEmpty) ...[
+                  _buildSectionHeader(context, '精选推荐', null),
+                  SliverToBoxAdapter(child: _buildCollections(context, vm.collections)),
+                ],
 
-              /// 搜索按钮
-              IconButton(
-                icon: const Icon(Icons.search),
-                tooltip: '搜索',
-                onPressed: () => _goToSearch(context),
-              ),
+                /// 随机漫画（Obx 监听追加）
+                if (vm.randomComics.isNotEmpty) ...[
+                  _buildSectionHeader(context, '随机推荐', () => vm.refreshRandom()),
+                  Obx(
+                    () => SliverAnimatedOpacity(
+                      opacity: vm.isLoadingMoreRandom.value ? 0.45 : 1.0,
+                      duration: const Duration(milliseconds: 300),
+                      sliver: SliverPadding(
+                        padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
+                        sliver: _buildRandomComicsGrid(context, vm.randomComics.toList()),
+                      ),
+                    ),
+                  ),
+                ],
 
-              /// 用户信息按钮
-              IconButton(
-                icon: const Icon(Icons.account_circle_outlined),
-                tooltip: vm.currentUser.value?.name ?? '用户',
-                onPressed: () => _showUserMenu(context, vm),
-              ),
+                /// 加载更多指示器
+                Obx(
+                  () => SliverToBoxAdapter(
+                    child: vm.isLoadingMoreRandom.value
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : SizedBox(height: metrics.kSpace24),
+                  ),
+                ),
+              ],
             ],
           ),
-          floating: true,
-          snap: true,
-          backgroundColor: theme.scaffoldBackgroundColor,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
         ),
-
-        /// 加载中
-        if (vm.isLoading)
-          const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-        /// 错误提示
-        else if (vm.errorMessage != null)
-          SliverFillRemaining(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.cloud_off_outlined,
-                    size: scaleW(48),
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-                  ),
-                  SizedBox(height: metrics.kSpace12),
-                  Text(
-                    vm.errorMessage!,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
-                  ),
-                  SizedBox(height: metrics.kSpace12),
-                  FilledButton(onPressed: vm.loadHomeData, child: const Text('重新加载')),
-                ],
+        // 返回顶部按钮
+        Positioned(
+          bottom: 80,
+          right: 16,
+          child: Obx(
+            () => AnimatedScale(
+              scale: _showBackToTop.value ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: FloatingActionButton.small(
+                heroTag: 'home_back_to_top',
+                onPressed: () => _scrollController.animateTo(
+                  0,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                ),
+                tooltip: '返回顶部',
+                child: const Icon(Icons.keyboard_arrow_up),
               ),
             ),
-          )
-        else ...[
-          /// 神魔推荐
-          if (vm.collections.isNotEmpty) ...[
-            _buildSectionHeader(context, '精选推荐', null),
-            SliverToBoxAdapter(child: _buildCollections(context, vm.collections)),
-          ],
-
-          /// 随机漫画
-          if (vm.randomComics.isNotEmpty) ...[
-            _buildSectionHeader(context, '随机推荐', () {
-              vm.loadHomeData();
-            }),
-            SliverPadding(
-              padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
-              sliver: _buildRandomComicsGrid(context, vm.randomComics),
-            ),
-          ],
-
-          SliverToBoxAdapter(child: SizedBox(height: metrics.kSpace24)),
-        ],
+          ),
+        ),
       ],
     );
   }
@@ -179,7 +239,16 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
         ),
         child: Row(
           children: [
-            Text(title, style: theme.textTheme.titleMedium),
+            Container(
+              width: 3,
+              height: 18,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            SizedBox(width: metrics.kSpace8),
+            Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             if (onRefresh != null) ...[
               const Spacer(),
               TextButton.icon(
@@ -281,6 +350,14 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const PicAcgFavouritesScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('下载管理'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                const PicAcgDownloadsRoute().push(context);
               },
             ),
             ListTile(
