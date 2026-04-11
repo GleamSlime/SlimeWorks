@@ -22,10 +22,10 @@ class PicAcgFavouritesViewModel extends BaseViewModel {
   final RxBool isLoadingMore = false.obs;
 
   int _currentPage = 1;
-  PicAcgSortOrder _sort = PicAcgSortOrder.dateDescending;
+  final Rx<PicAcgSortOrder> _sort = PicAcgSortOrder.dateDescending.obs;
   bool _isRefreshing = false;
 
-  PicAcgSortOrder get sort => _sort;
+  PicAcgSortOrder get sort => _sort.value;
 
   @override
   Future<void> onInitAsync() async {
@@ -38,12 +38,12 @@ class PicAcgFavouritesViewModel extends BaseViewModel {
   Future<void> refresh({PicAcgSortOrder? sort}) async {
     if (_isRefreshing) return;
     _isRefreshing = true;
-    _sort = sort ?? _sort;
+    _sort.value = sort ?? _sort.value;
     _currentPage = 1;
     comics.clear();
     setLoading(true);
     try {
-      final result = await _service.getFavourites(page: 1, sort: _sort);
+      final result = await _service.getFavourites(page: 1, sort: _sort.value);
       comics.assignAll(result.comics);
       pagination.value = result.pagination;
       clearError();
@@ -65,7 +65,7 @@ class PicAcgFavouritesViewModel extends BaseViewModel {
     isLoadingMore.value = true;
     try {
       _currentPage++;
-      final result = await _service.getFavourites(page: _currentPage, sort: _sort);
+      final result = await _service.getFavourites(page: _currentPage, sort: _sort.value);
       comics.addAll(result.comics);
       pagination.value = result.pagination;
     } catch (_) {

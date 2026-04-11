@@ -134,24 +134,31 @@ class _PicAcgFavouritesScreenState
                   ),
                   child: Row(
                     children: [
-                      Obx(
-                        () => ChoiceChip(
-                          label: const Text('新到旧'),
-                          selected: viewModel.sort == PicAcgSortOrder.dateDescending,
-                          onSelected: (_) =>
-                              viewModel.refresh(sort: PicAcgSortOrder.dateDescending),
+                      Expanded(
+                        child: Wrap(
+                          spacing: metrics.kSpace8,
+                          runSpacing: metrics.kSpace8,
+                          children: [
+                            Obx(
+                              () => ChoiceChip(
+                                label: const Text('新到旧'),
+                                selected: viewModel.sort == PicAcgSortOrder.dateDescending,
+                                onSelected: (_) =>
+                                    viewModel.refresh(sort: PicAcgSortOrder.dateDescending),
+                              ),
+                            ),
+                            Obx(
+                              () => ChoiceChip(
+                                label: const Text('热门'),
+                                selected: viewModel.sort == PicAcgSortOrder.likeDescending,
+                                onSelected: (_) =>
+                                    viewModel.refresh(sort: PicAcgSortOrder.likeDescending),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(width: metrics.kSpace8),
-                      Obx(
-                        () => ChoiceChip(
-                          label: const Text('热门'),
-                          selected: viewModel.sort == PicAcgSortOrder.likeDescending,
-                          onSelected: (_) =>
-                              viewModel.refresh(sort: PicAcgSortOrder.likeDescending),
-                        ),
-                      ),
-                      const Spacer(),
                       Obx(
                         () => Text(
                           '${viewModel.comics.length} 部',

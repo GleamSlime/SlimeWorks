@@ -44,7 +44,8 @@ class DesktopScaffold extends StatefulWidget {
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       // 恢复上次的窗口位置
       await positionService.restorePosition();
-      AppTheme.resetMetrics();
+      // 延迟到下一帧再计算度量，避免在 ScreenUtil 未初始化前访问它
+      WidgetsBinding.instance.addPostFrameCallback((_) => AppTheme.resetMetrics());
       // await windowManager.show();
       // await windowManager.focus();
     });
