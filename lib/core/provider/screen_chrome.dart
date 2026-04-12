@@ -14,6 +14,9 @@ class ScreenChromeData {
   final bool mobileBodyHandlesInsets;
   final EdgeInsets mobileImmersivePadding;
 
+  /// 移动端顶部 AppBar 背景色（null 则使用主题 appBarTheme.backgroundColor）
+  final Color? mobileAppBarColor;
+
   const ScreenChromeData({
     this.title,
     this.leading,
@@ -26,6 +29,7 @@ class ScreenChromeData {
     this.enableMobileImmersiveMode = false,
     this.mobileBodyHandlesInsets = false,
     this.mobileImmersivePadding = EdgeInsets.zero,
+    this.mobileAppBarColor,
   });
 
   static const ScreenChromeData empty = ScreenChromeData();

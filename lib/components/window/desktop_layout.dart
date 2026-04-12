@@ -400,7 +400,10 @@ class _MobileChromeOverlay extends StatelessWidget {
                 curve: Curves.easeOutCubic,
                 offset: isImmersiveMode ? const Offset(0, -1) : Offset.zero,
                 child: Material(
-                  color: theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface,
+                  color:
+                      chrome.mobileAppBarColor ??
+                      theme.appBarTheme.backgroundColor ??
+                      theme.colorScheme.surface,
                   elevation: 4,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -417,10 +420,10 @@ class _MobileChromeOverlay extends StatelessWidget {
                             title: chrome.titleWidget ?? Text(title),
                             actions: chrome.hasActions ? chrome.actions : null,
                             actionsPadding: EdgeInsets.zero,
-                            bottom: chrome.bottomBar != null
+                            bottom: chrome.hasToolbar
                                 ? PreferredSize(
                                     preferredSize: Size.fromHeight(bottomHeight),
-                                    child: chrome.bottomBar!,
+                                    child: chrome.toolbar!,
                                   )
                                 : null,
                           ),
@@ -501,7 +504,10 @@ class _MobileBottomOverlay extends StatelessWidget {
                 curve: Curves.easeOutCubic,
                 offset: showBottomBar && !isImmersiveMode ? Offset.zero : const Offset(0, 1),
                 child: Material(
-                  color: theme.bottomAppBarTheme.color ?? theme.colorScheme.surface,
+                  color:
+                      chrome.mobileAppBarColor ??
+                      theme.bottomAppBarTheme.color ??
+                      theme.colorScheme.surface,
                   elevation: 8,
                   child: SizedBox(
                     height: totalHeight,

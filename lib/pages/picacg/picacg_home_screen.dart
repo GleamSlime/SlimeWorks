@@ -10,6 +10,7 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/pages/picacg/components/picacg_block_words_dialog.dart';
 import 'package:slime_works/pages/picacg/components/picacg_comic_card.dart';
 import 'package:slime_works/pages/picacg/components/picacg_login_dialog.dart';
 import 'package:slime_works/pages/picacg/picacg_favourites_screen.dart';
@@ -350,6 +351,22 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const PicAcgFavouritesScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.history_outlined),
+              title: const Text('观看记录'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                const PicAcgHistoryRoute().push(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_outlined),
+              title: const Text('屏蔽词管理'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                showPicAcgBlockWordsDialog(context);
               },
             ),
             ListTile(

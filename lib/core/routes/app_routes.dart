@@ -27,6 +27,7 @@ import 'package:slime_works/pages/lan_transfer/lan_transfer_screen.dart';
 import 'package:slime_works/pages/lan_transfer/lan_chat_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_home_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_comic_detail_screen.dart';
+import 'package:slime_works/pages/picacg/picacg_history_screen.dart';
 import 'package:slime_works/pages/picacg/search/picacg_search_screen.dart';
 import 'package:slime_works/pages/picacg/reader/picacg_reader_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_downloads_screen.dart';

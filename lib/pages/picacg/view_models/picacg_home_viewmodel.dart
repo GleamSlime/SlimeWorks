@@ -40,6 +40,7 @@ class PicAcgHomeViewModel extends BaseViewModel {
       collections.value = results[0] as List<PicAcgCollection>;
       randomComics.value = results[1] as List<PicAcgComic>;
       clearError();
+      _prefetchCovers();
     } catch (e) {
       setError(e.toString());
     } finally {
@@ -55,6 +56,7 @@ class PicAcgHomeViewModel extends BaseViewModel {
     try {
       final more = await _service.getRandomComics();
       randomComics.addAll(more);
+      _prefetchCovers(more);
     } catch (_) {
       // load-more 失败时静默忽略
     } finally {
@@ -70,6 +72,7 @@ class PicAcgHomeViewModel extends BaseViewModel {
     try {
       final fresh = await _service.getRandomComics();
       randomComics.value = fresh;
+      _prefetchCovers(fresh);
     } catch (_) {
     } finally {
       isLoadingMoreRandom.value = false;
@@ -80,5 +83,11 @@ class PicAcgHomeViewModel extends BaseViewModel {
   Future<void> onLoginSuccess() async {
     currentUser.value = _service.currentUser;
     await loadHomeData();
+  }
+
+  /// 后台预取封面图，加速卡片首次显示速度
+  void _prefetchCovers([List<PicAcgComic>? comics]) {
+    final list = comics ?? [...randomComics, for (final c in collections) ...c.comics];
+    _service.prefetchImages(list.map((c) => c.thumb).toList());
   }
 }

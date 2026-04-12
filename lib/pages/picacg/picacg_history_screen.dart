@@ -1,0 +1,278 @@
+library;
+
+/// PicACG 观看记录页面
+///
+/// 展示用户的漫画阅读历史，支持删除单条或清空全部
+/// 点击记录可直接跳转到对应章节继续阅读
+
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/pages/picacg/view_models/picacg_history_viewmodel.dart';
+
+class PicAcgHistoryScreen extends BasePage<PicAcgHistoryViewModel> {
+  const PicAcgHistoryScreen({super.key});
+
+  @override
+  State<PicAcgHistoryScreen> createState() => _PicAcgHistoryScreenState();
+}
+
+class _PicAcgHistoryScreenState extends BasePageState<PicAcgHistoryViewModel, PicAcgHistoryScreen> {
+  @override
+  PicAcgHistoryViewModel createViewModel() => PicAcgHistoryViewModel();
+
+  @override
+  bool get showAppBar => false;
+
+  @override
+  Widget buildContent(BuildContext context) {
+    return ScreenChrome(
+      data: ScreenChromeData(
+        title: '观看记录',
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+          },
+        ),
+        actions: [
+          Obx(
+            () => viewModel.items.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    tooltip: '清空记录',
+                    onPressed: () => _confirmClearAll(context),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+      child: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (viewModel.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (viewModel.errorMessage != null) {
+      return Center(
+        child: Text(
+          viewModel.errorMessage!,
+          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+        ),
+      );
+    }
+
+    return Obx(() {
+      if (viewModel.items.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.history_outlined,
+                size: scaleW(64),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+              ),
+              SizedBox(height: appMetrics.kSpace12),
+              Text(
+                '暂无观看记录',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView.builder(
+        padding: EdgeInsets.symmetric(vertical: appMetrics.kSpace8),
+        itemCount: viewModel.items.length,
+        itemBuilder: (ctx, i) {
+          final item = viewModel.items[i];
+          return _HistoryListItem(
+            item: item,
+            onTap: () => _openReader(context, item),
+            onDelete: () => viewModel.removeItem(item.comicId),
+          );
+        },
+      );
+    });
+  }
+
+  void _openReader(BuildContext context, PicAcgHistoryItem item) {
+    PicAcgReaderRoute(
+      comicId: item.comicId,
+      epsOrder: item.epsOrder,
+      epsTitle: item.epsTitle,
+    ).push(context);
+  }
+
+  Future<void> _confirmClearAll(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清空记录'),
+        content: const Text('确定要清空所有观看记录吗？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('清空', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await viewModel.clearAll();
+    }
+  }
+}
+
+/// 单条观看记录列表项
+class _HistoryListItem extends StatelessWidget {
+  const _HistoryListItem({required this.item, required this.onTap, required this.onDelete});
+
+  final PicAcgHistoryItem item;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final metrics = appMetrics;
+
+    return Dismissible(
+      key: ValueKey(item.comicId),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: EdgeInsets.only(right: metrics.kSpace20),
+        color: theme.colorScheme.error,
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      onDismissed: (_) => onDelete(),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16, vertical: metrics.kSpace8),
+          child: Row(
+            children: [
+              /// 封面缩略图
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: item.thumbUrl.isNotEmpty
+                    ? _ThumbImage(thumbUrl: item.thumbUrl)
+                    : Container(
+                        width: scaleW(52),
+                        height: scaleW(72),
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          size: scaleW(24),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
+                      ),
+              ),
+              SizedBox(width: metrics.kSpace12),
+
+              /// 文字信息
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.comicTitle.isNotEmpty ? item.comicTitle : item.comicId,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                    SizedBox(height: metrics.kSpace4),
+                    Text(
+                      item.epsTitle.isNotEmpty ? item.epsTitle : '第${item.epsOrder}话',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+                    ),
+                    SizedBox(height: metrics.kSpace4),
+                    Text(
+                      _formatTime(item.tick),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              /// 删除按钮
+              IconButton(
+                icon: Icon(
+                  Icons.close,
+                  size: scaleW(16),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                ),
+                onPressed: onDelete,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(int tick) {
+    if (tick == 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(tick * 1000);
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return '刚刚';
+    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
+    if (diff.inDays < 1) return '${diff.inHours}小时前';
+    if (diff.inDays < 7) return '${diff.inDays}天前';
+    return '${dt.month}月${dt.day}日';
+  }
+}
+
+/// 从 URL 加载封面缩略图（使用 Image.network）
+class _ThumbImage extends StatelessWidget {
+  const _ThumbImage({required this.thumbUrl});
+
+  final String thumbUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      thumbUrl,
+      width: scaleW(52),
+      height: scaleW(72),
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        width: scaleW(52),
+        height: scaleW(72),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          size: scaleW(20),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+        ),
+      ),
+      loadingBuilder: (_, child, loadProgress) {
+        if (loadProgress == null) return child;
+        return Container(
+          width: scaleW(52),
+          height: scaleW(72),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        );
+      },
+    );
+  }
+}

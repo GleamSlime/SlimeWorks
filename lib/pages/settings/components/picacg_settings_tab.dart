@@ -25,6 +25,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
 
   PicAcgChannelMode _channel = PicAcgChannelMode.direct;
   final TextEditingController _customIpCtrl = TextEditingController();
+  final TextEditingController _relayAddrCtrl = TextEditingController();
   final TextEditingController _proxyCtrl = TextEditingController();
 
   String _imageServer = 'storage1.picacomic.com';
@@ -54,9 +55,14 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
     final proxy = await _service.getSavedProxy();
     final imageServer = await _service.getSavedImageServer();
     if (!mounted) return;
+    // lanRelay 模式的中转地址存储在 customIp 字段
+    final relayAddr = (channel == PicAcgChannelMode.lanRelay) ? customIp : '';
     setState(() {
       _channel = channel;
-      _customIpCtrl.text = customIp.trim().isEmpty ? _kDefaultCdnIp : customIp;
+      _customIpCtrl.text = (channel == PicAcgChannelMode.cdnIp && customIp.isNotEmpty)
+          ? customIp
+          : _kDefaultCdnIp;
+      _relayAddrCtrl.text = relayAddr;
       _proxyCtrl.text = proxy;
       _imageServer = imageServer.isEmpty ? 'storage1.picacomic.com' : imageServer;
       _loading = false;
@@ -66,6 +72,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
   @override
   void dispose() {
     _customIpCtrl.dispose();
+    _relayAddrCtrl.dispose();
     _proxyCtrl.dispose();
     super.dispose();
   }
@@ -75,7 +82,10 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
       _customIpCtrl.text = _kDefaultCdnIp;
     }
     setState(() => _channel = mode);
-    await _service.setChannel(mode, customIp: _customIpCtrl.text.trim());
+    final customIp = mode == PicAcgChannelMode.lanRelay
+        ? _relayAddrCtrl.text.trim()
+        : _customIpCtrl.text.trim();
+    await _service.setChannel(mode, customIp: customIp);
   }
 
   /// 测速全部节点（并行）
@@ -89,8 +99,11 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
     });
 
     for (final mode in PicAcgChannelMode.values) {
+      final customIp = mode == PicAcgChannelMode.lanRelay
+          ? _relayAddrCtrl.text.trim()
+          : _customIpCtrl.text.trim();
       try {
-        final ms = await _service.testChannel(mode, customIp: _customIpCtrl.text.trim());
+        final ms = await _service.testChannel(mode, customIp: customIp);
         if (mounted) setState(() => _latencyMap[mode] = ms);
       } catch (_) {
         if (mounted) setState(() => _latencyMap[mode] = -2); // 不可达
@@ -205,6 +218,50 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                               FilledButton.tonal(
                                 onPressed: () => _applyChannel(PicAcgChannelMode.cdnIp),
                                 child: const Text('应用'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                // PC 中转 地址输入框
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  child: _channel == PicAcgChannelMode.lanRelay
+                      ? Padding(
+                          padding: EdgeInsets.only(top: m.kSpace8, left: m.kSpace32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _relayAddrCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'PC 节点地址',
+                                        hintText: '192.168.1.x:17888',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: m.kSpace8),
+                                  FilledButton.tonal(
+                                    onPressed: () => _applyChannel(PicAcgChannelMode.lanRelay),
+                                    child: const Text('应用'),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: m.kSpace8),
+                              Text(
+                                '需先在 PC 端《设置 → 节点服务》中启动节点，'
+                                '端口默认 17888。移动端所有请求将经由 PC 分流代为获取。',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withValues(alpha: 0.55),
+                                ),
                               ),
                             ],
                           ),

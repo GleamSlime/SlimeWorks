@@ -51,8 +51,8 @@ pub fn picacg_logout() {
 
 /// 设置 API 分流模式
 ///
-/// - `mode`: 0=直连(分流1), 2=分流2, 3=分流3, 4=CDN分流(自定义IP), 5=JP反代, 6=US反代
-/// - `custom`: mode=4 时填写自定义 IP，其余模式忽略
+/// - `mode`: 0=直连(分流1), 2=分流2, 3=分流3, 4=CDN分流(自定义IP), 5=JP反代, 6=US反代, 7=PC中转
+/// - `custom`: mode=4 时填写自定义 IP，mode=7 时填写中转地址 (IP:PORT)
 #[frb(sync)]
 pub fn picacg_set_channel(mode: i32, custom: String) {
     let cdn_ip = if custom.trim().is_empty() {
@@ -67,6 +67,7 @@ pub fn picacg_set_channel(mode: i32, custom: String) {
         4 => ChannelMode::ChannelIp(cdn_ip.clone()),
         5 => ChannelMode::ReverseProxy("https://bika-api.jpacg.cc".to_string()),
         6 => ChannelMode::ReverseProxy("https://bika2-api.jpacg.cc".to_string()),
+        7 => ChannelMode::LanRelay(custom.trim().to_string()),
         _ => ChannelMode::Direct,
     };
     info!(
@@ -113,6 +114,7 @@ pub async fn picacg_test_channel(mode: i32, custom: String) -> Result<u64> {
         4 => crate::client::ChannelMode::ChannelIp(cdn_ip.clone()),
         5 => crate::client::ChannelMode::ReverseProxy("https://bika-api.jpacg.cc".to_string()),
         6 => crate::client::ChannelMode::ReverseProxy("https://bika2-api.jpacg.cc".to_string()),
+        7 => crate::client::ChannelMode::LanRelay(custom.trim().to_string()),
         _ => crate::client::ChannelMode::Direct,
     };
     info!(
@@ -396,4 +398,40 @@ pub async fn picacg_fetch_image(file_server: String, path: String) -> Result<Vec
 
 fn urlencoding_encode(s: &str) -> String {
     percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
+}
+
+// ==================== PC 中转服务端函数 ====================
+// 以下函数不直接暗露给 Flutter，而是供模块内部的节点服务器调用，
+// 实现“PC中转”功能（移动端请求 -> PC 节点服务器 -> PicACG）。
+
+/// 中转 API 请求（供 PC 节点服务器用）
+///
+/// 使用 PC 自身的 CLIENT（包含 PC 的分流配置与 Token）转发 API 请求。
+pub async fn picacg_relay_api(
+    path: String,
+    method: String,
+    body: Option<serde_json::Value>,
+) -> anyhow::Result<serde_json::Value> {
+    let result = match method.to_uppercase().as_str() {
+        "POST" => CLIENT.post(&path, body.unwrap_or_else(|| json!({}))).await,
+        "PUT" => CLIENT.put(&path).await,
+        _ => CLIENT.get(&path).await,
+    };
+    result.map_err(|e| anyhow::anyhow!("{}", e))
+}
+
+/// 中转图片下载（供 PC 节点服务器用）
+pub async fn picacg_relay_image(
+    file_server: String,
+    path: String,
+) -> anyhow::Result<Vec<u8>> {
+    CLIENT
+        .fetch_image_bytes(&file_server, &path)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
+}
+
+/// 获取 PC 当前 Token（供 PC 节点服务器用）
+pub fn picacg_relay_get_token() -> String {
+    CLIENT.get_token()
 }

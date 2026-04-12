@@ -38,9 +38,8 @@ class _ScreenChromeState extends State<ScreenChrome> {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _desktopScreen.clearScreenChrome(owner: _owner);
-    });
+    // 立即同步清除，防止下一个页面加载前头部仍显示当前页数据
+    _desktopScreen.clearScreenChrome(owner: _owner);
     super.dispose();
   }
 

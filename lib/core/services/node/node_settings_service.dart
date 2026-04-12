@@ -825,6 +825,7 @@ class NodeSettingsService extends GetxService {
         final response = await _dio.post<Map<String, dynamic>>(
           url,
           data: requestPayload,
+          options: _nodeCallOptionsForAction(action),
           onReceiveProgress: onReceiveProgress,
         );
         final body = response.data ?? <String, dynamic>{};
@@ -1144,5 +1145,21 @@ class NodeSettingsService extends GetxService {
 
     values.add('http://127.0.0.1:${localNodePort.value}/node/call');
     localNodeApiList.assignAll(values.toSet().toList()..sort());
+  }
+
+  Options? _nodeCallOptionsForAction(String action) {
+    if (action == 'list_novels') {
+      return Options(
+        sendTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 45),
+      );
+    }
+    if (action.startsWith('picacg_')) {
+      return Options(
+        sendTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 30),
+      );
+    }
+    return null;
   }
 }

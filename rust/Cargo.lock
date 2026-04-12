@@ -1294,7 +1294,6 @@ dependencies = [
  "http 1.4.0",
  "hyper 1.6.0",
  "hyper-util",
- "log",
  "rustls 0.23.36",
  "rustls-native-certs 0.8.3",
  "rustls-pki-types",
@@ -2513,7 +2512,6 @@ version = "0.23.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c665f33d38cea657d9614f766881e4d510e0eda4239891eea56b4cadcf01801b"
 dependencies = [
- "log",
  "once_cell",
  "ring 0.17.14",
  "rustls-pki-types",

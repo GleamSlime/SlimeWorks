@@ -111,3 +111,21 @@ class PicAcgDownloadsRoute extends AppRouteData with $PicAcgDownloadsRoute {
     return AppRoutes.buildPage(context, state, const PicAcgDownloadsScreen());
   }
 }
+
+@TypedGoRoute<PicAcgHistoryRoute>(path: '/picacg/history')
+class PicAcgHistoryRoute extends AppRouteData with $PicAcgHistoryRoute {
+  const PicAcgHistoryRoute();
+
+  @override
+  String get title => '观看记录';
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+
+  static const Permission routePermission = Permission.accessPicAcg;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const PicAcgHistoryScreen());
+  }
+}

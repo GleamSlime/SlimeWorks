@@ -15,7 +15,8 @@ lib/pages/picacg/
 ├── components/                    # 共享 UI 组件
 │   ├── picacg_comic_card.dart     # 漫画网格卡片
 │   ├── picacg_image_view.dart     # 异步图片加载组件
-│   └── picacg_login_dialog.dart   # 登录对话框
+│   ├── picacg_login_dialog.dart   # 登录对话框
+│   └── picacg_block_words_dialog.dart  # 屏蔽词管理对话框
 ├── models/
 │   └── picacg_models.dart         # 所有 Dart 数据模型
 ├── view_models/                   # ViewModel（GetX Controller）
@@ -23,6 +24,7 @@ lib/pages/picacg/
 │   ├── picacg_reader_viewmodel.dart
 │   ├── picacg_comic_detail_viewmodel.dart
 │   ├── picacg_search_viewmodel.dart
+│   ├── picacg_history_viewmodel.dart  # 观看记录 ViewModel
 │   └── picacg_favourites_viewmodel.dart
 ├── reader/
 │   └── picacg_reader_screen.dart  # 漫画阅读器页面
@@ -30,6 +32,7 @@ lib/pages/picacg/
 │   └── picacg_search_screen.dart  # 搜索页面
 ├── picacg_home_screen.dart        # 主页（推荐 + 随机）
 ├── picacg_comic_detail_screen.dart # 漫画详情页
+├── picacg_history_screen.dart     # 观看记录页面
 └── picacg_favourites_screen.dart  # 收藏夹页面
 ```
 
@@ -54,6 +57,8 @@ lib/pages/picacg/
 | `getFavourites(page, sort)` | 获取收藏列表 |
 | `toggleFavourite(comicId)` | 收藏/取消收藏 |
 | `fetchImageBytes(image)` | 拉取图片原始字节（走 Rust 节点代理） |
+| `cacheComicMeta(comicId, title, thumbUrl)` | 缓存漫画基本信息（供历史记录用） |
+| `getComicMeta(comicId)` | 从内存缓存读取漫画基本信息 |
 
 ---
 
@@ -67,6 +72,7 @@ lib/pages/picacg/
 | `PicAcgComicDetailRoute` | `/picacg/comic/:id` | 漫画详情 |
 | `PicAcgReaderRoute` | `/picacg/reader/:id/:eps` | 阅读器 |
 | `PicAcgSearchRoute` | `/picacg/search` | 搜索 |
+| `PicAcgHistoryRoute` | `/picacg/history` | 观看记录 |
 
 ---
 
@@ -105,18 +111,13 @@ lib/pages/picacg/
 ## 阅读器设计说明（PicAcgReaderScreen）
 
 ### 沉浸模式
-- 进入阅读器：`SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky)`
-- 退出阅读器：恢复 `SystemUiMode.edgeToEdge`
+- 使用 `ScreenChromeData(enableMobileImmersiveMode: true)` —— 由 `MobileLayout` 管理顶部/底部工具栏的统一显隐。
+- `mobileAppBarColor: Color(0xE6121212)` 覆盖默认头部色，顶部与底部使用同一深色背景，保持视觉一致。
+- 顶部与底部收起逻辑**完全同步**：上划隐藏两者，点击显示两者，由 `ScreenChromeData.bottomBar` 持有底部控件，无独立动画控制器。
 
-### 滚动设计
-```
-Stack
-├── Obx(ListView.builder)          ← 图片列表，用 Obx 响应分页追加
-├── Positioned.fill(GestureDetector, behavior: translucent)  ← 点击检测层
-│     onTap → toggleToolbar()      ← 不直接包裹 ListView，避免手势竞争
-└── Obx(IgnorePointer + AnimatedOpacity + AppBar)  ← 工具栏
-      IgnorePointer(ignoring: !showToolbar)  ← 隐藏时穿透，允许重新唤起
-```
+### 滚动防抖（_ComicPageImage）
+- `_ComicPageImage` 是带 `AutomaticKeepAliveClientMixin` 的 `StatefulWidget`，`wantKeepAlive = true`。
+- 防止 `ListView` 在图片滚动出 `cacheExtent` 后回收并重建，消除回滚时占位高度与实际图片高度不一致导致的抖动。
 
 **为什么不用 `GestureDetector` 包裹 `ListView`？**
 
@@ -153,4 +154,53 @@ Stack
 | 修改阅读器交互 | `lib/pages/picacg/reader/picacg_reader_screen.dart` |
 | 修改图片加载策略 | `lib/pages/picacg/components/picacg_image_view.dart` |
 | 修改搜索逻辑 | `lib/pages/picacg/view_models/picacg_search_viewmodel.dart` |
+| 修改观看记录逻辑 | `lib/pages/picacg/view_models/picacg_history_viewmodel.dart` |
+| 修改屏蔽词管理 | `lib/pages/picacg/components/picacg_block_words_dialog.dart` |
 | 修改 Rust 侧接口 | `rust/picacg_module/src/` |
+
+---
+
+## 搜索页（PicAcgSearchScreen）
+
+- 搜索输入框位于 `ScreenChromeData.titleWidget`，符合头部规范（不使用 AppBar）。
+- **搜索历史**：最多存 20 条，持久化于 `SharedPreferences`（key: `picacg_search_history`）；支持单条删除和全部清空。
+- **排序**：支持 dd（最新）、da（最早）、ld（最多点赞）、vd（最多浏览）四种排序，通过右上角 `PopupMenuButton` 切换。
+- **屏蔽词过滤**：搜索返回结果均经 `PicAcgBlockWordsService.shouldBlock()` 过滤，命中标题/分类/标签屏蔽词的漫画不会显示。
+
+---
+
+## 观看记录（PicAcgHistoryScreen）
+
+存储于 `SharedPreferences`（key: `picacg_history_list`），最多保留 200 条，序列化为 JSON 数组。
+
+每条记录字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `comicId` | String | 漫画 ID |
+| `comicTitle` | String | 漫画标题 |
+| `thumbUrl` | String | 封面图 URL（缓存自 `PicAcgService._comicMetaCache`） |
+| `epsOrder` | int | 最后阅读的章节序号 |
+| `epsTitle` | String | 最后阅读的章节标题 |
+| `tick` | int | 记录时的时间戳（毫秒） |
+
+- 阅读器每次进入章节时通过 `PicAcgHistoryViewModel.saveRecord()` 自动保存记录（静态方法）。
+- 点击记录直接跳转到对应章节继续阅读（`PicAcgReaderRoute`）。
+- 支持左滑删除单条记录，右上角可清空全部。
+
+---
+
+## 屏蔽词管理（PicAcgBlockWordsDialog）
+
+持久化于 `SharedPreferences`（key: `picacg_block_words`），序列化为 JSON 对象。
+
+支持三种维度的屏蔽词：
+
+| 维度 | 说明 |
+|------|------|
+| 标题（title） | 漫画标题包含屏蔽词时过滤 |
+| 分类（category） | 漫画分类列表中任一分类命中时过滤 |
+| 标签（tag） | 漫画标签列表中任一标签命中时过滤 |
+
+- `PicAcgBlockWordsService` 用内存缓存（`_cache`）减少 SharedPreferences 读取；`invalidateCache()` 可强制重新加载。
+- 通过主页用户菜单中"屏蔽词管理"菜单项打开。

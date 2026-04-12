@@ -28,6 +28,7 @@ use rustls::{
     ClientConfig, DigitallySignedStruct, Error as RustlsError, SignatureScheme,
 };
 use serde_json::Value;
+use std::error::Error as StdError;
 use std::future::{ready, Ready};
 use std::io;
 use std::net::SocketAddr;
@@ -38,6 +39,12 @@ use tower_service::Service;
 
 /// 标准 API 域名
 pub const API_DOMAIN: &str = "picaapi.picacomic.com";
+
+/// 分流2/3官方 IPv4/IPv6 节点（与原项目一致）
+pub const CHANNEL2_IPV4: &str = "104.21.91.145";
+pub const CHANNEL2_IPV6: &str = "2606:4700:d:28:dbf4:26f3:c265:73bc";
+pub const CHANNEL3_IPV4: &str = "188.114.98.153";
+pub const CHANNEL3_IPV6: &str = "2a06:98c1:3120:ca71:be2c:c721:d2b5:5dbf";
 
 /// 备用 API 域名（旧项目也做了同样映射）
 pub const API_DOMAIN_ALT: &str = "post-api.wikawika.xyz";
@@ -78,6 +85,9 @@ pub enum ChannelMode {
     Direct,
     ChannelIp(String),
     ReverseProxy(String),
+    /// PC 中转：通过局域网 PC 节点服务器中转所有请求
+    /// 值格式："192.168.x.x:PORT"（PC 端节点服务器地址）
+    LanRelay(String),
 }
 
 struct ClientState {
@@ -143,6 +153,7 @@ impl PicAcgClient {
             ChannelMode::Direct => "direct".to_string(),
             ChannelMode::ChannelIp(ip) => format!("ip:{}", ip),
             ChannelMode::ReverseProxy(url) => format!("proxy:{}", url),
+            ChannelMode::LanRelay(addr) => format!("relay:{}", addr),
         }
     }
 
@@ -348,6 +359,36 @@ impl PicAcgClient {
         }
     }
 
+    fn format_error_chain(err: &dyn StdError) -> String {
+        let mut chain = format!("{}", err);
+        let mut src = err.source();
+        while let Some(cause) = src {
+            chain.push_str(&format!(" caused by: {}", cause));
+            if let Some(io_err) = cause.downcast_ref::<io::Error>() {
+                chain.push_str(&format!(
+                    " [os={:?} raw={}]",
+                    io_err.kind(),
+                    io_err.raw_os_error().unwrap_or(-1)
+                ));
+            }
+            src = cause.source();
+        }
+        chain
+    }
+
+    /// 给分流2/3提供 IPv4+IPv6 双栈候选，减少在特定网络下单栈不可达的概率。
+    fn channel_ip_candidates(ip: &str) -> Vec<String> {
+        match ip {
+            CHANNEL2_IPV4 | CHANNEL2_IPV6 => {
+                vec![CHANNEL2_IPV6.to_string(), CHANNEL2_IPV4.to_string()]
+            }
+            CHANNEL3_IPV4 | CHANNEL3_IPV6 => {
+                vec![CHANNEL3_IPV6.to_string(), CHANNEL3_IPV4.to_string()]
+            }
+            _ => vec![ip.to_string()],
+        }
+    }
+
     /// 测试指定分流模式的连通性，返回延迟（毫秒）
     ///
     /// **测试行为与原项目一致**：
@@ -362,10 +403,29 @@ impl PicAcgClient {
             ChannelMode::Direct => "直连".to_string(),
             ChannelMode::ChannelIp(ip) => format!("分流IP:{}", ip),
             ChannelMode::ReverseProxy(url) => format!("反代:{}", url),
+            ChannelMode::LanRelay(addr) => format!("PC中转:{}", addr),
         };
         info!("[PicACG测速] 开始测试节点: {}", channel_desc);
 
-        let client = self.build_client_with_channel(Some(&mode))?;
+        // PC 中转模式：对 /picacg/ping 探头测速
+        if let ChannelMode::LanRelay(relay_addr) = &mode {
+            let t0 = Instant::now();
+            let url = format!("http://{}/picacg/ping", relay_addr);
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .map_err(|e| PicAcgError::Network(e.to_string()))?;
+            client.get(&url).send().await.map_err(|e| {
+                let msg = format!("中转服务器 {} 不可达: {}", relay_addr, e);
+                warn!("[PicACG测速] {}", msg);
+                PicAcgError::Network(msg)
+            })?;
+            let elapsed = t0.elapsed().as_millis() as u64;
+            info!("[PicACG测速] PC中转[{}] 延迟={}ms", relay_addr, elapsed);
+            return Ok(elapsed);
+        }
+
+        let client = self.build_client_with_channel(Some(&mode))?;;
 
         // 与原项目一致：使用 categories 端点，authorization 为空字符串
         let path = "categories";
@@ -377,26 +437,20 @@ impl PicAcgClient {
         debug!("[PicACG测速] 目标URL: {}", url);
 
         let t0 = Instant::now();
-        let status = match &mode {
-            ChannelMode::ChannelIp(ip) => self
-                .send_via_fixed_ip(Method::GET, &url, &headers, None, ip)
-                .await
-                .map(|(status, _)| status),
-            _ => {
-                let mut req = client.get(&url);
-                for (k, v) in &headers {
-                    req = req.header(k.as_str(), v.as_str());
-                }
-                req.send()
-                    .await
-                    .map(|resp| resp.status().as_u16())
-                    .map_err(|e| {
-                        let msg = format!("节点[{}]连接失败: {}", channel_desc, e);
-                        warn!("[PicACG测速] {}", msg);
-                        PicAcgError::Network(msg)
-                    })
-            }
-        }?;
+        let mut req = client.get(&url);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+        let status = req
+            .send()
+            .await
+            .map(|resp| resp.status().as_u16())
+            .map_err(|e| {
+                let detail = Self::format_error_chain(&e);
+                let msg = format!("节点[{}]连接失败: {}", channel_desc, detail);
+                warn!("[PicACG测速] {}", msg);
+                PicAcgError::Network(msg)
+            })?;
 
         let elapsed = t0.elapsed().as_millis() as u64;
         info!(
@@ -465,7 +519,24 @@ impl PicAcgClient {
         let response: hyper::Response<hyper::body::Incoming> = client
             .request(request)
             .await
-            .map_err(|e| PicAcgError::Network(format!("网络错误: {}", e)))?;
+            .map_err(|e| {
+                // 遍历错误链以暴露底层 OS 错误码（ENETUNREACH / ECONNREFUSED 等）
+                let mut chain = format!("{}", e);
+                let mut src: Option<&dyn StdError> = e.source();
+                while let Some(cause) = src {
+                    chain.push_str(&format!(" caused by: {}", cause));
+                    if let Some(io_err) = cause.downcast_ref::<io::Error>() {
+                        chain.push_str(&format!(
+                            " [os={:?} raw={}]",
+                            io_err.kind(),
+                            io_err.raw_os_error().unwrap_or(-1)
+                        ));
+                    }
+                    src = cause.source();
+                }
+                warn!("[PicACG] send_via_fixed_ip 连接失败 ip={} url={} err={}", ip_str, url, chain);
+                PicAcgError::Network(format!("网络错误: {}", chain))
+            })?;
         let status = response.status().as_u16();
         let body_bytes = response
             .into_body()
@@ -584,6 +655,11 @@ impl PicAcgClient {
             (state.channel.clone(), state.image_server.clone())
         };
 
+        // PC 中转模式：图片也经由局域网节点获取
+        if let ChannelMode::LanRelay(relay_addr) = &channel {
+            return self.fetch_image_via_relay(file_server, path, &relay_addr.clone()).await;
+        }
+
         let candidate_urls = Self::build_image_candidate_urls(file_server, path, &image_server);
         let client = self.build_client()?;
         let mut last_error: Option<PicAcgError> = None;
@@ -597,7 +673,25 @@ impl PicAcgClient {
 
             let result = match &channel {
                 ChannelMode::ChannelIp(ip) => {
-                    self.download_bytes_via_fixed_ip(&request_url, ip).await
+                    let mut last_ip_err: Option<PicAcgError> = None;
+                    for candidate_ip in Self::channel_ip_candidates(ip) {
+                        match self
+                            .download_bytes_via_fixed_ip(&request_url, &candidate_ip)
+                            .await
+                        {
+                            Ok(bytes) => return Ok(bytes),
+                            Err(err) => {
+                                warn!(
+                                    "[PicACG IMG] 分流IP下载失败 ip={} url={} err={}",
+                                    candidate_ip, request_url, err
+                                );
+                                last_ip_err = Some(err);
+                            }
+                        }
+                    }
+                    Err(last_ip_err.unwrap_or_else(|| {
+                        PicAcgError::Network(format!("图片请求失败（分流IP候选均不可达）: {}", request_url))
+                    }))
                 }
                 _ => {
                     let response = client
@@ -673,9 +767,16 @@ impl PicAcgClient {
         let channel = override_channel.unwrap_or(&state.channel).clone();
         drop(state); // 尽早释放读锁
 
+        // PC 中转模式不需要特殊客户端配置
+        if matches!(channel, ChannelMode::LanRelay(_)) {
+            return Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| PicAcgError::Network(e.to_string()));
+        }
+
         let mut builder = Client::builder()
             .gzip(true)
-            .no_proxy()
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(12));
 
@@ -683,13 +784,23 @@ impl PicAcgClient {
         // 同时关闭证书校验——原项目 httpx.Client(verify=False) 亦如此处理，
         // 因为 Cloudflare 共享 IP 上 SNI 映射不保证与目标域名证书完全匹配。
         if let ChannelMode::ChannelIp(ip_str) = &channel {
-            let addr: SocketAddr = format!("{}:443", ip_str)
-                .parse()
-                .map_err(|e| PicAcgError::Network(format!("分流 IP 无效 '{}': {}", ip_str, e)))?;
+            let addrs: Vec<SocketAddr> = Self::channel_ip_candidates(ip_str)
+                .into_iter()
+                .map(|ip| {
+                    let host = if ip.contains(':') {
+                        format!("[{}]:443", ip)
+                    } else {
+                        format!("{}:443", ip)
+                    };
+                    host.parse().map_err(|e| {
+                        PicAcgError::Network(format!("分流 IP 无效 '{}': {}", ip, e))
+                    })
+                })
+                .collect::<Result<Vec<_>, PicAcgError>>()?;
             builder = builder
-                .resolve(API_DOMAIN, addr)
+                .resolve_to_addrs(API_DOMAIN, &addrs)
                 // 旧项目同时映射 post-api.wikawika.xyz，避免部分接口或重定向走污染 DNS
-                .resolve(API_DOMAIN_ALT, addr)
+                .resolve_to_addrs(API_DOMAIN_ALT, &addrs)
                 .danger_accept_invalid_certs(true);
         }
 
@@ -707,7 +818,7 @@ impl PicAcgClient {
 
     /// GET 请求
     pub async fn get(&self, path: &str) -> PicAcgResult<Value> {
-        let (token, channel, channel_desc) = {
+        let (token, channel) = {
             let s = self.state.read();
             let token = if s.token.is_empty() {
                 None
@@ -715,16 +826,16 @@ impl PicAcgClient {
                 Some(s.token.clone())
             };
             let channel = s.channel.clone();
-            let desc = match &s.channel {
-                ChannelMode::Direct => "直连".to_string(),
-                ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
-                ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
-            };
-            (token, channel, desc)
+            (token, channel)
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
-        // debug!("[PicACG GET] {} [{}]", url, channel_desc);
+        debug!("[PicACG GET] {}", url);
+
+        // PC 中转模式：转发到局域网节点服务器
+        if let ChannelMode::LanRelay(relay_addr) = &channel {
+            return self.call_relay_api(path, "GET", None, &relay_addr.clone()).await;
+        }
 
         let auth_token = if path.starts_with("auth/") {
             None
@@ -733,31 +844,55 @@ impl PicAcgClient {
         };
         let mut headers = signature::build_headers(path, "GET", auth_token);
         Self::rewrite_headers_for_channel(&mut headers, &channel);
-        let (status, body) = match &channel {
-            ChannelMode::ChannelIp(ip) => {
-                self.send_via_fixed_ip(Method::GET, &url, &headers, None, ip)
-                    .await
-            }
-            _ => {
-                let client = self.build_client()?;
 
-                let mut req = client.get(&url);
-                for (k, v) in &headers {
-                    req = req.header(k.as_str(), v.as_str());
+        // 分流2/3：通过 Hyper FixedConnector 绕过系统 DNS，直连目标 IP
+        if let ChannelMode::ChannelIp(ip_str) = &channel {
+            let mut last_err: Option<PicAcgError> = None;
+            for candidate_ip in Self::channel_ip_candidates(ip_str) {
+                match self
+                    .send_via_fixed_ip(Method::GET, &url, &headers, None, &candidate_ip)
+                    .await
+                {
+                    Ok((status, body)) => {
+                        if status != 200 {
+                            warn!(
+                                "[PicACG GET] 非200响应 path={} status={} body={}",
+                                path, status, body
+                            );
+                        }
+                        return check_api_response(status, body);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "[PicACG GET] 分流IP失败 ip={} path={} err={}",
+                            candidate_ip, path, e
+                        );
+                        last_err = Some(e);
+                    }
                 }
-
-                let resp = req.send().await.map_err(|e| {
-                    warn!("[PicACG GET] 请求失败 path={} err={}", path, e);
-                    PicAcgError::Network(format!("网络错误: {}", e))
-                })?;
-                let status = resp.status().as_u16();
-                let body: Value = resp
-                    .json()
-                    .await
-                    .map_err(|e| PicAcgError::Parse(e.to_string()))?;
-                Ok((status, body))
             }
-        }?;
+            return Err(last_err.unwrap_or_else(|| {
+                PicAcgError::Network(format!("分流连接失败（所有候选IP不可达）: {}", path))
+            }));
+        }
+
+        let client = self.build_client()?;
+
+        let mut req = client.get(&url);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+
+        let resp = req.send().await.map_err(|e| {
+            let detail = Self::format_error_chain(&e);
+            warn!("[PicACG GET] 请求失败 path={} err={}", path, detail);
+            PicAcgError::Network(format!("网络错误: {}", detail))
+        })?;
+        let status = resp.status().as_u16();
+        let body: Value = resp
+            .json()
+            .await
+            .map_err(|e| PicAcgError::Parse(e.to_string()))?;
         debug!("[PicACG GET] 响应 path={} status={}", path, status);
         if status != 200 {
             warn!(
@@ -782,12 +917,18 @@ impl PicAcgClient {
                 ChannelMode::Direct => "直连".to_string(),
                 ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
                 ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
+                ChannelMode::LanRelay(addr) => format!("中转:{}", addr),
             };
             (token, channel, desc)
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
         debug!("[PicACG POST] {} [{}]", url, channel_desc);
+
+        // PC 中转模式：转发到局域网节点服务器
+        if let ChannelMode::LanRelay(relay_addr) = &channel {
+            return self.call_relay_api(path, "POST", Some(&body), &relay_addr.clone()).await;
+        }
 
         let auth_token = if path.starts_with("auth/") {
             None
@@ -796,31 +937,61 @@ impl PicAcgClient {
         };
         let mut headers = signature::build_headers(path, "POST", auth_token);
         Self::rewrite_headers_for_channel(&mut headers, &channel);
-        let (status, resp_body) = match &channel {
-            ChannelMode::ChannelIp(ip) => {
-                self.send_via_fixed_ip(Method::POST, &url, &headers, Some(&body), ip)
-                    .await
-            }
-            _ => {
-                let client = self.build_client()?;
 
-                let mut req = client.post(&url).json(&body);
-                for (k, v) in &headers {
-                    req = req.header(k.as_str(), v.as_str());
+        // 分流2/3：通过 Hyper FixedConnector 绕过系统 DNS，直连目标 IP
+        if let ChannelMode::ChannelIp(ip_str) = &channel {
+            let mut last_err: Option<PicAcgError> = None;
+            for candidate_ip in Self::channel_ip_candidates(ip_str) {
+                match self
+                    .send_via_fixed_ip(
+                        Method::POST,
+                        &url,
+                        &headers,
+                        Some(&body),
+                        &candidate_ip,
+                    )
+                    .await
+                {
+                    Ok((status, resp_body)) => {
+                        if status != 200 {
+                            warn!(
+                                "[PicACG POST] 非200响应 path={} status={} body={}",
+                                path, status, resp_body
+                            );
+                        }
+                        return check_api_response(status, resp_body);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "[PicACG POST] 分流IP失败 ip={} path={} err={}",
+                            candidate_ip, path, e
+                        );
+                        last_err = Some(e);
+                    }
                 }
-
-                let resp = req.send().await.map_err(|e| {
-                    warn!("[PicACG POST] 请求失败 path={} err={}", path, e);
-                    PicAcgError::Network(format!("网络错误: {}", e))
-                })?;
-                let status = resp.status().as_u16();
-                let resp_body: Value = resp
-                    .json()
-                    .await
-                    .map_err(|e| PicAcgError::Parse(e.to_string()))?;
-                Ok((status, resp_body))
             }
-        }?;
+            return Err(last_err.unwrap_or_else(|| {
+                PicAcgError::Network(format!("分流连接失败（所有候选IP不可达）: {}", path))
+            }));
+        }
+
+        let client = self.build_client()?;
+
+        let mut req = client.post(&url).json(&body);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+
+        let resp = req.send().await.map_err(|e| {
+            let detail = Self::format_error_chain(&e);
+            warn!("[PicACG POST] 请求失败 path={} err={}", path, detail);
+            PicAcgError::Network(format!("网络错误: {}", detail))
+        })?;
+        let status = resp.status().as_u16();
+        let resp_body: Value = resp
+            .json()
+            .await
+            .map_err(|e| PicAcgError::Parse(e.to_string()))?;
         debug!("[PicACG POST] 响应 path={} status={}", path, status);
         if status != 200 {
             warn!(
@@ -845,12 +1016,18 @@ impl PicAcgClient {
                 ChannelMode::Direct => "直连".to_string(),
                 ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
                 ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
+                ChannelMode::LanRelay(addr) => format!("中转:{}", addr),
             };
             (token, channel, desc)
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
         debug!("[PicACG PUT] {} [{}]", url, channel_desc);
+
+        // PC 中转模式：转发到局域网节点服务器
+        if let ChannelMode::LanRelay(relay_addr) = &channel {
+            return self.call_relay_api(path, "PUT", None, &relay_addr.clone()).await;
+        }
 
         let auth_token = if path.starts_with("auth/") {
             None
@@ -859,31 +1036,55 @@ impl PicAcgClient {
         };
         let mut headers = signature::build_headers(path, "PUT", auth_token);
         Self::rewrite_headers_for_channel(&mut headers, &channel);
-        let (status, resp_body) = match &channel {
-            ChannelMode::ChannelIp(ip) => {
-                self.send_via_fixed_ip(Method::PUT, &url, &headers, None, ip)
-                    .await
-            }
-            _ => {
-                let client = self.build_client()?;
 
-                let mut req = client.put(&url);
-                for (k, v) in &headers {
-                    req = req.header(k.as_str(), v.as_str());
+        // 分流2/3：通过 Hyper FixedConnector 绕过系统 DNS，直连目标 IP
+        if let ChannelMode::ChannelIp(ip_str) = &channel {
+            let mut last_err: Option<PicAcgError> = None;
+            for candidate_ip in Self::channel_ip_candidates(ip_str) {
+                match self
+                    .send_via_fixed_ip(Method::PUT, &url, &headers, None, &candidate_ip)
+                    .await
+                {
+                    Ok((status, resp_body)) => {
+                        if status != 200 {
+                            warn!(
+                                "[PicACG PUT] 非200响应 path={} status={} body={}",
+                                path, status, resp_body
+                            );
+                        }
+                        return check_api_response(status, resp_body);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "[PicACG PUT] 分流IP失败 ip={} path={} err={}",
+                            candidate_ip, path, e
+                        );
+                        last_err = Some(e);
+                    }
                 }
-
-                let resp = req.send().await.map_err(|e| {
-                    warn!("[PicACG PUT] 请求失败 path={} err={}", path, e);
-                    PicAcgError::Network(format!("网络错误: {}", e))
-                })?;
-                let status = resp.status().as_u16();
-                let resp_body: Value = resp
-                    .json()
-                    .await
-                    .map_err(|e| PicAcgError::Parse(e.to_string()))?;
-                Ok((status, resp_body))
             }
-        }?;
+            return Err(last_err.unwrap_or_else(|| {
+                PicAcgError::Network(format!("分流连接失败（所有候选IP不可达）: {}", path))
+            }));
+        }
+
+        let client = self.build_client()?;
+
+        let mut req = client.put(&url);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+
+        let resp = req.send().await.map_err(|e| {
+            let detail = Self::format_error_chain(&e);
+            warn!("[PicACG PUT] 请求失败 path={} err={}", path, detail);
+            PicAcgError::Network(format!("网络错误: {}", detail))
+        })?;
+        let status = resp.status().as_u16();
+        let resp_body: Value = resp
+            .json()
+            .await
+            .map_err(|e| PicAcgError::Parse(e.to_string()))?;
         debug!("[PicACG PUT] 响应 path={} status={}", path, status);
         if status != 200 {
             warn!(
@@ -892,6 +1093,92 @@ impl PicAcgClient {
             );
         }
         check_api_response(status, resp_body)
+    }
+
+    // ==================== PC 中转辅助方法 ====================
+
+    /// 通过 PC 节点服务器中转 API 请求
+    async fn call_relay_api(
+        &self,
+        path: &str,
+        method: &str,
+        body: Option<&Value>,
+        relay_addr: &str,
+    ) -> PicAcgResult<Value> {
+        let relay_url = format!("http://{}/picacg/api", relay_addr);
+        let req_body = serde_json::json!({
+            "path": path,
+            "method": method,
+            "body": body,
+        });
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(20))
+            .build()
+            .map_err(|e| PicAcgError::Network(e.to_string()))?;
+        let resp = client
+            .post(&relay_url)
+            .json(&req_body)
+            .send()
+            .await
+            .map_err(|e| {
+                PicAcgError::Network(format!("PC中转服务器 {} 请求失败: {}", relay_addr, e))
+            })?;
+        let resp_val: Value = resp
+            .json()
+            .await
+            .map_err(|e| PicAcgError::Parse(format!("PC中转响应解析失败: {}", e)))?;
+        let success = resp_val
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if success {
+            resp_val
+                .get("data")
+                .cloned()
+                .ok_or_else(|| PicAcgError::Parse("PC中转响应缺少data字段".to_string()))
+        } else {
+            let err_msg = resp_val
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("PC中转请求失败")
+                .to_string();
+            Err(PicAcgError::Network(format!("PC中转错误: {}", err_msg)))
+        }
+    }
+
+    /// 通过 PC 节点服务器中转图片下载
+    async fn fetch_image_via_relay(
+        &self,
+        file_server: &str,
+        path: &str,
+        relay_addr: &str,
+    ) -> PicAcgResult<Vec<u8>> {
+        use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+        let fs_enc = utf8_percent_encode(file_server, NON_ALPHANUMERIC).to_string();
+        let path_enc = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+        let relay_url = format!(
+            "http://{}/picacg/img?file_server={}&path={}",
+            relay_addr, fs_enc, path_enc
+        );
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| PicAcgError::Network(e.to_string()))?;
+        let resp = client.get(&relay_url).send().await.map_err(|e| {
+            PicAcgError::Network(format!("PC中转图片请求失败 addr={}: {}", relay_addr, e))
+        })?;
+        if !resp.status().is_success() {
+            return Err(PicAcgError::Network(format!(
+                "PC中转图片HTTP错误: {} url={}",
+                resp.status(),
+                relay_url
+            )));
+        }
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| PicAcgError::Network(format!("读取PC中转图片数据失败: {}", e)))?;
+        Ok(bytes.to_vec())
     }
 }
 

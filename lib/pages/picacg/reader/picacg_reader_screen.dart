@@ -3,19 +3,28 @@ library;
 /// PicACG 漫画阅读器页面
 ///
 /// 支持纵向滚动阅读，图片逐张加载
-/// 点击屏幕切换顶部/底部 UI 显隐（沉浸模式）
+/// 顶部/底部 UI 通过 ScreenChrome 统一管理沉浸模式（点击/上划切换）
+/// 顶底颜色由 AppTheme 主题色统一决定
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/services/picacg_download_service.dart';
+import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 import 'package:slime_works/pages/picacg/view_models/picacg_reader_viewmodel.dart';
+
+/// 阅读器顶底栏深色背景色（与漫画黑色背景协调）
+// 已改为使用主题色，去除硬编码暗色
 
 class PicAcgReaderScreen extends BasePage<PicAcgReaderViewModel> {
   const PicAcgReaderScreen({
@@ -33,13 +42,27 @@ class PicAcgReaderScreen extends BasePage<PicAcgReaderViewModel> {
   State<PicAcgReaderScreen> createState() => _PicAcgReaderScreenState();
 }
 
-class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicAcgReaderScreen>
-    with SingleTickerProviderStateMixin {
+class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicAcgReaderScreen> {
   final ScrollController _scrollController = ScrollController();
+  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
 
-  late final AnimationController _uiController;
-  late final Animation<double> _uiAnim;
-  bool _uiVisible = true;
+  /// 自动沉浸定时 Timer（定时进入）
+  Timer? _autoImmersiveTimer;
+
+  /// 防止底部弹层重复弹出
+  bool _isBottomSheetOpen = false;
+
+  /// 记录上次 scroll 位置，用于计算偏移距离
+  double _lastScrollPixels = 0;
+
+  /// 向下累计滚动距离（进入沉浸）
+  double _scrollDownAccum = 0;
+
+  /// 向上累计滚动距离（退出沉浸）
+  double _scrollUpAccum = 0;
+
+  static const double _kImmersiveScrollThreshold = 100;
+  static const double _kExitImmersiveScrollUp = 60;
 
   ScreenChromeData _buildScreenChromeData() {
     return ScreenChromeData(
@@ -49,12 +72,31 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
         overflow: TextOverflow.ellipsis,
       ),
       leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: _handleBack),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.more_vert),
+          onPressed: () => _showMoreMenu(context),
+        ),
+      ],
       enableMobileImmersiveMode: true,
       mobileBodyHandlesInsets: true,
+      bottomBarHeight: 56,
+      bottomBar: Obx(() {
+        if (viewModel.epsList.isEmpty) return const SizedBox.shrink();
+        return _ReaderBottomBar(
+          currentEps: viewModel.currentEpsOrder,
+          totalEps: viewModel.epsList.length,
+          onEpsTap: () => _showEpsSheet(context),
+          onSettingsTap: () => _showSettingsSheet(context),
+        );
+      }),
     );
   }
 
   void _handleBack() {
+    // 立即清除本页注册的 chrome，防止动画期间顶底栏残留到上一页
+    _desktopScreen.clearScreenChrome(owner: this);
+    _desktopScreen.setMobileImmersiveMode(false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -72,12 +114,12 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   @override
   void initState() {
     super.initState();
-    _uiController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-      value: 1.0,
-    );
-    _uiAnim = CurvedAnimation(parent: _uiController, curve: Curves.easeInOut);
+    // 直接注册 chrome（以 this 为 owner），在 _handleBack 和 dispose 中可立即清除
+    // 这样 pop 动画期间不会残留阅读器的顶底栏
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _desktopScreen.setScreenChrome(_buildScreenChromeData(), owner: this);
+    });
   }
 
   @override
@@ -85,80 +127,88 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     await viewModel.loadPages(widget.comicId, widget.epsOrder);
     _scrollController.addListener(_onScroll);
+    _scheduleAutoImmersive();
+  }
+
+  /// 根据设置启动自动沉浸定时器
+  void _scheduleAutoImmersive() {
+    _autoImmersiveTimer?.cancel();
+    final secs = viewModel.autoImmersiveSeconds.value;
+    if (secs <= 0) return;
+    _autoImmersiveTimer = Timer(Duration(seconds: secs), () {
+      if (mounted && !_desktopScreen.mobileImmersiveMode.value) {
+        _desktopScreen.setMobileImmersiveMode(true);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _autoImmersiveTimer?.cancel();
+    // 兜底清除 chrome（正常情况下 _handleBack 已提前清除）
+    _desktopScreen.clearScreenChrome(owner: this);
+    _desktopScreen.setMobileImmersiveMode(false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scrollController.dispose();
-    _uiController.dispose();
     super.dispose();
-  }
-
-  void _toggleUi() {
-    setState(() => _uiVisible = !_uiVisible);
-    if (_uiVisible) {
-      _uiController.forward();
-    } else {
-      _uiController.reverse();
-    }
   }
 
   /// 滚动到底部附近时触发加载更多
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 300) {
       viewModel.loadMore();
     }
+    final firstVisible = (pos.pixels / 600).floor();
+    viewModel.prefetchAhead(firstVisible + 1);
+
+    // 向下累积 100px → 进入沉浸；向上累积 60px → 退出沉浸
+    if (viewModel.autoImmersiveOnScrollDown.value) {
+      final delta = pos.pixels - _lastScrollPixels;
+      if (delta > 0) {
+        // 向下
+        _scrollUpAccum = 0;
+        _scrollDownAccum += delta;
+        if (_scrollDownAccum >= _kImmersiveScrollThreshold &&
+            !_desktopScreen.mobileImmersiveMode.value) {
+          _scrollDownAccum = 0;
+          _desktopScreen.setMobileImmersiveMode(true);
+        }
+      } else if (delta < 0) {
+        // 向上
+        _scrollDownAccum = 0;
+        _scrollUpAccum += (-delta);
+        if (_scrollUpAccum >= _kExitImmersiveScrollUp &&
+            _desktopScreen.mobileImmersiveMode.value) {
+          _scrollUpAccum = 0;
+          _desktopScreen.setMobileImmersiveMode(false);
+        }
+      }
+    }
+    _lastScrollPixels = pos.pixels;
   }
 
   @override
   Widget buildContent(BuildContext context) {
-    return ScreenChrome(
-      data: _buildScreenChromeData(),
-      child: ColoredBox(
-        color: Colors.black,
-        child: Obx(() {
-          final error = viewModel.readerError.value;
-          if (error != null) return _buildErrorView(context, error);
-          return GestureDetector(
-            onTap: _toggleUi,
-            behavior: HitTestBehavior.opaque,
-            child: Stack(children: [_buildReaderView(context), _buildBottomBar(context)]),
-          );
-        }),
-      ),
+    // Chrome 已通过 initState 的 addPostFrameCallback 直接注册（owner: this）
+    // 不再使用 ScreenChrome widget 包裹，以便在 _handleBack 中立即清除
+    return ColoredBox(
+      color: Colors.black,
+      child: Obx(() {
+        final error = viewModel.readerError.value;
+        if (error != null) return _buildErrorView(context, error);
+        return _buildReaderView(context);
+      }),
     );
   }
 
-  /// 底部操作栏（章节 / 更多 / 设置）
-  Widget _buildBottomBar(BuildContext context) {
-    return Obx(() {
-      if (viewModel.epsList.isEmpty) return const SizedBox.shrink();
-      return Positioned(
-        left: 0,
-        right: 0,
-        bottom: 0,
-        child: FadeTransition(
-          opacity: _uiAnim,
-          child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero).animate(_uiAnim),
-            child: _ReaderBottomBar(
-              currentEps: viewModel.currentEpsOrder,
-              totalEps: viewModel.epsList.length,
-              onEpsTap: () => _showEpsSheet(context),
-              onMoreTap: () => _showMoreMenu(context),
-              onSettingsTap: () => _showSettingsSheet(context),
-            ),
-          ),
-        ),
-      );
-    });
-  }
-
   void _showMoreMenu(BuildContext context) {
+    if (_isBottomSheetOpen) return;
+    _isBottomSheetOpen = true;
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
+      useRootNavigator: true,
+      showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -166,81 +216,223 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
             ListTile(
-              leading: const Icon(Icons.save_alt, color: Colors.white70),
-              title: const Text('离线保存到媒体库', style: TextStyle(color: Colors.white)),
-              subtitle: const Text(
-                '保存所有已加载图片',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('下载'),
+              subtitle: const Text('选择章节下载', style: TextStyle(fontSize: 12)),
               onTap: () {
                 Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('待实现：保存到媒体库')));
+                _showDownloadSheet(context);
               },
             ),
+            if (PlatformUtil.isDesktop)
+              ListTile(
+                leading: const Icon(Icons.save_alt),
+                title: const Text('离线保存到媒体库'),
+                subtitle: const Text('保存所有已加载图片', style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('待实现：保存到媒体库')));
+                },
+              ),
             const SizedBox(height: 8),
           ],
         ),
       ),
-    );
+    ).whenComplete(() => _isBottomSheetOpen = false);
+  }
+
+  void _showDownloadSheet(BuildContext context) {
+    if (_isBottomSheetOpen) return;
+    _isBottomSheetOpen = true;
+    if (viewModel.epsList.isEmpty) {
+      _isBottomSheetOpen = false;
+      return;
+    }
+
+    // 如果 comic 还没拉到就先等待，或用空对象占位（id/title/thumb 从 service 缓存取）
+    Future<PicAcgComic?> getComic() async {
+      if (viewModel.comic != null) return viewModel.comic;
+      try {
+        final c = await getIt<PicAcgService>().getComicDetail(widget.comicId);
+        viewModel.comic = c;
+        return c;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // 提前捕获 context 相关对象，避免跨异步间隙使用 BuildContext
+    final messenger = ScaffoldMessenger.of(context);
+    final ctx = context;
+
+    getComic().then((comic) {
+      if (!mounted) {
+        _isBottomSheetOpen = false;
+        return;
+      }
+      if (comic == null) {
+        _isBottomSheetOpen = false;
+        messenger.showSnackBar(const SnackBar(content: Text('获取漫画信息失败，请重试')));
+        return;
+      }
+      final dl = getIt<PicAcgDownloadService>();
+      final selected = <int>{};
+
+      showModalBottomSheet(
+        context: ctx,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx2, setSheetState) {
+              return DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.6,
+                maxChildSize: 0.9,
+                builder: (_, controller) {
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: Row(
+                          children: [
+                            const Text(
+                              '选择下载章节',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  if (selected.length == viewModel.epsList.length) {
+                                    selected.clear();
+                                  } else {
+                                    selected.addAll(viewModel.epsList.map((e) => e.order));
+                                  }
+                                });
+                              },
+                              child: Text(
+                                selected.length == viewModel.epsList.length ? '取消全选' : '全选',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: GridView.builder(
+                          controller: controller,
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 2.5,
+                          ),
+                          itemCount: viewModel.epsList.length,
+                          itemBuilder: (_, i) {
+                            final ep = viewModel.epsList[i];
+                            final info = dl.entries[comic.id]?.episodes[ep.order];
+                            final isDownloaded = info?.isCompleted == true;
+                            final isSelected = selected.contains(ep.order);
+                            return GestureDetector(
+                              onTap: () => setSheetState(() {
+                                if (isDownloaded) return;
+                                if (isSelected) {
+                                  selected.remove(ep.order);
+                                } else {
+                                  selected.add(ep.order);
+                                }
+                              }),
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isDownloaded
+                                      ? Colors.green.withValues(alpha: 0.3)
+                                      : isSelected
+                                      ? Theme.of(ctx2).colorScheme.primary.withValues(alpha: 0.3)
+                                      : Theme.of(ctx2).colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: Theme.of(ctx2).colorScheme.primary,
+                                          width: 1.5,
+                                        )
+                                      : null,
+                                ),
+                                child: Text(
+                                  '${ep.order}',
+                                  style: TextStyle(
+                                    color: isDownloaded
+                                        ? Colors.green
+                                        : Theme.of(ctx2).colorScheme.onSurface,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SafeArea(
+                        top: false,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: selected.isEmpty
+                                ? null
+                                : () {
+                                    Navigator.of(ctx).pop();
+                                    final eps = viewModel.epsList
+                                        .where((e) => selected.contains(e.order))
+                                        .toList();
+                                    dl.downloadEpsMultiple(comic, eps);
+                                  },
+                            child: Text('下载 ${selected.isEmpty ? '' : selected.length} 章'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    ).whenComplete(() => _isBottomSheetOpen = false);
+    });
   }
 
   void _showSettingsSheet(BuildContext context) {
+    if (_isBottomSheetOpen) return;
+    _isBottomSheetOpen = true;
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
+      useRootNavigator: true,
+      isScrollControlled: true,
+      showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '阅读设置',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  Text('更多设置选项待扩展', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+      builder: (ctx) => _ReaderSettingsSheet(viewModel: viewModel),
+    ).whenComplete(() => _isBottomSheetOpen = false);
   }
 
   /// 显示章节列表底部弹窗
   void _showEpsSheet(BuildContext context) {
+    if (_isBottomSheetOpen) return;
+    _isBottomSheetOpen = true;
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -252,11 +444,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
                   '章节列表',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               Expanded(
@@ -284,13 +472,17 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                         child: Container(
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: isCurrent ? Colors.blue : Colors.grey[800],
+                            color: isCurrent
+                                ? Theme.of(ctx).colorScheme.primary
+                                : Theme.of(ctx).colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             '${eps.order}',
                             style: TextStyle(
-                              color: isCurrent ? Colors.white : Colors.white70,
+                              color: isCurrent
+                                  ? Theme.of(ctx).colorScheme.onPrimary
+                                  : Theme.of(ctx).colorScheme.onSurface,
                               fontSize: 12,
                             ),
                           ),
@@ -304,7 +496,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
           ),
         );
       },
-    );
+    ).whenComplete(() => _isBottomSheetOpen = false);
   }
 
   /// 错误页面（支持重试）
@@ -342,65 +534,74 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   /// [Fix] cacheExtent 加大到 2000，防止上滑时因 item 被回收/重建触发布局抖动
   /// [Fix] 使用 ClampingScrollPhysics，去掉 Bouncing 弹性边界减少位置重算
   Widget _buildReaderView(BuildContext context) {
-    return Obx(
-      () => ListView.builder(
+    return Obx(() {
+      final extraCount = viewModel.hasMore ? 1 : (viewModel.nextEps != null ? 1 : 0);
+      return ListView.builder(
         controller: _scrollController,
         cacheExtent: 2000,
         physics: const ClampingScrollPhysics(),
-        itemCount: viewModel.pages.length + (viewModel.hasMore ? 1 : 0),
+        itemCount: viewModel.pages.length + extraCount,
         itemBuilder: (ctx, i) {
           if (i >= viewModel.pages.length) {
-            return const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            if (viewModel.hasMore) {
+              return const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator(color: Colors.white)),
+              );
+            }
+            // 所有部分已加载完毕，显示下一章公告
+            final next = viewModel.nextEps;
+            if (next == null) return const SizedBox.shrink();
+            return _NextChapterBanner(
+              nextEps: next,
+              onTap: () {
+                _scrollController.jumpTo(0);
+                viewModel.switchEps(next.order);
+              },
             );
           }
           final page = viewModel.pages[i];
-          return _ComicPageImage(image: page.media, pageIndex: i + 1);
+          return Obx(
+            () => Padding(
+              padding: EdgeInsets.symmetric(horizontal: viewModel.imageHorizontalPadding.value),
+              child: _ComicPageImage(image: page.media, pageIndex: i + 1),
+            ),
+          );
         },
-      ),
-    );
+      );
+    });
   }
 }
 
-/// 底部操作栏（不透明深色背景）
+/// 底部操作栏（背景色由 _MobileBottomOverlay 统一提供，此处透明）
 class _ReaderBottomBar extends StatelessWidget {
   const _ReaderBottomBar({
     required this.onEpsTap,
-    required this.onMoreTap,
     required this.onSettingsTap,
     required this.currentEps,
     required this.totalEps,
   });
 
   final VoidCallback onEpsTap;
-  final VoidCallback onMoreTap;
   final VoidCallback onSettingsTap;
   final int currentEps;
   final int totalEps;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xE6121212),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 56,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _BarBtn(
-                icon: Icons.menu_book_outlined,
-                label: '章节',
-                badge: '$currentEps/$totalEps',
-                onTap: onEpsTap,
-              ),
-              _BarBtn(icon: Icons.more_horiz, label: '更多', onTap: onMoreTap),
-              _BarBtn(icon: Icons.settings_outlined, label: '设置', onTap: onSettingsTap),
-            ],
+    return SizedBox(
+      height: 56,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _BarBtn(
+            icon: Icons.menu_book_outlined,
+            label: '章节',
+            badge: '$currentEps/$totalEps',
+            onTap: onEpsTap,
           ),
-        ),
+          _BarBtn(icon: Icons.settings_outlined, label: '设置', onTap: onSettingsTap),
+        ],
       ),
     );
   }
@@ -415,6 +616,8 @@ class _BarBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fg = theme.colorScheme.onSurface;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -423,11 +626,11 @@ class _BarBtn extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white70, size: 22),
+            Icon(icon, color: fg.withValues(alpha: 0.7), size: 22),
             const SizedBox(height: 2),
             Text(
               badge != null ? '$label  $badge' : label,
-              style: const TextStyle(color: Colors.white60, fontSize: 11),
+              style: TextStyle(color: fg.withValues(alpha: 0.6), fontSize: 11),
             ),
           ],
         ),
@@ -437,18 +640,31 @@ class _BarBtn extends StatelessWidget {
 }
 
 /// 单张漫画图片组件
-class _ComicPageImage extends StatelessWidget {
+///
+/// 使用 AutomaticKeepAliveClientMixin 保持 widget 存活，防止滚动时被回收重建，
+/// 避免图片加载完成前展示占位符导致的高度变化引起的滚动抖动
+class _ComicPageImage extends StatefulWidget {
   const _ComicPageImage({required this.image, required this.pageIndex});
 
   final PicAcgImage image;
   final int pageIndex;
 
   @override
+  State<_ComicPageImage> createState() => _ComicPageImageState();
+}
+
+class _ComicPageImageState extends State<_ComicPageImage> with AutomaticKeepAliveClientMixin {
+  /// 保持 Widget 存活，阻止 ListView 回收已渲染的图片项
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin 必须调用 super.build
     return ColoredBox(
       color: Colors.black,
       child: PicAcgImageView(
-        image: image,
+        image: widget.image,
         width: double.infinity,
         fit: BoxFit.fitWidth,
         loadingBuilder: (_) {
@@ -460,7 +676,10 @@ class _ComicPageImage extends StatelessWidget {
                 children: [
                   const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   const SizedBox(height: 8),
-                  Text('P$pageIndex', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text(
+                    'P${widget.pageIndex}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
                 ],
               ),
             ),
@@ -472,6 +691,175 @@ class _ComicPageImage extends StatelessWidget {
             child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 阅读器设置面板
+///
+/// 包含：图片左右间距 / 预加载图片数 / 自动沉浸倒计时 / 向下滚动自动沉浸开关
+class _ReaderSettingsSheet extends StatefulWidget {
+  const _ReaderSettingsSheet({required this.viewModel});
+  final PicAcgReaderViewModel viewModel;
+
+  @override
+  State<_ReaderSettingsSheet> createState() => _ReaderSettingsSheetState();
+}
+
+class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
+  late double _padding;
+  late int _preloadCount;
+  late int _autoImmersiveSec;
+  late bool _autoImmersiveOnScroll;
+
+  @override
+  void initState() {
+    super.initState();
+    _padding = widget.viewModel.imageHorizontalPadding.value;
+    _preloadCount = widget.viewModel.preloadCount.value;
+    _autoImmersiveSec = widget.viewModel.autoImmersiveSeconds.value;
+    _autoImmersiveOnScroll = widget.viewModel.autoImmersiveOnScrollDown.value;
+  }
+
+  void _save() {
+    widget.viewModel.imageHorizontalPadding.value = _padding;
+    widget.viewModel.preloadCount.value = _preloadCount;
+    widget.viewModel.autoImmersiveSeconds.value = _autoImmersiveSec;
+    widget.viewModel.autoImmersiveOnScrollDown.value = _autoImmersiveOnScroll;
+    widget.viewModel.saveSettings();
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final labelStyle = TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 13);
+    final titleStyle = TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: 15);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('阅读设置', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 18),
+
+            // ── 图片左右间距 ──
+            Row(
+              children: [
+                Expanded(child: Text('图片左右间距', style: titleStyle)),
+                Text('${_padding.toInt()} px', style: labelStyle),
+              ],
+            ),
+            Slider(
+              value: _padding,
+              min: 0,
+              max: 40,
+              divisions: 8,
+              onChanged: (v) => setState(() => _padding = v),
+            ),
+            const SizedBox(height: 12),
+
+            // ── 预加载图片数量 ──
+            Text('预加载图片数量', style: titleStyle),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [1, 3, 5, 10].map((n) {
+                final selected = _preloadCount == n;
+                return ChoiceChip(
+                  label: Text('$n 张'),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _preloadCount = n),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // ── 自动进入沉浸式时间 ──
+            Text('自动进入沉浸模式', style: titleStyle),
+            const SizedBox(height: 4),
+            Text('进入阅读器后自动隐藏顶底栏（0 = 关闭）', style: labelStyle),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [0, 3, 5, 10, 30].map((s) {
+                final selected = _autoImmersiveSec == s;
+                return ChoiceChip(
+                  label: Text(s == 0 ? '不自动' : '$s 秒'),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _autoImmersiveSec = s),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // ── 向下滚动自动沉浸 ──
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('向下滚动时自动沉浸', style: titleStyle),
+                      const SizedBox(height: 2),
+                      Text('向下滚动时自动隐藏顶底栏', style: labelStyle),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _autoImmersiveOnScroll,
+                  onChanged: (v) => setState(() => _autoImmersiveOnScroll = v),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // ── 保存按钮 ──
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(onPressed: _save, child: const Text('保存')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 下一章引导横幅
+class _NextChapterBanner extends StatelessWidget {
+  const _NextChapterBanner({required this.nextEps, required this.onTap});
+  final PicAcgEps nextEps;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Divider(color: theme.colorScheme.outlineVariant),
+          const SizedBox(height: 16),
+          Text(
+            '本章已读完',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onTap,
+            icon: const Icon(Icons.navigate_next),
+            label: Text('下一章：第 ${nextEps.order} 话'),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

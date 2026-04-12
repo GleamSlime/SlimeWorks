@@ -41,7 +41,10 @@ enum PicAcgChannelMode {
   jpProxy(5, 'JP反代分流'),
 
   /// 6 — US 反代（bika2-api.jpacg.cc）
-  usProxy(6, 'US反代分流');
+  usProxy(6, 'US反代分流'),
+
+  /// 7 — PC 中转（经由局域网 PC端节点服务器中转）
+  lanRelay(7, 'PC中转');
 
   const PicAcgChannelMode(this.value, this.label);
   final int value;
@@ -253,6 +256,16 @@ class PicAcgService {
     return bytes;
   }
 
+  /// 后台静默预取图片列表（不抛异常，不重复拉取已缓存图片）
+  void prefetchImages(List<PicAcgImage> images) {
+    for (final image in images) {
+      final key = buildImageUrl(image);
+      if (!_imageCache.containsKey(key)) {
+        fetchImageBytes(image).ignore();
+      }
+    }
+  }
+
   /// 获取已保存的图片服务器
   Future<String> getSavedImageServer() async {
     final prefs = await SharedPreferences.getInstance();
@@ -294,6 +307,10 @@ class PicAcgService {
     final value = customIp.trim();
     if (mode == PicAcgChannelMode.cdnIp) {
       return value.isEmpty ? _kPicAcgDefaultCdnIp : value;
+    }
+    if (mode == PicAcgChannelMode.lanRelay) {
+      // 中转地址直接作为 custom 传入 Rust
+      return value;
     }
     return value;
   }
@@ -415,13 +432,30 @@ class PicAcgService {
 
   // ==================== 漫画详情 ====================
 
-  /// 获取漫画详情
+  /// 漫画元数据内存缓存（title + thumbUrl），供历史记录保存使用
+  final Map<String, ({String title, String thumbUrl})> _comicMetaCache = {};
+
+  /// 缓存漫画元数据（由调用方主动写入，例如详情页加载后）
+  void cacheComicMeta(String comicId, String title, String thumbUrl) {
+    _comicMetaCache[comicId] = (title: title, thumbUrl: thumbUrl);
+  }
+
+  /// 读取漫画元数据缓存（读取此前缓存的信息）
+  ({String title, String thumbUrl})? getComicMeta(String comicId) {
+    return _comicMetaCache[comicId];
+  }
+
+  /// 获取漫画详情（结果自动写入元数据缓存）
   Future<PicAcgComic> getComicDetail(String comicId) async {
     logger.info('PicACG 漫画详情: $comicId');
     final json = await rust.picacgGetComicDetail(comicId: comicId);
     final data = jsonDecode(json) as Map<String, dynamic>;
     final comic = data['comic'] as Map<String, dynamic>? ?? data;
-    return PicAcgComic.fromJson(comic);
+    final result = PicAcgComic.fromJson(comic);
+
+    /// 缓存漫画元数据，方便阅读器保存历史时读取
+    _comicMetaCache[comicId] = (title: result.title, thumbUrl: result.thumb.fullUrl);
+    return result;
   }
 
   /// 获取漫画推荐

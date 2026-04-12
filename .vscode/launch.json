@@ -35,6 +35,18 @@
       "preLaunchTask": ""
     },
     {
+      "name": "Flutter-Rust Profile Iphone",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": [
+        "--profile",
+        "-d",
+        "00008110-001954AC267A801E"
+      ],
+      "preLaunchTask": ""
+    },
+    {
       "name": "Flutter-Rust Iphone",
       "type": "dart",
       "request": "launch",
