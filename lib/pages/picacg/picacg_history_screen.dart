@@ -13,6 +13,8 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
+import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 import 'package:slime_works/pages/picacg/view_models/picacg_history_viewmodel.dart';
 
 class PicAcgHistoryScreen extends BasePage<PicAcgHistoryViewModel> {
@@ -101,12 +103,17 @@ class _PicAcgHistoryScreenState extends BasePageState<PicAcgHistoryViewModel, Pi
           final item = viewModel.items[i];
           return _HistoryListItem(
             item: item,
-            onTap: () => _openReader(context, item),
+            onTap: () => _openDetail(context, item),
             onDelete: () => viewModel.removeItem(item.comicId),
           );
         },
       );
     });
+  }
+
+  /// 点击条目打开漫画详情页
+  void _openDetail(BuildContext context, PicAcgHistoryItem item) {
+    PicAcgComicDetailRoute(comicId: item.comicId).push(context);
   }
 
   void _openReader(BuildContext context, PicAcgHistoryItem item) {
@@ -243,15 +250,44 @@ class _HistoryListItem extends StatelessWidget {
 }
 
 /// 从 URL 加载封面缩略图（使用 Image.network）
+/// 从 thumbUrl（fileServer + /static/ + path 格式）解析出 PicAcgImage 并用
+/// PicAcgImageView 渲染，保证走 Rust 带鉴权的图片请求通道。
 class _ThumbImage extends StatelessWidget {
   const _ThumbImage({required this.thumbUrl});
 
   final String thumbUrl;
 
+  /// 将 `fullUrl` 拆解回 PicAcgImage；若格式无法识别则返回 null。
+  static PicAcgImage? _parse(String url) {
+    const sep = '/static/';
+    final idx = url.indexOf(sep);
+    if (idx < 0) return null;
+    final path = url.substring(idx + sep.length);
+    if (path.isEmpty) return null;
+    return PicAcgImage(
+      originalName: path.split('/').last,
+      path: path,
+      fileServer: url.substring(0, idx),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      thumbUrl,
+    final image = _parse(thumbUrl);
+    if (image == null) {
+      return Container(
+        width: scaleW(52),
+        height: scaleW(72),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          size: scaleW(20),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+        ),
+      );
+    }
+    return PicAcgImageView(
+      image: image,
       width: scaleW(52),
       height: scaleW(72),
       fit: BoxFit.cover,
@@ -265,14 +301,6 @@ class _ThumbImage extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
         ),
       ),
-      loadingBuilder: (_, child, loadProgress) {
-        if (loadProgress == null) return child;
-        return Container(
-          width: scaleW(52),
-          height: scaleW(72),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        );
-      },
     );
   }
 }

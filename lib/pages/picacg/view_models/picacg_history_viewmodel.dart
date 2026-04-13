@@ -2,14 +2,15 @@ library;
 
 /// PicACG 观看记录 ViewModel
 ///
-/// 从 SharedPreferences 读取阅读历史，支持清除单条和全部
+/// 历史记录通过 Rust FFI 接口存取（基于 redb 本地数据库），
+/// 比 SharedPreferences 更高效可靠，支持清除单条和全部
 
 import 'dart:convert';
 
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
+import 'package:slime_works/src/rust/api/picacg.dart' as rust;
 
 /// 单条观看记录数据
 class PicAcgHistoryItem {
@@ -48,8 +49,7 @@ class PicAcgHistoryItem {
   };
 }
 
-/// 观看记录存储 Key 及上限
-const String _kHistoryListKey = 'picacg_history_list';
+/// 观看记录最大保留条数
 const int _kHistoryMaxCount = 200;
 
 /// 观看记录 ViewModel
@@ -63,13 +63,12 @@ class PicAcgHistoryViewModel extends BaseViewModel {
     await loadHistory();
   }
 
-  /// 加载历史记录
+  /// 从 Rust 本地数据库加载历史记录
   Future<void> loadHistory() async {
     setLoading(true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_kHistoryListKey);
-      if (raw == null || raw.isEmpty) {
+      final raw = rust.picacgLoadHistory();
+      if (raw.isEmpty) {
         items.clear();
         clearError();
         return;
@@ -99,18 +98,16 @@ class PicAcgHistoryViewModel extends BaseViewModel {
   Future<void> clearAll() async {
     try {
       items.clear();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kHistoryListKey);
+      rust.picacgClearHistory();
     } catch (e) {
       logger.error('清空观看记录失败: $e');
     }
   }
 
-  /// 持久化当前记录列表
+  /// 将当前记录列表持久化到 Rust 数据库
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
     final encoded = jsonEncode(items.map((e) => e.toJson()).toList());
-    await prefs.setString(_kHistoryListKey, encoded);
+    rust.picacgSaveHistoryRaw(json: encoded);
   }
 
   // ==================== 静态工具方法（供 ReaderViewModel 调用） ====================
@@ -124,11 +121,10 @@ class PicAcgHistoryViewModel extends BaseViewModel {
     required String epsTitle,
   }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_kHistoryListKey);
+      final raw = rust.picacgLoadHistory();
 
       List<PicAcgHistoryItem> list = [];
-      if (raw != null && raw.isNotEmpty) {
+      if (raw.isNotEmpty) {
         final decoded = jsonDecode(raw) as List<dynamic>;
         list = decoded.map((e) => PicAcgHistoryItem.fromJson(e as Map<String, dynamic>)).toList();
       }
@@ -154,8 +150,8 @@ class PicAcgHistoryViewModel extends BaseViewModel {
       }
 
       final encoded = jsonEncode(list.map((e) => e.toJson()).toList());
-      await prefs.setString(_kHistoryListKey, encoded);
-      logger.info('保存观看记录成功: $comicTitle 第$epsOrder话');
+      rust.picacgSaveHistoryRaw(json: encoded);
+      logger.info('保存观看记录成功: $comicTitle 第${epsOrder}话');
     } catch (e) {
       logger.error('保存观看记录失败: $e');
     }

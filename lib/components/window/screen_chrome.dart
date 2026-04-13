@@ -44,12 +44,8 @@ class _ScreenChromeState extends State<ScreenChrome> {
   }
 
   void _publishChrome() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _desktopScreen.setScreenChrome(widget.data, owner: _owner);
-    });
+    if (!mounted) return;
+    _desktopScreen.setScreenChrome(widget.data, owner: _owner);
   }
 
   @override

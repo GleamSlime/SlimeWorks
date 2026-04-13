@@ -72,13 +72,17 @@ class _PicAcgComicDetailScreenState
                   onPressed: () => _showDownloadSheet(context),
                 );
               }),
-              IconButton(
-                icon: Icon(
-                  viewModel.isFavourite ? Icons.favorite : Icons.favorite_border,
-                  color: viewModel.isFavourite ? Colors.red : null,
+
+              /// 收藏按鈕（使用 Obx 监听 RxBool 实时更新）
+              Obx(
+                () => IconButton(
+                  icon: Icon(
+                    viewModel.isFavourite.value ? Icons.favorite : Icons.favorite_border,
+                    color: viewModel.isFavourite.value ? Colors.red : null,
+                  ),
+                  tooltip: viewModel.isFavourite.value ? '取消收藏' : '收藏',
+                  onPressed: () => viewModel.toggleFavourite(comic.id),
                 ),
-                tooltip: viewModel.isFavourite ? '取消收藏' : '收藏',
-                onPressed: () => viewModel.toggleFavourite(comic.id),
               ),
             ],
     );
@@ -92,7 +96,7 @@ class _PicAcgComicDetailScreenState
       child: Builder(
         builder: (context) {
           if (viewModel.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const _ComicDetailSkeleton();
           }
           if (viewModel.errorMessage != null) {
             return Center(
@@ -144,7 +148,7 @@ class _PicAcgComicDetailScreenState
                     child: PicAcgImageView(
                       image: comic.thumb,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, e) => const Icon(Icons.broken_image_outlined),
+                      errorBuilder: (_, e, _) => const Icon(Icons.broken_image_outlined),
                     ),
                   ),
                 ),
@@ -153,7 +157,7 @@ class _PicAcgComicDetailScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(comic.title, style: theme.textTheme.titleMedium),
+                      SelectableText(comic.title, style: theme.textTheme.titleMedium),
                       SizedBox(height: metrics.kSpace8),
                       // 发布者行
                       if (comic.creator != null)
@@ -170,7 +174,7 @@ class _PicAcgComicDetailScreenState
                                       ? PicAcgImageView(
                                           image: comic.creator!.avatar!,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __) =>
+                                          errorBuilder: (_, _, _) =>
                                               const Icon(Icons.person, size: 16),
                                         )
                                       : const Icon(Icons.person, size: 16),
@@ -203,7 +207,10 @@ class _PicAcgComicDetailScreenState
                           ),
                         ),
                       if (comic.chineseTeam?.isNotEmpty == true)
-                        Text('汉化: ${comic.chineseTeam}', style: theme.textTheme.bodySmall),
+                        SelectableText(
+                          '汉化: ${comic.chineseTeam}',
+                          style: theme.textTheme.bodySmall,
+                        ),
                       SizedBox(height: metrics.kSpace4),
 
                       // 统计 chips
@@ -274,11 +281,11 @@ class _PicAcgComicDetailScreenState
                   ),
                 ),
                 // 收藏
-                GetBuilder<PicAcgComicDetailViewModel>(
-                  builder: (_) => _ActionButton(
-                    icon: vm.isFavourite ? Icons.favorite : Icons.favorite_border,
+                Obx(
+                  () => _ActionButton(
+                    icon: vm.isFavourite.value ? Icons.favorite : Icons.favorite_border,
                     label: '收藏',
-                    active: vm.isFavourite,
+                    active: vm.isFavourite.value,
                     activeColor: Colors.red,
                     onTap: () => vm.toggleFavourite(comic.id),
                   ),
@@ -757,6 +764,129 @@ class _ActionButton extends StatelessWidget {
 }
 
 /// 可展开文本
+// ─────────────────────────────────────────────────────
+// 骨架屏：漫画详情加载中占位
+// ─────────────────────────────────────────────────────
+
+/// 脉冲闪烁骨架屏，模拟漫画详情页布局。
+/// 不依赖外部 shimmer 包，使用 AnimationController 自制动效。
+class _ComicDetailSkeleton extends StatefulWidget {
+  const _ComicDetailSkeleton();
+
+  @override
+  State<_ComicDetailSkeleton> createState() => _ComicDetailSkeletonState();
+}
+
+class _ComicDetailSkeletonState extends State<_ComicDetailSkeleton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+      ..repeat(reverse: true);
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _fade,
+      builder: (context, _) {
+        final alpha = 0.12 + _fade.value * 0.18;
+        final base = Theme.of(context).colorScheme.onSurface.withValues(alpha: alpha);
+
+        Widget box(double w, double h, {double r = 6}) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(r)),
+        );
+
+        final metrics = appMetrics;
+        final coverW = scaleW(100);
+        final coverH = scaleW(133);
+
+        return SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.all(metrics.kSpace16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── 封面 + 标题区块 ──
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  box(coverW, coverH, r: metrics.kSpace12),
+                  SizedBox(width: metrics.kSpace12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        box(double.infinity, 18),
+                        SizedBox(height: metrics.kSpace8),
+                        box(120, 14),
+                        SizedBox(height: metrics.kSpace8),
+                        box(80, 14),
+                        SizedBox(height: metrics.kSpace8),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: List.generate(3, (_) => box(56, 26, r: 13)),
+                        ),
+                        SizedBox(height: metrics.kSpace8),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: List.generate(2, (_) => box(64, 28, r: 14)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: metrics.kSpace16),
+
+              // ── 互动按钮行 ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(3, (_) => box(64, 56, r: 8)),
+              ),
+              SizedBox(height: metrics.kSpace16),
+
+              // ── 章节标题 ──
+              box(80, 16),
+              SizedBox(height: metrics.kSpace8),
+              Wrap(spacing: 6, runSpacing: 6, children: List.generate(6, (_) => box(72, 32, r: 6))),
+              SizedBox(height: metrics.kSpace16),
+
+              // ── 简介标题 ──
+              box(40, 14),
+              SizedBox(height: metrics.kSpace8),
+              box(double.infinity, 12),
+              SizedBox(height: 6),
+              box(double.infinity, 12),
+              SizedBox(height: 6),
+              box(200, 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────
+// 可展开文本
+// ─────────────────────────────────────────────────────
+
 class _ExpandableText extends StatefulWidget {
   const _ExpandableText({required this.label, required this.text});
   final String label;
@@ -791,10 +921,9 @@ class _ExpandableTextState extends State<_ExpandableText> {
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           alignment: Alignment.topCenter,
-          child: Text(
+          child: SelectableText(
             widget.text,
             maxLines: _expanded ? null : 3,
-            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
@@ -814,22 +943,68 @@ class _CommentsSheet extends StatefulWidget {
 }
 
 class _CommentsSheetState extends State<_CommentsSheet> {
+  final _scrollController = ScrollController();
   List<PicAcgComment>? _comments;
   String? _error;
+  int _page = 1;
+  int _totalPages = 1;
+  bool _loadingMore = false;
+
+  bool get _hasMore => _page < _totalPages;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final current = _scrollController.offset;
+    if (current >= maxScroll - 200 && _hasMore && !_loadingMore) {
+      _loadMore();
+    }
   }
 
   Future<void> _load() async {
     try {
       final service = getIt<PicAcgService>();
-      final list = await service.getComments(widget.comicId);
-      if (mounted) setState(() => _comments = list);
+      final (list, pages) = await service.getComments(widget.comicId);
+      if (mounted) {
+        setState(() {
+          _comments = list;
+          _totalPages = pages;
+          _page = 1;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final service = getIt<PicAcgService>();
+      final (list, _) = await service.getComments(widget.comicId, page: _page + 1);
+      if (mounted) {
+        setState(() {
+          _page += 1;
+          _comments = [...?_comments, ...list];
+          _loadingMore = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -840,7 +1015,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       expand: false,
       initialChildSize: 0.65,
       maxChildSize: 0.95,
-      builder: (_, controller) => Column(
+      builder: (_, sheetController) => Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -853,58 +1028,82 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 ? const Center(child: CircularProgressIndicator())
                 : _comments!.isEmpty
                 ? const Center(child: Text('暂无评论'))
-                : ListView.separated(
-                    controller: controller,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _comments!.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final c = _comments![i];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ClipOval(
-                              child: SizedBox(
-                                width: 36,
-                                height: 36,
-                                child: c.user.avatar != null
-                                    ? PicAcgImageView(
-                                        image: c.user.avatar!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __) => const Icon(Icons.person),
-                                      )
-                                    : const Icon(Icons.person),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(c.user.name, style: theme.textTheme.labelMedium),
-                                  const SizedBox(height: 2),
-                                  Text(c.content, style: theme.textTheme.bodySmall),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.thumb_up_outlined,
-                                        size: 12,
-                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text('${c.likesCount}', style: theme.textTheme.labelSmall),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
+                : NotificationListener<ScrollNotification>(
+                    onNotification: (n) {
+                      // 同步 DraggableScrollableSheet 的 controller → 我们的 scroll controller
+                      // 实际上直接使用 sheetController 监听底部
+                      if (n is ScrollUpdateNotification) {
+                        final pos = n.metrics;
+                        if (pos.extentAfter < 200 && _hasMore && !_loadingMore) {
+                          _loadMore();
+                        }
+                      }
+                      return false;
                     },
+                    child: ListView.separated(
+                      controller: sheetController,
+                      padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 24),
+                      itemCount: _comments!.length + (_loadingMore ? 1 : (_hasMore ? 1 : 0)),
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        // 底部加载指示器 / 触发行
+                        if (i >= _comments!.length) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: _loadingMore
+                                  ? const CircularProgressIndicator(strokeWidth: 2)
+                                  : TextButton(onPressed: _loadMore, child: const Text('加载更多')),
+                            ),
+                          );
+                        }
+                        final c = _comments![i];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipOval(
+                                child: SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: c.user.avatar != null
+                                      ? PicAcgImageView(
+                                          image: c.user.avatar!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => const Icon(Icons.person),
+                                        )
+                                      : const Icon(Icons.person),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(c.user.name, style: theme.textTheme.labelMedium),
+                                    const SizedBox(height: 2),
+                                    Text(c.content, style: theme.textTheme.bodySmall),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.thumb_up_outlined,
+                                          size: 12,
+                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text('${c.likesCount}', style: theme.textTheme.labelSmall),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

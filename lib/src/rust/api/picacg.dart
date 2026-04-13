@@ -6,6 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `ensure_history_table`
+
 /// 初始化 PicACG 客户端
 void picacgInit() => RustLib.instance.api.crateApiPicacgPicacgInit();
 
@@ -201,3 +203,22 @@ Future<Uint8List> picacgFetchImage({
   fileServer: fileServer,
   path: path,
 );
+
+/// 初始化漫画历史记录数据库
+///
+/// 在应用启动时调用一次，传入应用数据目录下的 db 文件路径（由 Dart path_provider 提供）。
+/// db_module 是全局单例，若已初始化则幂等返回。
+void picacgInitHistory({required String dbPath}) =>
+    RustLib.instance.api.crateApiPicacgPicacgInitHistory(dbPath: dbPath);
+
+/// 读取所有历史记录，返回 JSON 字符串（未初始化或无数据时返回空字符串）
+String picacgLoadHistory() =>
+    RustLib.instance.api.crateApiPicacgPicacgLoadHistory();
+
+/// 持久化历史记录（完整 JSON 字符串，由 Dart 构造后传入）
+void picacgSaveHistoryRaw({required String json}) =>
+    RustLib.instance.api.crateApiPicacgPicacgSaveHistoryRaw(json: json);
+
+/// 清空全部历史记录
+void picacgClearHistory() =>
+    RustLib.instance.api.crateApiPicacgPicacgClearHistory();

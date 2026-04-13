@@ -3,6 +3,7 @@
 /// 将独立 crate picacg_module 的 API 包装并暴露给 Flutter Rust Bridge
 use anyhow::Result;
 use flutter_rust_bridge::frb;
+use std::sync::OnceLock;
 
 // ==================== 初始化 / 配置 ====================
 
@@ -206,3 +207,54 @@ pub fn picacg_build_image_url(file_server: String, path: String) -> String {
 pub async fn picacg_fetch_image(file_server: String, path: String) -> Result<Vec<u8>> {
     picacg_module::api::picacg_fetch_image(file_server, path).await
 }
+
+// ==================== 观看历史（本地数据库存储）====================
+// 历史记录存储在 Rust 侧 redb 数据库中，比 SharedPreferences 更可靠高效。
+// 数据格式：JSON 数组字符串，由 Dart 层负责序列化/反序列化。
+
+const PICACG_HISTORY_TABLE: &str = "picacg_history";
+const PICACG_HISTORY_KEY: &str = "items";
+
+/// 标记历史表是否已注册（防止重复 leak 内存）
+static HISTORY_TABLE_INIT: OnceLock<()> = OnceLock::new();
+
+/// 确保历史表已初始化（注册到 db_module 的已打开数据库中）
+fn ensure_history_table() {
+    HISTORY_TABLE_INIT.get_or_init(|| {
+        let _ = db_module::db_register_table(PICACG_HISTORY_TABLE.to_string());
+    });
+}
+
+/// 初始化漫画历史记录数据库
+///
+/// 在应用启动时调用一次，传入应用数据目录下的 db 文件路径（由 Dart path_provider 提供）。
+/// db_module 是全局单例，若已初始化则幂等返回。
+#[frb(sync)]
+pub fn picacg_init_history(db_path: String) {
+    let _ = db_module::db_init(db_path);
+    ensure_history_table();
+}
+
+/// 读取所有历史记录，返回 JSON 字符串（未初始化或无数据时返回空字符串）
+#[frb(sync)]
+pub fn picacg_load_history() -> String {
+    ensure_history_table();
+    db_module::db_get(PICACG_HISTORY_TABLE.to_string(), PICACG_HISTORY_KEY.to_string())
+        .unwrap_or(None)
+        .unwrap_or_default()
+}
+
+/// 持久化历史记录（完整 JSON 字符串，由 Dart 构造后传入）
+#[frb(sync)]
+pub fn picacg_save_history_raw(json: String) {
+    ensure_history_table();
+    let _ = db_module::db_set(PICACG_HISTORY_TABLE.to_string(), PICACG_HISTORY_KEY.to_string(), json);
+}
+
+/// 清空全部历史记录
+#[frb(sync)]
+pub fn picacg_clear_history() {
+    ensure_history_table();
+    let _ = db_module::db_delete(PICACG_HISTORY_TABLE.to_string(), PICACG_HISTORY_KEY.to_string());
+}
+

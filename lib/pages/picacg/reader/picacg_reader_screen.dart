@@ -61,6 +61,15 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   /// 向上累计滚动距离（退出沉浸）
   double _scrollUpAccum = 0;
 
+  /// 历导当前章节已加载图片的高度缓存，防止 ListView 回收 Widget 后高度抖动
+  /// key: 页码索引（从 0 起）， value: 已渲染高度
+  final Map<int, double> _pageHeights = {};
+
+  /// [Fix] 返回导航标志位：设置为 true 后阻止 initState 的延迟注册再次触发
+  /// 用于修复 “_handleBack 已清除 chrome 但 addPostFrameCallback 未执行
+  /// 导致阅读器头部残留到详情页” 的 race condition。
+  bool _backHandled = false;
+
   static const double _kImmersiveScrollThreshold = 100;
   static const double _kExitImmersiveScrollUp = 60;
 
@@ -73,10 +82,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
       ),
       leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: _handleBack),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.more_vert),
-          onPressed: () => _showMoreMenu(context),
-        ),
+        IconButton(icon: const Icon(Icons.more_vert), onPressed: () => _showMoreMenu(context)),
       ],
       enableMobileImmersiveMode: true,
       mobileBodyHandlesInsets: true,
@@ -94,10 +100,14 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   }
 
   void _handleBack() {
+    // [Fix] 标记返回已处理，阻止此后 initState 延迟回调再次注册阅读器的 chrome
+    _backHandled = true;
     // 立即清除本页注册的 chrome，防止动画期间顶底栏残留到上一页
     _desktopScreen.clearScreenChrome(owner: this);
     _desktopScreen.setMobileImmersiveMode(false);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // [Fix] 不在此处调用 setEnabledSystemUIMode，防止 Android 上
+    // 导航动画与系统 UI 变化并发触发 UI 卡死（需要切任务管理器解冻）。
+    // SystemUiMode 的恢复交由 dispose() 在动画结束后完成。
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
       return;
@@ -117,7 +127,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
     // 直接注册 chrome（以 this 为 owner），在 _handleBack 和 dispose 中可立即清除
     // 这样 pop 动画期间不会残留阅读器的顶底栏
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _backHandled) return;
       _desktopScreen.setScreenChrome(_buildScreenChromeData(), owner: this);
     });
   }
@@ -144,6 +154,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
 
   @override
   void dispose() {
+    _backHandled = true;
     _autoImmersiveTimer?.cancel();
     // 兜底清除 chrome（正常情况下 _handleBack 已提前清除）
     _desktopScreen.clearScreenChrome(owner: this);
@@ -178,8 +189,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
         // 向上
         _scrollDownAccum = 0;
         _scrollUpAccum += (-delta);
-        if (_scrollUpAccum >= _kExitImmersiveScrollUp &&
-            _desktopScreen.mobileImmersiveMode.value) {
+        if (_scrollUpAccum >= _kExitImmersiveScrollUp && _desktopScreen.mobileImmersiveMode.value) {
           _scrollUpAccum = 0;
           _desktopScreen.setMobileImmersiveMode(false);
         }
@@ -380,34 +390,34 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                         ),
                       ),
                       Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: SafeArea(
-                        top: false,
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: selected.isEmpty
-                                ? null
-                                : () {
-                                    Navigator.of(ctx).pop();
-                                    final eps = viewModel.epsList
-                                        .where((e) => selected.contains(e.order))
-                                        .toList();
-                                    dl.downloadEpsMultiple(comic, eps);
-                                  },
-                            child: Text('下载 ${selected.isEmpty ? '' : selected.length} 章'),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: SafeArea(
+                          top: false,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: selected.isEmpty
+                                  ? null
+                                  : () {
+                                      Navigator.of(ctx).pop();
+                                      final eps = viewModel.epsList
+                                          .where((e) => selected.contains(e.order))
+                                          .toList();
+                                      dl.downloadEpsMultiple(comic, eps);
+                                    },
+                              child: Text('下载 ${selected.isEmpty ? '' : selected.length} 章'),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
-    ).whenComplete(() => _isBottomSheetOpen = false);
+                    ],
+                  );
+                },
+              );
+            },
+          );
+        },
+      ).whenComplete(() => _isBottomSheetOpen = false);
     });
   }
 
@@ -466,6 +476,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                           Navigator.of(ctx).pop();
                           if (!isCurrent) {
                             _scrollController.jumpTo(0);
+                            _pageHeights.clear();
                             viewModel.switchEps(eps.order);
                           }
                         },
@@ -556,6 +567,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
               nextEps: next,
               onTap: () {
                 _scrollController.jumpTo(0);
+                _pageHeights.clear();
                 viewModel.switchEps(next.order);
               },
             );
@@ -564,7 +576,12 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
           return Obx(
             () => Padding(
               padding: EdgeInsets.symmetric(horizontal: viewModel.imageHorizontalPadding.value),
-              child: _ComicPageImage(image: page.media, pageIndex: i + 1),
+              child: _ComicPageImage(
+                image: page.media,
+                pageIndex: i + 1,
+                initialHeight: _pageHeights[i],
+                onImageLoaded: (h) => _pageHeights[i] = h,
+              ),
             ),
           );
         },
@@ -641,54 +658,84 @@ class _BarBtn extends StatelessWidget {
 
 /// 单张漫画图片组件
 ///
-/// 使用 AutomaticKeepAliveClientMixin 保持 widget 存活，防止滚动时被回收重建，
-/// 避免图片加载完成前展示占位符导致的高度变化引起的滚动抖动
+/// [Memory Optimization] 移除 AutomaticKeepAliveClientMixin，允许 ListView 回收屏幕
+/// 外的图片 Widget，防止大量图片常驻内存导致 OOM（高水位内存超限）。
+/// 图片字节由 PicAcgService 的 LRU 缓存持有，即使 Widget 被回收后滚回来时
+/// 也会命中缓存，快速恢复显示。使用 initialHeight 减少布局抖动。
 class _ComicPageImage extends StatefulWidget {
-  const _ComicPageImage({required this.image, required this.pageIndex});
+  const _ComicPageImage({
+    required this.image,
+    required this.pageIndex,
+    this.initialHeight,
+    this.onImageLoaded,
+  });
 
   final PicAcgImage image;
   final int pageIndex;
+
+  /// 上次已知的显示高度（从父组件传入，用于平滑 placeholder 高度防止抖动）
+  final double? initialHeight;
+
+  /// 图片成功渲染后回调实际高度
+  final ValueChanged<double>? onImageLoaded;
 
   @override
   State<_ComicPageImage> createState() => _ComicPageImageState();
 }
 
-class _ComicPageImageState extends State<_ComicPageImage> with AutomaticKeepAliveClientMixin {
-  /// 保持 Widget 存活，阻止 ListView 回收已渲染的图片项
-  @override
-  bool get wantKeepAlive => true;
+class _ComicPageImageState extends State<_ComicPageImage> {
+  final GlobalKey _containerKey = GlobalKey();
+
+  /// 图片加载完成或刷新后测量并上报容器高度
+  void _measureAndReportHeight() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = _containerKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) return;
+      final h = box.size.height;
+      if (h > 0) widget.onImageLoaded?.call(h);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // AutomaticKeepAliveClientMixin 必须调用 super.build
+    final placeholderHeight = widget.initialHeight ?? scaleW(400);
     return ColoredBox(
+      key: _containerKey,
       color: Colors.black,
       child: PicAcgImageView(
         image: widget.image,
         width: double.infinity,
         fit: BoxFit.fitWidth,
+        onLoad: _measureAndReportHeight,
         loadingBuilder: (_) {
           return SizedBox(
-            height: scaleW(400),
+            height: placeholderHeight,
             child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  const SizedBox(height: 8),
-                  Text(
-                    'P${widget.pageIndex}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                ],
-              ),
+              child: PicAcgProgressRing(size: scaleW(44), color: Colors.white70),
             ),
           );
         },
-        errorBuilder: (_, e) => SizedBox(
-          height: scaleW(200),
-          child: const Center(
-            child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+        errorBuilder: (_, e, onRetry) => SizedBox(
+          height: placeholderHeight,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  'P${widget.pageIndex} 加载失败',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh, color: Colors.white70, size: 16),
+                  label: const Text('重试', style: TextStyle(color: Colors.white70)),
+                ),
+              ],
+            ),
           ),
         ),
       ),

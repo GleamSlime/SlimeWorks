@@ -12,6 +12,7 @@ import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/picacg/components/picacg_block_words_dialog.dart';
 import 'package:slime_works/pages/picacg/components/picacg_comic_card.dart';
+import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
 import 'package:slime_works/pages/picacg/components/picacg_login_dialog.dart';
 import 'package:slime_works/pages/picacg/picacg_favourites_screen.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
@@ -27,6 +28,9 @@ class PicAcgHomeScreen extends BasePage<PicAcgHomeViewModel> {
 class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHomeScreen> {
   final ScrollController _scrollController = ScrollController();
   final RxBool _showBackToTop = false.obs;
+
+  /// 防止快速多次点击头像按钮弹出多个底部菜单
+  bool _isMenuOpen = false;
 
   @override
   void initState() {
@@ -52,6 +56,7 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
   bool get showAppBar => false;
 
   ScreenChromeData _buildScreenChromeData(BuildContext context, PicAcgHomeViewModel vm) {
+    final avatarImage = vm.currentUser.value?.avatar;
     return ScreenChromeData(
       title: 'PicACG',
       actions: vm.isLoggedIn
@@ -61,10 +66,36 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 tooltip: '搜索',
                 onPressed: () => _goToSearch(context),
               ),
-              IconButton(
-                icon: const Icon(Icons.account_circle_outlined),
-                tooltip: vm.currentUser.value?.name ?? '用户',
-                onPressed: () => _showUserMenu(context, vm),
+              Tooltip(
+                message: vm.currentUser.value?.name ?? '用户',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => _showUserMenu(context, vm),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: ClipOval(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: avatarImage != null
+                            ? PicAcgImageView(
+                                image: avatarImage,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (_) => const Center(
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                                  ),
+                                ),
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.account_circle_outlined),
+                              )
+                            : const Icon(Icons.account_circle_outlined, size: 28),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ]
           : const <Widget>[],
@@ -175,13 +206,9 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 if (vm.randomComics.isNotEmpty) ...[
                   _buildSectionHeader(context, '随机推荐', () => vm.refreshRandom()),
                   Obx(
-                    () => SliverAnimatedOpacity(
-                      opacity: vm.isLoadingMoreRandom.value ? 0.45 : 1.0,
-                      duration: const Duration(milliseconds: 300),
-                      sliver: SliverPadding(
-                        padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
-                        sliver: _buildRandomComicsGrid(context, vm.randomComics.toList()),
-                      ),
+                    () => SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
+                      sliver: _buildRandomComicsGrid(context, vm.randomComics.toList()),
                     ),
                   ),
                 ],
@@ -331,6 +358,8 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
 
   /// 显示用户菜单
   void _showUserMenu(BuildContext context, PicAcgHomeViewModel vm) {
+    if (_isMenuOpen) return;
+    _isMenuOpen = true;
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -392,6 +421,6 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
           ],
         ),
       ),
-    );
+    ).whenComplete(() => _isMenuOpen = false);
   }
 }

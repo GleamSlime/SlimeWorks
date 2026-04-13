@@ -30,8 +30,8 @@ class PicAcgComicDetailViewModel extends BaseViewModel {
   /// 章节分页
   PicAcgPagination? epsPagination;
 
-  /// 是否已收藏
-  bool isFavourite = false;
+  /// 是否已收藏（响应式，支持 Obx 监听）
+  final RxBool isFavourite = false.obs;
 
   /// 是否已点赞
   final RxBool isLiked = false.obs;
@@ -57,7 +57,7 @@ class PicAcgComicDetailViewModel extends BaseViewModel {
       final epsList = results[1] as PicAcgEpsList;
       eps = epsList.eps;
       epsPagination = epsList.pagination;
-      isFavourite = comic?.isFavourite ?? false;
+      isFavourite.value = comic?.isFavourite ?? false;
       isLiked.value = comic?.isLiked ?? false;
       likesCount.value = comic?.likesCount ?? 0;
       clearError();
@@ -97,13 +97,14 @@ class PicAcgComicDetailViewModel extends BaseViewModel {
     } catch (_) {}
   }
 
-  /// 切换收藏状态
+  /// 切换收藏状态（乐观更新：先更新 UI，失败后回退）
   Future<void> toggleFavourite(String comicId) async {
+    final prev = isFavourite.value;
+    isFavourite.value = !prev;
     try {
       await _service.toggleFavourite(comicId);
-      isFavourite = !isFavourite;
-      update();
     } catch (e) {
+      isFavourite.value = prev;
       setError(e.toString());
     }
   }

@@ -163,7 +163,8 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                         child: PicAcgImageView(
                           image: entry.thumb!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, e) => const Icon(Icons.broken_image_outlined, size: 24),
+                          errorBuilder: (_, e, _) =>
+                              const Icon(Icons.broken_image_outlined, size: 24),
                         ),
                       ),
                     )

@@ -134,7 +134,7 @@ class _ComicCoverImage extends StatelessWidget {
           child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         );
       },
-      errorBuilder: (_, e) => Container(
+      errorBuilder: (_, e, _) => Container(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: const Center(child: Icon(Icons.broken_image_outlined, size: 32)),
       ),

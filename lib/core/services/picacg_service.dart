@@ -6,6 +6,7 @@
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/src/rust/api/picacg.dart' as rust;
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
@@ -76,13 +77,24 @@ class PicAcgService {
 
   /// 图片字节 LRU 缓存，最多保留 [_kImageCacheMaxSize] 条
   /// 使用 LinkedHashMap 保留访问顺序，容量超限时淘汰最久未用的条目
-  static const int _kImageCacheMaxSize = 400;
+  /// 显示大量漫画图片时内存占用较高，缩小缓存上限防止 OOM
+  static const int _kImageCacheMaxSize = 60;
   final LinkedHashMap<String, Uint8List> _imageCache = LinkedHashMap<String, Uint8List>();
 
   /// 初始化服务（从持久化存储恢复 Token、代理和分流配置）
   Future<void> init() async {
     logger.info('PicACG Service 初始化');
     rust.picacgInit();
+
+    // 初始化历史记录本地数据库（Rust redb）
+    try {
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final dbPath = '${appDocDir.path}/slime_picacg.redb';
+      rust.picacgInitHistory(dbPath: dbPath);
+      logger.info('PicACG 历史记录数据库初始化: $dbPath');
+    } catch (e) {
+      logger.error('PicACG 历史记录数据库初始化失败: $e');
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -511,13 +523,15 @@ class PicAcgService {
 
   // ==================== 评论 ====================
 
-  /// 获取评论列表
-  Future<List<PicAcgComment>> getComments(String comicId, {int page = 1}) async {
+  /// 获取评论列表（同时返回总页数）
+  Future<(List<PicAcgComment>, int)> getComments(String comicId, {int page = 1}) async {
     final json = await rust.picacgGetComments(comicId: comicId, page: page);
     final data = jsonDecode(json) as Map<String, dynamic>;
     final commentData = data['comments'] as Map<String, dynamic>? ?? {};
     final docs = commentData['docs'] as List? ?? [];
-    return docs.map((e) => PicAcgComment.fromJson(e as Map<String, dynamic>)).toList();
+    final totalPages = commentData['pages'] as int? ?? 1;
+    final list = docs.map((e) => PicAcgComment.fromJson(e as Map<String, dynamic>)).toList();
+    return (list, totalPages);
   }
 
   /// 发送评论

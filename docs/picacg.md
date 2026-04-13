@@ -115,9 +115,20 @@ lib/pages/picacg/
 - `mobileAppBarColor: Color(0xE6121212)` 覆盖默认头部色，顶部与底部使用同一深色背景，保持视觉一致。
 - 顶部与底部收起逻辑**完全同步**：上划隐藏两者，点击显示两者，由 `ScreenChromeData.bottomBar` 持有底部控件，无独立动画控制器。
 
-### 滚动防抖（_ComicPageImage）
-- `_ComicPageImage` 是带 `AutomaticKeepAliveClientMixin` 的 `StatefulWidget`，`wantKeepAlive = true`。
-- 防止 `ListView` 在图片滚动出 `cacheExtent` 后回收并重建，消除回滚时占位高度与实际图片高度不一致导致的抖动。
+### 阅读器内存优化（_ComicPageImage）
+- **已移除** `AutomaticKeepAliveClientMixin`（`wantKeepAlive = true`），允许 ListView 回收屏幕外的图片 Widget，避免大量图片常驻内存触发 OOM（高水位 3GB 内存超限崩溃）。
+- 图片字节由 `PicAcgService` 侧的 LRU 缓存（上限 60 条）持有；Widget 被回收后再次滚动到视口时仍能命中缓存，快速恢复显示。
+- `_pageHeights` Map 在 Screen State 中按页码索引保存已渲染高度，作为 `initialHeight` 传入各页图片 Widget 的 `loadingBuilder` 占位高度，最小化布局抖动。
+- 切换章节时 `_pageHeights.clear()`，防止旧章节高度污染新章节占位。
+
+### 图片加载失败重试
+- `PicAcgImageView` 新增 `onLoad` 回调和 `errorBuilder` 第三参数 `VoidCallback onRetry`。
+- `_PicAcgImageViewState._retry()` 通过重置 `_future` 重新发起图片请求。
+- 阅读器中加载失败时展示图片序号 + **重试按钮**，点击后调用 `onRetry` 重试。
+
+### 返回导航 Chrome Race Condition 修复
+- **场景**：从详情页 push 进阅读器后极快返回，`initState` 的 `addPostFrameCallback` 在 `_handleBack` 调用 `clearScreenChrome` 之后才触发，导致阅读器的 Chrome 重新注册到 chrome stack 顶部，详情页頭部消失或卡住。
+- **修复**：`_backHandled` 布尔标志——`_handleBack` 和 `dispose` 中置 `true`，`addPostFrameCallback` 回调中检查该标志，若已置 true 则跳过注册。
 
 **为什么不用 `GestureDetector` 包裹 `ListView`？**
 

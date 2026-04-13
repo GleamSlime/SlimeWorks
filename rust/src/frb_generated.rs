@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1730251418;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -218583241;
 
 // Section: executor
 
@@ -3981,6 +3981,37 @@ fn wire__crate__api__picacg__picacg_build_image_url_impl(
         },
     )
 }
+fn wire__crate__api__picacg__picacg_clear_history_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "picacg_clear_history",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::picacg::picacg_clear_history();
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__picacg__picacg_fetch_image_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -4638,6 +4669,38 @@ fn wire__crate__api__picacg__picacg_init_impl(
         },
     )
 }
+fn wire__crate__api__picacg__picacg_init_history_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "picacg_init_history",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::picacg::picacg_init_history(api_db_path);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__picacg__picacg_like_comment_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -4672,6 +4735,35 @@ fn wire__crate__api__picacg__picacg_like_comment_impl(
                     .await,
                 )
             }
+        },
+    )
+}
+fn wire__crate__api__picacg__picacg_load_history_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "picacg_load_history",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::picacg::picacg_load_history())?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -4776,6 +4868,38 @@ fn wire__crate__api__picacg__picacg_punch_in_impl(
                     .await,
                 )
             }
+        },
+    )
+}
+fn wire__crate__api__picacg__picacg_save_history_raw_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "picacg_save_history_raw",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::picacg::picacg_save_history_raw(api_json);
+                })?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -8183,165 +8307,165 @@ fn pde_ffi_dispatcher_primary_impl(
         102 => {
             wire__crate__api__module_manager__module_unload_impl(port, ptr, rust_vec_len, data_len)
         }
-        106 => wire__crate__api__picacg__picacg_fetch_image_impl(port, ptr, rust_vec_len, data_len),
-        107 => {
+        107 => wire__crate__api__picacg__picacg_fetch_image_impl(port, ptr, rust_vec_len, data_len),
+        108 => {
             wire__crate__api__picacg__picacg_get_categories_impl(port, ptr, rust_vec_len, data_len)
         }
-        108 => {
+        109 => {
             wire__crate__api__picacg__picacg_get_collections_impl(port, ptr, rust_vec_len, data_len)
         }
-        109 => wire__crate__api__picacg__picacg_get_comic_detail_impl(
+        110 => wire__crate__api__picacg__picacg_get_comic_detail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => {
+        111 => {
             wire__crate__api__picacg__picacg_get_comic_eps_impl(port, ptr, rust_vec_len, data_len)
         }
-        111 => wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
+        112 => wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => wire__crate__api__picacg__picacg_get_comics_by_category_impl(
+        113 => wire__crate__api__picacg__picacg_get_comics_by_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__picacg__picacg_get_comment_children_impl(
+        114 => wire__crate__api__picacg__picacg_get_comment_children_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        114 => {
+        115 => {
             wire__crate__api__picacg__picacg_get_comments_impl(port, ptr, rust_vec_len, data_len)
         }
-        115 => {
+        116 => {
             wire__crate__api__picacg__picacg_get_eps_pages_impl(port, ptr, rust_vec_len, data_len)
         }
-        116 => {
+        117 => {
             wire__crate__api__picacg__picacg_get_favourites_impl(port, ptr, rust_vec_len, data_len)
         }
-        118 => {
+        119 => {
             wire__crate__api__picacg__picacg_get_keywords_impl(port, ptr, rust_vec_len, data_len)
         }
-        119 => wire__crate__api__picacg__picacg_get_random_comics_impl(
+        120 => wire__crate__api__picacg__picacg_get_random_comics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        120 => {
+        121 => {
             wire__crate__api__picacg__picacg_get_rankings_impl(port, ptr, rust_vec_len, data_len)
         }
-        122 => wire__crate__api__picacg__picacg_get_user_profile_impl(
+        123 => wire__crate__api__picacg__picacg_get_user_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        124 => {
+        126 => {
             wire__crate__api__picacg__picacg_like_comment_impl(port, ptr, rust_vec_len, data_len)
         }
-        125 => wire__crate__api__picacg__picacg_login_impl(port, ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__picacg__picacg_punch_in_impl(port, ptr, rust_vec_len, data_len),
-        128 => {
+        128 => wire__crate__api__picacg__picacg_login_impl(port, ptr, rust_vec_len, data_len),
+        130 => wire__crate__api__picacg__picacg_punch_in_impl(port, ptr, rust_vec_len, data_len),
+        132 => {
             wire__crate__api__picacg__picacg_search_comics_impl(port, ptr, rust_vec_len, data_len)
         }
-        129 => {
+        133 => {
             wire__crate__api__picacg__picacg_send_comment_impl(port, ptr, rust_vec_len, data_len)
         }
-        134 => {
+        138 => {
             wire__crate__api__picacg__picacg_test_channel_impl(port, ptr, rust_vec_len, data_len)
         }
-        135 => wire__crate__api__picacg__picacg_toggle_favourite_impl(
+        139 => wire__crate__api__picacg__picacg_toggle_favourite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        136 => wire__crate__api__picacg__picacg_toggle_like_impl(port, ptr, rust_vec_len, data_len),
-        143 => wire__crate__api__media_collection__scan_media_folders_impl(
+        140 => wire__crate__api__picacg__picacg_toggle_like_impl(port, ptr, rust_vec_len, data_len),
+        147 => wire__crate__api__media_collection__scan_media_folders_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        145 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
+        149 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        146 => wire__crate__api__novel_reader__search_in_all_novels_impl(
+        150 => wire__crate__api__novel_reader__search_in_all_novels_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        147 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
+        151 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => {
+        152 => {
             wire__crate__api__novel_reader__search_in_novel_impl(port, ptr, rust_vec_len, data_len)
         }
-        155 => wire__crate__api__novel_reader__update_novel_cover_impl(
+        159 => wire__crate__api__novel_reader__update_novel_cover_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        163 => {
+        167 => {
             wire__crate__api__websocket__ws_client_connect_impl(port, ptr, rust_vec_len, data_len)
         }
-        164 => wire__crate__api__websocket__ws_client_disconnect_impl(
+        168 => wire__crate__api__websocket__ws_client_disconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        165 => {
+        169 => {
             wire__crate__api__websocket__ws_client_get_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        166 => wire__crate__api__websocket__ws_client_is_connected_impl(
+        170 => wire__crate__api__websocket__ws_client_is_connected_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__websocket__ws_client_receive_message_impl(
+        172 => wire__crate__api__websocket__ws_client_receive_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__websocket__ws_client_send_binary_impl(
+        173 => wire__crate__api__websocket__ws_client_send_binary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => {
+        174 => {
             wire__crate__api__websocket__ws_client_send_text_impl(port, ptr, rust_vec_len, data_len)
         }
-        175 => {
+        179 => {
             wire__crate__api__websocket__ws_server_broadcast_impl(port, ptr, rust_vec_len, data_len)
         }
-        176 => wire__crate__api__websocket__ws_server_get_client_count_impl(
+        180 => wire__crate__api__websocket__ws_server_get_client_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        178 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
-        179 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
+        183 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -8480,58 +8604,62 @@ fn pde_ffi_dispatcher_sync_impl(
             wire__crate__api__novel_reader__move_novel_to_folder_impl(ptr, rust_vec_len, data_len)
         }
         105 => wire__crate__api__picacg__picacg_build_image_url_impl(ptr, rust_vec_len, data_len),
-        117 => wire__crate__api__picacg__picacg_get_image_server_impl(ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__picacg__picacg_get_token_impl(ptr, rust_vec_len, data_len),
-        123 => wire__crate__api__picacg__picacg_init_impl(ptr, rust_vec_len, data_len),
-        126 => wire__crate__api__picacg__picacg_logout_impl(ptr, rust_vec_len, data_len),
-        130 => wire__crate__api__picacg__picacg_set_channel_impl(ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__picacg__picacg_set_image_server_impl(ptr, rust_vec_len, data_len),
-        132 => wire__crate__api__picacg__picacg_set_proxy_impl(ptr, rust_vec_len, data_len),
-        133 => wire__crate__api__picacg__picacg_set_token_impl(ptr, rust_vec_len, data_len),
-        137 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
-        138 => {
+        106 => wire__crate__api__picacg__picacg_clear_history_impl(ptr, rust_vec_len, data_len),
+        118 => wire__crate__api__picacg__picacg_get_image_server_impl(ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__picacg__picacg_get_token_impl(ptr, rust_vec_len, data_len),
+        124 => wire__crate__api__picacg__picacg_init_impl(ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__picacg__picacg_init_history_impl(ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__picacg__picacg_load_history_impl(ptr, rust_vec_len, data_len),
+        129 => wire__crate__api__picacg__picacg_logout_impl(ptr, rust_vec_len, data_len),
+        131 => wire__crate__api__picacg__picacg_save_history_raw_impl(ptr, rust_vec_len, data_len),
+        134 => wire__crate__api__picacg__picacg_set_channel_impl(ptr, rust_vec_len, data_len),
+        135 => wire__crate__api__picacg__picacg_set_image_server_impl(ptr, rust_vec_len, data_len),
+        136 => wire__crate__api__picacg__picacg_set_proxy_impl(ptr, rust_vec_len, data_len),
+        137 => wire__crate__api__picacg__picacg_set_token_impl(ptr, rust_vec_len, data_len),
+        141 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
+        142 => {
             wire__crate__api__novel_reader__remove_novel_with_file_impl(ptr, rust_vec_len, data_len)
         }
-        139 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
-        140 => wire__crate__api__media_collection__rename_media_collection_impl(
+        143 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__media_collection__rename_media_collection_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        141 => wire__crate__api__media_collection__rename_media_folder_impl(
+        145 => wire__crate__api__media_collection__rename_media_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        142 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
-        149 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
-        150 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        151 => wire__crate__api__http_bridge__start_node_server_impl(ptr, rust_vec_len, data_len),
-        152 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        153 => wire__crate__api__http_bridge__stop_node_server_impl(ptr, rust_vec_len, data_len),
-        154 => {
+        146 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
+        148 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
+        153 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
+        154 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        155 => wire__crate__api__http_bridge__start_node_server_impl(ptr, rust_vec_len, data_len),
+        156 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        157 => wire__crate__api__http_bridge__stop_node_server_impl(ptr, rust_vec_len, data_len),
+        158 => {
             wire__crate__api__novel_reader__update_novel_author_impl(ptr, rust_vec_len, data_len)
         }
-        156 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
-        157 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
-        158 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
-        159 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
-        160 => wire__crate__api__novel_reader__update_reading_progress_impl(
+        160 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
+        161 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
+        162 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
+        163 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
+        164 => wire__crate__api__novel_reader__update_reading_progress_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        161 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
-        162 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
-        167 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
-        171 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
-        172 => {
+        165 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
+        166 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
+        171 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
+        175 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
+        176 => {
             wire__crate__api__websocket__ws_message_get_timestamp_impl(ptr, rust_vec_len, data_len)
         }
-        173 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
-        174 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
-        177 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
+        177 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
+        178 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
+        181 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
