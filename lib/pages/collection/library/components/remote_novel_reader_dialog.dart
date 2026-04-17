@@ -109,7 +109,7 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                           width: 280,
                           child: ListView.separated(
                             itemCount: _chapters.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, _) => const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final title = (_chapters[index]['title'] ?? '章节 ${index + 1}')
                                   .toString();
@@ -499,7 +499,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                       ? const Center(child: CircularProgressIndicator())
                       : ListView.separated(
                           itemCount: _chapters.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          separatorBuilder: (_, _) => const Divider(height: 1),
                           itemBuilder: (context, index) {
                             final title = _chapterTitleAt(index);
                             return ListTile(

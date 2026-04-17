@@ -293,7 +293,7 @@ class NovelReaderViewModel extends GetxController {
       // 更新阅读进度
       final progress = (index + 1) / chapters.length;
       updateReadingProgress(novelId: novel.id, progress: progress);
-      print(
+      debugPrint(
         '[Reader] Updated progress for ${novel.title} to ${(progress * 100).toStringAsFixed(1)}% (chapter ${index + 1}/${chapters.length})',
       );
 

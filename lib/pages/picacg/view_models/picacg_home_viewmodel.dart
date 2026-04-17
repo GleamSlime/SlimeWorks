@@ -1,4 +1,4 @@
-/// PicACG 主页 ViewModel
+// PicACG 主页 ViewModel
 
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';

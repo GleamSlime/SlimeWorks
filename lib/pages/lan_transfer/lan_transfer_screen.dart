@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/pages/lan_transfer/components/device_list.dart';
 import 'package:slime_works/pages/lan_transfer/components/pending_requests.dart';
@@ -420,6 +419,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// 工具栏：显示本机状态 + 设备数量徽章 + 服务开关
+// ignore: unused_element
 class _LanTransferToolbar extends StatelessWidget {
   final LanTransferViewModel viewModel;
   final VoidCallback onOpenDeviceSheet;

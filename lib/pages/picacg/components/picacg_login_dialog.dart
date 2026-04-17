@@ -1,4 +1,4 @@
-/// PicACG 登录对话框组件
+// PicACG 登录对话框组件
 
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';

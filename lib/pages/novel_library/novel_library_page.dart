@@ -35,6 +35,7 @@ class NovelLibraryPage extends StatelessWidget {
       ],
     ).then((value) {
       if (value == 'move_to_folder') {
+        // ignore: use_build_context_synchronously
         _showMoveToFolderDialog(context, novel);
       } else if (value == 'delete') {
         Get.find<NovelLibraryViewModel>().deleteNovel(novel.id);
@@ -111,7 +112,7 @@ class NovelLibraryPage extends StatelessWidget {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor.withOpacity(0.1),
+                          color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -147,7 +148,7 @@ class NovelLibraryPage extends StatelessWidget {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -178,7 +179,7 @@ class NovelLibraryPage extends StatelessWidget {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
+                          color: Colors.blue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(
@@ -440,9 +441,10 @@ class NovelLibraryPage extends StatelessWidget {
                           ),
                         ),
                         child: DragTarget<NovelMetadata>(
-                          onWillAccept: (data) => data != null && data.id != novel.id,
-                          onAccept: (draggedNovel) {
+                          onWillAcceptWithDetails: (details) => details.data.id != novel.id,
+                          onAcceptWithDetails: (details) {
                             // 重新排序：将拖拽的书籍移动到目标位置
+                            final draggedNovel = details.data;
                             final draggedIndex = displayNovels.indexWhere(
                               (n) => n.id == draggedNovel.id,
                             );

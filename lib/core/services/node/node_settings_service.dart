@@ -464,7 +464,7 @@ class NodeSettingsService extends GetxService {
     final response = await _callNode(
       node: node,
       action: parentId == null ? 'create_media_folder' : 'create_child_media_folder',
-      params: <String, dynamic>{'name': name, if (parentId != null) 'parent_id': parentId},
+      params: <String, dynamic>{'name': name, 'parent_id': ?parentId},
     );
     return Map<String, dynamic>.from(response['data'] as Map<dynamic, dynamic>);
   }
@@ -647,9 +647,13 @@ class NodeSettingsService extends GetxService {
       action: 'update_novel_info',
       params: <String, dynamic>{
         'novel_id': novelId,
+        // ignore: use_null_aware_elements
         if (title != null) 'title': title,
+        // ignore: use_null_aware_elements
         if (author != null) 'author': author,
+        // ignore: use_null_aware_elements
         if (notes != null) 'notes': notes,
+        // ignore: use_null_aware_elements
         if (tags != null) 'tags': tags,
       },
     );

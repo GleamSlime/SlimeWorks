@@ -536,10 +536,12 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                     width: MediaQuery.of(context).size.width / 2,
                     height: 50,
                   );
-            Share.shareXFiles(
-              [XFile(item.filePath!)],
-              subject: item.fileName ?? '互传文件',
-              sharePositionOrigin: origin,
+            SharePlus.instance.share(
+              ShareParams(
+                files: [XFile(item.filePath!)],
+                subject: item.fileName ?? '互传文件',
+                sharePositionOrigin: origin,
+              ),
             );
           }
         },
@@ -728,10 +730,12 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 color: isDark ? DarkColors.white80 : LightColors.black80,
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  Share.shareXFiles(
-                    [XFile(item.filePath!)],
-                    subject: item.fileName ?? '互传文件',
-                    sharePositionOrigin: shareOrigin,
+                  SharePlus.instance.share(
+                    ShareParams(
+                      files: [XFile(item.filePath!)],
+                      subject: item.fileName ?? '互传文件',
+                      sharePositionOrigin: shareOrigin,
+                    ),
                   );
                 },
               ),
@@ -909,7 +913,7 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
                               title: const Text('分享到...'),
                               onTap: () {
                                 Navigator.of(ctx).pop();
-                                Share.shareXFiles([XFile(widget.filePath)], subject: widget.title);
+                                SharePlus.instance.share(ShareParams(files: [XFile(widget.filePath)], subject: widget.title));
                               },
                             ),
                           ],
@@ -974,7 +978,7 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
             width: MediaQuery.of(context).size.width / 2,
             height: 50,
           );
-    Share.shareXFiles([XFile(widget.filePath)], subject: widget.title, sharePositionOrigin: origin);
+    SharePlus.instance.share(ShareParams(files: [XFile(widget.filePath)], subject: widget.title, sharePositionOrigin: origin));
   }
 
   @override

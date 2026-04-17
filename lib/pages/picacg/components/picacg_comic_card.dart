@@ -1,4 +1,4 @@
-/// PicACG 漫画卡片组件
+// PicACG 漫画卡片组件
 
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/theme/app_theme.dart';

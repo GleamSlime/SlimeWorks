@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/dialogs/confirm_dialog.dart';
-import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -94,7 +93,7 @@ class CollectionDetailSection extends StatelessWidget {
               final route = PageRouteBuilder<void>(
                 opaque: true,
                 barrierColor: Colors.black,
-                pageBuilder: (_, __, ___) => MediaViewerPage(
+                pageBuilder: (_, _, _) => MediaViewerPage(
                   items: sortedItems,
                   initialIndex: index,
                   collectionId: collectionId,
@@ -102,7 +101,7 @@ class CollectionDetailSection extends StatelessWidget {
                 ),
                 transitionDuration: const Duration(milliseconds: 280),
                 reverseTransitionDuration: const Duration(milliseconds: 240),
-                transitionsBuilder: (_, animation, __, child) => FadeTransition(
+                transitionsBuilder: (_, animation, _, child) => FadeTransition(
                   opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
                   child: ScaleTransition(
                     scale: Tween<double>(begin: 0.93, end: 1.0).animate(

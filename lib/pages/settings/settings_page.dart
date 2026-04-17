@@ -54,6 +54,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
         title: '设置',
         toolbarHeight: AppTheme.metrics.kSpace48,
         toolbar: TabBar(
+          tabAlignment: TabAlignment.start,
           controller: _controller,
           isScrollable: true,
           dividerHeight: 0,
@@ -79,6 +80,7 @@ class _ResourcesSettingsTab extends StatelessWidget {
       child: Column(
         children: [
           const TabBar(
+                tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: '媒体设置'),
               Tab(text: '书籍设置'),

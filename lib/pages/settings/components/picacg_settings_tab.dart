@@ -188,13 +188,19 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                 ),
                 SizedBox(height: m.kSpace8),
                 // 每个节点 radio + 测速结果
-                for (final mode in PicAcgChannelMode.values)
-                  _ChannelRadioTile(
-                    mode: mode,
-                    groupValue: _channel,
-                    latency: _latencyMap[mode],
-                    onChanged: _applyChannel,
+                RadioGroup<PicAcgChannelMode>(
+                  groupValue: _channel,
+                  onChanged: (v) => v != null ? _applyChannel(v) : null,
+                  child: Column(
+                    children: [
+                      for (final mode in PicAcgChannelMode.values)
+                        _ChannelRadioTile(
+                          mode: mode,
+                          latency: _latencyMap[mode],
+                        ),
+                    ],
                   ),
+                ),
                 // CDN分流 自定义 IP 输入框
                 AnimatedSize(
                   duration: const Duration(milliseconds: 200),
@@ -332,14 +338,20 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                   ),
                 ),
                 SizedBox(height: m.kSpace8),
-                for (final server in _imageServers)
-                  RadioListTile<String>(
-                    title: Text(server),
-                    value: server,
-                    groupValue: _imageServer,
-                    dense: true,
-                    onChanged: (v) => v != null ? _applyImageServer(v) : null,
+                RadioGroup<String>(
+                  groupValue: _imageServer,
+                  onChanged: (v) => v != null ? _applyImageServer(v) : null,
+                  child: Column(
+                    children: [
+                      for (final server in _imageServers)
+                        RadioListTile<String>(
+                          title: Text(server),
+                          value: server,
+                          dense: true,
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -425,14 +437,10 @@ class _AccountCard extends StatelessWidget {
 
 class _ChannelRadioTile extends StatelessWidget {
   final PicAcgChannelMode mode;
-  final PicAcgChannelMode groupValue;
   final int? latency; // null=未测, -1=测速中, -2=不可达, >=0=ms
-  final ValueChanged<PicAcgChannelMode> onChanged;
 
   const _ChannelRadioTile({
     required this.mode,
-    required this.groupValue,
-    required this.onChanged,
     this.latency,
   });
 
@@ -474,10 +482,8 @@ class _ChannelRadioTile extends StatelessWidget {
       title: Text(mode.label),
       subtitle: Text(_subtitles[mode] ?? ''),
       value: mode,
-      groupValue: groupValue,
       dense: true,
       secondary: trailing,
-      onChanged: (v) => v != null ? onChanged(v) : null,
     );
   }
 }

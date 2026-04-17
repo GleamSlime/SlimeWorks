@@ -71,50 +71,6 @@
 
 ---
 
-## 页面头部（Chrome）规范
-
-> **重要**：禁止使用 `Scaffold(appBar: AppBar(...))` 定义页面头部，否则会与桌面/移动端统一布局叠加出现双头部。
-
-### 正确用法
-
-```dart
-// 在页面 Widget 树中包裹 ScreenChrome，即可自动注册到顶部导航区域
-return ScreenChrome(
-  data: ScreenChromeData(
-    title: '页面标题',              // 文字标题（移动端标准标题栏显示）
-    toolbarHeight: AppTheme.metrics.kSpace48,  // 自定义工具栏高度
-    toolbar: _MyToolbarWidget(),  // 自定义工具栏内容（桌面端右上角，移动端标题栏下方）
-    leading: _buildLeading(),     // 返回按钮等左侧内容（桌面端左上角）
-    actions: [_buildActions()],   // 右侧操作按钮（桌面端右上角）
-    bottomBar: _MyBottomBar(),    // 标题底部状态（录制中...，子标题，子状态等）
-    bottomBarHeight: AppTheme.metrics.kSpace56,
-  ),
-  child: /* 页面内容 */,
-);
-```
-
-### `ScreenChromeData` 字段说明
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `title` | `String?` | 页面标题（移动端 AppBar 中央文字） |
-| `titleWidget` | `Widget?` | 自定义标题组件（优先于 title） |
-| `leading` | `Widget?` | 左侧内容（桌面端显示；移动端忽略） |
-| `toolbar` | `Widget?` | 自定义工具栏（桌面端右上角；移动端显示在标题行下方） |
-| `toolbarHeight` | `double?` | toolbar 高度（必须设置才生效） |
-| `actions` | `List<Widget>` | 右侧操作按钮列表 |
-| `bottomBar` | `Widget?` | 底部工具栏内容 |
-| `bottomBarHeight` | `double?` | bottomBar 高度 |
-| `enableMobileImmersiveMode` | `bool` | 是否允许向上滑动进入沉浸模式 |
-
-### 在全屏/独立 Material 弹窗中使用 AppBar
-
-以下场景是**唯一允许使用** `AppBar` 的情况：
-
-- 图片全屏预览（`_ImagePreviewPage`）、视频全屏预览（`_VideoPreviewPage`）等**通过 `Navigator.push` 进入的全屏遮盖页面**，此类页面脱离了 `DesktopLayout` 的 Chrome 体系，可以直接使用原生 `AppBar`。
-- 颜色必须设为透明（`backgroundColor: Colors.transparent, elevation: 0`）。
-
----
 
 ## 响应式设计规范
 

@@ -167,7 +167,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _settingsService!.defaultModel.value.isEmpty
+                      initialValue: _settingsService!.defaultModel.value.isEmpty
                           ? null
                           : _settingsService!.defaultModel.value,
                       decoration: const InputDecoration(

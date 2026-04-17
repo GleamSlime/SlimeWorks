@@ -32,8 +32,8 @@ class GooeyDropdownDemoPage extends StatelessWidget {
               cardOffset: 30,
               direction: DropdownDirection.left,
               content: const _MessageContent(),
-              onOpen: () => print('打开了消息卡片'),
-              onClose: () => print('关闭了消息卡片'),
+              onOpen: () => debugPrint('打开了消息卡片'),
+              onClose: () => debugPrint('关闭了消息卡片'),
             ),
 
             const SizedBox(height: 80),
@@ -48,8 +48,8 @@ class GooeyDropdownDemoPage extends StatelessWidget {
               cardRadius: 12,
               cardOffset: 10,
               duration: const Duration(milliseconds: 1000),
-              onOpen: () => print('打开了菜单'),
-              onClose: () => print('关闭了菜单'),
+              onOpen: () => debugPrint('打开了菜单'),
+              onClose: () => debugPrint('关闭了菜单'),
             ),
             const SizedBox(height: 80),
 
@@ -76,8 +76,8 @@ class GooeyDropdownDemoPage extends StatelessWidget {
               cardOffset: 30,
               direction: DropdownDirection.left,
               content: const _MessageContent(),
-              onOpen: () => print('打开了消息卡片'),
-              onClose: () => print('关闭了消息卡片'),
+              onOpen: () => debugPrint('打开了消息卡片'),
+              onClose: () => debugPrint('关闭了消息卡片'),
               duration: const Duration(milliseconds: 250),
             ),
           ],
@@ -190,7 +190,7 @@ class _MenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => print('点击了 $label'),
+      onTap: () => debugPrint('点击了 $label'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: FittedBox(

@@ -1,7 +1,7 @@
-/// PicACG 服务层
-///
-/// 封装 Rust FFI 调用，提供高层业务 API
-/// 使用 GetIt 注入，全局单例
+// PicACG 服务层
+//
+// 封装 Rust FFI 调用，提供高层业务 API
+// 使用 GetIt 注入，全局单例
 
 import 'dart:collection';
 import 'dart:convert';
@@ -391,7 +391,7 @@ class PicAcgService {
     int page = 1,
     PicAcgSortOrder sort = PicAcgSortOrder.dateDescending,
   }) async {
-    logger.info('PicACG 按分类: $category, 第${page}页');
+    logger.info('PicACG 按分类: $category, 第$page页');
     final json = await rust.picacgGetComicsByCategory(
       category: category,
       page: page,
@@ -410,7 +410,7 @@ class PicAcgService {
     int page = 1,
     PicAcgSortOrder sort = PicAcgSortOrder.dateDescending,
   }) async {
-    logger.info('PicACG 搜索: "$keyword", 第${page}页');
+    logger.info('PicACG 搜索: "$keyword", 第$page页');
     final json = await rust.picacgSearchComics(
       keyword: keyword,
       categories: categories,
@@ -480,7 +480,7 @@ class PicAcgService {
 
   /// 获取章节列表
   Future<PicAcgEpsList> getComicEps(String comicId, {int page = 1}) async {
-    logger.info('PicACG 章节列表: $comicId, 第${page}页');
+    logger.info('PicACG 章节列表: $comicId, 第$page页');
     final json = await rust.picacgGetComicEps(comicId: comicId, page: page);
     final data = jsonDecode(json) as Map<String, dynamic>;
     return PicAcgEpsList.fromJson(data);
@@ -488,7 +488,7 @@ class PicAcgService {
 
   /// 获取章节图片
   Future<PicAcgPageList> getEpsPages(String comicId, int epsOrder, {int page = 1}) async {
-    logger.info('PicACG 章节图片: $comicId, 第${epsOrder}集, 第${page}页');
+    logger.info('PicACG 章节图片: $comicId, 第$epsOrder集, 第$page页');
     final json = await rust.picacgGetEpsPages(comicId: comicId, epsOrder: epsOrder, page: page);
     final data = jsonDecode(json) as Map<String, dynamic>;
     return PicAcgPageList.fromJson(data);
@@ -501,7 +501,7 @@ class PicAcgService {
     int page = 1,
     PicAcgSortOrder sort = PicAcgSortOrder.dateDescending,
   }) async {
-    logger.info('PicACG 收藏列表: 第${page}页');
+    logger.info('PicACG 收藏列表: 第$page页');
     final json = await rust.picacgGetFavourites(page: page, sort: sort.value);
     final data = jsonDecode(json) as Map<String, dynamic>;
     return PicAcgComicList.fromJson(data);

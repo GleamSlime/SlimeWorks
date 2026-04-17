@@ -321,8 +321,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 420),
         reverseTransitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (_, __, ___) => page,
-        transitionsBuilder: (_, animation, __, child) {
+        pageBuilder: (_, _, _) => page,
+        transitionsBuilder: (_, animation, _, child) {
           final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
           return Stack(
             children: [
@@ -544,8 +544,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                           alignment: WrapAlignment.end,
                                           children: displayTags
                                               .map(
-                                                (tag) => Container(
-                                                  child: GestureDetector(
+                                                (tag) => GestureDetector(
                                                     onTap: tag.startsWith('章节 ')
                                                         ? null
                                                         : () => _onTagTap(tag),
@@ -568,7 +567,6 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                                       ),
                                                     ),
                                                   ),
-                                                ),
                                               )
                                               .toList(growable: false),
                                         );

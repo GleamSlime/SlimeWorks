@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
-import 'package:slime_works/src/rust/api/novel_reader.dart' show SearchMatch;
 
 /// 构建纯文本模式下带搜索高亮的文本
 Widget buildHighlightedText({
@@ -69,7 +68,7 @@ Widget buildHighlightedText({
       final snippetLines = match.snippet.split(RegExp(r'[\n\r]'));
       if (snippetLines.isNotEmpty) {
         final firstLine = snippetLines.first;
-        final tokenMatch = RegExp(r'\S+').firstMatch(firstLine ?? '');
+        final tokenMatch = RegExp(r'\S+').firstMatch(firstLine);
         searchKeyword = tokenMatch != null ? tokenMatch.group(0)!.trim() : firstLine.trim();
       }
     }
@@ -150,8 +149,8 @@ Widget buildHighlightedText({
           height: 1.8,
           letterSpacing: 0.5,
           backgroundColor: isSelected
-              ? Colors.orange.withOpacity(0.5)
-              : Colors.yellow.withOpacity(0.3),
+              ? Colors.orange.withValues(alpha: 0.5)
+              : Colors.yellow.withValues(alpha: 0.3),
           color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
         ),
@@ -182,7 +181,7 @@ Widget buildHighlightedText({
   return SelectableText.rich(TextSpan(children: spans), textAlign: TextAlign.justify);
 }
 
-/// 对 HTML 内容做关键词高亮（插入 <mark>/<mark_selected> 标签）
+/// 对 HTML 内容做关键词高亮（插入 `mark`/`mark_selected` 标签）
 String highlightHtml(String html, String keyword, {int? selectedOccurrence}) {
   if (keyword.isEmpty) return html;
 
@@ -455,7 +454,7 @@ String processHtmlForCompute(Map params) {
     final bool embedImages = params['embedImages'] == true;
 
     debugPrint(
-      '[Isolate] processHtmlForCompute started: ${htmlLenKB}KB, keyword="${keyword}", embedImages=$embedImages',
+      '[Isolate] processHtmlForCompute started: ${htmlLenKB}KB, keyword="$keyword", embedImages=$embedImages',
     );
 
     // Step 1: Highlight

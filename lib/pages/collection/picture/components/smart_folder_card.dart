@@ -129,13 +129,13 @@ class SmartFolderCard extends StatelessWidget {
                           ? Image.network(
                               src,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const _SmartPlaceholder(),
+                              errorBuilder: (_, _, _) => const _SmartPlaceholder(),
                             )
                           : Image.file(
                               File(src),
                               fit: BoxFit.cover,
                               cacheWidth: cacheW,
-                              errorBuilder: (_, __, ___) => const _SmartPlaceholder(),
+                              errorBuilder: (_, _, _) => const _SmartPlaceholder(),
                             ),
                       if (kDebugMode)
                         Positioned(right: 4, bottom: 4, child: DebugImageSizeBadge(src: src)),

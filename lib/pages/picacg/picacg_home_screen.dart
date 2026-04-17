@@ -1,4 +1,4 @@
-/// PicACG 主页
+// PicACG 主页
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -88,7 +88,7 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                                     child: CircularProgressIndicator(strokeWidth: 1.5),
                                   ),
                                 ),
-                                errorBuilder: (_, __, ___) =>
+                                errorBuilder: (_, _, _) =>
                                     const Icon(Icons.account_circle_outlined),
                               )
                             : const Icon(Icons.account_circle_outlined, size: 28),

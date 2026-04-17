@@ -33,7 +33,7 @@ class _ThumbTask {
 /// - [cancelGroup]：批量取消一批 key。
 /// - [onTaskComplete]：每次任务完成（无论成功/取消/异常）时调用的回调。
 class VideoThumbQueue {
-  VideoThumbQueue({int concurrency = 2}) : concurrency = concurrency;
+  VideoThumbQueue({this.concurrency = 2});
 
   int concurrency;
   int _running = 0;

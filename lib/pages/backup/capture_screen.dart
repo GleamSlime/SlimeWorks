@@ -45,7 +45,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    _loadCapturedData().catchError((e) => print('Load data error: $e'));
+    _loadCapturedData().catchError((e) => debugPrint('Load data error: $e'));
     _checkProxyStatus();
     _checkCertificateStatus();
     _loadAvailableVideos();
@@ -80,7 +80,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
           try {
             thumbnailPath = await generateVideoThumbnail(videoUrl: url, cacheDir: cacheDir.path);
           } catch (e) {
-            print('生成缩略图失败 $url: $e');
+            debugPrint('生成缩略图失败 $url: $e');
           }
 
           tasks.add(
@@ -95,7 +95,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
             ),
           );
         } catch (e) {
-          print('处理视频失败 $url: $e');
+          debugPrint('处理视频失败 $url: $e');
           // 如果获取元数据失败，使用默认值
           tasks.add(
             RecordingTask(
@@ -225,7 +225,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         // 启动定时刷新（每2秒刷新一次数据）
         _refreshTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
           if (mounted) {
-            _loadCapturedData().catchError((e) => print('Refresh error: $e'));
+            _loadCapturedData().catchError((e) => debugPrint('Refresh error: $e'));
           }
         });
       }
@@ -427,7 +427,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       decoration: BoxDecoration(
                         color: _isCapturing ? Colors.green : Colors.grey,
                         shape: BoxShape.circle,
-                        boxShadow: _isCapturing ? [BoxShadow(color: Colors.green.withOpacity(0.5), blurRadius: 12, spreadRadius: 2)] : null,
+                        boxShadow: _isCapturing ? [BoxShadow(color: Colors.green.withValues(alpha: 0.5), blurRadius: 12, spreadRadius: 2)] : null,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -440,9 +440,9 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _isCertInstalled ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                        color: _isCertInstalled ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _isCertInstalled ? Colors.green.withOpacity(0.3) : Colors.orange.withOpacity(0.3)),
+                        border: Border.all(color: _isCertInstalled ? Colors.green.withValues(alpha: 0.3) : Colors.orange.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -620,7 +620,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
           ),
           child: Row(
@@ -992,7 +992,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                        decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                         child: Row(
                           children: [
                             const Icon(Icons.error_outline, size: 14, color: Colors.red),

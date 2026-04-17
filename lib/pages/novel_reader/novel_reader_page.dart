@@ -7,10 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
-import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
-import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
@@ -33,9 +31,11 @@ class NovelReaderPage extends StatefulWidget {
 class _NovelReaderPageState extends State<NovelReaderPage> {
   late final NovelMetadata novel;
   late final NovelReaderViewModel controller;
-  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
   Timer? _immersiveTimer;
   Color _readerBgColor = const Color(0xFFF6F0E7);
+
+  /// 本地沉浸模式状态（替代全局 DesktopScreenProvider.mobileImmersiveMode）
+  final RxBool _isImmersive = false.obs;
 
   @override
   void initState() {
@@ -49,6 +49,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   @override
   void dispose() {
     _immersiveTimer?.cancel();
+    _isImmersive.close();
     try {
       Get.delete<NovelReaderViewModel>(tag: novel.id);
     } catch (_) {}
@@ -59,14 +60,14 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     _immersiveTimer?.cancel();
     _immersiveTimer = Timer(const Duration(seconds: 30), () {
       if (!mounted) return;
-      _desktopScreen.setMobileImmersiveMode(true);
+      _isImmersive.value = true;
     });
   }
 
   void _exitImmersiveMode() {
     _immersiveTimer?.cancel();
-    if (!mounted || !_desktopScreen.mobileImmersiveMode.value) return;
-    _desktopScreen.setMobileImmersiveMode(false);
+    if (!mounted || !_isImmersive.value) return;
+    _isImmersive.value = false;
   }
 
   void _showReaderSettingsSheet() {
@@ -208,7 +209,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   EdgeInsets _mobileReaderContentPadding(BuildContext context) {
     final mediaPadding = MediaQuery.paddingOf(context);
     final immersivePadding = _mobileReaderImmersivePadding();
-    final isImmersiveMode = _desktopScreen.mobileImmersiveMode.value;
+    final isImmersiveMode = _isImmersive.value;
 
     return EdgeInsets.fromLTRB(
       AppTheme.metrics.kSpace16,
@@ -220,31 +221,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     );
   }
 
-  ScreenChromeData _buildMobileScreenChromeData(bool showChapterList) {
-    return ScreenChromeData(
-      title: _mobileLayoutTitle(),
-      enableMobileImmersiveMode: true,
-      mobileBodyHandlesInsets: true,
-      mobileImmersivePadding: _mobileReaderImmersivePadding(),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/collection/library');
-          }
-        },
-      ),
-      bottomBarHeight: _mobileReaderBottomBarHeight(),
-      bottomBar: _MobileReaderBottomBar(
-        controller: controller,
-        onShowBookInfo: _showBookInfoDialog,
-        onShowReaderSettings: _showReaderSettingsSheet,
-        novel: novel,
-      ),
-    );
-  }
+  static const Duration _kOverlayAnim = Duration(milliseconds: 180);
 
   @override
   Widget build(BuildContext context) {
@@ -294,80 +271,178 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
 
   Widget _buildContent(BuildContext context, bool isNarrow) {
     if (isNarrow) {
-      // 移动端布局：章节列表使用抽屉
+      // 移动端布局：Stack 覆盖层管理 AppBar / BottomBar，支持沉浸模式动画
       return Obx(() {
         final showChapterList = controller.showChapterList.value;
+        final theme = Theme.of(context);
 
-        return ScreenChrome(
-          data: _buildMobileScreenChromeData(showChapterList),
-          child: Scaffold(
-            body: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _scheduleImmersiveMode,
-              child: Stack(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    color: _readerBgColor,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: NotificationListener<UserScrollNotification>(
-                            onNotification: (notification) {
-                              if (notification.direction == ScrollDirection.reverse) {
-                                _scheduleImmersiveMode();
-                              } else if (notification.direction == ScrollDirection.forward) {
-                                _exitImmersiveMode();
-                              }
-                              return false;
-                            },
-                            child: Obx(() {
-                              if (controller.isLoading.value) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
+        return Scaffold(
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _scheduleImmersiveMode,
+            child: Stack(
+              children: [
+                // ── 内容区 ──────────────────────────────────────────────────
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  color: _readerBgColor,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: NotificationListener<UserScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification.direction == ScrollDirection.reverse) {
+                              _scheduleImmersiveMode();
+                            } else if (notification.direction == ScrollDirection.forward) {
+                              _exitImmersiveMode();
+                            }
+                            return false;
+                          },
+                          child: Obx(() {
+                            if (controller.isLoading.value) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (controller.errorMessage.value.isNotEmpty) {
+                              return _buildErrorView();
+                            }
+                            return ReaderContent(
+                              controller: controller,
+                              contentPadding: _mobileReaderContentPadding(context),
+                              onSwipeToPreviousChapter: controller.hasPreviousChapter()
+                                  ? controller.previousChapter
+                                  : null,
+                              onSwipeToNextChapter: controller.hasNextChapter()
+                                  ? controller.nextChapter
+                                  : null,
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
-                              if (controller.errorMessage.value.isNotEmpty) {
-                                return _buildErrorView();
-                              }
-
-                              return ReaderContent(
-                                controller: controller,
-                                contentPadding: _mobileReaderContentPadding(context),
-                                onSwipeToPreviousChapter: controller.hasPreviousChapter()
-                                    ? controller.previousChapter
-                                    : null,
-                                onSwipeToNextChapter: controller.hasNextChapter()
-                                    ? controller.nextChapter
-                                    : null,
-                              );
-                            }),
+                // ── 顶部 AppBar 覆盖层（沉浸时上滑隐藏）─────────────────────
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Obx(() {
+                    final isImmersive = _isImmersive.value;
+                    return IgnorePointer(
+                      ignoring: isImmersive,
+                      child: AnimatedSlide(
+                        duration: _kOverlayAnim,
+                        curve: Curves.easeOutCubic,
+                        offset: isImmersive ? const Offset(0, -1) : Offset.zero,
+                        child: Material(
+                          color: theme.colorScheme.surface,
+                          elevation: 4,
+                          child: SafeArea(
+                            bottom: false,
+                            child: SizedBox(
+                              height: AppTheme.metrics.kSpace48,
+                              child: AppBar(
+                                primary: false,
+                                toolbarHeight: AppTheme.metrics.kSpace48,
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                leading: IconButton(
+                                  icon: const Icon(Icons.arrow_back),
+                                  onPressed: () {
+                                    if (context.canPop()) {
+                                      context.pop();
+                                    } else {
+                                      context.go('/collection/library');
+                                    }
+                                  },
+                                ),
+                                centerTitle: true,
+                                title: Obx(
+                                  () => Text(
+                                    _mobileLayoutTitle(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                actions: [
+                                  IconButton(
+                                    icon: const Icon(Icons.list),
+                                    tooltip: '章节列表',
+                                    onPressed: () {
+                                      _exitImmersiveMode();
+                                      controller.toggleChapterList();
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.settings_outlined),
+                                    tooltip: '阅读设置',
+                                    onPressed: _showReaderSettingsSheet,
+                                  ),
+                                ],
+                                actionsPadding: EdgeInsets.zero,
+                              ),
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  if (showChapterList)
-                    Positioned.fill(
-                      child: GestureDetector(
-                        onTap: () {
-                          _exitImmersiveMode();
-                          controller.toggleChapterList();
-                        },
-                        child: Container(
-                          color: Colors.black54,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: GestureDetector(
-                              onTap: () {},
-                              child: SizedBox(
-                                width: MediaQuery.of(context).size.width * 0.75,
-                                child: Material(
-                                  color: Theme.of(context).colorScheme.surface,
-                                  child: Column(
-                                    children: [
-                                      Expanded(child: ChapterList(controller: controller)),
-                                    ],
-                                  ),
+                      ),
+                    );
+                  }),
+                ),
+
+                // ── 底部 BottomBar 覆盖层（沉浸时下滑隐藏）──────────────────
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Obx(() {
+                    final isImmersive = _isImmersive.value;
+                    return IgnorePointer(
+                      ignoring: isImmersive,
+                      child: AnimatedSlide(
+                        duration: _kOverlayAnim,
+                        curve: Curves.easeOutCubic,
+                        offset: isImmersive ? const Offset(0, 1) : Offset.zero,
+                        child: Material(
+                          color: theme.colorScheme.surface,
+                          elevation: 8,
+                          child: SafeArea(
+                            top: false,
+                            child: _MobileReaderBottomBar(
+                              controller: controller,
+                              onShowBookInfo: _showBookInfoDialog,
+                              onShowReaderSettings: _showReaderSettingsSheet,
+                              novel: novel,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+
+                // ── 章节列表抽屉覆盖层 ────────────────────────────────────────
+                if (showChapterList)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () {
+                        _exitImmersiveMode();
+                        controller.toggleChapterList();
+                      },
+                      child: Container(
+                        color: Colors.black54,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: GestureDetector(
+                            onTap: () {},
+                            child: SizedBox(
+                              width: MediaQuery.of(context).size.width * 0.75,
+                              child: Material(
+                                color: theme.colorScheme.surface,
+                                child: Column(
+                                  children: [
+                                    Expanded(child: ChapterList(controller: controller)),
+                                  ],
                                 ),
                               ),
                             ),
@@ -375,8 +450,8 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         );

@@ -151,7 +151,7 @@ class PicAcgHistoryViewModel extends BaseViewModel {
 
       final encoded = jsonEncode(list.map((e) => e.toJson()).toList());
       rust.picacgSaveHistoryRaw(json: encoded);
-      logger.info('保存观看记录成功: $comicTitle 第${epsOrder}话');
+      logger.info('保存观看记录成功: $comicTitle 第$epsOrder话');
     } catch (e) {
       logger.error('保存观看记录失败: $e');
     }

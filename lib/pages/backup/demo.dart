@@ -51,7 +51,7 @@ class _GooeyDropdownDemoState extends State<GooeyDropdownDemo> with SingleTicker
         // 在整个body上监听点击，用于关闭卡片
         onTap: () {
           if (isOpen) {
-            print('背景被点击，关闭卡片');
+            debugPrint('背景被点击，关闭卡片');
             close();
           }
         },
@@ -146,7 +146,7 @@ class _GooeyDropdownDemoState extends State<GooeyDropdownDemo> with SingleTicker
                   left: 172,
                   child: GestureDetector(
                     onTap: () {
-                      print('按钮被点击');
+                      debugPrint('按钮被点击');
                       open();
                     },
                     child: Container(

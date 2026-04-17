@@ -83,7 +83,9 @@ class _ReaderContentState extends State<ReaderContent> {
         debugPrint(
           '[Reader] selectedSearchIndex changed: ${widget.controller.selectedSearchIndex.value}',
         );
-      } catch (e) {}
+      } catch (_) {
+        // 日志输出错误可忽略
+      }
       if (mounted) setState(() {});
     });
   }

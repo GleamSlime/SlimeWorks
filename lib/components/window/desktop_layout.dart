@@ -6,7 +6,6 @@ import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -208,323 +207,32 @@ class _DesktopTopBar extends StatelessWidget {
   }
 }
 
-class MobileLayout extends StatefulWidget {
+class MobileLayout extends StatelessWidget {
   final Widget child;
 
   const MobileLayout({super.key, required this.child});
 
   @override
-  State<MobileLayout> createState() => _MobileLayoutState();
-}
-
-class _MobileLayoutState extends State<MobileLayout> {
-  static const Duration _kChromeAnimationDuration = Duration(milliseconds: 180);
-  static const double _kTapSlop = 10;
-  static const double _kDownSwipeThreshold = 18;
-
-  final DesktopScreenProvider desktopScreen = getIt<DesktopScreenProvider>();
-  Offset? _pointerDownPosition;
-  Offset? _latestPointerPosition;
-
-  void _handlePointerDown(PointerDownEvent event) {
-    _pointerDownPosition = event.position;
-    _latestPointerPosition = event.position;
-  }
-
-  void _handlePointerMove(PointerMoveEvent event) {
-    _latestPointerPosition = event.position;
-  }
-
-  void _handlePointerCancel(PointerCancelEvent event) {
-    _pointerDownPosition = null;
-    _latestPointerPosition = null;
-  }
-
-  void _handlePointerUp(PointerUpEvent event) {
-    final Offset? start = _pointerDownPosition;
-    final Offset end = _latestPointerPosition ?? event.position;
-    _pointerDownPosition = null;
-    _latestPointerPosition = null;
-
-    if (start == null) {
-      return;
-    }
-
-    final Offset delta = end - start;
-    final ScreenChromeData chrome = desktopScreen.screenChrome.value.data;
-    if (!chrome.enableMobileImmersiveMode) {
-      return;
-    }
-
-    final bool isTap = delta.distance <= _kTapSlop;
-    final bool isDownSwipe = delta.dy >= _kDownSwipeThreshold && delta.dy.abs() > delta.dx.abs();
-    final bool isUpSwipe = delta.dy <= -_kDownSwipeThreshold && delta.dy.abs() > delta.dx.abs();
-    final bool isImmersiveMode = desktopScreen.mobileImmersiveMode.value;
-
-    if (isImmersiveMode) {
-      if (isTap) {
-        desktopScreen.setMobileImmersiveMode(false);
-      }
-      return;
-    }
-
-    if (isUpSwipe) {
-      return;
-    }
-    if (isTap || isDownSwipe) {
-      desktopScreen.setMobileImmersiveMode(true);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final chrome = desktopScreen.screenChrome.value.data;
-      final title = chrome.title ?? desktopScreen.title.value;
-      final sidebarExpandScale = desktopScreen.sidebarExpandScale.value;
-      final bool showToolbar = chrome.hasToolbar && sidebarExpandScale >= 1.0;
-      final bool showBottomBar = chrome.hasBottomBar && sidebarExpandScale >= 1.0;
-      final bool isImmersiveMode = desktopScreen.mobileImmersiveMode.value;
-      final bool bodyHandlesInsets = chrome.mobileBodyHandlesInsets;
-      final double safeTop = MediaQuery.paddingOf(context).top;
-      final double safeBottom = MediaQuery.paddingOf(context).bottom;
-      final double resolvedToolbarHeight = AppTheme.metrics.kSpace48;
-      final double resolvedBottomHeight = showToolbar
-          ? (chrome.toolbarHeight ?? AppTheme.metrics.kSpace24)
-          : 0;
-      final double chromeHeight = safeTop + resolvedToolbarHeight + resolvedBottomHeight;
-      final double bottomBarHeight = showBottomBar
-          ? (chrome.bottomBarHeight ?? (AppTheme.metrics.kSpace48 + AppTheme.metrics.kSpace8))
-          : 0;
-      final EdgeInsets immersivePadding = chrome.mobileImmersivePadding;
-      final double contentTopPadding = bodyHandlesInsets
-          ? 0
-          : (isImmersiveMode ? safeTop + immersivePadding.top : chromeHeight);
-      final double contentBottomPadding = bodyHandlesInsets
-          ? 0
-          : (isImmersiveMode ? safeBottom + immersivePadding.bottom : bottomBarHeight);
+      final sidebarExpandScale = getIt<DesktopScreenProvider>().sidebarExpandScale.value;
 
-      return Scaffold(
-        body: Stack(
-          children: [
-            Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: _handlePointerDown,
-              onPointerMove: _handlePointerMove,
-              onPointerUp: _handlePointerUp,
-              onPointerCancel: _handlePointerCancel,
-              child: AnimatedPadding(
-                duration: _kChromeAnimationDuration,
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(top: contentTopPadding, bottom: contentBottomPadding),
-                child: Stack(
-                  children: [
-                    AnimatedScale(
-                      scale: sidebarExpandScale,
-                      duration: sidebarExpandScale == 1.0 || sidebarExpandScale == 0.9
-                          ? const Duration(milliseconds: 200)
-                          : Duration.zero,
-                      curve: Curves.easeOutCubic,
-                      child: widget.child,
-                    ),
-                    CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),
-                  ],
-                ),
-              ),
-            ),
-            _MobileChromeOverlay(
-              chrome: chrome,
-              title: title,
-              showToolbar: showToolbar,
-              isImmersiveMode: isImmersiveMode,
-              toolbarHeight: resolvedToolbarHeight,
-              bottomHeight: resolvedBottomHeight,
-              animationDuration: _kChromeAnimationDuration,
-            ),
-            _MobileBottomOverlay(
-              chrome: chrome,
-              showBottomBar: showBottomBar,
-              isImmersiveMode: isImmersiveMode,
-              bottomBarHeight: bottomBarHeight,
-              animationDuration: _kChromeAnimationDuration,
-            ),
-          ],
-        ),
+      return Stack(
+        children: [
+          // 内容区（侧边栏展开时缩放）
+          AnimatedScale(
+            scale: sidebarExpandScale,
+            duration: sidebarExpandScale == 1.0 || sidebarExpandScale == 0.9
+                ? const Duration(milliseconds: 200)
+                : Duration.zero,
+            curve: Curves.easeOutCubic,
+            child: child,
+          ),
+          // 侧边栏悬浮层（由 CollapsibleSidebar 自行管理展开/收起）
+          CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),
+        ],
       );
     });
   }
 }
 
-class _MobileChromeOverlay extends StatelessWidget {
-  final ScreenChromeData chrome;
-  final String title;
-  final bool showToolbar;
-  final bool isImmersiveMode;
-  final double toolbarHeight;
-  final double bottomHeight;
-  final Duration animationDuration;
-
-  const _MobileChromeOverlay({
-    required this.chrome,
-    required this.title,
-    required this.showToolbar,
-    required this.isImmersiveMode,
-    required this.toolbarHeight,
-    required this.bottomHeight,
-    required this.animationDuration,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final double safeTop = MediaQuery.paddingOf(context).top;
-    final double totalHeight = safeTop + toolbarHeight + bottomHeight;
-    final ThemeData theme = Theme.of(context);
-
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        ignoring: isImmersiveMode,
-        child: ClipRect(
-          child: AnimatedContainer(
-            duration: animationDuration,
-            curve: Curves.easeOutCubic,
-            height: isImmersiveMode ? 0 : totalHeight,
-            child: OverflowBox(
-              alignment: Alignment.topCenter,
-              minHeight: totalHeight,
-              maxHeight: totalHeight,
-              child: AnimatedSlide(
-                duration: animationDuration,
-                curve: Curves.easeOutCubic,
-                offset: isImmersiveMode ? const Offset(0, -1) : Offset.zero,
-                child: Material(
-                  color:
-                      chrome.mobileAppBarColor ??
-                      theme.appBarTheme.backgroundColor ??
-                      theme.colorScheme.surface,
-                  elevation: 4,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SafeArea(
-                        bottom: false,
-                        child: SizedBox(
-                          height: toolbarHeight,
-                          child: AppBar(
-                            primary: false,
-                            toolbarHeight: toolbarHeight,
-                            leading: chrome.leading,
-                            centerTitle: true,
-                            title: chrome.titleWidget ?? Text(title),
-                            actions: chrome.hasActions ? chrome.actions : null,
-                            actionsPadding: EdgeInsets.zero,
-                            bottom: chrome.hasToolbar
-                                ? PreferredSize(
-                                    preferredSize: Size.fromHeight(bottomHeight),
-                                    child: chrome.toolbar!,
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                      if (showToolbar)
-                        SizedBox(
-                          height: bottomHeight,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppTheme.metrics.kSpace12,
-                              vertical: AppTheme.metrics.kSpace8,
-                            ),
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                reverse: true,
-                                child: chrome.toolbar ?? const SizedBox.shrink(),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileBottomOverlay extends StatelessWidget {
-  final ScreenChromeData chrome;
-  final bool showBottomBar;
-  final bool isImmersiveMode;
-  final double bottomBarHeight;
-  final Duration animationDuration;
-
-  const _MobileBottomOverlay({
-    required this.chrome,
-    required this.showBottomBar,
-    required this.isImmersiveMode,
-    required this.bottomBarHeight,
-    required this.animationDuration,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final double safeBottom = MediaQuery.paddingOf(context).bottom;
-    final double totalHeight = bottomBarHeight + safeBottom;
-    final ThemeData theme = Theme.of(context);
-
-    // debugPrint(
-    //   'Building MobileBottomOverlay: showBottomBar=$showBottomBar, isImmersiveMode=$isImmersiveMode, totalHeight=$totalHeight',
-    // );
-
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: IgnorePointer(
-        ignoring: isImmersiveMode || !showBottomBar,
-        child: ClipRect(
-          child: AnimatedContainer(
-            duration: animationDuration,
-            curve: Curves.easeOutCubic,
-            height: showBottomBar && !isImmersiveMode ? totalHeight : 0,
-            child: OverflowBox(
-              alignment: Alignment.bottomCenter,
-              minHeight: totalHeight,
-              maxHeight: totalHeight,
-              child: AnimatedSlide(
-                duration: animationDuration,
-                curve: Curves.easeOutCubic,
-                offset: showBottomBar && !isImmersiveMode ? Offset.zero : const Offset(0, 1),
-                child: Material(
-                  color:
-                      chrome.mobileAppBarColor ??
-                      theme.bottomAppBarTheme.color ??
-                      theme.colorScheme.surface,
-                  elevation: 8,
-                  child: SizedBox(
-                    height: totalHeight,
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: safeBottom),
-                      child: SizedBox(
-                        height: bottomBarHeight,
-                        child: chrome.bottomBar ?? const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -54,7 +54,7 @@ class _ChapterListState extends State<ChapterList> {
           color: Theme.of(context).cardColor,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(2, 0),
             ),
@@ -100,7 +100,7 @@ class _ChapterListState extends State<ChapterList> {
 
                     return Material(
                       color: isCurrent
-                          ? Theme.of(context).primaryColor.withOpacity(0.1)
+                          ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
                           : Colors.transparent,
                       child: InkWell(
                         onTap: () => widget.controller.goToChapter(index),
@@ -109,7 +109,7 @@ class _ChapterListState extends State<ChapterList> {
                           decoration: BoxDecoration(
                             border: Border(
                               bottom: BorderSide(
-                                color: Theme.of(context).dividerColor.withOpacity(0.3),
+                                color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
                               ),
                             ),
                           ),

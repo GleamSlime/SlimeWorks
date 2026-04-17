@@ -3,8 +3,7 @@ library;
 /// PicACG 漫画阅读器页面
 ///
 /// 支持纵向滚动阅读，图片逐张加载
-/// 顶部/底部 UI 通过 ScreenChrome 统一管理沉浸模式（点击/上划切换）
-/// 顶底颜色由 AppTheme 主题色统一决定
+/// AppBar/BottomBar 由页面内部 Stack 覆盖层直接管理，支持沉浸模式（点击切换）
 
 import 'dart:async';
 
@@ -12,11 +11,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
@@ -44,7 +42,9 @@ class PicAcgReaderScreen extends BasePage<PicAcgReaderViewModel> {
 
 class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicAcgReaderScreen> {
   final ScrollController _scrollController = ScrollController();
-  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
+
+  /// 本地沉浸模式状态（替代全局 DesktopScreenProvider.mobileImmersiveMode）
+  final RxBool _isImmersive = false.obs;
 
   /// 自动沉浸定时 Timer（定时进入）
   Timer? _autoImmersiveTimer;
@@ -62,52 +62,14 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   double _scrollUpAccum = 0;
 
   /// 历导当前章节已加载图片的高度缓存，防止 ListView 回收 Widget 后高度抖动
-  /// key: 页码索引（从 0 起）， value: 已渲染高度
   final Map<int, double> _pageHeights = {};
-
-  /// [Fix] 返回导航标志位：设置为 true 后阻止 initState 的延迟注册再次触发
-  /// 用于修复 “_handleBack 已清除 chrome 但 addPostFrameCallback 未执行
-  /// 导致阅读器头部残留到详情页” 的 race condition。
-  bool _backHandled = false;
 
   static const double _kImmersiveScrollThreshold = 100;
   static const double _kExitImmersiveScrollUp = 60;
-
-  ScreenChromeData _buildScreenChromeData() {
-    return ScreenChromeData(
-      titleWidget: Text(
-        widget.epsTitle.isNotEmpty ? widget.epsTitle : '第 ${widget.epsOrder} 话',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: _handleBack),
-      actions: [
-        IconButton(icon: const Icon(Icons.more_vert), onPressed: () => _showMoreMenu(context)),
-      ],
-      enableMobileImmersiveMode: true,
-      mobileBodyHandlesInsets: true,
-      bottomBarHeight: 56,
-      bottomBar: Obx(() {
-        if (viewModel.epsList.isEmpty) return const SizedBox.shrink();
-        return _ReaderBottomBar(
-          currentEps: viewModel.currentEpsOrder,
-          totalEps: viewModel.epsList.length,
-          onEpsTap: () => _showEpsSheet(context),
-          onSettingsTap: () => _showSettingsSheet(context),
-        );
-      }),
-    );
-  }
+  static const Duration _kOverlayAnim = Duration(milliseconds: 180);
 
   void _handleBack() {
-    // [Fix] 标记返回已处理，阻止此后 initState 延迟回调再次注册阅读器的 chrome
-    _backHandled = true;
-    // 立即清除本页注册的 chrome，防止动画期间顶底栏残留到上一页
-    _desktopScreen.clearScreenChrome(owner: this);
-    _desktopScreen.setMobileImmersiveMode(false);
-    // [Fix] 不在此处调用 setEnabledSystemUIMode，防止 Android 上
-    // 导航动画与系统 UI 变化并发触发 UI 卡死（需要切任务管理器解冻）。
-    // SystemUiMode 的恢复交由 dispose() 在动画结束后完成。
+    _isImmersive.value = false;
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
       return;
@@ -124,12 +86,6 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   @override
   void initState() {
     super.initState();
-    // 直接注册 chrome（以 this 为 owner），在 _handleBack 和 dispose 中可立即清除
-    // 这样 pop 动画期间不会残留阅读器的顶底栏
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _backHandled) return;
-      _desktopScreen.setScreenChrome(_buildScreenChromeData(), owner: this);
-    });
   }
 
   @override
@@ -146,19 +102,16 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
     final secs = viewModel.autoImmersiveSeconds.value;
     if (secs <= 0) return;
     _autoImmersiveTimer = Timer(Duration(seconds: secs), () {
-      if (mounted && !_desktopScreen.mobileImmersiveMode.value) {
-        _desktopScreen.setMobileImmersiveMode(true);
+      if (mounted && !_isImmersive.value) {
+        _isImmersive.value = true;
       }
     });
   }
 
   @override
   void dispose() {
-    _backHandled = true;
+    _isImmersive.close();
     _autoImmersiveTimer?.cancel();
-    // 兜底清除 chrome（正常情况下 _handleBack 已提前清除）
-    _desktopScreen.clearScreenChrome(owner: this);
-    _desktopScreen.setMobileImmersiveMode(false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scrollController.dispose();
     super.dispose();
@@ -180,18 +133,17 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
         // 向下
         _scrollUpAccum = 0;
         _scrollDownAccum += delta;
-        if (_scrollDownAccum >= _kImmersiveScrollThreshold &&
-            !_desktopScreen.mobileImmersiveMode.value) {
+        if (_scrollDownAccum >= _kImmersiveScrollThreshold && !_isImmersive.value) {
           _scrollDownAccum = 0;
-          _desktopScreen.setMobileImmersiveMode(true);
+          _isImmersive.value = true;
         }
       } else if (delta < 0) {
         // 向上
         _scrollDownAccum = 0;
         _scrollUpAccum += (-delta);
-        if (_scrollUpAccum >= _kExitImmersiveScrollUp && _desktopScreen.mobileImmersiveMode.value) {
+        if (_scrollUpAccum >= _kExitImmersiveScrollUp && _isImmersive.value) {
           _scrollUpAccum = 0;
-          _desktopScreen.setMobileImmersiveMode(false);
+          _isImmersive.value = false;
         }
       }
     }
@@ -200,15 +152,111 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
 
   @override
   Widget buildContent(BuildContext context) {
-    // Chrome 已通过 initState 的 addPostFrameCallback 直接注册（owner: this）
-    // 不再使用 ScreenChrome widget 包裹，以便在 _handleBack 中立即清除
+    final ThemeData theme = Theme.of(context);
+    final String epsTitle =
+        widget.epsTitle.isNotEmpty ? widget.epsTitle : '第 ${widget.epsOrder} 话';
+
     return ColoredBox(
       color: Colors.black,
-      child: Obx(() {
-        final error = viewModel.readerError.value;
-        if (error != null) return _buildErrorView(context, error);
-        return _buildReaderView(context);
-      }),
+      child: Stack(
+        children: [
+          // 内容区：点击切换沉浸模式
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => _isImmersive.value = !_isImmersive.value,
+            child: Obx(() {
+              final error = viewModel.readerError.value;
+              if (error != null) return _buildErrorView(context, error);
+              return _buildReaderView(context);
+            }),
+          ),
+
+          // 顶部 AppBar 覆盖层（返回 + 章节标题 + 更多）
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Obx(() {
+              final isImmersive = _isImmersive.value;
+              return IgnorePointer(
+                ignoring: isImmersive,
+                child: AnimatedSlide(
+                  duration: _kOverlayAnim,
+                  curve: Curves.easeOutCubic,
+                  offset: isImmersive ? const Offset(0, -1) : Offset.zero,
+                  child: Material(
+                    color: theme.colorScheme.surface,
+                    elevation: 4,
+                    child: SafeArea(
+                      bottom: false,
+                      child: SizedBox(
+                        height: AppTheme.metrics.kSpace48,
+                        child: AppBar(
+                          primary: false,
+                          toolbarHeight: AppTheme.metrics.kSpace48,
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          leading: IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: _handleBack,
+                          ),
+                          centerTitle: true,
+                          title: Text(
+                            epsTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          actions: [
+                            IconButton(
+                              icon: const Icon(Icons.more_vert),
+                              onPressed: () => _showMoreMenu(context),
+                            ),
+                          ],
+                          actionsPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          // 底部 BottomBar 覆盖层（章节导航）
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Obx(() {
+              final isImmersive = _isImmersive.value;
+              if (viewModel.epsList.isEmpty) return const SizedBox.shrink();
+              return IgnorePointer(
+                ignoring: isImmersive,
+                child: AnimatedSlide(
+                  duration: _kOverlayAnim,
+                  curve: Curves.easeOutCubic,
+                  offset: isImmersive ? const Offset(0, 1) : Offset.zero,
+                  child: Material(
+                    color: theme.colorScheme.surface,
+                    elevation: 8,
+                    child: SafeArea(
+                      top: false,
+                      child: Obx(
+                        () => _ReaderBottomBar(
+                          currentEps: viewModel.currentEpsOrder,
+                          totalEps: viewModel.epsList.length,
+                          onEpsTap: () => _showEpsSheet(context),
+                          onSettingsTap: () => _showSettingsSheet(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
     );
   }
 
@@ -291,7 +339,9 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
       final dl = getIt<PicAcgDownloadService>();
       final selected = <int>{};
 
+      // ignore: use_build_context_synchronously
       showModalBottomSheet(
+        // ignore: use_build_context_synchronously
         context: ctx,
         useRootNavigator: true,
         isScrollControlled: true,

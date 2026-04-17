@@ -1044,7 +1044,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       controller: sheetController,
                       padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 24),
                       itemCount: _comments!.length + (_loadingMore ? 1 : (_hasMore ? 1 : 0)),
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         // 底部加载指示器 / 触发行
                         if (i >= _comments!.length) {

@@ -137,7 +137,7 @@ class AppRoutes {
         if (matched != null) {
           final permission = (matched as dynamic).permission;
           if (!RoleManager.canAccess(permission)) {
-            print('无权限访问 $path (需要 $permission)，重定向到 /dashboard');
+            debugPrint('无权限访问 $path (需要 $permission)，重定向到 /dashboard');
             return '/dashboard';
           }
         }
@@ -163,7 +163,11 @@ class AppRoutes {
     if (Platform.isIOS) {
       return CupertinoPage(
         key: state.pageKey,
-        child: BindingWidget(child: child),
+        // 用主题背景色包裹，避免透明页面在过渡动画中透出旧页面内容
+        child: ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: BindingWidget(child: child),
+        ),
       );
     }
     return CustomTransitionPage(
@@ -175,11 +179,16 @@ class AppRoutes {
         final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
 
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: scale,
-            child: Container(color: Theme.of(context).scaffoldBackgroundColor, child: child),
+        // 背景色放在 FadeTransition 外层，确保整个过渡期间背景始终不透明，
+        // 避免新页面内容透明时与旧页面内容重叠。
+        return ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: scale,
+              child: child,
+            ),
           ),
         );
       },

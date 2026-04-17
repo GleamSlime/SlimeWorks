@@ -137,13 +137,13 @@ class MediaFolderCard extends StatelessWidget {
                               ? Image.network(
                                   resolvedCover,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const _FolderPlaceholder(),
+                                  errorBuilder: (_, _, _) => const _FolderPlaceholder(),
                                 )
                               : Image.file(
                                   File(resolvedCover),
                                   fit: BoxFit.cover,
                                   cacheWidth: cacheW,
-                                  errorBuilder: (_, __, ___) => const _FolderPlaceholder(),
+                                  errorBuilder: (_, _, _) => const _FolderPlaceholder(),
                                 ),
                           if (kDebugMode)
                             Positioned(

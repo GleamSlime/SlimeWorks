@@ -17,10 +17,10 @@ class ThumbQualityLevel {
 
   final String label;
 
-  /// ffmpeg -vf scale=<scaleWidth>:-2
+  /// ffmpeg `-vf scale=scaleWidth:-2`
   final int scaleWidth;
 
-  /// ffmpeg -q:v <qv>  (值越小质量越高)
+  /// ffmpeg `-q:v qv`  (值越小质量越高)
   final int qv;
 
   /// ffprobe 成功时提取的帧数
@@ -162,7 +162,7 @@ class MediaPrefsService {
   }
 
   /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。
-  /// 路径结构：<AppSupport>/SlimeWorks/library/media/{thumbnails,covers}
+  /// 路径结构：`AppSupport/SlimeWorks/library/media/{thumbnails,covers}`
   Future<List<Directory>> getCacheDirs() async {
     final appDir = await getApplicationSupportDirectory();
     // 兼容旧路径（直接在 appDir 下）和新路径（library/media 子目录）

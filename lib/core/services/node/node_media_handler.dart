@@ -212,6 +212,7 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
   }
 
   /// 清除所有内存缓存（节点断开时调用，释放内存）。
+  // ignore: unused_element
   void clearMemoryCache() {
     _resizedBytesCache.clear();
     _resizedBytesCacheSize = 0;

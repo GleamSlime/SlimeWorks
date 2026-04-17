@@ -160,7 +160,7 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('transferHistoryPeers 分组逻辑', () {
     /// 镜像 ViewModel 中的分组逻辑（不引入 GetX 依赖）
-    List<({String deviceId, String lastCreatedAt})> _groupPeers(
+    List<({String deviceId, String lastCreatedAt})> groupPeers(
       List<TransferItem> history,
       String localId,
     ) {
@@ -194,7 +194,7 @@ void main() {
         ),
       ];
       // localId 空时返回空列表（防止错误分组）
-      final peers = _groupPeers(history, '');
+      final peers = groupPeers(history, '');
       expect(peers, isEmpty);
     });
 
@@ -213,7 +213,7 @@ void main() {
           receiverDeviceId: aId,
         ),
       ];
-      final peers = _groupPeers(history, aId);
+      final peers = groupPeers(history, aId);
       expect(peers.length, 1);
       expect(peers.first.deviceId, bId);
     });
@@ -232,7 +232,7 @@ void main() {
           receiverDeviceId: 'device-C',
         ),
       ];
-      final peers = _groupPeers(history, aId);
+      final peers = groupPeers(history, aId);
       expect(peers.length, 2);
       final ids = peers.map((p) => p.deviceId).toSet();
       expect(ids, {'device-B', 'device-C'});
@@ -253,13 +253,13 @@ void main() {
           receiverDeviceId: aId,
         ).copyWith(createdAt: '2025-01-02T10:00:00Z'),
       ];
-      final peers = _groupPeers(history, aId);
+      final peers = groupPeers(history, aId);
       expect(peers.length, 1);
       expect(peers.first.lastCreatedAt, '2025-01-02T10:00:00Z');
     });
 
     test('空历史返回空列表', () {
-      final peers = _groupPeers([], 'device-A');
+      final peers = groupPeers([], 'device-A');
       expect(peers, isEmpty);
     });
 
@@ -277,7 +277,7 @@ void main() {
           receiverDeviceId: '', // 空 receiverDeviceId
         ),
       ];
-      final peers = _groupPeers(history, aId);
+      final peers = groupPeers(history, aId);
       expect(peers.length, 1);
       expect(peers.first.deviceId, 'device-B');
     });
@@ -287,7 +287,7 @@ void main() {
   // transferHistoryForPeer 过滤逻辑
   // ─────────────────────────────────────────────────────────────────────────
   group('transferHistoryForPeer 过滤逻辑', () {
-    List<TransferItem> _historyForPeer(
+    List<TransferItem> historyForPeer(
       List<TransferItem> history,
       String localId,
       String peerDeviceId,
@@ -309,7 +309,7 @@ void main() {
         _makeItem(transferId: 'tx2', senderDeviceId: peer, receiverDeviceId: local),
         _makeItem(transferId: 'tx3', senderDeviceId: local, receiverDeviceId: other),
       ];
-      final items = _historyForPeer(history, local, peer);
+      final items = historyForPeer(history, local, peer);
       expect(items.length, 2);
       expect(items.map((i) => i.transferId), containsAll(['tx1', 'tx2']));
       expect(items.map((i) => i.transferId), isNot(contains('tx3')));
@@ -324,7 +324,7 @@ void main() {
         _makeItem(transferId: 'tx-earlier', senderDeviceId: local, receiverDeviceId: peer)
             .copyWith(createdAt: '2025-01-01T00:00:00Z'),
       ];
-      final items = _historyForPeer(history, local, peer);
+      final items = historyForPeer(history, local, peer);
       expect(items.first.transferId, 'tx-earlier');
       expect(items.last.transferId, 'tx-later');
     });
@@ -334,7 +334,7 @@ void main() {
   // 文件类型识别辅助（镜像 sendFileToDevice 中的类型判断逻辑）
   // ─────────────────────────────────────────────────────────────────────────
   group('文件传输类型识别', () {
-    TransferType _detectType(String fileName) {
+    TransferType detectType(String fileName) {
       final lower = fileName.toLowerCase();
       if (lower.endsWith('.jpg') ||
           lower.endsWith('.jpeg') ||
@@ -354,19 +354,19 @@ void main() {
 
     test('图片格式正确识别为 image', () {
       for (final ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'JPG', 'PNG']) {
-        expect(_detectType('photo.$ext'), TransferType.image, reason: '.$ext 应识别为 image');
+        expect(detectType('photo.$ext'), TransferType.image, reason: '.$ext 应识别为 image');
       }
     });
 
     test('视频格式正确识别为 video', () {
       for (final ext in ['mp4', 'mov', 'avi', 'mkv', 'MP4']) {
-        expect(_detectType('video.$ext'), TransferType.video, reason: '.$ext 应识别为 video');
+        expect(detectType('video.$ext'), TransferType.video, reason: '.$ext 应识别为 video');
       }
     });
 
     test('其他格式识别为 file', () {
       for (final name in ['doc.pdf', 'archive.zip', 'data.xlsx', 'readme.txt']) {
-        expect(_detectType(name), TransferType.file, reason: '$name 应识别为 file');
+        expect(detectType(name), TransferType.file, reason: '$name 应识别为 file');
       }
     });
   });

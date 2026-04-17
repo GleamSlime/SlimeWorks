@@ -71,7 +71,7 @@ class MediaLibraryViewModel extends BaseViewModel {
   static const String _remoteFolderPrefix = 'remote-media-folder:';
   static const String _smartFolderPrefix = 'smart-folder:';
 
-  /// 远程节点智能文件夹 ID 前缀，格式：smart-folder:remote:<nodeId>:<原始sfId>
+  /// 远程节点智能文件夹 ID 前缀，格式：smart-folder:remote:[nodeId]:[原始sfId]
   static const String _remoteSmartFolderPrefix = 'smart-folder:remote:';
   static const String _smartFoldersPrefsKey = 'media_library_smart_folders'; // kept for migration
   static const String _smartFolderFileName = 'smart_folders_data.json';
@@ -287,7 +287,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   bool isSmartFolder(String id) => id.startsWith(_smartFolderPrefix);
 
-  /// 是否是远程节点的智能文件夹（ID 格式：smart-folder:remote:<nodeId>:<rawId>）。
+  /// 是否是远程节点的智能文件夹（ID 格式：smart-folder:remote:[nodeId]:[rawId]）。
   bool isRemoteSmartFolder(String id) => id.startsWith(_remoteSmartFolderPrefix);
 
   /// 从远程智能文件夹 ID 中提取 nodeId。
@@ -1367,8 +1367,7 @@ class MediaLibraryViewModel extends BaseViewModel {
           probedDuration = parsed;
           debugPrint('[VideoThumb] ffprobe 时长: ${probedDuration}s');
         } else {
-          debugPrint(
-            '[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}\"',
+          debugPrint('[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
           );
         }
       } else {

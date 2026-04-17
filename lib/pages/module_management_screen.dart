@@ -73,7 +73,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
 
     try {
       final modules = await moduleListAll(manager: _manager!);
-      print("Loaded modules: ${modules.length}");
+      debugPrint("Loaded modules: ${modules.length}");
       setState(() {
         _modules = modules;
         _isLoading = false;
@@ -425,7 +425,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
     }
 
     String? selectedModuleName;
-
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

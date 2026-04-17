@@ -52,7 +52,7 @@ class NovelCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
+                          color: Colors.black.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -76,7 +76,7 @@ class NovelCard extends StatelessWidget {
                           height: 4,
                           child: LinearProgressIndicator(
                             value: progress,
-                            backgroundColor: Colors.white.withOpacity(0.3),
+                            backgroundColor: Colors.white.withValues(alpha: 0.3),
                             valueColor: AlwaysStoppedAnimation<Color>(
                               Theme.of(context).primaryColor,
                             ),
@@ -173,7 +173,7 @@ class NovelCard extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   border: Border(
-                    top: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.3)),
+                    top: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.3)),
                   ),
                 ),
                 child: Row(

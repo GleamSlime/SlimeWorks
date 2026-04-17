@@ -99,11 +99,12 @@ class _MediaItemTileState extends State<MediaItemTile> {
     setState(() => _loadingFrames = true);
     try {
       final frames = await widget.onRequestScrubFrames!();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _scrubFrames = frames;
           _loadingFrames = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingFrames = false);
     }
@@ -115,11 +116,12 @@ class _MediaItemTileState extends State<MediaItemTile> {
     setState(() => _loadingAudioCover = true);
     try {
       final path = await widget.onRequestAudioCover!();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _audioCoverPath = path;
           _loadingAudioCover = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingAudioCover = false);
     }
@@ -240,7 +242,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                           ? Image.network(
                               src,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
+                              errorBuilder: (_, _, _) => Center(
                                 child: Icon(
                                   _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
                                   size: scaleW(44),

@@ -128,20 +128,6 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
     }
   }
 
-  Future<void> _sendToClient() async {
-    if (_server == null || !_isServerRunning || _selectedClientId == null) return;
-    final message = _messageController.text.trim();
-    if (message.isEmpty) return;
-
-    try {
-      await _wsManager.sendToClient(_server!, _selectedClientId!, message);
-      _addLog('[发送给 $_selectedClientId] $message');
-      _messageController.clear();
-    } catch (e) {
-      _addLog('发送失败: $e');
-    }
-  }
-
   Future<void> _disconnectClientById(String clientId) async {
     if (_server == null || !_isServerRunning) return;
     try {

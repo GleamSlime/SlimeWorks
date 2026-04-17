@@ -64,7 +64,7 @@ class CaptureControlPanel extends StatelessWidget {
                             boxShadow: isCapturing
                                 ? [
                                     BoxShadow(
-                                      color: Colors.green.withOpacity(0.5),
+                                      color: Colors.green.withValues(alpha: 0.5),
                                       blurRadius: 12,
                                       spreadRadius: 2,
                                     ),
@@ -87,13 +87,13 @@ class CaptureControlPanel extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: isCertInstalled
-                                  ? Colors.green.withOpacity(0.1)
-                                  : Colors.orange.withOpacity(0.1),
+                                  ? Colors.green.withValues(alpha: 0.1)
+                                  : Colors.orange.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isCertInstalled
-                                    ? Colors.green.withOpacity(0.3)
-                                    : Colors.orange.withOpacity(0.3),
+                                    ? Colors.green.withValues(alpha: 0.3)
+                                    : Colors.orange.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(

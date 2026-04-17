@@ -1,6 +1,6 @@
-/// PicACG 数据模型（Dart 侧）
-///
-/// 与 Rust 侧 JSON 结构对应，使用 dart:convert 解析
+// PicACG 数据模型（Dart 侧）
+//
+// 与 Rust 侧 JSON 结构对应，使用 dart:convert 解析
 
 /// 图片资源
 class PicAcgImage {

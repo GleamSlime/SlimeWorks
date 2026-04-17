@@ -116,14 +116,6 @@ class _PicAcgHistoryScreenState extends BasePageState<PicAcgHistoryViewModel, Pi
     PicAcgComicDetailRoute(comicId: item.comicId).push(context);
   }
 
-  void _openReader(BuildContext context, PicAcgHistoryItem item) {
-    PicAcgReaderRoute(
-      comicId: item.comicId,
-      epsOrder: item.epsOrder,
-      epsTitle: item.epsTitle,
-    ).push(context);
-  }
-
   Future<void> _confirmClearAll(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -291,7 +283,7 @@ class _ThumbImage extends StatelessWidget {
       width: scaleW(52),
       height: scaleW(72),
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
+      errorBuilder: (_, _, _) => Container(
         width: scaleW(52),
         height: scaleW(72),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,

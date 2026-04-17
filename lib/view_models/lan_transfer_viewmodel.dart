@@ -540,7 +540,7 @@ class LanTransferViewModel extends BaseViewModel {
   void shareReceivedFile(String filePath) {
     if (Platform.isIOS || Platform.isAndroid) {
       final xFile = XFile(filePath);
-      Share.shareXFiles([xFile], subject: '互传文件');
+      SharePlus.instance.share(ShareParams(files: [xFile], subject: '互传文件'));
     }
   }
 

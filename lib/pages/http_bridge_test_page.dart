@@ -108,7 +108,8 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
       if (paramText.isEmpty) {
         throw const FormatException('参数不能为空');
       }
-      final params = json.decode(paramText);
+      // 预先验证 JSON 格式是否合法
+      json.decode(paramText);
 
       // 调用真实的HTTP Bridge API
       final resultJson = callHandler(
@@ -368,7 +369,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -389,7 +390,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 border: Border.all(color: Colors.red),
                 borderRadius: BorderRadius.circular(8),
               ),

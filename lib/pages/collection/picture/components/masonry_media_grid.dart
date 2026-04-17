@@ -89,11 +89,11 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   }
 
   @override
-  void didUpdateWidget(MasonryMediaGrid old) {
-    super.didUpdateWidget(old);
-    // 外部传入新的高亮 ID（如从 Viewer 返回后重建 widget）
+  void didUpdateWidget(MasonryMediaGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 外部传入新的高亮 ID（如从Viewer返回后重建 widget）
     if (widget.lastViewedItemId != null &&
-        widget.lastViewedItemId != old.lastViewedItemId &&
+        widget.lastViewedItemId != oldWidget.lastViewedItemId &&
         widget.lastViewedItemId != _highlightId) {
       _highlightTimer?.cancel();
       setState(() => _highlightId = widget.lastViewedItemId);
@@ -105,7 +105,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
         });
       });
     }
-    if (old.collectionId != widget.collectionId || old.columnCount != widget.columnCount) {
+    if (oldWidget.collectionId != widget.collectionId || oldWidget.columnCount != widget.columnCount) {
       // 切换了集合或列数变化：先立即显示前几行（避免空白闪烁），再继续逐行展开动画
       _revealTimer?.cancel();
       _itemKeys.clear();
@@ -124,7 +124,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       // 清理已不在列表中的 GlobalKey
       final currentIds = widget.items.map((i) => i.id).toSet();
       _itemKeys.removeWhere((id, _) => !currentIds.contains(id));
-    } else if (old.items.length > widget.items.length) {
+    } else if (oldWidget.items.length > widget.items.length) {
       // 条目减少（删除）：直接收缩，清理缓存
       final currentIds = widget.items.map((i) => i.id).toSet();
       _itemKeys.removeWhere((id, _) => !currentIds.contains(id));

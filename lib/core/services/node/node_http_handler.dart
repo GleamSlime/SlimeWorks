@@ -297,7 +297,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
       case 'move_media_collection_to_folder':
         final collectionId = (params['collection_id'] ?? '').toString();
         final folderIdValue = params['folder_id'];
-        final folderId = folderIdValue == null ? null : folderIdValue.toString();
+        final folderId = folderIdValue?.toString();
         media_api.moveMediaCollectionToFolder(collectionId: collectionId, folderId: folderId);
         _emitLibraryMutation();
         return <String, dynamic>{'ok': true};
@@ -398,7 +398,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
       case 'move_novel_to_folder':
         final novelId = (params['novel_id'] ?? '').toString();
         final dynamic folderIdValue = params['folder_id'];
-        final folderId = folderIdValue == null ? null : folderIdValue.toString();
+        final folderId = folderIdValue?.toString();
         rust_api.moveNovelToFolder(novelId: novelId, folderId: folderId);
         _emitLibraryMutation();
         return <String, dynamic>{'ok': true};

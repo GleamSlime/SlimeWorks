@@ -311,10 +311,12 @@ class _TransferHistoryCard extends StatelessWidget {
             height: 50,
           );
         }
-        Share.shareXFiles(
-          [XFile(path)],
-          subject: item.fileName ?? '互传文件',
-          sharePositionOrigin: origin,
+        SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(path)],
+            subject: item.fileName ?? '互传文件',
+            sharePositionOrigin: origin,
+          ),
         );
       },
       child: Container(

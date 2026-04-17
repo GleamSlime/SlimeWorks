@@ -2,7 +2,7 @@ library;
 
 /// PicACG 搜索页面
 ///
-/// 遵循 ScreenChrome 头部规范：
+/// 遵循 头部规范：
 /// - 搜索输入框置于 titleWidget 位置，不使用 AppBar
 /// - 支持搜索历史 Tag（本地存储，上限 20 条）
 /// - 支持排序切换
@@ -83,7 +83,6 @@ class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicA
     _focusNode.requestFocus();
   }
 
-  /// 构建顶部 ScreenChrome 配置（符合规范，搜索框在 titleWidget）
   ScreenChromeData _buildChromeData(BuildContext context) {
     final theme = Theme.of(context);
     return ScreenChromeData(
@@ -247,7 +246,6 @@ class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicA
   }
 }
 
-/// 搜索输入框组件（置于 ScreenChrome titleWidget 位置）
 class _SearchInputField extends StatelessWidget {
   const _SearchInputField({
     required this.controller,
@@ -278,7 +276,7 @@ class _SearchInputField extends StatelessWidget {
         ),
         suffixIcon: ListenableBuilder(
           listenable: controller,
-          builder: (_, __) => controller.text.isNotEmpty
+          builder: (_, _) => controller.text.isNotEmpty
               ? IconButton(
                   icon: Icon(
                     Icons.close,

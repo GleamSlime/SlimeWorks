@@ -51,6 +51,7 @@ class Loggers {
   }
 
   /// 生成日志定位码（设备码+时间戳+随机字符串）
+  // ignore: unused_element
   static String _generateTraceId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = Random().nextInt(999999).toString().padLeft(6, '0');
@@ -83,6 +84,7 @@ class Loggers {
   }
 
   /// 上报日志到Loki
+  // ignore: unused_element
   static Future<void> _reportToLoki({
     required String message,
     required String level,
@@ -106,6 +108,7 @@ class Loggers {
               "level": level.toLowerCase(),
               "deviceId": deviceId,
               "name": name,
+              // ignore: use_null_aware_elements
               if (traceId != null) "traceId": traceId,
             },
             "values": [

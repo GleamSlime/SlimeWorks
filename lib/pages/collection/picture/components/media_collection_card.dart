@@ -161,7 +161,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               )
             : Image.file(
@@ -170,7 +170,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 width: double.infinity,
                 height: double.infinity,
                 cacheWidth: cacheW,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               ),
         if (kDebugMode) Positioned(right: 4, bottom: 4, child: DebugImageSizeBadge(src: src)),

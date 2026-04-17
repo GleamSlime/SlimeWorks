@@ -364,7 +364,7 @@ class AppTheme {
   }
 
   static void resetMetrics() {
-    print("重新计算界面尺寸中...");
+    debugPrint("重新计算界面尺寸中...");
     metrics = ThemeMetrics();
     metricsVersion.value++;
   }

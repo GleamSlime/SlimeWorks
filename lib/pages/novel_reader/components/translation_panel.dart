@@ -119,9 +119,9 @@ class _TranslationPanelState extends State<TranslationPanel> {
         },
       );
 
-      Loggers(name: 'Translation').info('翻译完成, result length=${result?.length ?? 0}');
+      Loggers(name: 'Translation').info('翻译完成, result length=${result.length}');
 
-      if (_translatedText.value.isEmpty && result != null) {
+      if (_translatedText.value.isEmpty) {
         _translatedText.value = result;
       }
     } catch (e, st) {
@@ -178,7 +178,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
               Expanded(
                 child: Obx(() {
                   return DropdownButtonFormField<String>(
-                    value: _selectedModel,
+                    initialValue: _selectedModel,
                     decoration: const InputDecoration(
                       labelText: '选择模型',
                       border: OutlineInputBorder(),
@@ -205,7 +205,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
               SizedBox(width: appMetrics.spacingMedium),
               Expanded(
                 child: DropdownButtonFormField<TranslationLanguagePair>(
-                  value: _selectedLanguagePair,
+                  initialValue: _selectedLanguagePair,
                   decoration: const InputDecoration(
                     labelText: '语言对',
                     border: OutlineInputBorder(),

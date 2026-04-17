@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
@@ -317,6 +316,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (source == null || source.isEmpty) return;
 
+    // 提前捕获 ScaffoldMessenger，避免跨异步间隙使用 BuildContext
+    final messenger = ScaffoldMessenger.of(context);
+
     // 使用 permission_handler 授权，完全绕开 Gal.requestAccess（iOS native 冲突根源）
     if (Platform.isAndroid || Platform.isIOS) {
       final permission = Platform.isIOS
@@ -330,7 +332,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       }
       if (status.isPermanentlyDenied) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: const Text('相册权限被拒绝，请在系统设置中手动开启'),
               action: SnackBarAction(label: '去设置', onPressed: openAppSettings),
@@ -341,7 +343,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       }
       if (!status.isGranted && !status.isLimited) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('没有相册写入权限')));
+          messenger.showSnackBar(const SnackBar(content: Text('没有相册写入权限')));
         }
         return;
       }
@@ -552,7 +554,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                                 horizontal: appMetrics.kSpace10,
                                 vertical: appMetrics.kSpace10,
                               ),
-                              color: Colors.black.withOpacity(0.42),
+                              color: Colors.black.withValues(alpha: 0.42),
                               child: Text(
                                 widget.items[_currentIndex].title,
                                 style: const TextStyle(
@@ -599,7 +601,7 @@ class _GlassIconButton extends StatelessWidget {
           child: Container(
             width: 42,
             height: 42,
-            color: Colors.black.withOpacity(0.42),
+            color: Colors.black.withValues(alpha: 0.42),
             alignment: Alignment.center,
             child: Icon(icon, color: Colors.white, size: 22),
           ),
@@ -644,7 +646,7 @@ class _GlassChipState extends State<_GlassChip> {
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          color: Colors.black.withOpacity(0.42),
+          color: Colors.black.withValues(alpha: 0.42),
           // 固定宽度避免数字变化时容器宽度跳动
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1015,7 +1017,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                         ),
                       );
                     },
-                    errorBuilder: (_, __, ___) => Center(
+                    errorBuilder: (_, _, _) => Center(
                       child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
                     ),
                   );
@@ -1035,7 +1037,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                         ],
                       );
                     },
-                    errorBuilder: (_, __, ___) => Center(
+                    errorBuilder: (_, _, _) => Center(
                       child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
                     ),
                   );
@@ -1046,6 +1048,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                     alignment: Alignment.center,
                     transform: Matrix4.identity()
                       ..rotateZ(_rotation)
+                      // ignore: deprecated_member_use
                       ..scale(_scale),
                     child: SizedBox(width: w, height: h, child: imgWidget),
                   ),
@@ -1222,14 +1225,14 @@ class _VideoPreviewState extends State<_VideoPreview> {
     ];
 
     // 按钮栏高度来自 media_kit_video 默认值（56），进度条紧贴其上方
-    const double _buttonBarH = 56.0;
+    const double buttonBarH = 56.0;
     final videoWidget = media_controls.MaterialVideoControlsTheme(
       normal: media_controls.MaterialVideoControlsThemeData(
         // 顶部工具栏清空，按钮全部移到底部
         topButtonBar: const [],
         topButtonBarMargin: EdgeInsets.zero,
         // 进度条位于按钮栏正上方
-        seekBarMargin: EdgeInsets.only(bottom: bottomInset + 16 + _buttonBarH, left: 8, right: 8),
+        seekBarMargin: EdgeInsets.only(bottom: bottomInset + 16 + buttonBarH, left: 8, right: 8),
         // 底部控制栏：上移 + 安全区保护
         bottomButtonBar: bottomBar,
         bottomButtonBarMargin: EdgeInsets.only(bottom: bottomInset + 16, left: 8, right: 8),

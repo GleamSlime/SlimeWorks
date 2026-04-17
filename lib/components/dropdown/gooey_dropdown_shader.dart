@@ -538,7 +538,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                             cardPos: Offset(cardCenterX, cardCenterY),
                             buttonWidth: widget.buttonSize.width,
                             buttonHeight: widget.buttonSize.height,
-                            buttonRadius: widget.buttonRadius ?? (widget.buttonSize.height / 2),
+                            buttonRadius: widget.buttonRadius,
                             cardWidth: width,
                             cardHeight: height,
                             cardRadius: radius,

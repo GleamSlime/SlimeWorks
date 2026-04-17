@@ -26,7 +26,7 @@ class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
         tabAlignment: TabAlignment.start,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         indicator: BoxDecoration(
-          color: theme.colorScheme.primary.withOpacity(0.1),
+          color: theme.colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(top: BorderSide(color: theme.colorScheme.primary, width: 3)),
         ),

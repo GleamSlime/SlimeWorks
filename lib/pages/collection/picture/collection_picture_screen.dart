@@ -208,10 +208,11 @@ class _CollectionPictureScreenState
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back_rounded),
                   onPressed: () {
-                    if (inDetail)
+                    if (inDetail) {
                       _exitCollection();
-                    else
+                    } else {
                       _exitFolder();
+                    }
                   },
                 ),
               )
@@ -749,7 +750,7 @@ class _CollectionPictureScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: selectedNodeId,
+                    initialValue: selectedNodeId,
                     decoration: const InputDecoration(labelText: '目标节点'),
                     items: viewModel.enabledRemoteNodes
                         .map(
@@ -926,6 +927,7 @@ class _CollectionPictureScreenState
   Future<void> _showCreateSmartFolderDialog() async {
     // 确保文件夹列表是最新的
     await viewModel.loadFolders();
+    if (!mounted) return;
     // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
     final snapshotFolders = viewModel.folders.toList();
     final nameCtrl = TextEditingController();
@@ -957,7 +959,7 @@ class _CollectionPictureScreenState
                     if (enabledNodes.isNotEmpty) ...[
                       SizedBox(height: appMetrics.kSpace12),
                       DropdownButtonFormField<String?>(
-                        value: targetNodeId,
+                        initialValue: targetNodeId,
                         decoration: const InputDecoration(labelText: '创建位置'),
                         items: [
                           const DropdownMenuItem<String?>(value: null, child: Text('本机')),
@@ -1090,6 +1092,7 @@ class _CollectionPictureScreenState
   Future<void> _showEditSmartFolderDialog(SmartFolder sf, {bool isRemote = false}) async {
     // 确保文件夹列表是最新的
     await viewModel.loadFolders();
+    if (!mounted) return;
     // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
     final snapshotFolders = viewModel.folders.toList();
     final nameCtrl = TextEditingController(text: sf.name);
