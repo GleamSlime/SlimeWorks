@@ -174,8 +174,10 @@ class CollapsibleSidebar extends StatelessWidget {
           isExpanded: isExpanded,
           showExtends: showExtends,
           isMobile: desktopScreen.isMobile.value,
-          buildContent: (context) =>
-              _buildSidebarContent(context, controller, isExpanded, showExtends),
+          buildContent: (context) => SafeArea(
+            bottom: false,
+            child: _buildSidebarContent(context, controller, isExpanded, showExtends),
+          ),
         );
       }
 
@@ -709,7 +711,7 @@ class MobileSidebarState extends State<MobileSidebar> {
                 top: 0,
                 // bottom: 0,
                 width: scaleW(12), // 边缘检测区域宽度（缩小避免遮挡左侧按钮）
-                height: scaleH(140),
+                height: scaleH(250),
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onHorizontalDragStart: (details) {

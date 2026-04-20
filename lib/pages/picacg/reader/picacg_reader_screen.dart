@@ -6,6 +6,7 @@ library;
 /// AppBar/BottomBar 由页面内部 Stack 覆盖层直接管理，支持沉浸模式（点击切换）
 
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -84,11 +85,6 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   bool get showAppBar => false;
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   Future<void> onPageInit() async {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     await viewModel.loadPages(widget.comicId, widget.epsOrder);
@@ -152,9 +148,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
 
   @override
   Widget buildContent(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final String epsTitle =
-        widget.epsTitle.isNotEmpty ? widget.epsTitle : '第 ${widget.epsOrder} 话';
+    final String epsTitle = widget.epsTitle.isNotEmpty ? widget.epsTitle : '第 ${widget.epsOrder} 话';
 
     return ColoredBox(
       color: Colors.black,
@@ -184,35 +178,55 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                   duration: _kOverlayAnim,
                   curve: Curves.easeOutCubic,
                   offset: isImmersive ? const Offset(0, -1) : Offset.zero,
-                  child: Material(
-                    color: theme.colorScheme.surface,
-                    elevation: 4,
-                    child: SafeArea(
-                      bottom: false,
-                      child: SizedBox(
-                        height: AppTheme.metrics.kSpace48,
-                        child: AppBar(
-                          primary: false,
-                          toolbarHeight: AppTheme.metrics.kSpace48,
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          leading: IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            onPressed: _handleBack,
-                          ),
-                          centerTitle: true,
-                          title: Text(
-                            epsTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          actions: [
-                            IconButton(
-                              icon: const Icon(Icons.more_vert),
-                              onPressed: () => _showMoreMenu(context),
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.62),
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              width: 0.5,
                             ),
-                          ],
-                          actionsPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        child: SafeArea(
+                          bottom: false,
+                          child: SizedBox(
+                            height: AppTheme.metrics.kSpace48,
+                            child: AppBar(
+                              primary: false,
+                              toolbarHeight: AppTheme.metrics.kSpace48,
+                              backgroundColor: Colors.transparent,
+                              elevation: 0,
+                              foregroundColor: Colors.black87,
+                              leading: IconButton(
+                                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                                onPressed: _handleBack,
+                                color: Colors.black87,
+                              ),
+                              centerTitle: true,
+                              title: Text(
+                                epsTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              actions: [
+                                IconButton(
+                                  icon: const Icon(Icons.more_horiz_rounded, size: 22),
+                                  onPressed: () => _showMoreMenu(context),
+                                  color: Colors.black87,
+                                ),
+                              ],
+                              actionsPadding: EdgeInsets.zero,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -236,17 +250,26 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                   duration: _kOverlayAnim,
                   curve: Curves.easeOutCubic,
                   offset: isImmersive ? const Offset(0, 1) : Offset.zero,
-                  child: Material(
-                    color: theme.colorScheme.surface,
-                    elevation: 8,
-                    child: SafeArea(
-                      top: false,
-                      child: Obx(
-                        () => _ReaderBottomBar(
-                          currentEps: viewModel.currentEpsOrder,
-                          totalEps: viewModel.epsList.length,
-                          onEpsTap: () => _showEpsSheet(context),
-                          onSettingsTap: () => _showSettingsSheet(context),
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.62),
+                          border: Border(
+                            top: BorderSide(color: Colors.white.withValues(alpha: 0.4), width: 0.5),
+                          ),
+                        ),
+                        child: SafeArea(
+                          top: false,
+                          child: Obx(
+                            () => _ReaderBottomBar(
+                              currentEps: viewModel.currentEpsOrder,
+                              totalEps: viewModel.epsList.length,
+                              onEpsTap: () => _showEpsSheet(context),
+                              onSettingsTap: () => _showSettingsSheet(context),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -640,7 +663,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
   }
 }
 
-/// 底部操作栏（背景色由 _MobileBottomOverlay 统一提供，此处透明）
+/// 底部操作栏（背景由外层磨砂玻璃容器提供，此处透明）
 class _ReaderBottomBar extends StatelessWidget {
   const _ReaderBottomBar({
     required this.onEpsTap,
@@ -657,17 +680,21 @@ class _ReaderBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: 60,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _BarBtn(
-            icon: Icons.menu_book_outlined,
-            label: '章节',
-            badge: '$currentEps/$totalEps',
-            onTap: onEpsTap,
+          Expanded(
+            child: _BarBtn(
+              icon: Icons.menu_book_outlined,
+              label: '章节',
+              badge: '$currentEps / $totalEps',
+              onTap: onEpsTap,
+            ),
           ),
-          _BarBtn(icon: Icons.settings_outlined, label: '设置', onTap: onSettingsTap),
+          Container(width: 0.5, height: 32, color: Colors.black.withValues(alpha: 0.1)),
+          Expanded(
+            child: _BarBtn(icon: Icons.tune_rounded, label: '设置', onTap: onSettingsTap),
+          ),
         ],
       ),
     );
@@ -683,22 +710,42 @@ class _BarBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fg = theme.colorScheme.onSurface;
+    /// 图标和文字固定使用深色，以适配白色磨砂背景
+    const iconColor = Color(0xFF1A1A1A);
+    const labelColor = Color(0xFF444444);
+    const badgeColor = Color(0xFF888888);
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: fg.withValues(alpha: 0.7), size: 22),
-            const SizedBox(height: 2),
+            Icon(icon, color: iconColor, size: 22),
+            const SizedBox(height: 3),
             Text(
-              badge != null ? '$label  $badge' : label,
-              style: TextStyle(color: fg.withValues(alpha: 0.6), fontSize: 11),
+              label,
+              style: const TextStyle(
+                color: labelColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+              ),
             ),
+            if (badge != null) ...[
+              const SizedBox(height: 1),
+              Text(
+                badge!,
+                style: const TextStyle(
+                  color: badgeColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
           ],
         ),
       ),

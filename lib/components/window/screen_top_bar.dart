@@ -41,7 +41,13 @@ class ScreenTopBar extends StatelessWidget {
         width: MediaQuery.of(context).size.width,
         padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
         // color: Colors.red,
-        child: Platform.isMacOS ? Obx(() => getIt<DesktopScreenProvider>().isMobile.value ? const MacWindowButtons() : SizedBox.shrink()) : null,
+        child: Platform.isMacOS
+            ? Obx(
+                () => getIt<DesktopScreenProvider>().isMobile.value
+                    ? const MacWindowButtons()
+                    : SizedBox.shrink(),
+              )
+            : null,
       ),
     );
   }
@@ -58,7 +64,12 @@ class MacWindowButtons extends StatelessWidget {
       spacing: AppTheme.metrics.kSpace8,
       mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.start,
       children: [
-        HoverSvgButton(svg: Assets.image.svg.macToolsCloseNoHover, hoverSvg: Assets.image.svg.macToolsClose, onTap: windowManager.close, size: 13),
+        HoverSvgButton(
+          svg: Assets.image.svg.macToolsCloseNoHover,
+          hoverSvg: Assets.image.svg.macToolsClose,
+          onTap: windowManager.close,
+          size: 13,
+        ),
         HoverSvgButton(
           svg: Assets.image.svg.macToolsUnfoldNoHover,
           hoverSvg: Assets.image.svg.macToolsUnfold,
@@ -67,7 +78,9 @@ class MacWindowButtons extends StatelessWidget {
         ),
         HoverSvgButton(
           svg: Assets.image.svg.macToolsMaxNoHover,
-          hoverSvg: ScreenTopBar.isMaximized ? Assets.image.svg.macToolsMax : Assets.image.svg.macToolsMin,
+          hoverSvg: ScreenTopBar.isMaximized
+              ? Assets.image.svg.macToolsMax
+              : Assets.image.svg.macToolsMin,
           onTap: ScreenTopBar.handleDoubleTap,
           size: 13,
         ),
@@ -96,7 +109,12 @@ class WindowsWindowButtons extends StatelessWidget {
           child: SizedBox(
             width: scaleW(40),
             height: scaleW(40),
-            child: Center(child: SvgPicture.asset(Assets.image.svg.windowsToolsUnfold, width: AppTheme.metrics.fontSize16)),
+            child: Center(
+              child: SvgPicture.asset(
+                Assets.image.svg.windowsToolsUnfold,
+                width: AppTheme.metrics.fontSize16,
+              ),
+            ),
           ),
         ),
         InkWell(
@@ -111,7 +129,9 @@ class WindowsWindowButtons extends StatelessWidget {
             height: scaleW(40),
             child: Center(
               child: SvgPicture.asset(
-                ScreenTopBar.isMaximized ? Assets.image.svg.windowsToolsMax : Assets.image.svg.windowsToolsMin,
+                ScreenTopBar.isMaximized
+                    ? Assets.image.svg.windowsToolsMax
+                    : Assets.image.svg.windowsToolsMin,
                 width: AppTheme.metrics.fontSize16,
               ),
             ),
@@ -127,7 +147,12 @@ class WindowsWindowButtons extends StatelessWidget {
           child: SizedBox(
             width: scaleW(40),
             height: scaleW(40),
-            child: Center(child: SvgPicture.asset(Assets.image.svg.windowsToolsClose, width: AppTheme.metrics.fontSize16)),
+            child: Center(
+              child: SvgPicture.asset(
+                Assets.image.svg.windowsToolsClose,
+                width: AppTheme.metrics.fontSize16,
+              ),
+            ),
           ),
         ),
       ],

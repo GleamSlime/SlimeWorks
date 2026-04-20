@@ -5,7 +5,7 @@ final SidebarGroup demoSidebarGroup = SidebarGroup(
   sort: 90,
   permission: Permission.accessDemo,
   items: [
-    SidebarMenuItem(route: const GooeyDemoRoute()),
-    SidebarMenuItem(route: const ViewModelDemoRoute()),
+    // SidebarMenuItem(route: const GooeyDemoRoute()),
+    // SidebarMenuItem(route: const ViewModelDemoRoute()),
   ],
 );
