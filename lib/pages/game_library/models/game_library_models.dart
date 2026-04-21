@@ -61,6 +61,8 @@ class GameItem {
     this.lastPlayedAt,
     required this.totalPlayTimeSec,
     this.tags = const <String>[],
+    this.exePaths = const <String>[],
+    this.gameDir = '',
   });
 
   final String id;
@@ -70,6 +72,8 @@ class GameItem {
   final String summary;
   final double rating;
   final String releaseDate;
+
+  /// 默认启动 exe 路径（手动添加时为用户选择的 exe；批量导入时为首选 exe）
   final String path;
   final GameStatus status;
   final DateTime createdAt;
@@ -77,6 +81,12 @@ class GameItem {
   final DateTime? lastPlayedAt;
   final int totalPlayTimeSec;
   final List<String> tags;
+
+  /// 游戏目录下扫描到的所有顶层可执行文件列表（批量导入时填写）
+  final List<String> exePaths;
+
+  /// 游戏根目录路径（用于启动时设置工作目录）
+  final String gameDir;
 
   GameItem copyWith({
     String? id,
@@ -93,6 +103,8 @@ class GameItem {
     DateTime? lastPlayedAt,
     int? totalPlayTimeSec,
     List<String>? tags,
+    List<String>? exePaths,
+    String? gameDir,
   }) {
     return GameItem(
       id: id ?? this.id,
@@ -109,6 +121,8 @@ class GameItem {
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
       totalPlayTimeSec: totalPlayTimeSec ?? this.totalPlayTimeSec,
       tags: tags ?? this.tags,
+      exePaths: exePaths ?? this.exePaths,
+      gameDir: gameDir ?? this.gameDir,
     );
   }
 
@@ -128,11 +142,14 @@ class GameItem {
       'lastPlayedAt': lastPlayedAt?.millisecondsSinceEpoch,
       'totalPlayTimeSec': totalPlayTimeSec,
       'tags': tags,
+      'exePaths': exePaths,
+      'gameDir': gameDir,
     };
   }
 
   static GameItem fromJson(Map<String, dynamic> json) {
     final List<dynamic> tagsJson = (json['tags'] as List<dynamic>?) ?? <dynamic>[];
+    final List<dynamic> exePathsJson = (json['exePaths'] as List<dynamic>?) ?? <dynamic>[];
     return GameItem(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -150,6 +167,8 @@ class GameItem {
           : DateTime.fromMillisecondsSinceEpoch(json['lastPlayedAt'] as int),
       totalPlayTimeSec: json['totalPlayTimeSec'] as int? ?? 0,
       tags: tagsJson.map((dynamic e) => e.toString()).toList(),
+      exePaths: exePathsJson.map((dynamic e) => e.toString()).toList(),
+      gameDir: json['gameDir'] as String? ?? '',
     );
   }
 }

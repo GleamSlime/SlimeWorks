@@ -49,6 +49,9 @@ abstract class DesktopScreenProvider {
   /// 是否为移动端
   RxBool get isMobile => RxBool(width.value <= 600 || Platform.isAndroid || Platform.isIOS);
 
+  /// 全局背景图路径（详情页设置，空字符串表示无背景）
+  RxString globalBackgroundPath = ''.obs;
+
   /// 设置窗口宽度
   void setWidth(double w);
 

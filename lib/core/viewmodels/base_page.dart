@@ -264,7 +264,11 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(appBar: buildAppBar(context), body: _buildBody(context));
+    return Scaffold(
+      appBar: buildAppBar(context),
+      backgroundColor: Colors.transparent,
+      body: _buildBody(context),
+    );
   }
 
   /// 构建页面主体

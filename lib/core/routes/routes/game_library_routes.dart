@@ -11,7 +11,7 @@ class GameHomeRoute extends AppRouteData with $GameHomeRoute {
   String get sidebarLabel => '游戏主页';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  String get sidebarIcon => Assets.image.svg.menuAggregation;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -35,7 +35,7 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
   String get sidebarLabel => '游戏库';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  String get sidebarIcon => Assets.image.svg.menuCollectLibrary;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -44,7 +44,35 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, const GameLibraryScreen());
+    // 被游戏详情页覆盖时用 secondaryAnimation 淡出，避免透明详情页叠在列表上
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      name: state.name,
+      arguments: state.extra,
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      child: const GameLibraryScreen(),
+      transitionsBuilder: (
+        BuildContext context,
+        Animation<double> animation,
+        Animation<double> secondaryAnimation,
+        Widget child,
+      ) {
+        // 自身淡入
+        final Animation<double> fadeIn = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOut,
+        );
+        // 被详情页压栈时淡出
+        final Animation<double> fadeOut = Tween<double>(begin: 1.0, end: 0.0).animate(
+          CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeIn),
+        );
+        return FadeTransition(
+          opacity: fadeIn,
+          child: FadeTransition(opacity: fadeOut, child: child),
+        );
+      },
+    );
   }
 }
 
@@ -67,7 +95,31 @@ class GameDetailRoute extends AppRouteData with $GameDetailRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, GameDetailScreen(gameId: gameId));
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      name: state.name,
+      arguments: state.extra,
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
+      child: GameDetailScreen(gameId: gameId),
+      transitionsBuilder: (
+        BuildContext context,
+        Animation<double> animation,
+        Animation<double> secondaryAnimation,
+        Widget child,
+      ) {
+        // 纯淡入：封面背景已在 push 前由列表页预设，列表页同步通过 secondaryAnimation 淡出，
+        // 视觉上是封面背景 + 详情内容交叉淡入，不会看到列表叠加其下
+        return FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+            reverseCurve: Curves.easeIn,
+          ),
+          child: child,
+        );
+      },
+    );
   }
 }
 
@@ -82,7 +134,7 @@ class GameCategoriesRoute extends AppRouteData with $GameCategoriesRoute {
   String get sidebarLabel => '游戏分类';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  String get sidebarIcon => Assets.image.svg.menuCollectFile;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -129,7 +181,7 @@ class GameStatsRoute extends AppRouteData with $GameStatsRoute {
   String get sidebarLabel => '游戏统计';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  String get sidebarIcon => Assets.image.svg.menuBill;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -153,7 +205,7 @@ class GameSettingsRoute extends AppRouteData with $GameSettingsRoute {
   String get sidebarLabel => '游戏设置';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  String get sidebarIcon => Assets.image.svg.menuSetting;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 

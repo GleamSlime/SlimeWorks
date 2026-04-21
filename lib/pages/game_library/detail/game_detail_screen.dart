@@ -1,11 +1,18 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:slime_works/core/provider/main.dart';
+
+import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_detail_viewmodel.dart';
@@ -36,6 +43,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
 
   GameStatus _editStatus = GameStatus.notStarted;
 
+  bool _exeListExpanded = false;
+
   static const List<String> _tabLabels = <String>['统计', '编辑', '启动', '分类', '进度'];
 
   @override
@@ -53,7 +62,16 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   @override
   Future<void> onPageInit() async {
     await super.onPageInit();
+    // 打开详情页时自动收起侧边栏
+    try {
+      Get.find<SidebarController>().closeSidebar();
+    } catch (_) {}
     await viewModel.load(widget.gameId);
+    // 设置全局模糊背景
+    final String cover = viewModel.game.value?.coverPath ?? '';
+    if (cover.isNotEmpty) {
+      getIt<DesktopScreenProvider>().globalBackgroundPath.value = cover;
+    }
     _syncEditControllers();
   }
 
@@ -79,13 +97,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   ScreenChromeData _buildChromeData() {
     return ScreenChromeData(
       title: '游戏详情',
-      actions: <Widget>[
-        TextButton.icon(
-          onPressed: () => GameLibraryRoute().go(context),
-          icon: const Icon(Icons.arrow_back, size: 18),
-          label: const Text('返回'),
-        ),
-      ],
+      leading: TextButton.icon(
+        onPressed: () => GameLibraryRoute().go(context),
+        icon: const Icon(Icons.arrow_back_ios_new, size: 16),
+        label: const Text('返回'),
+      ),
     );
   }
 
@@ -93,49 +109,64 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   // 主体
   // ──────────────────────────────────────────────────────
 
+  Widget _buildBlurBackground(BuildContext context, String coverPath) {
+    // 全局背景已在 DesktopScaffold 层渲染，这里仅返回透明层
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget buildContent(BuildContext context) {
-    return ScreenChrome(
-      data: _buildChromeData(),
-      child: Obx(() {
-        final GameItem? game = viewModel.game.value;
-        if (game == null) {
-          return const Center(child: CircularProgressIndicator());
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+          if (context.canPop()) context.pop();
+          return KeyEventResult.handled;
         }
+        return KeyEventResult.ignored;
+      },
+      child: ScreenChrome(
+        data: _buildChromeData(),
+        child: Obx(() {
+          final GameItem? game = viewModel.game.value;
+          if (game == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _buildHeader(context, game),
-            Container(
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _buildHeader(context, game),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: false,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  indicatorWeight: 2,
+                  tabs: _tabLabels.map((String l) => Tab(text: l)).toList(growable: false),
+                ),
               ),
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: false,
-                labelColor: Theme.of(context).colorScheme.primary,
-                unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                indicatorColor: Theme.of(context).colorScheme.primary,
-                indicatorWeight: 2,
-                tabs: _tabLabels.map((String l) => Tab(text: l)).toList(growable: false),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: <Widget>[
+                    _buildStatsTab(game),
+                    _buildEditTab(game),
+                    _buildLaunchTab(game),
+                    _buildCategoriesTab(),
+                    _buildProgressTab(),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: <Widget>[
-                  _buildStatsTab(game),
-                  _buildEditTab(game),
-                  _buildLaunchTab(game),
-                  _buildCategoriesTab(),
-                  _buildProgressTab(),
-                ],
-              ),
-            ),
-          ],
-        );
-      }),
+            ],
+          );
+        }),
+      ),
     );
   }
 
@@ -253,15 +284,90 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
-        // 启动按钮
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-          onPressed: () => _launchGame(game),
-          icon: const Icon(Icons.play_arrow, size: 18),
-          label: const Text('启动游戏'),
-        ),
+        // 启动按钮（含运行中状态 + 多 exe 下拉选择）
+        Obx(() {
+          final bool running = viewModel.processTracker.isRunning(game.id);
+          if (running) {
+            return FilledButton.icon(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                backgroundColor: Colors.green,
+              ),
+              onPressed: null,
+              icon: const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              label: const Text('游戏运行中...'),
+            );
+          }
+
+          final List<String> exePaths = viewModel.gameExePaths;
+
+          // 单 exe / 无 exe：普通按钮
+          if (exePaths.length <= 1) {
+            return FilledButton.icon(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              onPressed: () => _launchGame(game),
+              icon: const Icon(Icons.play_arrow, size: 18),
+              label: const Text('启动游戏'),
+            );
+          }
+
+          // 多 exe：分割按钮（左：启动默认，右：下拉选择其他 exe）
+          final ColorScheme cs = Theme.of(context).colorScheme;
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
+                  ),
+                ),
+                onPressed: () => _launchGame(game),
+                icon: const Icon(Icons.play_arrow, size: 18),
+                label: const Text('启动游戏'),
+              ),
+              Container(width: 1, height: 36, color: cs.onPrimary.withAlpha(60)),
+              PopupMenuButton<String>(
+                tooltip: '选择其他可执行文件启动',
+                offset: const Offset(0, 44),
+                onSelected: (String p) => _launchWithExe(game, p),
+                shadowColor: Colors.transparent,
+                itemBuilder: (_) => exePaths.map((String p) {
+                  final bool isDefault = p.trim() == (viewModel.game.value?.path.trim() ?? '');
+                  return PopupMenuItem<String>(
+                    value: p,
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          isDefault ? Icons.star_rounded : Icons.play_arrow_outlined,
+                          size: 16,
+                          color: isDefault ? Colors.amber : null,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(child: Text(p.split(Platform.pathSeparator).last)),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
+                  ),
+                  child: Icon(Icons.arrow_drop_down, color: cs.onPrimary, size: 20),
+                ),
+              ),
+            ],
+          );
+        }),
         Container(width: 1, height: 24, color: Theme.of(context).dividerColor),
 
         // 状态 Pills
@@ -397,6 +503,12 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     (_MetaItem s) => SizedBox(
                       width: itemW,
                       child: Card(
+                        color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -460,6 +572,12 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         else
           ...viewModel.sessions.map(
             (PlaySession session) => Card(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+              ),
               child: ListTile(
                 leading: const Icon(Icons.history),
                 title: Text('${session.startTime} → ${session.endTime}'),
@@ -484,14 +602,24 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             Expanded(
               child: TextField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: '游戏名', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: '游戏名',
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: TextField(
                 controller: _companyController,
-                decoration: const InputDecoration(labelText: '开发商', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: '开发商',
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                ),
               ),
             ),
           ],
@@ -503,9 +631,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               child: TextField(
                 controller: _ratingController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '评分 (0-10)',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
                 ),
               ),
             ),
@@ -513,10 +643,12 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             Expanded(
               child: TextField(
                 controller: _releaseController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '发售日期',
                   hintText: 'YYYY-MM-DD',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
                 ),
               ),
             ),
@@ -525,16 +657,23 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         const SizedBox(height: 12),
         TextField(
           controller: _pathController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '启动路径',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.folder_outlined),
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.folder_outlined),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
           ),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<GameStatus>(
           value: _editStatus,
-          decoration: const InputDecoration(labelText: '状态', border: OutlineInputBorder()),
+          decoration: InputDecoration(
+            labelText: '状态',
+            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+          ),
           items: GameStatus.values
               .map((GameStatus e) => DropdownMenuItem<GameStatus>(value: e, child: Text(e.label)))
               .toList(growable: false),
@@ -551,7 +690,12 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           controller: _summaryController,
           minLines: 4,
           maxLines: 8,
-          decoration: const InputDecoration(labelText: '简介', border: OutlineInputBorder()),
+          decoration: InputDecoration(
+            labelText: '简介',
+            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+          ),
         ),
         const SizedBox(height: 20),
         FilledButton.icon(
@@ -601,92 +745,320 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   // ──────────────────────────────────────────────────────
 
   Widget _buildLaunchTab(GameItem game) {
-    final bool hasPath = game.path.trim().isNotEmpty;
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '启动配置',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Obx(() {
+      // 读取最新游戏数据（响应 setDefaultExe / removeExePath 后的更新）
+      final GameItem g = viewModel.game.value ?? game;
+      final List<String> exePaths = viewModel.gameExePaths;
+      final bool running = viewModel.processTracker.isRunning(g.id);
+
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: <Widget>[
+          // 运行状态提示卡
+          if (running)
+            Card(
+              color: Colors.green.shade50,
+              margin: const EdgeInsets.only(bottom: 16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
                   children: <Widget>[
-                    const Icon(Icons.folder_open_outlined, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        hasPath ? game.path : '未配置启动路径，请在「编辑」标签中填写',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: hasPath ? null : Theme.of(context).colorScheme.onSurfaceVariant,
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '游戏运行中... 退出后将自动记录游玩时间',
+                      style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // 启动配置卡
+          Card(
+            color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '启动配置',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 游戏目录
+                  if (g.gameDir.trim().isNotEmpty) ...<Widget>[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Icon(Icons.folder_open_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '游戏目录: ${g.gameDir}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // ── 启动按钮行 ──
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      // 主启动按钮
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          ),
+                          onPressed: (g.path.trim().isNotEmpty || exePaths.isNotEmpty) && !running
+                              ? () => _launchGame(g)
+                              : null,
+                          icon: running
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.play_arrow),
+                          label: Text(
+                            running
+                                ? '游戏运行中...'
+                                : exePaths.isEmpty
+                                ? '启动游戏'
+                                : '启动游戏（${_exeName(g.path.isNotEmpty ? g.path : exePaths.first)}）',
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      // 打开所在文件夹按钮
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: '打开所在文件夹',
+                        onPressed: () {
+                          final String openPath = g.gameDir.trim().isNotEmpty
+                              ? g.gameDir.trim()
+                              : (g.path.trim().isNotEmpty ? File(g.path).parent.path : '');
+                          if (openPath.isNotEmpty) {
+                            _openContainingFolder(openPath);
+                          }
+                        },
+                        icon: const Icon(Icons.folder_open_outlined),
                       ),
-                      onPressed: hasPath ? () => _launchGame(game) : null,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('启动游戏'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final DateTime end = DateTime.now();
-                        final DateTime start = end.subtract(const Duration(hours: 1));
-                        await viewModel.addManualSession(start: start, end: end);
-                        if (mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(const SnackBar(content: Text('已追加 1 小时记录')));
-                        }
-                      },
-                      icon: const Icon(Icons.add_alarm),
-                      label: const Text('追加 1 小时记录'),
+                      // 展开/收起可执行文件列表
+                      if (exePaths.isNotEmpty) ...<Widget>[
+                        const SizedBox(width: 8),
+                        IconButton.outlined(
+                          tooltip: _exeListExpanded ? '收起选项' : '展开可执行文件列表',
+                          onPressed: () => setState(() => _exeListExpanded = !_exeListExpanded),
+                          icon: AnimatedRotation(
+                            turns: _exeListExpanded ? 0.5 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            child: const Icon(Icons.expand_more),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  // ── 可执行文件列表（展开时显示）──
+                  if (_exeListExpanded && exePaths.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).dividerColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: exePaths.asMap().entries.map((MapEntry<int, String> entry) {
+                          final String p = entry.value;
+                          final bool isDefault = g.path.trim() == p;
+                          final bool isLast = entry.key == exePaths.length - 1;
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 0,
+                                ),
+                                // 单选按钮：选中即设为默认
+                                leading: Radio<String>(
+                                  value: p,
+                                  groupValue: g.path.trim().isNotEmpty
+                                      ? g.path.trim()
+                                      : (exePaths.isNotEmpty ? exePaths.first : ''),
+                                  onChanged: (_) async {
+                                    await viewModel.setDefaultExe(p);
+                                  },
+                                ),
+                                title: Text(
+                                  _exeName(p),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: isDefault ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  p,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                // X 按钮：移除该 exe
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    if (!running)
+                                      IconButton(
+                                        tooltip: '直接启动此文件',
+                                        icon: const Icon(Icons.play_circle_outline, size: 20),
+                                        onPressed: () => _launchWithExe(g, p),
+                                      ),
+                                    IconButton(
+                                      tooltip: '移除此启动项',
+                                      icon: Icon(
+                                        Icons.close,
+                                        size: 18,
+                                        color: Theme.of(context).colorScheme.error,
+                                      ),
+                                      onPressed: exePaths.length > 1
+                                          ? () async {
+                                              await viewModel.removeExePath(p);
+                                            }
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!isLast)
+                                Divider(
+                                  height: 1,
+                                  indent: 8,
+                                  endIndent: 8,
+                                  color: Theme.of(context).dividerColor,
+                                ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ],
-                ),
-              ],
+
+                  const SizedBox(height: 12),
+                  // 检测到的存档目录（若有）
+                  Obx(() {
+                    final String savePath = viewModel.detectedSaveFolder.value;
+                    if (savePath.trim().isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      children: <Widget>[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            const Icon(Icons.save_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '存档目录: $savePath',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: () => _openContainingFolder(savePath),
+                              icon: const Icon(Icons.open_in_new, size: 16),
+                              label: const Text('打开'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    );
+                  }),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final DateTime end = DateTime.now();
+                      final DateTime start = end.subtract(const Duration(hours: 1));
+                      await viewModel.addManualSession(start: start, end: end);
+                      if (mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('已追加 1 小时记录')));
+                      }
+                    },
+                    icon: const Icon(Icons.add_alarm),
+                    label: const Text('追加 1 小时记录'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
+  }
+
+  String _exeName(String path) {
+    if (path.isEmpty) return '未设置';
+    return path.split(Platform.pathSeparator).last;
   }
 
   Future<void> _launchGame(GameItem game) async {
-    final String path = game.path.trim();
-    if (path.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('未配置启动路径，请在「编辑」标签中设置')));
-      }
-      return;
+    final bool ok = await viewModel.launchGame();
+    if (!ok && mounted) {
+      final String? err = viewModel.errorMessage;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err?.isNotEmpty == true ? err! : '启动失败')));
     }
+  }
+
+  Future<void> _launchWithExe(GameItem game, String exePath) async {
+    final bool ok = await viewModel.launchGame(overrideExePath: exePath);
+    if (!ok && mounted) {
+      final String? err = viewModel.errorMessage;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err?.isNotEmpty == true ? err! : '启动失败')));
+    }
+  }
+
+  void _openContainingFolder(String path) {
     try {
-      await Process.start(path, <String>[]);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('启动失败: $e')));
+      if (Platform.isWindows) {
+        Process.start('explorer.exe', <String>[path]);
+      } else if (Platform.isMacOS) {
+        Process.start('open', <String>[path]);
+      } else {
+        Process.start('xdg-open', <String>[path]);
       }
-    }
+    } catch (_) {}
   }
 
   // ──────────────────────────────────────────────────────
@@ -747,19 +1119,23 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         const SizedBox(height: 16),
         TextField(
           controller: _chapterController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '当前章节',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.book_outlined),
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.book_outlined),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _routeController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '当前路线',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.alt_route_outlined),
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.alt_route_outlined),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
           ),
         ),
         const SizedBox(height: 12),
@@ -767,10 +1143,12 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           controller: _noteController,
           minLines: 4,
           maxLines: 10,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '进度备注',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
             alignLabelWithHint: true,
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
           ),
         ),
         const SizedBox(height: 20),
@@ -794,6 +1172,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
 
   @override
   void dispose() {
+    // 离开详情页时，等路由反向过渡动画结束后再清除全局背景（避免淡出动画中途背景消失）
+    Future<void>.delayed(const Duration(milliseconds: 400), () {
+      getIt<DesktopScreenProvider>().globalBackgroundPath.value = '';
+    });
     _nameController.dispose();
     _companyController.dispose();
     _summaryController.dispose();

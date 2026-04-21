@@ -59,6 +59,8 @@ class SidebarController extends GetxController {
   // 各个菜单项的展开状态 (使用label作为key)
   final RxMap<String, bool> expandedItems = <String, bool>{}.obs;
 
+  /// 各分组的折叠状态 (使用group.id作为key，true=折叠)
+  final RxMap<String, bool> collapsedGroups = <String, bool>{}.obs;
   // 是否已初始化为移动端模式
   bool _initializedMobile = false;
 
@@ -117,6 +119,16 @@ class SidebarController extends GetxController {
   /// 检查菜单项是否展开
   bool isItemExpanded(String itemLabel) {
     return expandedItems[itemLabel] ?? false;
+  }
+
+  /// 切换分组的折叠/展开状态
+  void toggleGroupCollapsed(String groupId) {
+    collapsedGroups[groupId] = !(collapsedGroups[groupId] ?? false);
+  }
+
+  /// 检查分组是否折叠
+  bool isGroupCollapsed(String groupId) {
+    return collapsedGroups[groupId] ?? false;
   }
 }
 
@@ -351,50 +363,70 @@ class CollapsibleSidebar extends StatelessWidget {
   ) {
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 分组标题
-        if (group.title != null && isExpanded)
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace12,
-              vertical: AppTheme.metrics.kSpace4,
-            ),
-            child: Text(
-              group.title!,
-              style: TextStyle(
-                fontSize: AppTheme.metrics.fontSize14,
-                color: theme.hintColor,
-                fontWeight: FontWeight.w500,
-                decoration: TextDecoration.none,
+    return Obx(() {
+      final bool isCollapsed = controller.isGroupCollapsed(group.id);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 分组标题（可点击折叠/展开）
+          if (group.title != null && isExpanded)
+            InkWell(
+              onTap: () => controller.toggleGroupCollapsed(group.id),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppTheme.metrics.kSpace12,
+                  vertical: AppTheme.metrics.kSpace4,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        group.title!,
+                        style: TextStyle(
+                          fontSize: AppTheme.metrics.fontSize14,
+                          color: theme.hintColor,
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: isCollapsed ? -0.25 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(Icons.expand_more, size: 16, color: theme.hintColor),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
-        if (group.title != null && !isExpanded)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Divider(
-              height: 1,
-              thickness: scaleW(0.5),
-              color: theme.dividerColor.withAlpha(25),
+          if (group.title != null && !isExpanded)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Divider(
+                height: 1,
+                thickness: scaleW(0.5),
+                color: theme.dividerColor.withAlpha(25),
+              ),
             ),
-          ),
 
-        // 菜单项列表
-        ...group.items.map(
-          (item) => _buildMenuItem(
-            context,
-            controller,
-            item,
-            isExpanded,
-            showExtends,
-            0, // 层级
-          ),
-        ),
-      ],
-    );
+          // 菜单项列表（折叠时隐藏）
+          if (!isCollapsed)
+            ...group.items.map(
+              (item) => _buildMenuItem(
+                context,
+                controller,
+                item,
+                isExpanded,
+                showExtends,
+                0, // 层级
+              ),
+            ),
+        ],
+      );
+    });
   }
 
   /// 构建菜单项

@@ -1,7 +1,10 @@
 import 'dart:io';
-import 'package:window_manager/window_manager.dart';
+import 'dart:ui';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -96,10 +99,68 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
           ? widget.child
           : Stack(
               children: [
+                // 全局背景图（游戏详情页设置，AnimatedSwitcher 保证进出场均有淡入淡出过渡）
+                Positioned.fill(
+                  child: Obx(() {
+                    final String path = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
+                    return AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 450),
+                      reverseDuration: const Duration(milliseconds: 350),
+                      child: path.isEmpty
+                          ? const SizedBox.shrink()
+                          : _GlobalBlurBackground(
+                              key: ValueKey<String>(path),
+                              coverPath: path,
+                            ),
+                    );
+                  }),
+                ),
                 widget.child,
                 Positioned(left: 0, top: 0, child: const ScreenTopBar()),
               ],
             ),
+    );
+  }
+}
+
+/// 全局模糊封面背景（铺满整个窗口）
+class _GlobalBlurBackground extends StatelessWidget {
+  const _GlobalBlurBackground({super.key, required this.coverPath});
+
+  final String coverPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final String value = coverPath.trim();
+    Widget image;
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      image = CachedNetworkImage(
+        imageUrl: value,
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        placeholder: (_, __) => const SizedBox.shrink(),
+        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+      );
+    } else {
+      final File file = File(value);
+      if (value.isNotEmpty && file.existsSync()) {
+        image = Image.file(file, fit: BoxFit.cover, alignment: Alignment.center);
+      } else {
+        return const SizedBox.shrink();
+      }
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        image,
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: ColoredBox(
+            color: Theme.of(context).colorScheme.surface.withAlpha(200),
+          ),
+        ),
+      ],
     );
   }
 }

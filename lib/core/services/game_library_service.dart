@@ -299,6 +299,8 @@ class GameLibraryService {
     required String path,
     required GameStatus status,
     required String coverPath,
+    List<String> exePaths = const <String>[],
+    String gameDir = '',
   }) async {
     final DateTime now = DateTime.now();
     final GameItem item = GameItem(
@@ -315,6 +317,8 @@ class GameLibraryService {
       updatedAt: now,
       totalPlayTimeSec: 0,
       tags: const <String>[],
+      exePaths: exePaths,
+      gameDir: gameDir.trim(),
     );
     _games.add(item);
     await _persistGames();

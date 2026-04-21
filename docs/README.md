@@ -26,7 +26,7 @@
 | 局域网互传 | [docs/lan_transfer.md](lan_transfer.md) | `lib/pages/lan_transfer/` · `rust/lan_transfer/` |
 | 媒体库 | [docs/media_library.md](media_library.md) | `lib/pages/collection/picture/` · `rust/media_collection/` |
 | 书库 | [docs/novel_library.md](novel_library.md) | `lib/pages/collection/library/` · `rust/novel_reader/` |
-| 游戏库（LunaBox迁移） | `待补充` | `lib/pages/game_library/` · `lib/core/services/game_library_service.dart` · `rust/game_library/` |
+| 游戏库（LunaBox迁移） | [docs/game_library.md](game_library.md) | `lib/pages/game_library/` · `lib/core/services/game_library_service.dart` · `lib/core/services/game_process_tracker.dart` |
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
 | PicACG 漫画 | [docs/picacg.md](picacg.md) | `lib/pages/picacg/` · `rust/picacg_module/` |
 
