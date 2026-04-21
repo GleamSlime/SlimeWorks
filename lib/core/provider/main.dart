@@ -6,7 +6,9 @@ import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
+import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 
@@ -41,6 +43,12 @@ void getItInit() {
 
   // PicACG 下载服务
   getIt.registerLazySingleton<PicAcgDownloadService>(() => PicAcgDownloadService());
+
+  // 游戏库服务
+  getIt.registerLazySingleton<GameLibraryMetadataApi>(() => GameLibraryMetadataApi());
+  getIt.registerLazySingleton<GameLibraryService>(
+    () => GameLibraryService(metadataApi: getIt<GameLibraryMetadataApi>()),
+  );
 
   isInitialized = true;
 }

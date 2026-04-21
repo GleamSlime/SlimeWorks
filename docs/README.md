@@ -26,6 +26,7 @@
 | 局域网互传 | [docs/lan_transfer.md](lan_transfer.md) | `lib/pages/lan_transfer/` · `rust/lan_transfer/` |
 | 媒体库 | [docs/media_library.md](media_library.md) | `lib/pages/collection/picture/` · `rust/media_collection/` |
 | 书库 | [docs/novel_library.md](novel_library.md) | `lib/pages/collection/library/` · `rust/novel_reader/` |
+| 游戏库（LunaBox迁移） | `待补充` | `lib/pages/game_library/` · `lib/core/services/game_library_service.dart` · `rust/game_library/` |
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
 | PicACG 漫画 | [docs/picacg.md](picacg.md) | `lib/pages/picacg/` · `rust/picacg_module/` |
 
@@ -56,6 +57,7 @@
 | `lib/core/services/node/node_http_handler.dart` | 节点 action 分发（**已迁移到 Rust，历史参考**） |
 | `lib/core/services/lan_transfer_service.dart` | 互传 Dart Service，含端口重试逻辑 |
 | `lib/core/services/media_prefs_service.dart` | 媒体质量偏好设置 |
+| `lib/core/services/game_library_service.dart` | 游戏库聚合服务（游戏、分类、统计、备份） |
 
 ### Rust 层
 
@@ -66,6 +68,7 @@
 | `rust/lan_transfer/src/` | 局域网互传核心（`api.rs` FFI, `manager.rs` 总控, `discovery.rs` mDNS, `transfer.rs` TCP 帧传输） |
 | `rust/media_collection/` | 媒体库（扫描、FFI、缩略图生成） |
 | `rust/novel_reader/` | 书库（TXT/EPUB 解析、搜索、进度管理） |
+| `rust/game_library/` | 游戏库核心（SQLite、分类、游玩会话、统计） |
 | `rust/src/frb_generated.rs` | FRB 自动生成，**勿直接修改** |
 | `lib/src/rust/` | Dart FFI 自动生成，**勿直接修改** |
 

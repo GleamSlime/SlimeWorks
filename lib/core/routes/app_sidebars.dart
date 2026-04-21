@@ -7,3 +7,4 @@ part 'sidebars/core_sidebar.dart';
 part 'sidebars/bottom_sidebar.dart';
 part 'sidebars/demo_sidebar.dart';
 part 'sidebars/picacg_sidebar.dart';
+part 'sidebars/game_library_sidebar.dart';

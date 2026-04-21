@@ -1,5 +1,6 @@
 pub mod capture;
 pub mod ffmpeg;
+pub mod game_library;
 pub mod http_bridge;
 pub mod lan_transfer;
 pub mod logger;

@@ -25,6 +25,13 @@ import 'package:slime_works/pages/http_bridge_test_page.dart';
 import 'package:slime_works/pages/settings/settings_page.dart';
 import 'package:slime_works/pages/lan_transfer/lan_transfer_screen.dart';
 import 'package:slime_works/pages/lan_transfer/lan_chat_screen.dart';
+import 'package:slime_works/pages/game_library/home/game_library_home_screen.dart';
+import 'package:slime_works/pages/game_library/library/game_library_screen.dart';
+import 'package:slime_works/pages/game_library/detail/game_detail_screen.dart';
+import 'package:slime_works/pages/game_library/categories/game_categories_screen.dart';
+import 'package:slime_works/pages/game_library/categories/game_category_detail_screen.dart';
+import 'package:slime_works/pages/game_library/stats/game_stats_screen.dart';
+import 'package:slime_works/pages/game_library/settings/game_settings_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_home_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_comic_detail_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_history_screen.dart';
@@ -46,6 +53,7 @@ part 'routes/demo_routes.dart';
 part 'routes/capture_routers.dart';
 part 'routes/lan_transfer_routes.dart';
 part 'routes/picacg_routes.dart';
+part 'routes/game_library_routes.dart';
 
 // // 导航到 Dashboard
 // DashboardRoute().go(context);
@@ -101,6 +109,14 @@ class AppRoutes {
       const RequestHostRoute(),
       const LanTransferRoute(),
       LanChatRoute(peerId: '', peerName: ''),
+
+      const GameHomeRoute(),
+      const GameLibraryRoute(),
+      const GameCategoriesRoute(),
+      const GameStatsRoute(),
+      const GameSettingsRoute(),
+      const GameDetailRoute(gameId: ''),
+      const GameCategoryDetailRoute(categoryId: ''),
 
       const GooeyDemoRoute(),
       const ViewModelDemoRoute(),
@@ -185,10 +201,7 @@ class AppRoutes {
           color: Theme.of(context).scaffoldBackgroundColor,
           child: FadeTransition(
             opacity: curved,
-            child: ScaleTransition(
-              scale: scale,
-              child: child,
-            ),
+            child: ScaleTransition(scale: scale, child: child),
           ),
         );
       },

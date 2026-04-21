@@ -21,6 +21,7 @@ class DesktopLayout extends StatefulWidget {
     return [
       coreSidebarGroup,
       collectionSidebarGroup,
+      gameLibrarySidebarGroup,
       picacgSidebarGroup,
       // 第一组：主要功能
       // SidebarGroup(
@@ -235,4 +236,3 @@ class MobileLayout extends StatelessWidget {
     });
   }
 }
-
