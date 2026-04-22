@@ -121,9 +121,11 @@ Future<String> gameLibraryGetHomePageDataJson() =>
 Future<PlatformInt64> gameLibraryLaunchGame({
   required String exePath,
   required String workingDir,
+  required bool useOpen,
 }) => RustLib.instance.api.crateApiGameLibraryGameLibraryLaunchGame(
   exePath: exePath,
   workingDir: workingDir,
+  useOpen: useOpen,
 );
 
 String gameLibraryDeriveGameName({required String path}) => RustLib.instance.api
@@ -147,3 +149,33 @@ Future<void> gameLibrarySaveSettingsJson({required String settingsJson}) =>
     RustLib.instance.api.crateApiGameLibraryGameLibrarySaveSettingsJson(
       settingsJson: settingsJson,
     );
+
+Future<String> gameLibraryFetchMoegirl({required String gameName}) => RustLib
+    .instance
+    .api
+    .crateApiGameLibraryGameLibraryFetchMoegirl(gameName: gameName);
+
+Future<String> gameLibrarySearch2DfanSubject({required String gameName}) =>
+    RustLib.instance.api.crateApiGameLibraryGameLibrarySearch2DfanSubject(
+      gameName: gameName,
+    );
+
+Future<String> gameLibraryFetch2DfanDownloadPath({
+  required String subjectPath,
+}) => RustLib.instance.api.crateApiGameLibraryGameLibraryFetch2DfanDownloadPath(
+  subjectPath: subjectPath,
+);
+
+Future<String> gameLibraryFetch2DfanDownloadInfo({
+  required String downloadPath,
+}) => RustLib.instance.api.crateApiGameLibraryGameLibraryFetch2DfanDownloadInfo(
+  downloadPath: downloadPath,
+);
+
+Future<void> gameLibraryDownloadFile({
+  required String url,
+  required String savePath,
+}) => RustLib.instance.api.crateApiGameLibraryGameLibraryDownloadFile(
+  url: url,
+  savePath: savePath,
+);

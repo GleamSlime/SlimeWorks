@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 import 'package:slime_works/core/utils/logger.dart';
@@ -8,12 +10,21 @@ class GameLibraryMetadataApi {
   GameLibraryMetadataApi()
     : _dio = Dio(
         BaseOptions(
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-          sendTimeout: const Duration(seconds: 5),
+          connectTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+          sendTimeout: const Duration(seconds: 60),
           headers: <String, dynamic>{'User-Agent': 'SlimeWorks/1.0', 'Accept': 'application/json'},
         ),
       ) {
+    // 检测系统代理
+    final String? proxyUrl = _detectSystemProxy();
+    if (proxyUrl != null) {
+      (_dio.httpClientAdapter as dynamic).onHttpClientCreate = (HttpClient client) {
+        client.findProxy = (Uri uri) => 'PROXY $proxyUrl';
+        client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+        return client;
+      };
+    }
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
@@ -320,6 +331,25 @@ class GameLibraryMetadataApi {
     if (score > 10) return 10;
     return score;
   }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 系统代理检测
+  // ───────────────────────────────────────────────────────────────────────────
+
+  static String? _detectSystemProxy() {
+    for (final String key in <String>[
+      'HTTPS_PROXY',
+      'https_proxy',
+      'HTTP_PROXY',
+      'http_proxy',
+      'ALL_PROXY',
+      'all_proxy',
+    ]) {
+      final String? v = Platform.environment[key];
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
 }
 
 /// 游戏元数据搜索结果
@@ -343,4 +373,15 @@ class GameSearchMetadata {
   final String releaseDate;
   final String source;
   final String sourceId;
+}
+
+/// 2DFan 下载页解析结果
+class TwodfanDownloadInfo {
+  const TwodfanDownloadInfo({required this.fileUrl, required this.description});
+
+  /// 直接下载链接（null 表示未找到）
+  final String? fileUrl;
+
+  /// 简介/存档路径说明文本
+  final String description;
 }

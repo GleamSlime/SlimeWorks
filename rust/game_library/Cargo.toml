@@ -18,6 +18,15 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 lazy_static = "1.5"
 parking_lot = "0.12"
+# HTTP 抓取（萌娘百科 / 2DFan）
+reqwest = { version = "0.12", features = [
+    "blocking",
+    "cookies",
+    "gzip",
+    "deflate",
+] }
+scraper = "0.22"
+percent-encoding = "2"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

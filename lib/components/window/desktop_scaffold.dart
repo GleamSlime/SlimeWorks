@@ -104,14 +104,11 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                   child: Obx(() {
                     final String path = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
                     return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 450),
-                      reverseDuration: const Duration(milliseconds: 350),
+                      duration: const Duration(milliseconds: 250),
+                      reverseDuration: const Duration(milliseconds: 150),
                       child: path.isEmpty
                           ? const SizedBox.shrink()
-                          : _GlobalBlurBackground(
-                              key: ValueKey<String>(path),
-                              coverPath: path,
-                            ),
+                          : _GlobalBlurBackground(key: ValueKey<String>(path), coverPath: path),
                     );
                   }),
                 ),
@@ -156,9 +153,7 @@ class _GlobalBlurBackground extends StatelessWidget {
         image,
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: ColoredBox(
-            color: Theme.of(context).colorScheme.surface.withAlpha(200),
-          ),
+          child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor.withAlpha(120)),
         ),
       ],
     );

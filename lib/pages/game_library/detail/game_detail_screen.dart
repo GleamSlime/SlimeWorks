@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 
@@ -44,6 +45,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   GameStatus _editStatus = GameStatus.notStarted;
 
   bool _exeListExpanded = false;
+  final GlobalKey _twodfanPickerKey = GlobalKey();
+  bool _twodfanPickerLoading = false;
 
   static const List<String> _tabLabels = <String>['统计', '编辑', '启动', '分类', '进度'];
 
@@ -507,7 +510,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.outline.withOpacity(0.12),
+                          ),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -585,8 +590,154 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               ),
             ),
           ),
+
+        // ── 萌娘百科 ──
+        const SizedBox(height: 20),
+        _buildMoegirlSection(),
       ],
     );
+  }
+
+  Widget _buildMoegirlSection() {
+    return Obx(() {
+      final bool loading = viewModel.moegirlLoading.value;
+      final String html = viewModel.moegirlHtml.value;
+      final String error = viewModel.moegirlError.value;
+      if (loading) {
+        return Card(
+          color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+          ),
+          child: const Padding(
+            padding: EdgeInsets.all(20),
+            child: Row(
+              children: <Widget>[
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 12),
+                Text('正在加载萌娘百科...'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (error.isNotEmpty) {
+        return Card(
+          color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+          ),
+          child: ListTile(
+            leading: const Icon(Icons.warning_amber_outlined),
+            title: const Text('萌娘百科加载失败'),
+            subtitle: Text(error, style: Theme.of(context).textTheme.bodySmall),
+            trailing: IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: '重试',
+              onPressed: viewModel.retryMoegirl,
+            ),
+          ),
+        );
+      }
+      if (html.isEmpty) return const SizedBox.shrink();
+      return Card(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.menu_book_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Text('萌娘百科', style: Theme.of(context).textTheme.titleSmall),
+                  const Spacer(),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(4),
+                    onTap: () async {
+                      final String name = viewModel.game.value?.name ?? '';
+                      if (name.isEmpty) return;
+                      final String encoded = Uri.encodeComponent(name);
+                      final String url = 'https://zh.moegirl.org.cn/$encoded';
+                      try {
+                        await Process.run('open', [url]);
+                      } catch (_) {}
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            Icons.open_in_new,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            '原文',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              HtmlWidget(
+                html,
+                buildAsync: true,
+                baseUrl: Uri.parse('https://zh.moegirl.org.cn'),
+                textStyle: Theme.of(context).textTheme.bodySmall,
+                onTapUrl: (url) async {
+                  try {
+                    await Process.run('open', [url]);
+                  } catch (_) {}
+                  return true;
+                },
+                customStylesBuilder: (element) {
+                  switch (element.localName) {
+                    case 'img':
+                      // 强制块级渲染，避免内联 WidgetSpan 路径下
+                      // CircularProgressIndicator 调用 computeDryBaseline 崩溃
+                      return {'display': 'block', 'max-width': '100%', 'margin': '4px 0'};
+                    case 'p':
+                    case 'li':
+                      return {'margin': '0', 'padding': '0'};
+                    case 'ul':
+                    case 'ol':
+                      return {'margin': '2px 0', 'padding-left': '16px'};
+                    case 'h1':
+                    case 'h2':
+                    case 'h3':
+                    case 'h4':
+                    case 'h5':
+                    case 'h6':
+                      return {'margin': '4px 0 2px 0'};
+                    default:
+                      return null;
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   // ──────────────────────────────────────────────────────
@@ -819,6 +970,28 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     const SizedBox(height: 12),
                   ],
 
+                  // ── macOS：使用 open 启动开关（仅 macOS 显示）──
+                  if (Platform.isMacOS)
+                    Obx(
+                      () => SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('使用 open 命令启动'),
+                        subtitle: const Text(
+                          '适用于 Wine/Crossover 包装或需要 macOS 关联打开的程序',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: viewModel.useOpenOnMacos.value,
+                        onChanged: (bool v) async {
+                          viewModel.useOpenOnMacos.value = v;
+                          // 持久化到设置
+                          try {
+                            final GameLibrarySettings cur = await viewModel.getSettings();
+                            await viewModel.saveSettings(cur.copyWith(useOpenOnMacos: v));
+                          } catch (_) {}
+                        },
+                      ),
+                    ),
+
                   // ── 启动按钮行 ──
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1043,8 +1216,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
                     onPressed: () {
-                      final String url =
-                          'https://zh.moegirl.org.cn/${Uri.encodeComponent(g.name)}';
+                      final String url = 'https://zh.moegirl.org.cn/${Uri.encodeComponent(g.name)}';
                       Process.run('open', <String>[url]);
                     },
                     icon: const Icon(Icons.open_in_browser),
@@ -1054,9 +1226,260 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               ),
             ),
           ),
+
+          // 2DFan
+          const SizedBox(height: 16),
+          _buildTwodfanCard(g),
         ],
       );
     });
+  }
+
+  Widget _buildTwodfanCard(GameItem g) {
+    return Card(
+      color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '2DFan',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+
+            // 在浏览器打开搜索页
+            OutlinedButton.icon(
+              onPressed: () {
+                final String url =
+                    'https://2dfan.com/subjects/search?keyword=${Uri.encodeComponent(g.name)}';
+                Process.run('open', <String>[url]);
+              },
+              icon: const Icon(Icons.search),
+              label: Text('在 2DFan 搜索「${g.name}」'),
+            ),
+            const SizedBox(height: 10),
+
+            // 一键下载存档 + 选择存档版本
+            Obx(() {
+              final bool processing = viewModel.twodfanProcessing.value;
+              final String status = viewModel.twodfanStatus.value;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      FilledButton.icon(
+                        onPressed: processing ? null : () => viewModel.downloadTwodfanSave(),
+                        icon: processing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.download_outlined),
+                        label: Text(processing ? '处理中...' : '一键下载存档'),
+                      ),
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: '选择存档版本',
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: OutlinedButton(
+                            key: _twodfanPickerKey,
+                            onPressed: viewModel.twodfanProcessing.value || _twodfanPickerLoading
+                                ? null
+                                : () => _showTwodfanMenu(g),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.all(Radius.circular(8)),
+                              ),
+                            ),
+                            child: _twodfanPickerLoading
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                                  )
+                                : const Icon(Icons.expand_more, size: 18),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (status.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      status,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: status.startsWith('下载完成')
+                            ? Colors.green
+                            : (status.startsWith('下载失败') || status.startsWith('未'))
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            }),
+
+            // 存档简介（下载后展示）
+            Obx(() {
+              final String desc = viewModel.twodfanDesc.value;
+              if (desc.isEmpty) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    '存档说明',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildTwodfanDescWidget(desc),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 在按钮位置弹出 popup menu 让用户选择存档版本。
+  Future<void> _showTwodfanMenu(GameItem g) async {
+    setState(() => _twodfanPickerLoading = true);
+    try {
+      final List<Map<String, String>> items = await viewModel.fetchTwodfanDownloadItems();
+      if (!mounted) return;
+      if (items.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未找到存档资源')));
+        return;
+      }
+      final RenderBox? btnBox = _twodfanPickerKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+      final RelativeRect position = btnBox != null
+          ? RelativeRect.fromRect(
+              Rect.fromPoints(
+                btnBox.localToGlobal(Offset.zero, ancestor: overlay),
+                btnBox.localToGlobal(btnBox.size.bottomRight(Offset.zero), ancestor: overlay),
+              ),
+              Offset.zero & overlay.size,
+            )
+          : RelativeRect.fill;
+      final Map<String, String>? selected = await showMenu<Map<String, String>>(
+        context: context,
+        position: position,
+        items: items
+            .asMap()
+            .entries
+            .map(
+              (MapEntry<int, Map<String, String>> entry) => PopupMenuItem<Map<String, String>>(
+                value: entry.value,
+                child: Text(
+                  '${entry.key + 1}. ${entry.value['title'] ?? entry.value['path'] ?? ''}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
+            .toList(),
+      );
+      if (selected != null && mounted) {
+        final String? path = selected['path'];
+        if (path != null && path.isNotEmpty) {
+          viewModel.downloadTwodfanSave(downloadItemPath: path);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('获取存档列表失败: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _twodfanPickerLoading = false);
+    }
+  }
+
+  /// 渲染 2DFan 存档简介，将 Windows 路径高亮为可点击/可复制链接，替换用户名占位符。
+  Widget _buildTwodfanDescWidget(String rawDesc) {
+    final String username =
+        Platform.environment['USER'] ?? Platform.environment['USERNAME'] ?? '用户名';
+
+    final String text = rawDesc
+        .replaceAll('你的用户名', username)
+        .replaceAll('(你的|用户名)', username)
+        .replaceAll('ユーザー名', username)
+        .replaceAll('あなたのユーザー名', username);
+
+    final RegExp pathRegex = RegExp(r'[A-Z]:\\(?:[^\\\r\n]+\\)*[^\\\r\n]*');
+    final List<InlineSpan> spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final RegExpMatch match in pathRegex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final String path = match.group(0)!;
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Tooltip(
+            message: '点击：复制路径并尝试打开',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(4),
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: path));
+                Process.run('open', <String>[path]);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('已复制: $path'), duration: const Duration(seconds: 2)),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                  path,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    decoration: TextDecoration.underline,
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return SelectionArea(
+      child: Text.rich(
+        TextSpan(
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.7),
+          children: spans,
+        ),
+      ),
+    );
   }
 
   String _exeName(String path) {

@@ -313,6 +313,7 @@ class GameLibrarySettings {
     required this.defaultSort,
     required this.autoSave,
     required this.enableDesktopLaunch,
+    this.useOpenOnMacos = false,
   });
 
   final bool autoTrackPlayTime;
@@ -320,17 +321,22 @@ class GameLibrarySettings {
   final bool autoSave;
   final bool enableDesktopLaunch;
 
+  /// macOS 下使用 open 命令启动游戏
+  final bool useOpenOnMacos;
+
   GameLibrarySettings copyWith({
     bool? autoTrackPlayTime,
     String? defaultSort,
     bool? autoSave,
     bool? enableDesktopLaunch,
+    bool? useOpenOnMacos,
   }) {
     return GameLibrarySettings(
       autoTrackPlayTime: autoTrackPlayTime ?? this.autoTrackPlayTime,
       defaultSort: defaultSort ?? this.defaultSort,
       autoSave: autoSave ?? this.autoSave,
       enableDesktopLaunch: enableDesktopLaunch ?? this.enableDesktopLaunch,
+      useOpenOnMacos: useOpenOnMacos ?? this.useOpenOnMacos,
     );
   }
 
@@ -340,6 +346,7 @@ class GameLibrarySettings {
       'defaultSort': defaultSort,
       'autoSave': autoSave,
       'enableDesktopLaunch': enableDesktopLaunch,
+      'useOpenOnMacos': useOpenOnMacos,
     };
   }
 
@@ -349,6 +356,7 @@ class GameLibrarySettings {
       defaultSort: json['defaultSort'] as String? ?? 'updatedAt_desc',
       autoSave: json['autoSave'] as bool? ?? true,
       enableDesktopLaunch: json['enableDesktopLaunch'] as bool? ?? true,
+      useOpenOnMacos: json['useOpenOnMacos'] as bool? ?? false,
     );
   }
 
@@ -358,6 +366,7 @@ class GameLibrarySettings {
       defaultSort: 'updatedAt_desc',
       autoSave: true,
       enableDesktopLaunch: true,
+      useOpenOnMacos: false,
     );
   }
 }

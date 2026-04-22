@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:get/get.dart';
@@ -9,6 +10,7 @@ import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
+import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
 
 final Loggers _logger = Loggers(name: '游戏详情ViewModel');
 
@@ -21,8 +23,20 @@ class GameLibraryDetailViewModel extends BaseViewModel {
   final Rxn<GameProgress> progress = Rxn<GameProgress>();
   final RxList<GameCategory> categories = <GameCategory>[].obs;
   final RxSet<String> selectedCategoryIds = <String>{}.obs;
-  // 自动检测到的存档目录（相对于 game.gameDir 或可识别的子目录）
   final RxString detectedSaveFolder = ''.obs;
+
+  // ── 萌娘百科 ────────────────────────────────────────────
+  final RxString moegirlHtml = ''.obs;
+  final RxBool moegirlLoading = false.obs;
+  final RxString moegirlError = ''.obs;
+
+  // ── 2DFan ────────────────────────────────────────────────
+  final RxString twodfanDesc = ''.obs;
+  final RxString twodfanStatus = ''.obs;
+  final RxBool twodfanProcessing = false.obs;
+
+  // ── 启动设置 ─────────────────────────────────────────────
+  final RxBool useOpenOnMacos = false.obs;
 
   Future<void> load(String gameId) async {
     await _service.init();
@@ -40,8 +54,15 @@ class GameLibraryDetailViewModel extends BaseViewModel {
         load(id);
       }
     });
+    // 加载全局设置（useOpenOnMacos）
+    try {
+      final GameLibrarySettings settings = await _service.getSettings();
+      useOpenOnMacos.value = settings.useOpenOnMacos;
+    } catch (_) {}
     // 尝试检测存档目录
     await detectSaveFolder();
+    // 后台加载萌娘百科内容（不阻塞主界面）
+    _fetchMoegirlInBackground();
   }
 
   /// 简单启发式检测游戏存档目录：检查游戏目录下常见的存档文件夹名
@@ -215,7 +236,19 @@ class GameLibraryDetailViewModel extends BaseViewModel {
   }
 
   /// 启动游戏。[overrideExePath] 非空时跳过默认 exe 逻辑直接启动指定 exe。
+  bool _launching = false;
+
   Future<bool> launchGame({String? overrideExePath}) async {
+    if (_launching) return false;
+    _launching = true;
+    try {
+      return await _doLaunchGame(overrideExePath: overrideExePath);
+    } finally {
+      _launching = false;
+    }
+  }
+
+  Future<bool> _doLaunchGame({String? overrideExePath}) async {
     final GameItem? current = game.value;
     if (current == null) {
       return false;
@@ -241,6 +274,7 @@ class GameLibraryDetailViewModel extends BaseViewModel {
       gameId: current.id,
       exePath: exePath,
       workingDirectory: workDir,
+      useOpen: useOpenOnMacos.value,
     );
     if (!ok) {
       setError('启动失败，请确认可执行文件是否有效');
@@ -293,4 +327,146 @@ class GameLibraryDetailViewModel extends BaseViewModel {
     }
     return File(exePath).parent.path;
   }
+
+  // ── 萌娘百科 ─────────────────────────────────────────────
+
+  void _fetchMoegirlInBackground() {
+    final String? name = game.value?.name;
+    if (name == null || name.trim().isEmpty) return;
+    moegirlLoading.value = true;
+    moegirlHtml.value = '';
+    moegirlError.value = '';
+    rust_api
+        .gameLibraryFetchMoegirl(gameName: name)
+        .then((String html) {
+          moegirlHtml.value = html;
+          moegirlLoading.value = false;
+        })
+        .catchError((Object e) {
+          _logger.info('萌娘百科加载失败: $e');
+          moegirlError.value = e.toString();
+          moegirlLoading.value = false;
+        });
+  }
+
+  void retryMoegirl() => _fetchMoegirlInBackground();
+
+  // ── 2DFan ─────────────────────────────────────────────────
+
+  /// 执行完整的「搜索→获取存档列表→获取下载链接→下载文件」流程。
+  /// [downloadItemPath]：若提供则跳过搜索/列表步骤，直接使用该路径进行下载。
+  Future<void> downloadTwodfanSave({String? downloadItemPath}) async {
+    final String? name = game.value?.name;
+    if (name == null || name.trim().isEmpty) return;
+    if (twodfanProcessing.value) return;
+
+    twodfanProcessing.value = true;
+    twodfanDesc.value = '';
+
+    try {
+      String actualDownloadPath;
+
+      if (downloadItemPath != null) {
+        // 直接使用外部传入的路径（来自选择器）
+        actualDownloadPath = downloadItemPath;
+        twodfanStatus.value = '正在获取下载链接...';
+      } else {
+        // Step 1: 搜索
+        twodfanStatus.value = '正在搜索游戏...';
+        final String subjectPath = await rust_api.gameLibrarySearch2DfanSubject(gameName: name);
+        if (subjectPath.isEmpty) {
+          twodfanStatus.value = '未在 2DFan 找到该游戏';
+          return;
+        }
+
+        // Step 2: 获取存档下载列表（JSON 数组）
+        twodfanStatus.value = '正在获取存档列表...';
+        final String itemsJson = await rust_api.gameLibraryFetch2DfanDownloadPath(
+          subjectPath: subjectPath,
+        );
+        final dynamic parsed = _parseJson(itemsJson);
+        final List<dynamic> items = parsed is List ? parsed : <dynamic>[];
+        if (items.isEmpty) {
+          twodfanStatus.value = '未找到存档资源';
+          return;
+        }
+        actualDownloadPath = (items.first as Map?)?['path'] as String? ?? '';
+        if (actualDownloadPath.isEmpty) {
+          twodfanStatus.value = '未找到存档资源';
+          return;
+        }
+        twodfanStatus.value = '正在获取下载链接...';
+      }
+
+      // Step 3: 获取下载链接与简介
+      final String infoJson = await rust_api.gameLibraryFetch2DfanDownloadInfo(
+        downloadPath: actualDownloadPath,
+      );
+      final Map<String, dynamic> info = Map<String, dynamic>.from((_parseJson(infoJson)) as Map);
+      final String desc = (info['description'] as String?) ?? '';
+      if (desc.isNotEmpty) twodfanDesc.value = desc;
+      final String fileUrl = (info['fileUrl'] as String?) ?? '';
+      if (fileUrl.isEmpty) {
+        twodfanStatus.value = '未找到下载文件';
+        return;
+      }
+
+      // Step 4: 下载到 ~/Downloads
+      twodfanStatus.value = '正在下载...';
+      final String home = Platform.environment['HOME'] ?? '';
+      final String downloadsDir = home.isNotEmpty ? '$home/Downloads' : '.';
+      final String filename = fileUrl
+          .split('/')
+          .last
+          .split('?')
+          .first
+          .replaceAll(RegExp(r'[^\w.\-]'), '_');
+      final String destPath = '$downloadsDir/$filename';
+
+      // Rust 直接下载（内部已处理代理）
+      await rust_api.gameLibraryDownloadFile(url: fileUrl, savePath: destPath);
+      twodfanStatus.value = '下载完成: $destPath';
+    } catch (e) {
+      twodfanStatus.value = '下载失败: $e';
+      _logger.info('2DFan下载失败: $e');
+    } finally {
+      twodfanProcessing.value = false;
+    }
+  }
+
+  /// 获取 2DFan 存档条目列表（用于 UI 选择器）。返回 [{path, title}, ...]
+  Future<List<Map<String, String>>> fetchTwodfanDownloadItems() async {
+    final String? name = game.value?.name;
+    if (name == null || name.trim().isEmpty) return const <Map<String, String>>[];
+    final String subjectPath = await rust_api.gameLibrarySearch2DfanSubject(gameName: name);
+    if (subjectPath.isEmpty) return const <Map<String, String>>[];
+    final String itemsJson = await rust_api.gameLibraryFetch2DfanDownloadPath(
+      subjectPath: subjectPath,
+    );
+    final dynamic parsed = _parseJson(itemsJson);
+    if (parsed is! List) return const <Map<String, String>>[];
+    return parsed
+        .whereType<Map>()
+        .map(
+          (dynamic e) => Map<String, String>.from(
+            (e as Map).map<String, String>(
+              (dynamic k, dynamic v) => MapEntry(k.toString(), v.toString()),
+            ),
+          ),
+        )
+        .toList();
+  }
+
+  dynamic _parseJson(String s) {
+    if (s.isEmpty) return <String, dynamic>{};
+    try {
+      return jsonDecode(s);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<GameLibrarySettings> getSettings() => _service.getSettings();
+
+  Future<void> saveSettings(GameLibrarySettings settings) => _service.updateSettings(settings);
 }

@@ -84,6 +84,9 @@ pub struct GameLibrarySettings {
     pub default_sort: String,
     pub auto_save: bool,
     pub enable_desktop_launch: bool,
+    /// macOS 下使用 `open` 命令启动游戏（适用于非 .app 的 Wine/Crossover 包装）
+    #[serde(default)]
+    pub use_open_on_macos: bool,
 }
 
 /// 分类信息

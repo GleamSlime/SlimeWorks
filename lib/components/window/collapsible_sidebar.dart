@@ -193,6 +193,8 @@ class CollapsibleSidebar extends StatelessWidget {
         );
       }
 
+      final String globalBackgroundPath = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
+
       // 桌面端使用原有布局
       return Container(
         margin: EdgeInsets.all(AppTheme.metrics.kSpace12),
@@ -206,11 +208,14 @@ class CollapsibleSidebar extends StatelessWidget {
             boxShadow: desktopScreen.isDesktop.value
                 ? [BoxShadow(color: theme.shadowColor.withAlpha(25), blurRadius: scaleW(10))]
                 : null,
-            gradient: AppTheme.sideBarTheme(context),
+            gradient: AppTheme.sideBarTheme(
+              context,
+              alpha: globalBackgroundPath.isNotEmpty ? 100 : 255,
+            ),
             border: Border.all(
               width: 1.w,
               color: AppTheme.isLight(context)
-                  ? Colors.white
+                  ? Colors.white.withAlpha(150)
                   : Color(0xFF333333).withAlpha((255 * 0.9).toInt()),
             ),
           ),

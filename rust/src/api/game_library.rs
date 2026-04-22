@@ -240,8 +240,12 @@ pub async fn game_library_get_home_page_data_json() -> Result<String> {
     Ok(serde_json::to_string(&v).context("序列化首页数据失败")?)
 }
 
-pub async fn game_library_launch_game(exe_path: String, working_dir: String) -> Result<i64> {
-    game_library::game_library_launch_game(exe_path, working_dir).await
+pub async fn game_library_launch_game(
+    exe_path: String,
+    working_dir: String,
+    use_open: bool,
+) -> Result<i64> {
+    game_library::game_library_launch_game(exe_path, working_dir, use_open).await
 }
 
 #[frb(sync)]
@@ -270,6 +274,7 @@ pub async fn game_library_get_settings_json() -> Result<String> {
         "defaultSort": s.default_sort,
         "autoSave": s.auto_save,
         "enableDesktopLaunch": s.enable_desktop_launch,
+        "useOpenOnMacos": s.use_open_on_macos,
     });
     Ok(serde_json::to_string(&v).context("序列化设置失败")?)
 }
@@ -281,6 +286,31 @@ pub async fn game_library_save_settings_json(settings_json: String) -> Result<()
         default_sort: v["defaultSort"].as_str().unwrap_or("updatedAt_desc").to_string(),
         auto_save: v["autoSave"].as_bool().unwrap_or(true),
         enable_desktop_launch: v["enableDesktopLaunch"].as_bool().unwrap_or(true),
+        use_open_on_macos: v["useOpenOnMacos"].as_bool().unwrap_or(false),
     };
     game_library::game_library_save_settings(s).await
+}
+
+// ─── 萌娘百科 ────────────────────────────────────────────────────────────────
+
+pub async fn game_library_fetch_moegirl(game_name: String) -> Result<String> {
+    game_library::game_library_fetch_moegirl(game_name).await
+}
+
+// ─── 2DFan ───────────────────────────────────────────────────────────────────
+
+pub async fn game_library_search_2dfan_subject(game_name: String) -> Result<String> {
+    game_library::game_library_search_2dfan_subject(game_name).await
+}
+
+pub async fn game_library_fetch_2dfan_download_path(subject_path: String) -> Result<String> {
+    game_library::game_library_fetch_2dfan_download_path(subject_path).await
+}
+
+pub async fn game_library_fetch_2dfan_download_info(download_path: String) -> Result<String> {
+    game_library::game_library_fetch_2dfan_download_info(download_path).await
+}
+
+pub async fn game_library_download_file(url: String, save_path: String) -> Result<()> {
+    game_library::game_library_download_file(url, save_path).await
 }

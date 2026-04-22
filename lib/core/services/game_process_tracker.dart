@@ -45,6 +45,7 @@ class GameProcessTracker {
     required String gameId,
     required String exePath,
     required String workingDirectory,
+    bool useOpen = false,
   }) async {
     if (isRunning(gameId)) {
       _logger.info('游戏已在运行中，跳过重复启动: gameId=$gameId');
@@ -52,11 +53,12 @@ class GameProcessTracker {
     }
 
     try {
-      _logger.info('启动游戏进程: exePath=$exePath, workDir=$workingDirectory');
+      _logger.info('启动游戏进程: exePath=$exePath, workDir=$workingDirectory, useOpen=$useOpen');
       // Rust 负责 spawn 游戏进程，返回 PID（架构约定：进程启动逻辑在 Rust 层）
       final int pid = await rust_api.gameLibraryLaunchGame(
         exePath: exePath,
         workingDir: workingDirectory,
+        useOpen: useOpen,
       );
       _logger.info('游戏进程已启动: gameId=$gameId, pid=$pid');
 

@@ -82,7 +82,7 @@ dependencies:
   easy_refresh: ^3.4.0 # 下拉刷新上拉加载
   flutter_slidable: ^4.0.3 # 滑动操作组件
   skeletonizer: ^2.1.2 # 骨架屏加载效果
-  flutter_widget_from_html_core: ^0.15.2 # 轻量级HTML渲染器，针对epub优化
+  flutter_widget_from_html: ^0.15.2 # HTML渲染器（含图片/链接等完整支持）
   html: ^0.15.6 # HTML 解析库
 
   # 屏幕适配

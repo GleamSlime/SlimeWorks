@@ -353,11 +353,11 @@ class AppTheme {
     return Theme.of(context).brightness == Brightness.light;
   }
 
-  static LinearGradient sideBarTheme(BuildContext context) {
+  static LinearGradient sideBarTheme(BuildContext context, {int alpha = 255}) {
     return LinearGradient(
       colors: isLight(context)
-          ? [const Color(0xFFF8F9FB), const Color(0xFFF8F9FB)]
-          : [const Color(0xFF20201E), const Color(0xFF1F1F1D)],
+          ? [const Color(0xFFF8F9FB).withAlpha(alpha), const Color(0xFFF8F9FB).withAlpha(alpha)]
+          : [const Color(0xFF20201E).withAlpha(alpha), const Color(0xFF1F1F1D).withAlpha(alpha)],
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
     );
