@@ -17,7 +17,10 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             path TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'not_started',
             created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
+            updated_at INTEGER NOT NULL,
+            tags TEXT NOT NULL DEFAULT '[]',
+            exe_paths TEXT NOT NULL DEFAULT '[]',
+            game_dir TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS categories (
@@ -54,6 +57,11 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             updated_at INTEGER NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS game_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_play_sessions_game ON play_sessions(game_id);
         CREATE INDEX IF NOT EXISTS idx_play_sessions_start_time ON play_sessions(start_time);
         CREATE INDEX IF NOT EXISTS idx_game_categories_category ON game_categories(category_id);
@@ -62,7 +70,23 @@ pub fn init_db(conn: &Connection) -> Result<()> {
     )
     .context("初始化游戏库数据库失败")?;
 
+    // 为旧数据库做列迁移（新增字段）
+    migrate_games_table(conn)?;
     ensure_system_categories(conn)?;
+    Ok(())
+}
+
+/// 为已有 games 表添加缺失的新列（兼容旧数据库）
+fn migrate_games_table(conn: &Connection) -> Result<()> {
+    let migrations = [
+        "ALTER TABLE games ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE games ADD COLUMN exe_paths TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE games ADD COLUMN game_dir TEXT NOT NULL DEFAULT ''",
+    ];
+    for sql in &migrations {
+        // 列已存在时 SQLite 会报错，忽略该错误即可
+        let _ = conn.execute(sql, []);
+    }
     Ok(())
 }
 

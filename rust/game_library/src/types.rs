@@ -46,7 +46,7 @@ pub struct Game {
     pub rating: f64,
     /// 发售日期（字符串，如 "2020-01-01"）
     pub release_date: String,
-    /// 可执行文件路径（桌面端启动用）
+    /// 默认可执行文件路径（桌面端启动用）
     pub path: String,
     /// 游戏状态（GameStatus 序列化字符串）
     pub status: String,
@@ -58,6 +58,32 @@ pub struct Game {
     pub last_played_at: Option<i64>,
     /// 总游玩时长（秒）
     pub total_play_time_sec: i64,
+    /// 标签列表
+    pub tags: Vec<String>,
+    /// 所有可执行文件路径列表（批量导入时可能含多个 exe）
+    pub exe_paths: Vec<String>,
+    /// 游戏根目录路径
+    pub game_dir: String,
+}
+
+/// 扫描目录得到的候选游戏条目
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScannedGame {
+    /// 游戏根目录路径
+    pub folder_path: String,
+    /// 清理后的显示名（已去除版本号、括号等干扰字符）
+    pub folder_name: String,
+    /// 目录下发现的可执行文件路径列表
+    pub exe_paths: Vec<String>,
+}
+
+/// 游戏库设置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameLibrarySettings {
+    pub auto_track_play_time: bool,
+    pub default_sort: String,
+    pub auto_save: bool,
+    pub enable_desktop_launch: bool,
 }
 
 /// 分类信息

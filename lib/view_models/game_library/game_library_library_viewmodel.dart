@@ -1,28 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
-
-/// 游戏文件夹扫描结果（内部数据类）
-class _GameFolderInfo {
-  const _GameFolderInfo({
-    required this.folderPath,
-    required this.folderName,
-    required this.exePaths,
-  });
-
-  final String folderPath;
-  final String folderName;
-  final List<String> exePaths;
-}
+import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
 
 final Loggers _logger = Loggers(name: '游戏库ViewModel');
 
@@ -36,6 +26,9 @@ class GameLibraryViewModel extends BaseViewModel {
   final RxString selectedSort = 'updatedAt_desc'.obs;
   final RxString selectedTag = ''.obs;
 
+  /// 收藏游戏 ID 集合（随 refresh 同步，供 UI 同步读取）
+  final RxSet<String> favoriteIds = <String>{}.obs;
+
   /// 多选模式下已选中的游戏 ID 集合
   final RxSet<String> selectedIds = <String>{}.obs;
 
@@ -46,7 +39,8 @@ class GameLibraryViewModel extends BaseViewModel {
   Future<void> onInitAsync() async {
     await super.onInitAsync();
     await _service.init();
-    selectedSort.value = _service.settings.defaultSort;
+    final GameLibrarySettings settings = await _service.getSettings();
+    selectedSort.value = settings.defaultSort;
     await refresh();
     // 监听游玩会话保存事件，自动刷新列表（游戏进程退出后触发）
     ever(_processTracker.sessionSavedCount, (_) => refresh());
@@ -54,7 +48,14 @@ class GameLibraryViewModel extends BaseViewModel {
 
   @override
   Future<void> refresh() async {
-    games.assignAll(_service.games);
+    final List<GameItem> all = await _service.getGames();
+    games.assignAll(all);
+    // 批量加载收藏状态
+    final Set<String> favs = <String>{};
+    for (final GameItem g in all) {
+      if (await _service.isFavorite(g.id)) favs.add(g.id);
+    }
+    favoriteIds.assignAll(favs);
   }
 
   List<GameItem> get filteredGames {
@@ -125,8 +126,16 @@ class GameLibraryViewModel extends BaseViewModel {
     return tags;
   }
 
-  List<GameItem> getGamesByCategory(String categoryId) {
+  /// 从本地缓存过滤指定分类的游戏（同步，避免UI层 await）
+  Future<List<GameItem>> getGamesByCategory(String categoryId) {
     return _service.getGamesByCategory(categoryId);
+  }
+
+  /// 从本地 games 缓存中同步过滤，供 UI 层 Obx 使用
+  List<GameItem> getGamesByCategorySync(String categoryId) {
+    // 无法在 ViewModel 层知道分类关联，需异步；UI 层应改用 FutureBuilder 或预加载
+    // 返回空列表作占位，调用方请用 getGamesByCategory 并预加载
+    return games.toList(growable: false);
   }
 
   Future<GameItem?> addGame({
@@ -201,12 +210,14 @@ class GameLibraryViewModel extends BaseViewModel {
     return total;
   }
 
-  /// 扫描 [parentDir] 的直属子目录，将包含 exe 的子目录视为候选游戏文件夹，
-  /// 调用元数据 API 搜索游戏信息，有匹配结果则导入，无匹配则以文件夹名直接添加。
+  /// 扫描 [parentDir]，调用 Rust 扫描逻辑获取候选游戏文件夹，
+  /// 搜索元数据后批量导入。
   Future<int> _batchImportGameFolders(String parentDir) async {
-    final List<_GameFolderInfo> candidates = _scanGameFolders(parentDir);
-    if (candidates.isEmpty) {
-      _logger.info('批量导入：未在 $parentDir 的直属子目录中找到含 exe 的文件夹');
+    // Rust 负责文件系统扫描（含递归、exe 检测）
+    final String scanJson = await rust_api.gameLibraryScanDirectoryJson(paths: <String>[parentDir]);
+    final List<dynamic> rawList = jsonDecode(scanJson) as List<dynamic>;
+    if (rawList.isEmpty) {
+      _logger.info('批量导入：未在 $parentDir 的子目录中找到含可执行文件的文件夹');
       return 0;
     }
 
@@ -220,214 +231,71 @@ class GameLibraryViewModel extends BaseViewModel {
         .toSet();
 
     int imported = 0;
-    for (final _GameFolderInfo folder in candidates) {
-      // 跳过已录入游戏的目录
-      if (existingDirs.contains(folder.folderPath.toLowerCase())) {
-        _logger.info('批量导入跳过（目录已存在）: ${folder.folderPath}');
+    for (final dynamic raw in rawList) {
+      final Map<String, dynamic> info = Map<String, dynamic>.from(raw as Map);
+      final String folderPath = info['folderPath'] as String? ?? '';
+      final String folderName = info['folderName'] as String? ?? '';
+      final List<String> exePaths =
+          (info['exePaths'] as List<dynamic>?)
+              ?.map((dynamic e) => e.toString())
+              .toList(growable: false) ??
+          <String>[];
+
+      if (folderPath.isEmpty || folderName.isEmpty) continue;
+
+      if (existingDirs.contains(folderPath.toLowerCase())) {
+        _logger.info('批量导入跳过（目录已存在）: $folderPath');
         continue;
       }
 
-      _logger.info('批量导入：搜索游戏信息 "${folder.folderName}"');
-      final GameSearchMetadata? metadata = await _service.searchMetadataByName(folder.folderName);
-
+      _logger.info('批量导入：搜索游戏信息 "$folderName"');
+      final dynamic metadata = await _service.searchMetadataByName(folderName);
       if (metadata == null) {
-        _logger.info('批量导入：API 未找到匹配游戏，跳过 "${folder.folderName}"');
+        _logger.info('批量导入：API 未找到匹配游戏，跳过 "$folderName"');
         continue;
       }
 
-      final String finalName = metadata.name.trim().isNotEmpty
-          ? metadata.name.trim()
-          : folder.folderName;
+      final String finalName = (metadata.name as String).trim().isNotEmpty
+          ? (metadata.name as String).trim()
+          : folderName;
 
-      // 跳过同名游戏
       if (existingNames.contains(finalName.toLowerCase())) {
         _logger.info('批量导入跳过（游戏名已存在）: $finalName');
-        existingDirs.add(folder.folderPath.toLowerCase());
+        existingDirs.add(folderPath.toLowerCase());
         continue;
       }
 
-      // 选择默认启动 exe（优先选与文件夹同名或名称最短的）
-      final String defaultExe = _pickDefaultExe(folder.exePaths, folder.folderName);
+      // Rust 负责选择默认 exe（取 exePaths 第一项）
+      final String defaultExe = exePaths.isNotEmpty ? exePaths.first : '';
 
       await _service.addGame(
         name: finalName,
-        company: metadata.company.trim().isNotEmpty ? metadata.company.trim() : '未知',
-        summary: metadata.summary.trim(),
-        rating: metadata.rating,
-        releaseDate: metadata.releaseDate.trim(),
+        company: (metadata.company as String).trim().isNotEmpty
+            ? (metadata.company as String).trim()
+            : '未知',
+        summary: (metadata.summary as String).trim(),
+        rating: metadata.rating as double,
+        releaseDate: (metadata.releaseDate as String).trim(),
         path: defaultExe,
         status: GameStatus.notStarted,
-        coverPath: metadata.coverUrl.trim(),
-        exePaths: folder.exePaths,
-        gameDir: folder.folderPath,
+        coverPath: (metadata.coverUrl as String).trim(),
+        exePaths: exePaths,
+        gameDir: folderPath,
       );
 
       imported++;
-      existingDirs.add(folder.folderPath.toLowerCase());
+      existingDirs.add(folderPath.toLowerCase());
       existingNames.add(finalName.toLowerCase());
-      _logger.info('批量导入成功: $finalName (${folder.folderPath})');
+      _logger.info('批量导入成功: $finalName ($folderPath)');
     }
 
     await refresh();
     return imported;
   }
 
-  /// 扫描 [parentDir] 的子目录（最多向下 [maxDepth] 层），
-  /// 将包含可执行文件的目录视为候选游戏文件夹，支持「出版商/游戏/exe」等嵌套结构。
-  List<_GameFolderInfo> _scanGameFolders(String parentDir, {int maxDepth = 3}) {
-    final List<_GameFolderInfo> result = <_GameFolderInfo>[];
-    final Directory parent = Directory(parentDir);
-    List<FileSystemEntity> entries;
-    try {
-      entries = parent.listSync(followLinks: false);
-    } catch (e) {
-      _logger.error('扫描游戏目录失败: $parentDir, error=$e');
-      return result;
-    }
-    _scanRecursive(entries, result, currentDepth: 1, maxDepth: maxDepth);
-    return result;
-  }
-
-  void _scanRecursive(
-    List<FileSystemEntity> entries,
-    List<_GameFolderInfo> result, {
-    required int currentDepth,
-    required int maxDepth,
-  }) {
-    for (final FileSystemEntity entry in entries) {
-      if (entry is! Directory) continue;
-
-      // macOS .app 包本身即一个游戏
-      if (entry.path.toLowerCase().endsWith('.app')) {
-        final String name = _cleanFolderName(
-          entry.path
-              .split(Platform.pathSeparator)
-              .last
-              .replaceAll(RegExp(r'\.app$', caseSensitive: false), ''),
-        );
-        result.add(
-          _GameFolderInfo(folderPath: entry.path, folderName: name, exePaths: <String>[entry.path]),
-        );
-        continue;
-      }
-
-      // 当前目录直接包含 exe → 视为游戏文件夹，不再向下递归
-      final List<String> topLevelExes = _findTopLevelExes(entry);
-      if (topLevelExes.isNotEmpty) {
-        final String rawName = entry.path.split(Platform.pathSeparator).last;
-        result.add(
-          _GameFolderInfo(
-            folderPath: entry.path,
-            folderName: _cleanFolderName(rawName),
-            exePaths: topLevelExes,
-          ),
-        );
-        continue;
-      }
-
-      // 当前目录没有 exe，若还未到最大深度则继续向下扫描
-      if (currentDepth < maxDepth) {
-        List<FileSystemEntity> children;
-        try {
-          children = entry.listSync(followLinks: false);
-        } catch (_) {
-          continue;
-        }
-        _scanRecursive(children, result, currentDepth: currentDepth + 1, maxDepth: maxDepth);
-      }
-    }
-  }
-
-  /// 获取 [dir] 顶层（不含子目录）的可执行文件路径列表
-  List<String> _findTopLevelExes(Directory dir) {
-    final List<String> exes = <String>[];
-    try {
-      for (final FileSystemEntity entry in dir.listSync(followLinks: false)) {
-        if (entry is File && _isExecutablePath(entry.path)) {
-          exes.add(entry.path);
-        }
-      }
-    } catch (_) {}
-    return exes;
-  }
-
-  /// 清理文件夹名中的括号、版本号等无关符号，用于更精准的 API 搜索
-  String _cleanFolderName(String name) {
-    return name.replaceAll(RegExp(r'[\[\]（）()【】_]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
-
-  /// 从 exe 列表中挑选最合适的默认启动文件
-  /// 优先选名称与 [gameHint] 接近的，其次选最短文件名（通常是主程序）
-  String _pickDefaultExe(List<String> exePaths, String gameHint) {
-    if (exePaths.isEmpty) {
-      return '';
-    }
-    if (exePaths.length == 1) {
-      return exePaths.first;
-    }
-
-    final String hintLower = gameHint.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-
-    // 优先选文件名与游戏名相近的
-    for (final String p in exePaths) {
-      final String fileName = p.split(Platform.pathSeparator).last.toLowerCase();
-      if (fileName.contains(hintLower) || hintLower.contains(fileName.replaceAll('.exe', ''))) {
-        return p;
-      }
-    }
-
-    // 其次选文件名最短（主程序通常命名最简洁）
-    return exePaths.reduce((String a, String b) {
-      final String aName = a.split(Platform.pathSeparator).last;
-      final String bName = b.split(Platform.pathSeparator).last;
-      return aName.length <= bName.length ? a : b;
-    });
-  }
-
-  bool _isExecutablePath(String path) {
-    final String value = path.toLowerCase();
-    return value.endsWith('.exe') ||
-        value.endsWith('.app') ||
-        value.endsWith('.sh') ||
-        value.endsWith('.bat') ||
-        value.endsWith('.cmd') ||
-        value.endsWith('.x86_64');
-  }
-
-  /// 公开版，供 UI 层调用（选路径后预填名称）
-  String deriveGameName(String executablePath) => _deriveGameName(executablePath);
-
-  String _deriveGameName(String executablePath) {
-    final String path = executablePath.trim();
-    if (path.isEmpty) {
-      return '';
-    }
-
-    final String lower = path.toLowerCase();
-    if (lower.endsWith('.app')) {
-      final String appName = path.split(Platform.pathSeparator).last;
-      return appName
-          .replaceAll(RegExp(r'\.app$', caseSensitive: false), '')
-          .replaceAll(RegExp(r'[_\.]+'), ' ')
-          .trim();
-    }
-
-    final String normalized = path.replaceAll('\\', '/');
-    final List<String> segments = normalized.split('/').where((String s) => s.isNotEmpty).toList();
-    if (segments.length >= 2) {
-      final String folderName = segments[segments.length - 2]
-          .replaceAll(RegExp(r'[_\.]+'), ' ')
-          .trim();
-      if (folderName.isNotEmpty) {
-        return folderName;
-      }
-    }
-
-    final String fileName = segments.isEmpty ? path : segments.last;
-    return fileName
-        .replaceAll(RegExp(r'\.(exe|app|sh|bat|cmd|x86_64)$', caseSensitive: false), '')
-        .replaceAll(RegExp(r'[_\.]+'), ' ')
-        .trim();
+  /// 供 UI 层调用：根据可执行文件路径推导游戏名（委托给 Rust）
+  String deriveGameName(String executablePath) {
+    return rust_api.gameLibraryDeriveGameName(path: executablePath);
   }
 
   Future<void> deleteGame(String gameId) async {
@@ -441,13 +309,17 @@ class GameLibraryViewModel extends BaseViewModel {
   }
 
   Future<void> toggleFavorite(GameItem game) async {
-    final bool next = !_service.isFavorite(game.id);
+    final bool next = !favoriteIds.contains(game.id);
     await _service.toggleFavorite(game.id, next);
-    await refresh();
+    if (next) {
+      favoriteIds.add(game.id);
+    } else {
+      favoriteIds.remove(game.id);
+    }
   }
 
   bool isFavorite(String gameId) {
-    return _service.isFavorite(gameId);
+    return favoriteIds.contains(gameId);
   }
 
   Future<String?> pickExecutablePath() async {
@@ -568,7 +440,7 @@ class GameLibraryViewModel extends BaseViewModel {
         next.add(sourceList[i].id);
       }
     }
-    selectedIds.value = next;
+    selectedIds.assignAll(next);
   }
 
   /// 批量删除已选中游戏

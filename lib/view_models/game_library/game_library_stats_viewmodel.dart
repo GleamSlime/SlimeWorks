@@ -21,7 +21,7 @@ class GameLibraryStatsViewModel extends BaseViewModel {
 
   @override
   Future<void> refresh() async {
-    statsData.value = _service.getStats(start: startDate.value, end: endDate.value);
+    statsData.value = await _service.getStats(start: startDate.value, end: endDate.value);
   }
 
   Future<void> setRange(DateTime start, DateTime end) async {

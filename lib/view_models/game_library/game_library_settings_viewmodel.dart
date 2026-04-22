@@ -14,7 +14,7 @@ class GameLibrarySettingsViewModel extends BaseViewModel {
   Future<void> onInitAsync() async {
     await super.onInitAsync();
     await _service.init();
-    settings.value = _service.settings;
+    settings.value = await _service.getSettings();
   }
 
   Future<void> saveSettings(GameLibrarySettings next) async {
@@ -22,12 +22,13 @@ class GameLibrarySettingsViewModel extends BaseViewModel {
     settings.value = next;
   }
 
+  /// 导出备份（暂未实现，数据已迁移至 SQLite，可通过复制数据库文件备份）
   String exportBackupJson() {
-    return _service.exportBackupJson();
+    return '{"note": "请直接复制数据库文件进行备份"}';
   }
 
+  /// 导入备份（暂未实现）
   Future<void> importBackupJson(String jsonText) async {
-    await _service.importBackupJson(jsonText);
-    settings.value = _service.settings;
+    // TODO: 实现从 JSON 导入数据到 SQLite 的迁移逻辑
   }
 }

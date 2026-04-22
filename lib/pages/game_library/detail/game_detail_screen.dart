@@ -1019,6 +1019,41 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               ),
             ),
           ),
+
+          // 万物皆可萌
+          const SizedBox(height: 16),
+          Card(
+            color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '万物皆可萌',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final String url =
+                          'https://zh.moegirl.org.cn/${Uri.encodeComponent(g.name)}';
+                      Process.run('open', <String>[url]);
+                    },
+                    icon: const Icon(Icons.open_in_browser),
+                    label: Text('在萌娘百科查看「${g.name}」'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       );
     });

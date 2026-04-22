@@ -20,7 +20,7 @@ class GameLibraryCategoriesViewModel extends BaseViewModel {
 
   @override
   Future<void> refresh() async {
-    categories.assignAll(_service.categories);
+    categories.assignAll(await _service.getCategories());
   }
 
   List<GameCategory> get filtered {
@@ -38,12 +38,21 @@ class GameLibraryCategoriesViewModel extends BaseViewModel {
       setError('分类名不能为空');
       return;
     }
-    await _service.addCategory(name: name, emoji: emoji);
+    await _service.upsertCategory(
+      GameCategory(
+        id: '',
+        name: name.trim(),
+        emoji: emoji.trim(),
+        isSystem: false,
+        createdAt: DateTime.now(),
+        gameCount: 0,
+      ),
+    );
     await refresh();
   }
 
   Future<void> updateCategory(GameCategory category, String name, String emoji) async {
-    await _service.updateCategory(category.copyWith(name: name, emoji: emoji));
+    await _service.upsertCategory(category.copyWith(name: name, emoji: emoji));
     await refresh();
   }
 

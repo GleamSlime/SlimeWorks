@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
 
 final Loggers _logger = Loggers(name: '游戏进程追踪');
 
@@ -52,56 +53,99 @@ class GameProcessTracker {
 
     try {
       _logger.info('启动游戏进程: exePath=$exePath, workDir=$workingDirectory');
-      final Process process = await Process.start(
-        exePath,
-        <String>[],
-        workingDirectory: workingDirectory,
-        runInShell: false,
+      // Rust 负责 spawn 游戏进程，返回 PID（架构约定：进程启动逻辑在 Rust 层）
+      final int pid = await rust_api.gameLibraryLaunchGame(
+        exePath: exePath,
+        workingDir: workingDirectory,
       );
-      _logger.info('游戏进程已启动: gameId=$gameId, pid=${process.pid}');
+      _logger.info('游戏进程已启动: gameId=$gameId, pid=$pid');
 
       final DateTime startTime = DateTime.now();
       runningGameIds.add(gameId);
 
       unawaited(
-        process.exitCode.then((int exitCode) async {
-          final int elapsedSec = DateTime.now().difference(startTime).inSeconds;
-          _logger.info('主进程已退出: gameId=$gameId, exitCode=$exitCode, 运行时长=${elapsedSec}s');
-
-          // ── 启动器模式检测 ──────────────────────────────────────────
-          // 若主进程在阈值内退出，尝试寻找其在游戏目录中留下的子进程
-          if (elapsedSec < _launcherExitThresholdSec && workingDirectory.isNotEmpty) {
-            bool foundSuccessor = false;
-            for (int attempt = 0; attempt < _childScanMaxAttempts; attempt++) {
-              if (attempt > 0) {
-                await Future<void>.delayed(const Duration(seconds: 2));
-              }
-              final List<int> pids = await _findProcessesInDir(workingDirectory);
-              if (pids.isNotEmpty) {
-                foundSuccessor = true;
-                _logger.info('检测到启动器模式，发现 ${pids.length} 个子进程，继续追踪游戏: gameId=$gameId');
-                // 轮询直到游戏目录内所有进程结束
-                await _pollUntilDone(gameId: gameId, gameDir: workingDirectory);
-                break;
-              }
-            }
-            if (!foundSuccessor) {
-              _logger.info('未发现子进程，认为游戏已正常退出: gameId=$gameId');
-            }
-          }
-          // ────────────────────────────────────────────────────────────
-
-          final DateTime endTime = DateTime.now();
-          _logger.info('游戏会话结束: gameId=$gameId, 总时长=${endTime.difference(startTime).inMinutes}分钟');
-          runningGameIds.remove(gameId);
-          await _service.addPlaySession(gameId: gameId, startTime: startTime, endTime: endTime);
-          sessionSavedCount.value++;
-        }),
+        _trackByPid(
+          pid: pid,
+          gameId: gameId,
+          workingDirectory: workingDirectory,
+          startTime: startTime,
+        ),
       );
 
       return true;
     } catch (e) {
       _logger.error('启动游戏进程失败: gameId=$gameId, error=$e');
+      return false;
+    }
+  }
+
+  /// 监测指定 PID 的进程，退出后触发游玩会话记录
+  Future<void> _trackByPid({
+    required int pid,
+    required String gameId,
+    required String workingDirectory,
+    required DateTime startTime,
+  }) async {
+    await _waitForPidExit(pid);
+
+    final int elapsedSec = DateTime.now().difference(startTime).inSeconds;
+    _logger.info('主进程已退出: gameId=$gameId, pid=$pid, 运行时长=${elapsedSec}s');
+
+    // ── 启动器模式检测 ──────────────────────────────────────────────────────
+    if (elapsedSec < _launcherExitThresholdSec && workingDirectory.isNotEmpty) {
+      bool foundSuccessor = false;
+      for (int attempt = 0; attempt < _childScanMaxAttempts; attempt++) {
+        if (attempt > 0) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+        final List<int> pids = await _findProcessesInDir(workingDirectory);
+        if (pids.isNotEmpty) {
+          foundSuccessor = true;
+          _logger.info('检测到启动器模式，发现 ${pids.length} 个子进程，继续追踪: gameId=$gameId');
+          await _pollUntilDone(gameId: gameId, gameDir: workingDirectory);
+          break;
+        }
+      }
+      if (!foundSuccessor) {
+        _logger.info('未发现子进程，认为游戏已正常退出: gameId=$gameId');
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    final DateTime endTime = DateTime.now();
+    _logger.info('游戏会话结束: gameId=$gameId, 总时长=${endTime.difference(startTime).inMinutes}分钟');
+    runningGameIds.remove(gameId);
+    await _service.addPlaySession(gameId: gameId, startTime: startTime, endTime: endTime);
+    sessionSavedCount.value++;
+  }
+
+  /// 轮询等待指定 PID 的进程退出
+  Future<void> _waitForPidExit(int pid) async {
+    while (true) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!await _isPidAlive(pid)) break;
+    }
+  }
+
+  /// 检测指定 PID 的进程是否仍在运行
+  Future<bool> _isPidAlive(int pid) async {
+    try {
+      ProcessResult result;
+      if (Platform.isWindows) {
+        result = await Process.run('tasklist', <String>[
+          '/FI',
+          'PID eq $pid',
+          '/NH',
+          '/FO',
+          'CSV',
+        ], runInShell: false);
+        return result.stdout.toString().contains('"$pid"');
+      } else {
+        // Unix/macOS: kill -0 不发送信号，只检查进程是否存在
+        result = await Process.run('kill', <String>['-0', '$pid'], runInShell: false);
+        return result.exitCode == 0;
+      }
+    } catch (_) {
       return false;
     }
   }

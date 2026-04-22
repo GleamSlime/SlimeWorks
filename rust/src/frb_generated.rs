@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -218583241;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 41082733;
 
 // Section: executor
 
@@ -1296,6 +1296,1062 @@ fn wire__crate__api__media_collection__ensure_cover_thumbnail_impl(
                 )?;
                 Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_add_game_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_add_game_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_add_game_json(api_game_json)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_add_game_to_category_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_add_game_to_category",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            let api_category_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_add_game_to_category(
+                                api_game_id,
+                                api_category_id,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_add_play_session_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_add_play_session_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_add_play_session_json(
+                                api_session_json,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_check_paths_exist_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_check_paths_exist",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_paths = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_check_paths_exist(api_paths)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_close_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_close",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::game_library::game_library_close();
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_delete_category_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_delete_category",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_category_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_delete_category(api_category_id)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_delete_game_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_delete_game",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_delete_game(api_game_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_derive_game_name_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_derive_game_name",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::game_library::game_library_derive_game_name(api_path),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_categories_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_categories_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_categories_json().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_game_by_id_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_game_by_id_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_game_by_id_json(api_game_id)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_game_category_ids_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_game_category_ids",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_game_category_ids(
+                                api_game_id,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_games_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_games_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_games_json().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_home_page_data_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_home_page_data_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_home_page_data_json()
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_play_sessions_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_play_sessions_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_play_sessions_json(
+                                api_game_id,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_progress_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_progress_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_progress_json(api_game_id)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_settings_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_settings_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_settings_json().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_stats_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_stats_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_start_ts_sec = <i64>::sse_decode(&mut deserializer);
+            let api_end_ts_sec = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::game_library::game_library_get_stats_json(
+                            api_start_ts_sec,
+                            api_end_ts_sec,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_init_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_init",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_db_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::game_library::game_library_init(api_db_path)?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_is_favorite_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_is_favorite",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_is_favorite(api_game_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_is_ready_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_is_ready",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::game_library::game_library_is_ready())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_launch_game_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_launch_game",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_exe_path = <String>::sse_decode(&mut deserializer);
+            let api_working_dir = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::game_library::game_library_launch_game(
+                            api_exe_path,
+                            api_working_dir,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_remove_game_from_category_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_remove_game_from_category",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            let api_category_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_remove_game_from_category(
+                                api_game_id,
+                                api_category_id,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_save_settings_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_save_settings_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_settings_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::game_library::game_library_save_settings_json(
+                            api_settings_json,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_scan_directory_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_scan_directory_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_paths = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_scan_directory_json(api_paths)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_toggle_favorite_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_toggle_favorite",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_id = <String>::sse_decode(&mut deserializer);
+            let api_favorite = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::game_library::game_library_toggle_favorite(
+                            api_game_id,
+                            api_favorite,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_update_game_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_update_game_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_game_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_update_game_json(api_game_json)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_upsert_category_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_upsert_category_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_category_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_upsert_category_json(
+                                api_category_json,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_upsert_progress_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_upsert_progress_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_progress_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_upsert_progress_json(
+                                api_progress_json,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
         },
     )
 }
@@ -8130,342 +9186,488 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
+        36 => wire__crate__api__game_library__game_library_add_game_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__novel_reader__get_chapter_content_impl(
+        37 => wire__crate__api__game_library__game_library_add_game_to_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__novel_reader__get_novel_content_impl(
+        38 => wire__crate__api__game_library__game_library_add_play_session_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__ffmpeg__get_video_metadata_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__media_collection__import_media_folder_impl(
+        39 => wire__crate__api__game_library__game_library_check_paths_exist_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__logger__init_logger_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__ffmpeg__initialize_ffmpeg_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__module_loader__is_capture_proxy_downloaded_impl(
+        41 => wire__crate__api__game_library__game_library_delete_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__capture__is_running_as_administrator_impl(
+        42 => wire__crate__api__game_library__game_library_delete_game_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__lan_transfer__lan_transfer_accept_impl(
+        44 => wire__crate__api__game_library__game_library_get_categories_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__api__lan_transfer__lan_transfer_add_trusted_impl(
+        45 => wire__crate__api__game_library__game_library_get_game_by_id_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__lan_transfer__lan_transfer_cancel_impl(
+        46 => wire__crate__api__game_library__game_library_get_game_category_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__crate__api__lan_transfer__lan_transfer_get_devices_impl(
+        47 => wire__crate__api__game_library__game_library_get_games_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__lan_transfer__lan_transfer_get_local_device_impl(
+        48 => wire__crate__api__game_library__game_library_get_home_page_data_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__lan_transfer__lan_transfer_get_transfers_impl(
+        49 => wire__crate__api__game_library__game_library_get_play_sessions_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => wire__crate__api__lan_transfer__lan_transfer_get_trusted_devices_impl(
+        50 => wire__crate__api__game_library__game_library_get_progress_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__lan_transfer__lan_transfer_is_trusted_impl(
+        51 => wire__crate__api__game_library__game_library_get_settings_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__api__lan_transfer__lan_transfer_reject_impl(
+        52 => wire__crate__api__game_library__game_library_get_stats_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__api__lan_transfer__lan_transfer_remove_trusted_impl(
+        54 => wire__crate__api__game_library__game_library_is_favorite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__lan_transfer__lan_transfer_send_file_impl(
+        56 => wire__crate__api__game_library__game_library_launch_game_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => wire__crate__api__lan_transfer__lan_transfer_send_text_impl(
+        57 => wire__crate__api__game_library__game_library_remove_game_from_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__api__lan_transfer__lan_transfer_start_impl(
+        58 => wire__crate__api__game_library__game_library_save_settings_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => wire__crate__api__lan_transfer__lan_transfer_stop_impl(
+        59 => wire__crate__api__game_library__game_library_scan_directory_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        87 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__logger__log_warn_impl(port, ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__module_manager__module_check_update_impl(
+        60 => wire__crate__api__game_library__game_library_toggle_favorite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__module_manager__module_get_available_impl(
+        61 => wire__crate__api__game_library__game_library_update_game_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => {
-            wire__crate__api__module_manager__module_install_impl(port, ptr, rust_vec_len, data_len)
-        }
-        95 => wire__crate__api__module_manager__module_list_all_impl(
+        62 => wire__crate__api__game_library__game_library_upsert_category_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__module_manager__module_list_versions_impl(
+        63 => wire__crate__api__game_library__game_library_upsert_progress_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__api__module_manager__module_load_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__api__module_manager__module_reinstall_impl(
+        64 => wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => {
-            wire__crate__api__module_manager__module_reload_impl(port, ptr, rust_vec_len, data_len)
-        }
-        101 => wire__crate__api__module_manager__module_uninstall_impl(
+        75 => wire__crate__api__novel_reader__get_chapter_content_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => {
-            wire__crate__api__module_manager__module_unload_impl(port, ptr, rust_vec_len, data_len)
-        }
-        107 => wire__crate__api__picacg__picacg_fetch_image_impl(port, ptr, rust_vec_len, data_len),
-        108 => {
-            wire__crate__api__picacg__picacg_get_categories_impl(port, ptr, rust_vec_len, data_len)
-        }
-        109 => {
-            wire__crate__api__picacg__picacg_get_collections_impl(port, ptr, rust_vec_len, data_len)
-        }
-        110 => wire__crate__api__picacg__picacg_get_comic_detail_impl(
+        78 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__novel_reader__get_novel_content_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => {
-            wire__crate__api__picacg__picacg_get_comic_eps_impl(port, ptr, rust_vec_len, data_len)
-        }
-        112 => wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
+        85 => wire__crate__api__ffmpeg__get_video_metadata_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__media_collection__import_media_folder_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__picacg__picacg_get_comics_by_category_impl(
+        88 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__logger__init_logger_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__ffmpeg__initialize_ffmpeg_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__module_loader__is_capture_proxy_downloaded_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        114 => wire__crate__api__picacg__picacg_get_comment_children_impl(
+        96 => wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__capture__is_running_as_administrator_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        115 => {
-            wire__crate__api__picacg__picacg_get_comments_impl(port, ptr, rust_vec_len, data_len)
-        }
-        116 => {
-            wire__crate__api__picacg__picacg_get_eps_pages_impl(port, ptr, rust_vec_len, data_len)
-        }
-        117 => {
-            wire__crate__api__picacg__picacg_get_favourites_impl(port, ptr, rust_vec_len, data_len)
-        }
-        119 => {
-            wire__crate__api__picacg__picacg_get_keywords_impl(port, ptr, rust_vec_len, data_len)
-        }
-        120 => wire__crate__api__picacg__picacg_get_random_comics_impl(
+        100 => wire__crate__api__lan_transfer__lan_transfer_accept_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        101 => wire__crate__api__lan_transfer__lan_transfer_add_trusted_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        102 => wire__crate__api__lan_transfer__lan_transfer_cancel_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        103 => wire__crate__api__lan_transfer__lan_transfer_get_devices_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        104 => wire__crate__api__lan_transfer__lan_transfer_get_local_device_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        105 => wire__crate__api__lan_transfer__lan_transfer_get_transfers_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        106 => wire__crate__api__lan_transfer__lan_transfer_get_trusted_devices_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        108 => wire__crate__api__lan_transfer__lan_transfer_is_trusted_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        109 => wire__crate__api__lan_transfer__lan_transfer_reject_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        110 => wire__crate__api__lan_transfer__lan_transfer_remove_trusted_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        111 => wire__crate__api__lan_transfer__lan_transfer_send_file_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        112 => wire__crate__api__lan_transfer__lan_transfer_send_text_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        113 => wire__crate__api__lan_transfer__lan_transfer_start_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        114 => wire__crate__api__lan_transfer__lan_transfer_stop_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        115 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
+        116 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
+        117 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
+        118 => wire__crate__api__logger__log_warn_impl(port, ptr, rust_vec_len, data_len),
+        119 => wire__crate__api__module_manager__module_check_update_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        120 => wire__crate__api__module_manager__module_get_available_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         121 => {
-            wire__crate__api__picacg__picacg_get_rankings_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__module_manager__module_install_impl(port, ptr, rust_vec_len, data_len)
         }
-        123 => wire__crate__api__picacg__picacg_get_user_profile_impl(
+        123 => wire__crate__api__module_manager__module_list_all_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        125 => wire__crate__api__module_manager__module_list_versions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         126 => {
+            wire__crate__api__module_manager__module_load_impl(port, ptr, rust_vec_len, data_len)
+        }
+        127 => wire__crate__api__module_manager__module_reinstall_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        128 => {
+            wire__crate__api__module_manager__module_reload_impl(port, ptr, rust_vec_len, data_len)
+        }
+        129 => wire__crate__api__module_manager__module_uninstall_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        130 => {
+            wire__crate__api__module_manager__module_unload_impl(port, ptr, rust_vec_len, data_len)
+        }
+        135 => wire__crate__api__picacg__picacg_fetch_image_impl(port, ptr, rust_vec_len, data_len),
+        136 => {
+            wire__crate__api__picacg__picacg_get_categories_impl(port, ptr, rust_vec_len, data_len)
+        }
+        137 => {
+            wire__crate__api__picacg__picacg_get_collections_impl(port, ptr, rust_vec_len, data_len)
+        }
+        138 => wire__crate__api__picacg__picacg_get_comic_detail_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        139 => {
+            wire__crate__api__picacg__picacg_get_comic_eps_impl(port, ptr, rust_vec_len, data_len)
+        }
+        140 => wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        141 => wire__crate__api__picacg__picacg_get_comics_by_category_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        142 => wire__crate__api__picacg__picacg_get_comment_children_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        143 => {
+            wire__crate__api__picacg__picacg_get_comments_impl(port, ptr, rust_vec_len, data_len)
+        }
+        144 => {
+            wire__crate__api__picacg__picacg_get_eps_pages_impl(port, ptr, rust_vec_len, data_len)
+        }
+        145 => {
+            wire__crate__api__picacg__picacg_get_favourites_impl(port, ptr, rust_vec_len, data_len)
+        }
+        147 => {
+            wire__crate__api__picacg__picacg_get_keywords_impl(port, ptr, rust_vec_len, data_len)
+        }
+        148 => wire__crate__api__picacg__picacg_get_random_comics_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        149 => {
+            wire__crate__api__picacg__picacg_get_rankings_impl(port, ptr, rust_vec_len, data_len)
+        }
+        151 => wire__crate__api__picacg__picacg_get_user_profile_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        154 => {
             wire__crate__api__picacg__picacg_like_comment_impl(port, ptr, rust_vec_len, data_len)
         }
-        128 => wire__crate__api__picacg__picacg_login_impl(port, ptr, rust_vec_len, data_len),
-        130 => wire__crate__api__picacg__picacg_punch_in_impl(port, ptr, rust_vec_len, data_len),
-        132 => {
+        156 => wire__crate__api__picacg__picacg_login_impl(port, ptr, rust_vec_len, data_len),
+        158 => wire__crate__api__picacg__picacg_punch_in_impl(port, ptr, rust_vec_len, data_len),
+        160 => {
             wire__crate__api__picacg__picacg_search_comics_impl(port, ptr, rust_vec_len, data_len)
         }
-        133 => {
+        161 => {
             wire__crate__api__picacg__picacg_send_comment_impl(port, ptr, rust_vec_len, data_len)
         }
-        138 => {
+        166 => {
             wire__crate__api__picacg__picacg_test_channel_impl(port, ptr, rust_vec_len, data_len)
         }
-        139 => wire__crate__api__picacg__picacg_toggle_favourite_impl(
+        167 => wire__crate__api__picacg__picacg_toggle_favourite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        140 => wire__crate__api__picacg__picacg_toggle_like_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__api__media_collection__scan_media_folders_impl(
+        168 => wire__crate__api__picacg__picacg_toggle_like_impl(port, ptr, rust_vec_len, data_len),
+        175 => wire__crate__api__media_collection__scan_media_folders_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        149 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
+        177 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        150 => wire__crate__api__novel_reader__search_in_all_novels_impl(
+        178 => wire__crate__api__novel_reader__search_in_all_novels_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        151 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
+        179 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        152 => {
+        180 => {
             wire__crate__api__novel_reader__search_in_novel_impl(port, ptr, rust_vec_len, data_len)
         }
-        159 => wire__crate__api__novel_reader__update_novel_cover_impl(
+        187 => wire__crate__api__novel_reader__update_novel_cover_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        167 => {
+        195 => {
             wire__crate__api__websocket__ws_client_connect_impl(port, ptr, rust_vec_len, data_len)
         }
-        168 => wire__crate__api__websocket__ws_client_disconnect_impl(
+        196 => wire__crate__api__websocket__ws_client_disconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => {
+        197 => {
             wire__crate__api__websocket__ws_client_get_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        170 => wire__crate__api__websocket__ws_client_is_connected_impl(
+        198 => wire__crate__api__websocket__ws_client_is_connected_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        172 => wire__crate__api__websocket__ws_client_receive_message_impl(
+        200 => wire__crate__api__websocket__ws_client_receive_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        173 => wire__crate__api__websocket__ws_client_send_binary_impl(
+        201 => wire__crate__api__websocket__ws_client_send_binary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        174 => {
+        202 => {
             wire__crate__api__websocket__ws_client_send_text_impl(port, ptr, rust_vec_len, data_len)
         }
-        179 => {
+        207 => {
             wire__crate__api__websocket__ws_server_broadcast_impl(port, ptr, rust_vec_len, data_len)
         }
-        180 => wire__crate__api__websocket__ws_server_get_client_count_impl(
+        208 => wire__crate__api__websocket__ws_server_get_client_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        182 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
-        183 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
+        210 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
+        211 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -8537,129 +9739,139 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__media_collection__get_all_collection_stats_impl(
+        40 => wire__crate__api__game_library__game_library_close_impl(ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__game_library__game_library_derive_game_name_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__media_collection__get_all_media_collections_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        40 => wire__crate__api__media_collection__get_all_media_folders_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        41 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__novel_reader__get_child_folders_impl(ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__media_collection__get_child_media_folders_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        52 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__media_collection__get_media_collection_items_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
+        53 => wire__crate__api__game_library__game_library_init_impl(ptr, rust_vec_len, data_len),
         55 => {
+            wire__crate__api__game_library__game_library_is_ready_impl(ptr, rust_vec_len, data_len)
+        }
+        65 => wire__crate__api__media_collection__get_all_collection_stats_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        66 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__media_collection__get_all_media_collections_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        68 => wire__crate__api__media_collection__get_all_media_folders_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        69 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__novel_reader__get_child_folders_impl(ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__media_collection__get_child_media_folders_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        80 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__media_collection__get_media_collection_items_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        83 => {
             wire__crate__api__http_bridge__get_registered_handlers_impl(ptr, rust_vec_len, data_len)
         }
-        56 => wire__crate__api__system_metrics__get_system_resource_snapshot_impl(
+        84 => wire__crate__api__system_metrics__get_system_resource_snapshot_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__http_bridge__init_http_bridge_impl(ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__capture__initialize_logger_impl(ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__capture__install_ca_certificate_impl(ptr, rust_vec_len, data_len),
-        66 => {
+        86 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__http_bridge__init_http_bridge_impl(ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__capture__initialize_logger_impl(ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__capture__install_ca_certificate_impl(ptr, rust_vec_len, data_len),
+        94 => {
             wire__crate__api__capture__is_ca_certificate_installed_impl(ptr, rust_vec_len, data_len)
         }
-        69 => {
+        97 => {
             wire__crate__api__http_bridge__is_node_server_running_impl(ptr, rust_vec_len, data_len)
         }
-        70 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__lan_transfer__lan_transfer_init_impl(ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
-        96 => {
+        98 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__lan_transfer__lan_transfer_init_impl(ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
+        124 => {
             wire__crate__api__module_manager__module_list_loaded_impl(ptr, rust_vec_len, data_len)
         }
-        103 => wire__crate__api__media_collection__move_media_collection_to_folder_impl(
+        131 => wire__crate__api__media_collection__move_media_collection_to_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => {
+        132 => {
             wire__crate__api__novel_reader__move_novel_to_folder_impl(ptr, rust_vec_len, data_len)
         }
-        105 => wire__crate__api__picacg__picacg_build_image_url_impl(ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__picacg__picacg_clear_history_impl(ptr, rust_vec_len, data_len),
-        118 => wire__crate__api__picacg__picacg_get_image_server_impl(ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__picacg__picacg_get_token_impl(ptr, rust_vec_len, data_len),
-        124 => wire__crate__api__picacg__picacg_init_impl(ptr, rust_vec_len, data_len),
-        125 => wire__crate__api__picacg__picacg_init_history_impl(ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__picacg__picacg_load_history_impl(ptr, rust_vec_len, data_len),
-        129 => wire__crate__api__picacg__picacg_logout_impl(ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__picacg__picacg_save_history_raw_impl(ptr, rust_vec_len, data_len),
-        134 => wire__crate__api__picacg__picacg_set_channel_impl(ptr, rust_vec_len, data_len),
-        135 => wire__crate__api__picacg__picacg_set_image_server_impl(ptr, rust_vec_len, data_len),
-        136 => wire__crate__api__picacg__picacg_set_proxy_impl(ptr, rust_vec_len, data_len),
-        137 => wire__crate__api__picacg__picacg_set_token_impl(ptr, rust_vec_len, data_len),
-        141 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
-        142 => {
+        133 => wire__crate__api__picacg__picacg_build_image_url_impl(ptr, rust_vec_len, data_len),
+        134 => wire__crate__api__picacg__picacg_clear_history_impl(ptr, rust_vec_len, data_len),
+        146 => wire__crate__api__picacg__picacg_get_image_server_impl(ptr, rust_vec_len, data_len),
+        150 => wire__crate__api__picacg__picacg_get_token_impl(ptr, rust_vec_len, data_len),
+        152 => wire__crate__api__picacg__picacg_init_impl(ptr, rust_vec_len, data_len),
+        153 => wire__crate__api__picacg__picacg_init_history_impl(ptr, rust_vec_len, data_len),
+        155 => wire__crate__api__picacg__picacg_load_history_impl(ptr, rust_vec_len, data_len),
+        157 => wire__crate__api__picacg__picacg_logout_impl(ptr, rust_vec_len, data_len),
+        159 => wire__crate__api__picacg__picacg_save_history_raw_impl(ptr, rust_vec_len, data_len),
+        162 => wire__crate__api__picacg__picacg_set_channel_impl(ptr, rust_vec_len, data_len),
+        163 => wire__crate__api__picacg__picacg_set_image_server_impl(ptr, rust_vec_len, data_len),
+        164 => wire__crate__api__picacg__picacg_set_proxy_impl(ptr, rust_vec_len, data_len),
+        165 => wire__crate__api__picacg__picacg_set_token_impl(ptr, rust_vec_len, data_len),
+        169 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
+        170 => {
             wire__crate__api__novel_reader__remove_novel_with_file_impl(ptr, rust_vec_len, data_len)
         }
-        143 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__media_collection__rename_media_collection_impl(
+        171 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
+        172 => wire__crate__api__media_collection__rename_media_collection_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        145 => wire__crate__api__media_collection__rename_media_folder_impl(
+        173 => wire__crate__api__media_collection__rename_media_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        146 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
-        148 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
-        153 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
-        154 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        155 => wire__crate__api__http_bridge__start_node_server_impl(ptr, rust_vec_len, data_len),
-        156 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        157 => wire__crate__api__http_bridge__stop_node_server_impl(ptr, rust_vec_len, data_len),
-        158 => {
+        174 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
+        176 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
+        181 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        183 => wire__crate__api__http_bridge__start_node_server_impl(ptr, rust_vec_len, data_len),
+        184 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__http_bridge__stop_node_server_impl(ptr, rust_vec_len, data_len),
+        186 => {
             wire__crate__api__novel_reader__update_novel_author_impl(ptr, rust_vec_len, data_len)
         }
-        160 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
-        161 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
-        162 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
-        163 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
-        164 => wire__crate__api__novel_reader__update_reading_progress_impl(
+        188 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
+        189 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
+        191 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
+        192 => wire__crate__api__novel_reader__update_reading_progress_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        165 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
-        171 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
-        175 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
-        176 => {
+        193 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
+        194 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
+        199 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
+        203 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
+        204 => {
             wire__crate__api__websocket__ws_message_get_timestamp_impl(ptr, rust_vec_len, data_len)
         }
-        177 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
-        178 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
-        181 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
+        205 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
+        206 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
+        209 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

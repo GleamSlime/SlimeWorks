@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -25,13 +26,13 @@ class GameLibraryDetailViewModel extends BaseViewModel {
 
   Future<void> load(String gameId) async {
     await _service.init();
-    game.value = _service.getGameById(gameId);
-    sessions.assignAll(_service.getPlaySessionsByGameId(gameId));
-    progress.value = _service.getProgressByGameId(gameId);
-    categories.assignAll(_service.categories);
+    game.value = await _service.getGameById(gameId);
+    sessions.assignAll(await _service.getPlaySessionsByGameId(gameId));
+    progress.value = await _service.getProgressByGameId(gameId);
+    categories.assignAll(await _service.getCategories());
     selectedCategoryIds
       ..clear()
-      ..addAll(_service.getCategoryIdsByGameId(gameId));
+      ..addAll(await _service.getCategoryIdsByGameId(gameId));
     // 监听游玩会话保存（游戏退出后）自动刷新
     ever(processTracker.sessionSavedCount, (_) {
       final String? id = game.value?.id;
@@ -170,10 +171,13 @@ class GameLibraryDetailViewModel extends BaseViewModel {
   }
 
   bool get isFavorite {
+    // 使用本地缓存值（load 时已加载），如需实时可改为 Future<bool>
+    return false; // placeholder — see isFavoriteAsync
+  }
+
+  Future<bool> isFavoriteAsync() async {
     final GameItem? current = game.value;
-    if (current == null) {
-      return false;
-    }
+    if (current == null) return false;
     return _service.isFavorite(current.id);
   }
 

@@ -47,30 +47,36 @@ class _GameCategoryDetailScreenState
   Widget buildContent(BuildContext context) {
     return ScreenChrome(
       data: _buildChromeData(),
-      child: Obx(() {
-        final List<GameItem> display = viewModel.getGamesByCategory(widget.categoryId);
+      child: FutureBuilder<List<GameItem>>(
+        future: viewModel.getGamesByCategory(widget.categoryId),
+        builder: (BuildContext ctx, AsyncSnapshot<List<GameItem>> snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final List<GameItem> display = snap.data ?? <GameItem>[];
 
-        if (display.isEmpty) {
-          return const Center(child: Text('该分类下暂无游戏'));
-        }
+          if (display.isEmpty) {
+            return const Center(child: Text('该分类下暂无游戏'));
+          }
 
-        return ListView.separated(
-          padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-          itemCount: display.length,
-          separatorBuilder: (_, _) => SizedBox(height: AppTheme.metrics.kSpace8),
-          itemBuilder: (BuildContext context, int index) {
-            final GameItem game = display[index];
-            return Card(
-              child: ListTile(
-                title: Text(game.name),
-                subtitle: Text('${game.company} · ${game.status.label}'),
-                trailing: Text(viewModel.formatDuration(game.totalPlayTimeSec)),
-                onTap: () => GameDetailRoute(gameId: game.id).push<void>(context),
-              ),
-            );
-          },
-        );
-      }),
+          return ListView.separated(
+            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+            itemCount: display.length,
+            separatorBuilder: (_, _) => SizedBox(height: AppTheme.metrics.kSpace8),
+            itemBuilder: (BuildContext context, int index) {
+              final GameItem game = display[index];
+              return Card(
+                child: ListTile(
+                  title: Text(game.name),
+                  subtitle: Text('${game.company} · ${game.status.label}'),
+                  trailing: Text(viewModel.formatDuration(game.totalPlayTimeSec)),
+                  onTap: () => GameDetailRoute(gameId: game.id).push<void>(context),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
