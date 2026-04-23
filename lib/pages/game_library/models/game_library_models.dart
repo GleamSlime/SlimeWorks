@@ -409,3 +409,40 @@ class DayPlayTime {
 String encodeJsonList(List<Map<String, dynamic>> list) {
   return jsonEncode(list);
 }
+
+/// 游戏元数据搜索结果（来自 Steam / VNDB / Bangumi）
+class GameSearchMetadata {
+  const GameSearchMetadata({
+    required this.name,
+    required this.coverUrl,
+    required this.company,
+    required this.summary,
+    required this.rating,
+    required this.releaseDate,
+    required this.source,
+    required this.sourceId,
+  });
+
+  /// 从 Rust 返回的 JSON 字符串解析
+  factory GameSearchMetadata.fromJson(Map<String, dynamic> json) {
+    return GameSearchMetadata(
+      name: (json['name'] as String?) ?? '',
+      coverUrl: (json['coverUrl'] as String?) ?? '',
+      company: (json['company'] as String?) ?? '',
+      summary: (json['summary'] as String?) ?? '',
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      releaseDate: (json['releaseDate'] as String?) ?? '',
+      source: (json['source'] as String?) ?? '',
+      sourceId: (json['sourceId'] as String?) ?? '',
+    );
+  }
+
+  final String name;
+  final String coverUrl;
+  final String company;
+  final String summary;
+  final double rating;
+  final String releaseDate;
+  final String source;
+  final String sourceId;
+}

@@ -179,3 +179,26 @@ Future<void> gameLibraryDownloadFile({
   url: url,
   savePath: savePath,
 );
+
+/// 用游戏名在 Steam/VNDB/Bangumi 中搜索元数据。
+/// 找到则返回 JSON 字符串，未找到则返回空字符串。
+Future<String> gameLibrarySearchMetadataByName({required String name}) =>
+    RustLib.instance.api.crateApiGameLibraryGameLibrarySearchMetadataByName(
+      name: name,
+    );
+
+/// 检测指定 PID 的进程是否仍在运行
+Future<bool> gameLibraryIsPidAlive({required PlatformInt64 pid}) =>
+    RustLib.instance.api.crateApiGameLibraryGameLibraryIsPidAlive(pid: pid);
+
+/// 查找运行中且路径位于指定目录下的进程 PID 列表（仅 Windows）
+Future<Int64List> gameLibraryFindProcessesInDir({required String gameDir}) =>
+    RustLib.instance.api.crateApiGameLibraryGameLibraryFindProcessesInDir(
+      gameDir: gameDir,
+    );
+
+/// 启发式检测游戏存档目录，返回路径或空字符串
+String gameLibraryDetectSaveFolder({required String gameDir}) => RustLib
+    .instance
+    .api
+    .crateApiGameLibraryGameLibraryDetectSaveFolder(gameDir: gameDir);

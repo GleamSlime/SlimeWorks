@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
@@ -13,10 +12,8 @@ final Loggers _log = Loggers(name: '游戏库服务');
 
 /// 游戏库服务：数据持久化全部委托给 Rust/SQLite 层，Flutter 只处理 UI 相关数据转换。
 class GameLibraryService {
-  GameLibraryService({GameLibraryMetadataApi? metadataApi})
-    : _metadataApi = metadataApi ?? GameLibraryMetadataApi();
+  GameLibraryService();
 
-  final GameLibraryMetadataApi _metadataApi;
   bool _initialized = false;
 
   bool get initialized => _initialized;
@@ -317,9 +314,18 @@ class GameLibraryService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 元数据搜索（HTTP 网络层，保留在 Dart 层）
+  // 元数据搜索（委托给 Rust 层执行 HTTP 请求）
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<GameSearchMetadata?> searchMetadataByName(String rawName) =>
-      _metadataApi.searchByName(rawName);
+  /// 用游戏名在 Steam/VNDB/Bangumi 搜索元数据，找到返回结果，未找到返回 null
+  Future<GameSearchMetadata?> searchMetadataByName(String rawName) async {
+    final String json = await rust_api.gameLibrarySearchMetadataByName(name: rawName);
+    if (json.isEmpty) return null;
+    try {
+      return GameSearchMetadata.fromJson(jsonDecode(json) as Map<String, dynamic>);
+    } catch (e) {
+      _log.error('解析元数据 JSON 失败: $e');
+      return null;
+    }
+  }
 }

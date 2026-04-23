@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -65,7 +64,7 @@ class GameLibraryDetailViewModel extends BaseViewModel {
     _fetchMoegirlInBackground();
   }
 
-  /// 简单启发式检测游戏存档目录：检查游戏目录下常见的存档文件夹名
+  /// 启发式检测游戏存档目录，委托 Rust 层执行文件系统扫描
   Future<String?> detectSaveFolder() async {
     final GameItem? current = game.value;
     if (current == null) return null;
@@ -74,45 +73,9 @@ class GameLibraryDetailViewModel extends BaseViewModel {
       detectedSaveFolder.value = '';
       return null;
     }
-    try {
-      final Directory base = Directory(dir);
-      if (!base.existsSync()) {
-        detectedSaveFolder.value = '';
-        return null;
-      }
-      final List<String> candidates = <String>[
-        'save',
-        'saves',
-        'savegames',
-        'savedata',
-        'Save',
-        'Saves',
-        'Saved Games',
-        'UserData',
-        'userdata',
-      ];
-      for (final String name in candidates) {
-        final Directory d = Directory('${base.path}${Platform.pathSeparator}$name');
-        if (d.existsSync()) {
-          detectedSaveFolder.value = d.path;
-          return d.path;
-        }
-      }
-
-      // 若没有标准名字，尝试查找体积较小的子目录（heuristic）
-      final List<FileSystemEntity> children = base.listSync();
-      for (final FileSystemEntity ent in children) {
-        if (ent is Directory) {
-          final String lower = ent.path.split(Platform.pathSeparator).last.toLowerCase();
-          if (lower.contains('save') || lower.contains('userdata') || lower.contains('saves')) {
-            detectedSaveFolder.value = ent.path;
-            return ent.path;
-          }
-        }
-      }
-    } catch (_) {}
-    detectedSaveFolder.value = '';
-    return null;
+    final String found = rust_api.gameLibraryDetectSaveFolder(gameDir: dir);
+    detectedSaveFolder.value = found;
+    return found.isEmpty ? null : found;
   }
 
   Future<void> updateGame(GameItem next) async {

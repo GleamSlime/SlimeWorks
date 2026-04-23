@@ -25,11 +25,10 @@ lib/
     categories/    - 分类管理
     settings/      - 设置页
     stats/         - 统计页
-    models/        - 数据模型（GameItem、PlaySession 等）
+    models/        - 数据模型（GameItem、PlaySession、GameSearchMetadata 等）
   core/services/
-    game_library_service.dart        - 业务逻辑（SharedPreferences 持久化）
-    game_library_metadata_api.dart   - 元数据 API（Steam、VNDB、Bangumi）
-    game_process_tracker.dart        - 游戏进程生命周期追踪 ← 新增
+    game_library_service.dart        - 业务逻辑，全部委托 Rust SQLite 层
+    game_process_tracker.dart        - 游戏进程生命周期追踪（PID 检测委托 Rust）
   view_models/game_library/
     game_library_library_viewmodel.dart  - 游戏列表 VM
     game_library_detail_viewmodel.dart   - 游戏详情 VM
@@ -37,6 +36,10 @@ lib/
     game_library_categories_viewmodel.dart
     game_library_stats_viewmodel.dart
     game_library_settings_viewmodel.dart
+rust/game_library/src/
+    api.rs   - 全部业务逻辑（CRUD、元数据 HTTP 搜索、进程监控、存档检测、目录扫描）
+    db.rs    - SQLite 建表 & 迁移
+    types.rs - Rust 数据类型定义
 ```
 
 ---
@@ -105,9 +108,10 @@ lib/
 
 由 `GameProcessTracker`（GetIt 单例）负责：
 
-1. 调用 `launchAndTrack()` → 启动进程，记录 `startTime`，将 `gameId` 加入 `runningGameIds`
-2. 监听 `process.exitCode` Future（进程退出时自动触发）
+1. 调用 `launchAndTrack()` → 委托 Rust 层 `game_library_launch_game` 启动进程，记录 `startTime`，将 `gameId` 加入 `runningGameIds`
+2. 轮询 PID 存活状态（委托 Rust `game_library_is_pid_alive`）
 3. 退出后自动调用 `GameLibraryService.addPlaySession(startTime, endTime)`，更新 `totalPlayTimeSec` 并改状态至「游玩中」
+4. 启动器模式：主进程快速退出时，委托 Rust `game_library_find_processes_in_dir` 扫描子进程
 
 ### 运行中状态显示
 
@@ -122,14 +126,18 @@ lib/
 ## 关键服务
 
 ### GameLibraryService
-- 数据持久化：`SharedPreferences`（JSON 序列化）
-- 提供 `addPlaySession`、`getPlaySessionsByGameId`、`addGame`、`updateGame` 等接口
+- 数据持久化：全部委托给 Rust/SQLite 层
+- 提供 `addPlaySession`、`getPlaySessionsByGameId`、`addGame`、`updateGame`、`searchMetadataByName` 等接口
+- `searchMetadataByName` 调用 Rust `game_library_search_metadata_by_name`，Rust 依次尝试 Steam → VNDB → Bangumi
 
-### GameLibraryMetadataApi
+### 元数据搜索（Rust 层）
 - 搜索顺序：Steam → VNDB → Bangumi（短路：第一个有结果即返回）
-- 超时：5 秒连接 + 5 秒接收
+- 实现位于 `rust/game_library/src/api.rs`：`search_metadata_by_name_sync`
+- 超时：60 秒（复用 `build_browser_client` 全局 HTTP Client）
 
 ### GameProcessTracker
 - GetIt 懒加载单例
 - `runningGameIds: RxSet<String>` — 当前运行游戏集合（响应式）
 - `sessionSavedCount: RxInt` — 每保存一次 session 自增，VM 通过 `ever()` 订阅触发刷新
+- PID 检测委托 Rust `game_library_is_pid_alive`（kill -0 / tasklist）
+- 目录进程扫描委托 Rust `game_library_find_processes_in_dir`（PowerShell，仅 Windows）

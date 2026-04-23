@@ -314,3 +314,31 @@ pub async fn game_library_fetch_2dfan_download_info(download_path: String) -> Re
 pub async fn game_library_download_file(url: String, save_path: String) -> Result<()> {
     game_library::game_library_download_file(url, save_path).await
 }
+
+// ─── 元数据搜索（Steam / VNDB / Bangumi）────────────────────────────────────
+
+/// 用游戏名在 Steam/VNDB/Bangumi 中搜索元数据。
+/// 找到则返回 JSON 字符串，未找到则返回空字符串。
+pub async fn game_library_search_metadata_by_name(name: String) -> Result<String> {
+    game_library::game_library_search_metadata_by_name(name).await
+}
+
+// ─── 进程监控 ─────────────────────────────────────────────────────────────────
+
+/// 检测指定 PID 的进程是否仍在运行
+pub async fn game_library_is_pid_alive(pid: i64) -> Result<bool> {
+    game_library::game_library_is_pid_alive(pid).await
+}
+
+/// 查找运行中且路径位于指定目录下的进程 PID 列表（仅 Windows）
+pub async fn game_library_find_processes_in_dir(game_dir: String) -> Result<Vec<i64>> {
+    game_library::game_library_find_processes_in_dir(game_dir).await
+}
+
+// ─── 存档目录检测 ─────────────────────────────────────────────────────────────
+
+/// 启发式检测游戏存档目录，返回路径或空字符串
+#[frb(sync)]
+pub fn game_library_detect_save_folder(game_dir: String) -> String {
+    game_library::game_library_detect_save_folder(game_dir)
+}

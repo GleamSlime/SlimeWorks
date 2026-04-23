@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/utils/logger.dart';

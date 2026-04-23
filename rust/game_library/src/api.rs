@@ -1702,3 +1702,438 @@ fn download_file_sync(url: &str, save_path: &str) -> Result<()> {
     std::io::copy(&mut resp, &mut file).context("写入文件失败")?;
     Ok(())
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 游戏元数据搜索（Steam / VNDB / Bangumi）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 元数据搜索结果（用于 Dart 层解析）
+#[derive(serde::Serialize)]
+struct GameMetadata {
+    name: String,
+    #[serde(rename = "coverUrl")]
+    cover_url: String,
+    company: String,
+    summary: String,
+    rating: f64,
+    #[serde(rename = "releaseDate")]
+    release_date: String,
+    source: String,
+    #[serde(rename = "sourceId")]
+    source_id: String,
+}
+
+/// 用游戏名在 Steam / VNDB / Bangumi 中搜索元数据。
+/// 找到则返回 JSON 字符串，未找到或全部失败则返回空字符串。
+pub async fn game_library_search_metadata_by_name(name: String) -> Result<String> {
+    tokio::task::spawn_blocking(move || search_metadata_by_name_sync(&name)).await?
+}
+
+fn search_metadata_by_name_sync(raw_name: &str) -> Result<String> {
+    let queries = build_search_candidates(raw_name);
+    for query in &queries {
+        if let Ok(Some(meta)) = search_steam_sync(query) {
+            return Ok(serde_json::to_string(&meta).context("序列化 Steam 元数据失败")?);
+        }
+        if let Ok(Some(meta)) = search_vndb_sync(query) {
+            return Ok(serde_json::to_string(&meta).context("序列化 VNDB 元数据失败")?);
+        }
+        if let Ok(Some(meta)) = search_bangumi_sync(query) {
+            return Ok(serde_json::to_string(&meta).context("序列化 Bangumi 元数据失败")?);
+        }
+    }
+    Ok(String::new())
+}
+
+/// 构建搜索候选词列表（标准化 + 变体）
+fn build_search_candidates(raw_name: &str) -> Vec<String> {
+    let mut set: Vec<String> = Vec::new();
+    let normalized = normalize_game_name(raw_name);
+    let add = |s: &str, v: &mut Vec<String>| {
+        let t = s.trim().to_string();
+        if !t.is_empty() && !v.contains(&t) {
+            v.push(t);
+        }
+    };
+    add(&normalized, &mut set);
+    add(raw_name, &mut set);
+    let with_space = normalized.replace('-', " ");
+    add(&with_space, &mut set);
+    let with_dash = normalized.replace(' ', "-");
+    add(&with_dash, &mut set);
+    // 按长度降序（更长的名字匹配精度更高）
+    set.sort_by(|a, b| b.len().cmp(&a.len()));
+    set
+}
+
+/// 标准化游戏名：去掉括号内容、特殊符号替换为空格
+fn normalize_game_name(raw: &str) -> String {
+    let v = raw.trim();
+    if v.is_empty() {
+        return String::new();
+    }
+    let mut result = String::with_capacity(v.len());
+    let mut depth = 0i32;
+    for ch in v.chars() {
+        match ch {
+            '[' | '(' | '【' | '（' => { depth += 1; }
+            ']' | ')' | '】' | '）' => { if depth > 0 { depth -= 1; } }
+            _ if depth > 0 => {}
+            '_' | '.' | '-' => result.push(' '),
+            c => result.push(c),
+        }
+    }
+    // 压缩多余空格
+    let mut out = String::with_capacity(result.len());
+    let mut last_space = false;
+    for ch in result.chars() {
+        if ch == ' ' {
+            if !last_space { out.push(' '); }
+            last_space = true;
+        } else {
+            out.push(ch);
+            last_space = false;
+        }
+    }
+    let trimmed = out.trim().to_string();
+    if trimmed.len() > 80 { trimmed[..80].trim().to_string() } else { trimmed }
+}
+
+/// 在 Steam 搜索游戏元数据
+fn search_steam_sync(query: &str) -> Result<Option<GameMetadata>> {
+    let client = get_browser_client()?;
+    let search_url = format!(
+        "https://store.steampowered.com/api/storesearch/?term={}&l=schinese&cc=cn",
+        utf8_percent_encode(query, WIKI_PATH)
+    );
+    let search_resp = client
+        .get(&search_url)
+        .header("Referer", "https://store.steampowered.com/")
+        .header("Accept", "application/json")
+        .send()
+        .context("Steam 搜索请求失败")?;
+    if !search_resp.status().is_success() {
+        return Ok(None);
+    }
+    let search_text = search_resp.text().context("读取 Steam 搜索响应失败")?;
+    let search_root: serde_json::Value =
+        serde_json::from_str(&search_text).context("解析 Steam 搜索 JSON 失败")?;
+    let items = match search_root["items"].as_array() {
+        Some(a) if !a.is_empty() => a,
+        _ => return Ok(None),
+    };
+    let first = &items[0];
+    let app_id = match first["id"].as_u64() {
+        Some(id) => id.to_string(),
+        None => return Ok(None),
+    };
+
+    let detail_url = format!(
+        "https://store.steampowered.com/api/appdetails?appids={}&l=schinese&cc=cn",
+        app_id
+    );
+    let detail_resp = client
+        .get(&detail_url)
+        .header("Referer", format!("https://store.steampowered.com/app/{}/", app_id))
+        .header("Accept", "application/json")
+        .send()
+        .context("Steam 详情请求失败")?;
+    if !detail_resp.status().is_success() {
+        return Ok(None);
+    }
+    let detail_text = detail_resp.text().context("读取 Steam 详情响应失败")?;
+    let detail_root: serde_json::Value =
+        serde_json::from_str(&detail_text).context("解析 Steam 详情 JSON 失败")?;
+    let app_root = &detail_root[&app_id];
+    if app_root["success"].as_bool() != Some(true) {
+        return Ok(None);
+    }
+    let data = &app_root["data"];
+    let title = data["name"].as_str().unwrap_or("").trim().to_string();
+    if title.is_empty() {
+        return Ok(None);
+    }
+    let company = data["developers"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|e| e.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    let mut rating = data["metacritic"]["score"].as_f64().unwrap_or(0.0);
+    if rating > 0.0 { rating /= 10.0; }
+    let cover = if data["header_image"].as_str().unwrap_or("").is_empty() {
+        first["tiny_image"].as_str().unwrap_or("").to_string()
+    } else {
+        data["header_image"].as_str().unwrap_or("").to_string()
+    };
+    Ok(Some(GameMetadata {
+        name: title,
+        cover_url: cover,
+        company,
+        summary: data["short_description"].as_str().unwrap_or("").to_string(),
+        rating,
+        release_date: data["release_date"]["date"].as_str().unwrap_or("").to_string(),
+        source: "steam".to_string(),
+        source_id: app_id,
+    }))
+}
+
+/// 在 VNDB 搜索视觉小说元数据
+fn search_vndb_sync(query: &str) -> Result<Option<GameMetadata>> {
+    let client = get_browser_client()?;
+    let body = serde_json::json!({
+        "filters": ["search", "=", query],
+        "fields": "id,title,image.url,description,rating,released,developers.name,titles.lang,titles.title,titles.latin,titles.main,titles.official"
+    });
+    let body_str = serde_json::to_string(&body).context("序列化 VNDB 请求体失败")?;
+    let resp = client
+        .post("https://api.vndb.org/kana/vn")
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .body(body_str)
+        .send()
+        .context("VNDB 请求失败")?;
+    if !resp.status().is_success() {
+        return Ok(None);
+    }
+    let text = resp.text().context("读取 VNDB 响应失败")?;
+    let root: serde_json::Value = serde_json::from_str(&text).context("解析 VNDB JSON 失败")?;
+    let results = match root["results"].as_array() {
+        Some(a) if !a.is_empty() => a,
+        _ => return Ok(None),
+    };
+    let first = &results[0];
+    let title = pick_vndb_title(first);
+    if title.is_empty() {
+        return Ok(None);
+    }
+    let company = first["developers"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|e| e["name"].as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    let rating = first["rating"].as_f64().unwrap_or(0.0).min(100.0) / 10.0;
+    Ok(Some(GameMetadata {
+        name: title,
+        cover_url: first["image"]["url"].as_str().unwrap_or("").to_string(),
+        company,
+        summary: first["description"].as_str().unwrap_or("").to_string(),
+        rating,
+        release_date: first["released"].as_str().unwrap_or("").to_string(),
+        source: "vndb".to_string(),
+        source_id: first["id"].as_str().unwrap_or("").to_string(),
+    }))
+}
+
+/// 从 VNDB 条目的 titles 列表中选取最优标题
+fn pick_vndb_title(result: &serde_json::Value) -> String {
+    if let Some(titles) = result["titles"].as_array() {
+        let mut sorted = titles.to_vec();
+        sorted.sort_by(|a, b| {
+            let score_a = if a["main"].as_bool().unwrap_or(false) { 2 } else { 0 }
+                + if a["official"].as_bool().unwrap_or(false) { 1 } else { 0 };
+            let score_b = if b["main"].as_bool().unwrap_or(false) { 2 } else { 0 }
+                + if b["official"].as_bool().unwrap_or(false) { 1 } else { 0 };
+            score_b.cmp(&score_a)
+        });
+        for t in &sorted {
+            if let Some(s) = t["title"].as_str() {
+                if !s.is_empty() { return s.to_string(); }
+            }
+            if let Some(s) = t["latin"].as_str() {
+                if !s.is_empty() { return s.to_string(); }
+            }
+        }
+    }
+    result["title"].as_str().unwrap_or("").to_string()
+}
+
+/// 在 Bangumi 搜索游戏元数据
+fn search_bangumi_sync(query: &str) -> Result<Option<GameMetadata>> {
+    let client = get_browser_client()?;
+    let encoded = utf8_percent_encode(query, WIKI_PATH).to_string();
+    let url = format!(
+        "https://api.bgm.tv/search/subject/{}?type=4&responseGroup=medium",
+        encoded
+    );
+    let resp = client
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .context("Bangumi 请求失败")?;
+    if !resp.status().is_success() {
+        return Ok(None);
+    }
+    let text = resp.text().context("读取 Bangumi 响应失败")?;
+    let root: serde_json::Value =
+        serde_json::from_str(&text).context("解析 Bangumi JSON 失败")?;
+    let list = match root["list"].as_array() {
+        Some(a) if !a.is_empty() => a,
+        _ => return Ok(None),
+    };
+    let first = &list[0];
+    let name_cn = first["name_cn"].as_str().unwrap_or("").trim().to_string();
+    let name = if name_cn.is_empty() {
+        first["name"].as_str().unwrap_or("").trim().to_string()
+    } else {
+        name_cn
+    };
+    if name.is_empty() {
+        return Ok(None);
+    }
+    let cover = {
+        let large = first["images"]["large"].as_str().unwrap_or("");
+        if large.is_empty() {
+            first["images"]["common"].as_str().unwrap_or("").to_string()
+        } else {
+            large.to_string()
+        }
+    };
+    let company = extract_bangumi_company(&first["infobox"]);
+    let rating = first["score"].as_f64().unwrap_or(0.0).min(10.0);
+    Ok(Some(GameMetadata {
+        name,
+        cover_url: cover,
+        company,
+        summary: first["summary"].as_str().unwrap_or("").to_string(),
+        rating,
+        release_date: first["air_date"].as_str().unwrap_or("").to_string(),
+        source: "bangumi".to_string(),
+        source_id: first["id"].to_string(),
+    }))
+}
+
+/// 从 Bangumi infobox 提取制作公司名称
+fn extract_bangumi_company(infobox: &serde_json::Value) -> String {
+    if let Some(arr) = infobox.as_array() {
+        for item in arr {
+            let key = item["key"].as_str().unwrap_or("").to_lowercase();
+            if key.contains("开发") || key.contains("制作") || key.contains("厂商") || key.contains("company") {
+                if let Some(s) = item["value"].as_str() {
+                    let t = s.trim().to_string();
+                    if !t.is_empty() { return t; }
+                }
+                if let Some(arr) = item["value"].as_array() {
+                    let joined: Vec<&str> = arr.iter()
+                        .filter_map(|e| e["v"].as_str())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if !joined.is_empty() { return joined.join(", "); }
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 进程监控（PID 检测 & 目录进程扫描）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 检测指定 PID 的进程是否仍在运行
+pub async fn game_library_is_pid_alive(pid: i64) -> Result<bool> {
+    tokio::task::spawn_blocking(move || is_pid_alive_sync(pid)).await?
+}
+
+fn is_pid_alive_sync(pid: i64) -> Result<bool> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = std::process::Command::new("tasklist")
+            .args(&["/FI", &format!("PID eq {}", pid), "/NH", "/FO", "CSV"])
+            .output()
+            .context("执行 tasklist 失败")?;
+        Ok(String::from_utf8_lossy(&output.stdout).contains(&format!("\"{}\"", pid)))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix/macOS: kill -0 不发送信号，只检查进程是否存在
+        let output = std::process::Command::new("kill")
+            .args(&["-0", &pid.to_string()])
+            .output()
+            .context("执行 kill -0 失败")?;
+        Ok(output.status.success())
+    }
+}
+
+/// 查找运行中且路径位于指定目录下的进程 PID 列表（仅 Windows；其他平台返回空列表）
+pub async fn game_library_find_processes_in_dir(game_dir: String) -> Result<Vec<i64>> {
+    tokio::task::spawn_blocking(move || find_processes_in_dir_sync(&game_dir)).await?
+}
+
+fn find_processes_in_dir_sync(game_dir: &str) -> Result<Vec<i64>> {
+    #[cfg(target_os = "windows")]
+    {
+        let normalized = game_dir.replace('/', "\\");
+        let script = format!(
+            r#"Get-Process | Where-Object {{ $_.Path -and $_.Path.StartsWith("{}") }} | Select-Object -ExpandProperty Id | Out-String"#,
+            normalized
+        );
+        let output = std::process::Command::new("powershell")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+            .output()
+            .context("执行 PowerShell 失败")?;
+        if !output.status.success() {
+            return Ok(vec![]);
+        }
+        let pids: Vec<i64> = String::from_utf8_lossy(&output.stdout)
+            .split(|c: char| c == '\r' || c == '\n')
+            .filter_map(|line| line.trim().parse::<i64>().ok())
+            .filter(|&id| id > 0)
+            .collect();
+        Ok(pids)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = game_dir;
+        Ok(vec![])
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 存档目录检测
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 启发式检测游戏存档目录：扫描游戏根目录下的常见存档文件夹名。
+/// 返回检测到的存档目录路径，未找到则返回空字符串。
+#[frb(sync)]
+pub fn game_library_detect_save_folder(game_dir: String) -> String {
+    let dir = game_dir.trim().to_string();
+    if dir.is_empty() { return String::new(); }
+
+    let base = std::path::Path::new(&dir);
+    if !base.exists() { return String::new(); }
+
+    // 精确名称候选
+    let candidates = [
+        "save", "saves", "savegames", "savedata",
+        "Save", "Saves", "Saved Games", "UserData", "userdata",
+    ];
+    for name in &candidates {
+        let candidate = base.join(name);
+        if candidate.is_dir() {
+            return candidate.to_string_lossy().into_owned();
+        }
+    }
+
+    // 启发式：遍历子目录，名字含 save / userdata / saves
+    if let Ok(entries) = std::fs::read_dir(base) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                let lower = entry.file_name().to_string_lossy().to_lowercase();
+                if lower.contains("save") || lower.contains("userdata") || lower.contains("saves") {
+                    return p.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
+
+    String::new()
+}

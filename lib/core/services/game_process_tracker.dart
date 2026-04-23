@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:get/get.dart';
 
@@ -129,24 +128,10 @@ class GameProcessTracker {
     }
   }
 
-  /// 检测指定 PID 的进程是否仍在运行
+  /// 检测指定 PID 的进程是否仍在运行（委托给 Rust 层）
   Future<bool> _isPidAlive(int pid) async {
     try {
-      ProcessResult result;
-      if (Platform.isWindows) {
-        result = await Process.run('tasklist', <String>[
-          '/FI',
-          'PID eq $pid',
-          '/NH',
-          '/FO',
-          'CSV',
-        ], runInShell: false);
-        return result.stdout.toString().contains('"$pid"');
-      } else {
-        // Unix/macOS: kill -0 不发送信号，只检查进程是否存在
-        result = await Process.run('kill', <String>['-0', '$pid'], runInShell: false);
-        return result.exitCode == 0;
-      }
+      return await rust_api.gameLibraryIsPidAlive(pid: pid);
     } catch (_) {
       return false;
     }
@@ -154,28 +139,13 @@ class GameProcessTracker {
 
   // ── 内部工具方法 ──────────────────────────────────────────────────────────
 
-  /// 在游戏目录下查找正在运行的进程（仅 Windows）
+  /// 在游戏目录下查找正在运行的进程（委托给 Rust 层，仅 Windows 返回有效列表）
   Future<List<int>> _findProcessesInDir(String gameDir) async {
-    if (!Platform.isWindows) return <int>[];
     try {
-      // 规范化路径，避免大小写或斜杠差异
-      final String normalizedDir = gameDir.replaceAll('/', '\\');
-      final ProcessResult result = await Process.run('powershell', <String>[
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        r'Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("' +
-            normalizedDir +
-            r'") } | Select-Object -ExpandProperty Id | Out-String',
-      ], runInShell: false);
-      if (result.exitCode != 0) return <int>[];
-      final List<int> pids = result.stdout
-          .toString()
-          .split(RegExp(r'\r?\n'))
-          .map((String line) => int.tryParse(line.trim()) ?? 0)
-          .where((int id) => id > 0)
+      // Int64List 在 native 为 List<int>，在 web 为 List<BigInt>，统一转换
+      return (await rust_api.gameLibraryFindProcessesInDir(gameDir: gameDir))
+          .map<int>((dynamic e) => e is BigInt ? e.toInt() : (e as num).toInt())
           .toList();
-      return pids;
     } catch (e) {
       _logger.info('扫描子进程失败（可能是权限问题）: $e');
       return <int>[];
