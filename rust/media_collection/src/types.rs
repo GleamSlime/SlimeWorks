@@ -67,6 +67,23 @@ pub struct MediaItem {
     pub order: i32,
 }
 
+/// 智能文件夹（虚拟过滤规则，不存储实际文件）。
+/// JSON 字段名使用 camelCase 以与 Dart 端及节点服务器保持兼容。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartFolder {
+    pub id: String,
+    pub name: String,
+    /// 正则表达式（空字符串表示不过滤）
+    pub regex_pattern: String,
+    /// 匹配目标：collectionName | fileName
+    pub regex_target: String,
+    /// 文件类型过滤：all | images | videos
+    pub file_type_filter: String,
+    /// 目标文件夹 ID 列表（空 = 匹配所有文件夹）
+    pub target_folder_ids: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

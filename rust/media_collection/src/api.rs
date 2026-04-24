@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 use crate::scanner::MediaFolderScanner;
-use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind};
+use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind, SmartFolder};
 
 // ── Cover thumbnail cache ─────────────────────────────────────────────────────
 static THUMB_CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
@@ -1168,6 +1168,213 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
 
     delete_collection_from_db(&collection_id);
     Ok(true)
+}
+
+// ── 应用数据根目录（与 Dart getApplicationSupportDirectory() 对应）────────────
+
+/// 返回与 Dart `getApplicationSupportDirectory()` 对应的本地数据目录路径。
+/// 节点服务器的 `get_app_data_path` 和 Dart 端均使用此路径族，此处保持一致。
+fn app_data_root() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        format!("{}/Library/Application Support/com.slime.works", home)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+        format!("{}/slimeworks", appdata)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        format!("{}/.local/share/slimeworks", home)
+    }
+}
+
+/// 返回数据文件的完整路径，确保父目录已创建。
+fn data_file_path(filename: &str) -> std::path::PathBuf {
+    let root = app_data_root();
+    let dir = std::path::Path::new(&root);
+    let _ = std::fs::create_dir_all(dir);
+    dir.join(filename)
+}
+
+// ── 智能文件夹持久化 ─────────────────────────────────────────────────────────
+
+/// 加载所有智能文件夹（从磁盘 JSON 文件读取，路径与 Dart 端和节点服务器一致）。
+pub fn list_smart_folders() -> Vec<SmartFolder> {
+    let path = data_file_path("smart_folders_data.json");
+    match std::fs::read_to_string(&path) {
+        Ok(content) if !content.is_empty() => {
+            serde_json::from_str::<Vec<SmartFolder>>(&content)
+                .map_err(|e| {
+                    warn!("[smart_folders] JSON 解析失败: {}", e);
+                    e
+                })
+                .unwrap_or_default()
+        }
+        _ => vec![],
+    }
+}
+
+/// 将智能文件夹列表持久化到磁盘（覆盖写入）。
+pub fn save_all_smart_folders(folders: Vec<SmartFolder>) -> Result<(), String> {
+    let path = data_file_path("smart_folders_data.json");
+    let json = serde_json::to_string_pretty(&folders).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| {
+        warn!("[smart_folders] 保存失败: {}", e);
+        e.to_string()
+    })
+}
+
+// ── 集合排序持久化 ────────────────────────────────────────────────────────────
+
+/// 加载所有集合排序映射（orderKey → Vec<collectionId>）。
+pub fn load_all_collection_orders() -> HashMap<String, Vec<String>> {
+    let path = data_file_path("media_collection_orders.json");
+    match std::fs::read_to_string(&path) {
+        Ok(content) if !content.is_empty() => {
+            serde_json::from_str::<HashMap<String, Vec<String>>>(&content).unwrap_or_default()
+        }
+        _ => HashMap::new(),
+    }
+}
+
+/// 保存单条集合排序（ids 为空时删除该 key）。
+pub fn save_collection_order(order_key: String, ids: Vec<String>) -> Result<(), String> {
+    let path = data_file_path("media_collection_orders.json");
+    let mut all_orders = load_all_collection_orders();
+    if ids.is_empty() {
+        all_orders.remove(&order_key);
+    } else {
+        all_orders.insert(order_key, ids);
+    }
+    let json = serde_json::to_string_pretty(&all_orders).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+// ── 收藏持久化 ───────────────────────────────────────────────────────────────
+
+/// 加载收藏的集合 ID 列表。
+pub fn load_media_favorites() -> Vec<String> {
+    let path = data_file_path("media_favorites.json");
+    match std::fs::read_to_string(&path) {
+        Ok(content) if !content.is_empty() => {
+            serde_json::from_str::<Vec<String>>(&content).unwrap_or_default()
+        }
+        _ => vec![],
+    }
+}
+
+/// 保存收藏的集合 ID 列表。
+pub fn save_media_favorites(ids: Vec<String>) -> Result<(), String> {
+    let path = data_file_path("media_favorites.json");
+    let json = serde_json::to_string_pretty(&ids).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+// ── 集合文件物理转移 ──────────────────────────────────────────────────────────
+
+/// 将指定集合的所有文件物理迁移到 `<target_root>/<container_name>/<collection_title>/`，
+/// 在新路径重新注册集合、删除旧集合记录，并在旧目录为空时删除旧目录。
+/// 返回 (成功数, 失败数)。
+pub fn transfer_collections(
+    collection_ids: Vec<String>,
+    target_root: String,
+    container_name: String,
+) -> Result<(u32, u32), String> {
+    let container_dir = std::path::Path::new(&target_root).join(&container_name);
+    let all_collections = get_all_media_collections()?;
+    let collection_map: HashMap<String, MediaCollection> =
+        all_collections.into_iter().map(|c| (c.id.clone(), c)).collect();
+
+    let mut success_count: u32 = 0;
+    let mut fail_count: u32 = 0;
+
+    for collection_id in &collection_ids {
+        let collection = match collection_map.get(collection_id) {
+            Some(c) => c,
+            None => {
+                warn!("[transfer] 集合不存在: {}", collection_id);
+                fail_count += 1;
+                continue;
+            }
+        };
+
+        let dest_collection_dir = container_dir.join(&collection.title);
+        if let Err(e) = std::fs::create_dir_all(&dest_collection_dir) {
+            warn!("[transfer] 创建目标目录失败: {:?} err={}", dest_collection_dir, e);
+            fail_count += 1;
+            continue;
+        }
+
+        // 获取集合内所有文件
+        let items = match get_media_collection_items(collection_id.clone()) {
+            Ok(items) => items,
+            Err(e) => {
+                warn!("[transfer] 获取集合文件失败: {} err={}", collection_id, e);
+                fail_count += 1;
+                continue;
+            }
+        };
+
+        // 逐一迁移文件：优先 rename（同设备），失败则 copy+delete
+        for item in &items {
+            let src = std::path::Path::new(&item.file_path);
+            if !src.exists() {
+                debug!("[transfer] 源文件不存在，跳过: {}", item.file_path);
+                continue;
+            }
+            let file_name = match src.file_name() {
+                Some(n) => n,
+                None => continue,
+            };
+            let dest = dest_collection_dir.join(file_name);
+            if std::fs::rename(src, &dest).is_err() {
+                if std::fs::copy(src, &dest).is_ok() {
+                    let _ = std::fs::remove_file(src);
+                } else {
+                    warn!("[transfer] 文件迁移失败: {}", item.file_path);
+                }
+            }
+        }
+
+        // 在新路径重新导入集合（包含文件扫描和数据库注册）
+        let dest_path = dest_collection_dir.to_string_lossy().into_owned();
+        match import_media_folder(dest_path) {
+            Ok(new_collection) => {
+                // 继承原始文件夹归属
+                if let Some(ref folder_id) = collection.folder_id {
+                    let _ = move_media_collection_to_folder(
+                        new_collection.id.clone(),
+                        Some(folder_id.clone()),
+                    );
+                }
+                // 保持集合标题与原集合一致
+                let _ = rename_media_collection(new_collection.id.clone(), collection.title.clone());
+                // 删除旧集合数据库记录
+                let _ = delete_media_collection(collection_id.clone());
+                // 旧目录为空时删除
+                let old_dir = std::path::Path::new(&collection.folder_path);
+                if old_dir.exists() {
+                    if let Ok(mut entries) = std::fs::read_dir(old_dir) {
+                        if entries.next().is_none() {
+                            let _ = std::fs::remove_dir(old_dir);
+                        }
+                    }
+                }
+                success_count += 1;
+                info!("[transfer] 集合转移成功: {}", collection.title);
+            }
+            Err(e) => {
+                warn!("[transfer] 重新导入集合失败: {} err={}", collection.title, e);
+                fail_count += 1;
+            }
+        }
+    }
+
+    Ok((success_count, fail_count))
 }
 
 #[cfg(test)]

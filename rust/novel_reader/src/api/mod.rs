@@ -878,3 +878,68 @@ pub fn scan_novels_folder_batched(
 
     Ok(all_batches)
 }
+
+// ─────────────────────────────────────────────────────────────
+// 章节数缓存持久化（替代 Dart 端的 chapter_counts.json 文件读写）
+// ─────────────────────────────────────────────────────────────
+
+/// 章节数记录（novelId → count）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChapterCountEntry {
+    pub novel_id: String,
+    pub count: i32,
+}
+
+/// 加载所有章节数缓存（从 app_data_dir/chapter_counts.json）。
+pub fn load_chapter_counts() -> Vec<ChapterCountEntry> {
+    let path = get_app_data_dir().join("chapter_counts.json");
+    match std::fs::read_to_string(&path) {
+        Ok(content) if !content.is_empty() => {
+            serde_json::from_str::<HashMap<String, i32>>(&content)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(id, count)| ChapterCountEntry { novel_id: id, count })
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+/// 保存章节数缓存（全量覆盖，app_data_dir/chapter_counts.json）。
+pub fn save_chapter_counts(entries: Vec<ChapterCountEntry>) -> Result<(), String> {
+    let path = get_app_data_dir().join("chapter_counts.json");
+    let map: HashMap<String, i32> = entries.into_iter().map(|e| (e.novel_id, e.count)).collect();
+    let json = serde_json::to_string_pretty(&map).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+// ─────────────────────────────────────────────────────────────
+// 用户关键词规则持久化（替代 Dart 端的 keyword_rules.json 文件读写）
+// ─────────────────────────────────────────────────────────────
+
+/// 用户自定义关键词规则（一条规则：关键词 → 标签）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserKeywordRule {
+    pub keyword: String,
+    pub tag: String,
+}
+
+/// 加载用户关键词规则（从 app_data_dir/keyword_rules.json）。
+pub fn load_user_keyword_rules() -> Vec<UserKeywordRule> {
+    let path = get_app_data_dir().join("keyword_rules.json");
+    match std::fs::read_to_string(&path) {
+        Ok(content) if !content.is_empty() => {
+            // 兼容旧格式：[{"keyword":"...", "tag":"..."}]
+            serde_json::from_str::<Vec<UserKeywordRule>>(&content).unwrap_or_default()
+        }
+        _ => vec![],
+    }
+}
+
+/// 保存用户关键词规则（全量覆盖，app_data_dir/keyword_rules.json）。
+pub fn save_user_keyword_rules(rules: Vec<UserKeywordRule>) -> Result<(), String> {
+    let path = get_app_data_dir().join("keyword_rules.json");
+    let json = serde_json::to_string_pretty(&rules).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+

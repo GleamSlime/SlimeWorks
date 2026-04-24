@@ -228,6 +228,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats dco_decode_capture_stats(dynamic raw);
 
   @protected
+  ChapterCountEntry dco_decode_chapter_count_entry(dynamic raw);
+
+  @protected
+  CollectionOrder dco_decode_collection_order(dynamic raw);
+
+  @protected
   CollectionStats dco_decode_collection_stats(dynamic raw);
 
   @protected
@@ -259,6 +265,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AvailableModuleInfo> dco_decode_list_available_module_info(dynamic raw);
+
+  @protected
+  List<ChapterCountEntry> dco_decode_list_chapter_count_entry(dynamic raw);
+
+  @protected
+  List<CollectionOrder> dco_decode_list_collection_order(dynamic raw);
 
   @protected
   List<CollectionStats> dco_decode_list_collection_stats(dynamic raw);
@@ -310,6 +322,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SearchMatch> dco_decode_list_search_match(dynamic raw);
+
+  @protected
+  List<SmartFolderData> dco_decode_list_smart_folder_data(dynamic raw);
+
+  @protected
+  List<UserKeywordRule> dco_decode_list_user_keyword_rule(dynamic raw);
 
   @protected
   MediaCollection dco_decode_media_collection(dynamic raw);
@@ -384,7 +402,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchMatch dco_decode_search_match(dynamic raw);
 
   @protected
+  SmartFolderData dco_decode_smart_folder_data(dynamic raw);
+
+  @protected
   SystemResourceSnapshot dco_decode_system_resource_snapshot(dynamic raw);
+
+  @protected
+  TransferResult dco_decode_transfer_result(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -400,6 +424,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  UserKeywordRule dco_decode_user_keyword_rule(dynamic raw);
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
@@ -584,6 +611,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats sse_decode_capture_stats(SseDeserializer deserializer);
 
   @protected
+  ChapterCountEntry sse_decode_chapter_count_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CollectionOrder sse_decode_collection_order(SseDeserializer deserializer);
+
+  @protected
   CollectionStats sse_decode_collection_stats(SseDeserializer deserializer);
 
   @protected
@@ -617,6 +652,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AvailableModuleInfo> sse_decode_list_available_module_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ChapterCountEntry> sse_decode_list_chapter_count_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CollectionOrder> sse_decode_list_collection_order(
     SseDeserializer deserializer,
   );
 
@@ -690,6 +735,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SearchMatch> sse_decode_list_search_match(SseDeserializer deserializer);
+
+  @protected
+  List<SmartFolderData> sse_decode_list_smart_folder_data(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UserKeywordRule> sse_decode_list_user_keyword_rule(
+    SseDeserializer deserializer,
+  );
 
   @protected
   MediaCollection sse_decode_media_collection(SseDeserializer deserializer);
@@ -772,9 +827,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchMatch sse_decode_search_match(SseDeserializer deserializer);
 
   @protected
+  SmartFolderData sse_decode_smart_folder_data(SseDeserializer deserializer);
+
+  @protected
   SystemResourceSnapshot sse_decode_system_resource_snapshot(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TransferResult sse_decode_transfer_result(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -790,6 +851,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  UserKeywordRule sse_decode_user_keyword_rule(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
@@ -1006,6 +1070,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_capture_stats(CaptureStats self, SseSerializer serializer);
 
   @protected
+  void sse_encode_chapter_count_entry(
+    ChapterCountEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_collection_order(
+    CollectionOrder self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_collection_stats(
     CollectionStats self,
     SseSerializer serializer,
@@ -1050,6 +1126,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_available_module_info(
     List<AvailableModuleInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_chapter_count_entry(
+    List<ChapterCountEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_collection_order(
+    List<CollectionOrder> self,
     SseSerializer serializer,
   );
 
@@ -1153,6 +1241,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_smart_folder_data(
+    List<SmartFolderData> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_user_keyword_rule(
+    List<UserKeywordRule> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_media_collection(
     MediaCollection self,
     SseSerializer serializer,
@@ -1247,8 +1347,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_search_match(SearchMatch self, SseSerializer serializer);
 
   @protected
+  void sse_encode_smart_folder_data(
+    SmartFolderData self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_system_resource_snapshot(
     SystemResourceSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_transfer_result(
+    TransferResult self,
     SseSerializer serializer,
   );
 
@@ -1266,6 +1378,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_user_keyword_rule(
+    UserKeywordRule self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);

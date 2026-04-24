@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -7,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -73,10 +71,6 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// 远程节点智能文件夹 ID 前缀，格式：smart-folder:remote:[nodeId]:[原始sfId]
   static const String _remoteSmartFolderPrefix = 'smart-folder:remote:';
-  static const String _smartFoldersPrefsKey = 'media_library_smart_folders'; // kept for migration
-  static const String _smartFolderFileName = 'smart_folders_data.json';
-  static const String _collectionOrderPrefsKeyPrefix = 'media_col_order_';
-  static const String _favoritesPrefsKey = 'media_library_favorites';
 
   final NodeSettingsService nodeSettingsService = getIt<NodeSettingsService>();
   final MediaPrefsService mediaPrefs = getIt<MediaPrefsService>();
@@ -210,7 +204,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (isInitialized) {
       // 永久 ViewModel 再次进入页面时：刷新数据 + 重新加载智能文件夹（磁盘上的数据描和内存始终保持同步）
       debugPrint('[MediaLibrary] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
-      await _loadSmartFolders();
+      _loadSmartFolders();
       await refreshAll();
       return;
     }
@@ -220,9 +214,9 @@ class MediaLibraryViewModel extends BaseViewModel {
       debugPrint('[MediaLibrary] onInitAsync: nodeSettingsService 尚未初始化，等待...');
       await nodeSettingsService.init();
     }
-    await _loadSmartFolders();
-    await _loadCollectionOrders();
-    await _loadFavorites();
+    _loadSmartFolders();
+    _loadCollectionOrders();
+    _loadFavorites();
     debugPrint('[MediaLibrary] onInitAsync: 开始 refreshAll');
     await refreshAll();
     debugPrint(
@@ -1104,26 +1098,23 @@ class MediaLibraryViewModel extends BaseViewModel {
     } else {
       favoriteCollectionIds.add(id);
     }
-    await _saveFavorites();
+    _saveFavorites();
   }
 
-  Future<void> _loadFavorites() async {
+  /// 从 Rust 层加载收藏 ID 列表（同步 FFI 调用）。
+  void _loadFavorites() {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString(_favoritesPrefsKey);
-      if (json != null && json.isNotEmpty) {
-        final list = (jsonDecode(json) as List<dynamic>).cast<String>();
-        favoriteCollectionIds.assignAll(list.toSet());
-      }
+      final ids = media_api.loadMediaFavorites();
+      favoriteCollectionIds.assignAll(ids.toSet());
     } catch (e) {
       logger.e('加载收藏列表失败: $e');
     }
   }
 
-  Future<void> _saveFavorites() async {
+  /// 将收藏 ID 列表持久化到 Rust 层（同步 FFI 调用）。
+  void _saveFavorites() {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_favoritesPrefsKey, jsonEncode(favoriteCollectionIds.toList()));
+      media_api.saveMediaFavorites(ids: favoriteCollectionIds.toList());
     } catch (e) {
       logger.e('保存收藏列表失败: $e');
     }
@@ -1367,7 +1358,8 @@ class MediaLibraryViewModel extends BaseViewModel {
           probedDuration = parsed;
           debugPrint('[VideoThumb] ffprobe 时长: ${probedDuration}s');
         } else {
-          debugPrint('[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
+          debugPrint(
+            '[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
           );
         }
       } else {

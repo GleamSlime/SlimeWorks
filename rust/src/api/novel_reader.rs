@@ -475,3 +475,76 @@ pub fn add_novel_to_folder(
         novel_reader::add_novel_to_folder(file_paths, folder_id).map_err(|e| anyhow::anyhow!(e))?;
     Ok(novels.into_iter().map(convert_metadata).collect())
 }
+
+// ── 章节数缓存 FFI ────────────────────────────────────────────────────────────
+
+/// 章节数记录（novelId → count）。
+#[derive(Debug, Clone)]
+pub struct ChapterCountEntry {
+    pub novel_id: String,
+    pub count: i32,
+}
+
+/// 从 Rust 层加载所有章节数缓存。
+#[frb(sync)]
+pub fn load_chapter_counts() -> Vec<ChapterCountEntry> {
+    novel_reader::load_chapter_counts()
+        .into_iter()
+        .map(|e| ChapterCountEntry {
+            novel_id: e.novel_id,
+            count: e.count,
+        })
+        .collect()
+}
+
+/// 将章节数缓存全量持久化到 Rust 层。
+#[frb(sync)]
+pub fn save_chapter_counts(entries: Vec<ChapterCountEntry>) -> anyhow::Result<()> {
+    novel_reader::save_chapter_counts(
+        entries
+            .into_iter()
+            .map(|e| novel_reader::ChapterCountEntry {
+                novel_id: e.novel_id,
+                count: e.count,
+            })
+            .collect(),
+    )
+    .map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 用户关键词规则 FFI ────────────────────────────────────────────────────────
+
+/// 用户自定义关键词规则（关键词 → 标签）。
+#[derive(Debug, Clone)]
+pub struct UserKeywordRule {
+    pub keyword: String,
+    pub tag: String,
+}
+
+/// 从 Rust 层加载用户自定义关键词规则。
+#[frb(sync)]
+pub fn load_user_keyword_rules() -> Vec<UserKeywordRule> {
+    novel_reader::load_user_keyword_rules()
+        .into_iter()
+        .map(|r| UserKeywordRule {
+            keyword: r.keyword,
+            tag: r.tag,
+        })
+        .collect()
+}
+
+/// 将用户关键词规则全量持久化到 Rust 层。
+#[frb(sync)]
+pub fn save_user_keyword_rules(rules: Vec<UserKeywordRule>) -> anyhow::Result<()> {
+    novel_reader::save_user_keyword_rules(
+        rules
+            .into_iter()
+            .map(|r| novel_reader::UserKeywordRule {
+                keyword: r.keyword,
+                tag: r.tag,
+            })
+            .collect(),
+    )
+    .map_err(|e| anyhow::anyhow!(e))
+}
+

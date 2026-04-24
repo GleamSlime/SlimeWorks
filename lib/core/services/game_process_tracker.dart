@@ -143,9 +143,9 @@ class GameProcessTracker {
   Future<List<int>> _findProcessesInDir(String gameDir) async {
     try {
       // Int64List 在 native 为 List<int>，在 web 为 List<BigInt>，统一转换
-      return (await rust_api.gameLibraryFindProcessesInDir(gameDir: gameDir))
-          .map<int>((dynamic e) => e is BigInt ? e.toInt() : (e as num).toInt())
-          .toList();
+      return (await rust_api.gameLibraryFindProcessesInDir(
+        gameDir: gameDir,
+      )).map<int>((dynamic e) => e is BigInt ? e.toInt() : (e as num).toInt()).toList();
     } catch (e) {
       _logger.info('扫描子进程失败（可能是权限问题）: $e');
       return <int>[];

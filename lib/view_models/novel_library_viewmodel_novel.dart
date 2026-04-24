@@ -2,18 +2,6 @@ part of 'novel_library_viewmodel.dart';
 
 /// 文件夹导航 / CRUD 以及书籍 CRUD / 元数据操作
 extension NovelLibraryNovelOps on NovelLibraryViewModel {
-  bool _isHiddenNovelPath(String path) {
-    final normalized = path.replaceAll('\\', '/');
-    final segments = normalized.split('/');
-    for (final segment in segments) {
-      if (segment.isEmpty) continue;
-      if (segment.startsWith('.') || segment.startsWith('._')) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   String _normalizePath(String path) {
     final normalized = path.replaceAll('\\', '/');
     return normalized.replaceAll(RegExp('/+'), '/');
@@ -78,47 +66,30 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
     }
   }
 
-  String get _chapterCountFilePath {
-    final appData = Platform.environment['APPDATA'] ?? Platform.environment['HOME'];
-    final base = appData != null
-        ? '$appData${Platform.pathSeparator}slimeworks'
-        : Directory.systemTemp.path;
-    return '$base${Platform.pathSeparator}chapter_counts.json';
-  }
-
-  Future<void> loadChapterCounts() async {
+  /// 从 Rust 层加载章节数缓存（同步 FFI 调用）。
+  void loadChapterCounts() {
     try {
-      final file = File(_chapterCountFilePath);
-      if (!file.existsSync()) return;
-      final raw = await file.readAsString();
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
-
+      final entries = rust_api.loadChapterCounts();
       final loaded = <String, int>{};
-      decoded.forEach((key, value) {
-        if (value is int) {
-          loaded[key] = value;
-        } else if (value is num) {
-          loaded[key] = value.toInt();
-        }
-      });
-      chapterCountMap.assignAll(loaded);
-    } catch (e) {
-      if (kDebugMode) {
-        print('[ChapterCount] load failed: $e');
+      for (final e in entries) {
+        loaded[e.novelId] = e.count;
       }
+      chapterCountMap.assignAll(loaded);
+      logger.d('loadChapterCounts: 加载 ${loaded.length} 条章节数缓存');
+    } catch (e) {
+      logger.e('loadChapterCounts: 加载失败 err=$e');
     }
   }
 
-  Future<void> saveChapterCounts() async {
+  /// 将章节数缓存持久化到 Rust 层（同步 FFI 调用）。
+  void saveChapterCounts() {
     try {
-      final file = File(_chapterCountFilePath);
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(chapterCountMap), encoding: const Utf8Codec());
+      final entries = chapterCountMap.entries
+          .map((e) => rust_api.ChapterCountEntry(novelId: e.key, count: e.value))
+          .toList();
+      rust_api.saveChapterCounts(entries: entries);
     } catch (e) {
-      if (kDebugMode) {
-        print('[ChapterCount] save failed: $e');
-      }
+      logger.e('saveChapterCounts: 保存失败 err=$e');
     }
   }
 
@@ -143,7 +114,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
     }
 
     if (changed) {
-      await saveChapterCounts();
+      saveChapterCounts();
     }
   }
 
@@ -300,22 +271,15 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       final allScannedPaths = <String>[];
       for (final batch in batches) {
         scanProgressText.value = '${batch.completed}/${batch.total}';
-        final visibleNovels = <NovelMetadata>[];
-        for (final novel in batch.novels) {
-          if (_isHiddenNovelPath(novel.filePath)) {
-            rust_api.removeNovel(novelId: novel.id);
-            continue;
-          }
-          visibleNovels.add(novel);
-        }
+        final batchNovels = batch.novels;
 
-        totalFound += visibleNovels.length;
-        allScannedPaths.addAll(visibleNovels.map((n) => n.filePath));
+        totalFound += batchNovels.length;
+        allScannedPaths.addAll(batchNovels.map((n) => n.filePath));
         await loadNovels();
 
         // 如果在文件夹内，按扫描路径自动创建子文件夹并归类书籍
         if (fid != null) {
-          for (final novel in visibleNovels) {
+          for (final novel in batchNovels) {
             final leafFolder = _extractLeafFolderName(scanRoot: scanRoot, filePath: novel.filePath);
             String targetFolderId = fid;
 
@@ -405,7 +369,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       removeNovel(novelId: novelId);
       novels.removeWhere((n) => n.id == novelId);
       chapterCountMap.remove(novelId);
-      await saveChapterCounts();
+      saveChapterCounts();
       showSnack('成功', '已删除书籍');
     } catch (e) {
       showSnack('错误', '删除失败: $e');
@@ -420,7 +384,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       await Future.delayed(const Duration(milliseconds: 100));
       await loadData();
       chapterCountMap.clear();
-      await saveChapterCounts();
+      saveChapterCounts();
       showSnack('成功', '已清空所有书籍');
     } catch (e) {
       showSnack('错误', '清空失败: $e');
@@ -463,11 +427,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程节点映射不存在');
         }
-        await nodeSettingsService.updateNodeNovelInfo(
-          nodeId: nodeId,
-          novelId: rawId,
-          title: title,
-        );
+        await nodeSettingsService.updateNodeNovelInfo(nodeId: nodeId, novelId: rawId, title: title);
         await refreshRemoteNovels();
         return;
       }
@@ -621,59 +581,47 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   // 关键词规则管理（导入自动打标签）
   // ─────────────────────────────────────────
 
-  /// 关键词规则欲存文件路径
-  String get _keywordRulesFilePath {
-    final appData = Platform.environment['APPDATA'] ?? Platform.environment['HOME'];
-    final base = appData != null
-        ? '$appData${Platform.pathSeparator}slimeworks'
-        : Directory.systemTemp.path;
-    return '$base${Platform.pathSeparator}keyword_rules.json';
-  }
-
-  /// 加载关键词规则（从 JSON 文件）
-  Future<void> loadKeywordRules() async {
+  /// 从 Rust 层加载用户关键词规则（同步 FFI 调用）。
+  void loadKeywordRules() {
     try {
-      final file = File(_keywordRulesFilePath);
-      if (!file.existsSync()) return;
-      final raw = await file.readAsString();
-      final list = jsonDecode(raw) as List<dynamic>;
-      keywordRules.value = list
-          .whereType<Map<String, dynamic>>()
-          .map((m) => Map<String, String>.from(m))
+      final rules = rust_api.loadUserKeywordRules();
+      keywordRules.value = rules
+          .map((r) => <String, String>{'keyword': r.keyword, 'tag': r.tag})
           .toList();
-      logger.log('[KeywordRules] loaded ${keywordRules.length} rules from $_keywordRulesFilePath');
+      logger.d('loadKeywordRules: 加载 ${keywordRules.length} 条关键词规则');
     } catch (e) {
-      if (kDebugMode) print('[KeywordRules] load failed: $e');
+      logger.e('loadKeywordRules: 加载失败 err=$e');
     }
   }
 
-  /// 保存关键词规则到 JSON 文件
-  Future<void> saveKeywordRules() async {
+  /// 将用户关键词规则持久化到 Rust 层（同步 FFI 调用）。
+  void saveKeywordRules() {
     try {
-      final file = File(_keywordRulesFilePath);
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(keywordRules.toList()), encoding: const Utf8Codec());
+      final rules = keywordRules
+          .map((r) => rust_api.UserKeywordRule(keyword: r['keyword'] ?? '', tag: r['tag'] ?? ''))
+          .toList();
+      rust_api.saveUserKeywordRules(rules: rules);
     } catch (e) {
-      if (kDebugMode) print('[KeywordRules] save failed: $e');
+      logger.e('saveKeywordRules: 保存失败 err=$e');
     }
   }
 
   /// 添加一条关键词规则并保存
-  Future<void> addKeywordRule(String keyword, String tag) async {
+  void addKeywordRule(String keyword, String tag) {
     if (keyword.trim().isEmpty) return;
     final k = keyword.trim();
     final t = tag.trim().isEmpty ? k : tag.trim();
     // 去重
     if (keywordRules.any((r) => r['keyword'] == k && r['tag'] == t)) return;
     keywordRules.add({'keyword': k, 'tag': t});
-    await saveKeywordRules();
+    saveKeywordRules();
   }
 
   /// 按索引删除关键词规则并保存
-  Future<void> removeKeywordRule(int index) async {
+  void removeKeywordRule(int index) {
     if (index < 0 || index >= keywordRules.length) return;
     keywordRules.removeAt(index);
-    await saveKeywordRules();
+    saveKeywordRules();
   }
 
   /// 对指定书籍应用关键词规则，匹配的关键词自动添加对应 tag
@@ -711,7 +659,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
 
   /// 对当前库中所有书籍批量应用关键词规则（冘倒挂载）
   Future<void> applyKeywordRulesToAll() async {
-    await loadKeywordRules();
+    loadKeywordRules();
     if (keywordRules.isEmpty) {
       showSnack('提示', '请先添加关键词规则');
       return;

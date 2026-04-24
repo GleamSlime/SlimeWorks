@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `from_smart_folder`, `to_smart_folder`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 List<MediaCollection> getAllMediaCollections() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaCollections();
@@ -91,6 +91,69 @@ String? ensureCoverThumbnail({required String filePath, required int width}) =>
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
 List<CollectionStats> getAllCollectionStats() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionStats();
+
+/// 从磁盘加载所有本地智能文件夹。
+List<SmartFolderData> listSmartFolders() =>
+    RustLib.instance.api.crateApiMediaCollectionListSmartFolders();
+
+/// 将智能文件夹列表持久化到磁盘（全量覆盖）。
+void saveAllSmartFolders({required List<SmartFolderData> folders}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionSaveAllSmartFolders(folders: folders);
+
+/// 加载所有集合排序记录。
+List<CollectionOrder> loadAllCollectionOrders() =>
+    RustLib.instance.api.crateApiMediaCollectionLoadAllCollectionOrders();
+
+/// 保存单条集合排序（ids 为空时删除该 key）。
+void saveCollectionOrder({
+  required String orderKey,
+  required List<String> ids,
+}) => RustLib.instance.api.crateApiMediaCollectionSaveCollectionOrder(
+  orderKey: orderKey,
+  ids: ids,
+);
+
+/// 加载收藏的集合 ID 列表。
+List<String> loadMediaFavorites() =>
+    RustLib.instance.api.crateApiMediaCollectionLoadMediaFavorites();
+
+/// 保存收藏的集合 ID 列表。
+void saveMediaFavorites({required List<String> ids}) =>
+    RustLib.instance.api.crateApiMediaCollectionSaveMediaFavorites(ids: ids);
+
+/// 将指定集合的文件物理迁移到 `<target_root>/<container_name>/` 子目录，
+/// 并在数据库中重新注册。Dart 侧负责通过文件选择器获取 `target_root`，
+/// 核心文件 I/O 和数据库操作在 Rust 层完成。
+Future<TransferResult> transferCollections({
+  required List<String> collectionIds,
+  required String targetRoot,
+  required String containerName,
+}) => RustLib.instance.api.crateApiMediaCollectionTransferCollections(
+  collectionIds: collectionIds,
+  targetRoot: targetRoot,
+  containerName: containerName,
+);
+
+/// 单条集合排序记录（orderKey → 有序 collectionId 列表）。
+class CollectionOrder {
+  final String key;
+  final List<String> ids;
+
+  const CollectionOrder({required this.key, required this.ids});
+
+  @override
+  int get hashCode => key.hashCode ^ ids.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CollectionOrder &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          ids == other.ids;
+}
 
 /// Aggregated per-collection stats returned in a single batch FFI call.
 class CollectionStats {
@@ -260,3 +323,66 @@ class MediaItem {
 }
 
 enum MediaKind { image, video, audio }
+
+/// 智能文件夹数据（供 FFI 传输，字段与 Dart 端 SmartFolder 保持一致）。
+class SmartFolderData {
+  final String id;
+  final String name;
+  final String regexPattern;
+
+  /// 匹配目标字符串：collectionName | fileName
+  final String regexTarget;
+
+  /// 文件类型过滤字符串：all | images | videos
+  final String fileTypeFilter;
+  final List<String> targetFolderIds;
+
+  const SmartFolderData({
+    required this.id,
+    required this.name,
+    required this.regexPattern,
+    required this.regexTarget,
+    required this.fileTypeFilter,
+    required this.targetFolderIds,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      regexPattern.hashCode ^
+      regexTarget.hashCode ^
+      fileTypeFilter.hashCode ^
+      targetFolderIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SmartFolderData &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          regexPattern == other.regexPattern &&
+          regexTarget == other.regexTarget &&
+          fileTypeFilter == other.fileTypeFilter &&
+          targetFolderIds == other.targetFolderIds;
+}
+
+/// 集合批量转移结果。
+class TransferResult {
+  final int successCount;
+  final int failCount;
+
+  const TransferResult({required this.successCount, required this.failCount});
+
+  @override
+  int get hashCode => successCount.hashCode ^ failCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransferResult &&
+          runtimeType == other.runtimeType &&
+          successCount == other.successCount &&
+          failCount == other.failCount;
+}

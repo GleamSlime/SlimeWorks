@@ -207,3 +207,121 @@ pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
         })
         .collect())
 }
+
+// ── 智能文件夹 FFI ───────────────────────────────────────────────────────────
+
+/// 智能文件夹数据（供 FFI 传输，字段与 Dart 端 SmartFolder 保持一致）。
+#[derive(Debug, Clone)]
+pub struct SmartFolderData {
+    pub id: String,
+    pub name: String,
+    pub regex_pattern: String,
+    /// 匹配目标字符串：collectionName | fileName
+    pub regex_target: String,
+    /// 文件类型过滤字符串：all | images | videos
+    pub file_type_filter: String,
+    pub target_folder_ids: Vec<String>,
+}
+
+fn to_smart_folder(data: SmartFolderData) -> media_collection::types::SmartFolder {
+    media_collection::types::SmartFolder {
+        id: data.id,
+        name: data.name,
+        regex_pattern: data.regex_pattern,
+        regex_target: data.regex_target,
+        file_type_filter: data.file_type_filter,
+        target_folder_ids: data.target_folder_ids,
+    }
+}
+
+fn from_smart_folder(sf: media_collection::types::SmartFolder) -> SmartFolderData {
+    SmartFolderData {
+        id: sf.id,
+        name: sf.name,
+        regex_pattern: sf.regex_pattern,
+        regex_target: sf.regex_target,
+        file_type_filter: sf.file_type_filter,
+        target_folder_ids: sf.target_folder_ids,
+    }
+}
+
+/// 从磁盘加载所有本地智能文件夹。
+#[frb(sync)]
+pub fn list_smart_folders() -> Vec<SmartFolderData> {
+    media_collection::list_smart_folders()
+        .into_iter()
+        .map(from_smart_folder)
+        .collect()
+}
+
+/// 将智能文件夹列表持久化到磁盘（全量覆盖）。
+#[frb(sync)]
+pub fn save_all_smart_folders(folders: Vec<SmartFolderData>) -> anyhow::Result<()> {
+    media_collection::save_all_smart_folders(folders.into_iter().map(to_smart_folder).collect())
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 集合排序 FFI ─────────────────────────────────────────────────────────────
+
+/// 单条集合排序记录（orderKey → 有序 collectionId 列表）。
+#[derive(Debug, Clone)]
+pub struct CollectionOrder {
+    pub key: String,
+    pub ids: Vec<String>,
+}
+
+/// 加载所有集合排序记录。
+#[frb(sync)]
+pub fn load_all_collection_orders() -> Vec<CollectionOrder> {
+    media_collection::load_all_collection_orders()
+        .into_iter()
+        .map(|(k, v)| CollectionOrder { key: k, ids: v })
+        .collect()
+}
+
+/// 保存单条集合排序（ids 为空时删除该 key）。
+#[frb(sync)]
+pub fn save_collection_order(order_key: String, ids: Vec<String>) -> anyhow::Result<()> {
+    media_collection::save_collection_order(order_key, ids)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 收藏 FFI ─────────────────────────────────────────────────────────────────
+
+/// 加载收藏的集合 ID 列表。
+#[frb(sync)]
+pub fn load_media_favorites() -> Vec<String> {
+    media_collection::load_media_favorites()
+}
+
+/// 保存收藏的集合 ID 列表。
+#[frb(sync)]
+pub fn save_media_favorites(ids: Vec<String>) -> anyhow::Result<()> {
+    media_collection::save_media_favorites(ids).map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 集合文件物理转移 FFI ──────────────────────────────────────────────────────
+
+/// 集合批量转移结果。
+#[derive(Debug, Clone)]
+pub struct TransferResult {
+    pub success_count: u32,
+    pub fail_count: u32,
+}
+
+/// 将指定集合的文件物理迁移到 `<target_root>/<container_name>/` 子目录，
+/// 并在数据库中重新注册。Dart 侧负责通过文件选择器获取 `target_root`，
+/// 核心文件 I/O 和数据库操作在 Rust 层完成。
+pub fn transfer_collections(
+    collection_ids: Vec<String>,
+    target_root: String,
+    container_name: String,
+) -> anyhow::Result<TransferResult> {
+    media_collection::transfer_collections(collection_ids, target_root, container_name)
+        .map(|(success_count, fail_count)| TransferResult {
+            success_count,
+            fail_count,
+        })
+        .map_err(|e| anyhow::anyhow!(e))
+}
+

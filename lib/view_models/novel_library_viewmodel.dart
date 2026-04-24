@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -390,7 +389,9 @@ class NovelLibraryViewModel extends BaseViewModel {
       await loadNovels();
       await loadFolders();
     });
-    await Future.wait([loadData(), loadKeywordRules(), loadChapterCounts()]);
+    loadKeywordRules();
+    loadChapterCounts();
+    await Future.wait([loadData()]);
     await refreshRemoteNovels();
   }
 

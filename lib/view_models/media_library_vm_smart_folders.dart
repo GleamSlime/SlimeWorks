@@ -3,45 +3,26 @@ part of 'media_library_viewmodel.dart';
 /// 集合排序和智能文件夹 CRUD 操作。
 /// 通过 extension 挂载到 [MediaLibraryViewModel]，共享同一库私有成员。
 extension SmartFoldersCrudExt on MediaLibraryViewModel {
-  // ── 集合排序 ─────────────────────────────────────────────────────────────
+  // ── 集合排序（持久化由 Rust FFI 负责）────────────────────────────────────
 
-  Future<void> _loadCollectionOrders() async {
+  /// 从 Rust 层加载所有集合排序记录到内存缓存。
+  void _loadCollectionOrders() {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      int loaded = 0;
-      for (final key in prefs.getKeys()) {
-        if (!key.startsWith(MediaLibraryViewModel._collectionOrderPrefsKeyPrefix)) continue;
-        final orderKey = key.substring(MediaLibraryViewModel._collectionOrderPrefsKeyPrefix.length);
-        final json = prefs.getString(key);
-        if (json != null) {
-          try {
-            final ids = (jsonDecode(json) as List).cast<String>();
-            _collectionOrders[orderKey] = ids;
-            logger.d('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
-            loaded++;
-          } catch (e) {
-            logger.e('_loadCollectionOrders: 解析失败 key=$key err=$e');
-          }
-        }
+      final orders = media_api.loadAllCollectionOrders();
+      for (final order in orders) {
+        _collectionOrders[order.key] = order.ids;
       }
-      logger.d('_loadCollectionOrders: 共加载 $loaded 条排序记录');
+      logger.d('_loadCollectionOrders: 共加载 ${orders.length} 条排序记录');
     } catch (e) {
       logger.e('加载集合排序失败: $e');
     }
   }
 
-  Future<void> _saveCollectionOrder(String orderKey, List<String> ids) async {
+  /// 将单条集合排序写入 Rust 持久化层。
+  void _saveCollectionOrder(String orderKey, List<String> ids) {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = '${MediaLibraryViewModel._collectionOrderPrefsKeyPrefix}$orderKey';
-      if (ids.isEmpty) {
-        await prefs.remove(key);
-        logger.d('_saveCollectionOrder: removed key=$key (empty)');
-      } else {
-        final encoded = jsonEncode(ids);
-        final success = await prefs.setString(key, encoded);
-        logger.d('_saveCollectionOrder: key=$key count=${ids.length} success=$success');
-      }
+      media_api.saveCollectionOrder(orderKey: orderKey, ids: ids);
+      logger.d('_saveCollectionOrder: orderKey=$orderKey count=${ids.length}');
     } catch (e) {
       logger.e('保存集合排序失败: key=$orderKey err=$e');
     }
@@ -88,83 +69,75 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     _collectionOrders[orderKey] = ids;
     collectionOrderVersion.value++;
     logger.d('reorderCollection: orderKey=$orderKey newOrder=${ids.join(",")}');
-    await _saveCollectionOrder(orderKey, ids);
+    _saveCollectionOrder(orderKey, ids);
   }
 
-  // ── 智能文件夹 CRUD ───────────────────────────────────────────────────────
+  // ── 智能文件夹 CRUD（持久化由 Rust FFI 负责）─────────────────────────────
 
-  Future<File> _getSmartFoldersFile() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/${MediaLibraryViewModel._smartFolderFileName}');
-  }
-
-  Future<void> _loadSmartFolders() async {
+  /// 将 Rust FFI 返回的 [SmartFolderData] 转换为 Dart 端的 [SmartFolder]。
+  SmartFolder _fromFfiSmartFolder(media_api.SmartFolderData data) {
+    SmartFolderRegexTarget regexTarget;
     try {
-      final file = await _getSmartFoldersFile();
-      debugPrint('[MediaLibrary] _loadSmartFolders: 文件路径=${file.path}');
-      final dirExists = await file.parent.exists();
-      debugPrint('[MediaLibrary] _loadSmartFolders: 父目录存在=$dirExists');
-      final fileExists = await file.exists();
-      debugPrint('[MediaLibrary] _loadSmartFolders: 文件存在=$fileExists');
-      if (fileExists) {
-        final json = await file.readAsString();
-        debugPrint('[MediaLibrary] _loadSmartFolders: 读取 ${json.length} 字节');
-        if (json.isNotEmpty) {
-          final loaded = SmartFolder.listFromJson(json);
-          smartFolders.assignAll(loaded);
-          debugPrint('[MediaLibrary] _loadSmartFolders: ✅ 加载成功，${loaded.length} 个智能文件夹');
-        } else {
-          debugPrint('[MediaLibrary] _loadSmartFolders: 文件内容为空');
-        }
-      } else {
-        // 迁移：从 SharedPreferences 读取旧数据
-        debugPrint('[MediaLibrary] _loadSmartFolders: 文件不存在，尝试从 SharedPreferences 迁移');
-        final prefs = await SharedPreferences.getInstance();
-        final oldJson = prefs.getString(MediaLibraryViewModel._smartFoldersPrefsKey);
-        if (oldJson != null && oldJson.isNotEmpty) {
-          debugPrint('[MediaLibrary] _loadSmartFolders: SharedPreferences 迁移 ${oldJson.length} 字节');
-          final List<SmartFolder> loaded = SmartFolder.listFromJson(oldJson);
-          smartFolders.assignAll(loaded);
-          await _saveSmartFolders();
-          await prefs.remove(MediaLibraryViewModel._smartFoldersPrefsKey);
-          debugPrint('[MediaLibrary] _loadSmartFolders: 迁移完成，${loaded.length} 个智能文件夹');
-        } else {
-          debugPrint('[MediaLibrary] _loadSmartFolders: 无历史数据，首次使用');
-        }
-      }
-    } catch (err, stack) {
-      debugPrint('[MediaLibrary] _loadSmartFolders: ❌ 加载失败 err=$err');
-      debugPrint('[MediaLibrary] _loadSmartFolders: stack=$stack');
+      regexTarget = SmartFolderRegexTarget.values.byName(data.regexTarget);
+    } catch (_) {
+      regexTarget = SmartFolderRegexTarget.collectionName;
+    }
+    SmartFolderFileType fileTypeFilter;
+    try {
+      fileTypeFilter = SmartFolderFileType.values.byName(data.fileTypeFilter);
+    } catch (_) {
+      fileTypeFilter = SmartFolderFileType.all;
+    }
+    return SmartFolder(
+      id: data.id,
+      name: data.name,
+      regexPattern: data.regexPattern,
+      regexTarget: regexTarget,
+      fileTypeFilter: fileTypeFilter,
+      targetFolderIds: data.targetFolderIds,
+    );
+  }
+
+  /// 将 Dart 端 [SmartFolder] 列表转换为 Rust FFI 所需的 [SmartFolderData] 列表。
+  List<media_api.SmartFolderData> _toFfiSmartFolders(List<SmartFolder> folders) {
+    return folders
+        .map(
+          (sf) => media_api.SmartFolderData(
+            id: sf.id,
+            name: sf.name,
+            regexPattern: sf.regexPattern,
+            regexTarget: sf.regexTarget.name,
+            fileTypeFilter: sf.fileTypeFilter.name,
+            targetFolderIds: sf.targetFolderIds,
+          ),
+        )
+        .toList();
+  }
+
+  /// 从 Rust 层加载智能文件夹到内存（同步 FFI 调用）。
+  void _loadSmartFolders() {
+    try {
+      final data = media_api.listSmartFolders();
+      final loaded = data.map(_fromFfiSmartFolder).toList();
+      smartFolders.assignAll(loaded);
+      logger.i('_loadSmartFolders: 加载成功，${loaded.length} 个智能文件夹');
+    } catch (err) {
+      logger.e('_loadSmartFolders: 加载失败 err=$err');
     }
   }
 
-  /// 立即将智能文件夹列表持久化到磁盘，供调试时主动调用。
-  Future<void> debugForceReloadSmartFolders() => _loadSmartFolders();
-
-  Future<void> _saveSmartFolders() async {
+  /// 将智能文件夹列表持久化到 Rust 层（同步 FFI 调用）。
+  void _saveSmartFolders() {
     try {
-      final file = await _getSmartFoldersFile();
-      debugPrint('[MediaLibrary] _saveSmartFolders: 目标路径=${file.path}');
-      // 确保父目录存在（Windows 上 AppData 子目录可能尚未创建）
-      await file.parent.create(recursive: true);
-      final json = SmartFolder.listToJson(smartFolders);
-      await file.writeAsString(json, flush: true);
-      // 回读验证写入成功
-      final written = await file.readAsString();
-      if (written == json) {
-        debugPrint(
-          '[MediaLibrary] _saveSmartFolders: ✅ 写入验证通过，${smartFolders.length} 个智能文件夹，${json.length} 字节',
-        );
-      } else {
-        debugPrint(
-          '[MediaLibrary] _saveSmartFolders: ❌ 内容不符！期望 ${json.length} 字节，实际 ${written.length} 字节',
-        );
-      }
-    } catch (err, stack) {
-      debugPrint('[MediaLibrary] _saveSmartFolders: ❌ 保存失败 err=$err');
-      debugPrint('[MediaLibrary] _saveSmartFolders: stack=$stack');
+      media_api.saveAllSmartFolders(folders: _toFfiSmartFolders(smartFolders));
+      logger.d('_saveSmartFolders: 保存成功，${smartFolders.length} 个智能文件夹');
+    } catch (err) {
+      logger.e('_saveSmartFolders: 保存失败 err=$err');
     }
   }
+
+  /// 重新从 Rust 层加载智能文件夹（供调试使用）。
+  void debugForceReloadSmartFolders() => _loadSmartFolders();
 
   Future<void> createSmartFolder(
     String name,
@@ -211,7 +184,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       targetFolderIds: targetFolderIds,
     );
     smartFolders.add(sf);
-    await _saveSmartFolders();
+    _saveSmartFolders();
   }
 
   Future<void> renameSmartFolder(String id, String newName) async {
@@ -221,7 +194,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     if (index == -1) return;
     smartFolders[index] = smartFolders[index].copyWith(name: normalized);
     smartFolders.refresh();
-    await _saveSmartFolders();
+    _saveSmartFolders();
   }
 
   Future<void> editSmartFolder(
@@ -244,12 +217,12 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     );
     smartFolders[index] = updated;
     smartFolders.refresh();
-    await _saveSmartFolders();
+    _saveSmartFolders();
   }
 
   Future<void> deleteSmartFolder(String id) async {
     smartFolders.removeWhere((sf) => sf.id == id);
-    await _saveSmartFolders();
+    _saveSmartFolders();
     if (currentFolderId.value == id) {
       exitToRoot();
     }

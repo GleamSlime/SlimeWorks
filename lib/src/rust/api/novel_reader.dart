@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_keyword_apply_batch_result`, `convert_keyword_rule_input`, `convert_metadata`, `convert_scan_batch_result`, `convert_search_batch_result`, `convert_search_match`, `convert_search_result`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 扫描文件夹获取书籍列表
 List<NovelMetadata> scanNovelsFolder({required String folderPath}) => RustLib
@@ -231,6 +231,41 @@ List<NovelMetadata> addNovelToFolder({
   filePaths: filePaths,
   folderId: folderId,
 );
+
+/// 从 Rust 层加载所有章节数缓存。
+List<ChapterCountEntry> loadChapterCounts() =>
+    RustLib.instance.api.crateApiNovelReaderLoadChapterCounts();
+
+/// 将章节数缓存全量持久化到 Rust 层。
+void saveChapterCounts({required List<ChapterCountEntry> entries}) =>
+    RustLib.instance.api.crateApiNovelReaderSaveChapterCounts(entries: entries);
+
+/// 从 Rust 层加载用户自定义关键词规则。
+List<UserKeywordRule> loadUserKeywordRules() =>
+    RustLib.instance.api.crateApiNovelReaderLoadUserKeywordRules();
+
+/// 将用户关键词规则全量持久化到 Rust 层。
+void saveUserKeywordRules({required List<UserKeywordRule> rules}) =>
+    RustLib.instance.api.crateApiNovelReaderSaveUserKeywordRules(rules: rules);
+
+/// 章节数记录（novelId → count）。
+class ChapterCountEntry {
+  final String novelId;
+  final int count;
+
+  const ChapterCountEntry({required this.novelId, required this.count});
+
+  @override
+  int get hashCode => novelId.hashCode ^ count.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChapterCountEntry &&
+          runtimeType == other.runtimeType &&
+          novelId == other.novelId &&
+          count == other.count;
+}
 
 class KeywordApplyBatchResult {
   final BigInt completed;
@@ -559,4 +594,23 @@ class SearchMatch {
           chapterTitle == other.chapterTitle &&
           position == other.position &&
           snippet == other.snippet;
+}
+
+/// 用户自定义关键词规则（关键词 → 标签）。
+class UserKeywordRule {
+  final String keyword;
+  final String tag;
+
+  const UserKeywordRule({required this.keyword, required this.tag});
+
+  @override
+  int get hashCode => keyword.hashCode ^ tag.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserKeywordRule &&
+          runtimeType == other.runtimeType &&
+          keyword == other.keyword &&
+          tag == other.tag;
 }

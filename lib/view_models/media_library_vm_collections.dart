@@ -7,12 +7,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
   /// 将 [folderId] 文件夹（或智能文件夹 [smartFolderId]）内的所有集合
   /// 物理迁移到用户选择的目标目录。
+  /// 文件 I/O 和数据库操作由 Rust FFI 完成，Dart 仅负责 UI 交互（文件选择、进度显示）。
   Future<void> transferFolderCollections({String? folderId, String? smartFolderId}) async {
-    // 1. 弹出文件夹选择器
+    // 1. 弹出文件夹选择器（UI 交互，保留在 Dart 层）
     final targetRoot = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择转移目标目录');
     if (targetRoot == null || targetRoot.isEmpty) return;
 
-    // 2. 确定集合列表
+    // 2. 确定需要转移的集合列表及容器名称
     final List<media_api.MediaCollection> toTransfer;
     final String containerName;
     if (smartFolderId != null) {
@@ -47,76 +48,25 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
 
     isScanning.value = true;
-    scanStatusText.value = '准备转移...';
-    int successCount = 0;
-    int failCount = 0;
+    scanStatusText.value = '转移中...';
 
     try {
-      final sep = Platform.pathSeparator;
-      final containerDir = Directory('$targetRoot$sep$containerName');
-
-      for (final collection in toTransfer) {
-        try {
-          scanStatusText.value = '转移中: ${collection.title} ($successCount/${toTransfer.length})';
-
-          final destCollectionDir = Directory('${containerDir.path}$sep${collection.title}');
-          await destCollectionDir.create(recursive: true);
-
-          final items = media_api.getMediaCollectionItems(collectionId: collection.id);
-
-          for (final item in items) {
-            final srcFile = File(item.filePath);
-            if (!srcFile.existsSync()) {
-              debugPrint('[Transfer] 源文件不存在，跳过: ${item.filePath}');
-              continue;
-            }
-            final fileName = srcFile.uri.pathSegments.last;
-            final destFile = File('${destCollectionDir.path}$sep$fileName');
-            try {
-              await srcFile.rename(destFile.path);
-            } on FileSystemException {
-              try {
-                await srcFile.copy(destFile.path);
-                await srcFile.delete();
-              } catch (copyErr) {
-                debugPrint('[Transfer] copy+delete 失败: ${item.filePath} err=$copyErr');
-              }
-            }
-          }
-
-          final newCollection = await media_api.importMediaFolder(
-            folderPath: destCollectionDir.path,
-          );
-          if (collection.folderId != null) {
-            media_api.moveMediaCollectionToFolder(
-              collectionId: newCollection.id,
-              folderId: collection.folderId,
-            );
-          }
-          media_api.deleteMediaCollection(collectionId: collection.id);
-          try {
-            final oldDir = Directory(collection.folderPath);
-            if (oldDir.existsSync() && oldDir.listSync().isEmpty) {
-              await oldDir.delete();
-            }
-          } catch (_) {}
-
-          successCount++;
-        } catch (e) {
-          failCount++;
-          debugPrint('[Transfer] 集合"${collection.title}"转移失败: $e');
-        }
-      }
-
+      // 3. 调用 Rust FFI 执行文件迁移和数据库更新
+      final collectionIds = toTransfer.map((c) => c.id).toList();
+      final result = await media_api.transferCollections(
+        collectionIds: collectionIds,
+        targetRoot: targetRoot,
+        containerName: containerName,
+      );
       await refreshAll();
-      if (failCount == 0) {
-        showSnack('成功', '成功转移 $successCount 个集合到: $targetRoot');
+      if (result.failCount == 0) {
+        showSnack('成功', '成功转移 ${result.successCount} 个集合到: $targetRoot');
       } else {
-        showSnack('部分完成', '成功 $successCount 个，失败 $failCount 个');
+        showSnack('部分完成', '成功 ${result.successCount} 个，失败 ${result.failCount} 个');
       }
     } catch (e) {
       showSnack('错误', '转移失败: $e');
-      debugPrint('[Transfer] 转移异常: $e');
+      logger.e('[转移] 转移异常: $e');
     } finally {
       isScanning.value = false;
       scanStatusText.value = '';

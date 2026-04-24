@@ -60,6 +60,19 @@
 | `width` / `height` | `Option<u32>` | 图片/视频分辨率 |
 | `duration_ms` | `Option<u64>` | 音视频时长（毫秒） |
 
+### `SmartFolder`（智能文件夹数据）
+
+存储于 Rust `media_collection` 模块，通过 FRB 以 `SmartFolderData` 类型暴露给 Dart。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `String` | 格式：`smart-folder:<timestamp>` |
+| `name` | `String` | 显示名称 |
+| `regex_pattern` | `String` | 正则表达式（空 = 不过滤） |
+| `regex_target` | `String` | `collectionName` \| `fileName` |
+| `file_type_filter` | `String` | `all` \| `images` \| `videos` |
+| `target_folder_ids` | `Vec<String>` | 目标文件夹 ID（空 = 所有） |
+
 ### 支持的媒体格式
 
 | 类型 | 扩展名 |
@@ -83,9 +96,14 @@ class SmartFolder {
 }
 ```
 
-持久化：以 JSON 文件存储于 `<AppSupportDirectory>/slime_smart_folders.json`（`MediaLibraryViewModel._smartFolderFileName`）。
+**架构说明**：
+- **存储层（Rust）**：智能文件夹数据通过 `media_collection::list_smart_folders()` / `save_all_smart_folders()` 持久化到 `<AppSupportDir>/smart_folders_data.json`，节点服务器和本地 FFI 共用同一文件路径。
+- **UI 层（Dart）**：`SmartFolder` 类保留在 Dart 端作为展示模型，包含正则匹配逻辑（`matchesCollection`, `matchesFileNames`）。
+- **FFI 类型**：`SmartFolderData`（Rust FRB 层）↔ `SmartFolder`（Dart UI 层），通过 `_fromFfiSmartFolder` / `_toFfiSmartFolders` 辅助函数转换。
 
-集合排序：存储于 `SharedPreferences`，key 格式 `media_collection_order_<orderKey>`；各智能文件夹/文件夹视图维护独立的顺序。
+集合排序：通过 `media_api.saveCollectionOrder` / `loadAllCollectionOrders` 持久化至 `<AppSupportDir>/media_collection_orders.json`，替代原有 SharedPreferences 方案。
+
+收藏：通过 `media_api.saveMediaFavorites` / `loadMediaFavorites` 持久化至 `<AppSupportDir>/media_favorites.json`，替代原有 SharedPreferences 方案。
 
 ## 目录扫描
 
@@ -188,10 +206,20 @@ Rust 节点服务器的 `/node/media` 路由完整支持 HTTP Range 请求，供
 RxList<MediaCollection> collections;         // 本地集合
 RxList<MediaCollection> remoteCollections;   // 远程节点集合
 RxList<MediaFolder> folders;                 // 本地文件夹
-RxList<SmartFolder> smartFolders;            // 智能文件夹（Dart 端维护）
+RxList<SmartFolder> smartFolders;            // 智能文件夹（Dart UI 模型，持久化由 Rust 负责）
 RxBool isLoading;
 RxString currentFolderId;                    // 当前浏览的文件夹（null = 根）
 ```
+
+## 持久化层分工
+
+| 数据 | 存储方式 | 文件路径 |
+|------|----------|---------|
+| 媒体集合/文件夹/文件 | Rust SQLite (`media.db`) | `<AppSupportDir>/SlimeWorks/media.db` |
+| 智能文件夹 | Rust JSON（FFI: `list/save_all_smart_folders`） | `<AppSupportDir>/smart_folders_data.json` |
+| 集合排序 | Rust JSON（FFI: `load/save_collection_order`） | `<AppSupportDir>/media_collection_orders.json` |
+| 收藏集合 | Rust JSON（FFI: `load/save_media_favorites`） | `<AppSupportDir>/media_favorites.json` |
+| 媒体偏好设置 | Flutter SharedPreferences | — |
 
 ## 内存管理
 
