@@ -256,6 +256,23 @@ class PictureLibraryToolbar extends StatelessWidget {
                         .toList(),
                   ),
                 ],
+                // 桌面端/移动端详情模式：瀑布流布局切换
+                if (inDetail)
+                  Tooltip(
+                    message: viewModel.useMasonryGrid.value ? '切换为网格布局' : '切换为瀑布流布局',
+                    child: DesktopHeadToolsButton(
+                      icon: Icon(
+                        viewModel.useMasonryGrid.value
+                            ? Icons.view_comfy_rounded
+                            : Icons.grid_view_rounded,
+                        color: viewModel.useMasonryGrid.value
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      size: AppTheme.metrics.kSpace40,
+                      onTap: () => viewModel.useMasonryGrid.value = !viewModel.useMasonryGrid.value,
+                    ),
+                  ),
                 // 刷新/同步按钮（始终显示）
                 DesktopHeadToolsButton(
                   icon: const Icon(Icons.refresh),

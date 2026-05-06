@@ -342,7 +342,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 120),
                         child: KeyedSubtree(
-                          key: ValueKey(displaySource),
+                          key: ValueKey('${widget.collection.id}_$displaySource'),
                           child: _buildCoverImage(displaySource, theme),
                         ),
                       ),

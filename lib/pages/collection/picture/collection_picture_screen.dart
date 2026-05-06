@@ -14,6 +14,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/media_browse_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_detail.dart';
@@ -59,13 +60,22 @@ class _CollectionPictureScreenState
 
   /// 导航时重建 [_scrollController]，并同步保存当前滚动位置到 viewModel。
   void _replaceScrollController() {
+    logger.d(
+      '[Scroll] _replaceScrollController START: hasClients=${_scrollController.hasClients}, offset=${_scrollController.hasClients ? _scrollController.offset : "N/A"}',
+    );
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
+      logger.d(
+        '[Scroll] _replaceScrollController: saved offset=${_scrollController.offset} to viewModel',
+      );
     }
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
+    logger.d(
+      '[Scroll] _replaceScrollController END: new controller with initialScrollOffset=${_scrollController.initialScrollOffset}',
+    );
   }
 
   void _enterFolder(String id) {
@@ -90,15 +100,23 @@ class _CollectionPictureScreenState
   }
 
   void _enterCollection(String id) {
+    logger.d(
+      '[Scroll] _enterCollection START: id=$id, savedScrollOffset=${viewModel.savedScrollOffset.value}',
+    );
     setState(() => _navForward = true);
-    _replaceScrollController();
     viewModel.enterCollection(id);
+    logger.d('[Scroll] _enterCollection END');
   }
 
   void _exitCollection() {
+    logger.d(
+      '[Scroll] _exitCollection START: savedScrollOffset=${viewModel.savedScrollOffset.value}',
+    );
     setState(() => _navForward = false);
-    _replaceScrollController();
     viewModel.exitCollection();
+    logger.d(
+      '[Scroll] _exitCollection END: scrollRestoreTarget=${viewModel.scrollRestoreTarget.value}',
+    );
   }
 
   void _exitToRoot() {
@@ -133,27 +151,54 @@ class _CollectionPictureScreenState
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController(initialScrollOffset: viewModel.savedScrollOffset.value);
+    final initialOffset = viewModel.savedScrollOffset.value;
+    logger.d(
+      '[Scroll] initState: creating ScrollController with initialScrollOffset=$initialOffset',
+    );
+    _scrollController = ScrollController(initialScrollOffset: initialOffset);
     _scrollController.addListener(_onScroll);
     // Consume scroll-restore signals emitted by the viewmodel on exitCollection / exitFolder
     _scrollRestoreWorker = ever<double?>(viewModel.scrollRestoreTarget, (offset) {
+      logger.d('[Scroll] _scrollRestoreWorker triggered: offset=$offset');
       if (offset == null) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
+      final scrollController = _scrollController;
+      int attempts = 0;
+      void performRestore() {
+        attempts++;
+        if (!mounted) {
+          logger.d('[Scroll] _scrollRestoreWorker: not mounted, abort');
+          return;
+        }
+        logger.d(
+          '[Scroll] _scrollRestoreWorker attempt $attempts: hasClients=${scrollController.hasClients}, offset=$offset',
+        );
+        if (!scrollController.hasClients && attempts < 10) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => performRestore());
+          return;
+        }
+        if (scrollController.hasClients) {
           final clamped = offset.clamp(
-            _scrollController.position.minScrollExtent,
-            _scrollController.position.maxScrollExtent,
+            scrollController.position.minScrollExtent,
+            scrollController.position.maxScrollExtent,
           );
-          _scrollController.jumpTo(clamped);
+          logger.d('[Scroll] _scrollRestoreWorker: jumpTo $clamped (from $offset)');
+          scrollController.jumpTo(clamped);
+          logger.d(
+            '[Scroll] _scrollRestoreWorker: after jumpTo, position=${scrollController.offset}',
+          );
         }
         viewModel.scrollRestoreTarget.value = null;
-      });
+        logger.d('[Scroll] _scrollRestoreWorker: set scrollRestoreTarget=null');
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) => performRestore());
     });
   }
 
   void _onScroll() {
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
+      logger.d('[Scroll] _onScroll: saved offset=${_scrollController.offset}');
     }
   }
 
@@ -291,23 +336,11 @@ class _CollectionPictureScreenState
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       transitionBuilder: (child, animation) {
-                        // 每个过渡子 widget 加实色背景，防止滑动期间透出底层内容
                         return ColoredBox(
                           color: Theme.of(context).scaffoldBackgroundColor,
                           child: _buildPageTransition(child, animation),
                         );
                       },
-                      layoutBuilder: (currentChild, previousChildren) => Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ...previousChildren.map(
-                            (c) => Positioned.fill(
-                              child: TickerMode(enabled: false, child: IgnorePointer(child: c)),
-                            ),
-                          ),
-                          if (currentChild != null) Positioned.fill(child: currentChild),
-                        ],
-                      ),
                       child: KeyedSubtree(key: ValueKey(pageKey), child: pageContent),
                     ),
                   ),
@@ -1274,7 +1307,6 @@ class _CollectionPictureScreenState
     return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
-
   /// 浏览网格视图（首页列表 / 文件夹内列表），由 [MediaBrowseGridView] 实现。
   Widget _buildBrowseGridWidget(BuildContext context) {
     return MediaBrowseGridView(
@@ -1293,9 +1325,8 @@ class _CollectionPictureScreenState
       onRenameCollection: _showRenameDialog,
       onDeleteCollection: _confirmDeleteSingle,
       onMoveCollection: _showMoveCollectionDialog,
-      onOpenFolder: (path, {bool isRemote = false}) => isRemote
-          ? _showRemotePathDialog(path)
-          : _openFolderInExplorer(path),
+      onOpenFolder: (path, {bool isRemote = false}) =>
+          isRemote ? _showRemotePathDialog(path) : _openFolderInExplorer(path),
       onDeleteCollectionFolder: (id, path, title) =>
           _confirmDeleteCollectionFolder(id, path, title),
       onDeleteNodeLocalFilesForFolder: _confirmDeleteNodeLocalFilesForFolder,
@@ -1311,8 +1342,8 @@ class _CollectionPictureScreenState
       onConfirmDelete: _confirmDeleteItemFile,
       onConfirmDeleteNodeLocalFile:
           viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? '')
-              ? _confirmDeleteNodeLocalItemFile
-              : null,
+          ? _confirmDeleteNodeLocalItemFile
+          : null,
       onViewerStateChanged: (active) {
         if (mounted) setState(() => _viewerActive = active);
       },

@@ -112,6 +112,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// Per-browse-level scroll offset memory: key = folderId (null = root)
   final _browseScrollOffsets = <String?, double>{};
 
+  /// Saves the browse scroll offset when entering a collection so it can be
+  /// restored when exiting, independent of collection scroll changes.
+  double _savedBrowseScrollOffset = 0.0;
+
   final smartFolders = <SmartFolder>[].obs;
 
   /// 各远程节点的智能文件夹列表，key = nodeId，value = 重命名 ID 后的 SmartFolder 列表。
@@ -126,6 +130,9 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// 是否仅显示收藏集合（仅在浏览层生效）。
   final showFavoritesOnly = false.obs;
+
+  /// 是否启用瀑布流布局（详情页网格布局）。
+  final useMasonryGrid = true.obs;
 
   /// collectionId → 该集合内所有 MediaItem.fileSize 的总和（懒计算）。
   final _collectionSizes = <String, BigInt>{};
@@ -1167,23 +1174,58 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   Future<void> enterCollection(String collectionId) async {
-    // Snapshot scroll position for the current browse level before entering detail
+    logger.d(
+      '[Scroll] enterCollection START: collectionId=$collectionId, savedScrollOffset=${savedScrollOffset.value}, _savedBrowseScrollOffset=$_savedBrowseScrollOffset',
+    );
+    _savedBrowseScrollOffset = savedScrollOffset.value;
     _browseScrollOffsets[currentFolderId.value] = savedScrollOffset.value;
-    // 先标记 loading，再更新 collectionId，避免 UI 先闪一次"集合为空"状态
+    logger.d(
+      '[Scroll] enterCollection: saved browse offset to _savedBrowseScrollOffset=$_savedBrowseScrollOffset, _browseScrollOffsets[${currentFolderId.value}]=${_browseScrollOffsets[currentFolderId.value]}',
+    );
     currentItems.clear();
     isLoadingItems.value = true;
     currentCollectionId.value = collectionId;
     exitSelection();
+
+    final previousOffset = _browseScrollOffsets[collectionId];
+    logger.d(
+      '[Scroll] enterCollection: previousOffset for collectionId=$collectionId is $previousOffset',
+    );
+    if (previousOffset != null) {
+      savedScrollOffset.value = previousOffset;
+      logger.d(
+        '[Scroll] enterCollection: restored savedScrollOffset to previousOffset=$previousOffset',
+      );
+    } else {
+      savedScrollOffset.value = 0.0;
+      logger.d('[Scroll] enterCollection: no previousOffset, set savedScrollOffset=0');
+    }
+
     await loadCurrentCollectionItems();
+    logger.d('[Scroll] enterCollection END: savedScrollOffset=${savedScrollOffset.value}');
   }
 
   void exitCollection() {
+    final collectionId = currentCollectionId.value;
+    logger.d(
+      '[Scroll] exitCollection START: collectionId=$collectionId, savedScrollOffset=${savedScrollOffset.value}, _savedBrowseScrollOffset=$_savedBrowseScrollOffset',
+    );
+    if (collectionId != null) {
+      _browseScrollOffsets[collectionId] = savedScrollOffset.value;
+      logger.d(
+        '[Scroll] exitCollection: saved collection offset to _browseScrollOffsets[$collectionId]=${savedScrollOffset.value}',
+      );
+    }
+    final browseOffset = _savedBrowseScrollOffset;
+    savedScrollOffset.value = browseOffset;
+    scrollRestoreTarget.value = browseOffset;
+    logger.d(
+      '[Scroll] exitCollection: restored browse offset: savedScrollOffset=$browseOffset, scrollRestoreTarget=$browseOffset',
+    );
     currentCollectionId.value = null;
     currentItems.clear();
     exitSelection();
-    // Restore the saved browse-level scroll offset
-    final saved = _browseScrollOffsets[currentFolderId.value] ?? 0.0;
-    scrollRestoreTarget.value = saved;
+    logger.d('[Scroll] exitCollection END');
   }
 
   void enterFolder(String folderId) {
@@ -1367,7 +1409,8 @@ class MediaLibraryViewModel extends BaseViewModel {
           probedDuration = parsed;
           debugPrint('[VideoThumb] ffprobe 时长: ${probedDuration}s');
         } else {
-          debugPrint('[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
+          debugPrint(
+            '[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
           );
         }
       } else {

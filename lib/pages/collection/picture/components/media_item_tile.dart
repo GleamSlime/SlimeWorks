@@ -285,8 +285,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
                 top: appMetrics.kSpace8,
                 child: Container(
                   padding: EdgeInsets.symmetric(
-                    horizontal: appMetrics.kSpace8,
-                    vertical: appMetrics.kSpace4,
+                    horizontal: appMetrics.kSpace16,
+                    vertical: appMetrics.kSpace8,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.black.withAlpha(120),
@@ -300,7 +300,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                         : '视频',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: appMetrics.fontSize10,
+                      fontSize: appMetrics.fontSize14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -319,8 +319,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
                       decoration: BoxDecoration(color: Colors.black.withAlpha(132)),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: appMetrics.kSpace8,
-                          vertical: appMetrics.kSpace4,
+                          horizontal: appMetrics.kSpace16,
+                          vertical: appMetrics.kSpace8,
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -332,7 +332,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: appMetrics.fontSize12,
+                                  fontSize: appMetrics.fontSize18,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
