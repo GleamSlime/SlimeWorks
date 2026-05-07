@@ -225,4 +225,87 @@ void main() {
       });
     });
   });
+
+  // ── 无效正则容错 ────────────────────────────────────────────────────────
+
+  group('无效正则容错', () {
+    test('matchesFileNames 遇到无效正则时不抛出异常，返回 true（容错）', () {
+      const folder = SmartFolder(
+        id: 'sf-bad',
+        name: 'Invalid Regex',
+        regexPattern: r'[invalid regex (unclosed bracket',
+        regexTarget: SmartFolderRegexTarget.fileName,
+        fileTypeFilter: SmartFolderFileType.all,
+      );
+      // 容错逻辑：catch (_) { return true; }
+      expect(() => folder.matchesFileNames(['/photos/IMG_001.jpg']), returnsNormally);
+      expect(folder.matchesFileNames(['/photos/IMG_001.jpg']), isTrue);
+    });
+
+    test('空文件路径列表时 matchesFileNames 始终返回 false', () {
+      const folder = SmartFolder(
+        id: 'sf-empty',
+        name: 'EmptyList',
+        regexPattern: '.*',
+        regexTarget: SmartFolderRegexTarget.fileName,
+        fileTypeFilter: SmartFolderFileType.all,
+      );
+      expect(folder.matchesFileNames([]), isFalse);
+    });
+  });
+
+  // ── targetFolderIds 范围过滤 ─────────────────────────────────────────────
+
+  group('targetFolderIds 序列化与空值语义', () {
+    test('targetFolderIds 非空时正确序列化', () {
+      const folder = SmartFolder(
+        id: 'sf-scope',
+        name: 'Scoped',
+        regexPattern: '',
+        targetFolderIds: ['folder-1', 'folder-2', 'folder-3'],
+      );
+      final json = folder.toJson();
+      final restored = SmartFolder.fromJson(json);
+      expect(restored.targetFolderIds, ['folder-1', 'folder-2', 'folder-3']);
+    });
+
+    test('targetFolderIds 为空列表时序列化后仍为空', () {
+      const folder = SmartFolder(
+        id: 'sf-all',
+        name: 'All Folders',
+        regexPattern: '',
+        targetFolderIds: [],
+      );
+      final json = folder.toJson();
+      final restored = SmartFolder.fromJson(json);
+      expect(restored.targetFolderIds, isEmpty);
+    });
+  });
+
+  // ── Unicode 正则匹配 ────────────────────────────────────────────────────
+
+  group('Unicode 正则匹配', () {
+    test('中文文件名可正确匹配', () {
+      const folder = SmartFolder(
+        id: 'sf-zh',
+        name: 'Chinese',
+        regexPattern: '风景',
+        regexTarget: SmartFolderRegexTarget.fileName,
+        fileTypeFilter: SmartFolderFileType.all,
+      );
+      expect(folder.matchesFileNames(['/photos/风景照片.jpg']), isTrue);
+      expect(folder.matchesFileNames(['/photos/portrait.jpg']), isFalse);
+    });
+
+    test('日文/韩文文件名可正确匹配', () {
+      const folder = SmartFolder(
+        id: 'sf-jp',
+        name: 'Japanese',
+        regexPattern: r'写真',
+        regexTarget: SmartFolderRegexTarget.fileName,
+        fileTypeFilter: SmartFolderFileType.all,
+      );
+      expect(folder.matchesFileNames(['/gallery/写真001.png']), isTrue);
+    });
+  });
 }

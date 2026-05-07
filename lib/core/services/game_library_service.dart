@@ -159,16 +159,18 @@ class GameLibraryService {
     }
   }
 
-  /// 获取某分类下的游戏列表（先拿全量再过滤，避免 N+1 也不增加 Rust API）
+  /// 获取某分类下的游戏列表（全量游戏+并行分类查询，避免串行 N+1 问题）
   Future<List<GameItem>> getGamesByCategory(String categoryId) async {
     final List<GameItem> all = await getGames();
-    final List<String> allIds = all.map((GameItem g) => g.id).toList(growable: false);
-    final Set<String> matching = <String>{};
-    for (final String id in allIds) {
-      final Set<String> cats = await getCategoryIdsByGameId(id);
-      if (cats.contains(categoryId)) matching.add(id);
-    }
-    return all.where((GameItem g) => matching.contains(g.id)).toList(growable: false);
+    if (all.isEmpty) return <GameItem>[];
+    // 并行查询所有游戏的分类 ID，将 N 次串行调用压缩为单次等待
+    final List<Set<String>> allCatSets = await Future.wait(
+      all.map((GameItem g) => getCategoryIdsByGameId(g.id)),
+    );
+    return <GameItem>[
+      for (int i = 0; i < all.length; i++)
+        if (allCatSets[i].contains(categoryId)) all[i],
+    ];
   }
 
   // ───────────────────────────────────────────────────────────────────────────

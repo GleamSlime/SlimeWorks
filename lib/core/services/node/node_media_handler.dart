@@ -160,6 +160,9 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
     // ① Dart 内存缓存（L1）
     final cachedBytes = _resizedBytesCache[cacheKey];
     if (cachedBytes != null) {
+      // 命中后将 key 移到 Map 末尾，维持真正的 LRU 访问顺序
+      _resizedBytesCache.remove(cacheKey);
+      _resizedBytesCache[cacheKey] = cachedBytes;
       _writeBytesResponse(request, cachedBytes, ContentType('image', 'jpeg'));
       return;
     }

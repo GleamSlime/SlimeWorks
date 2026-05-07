@@ -85,6 +85,16 @@ void main() {
       expect(_mediaKind('exe'), isNull);
       expect(_mediaKind(''), isNull);
     });
+
+    test('jfif 识别为图片', () {
+      expect(_mediaKind('jfif'), 'image');
+    });
+
+    test('alac/ape/aiff 识别为音频', () {
+      expect(_mediaKind('alac'), 'audio');
+      expect(_mediaKind('ape'), 'audio');
+      expect(_mediaKind('aiff'), 'audio');
+    });
   });
 
   // ── 速度格式化 ────────────────────────────────────────────────────────────
@@ -100,6 +110,20 @@ void main() {
       expect(_formatSpeed(1024), '1.00 MB/s');
       expect(_formatSpeed(2048), '2.00 MB/s');
       expect(_formatSpeed(10240), '10.00 MB/s');
+    });
+
+    test('1024 边界值精确转换为 1.00 MB/s', () {
+      // 边界值：恰好等于 1024 时应转为 MB/s 而非 KB/s
+      expect(_formatSpeed(1024), '1.00 MB/s');
+    });
+
+    test('1023.9 仍显示 KB/s（未达到转换阈值）', () {
+      // 浮点边界：< 1024 时保持 KB/s
+      expect(_formatSpeed(1023.9), '1024 KB/s'); // toStringAsFixed(0) 四舍五入
+    });
+
+    test('超大速率正确格式化', () {
+      expect(_formatSpeed(102400), '100.00 MB/s');
     });
   });
 
@@ -140,6 +164,25 @@ void main() {
       }
       expect(buf.length, kHistoryLength);
       expect(buf.every((v) => v == 0.0), isTrue);
+    });
+
+    test('精确添加 60 条不触发移除', () {
+      final buf = <double>[];
+      for (int i = 0; i < 60; i++) {
+        appendHistory(buf, i.toDouble());
+      }
+      expect(buf.length, kHistoryLength);
+      expect(buf.first, 0.0);
+      expect(buf.last, 59.0);
+    });
+
+    test('第 61 条加入后队首为 1.0', () {
+      final buf = <double>[];
+      for (int i = 0; i < 61; i++) {
+        appendHistory(buf, i.toDouble());
+      }
+      expect(buf.length, kHistoryLength);
+      expect(buf.first, 1.0);
     });
   });
 }

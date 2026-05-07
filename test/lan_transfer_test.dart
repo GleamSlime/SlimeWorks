@@ -2,6 +2,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 辅助：构造 DeviceInfo
+// ─────────────────────────────────────────────────────────────────────────────
+
+DeviceInfo _makeDevice({
+  String deviceId = 'dev-001',
+  String deviceName = 'TestDevice',
+  String deviceType = 'desktop',
+  String ipAddress = '192.168.1.10',
+  int port = 8889,
+  String discoveredAt = '2025-01-01T12:00:00Z',
+  bool isOnline = true,
+}) {
+  return DeviceInfo(
+    deviceId: deviceId,
+    deviceName: deviceName,
+    deviceType: deviceType,
+    ipAddress: ipAddress,
+    port: port,
+    discoveredAt: discoveredAt,
+    isOnline: isOnline,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TransferItem 序列化 / copyWith 测试
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -167,8 +191,7 @@ void main() {
       if (localId.isEmpty) return [];
       final Map<String, TransferItem> latestByPeer = {};
       for (final item in history) {
-        final peerId =
-            item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
+        final peerId = item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
         if (peerId.isEmpty) continue;
         final existing = latestByPeer[peerId];
         if (existing == null || item.createdAt.compareTo(existing.createdAt) > 0) {
@@ -182,16 +205,8 @@ void main() {
 
     test('localId 未知时返回空列表，不产生错误分组', () {
       final history = [
-        _makeItem(
-          transferId: 'tx1',
-          senderDeviceId: 'device-A',
-          receiverDeviceId: 'device-B',
-        ),
-        _makeItem(
-          transferId: 'tx2',
-          senderDeviceId: 'device-B',
-          receiverDeviceId: 'device-A',
-        ),
+        _makeItem(transferId: 'tx1', senderDeviceId: 'device-A', receiverDeviceId: 'device-B'),
+        _makeItem(transferId: 'tx2', senderDeviceId: 'device-B', receiverDeviceId: 'device-A'),
       ];
       // localId 空时返回空列表（防止错误分组）
       final peers = groupPeers(history, '');
@@ -202,16 +217,8 @@ void main() {
       const aId = 'device-A';
       const bId = 'device-B';
       final history = [
-        _makeItem(
-          transferId: 'tx-A-to-B',
-          senderDeviceId: aId,
-          receiverDeviceId: bId,
-        ),
-        _makeItem(
-          transferId: 'tx-B-to-A',
-          senderDeviceId: bId,
-          receiverDeviceId: aId,
-        ),
+        _makeItem(transferId: 'tx-A-to-B', senderDeviceId: aId, receiverDeviceId: bId),
+        _makeItem(transferId: 'tx-B-to-A', senderDeviceId: bId, receiverDeviceId: aId),
       ];
       final peers = groupPeers(history, aId);
       expect(peers.length, 1);
@@ -221,16 +228,8 @@ void main() {
     test('不同对端各自独立分组', () {
       const aId = 'device-A';
       final history = [
-        _makeItem(
-          transferId: 'tx1',
-          senderDeviceId: aId,
-          receiverDeviceId: 'device-B',
-        ),
-        _makeItem(
-          transferId: 'tx2',
-          senderDeviceId: aId,
-          receiverDeviceId: 'device-C',
-        ),
+        _makeItem(transferId: 'tx1', senderDeviceId: aId, receiverDeviceId: 'device-B'),
+        _makeItem(transferId: 'tx2', senderDeviceId: aId, receiverDeviceId: 'device-C'),
       ];
       final peers = groupPeers(history, aId);
       expect(peers.length, 2);
@@ -266,11 +265,7 @@ void main() {
     test('peerId 为空的记录被跳过', () {
       const aId = 'device-A';
       final history = [
-        _makeItem(
-          transferId: 'tx-valid',
-          senderDeviceId: aId,
-          receiverDeviceId: 'device-B',
-        ),
+        _makeItem(transferId: 'tx-valid', senderDeviceId: aId, receiverDeviceId: 'device-B'),
         _makeItem(
           transferId: 'tx-empty-receiver',
           senderDeviceId: aId,
@@ -293,11 +288,9 @@ void main() {
       String peerDeviceId,
     ) {
       return history.where((item) {
-        final peerId =
-            item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
+        final peerId = item.senderDeviceId == localId ? item.receiverDeviceId : item.senderDeviceId;
         return peerId == peerDeviceId;
-      }).toList()
-        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      }).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     }
 
     test('只返回与指定对端的消息', () {
@@ -319,10 +312,16 @@ void main() {
       const local = 'device-A';
       const peer = 'device-B';
       final history = [
-        _makeItem(transferId: 'tx-later', senderDeviceId: local, receiverDeviceId: peer)
-            .copyWith(createdAt: '2025-01-03T00:00:00Z'),
-        _makeItem(transferId: 'tx-earlier', senderDeviceId: local, receiverDeviceId: peer)
-            .copyWith(createdAt: '2025-01-01T00:00:00Z'),
+        _makeItem(
+          transferId: 'tx-later',
+          senderDeviceId: local,
+          receiverDeviceId: peer,
+        ).copyWith(createdAt: '2025-01-03T00:00:00Z'),
+        _makeItem(
+          transferId: 'tx-earlier',
+          senderDeviceId: local,
+          receiverDeviceId: peer,
+        ).copyWith(createdAt: '2025-01-01T00:00:00Z'),
       ];
       final items = historyForPeer(history, local, peer);
       expect(items.first.transferId, 'tx-earlier');
@@ -378,11 +377,151 @@ void main() {
     test('包含所有预期状态', () {
       final statuses = TransferStatus.values.map((s) => s.name).toSet();
       for (final expected in [
-        'pending', 'accepted', 'rejected', 'transferring',
-        'completed', 'failed', 'cancelled', 'queued',
+        'pending',
+        'accepted',
+        'rejected',
+        'transferring',
+        'completed',
+        'failed',
+        'cancelled',
+        'queued',
       ]) {
         expect(statuses, contains(expected), reason: '缺少状态: $expected');
       }
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DeviceInfo 序列化
+  // ─────────────────────────────────────────────────────────────────────────
+  group('DeviceInfo 序列化', () {
+    test('toJson/fromJson 往返一致', () {
+      final original = _makeDevice();
+      final json = original.toJson();
+      final restored = DeviceInfo.fromJson(json);
+
+      expect(restored.deviceId, original.deviceId);
+      expect(restored.deviceName, original.deviceName);
+      expect(restored.deviceType, original.deviceType);
+      expect(restored.ipAddress, original.ipAddress);
+      expect(restored.port, original.port);
+      expect(restored.discoveredAt, original.discoveredAt);
+      expect(restored.isOnline, original.isOnline);
+    });
+
+    test('isOnline=false 正确序列化', () {
+      final device = _makeDevice(isOnline: false);
+      final restored = DeviceInfo.fromJson(device.toJson());
+      expect(restored.isOnline, isFalse);
+    });
+
+    test('不同端口值正确保留', () {
+      final device = _makeDevice(port: 12345);
+      final restored = DeviceInfo.fromJson(device.toJson());
+      expect(restored.port, 12345);
+    });
+
+    test('移动端设备类型正确保留', () {
+      final device = _makeDevice(deviceType: 'mobile');
+      final restored = DeviceInfo.fromJson(device.toJson());
+      expect(restored.deviceType, 'mobile');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TransferItem progress 字段边界值
+  // ─────────────────────────────────────────────────────────────────────────
+  group('TransferItem progress 边界值', () {
+    test('progress = 0.0 正确序列化', () {
+      final item = _makeItem(progress: 0.0);
+      expect(TransferItem.fromJson(item.toJson()).progress, 0.0);
+    });
+
+    test('progress = 50.5 小数正确保留', () {
+      final item = _makeItem(progress: 50.5);
+      expect(TransferItem.fromJson(item.toJson()).progress, 50.5);
+    });
+
+    test('progress = 100.0 正确序列化', () {
+      final item = _makeItem(progress: 100.0);
+      expect(TransferItem.fromJson(item.toJson()).progress, 100.0);
+    });
+
+    test('fromJson 中 progress 为整数 JSON 类型时正确转为 double', () {
+      // 服务端可能返回整数 0/100 而非浮点 0.0/100.0
+      final json = <String, dynamic>{
+        'transfer_id': 'tx-int-progress',
+        'sender_device_id': 'dev-A',
+        'sender_device_name': 'Device A',
+        'receiver_device_id': 'dev-B',
+        'transfer_type': 'File',
+        'status': 'Transferring',
+        'progress': 75, // 整数
+        'created_at': '2025-01-01T00:00:00Z',
+        'updated_at': '2025-01-01T00:00:00Z',
+      };
+      final item = TransferItem.fromJson(json);
+      expect(item.progress, 75.0);
+      expect(item.progress, isA<double>());
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // shouldRunEmptyDevicesSelfCheck 冷却逻辑（镜像 LanTransferService 中的逻辑）
+  // ─────────────────────────────────────────────────────────────────────────
+  group('shouldRunEmptyDevicesSelfCheck 冷却逻辑', () {
+    /// 镜像 LanTransferService 中的时间冷却逻辑
+    bool Function() buildChecker() {
+      DateTime? lastAt;
+      return () {
+        final now = DateTime.now();
+        if (lastAt == null) {
+          lastAt = now;
+          return true;
+        }
+        final delta = now.difference(lastAt!);
+        if (delta.inSeconds >= 15) {
+          lastAt = now;
+          return true;
+        }
+        return false;
+      };
+    }
+
+    test('首次调用始终返回 true', () {
+      final checker = buildChecker();
+      expect(checker(), isTrue);
+    });
+
+    test('冷却期内连续调用返回 false', () {
+      final checker = buildChecker();
+      checker(); // 首次
+      expect(checker(), isFalse);
+      expect(checker(), isFalse);
+    });
+
+    test('多次调用后仍只有首次为 true', () {
+      final checker = buildChecker();
+      final results = List.generate(5, (_) => checker());
+      expect(results.first, isTrue);
+      expect(results.skip(1).every((r) => r == false), isTrue);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TrustedDevice 序列化
+  // ─────────────────────────────────────────────────────────────────────────
+  group('TrustedDevice 序列化', () {
+    test('fromJson 正确解析各字段', () {
+      final json = <String, dynamic>{
+        'device_id': 'trusted-001',
+        'device_name': 'iPad Pro',
+        'trusted_at': '2025-06-01T09:00:00Z',
+      };
+      final device = TrustedDevice.fromJson(json);
+      expect(device.deviceId, 'trusted-001');
+      expect(device.deviceName, 'iPad Pro');
+      expect(device.trustedAt, '2025-06-01T09:00:00Z');
     });
   });
 }

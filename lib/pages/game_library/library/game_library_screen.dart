@@ -30,9 +30,6 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
   final ScrollController _gridScrollController = ScrollController();
   Offset? _boxStart;
   Offset? _boxEnd;
-  // 临时记录 layoutbuilder 状态供框选计算
-  int _crossAxisCount = 2;
-  double _gridAreaWidth = 0;
 
   @override
   void dispose() {
@@ -195,9 +192,6 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
                 final int crossAxisCount = (constraints.maxWidth / 180).floor().clamp(2, 8);
-                // 保存最新布局参数供框选计算使用
-                _crossAxisCount = crossAxisCount;
-                _gridAreaWidth = constraints.maxWidth;
 
                 final Widget grid = GridView.builder(
                   controller: _gridScrollController,
@@ -810,7 +804,9 @@ class _GameCardState extends State<_GameCard> {
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(widget.isSelected ? Icons.check_box_outlined : Icons.check_box_outline_blank),
+            leading: Icon(
+              widget.isSelected ? Icons.check_box_outlined : Icons.check_box_outline_blank,
+            ),
             title: Text(widget.isSelected ? '取消选择' : '选择'),
           ),
         ),
@@ -986,7 +982,9 @@ class _GameCardState extends State<_GameCard> {
                                 child: ListTile(
                                   dense: true,
                                   contentPadding: EdgeInsets.zero,
-                                  leading: Icon(widget.isFavorite ? Icons.favorite : Icons.favorite_border),
+                                  leading: Icon(
+                                    widget.isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  ),
                                   title: Text(widget.isFavorite ? '取消收藏' : '添加收藏'),
                                 ),
                               ),

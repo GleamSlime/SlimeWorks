@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -111,11 +110,6 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   // ──────────────────────────────────────────────────────
   // 主体
   // ──────────────────────────────────────────────────────
-
-  Widget _buildBlurBackground(BuildContext context, String coverPath) {
-    // 全局背景已在 DesktopScaffold 层渲染，这里仅返回透明层
-    return const SizedBox.shrink();
-  }
 
   @override
   Widget buildContent(BuildContext context) {

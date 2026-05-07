@@ -281,6 +281,7 @@ class LanTransferService {
 
   bool _isRunning = false;
   Timer? _deviceRefreshTimer;
+  bool _isRefreshing = false; // 防止定时器回调堆积
   Future<void>? _pendingStart;
   Future<void>? _pendingStop;
   Future<void>? _rustInitFuture;
@@ -349,11 +350,7 @@ class LanTransferService {
       // 获取 documents 目录才能在 iOS 等移动端保存文件
       final docsDir = await getApplicationDocumentsDirectory();
       final saveDir = '${docsDir.path}/LanTransfer';
-      await rust_api.lanTransferStart(
-        port: port,
-        saveDir: saveDir,
-        preTrustedJson: preTrustedJson,
-      );
+      await rust_api.lanTransferStart(port: port, saveDir: saveDir, preTrustedJson: preTrustedJson);
       _isRunning = true;
 
       // 定期刷新设备列表
@@ -679,7 +676,12 @@ class LanTransferService {
   void _startDeviceRefresh() {
     _deviceRefreshTimer?.cancel();
     _deviceRefreshTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      getDevices();
+      // 上次刷新仍在进行中则跳过本次，防止慢网络下请求无限堆积
+      if (_isRefreshing) return;
+      _isRefreshing = true;
+      getDevices().whenComplete(() {
+        _isRefreshing = false;
+      });
     });
   }
 
