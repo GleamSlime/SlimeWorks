@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/index.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
+import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
 
@@ -76,68 +78,132 @@ class MediaCollectionDetailView extends StatelessWidget {
 
       // ── 空集合 ────────────────────────────────────────────────────────────
       if (sortedItems.isEmpty) {
-        return Center(
-          child: Text('该集合暂无可预览媒体', style: Theme.of(context).textTheme.bodyMedium),
-        );
+        return Center(child: Text('该集合暂无可预览媒体', style: Theme.of(context).textTheme.bodyMedium));
       }
+
+      // ── 瀑布流/网格布局切换 ───────────────────────────────────────────────────
+      final useMasonry = viewModel.useMasonryGrid.value;
+      final gridWidget = useMasonry
+          ? MasonryMediaGrid(
+              key: ValueKey('masonry_$collectionId'),
+              items: sortedItems,
+              collectionId: collectionId,
+              isRemote: isRemote,
+              viewModel: viewModel,
+              columnCount: columnCount,
+              lastViewedItemId: viewModel.lastViewedItemId.value,
+              onOpenViewer: (index) {
+                if (collectionId.isEmpty) return;
+                if (index >= 0 && index < sortedItems.length) {
+                  viewModel.lastViewedItemId.value = sortedItems[index].id;
+                }
+                final isMobile = Platform.isAndroid || Platform.isIOS;
+                final route = PageRouteBuilder<void>(
+                  opaque: true,
+                  barrierColor: Colors.black,
+                  pageBuilder: (_, _, _) => MediaViewerPage(
+                    items: sortedItems,
+                    initialIndex: index,
+                    collectionId: collectionId,
+                    viewModel: viewModel,
+                  ),
+                  transitionDuration: const Duration(milliseconds: 280),
+                  reverseTransitionDuration: const Duration(milliseconds: 240),
+                  transitionsBuilder: (_, animation, _, child) => FadeTransition(
+                    opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+                    child: ScaleTransition(
+                      scale: Tween<double>(
+                        begin: 0.93,
+                        end: 1.0,
+                      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                      child: child,
+                    ),
+                  ),
+                );
+                if (isMobile) {
+                  Navigator.of(context, rootNavigator: true).push(route);
+                } else {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    onViewerStateChanged?.call(true);
+                  });
+                  Navigator.of(context).push(route).whenComplete(() {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      onViewerStateChanged?.call(false);
+                    });
+                  });
+                }
+              },
+              onConfirmDelete: onConfirmDelete,
+              onConfirmDeleteNodeLocalFile: isRemote ? onConfirmDeleteNodeLocalFile : null,
+            )
+          : GridView.builder(
+              key: ValueKey('grid_$collectionId'),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columnCount,
+                mainAxisSpacing: AppTheme.metrics.kSpace12,
+                crossAxisSpacing: AppTheme.metrics.kSpace12,
+                childAspectRatio: 0.75,
+              ),
+              itemCount: sortedItems.length,
+              itemBuilder: (context, index) {
+                final item = sortedItems[index];
+                final source = viewModel.buildMediaSource(item, isCover: true);
+                return MediaItemTile(
+                  key: ValueKey(item.id),
+                  item: item,
+                  source: source,
+                  onTap: () {
+                    if (collectionId.isEmpty) return;
+                    viewModel.lastViewedItemId.value = item.id;
+                    final isMobile = Platform.isAndroid || Platform.isIOS;
+                    final route = PageRouteBuilder<void>(
+                      opaque: true,
+                      barrierColor: Colors.black,
+                      pageBuilder: (_, _, _) => MediaViewerPage(
+                        items: sortedItems,
+                        initialIndex: index,
+                        collectionId: collectionId,
+                        viewModel: viewModel,
+                      ),
+                      transitionDuration: const Duration(milliseconds: 280),
+                      reverseTransitionDuration: const Duration(milliseconds: 240),
+                      transitionsBuilder: (_, animation, _, child) => FadeTransition(
+                        opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+                        child: ScaleTransition(
+                          scale: Tween<double>(
+                            begin: 0.93,
+                            end: 1.0,
+                          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                          child: child,
+                        ),
+                      ),
+                    );
+                    if (isMobile) {
+                      Navigator.of(context, rootNavigator: true).push(route);
+                    } else {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        onViewerStateChanged?.call(true);
+                      });
+                      Navigator.of(context).push(route).whenComplete(() {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          onViewerStateChanged?.call(false);
+                        });
+                      });
+                    }
+                  },
+                  onDeleteFile: isRemote ? null : () => onConfirmDelete(item),
+                  onDeleteNodeLocalFile: isRemote
+                      ? () => onConfirmDeleteNodeLocalFile?.call(item)
+                      : null,
+                );
+              },
+            );
 
       // ── 瀑布流 + 进度条 ───────────────────────────────────────────────────
       return Stack(
         children: [
-          MasonryMediaGrid(
-            key: ValueKey('masonry_$collectionId'),
-            items: sortedItems,
-            collectionId: collectionId,
-            isRemote: isRemote,
-            viewModel: viewModel,
-            columnCount: columnCount,
-            lastViewedItemId: viewModel.lastViewedItemId.value,
-            onOpenViewer: (index) {
-              if (collectionId.isEmpty) return;
-              if (index >= 0 && index < sortedItems.length) {
-                viewModel.lastViewedItemId.value = sortedItems[index].id;
-              }
-              final isMobile = Platform.isAndroid || Platform.isIOS;
-              // 自定义淡入放大过渡动画（opaque:true 防止透出底层内容）
-              final route = PageRouteBuilder<void>(
-                opaque: true,
-                barrierColor: Colors.black,
-                pageBuilder: (_, _, _) => MediaViewerPage(
-                  items: sortedItems,
-                  initialIndex: index,
-                  collectionId: collectionId,
-                  viewModel: viewModel,
-                ),
-                transitionDuration: const Duration(milliseconds: 280),
-                reverseTransitionDuration: const Duration(milliseconds: 240),
-                transitionsBuilder: (_, animation, _, child) => FadeTransition(
-                  opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.93, end: 1.0).animate(
-                      CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-                    ),
-                    child: child,
-                  ),
-                ),
-              );
-              if (isMobile) {
-                // 移动端：推到根 Navigator，覆盖整个 AppBar/Chrome 层
-                Navigator.of(context, rootNavigator: true).push(route);
-              } else {
-                // 桌面端：推到内层 Navigator，并通知父组件以重定向操作栏返回按钮
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  onViewerStateChanged?.call(true);
-                });
-                Navigator.of(context).push(route).whenComplete(() {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    onViewerStateChanged?.call(false);
-                  });
-                });
-              }
-            },
-            onConfirmDelete: onConfirmDelete,
-            onConfirmDeleteNodeLocalFile: isRemote ? onConfirmDeleteNodeLocalFile : null,
-          ),
+          gridWidget,
           // 有数据但仍在加载更多时，顶部细进度条
           if (isLoading)
             const Positioned(

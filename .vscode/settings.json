@@ -36,10 +36,9 @@
     "editor.defaultFormatter": "Dart-Code.dart-code",
     "editor.formatOnSave": true,
     "editor.formatOnType": true,
-    "editor.rulers": [
-      150
-    ]
+    "editor.rulers": [150]
   },
   "dart.lineLength": 100,
-  "dart.flutterSdkPath": ".fvm/versions/3.41.5"
+  "dart.flutterSdkPath": ".fvm/versions/3.41.5",
+  "cmake.sourceDirectory": "H:/SlimeWorks/windows/flutter"
 }

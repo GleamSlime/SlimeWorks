@@ -194,25 +194,21 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     return DragTarget<String>(
       onWillAcceptWithDetails: (d) => !vm.isRemoteCollection(d.data),
       onAcceptWithDetails: (d) => vm.moveCollectionToFolder(d.data, folder.id),
-      builder: (ctx, candidateData, _) => _buildDropHighlight(
-        ctx,
-        highlighted: candidateData.isNotEmpty,
-        child: folderCard,
-      ),
+      builder: (ctx, candidateData, _) =>
+          _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: folderCard),
     );
   }
 
   Widget _buildSmartFolderCard(BuildContext context, SmartFolder sf) {
     final isRemoteSf = vm.isRemoteSmartFolder(sf.id);
     final nodeId = vm.remoteSmartFolderNodeId(sf.id);
-    final nodeName =
-        nodeId != null ? (vm.nodeSettingsService.getNodeById(nodeId)?.name ?? nodeId) : null;
+    final nodeName = nodeId != null
+        ? (vm.nodeSettingsService.getNodeById(nodeId)?.name ?? nodeId)
+        : null;
     final sfCard = SmartFolderCard(
       smartFolder: sf,
       coverSource: vm.buildSmartFolderCoverSource(sf),
-      matchCount: vm.mergedCollections
-          .where((c) => vm.collectionMatchesSmartFolder(sf, c))
-          .length,
+      matchCount: vm.mergedCollections.where((c) => vm.collectionMatchesSmartFolder(sf, c)).length,
       isSelected: vm.selectedIds.contains(sf.id),
       nodeName: nodeName,
       onTap: () {
@@ -275,10 +271,10 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       onDeleteFolder: vm.isRemoteCollection(collection.id)
           ? null
           : () => widget.onDeleteCollectionFolder(
-                collection.id,
-                collection.folderPath,
-                collection.title,
-              ),
+              collection.id,
+              collection.folderPath,
+              collection.title,
+            ),
       onPullToLocal: vm.isRemoteCollection(collection.id)
           ? () => vm.pullRemoteCollectionToLocal(collection.id)
           : null,
@@ -338,11 +334,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.perm_media_outlined,
-                size: scaleW(64),
-                color: Theme.of(context).hintColor,
-              ),
+              Icon(Icons.perm_media_outlined, size: scaleW(64), color: Theme.of(context).hintColor),
               SizedBox(height: appMetrics.kSpace12),
               Text(
                 vm.currentFolderId.value == null ? '媒体库为空，使用上方操作导入集合' : '当前文件夹为空',
@@ -366,8 +358,8 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
         itemCount: items.length,
         itemBuilder: (context, index) {
           final item = items[index];
-          // 前 20 项加入场动画，超出部分跳过以免卡顿
-          final delay = index < 20 ? (index * 30).clamp(0, 400) : 0;
+          // 前 40 项加入场动画，超出部分跳过以免卡顿
+          final delay = index < 40 ? index * 15 : 0;
           return Cue.onMount(
             motion: .smooth(),
             child: Actor(
