@@ -72,6 +72,10 @@ class SmartFolder {
   /// Empty string means "no filter" – all collections in [targetFolderIds] are shown.
   final String regexPattern;
 
+  /// 关键词列表，每个关键词在匹配时等价于 `RegExp.escape(keyword)`，
+  /// 多个关键词用 `|` 连接后与 [regexPattern] 合并为最终正则。
+  final List<String> keywords;
+
   /// 正则匹配目标字段。
   final SmartFolderRegexTarget regexTarget;
 
@@ -86,6 +90,7 @@ class SmartFolder {
     required this.id,
     required this.name,
     required this.regexPattern,
+    this.keywords = const [],
     this.regexTarget = SmartFolderRegexTarget.collectionName,
     this.fileTypeFilter = SmartFolderFileType.all,
     this.targetFolderIds = const [],
@@ -95,6 +100,7 @@ class SmartFolder {
     String? id,
     String? name,
     String? regexPattern,
+    List<String>? keywords,
     SmartFolderRegexTarget? regexTarget,
     SmartFolderFileType? fileTypeFilter,
     List<String>? targetFolderIds,
@@ -103,16 +109,27 @@ class SmartFolder {
       id: id ?? this.id,
       name: name ?? this.name,
       regexPattern: regexPattern ?? this.regexPattern,
+      keywords: keywords ?? this.keywords,
       regexTarget: regexTarget ?? this.regexTarget,
       fileTypeFilter: fileTypeFilter ?? this.fileTypeFilter,
       targetFolderIds: targetFolderIds ?? this.targetFolderIds,
     );
   }
 
+  /// 合并关键词和手动正则为最终匹配正则。
+  String get effectivePattern {
+    final parts = <String>[
+      ...keywords.map((k) => RegExp.escape(k)),
+      if (regexPattern.isNotEmpty) regexPattern,
+    ];
+    return parts.join('|');
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'regexPattern': regexPattern,
+    'keywords': keywords,
     'regexTarget': regexTarget.name,
     'fileTypeFilter': fileTypeFilter.name,
     'targetFolderIds': targetFolderIds,
@@ -151,6 +168,7 @@ class SmartFolder {
       id: json['id'] as String,
       name: json['name'] as String,
       regexPattern: (json['regexPattern'] as String?) ?? '',
+      keywords: (json['keywords'] as List<dynamic>?)?.cast<String>() ?? const [],
       regexTarget: regexTarget,
       fileTypeFilter: fileTypeFilter,
       targetFolderIds: ids,
@@ -175,10 +193,9 @@ class SmartFolder {
       // 文件名模式下集合本身始终通过范围检查，具体文件过滤由 ViewModel 完成
       return true;
     }
-    // 正则过滤（空 = 不过滤）
-    if (regexPattern.isEmpty) return true;
+    if (regexPattern.isEmpty && keywords.isEmpty) return true;
     try {
-      final re = RegExp(regexPattern, caseSensitive: false, unicode: true);
+      final re = RegExp(effectivePattern, caseSensitive: false, unicode: true);
       return re.hasMatch(collection.title) || re.hasMatch(collection.folderPath);
     } catch (_) {
       return true;
@@ -191,9 +208,9 @@ class SmartFolder {
     // 根据文件类型过滤
     final filtered = _filterByType(itemPaths);
     if (filtered.isEmpty) return false;
-    if (regexPattern.isEmpty) return true;
+    if (regexPattern.isEmpty && keywords.isEmpty) return true;
     try {
-      final re = RegExp(regexPattern, caseSensitive: false, unicode: true);
+      final re = RegExp(effectivePattern, caseSensitive: false, unicode: true);
       return filtered.any((p) {
         final name = p.split(RegExp(r'[/\\]')).last;
         return re.hasMatch(name);

@@ -115,9 +115,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   /// 根据悬停/滑动位置返回当前应显示的封面路径。
   /// 优先级：实时视频帧 > hoverCoverSources > coverSource。
   String? _activeDisplaySource() {
-    final isActive = _hovering || _swipePreviewActive;
+    final isActive = (_hovering && _hoverPreviewActive) || _swipePreviewActive;
     if (!isActive) return widget.coverSource;
-    // 实时视频帧优先
     if (_realtimeVideoFrame != null && _realtimeVideoFrame!.isNotEmpty) {
       return _realtimeVideoFrame;
     }
@@ -130,7 +129,6 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     final idx = count == 1 ? 0 : (fraction * (count - 1)).round().clamp(0, count - 1);
     final src = sources[idx];
     if (src != null && src.isNotEmpty) return src;
-    // 当前 slot 无封面，向两侧找最近有效帧
     for (int d = 1; d < count; d++) {
       final left = idx - d;
       final right = idx + d;
@@ -336,7 +334,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                   children: [
                     // ── 全封面背景图（hover/swipe 时微缩放）────────────────
                     AnimatedScale(
-                      scale: (_hovering || _swipePreviewActive) ? 1.05 : 1.0,
+                      scale: _hovering || _swipePreviewActive ? 1.05 : 1.0,
                       duration: _kAnimDur,
                       curve: _kAnimCurve,
                       child: AnimatedSwitcher(
@@ -467,7 +465,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                     ),
 
                     // ── 悬停预览进度条————————————————————————————
-                    if ((_hovering || _swipePreviewActive) &&
+                    if ((_hovering && _hoverPreviewActive || _swipePreviewActive) &&
                         !widget.isSelecting &&
                         widget.hoverCoverSources != null &&
                         widget.hoverCoverSources!.length > 1)

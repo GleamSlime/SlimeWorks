@@ -64,6 +64,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
   String? _audioCoverPath;
   bool _loadingAudioCover = false;
 
+  static const Duration _kAnimDur = Duration(milliseconds: 200);
+  static const Curve _kAnimCurve = Curves.easeOut;
+
   bool get _isVideo => widget.item.kind == media_api.MediaKind.video;
   bool get _isAudio => widget.item.kind == media_api.MediaKind.audio;
 
@@ -190,83 +193,89 @@ class _MediaItemTileState extends State<MediaItemTile> {
         widget.onDeleteFile != null ||
         widget.onDeleteNodeLocalFile != null ||
         widget.onSaveToGallery != null;
-    final tile = GestureDetector(
-      onTap: widget.onTap,
-      onSecondaryTapDown: hasMenuActions
-          ? (details) => _showContextMenu(context, details.globalPosition)
-          : null,
-      onLongPressStart: (PlatformUtil.isMobile && hasMenuActions)
-          ? (details) => _showContextMenu(context, details.globalPosition)
-          : null,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) {
-          setState(() => _hovering = true);
-          // hover 时也确保帧已加载（initState 中已触发，此处为兜底）
-          if (_isVideo && widget.onRequestScrubFrames != null) _loadScrubFrames();
-        },
-        onHover: (event) {
-          if (!_isVideo || _scrubFrames == null || _scrubFrames!.isEmpty) return;
-          final box = context.findRenderObject() as RenderBox?;
-          if (box == null) return;
-          final ratio = (event.localPosition.dx / box.size.width).clamp(0.0, 1.0);
-          final newIdx = (ratio * (_scrubFrames!.length - 1)).round();
-          final curIdx = (_hoverRatio * (_scrubFrames!.length - 1)).round();
-          if (newIdx != curIdx) setState(() => _hoverRatio = ratio);
-        },
-        onExit: (_) => setState(() {
-          _hovering = false;
-          _hoverRatio = 0.0;
-        }),
-        child: Card(
-          elevation: 0,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: appMetrics.radius8),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 视频封面
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.surfaceContainerHighest,
-                      theme.colorScheme.surfaceContainerLow,
-                    ],
+    final tile = AnimatedScale(
+      scale: _hovering ? 1.03 : 1.0,
+      duration: _kAnimDur,
+      curve: _kAnimCurve,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onSecondaryTapDown: hasMenuActions
+            ? (details) => _showContextMenu(context, details.globalPosition)
+            : null,
+        onLongPressStart: (PlatformUtil.isMobile && hasMenuActions)
+            ? (details) => _showContextMenu(context, details.globalPosition)
+            : null,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) {
+            setState(() => _hovering = true);
+            if (_isVideo && widget.onRequestScrubFrames != null) _loadScrubFrames();
+          },
+          onHover: (event) {
+            if (!_isVideo || _scrubFrames == null || _scrubFrames!.isEmpty) return;
+            final box = context.findRenderObject() as RenderBox?;
+            if (box == null) return;
+            final ratio = (event.localPosition.dx / box.size.width).clamp(0.0, 1.0);
+            final newIdx = (ratio * (_scrubFrames!.length - 1)).round();
+            final curIdx = (_hoverRatio * (_scrubFrames!.length - 1)).round();
+            if (newIdx != curIdx) setState(() => _hoverRatio = ratio);
+          },
+          onExit: (_) => setState(() {
+            _hovering = false;
+            _hoverRatio = 0.0;
+          }),
+          child: Card(
+            elevation: _hovering ? 4 : 0,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(borderRadius: appMetrics.radius8),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimatedScale(
+                  scale: _hovering ? 1.05 : 1.0,
+                  duration: _kAnimDur,
+                  curve: _kAnimCurve,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          theme.colorScheme.surfaceContainerHighest,
+                          theme.colorScheme.surfaceContainerLow,
+                        ],
+                      ),
+                    ),
+                    child: showCoverAnyway
+                        ? (src.startsWith('http')
+                              ? Image.network(
+                                  src,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Center(
+                                    child: Icon(
+                                      _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
+                                      size: scaleW(44),
+                                      color: theme.colorScheme.primary.withAlpha(180),
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(src),
+                                  fit: BoxFit.cover,
+                                  cacheWidth: () {
+                                    final w = getIt<MediaPrefsService>().localPreviewWidth.value;
+                                    return w > 0 ? w : null;
+                                  }(),
+                                ))
+                        : Center(
+                            child: Icon(
+                              _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
+                              size: scaleW(44),
+                              color: theme.colorScheme.primary.withAlpha(180),
+                            ),
+                          ),
                   ),
                 ),
-                child: showCoverAnyway
-                    ? (src.startsWith('http')
-                          ? Image.network(
-                              src,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Center(
-                                child: Icon(
-                                  _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
-                                  size: scaleW(44),
-                                  color: theme.colorScheme.primary.withAlpha(180),
-                                ),
-                              ),
-                            )
-                          : Image.file(
-                              File(src),
-                              fit: BoxFit.cover,
-                              // 在解码阶段缩放，减少内存占用和加载时间
-                              cacheWidth: () {
-                                final w = getIt<MediaPrefsService>().localPreviewWidth.value;
-                                return w > 0 ? w : null;
-                              }(),
-                            ))
-                    : Center(
-                        child: Icon(
-                          _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
-                          size: scaleW(44),
-                          color: theme.colorScheme.primary.withAlpha(180),
-                        ),
-                      ),
-              ),
               // 悬停时视频进度条指示器
               if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
                 Positioned(
@@ -359,6 +368,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
             ],
           ),
         ),
+      ),
       ),
     );
     if (widget.fixedHeight != null) {

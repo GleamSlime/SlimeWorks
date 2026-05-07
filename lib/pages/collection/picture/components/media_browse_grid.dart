@@ -153,13 +153,15 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
   // ── 卡片构建 ──────────────────────────────────────────────────────────────
 
   Widget _buildCard(BuildContext context, MediaLibraryItem item) {
-    if (item is MediaLibraryFolderItem) {
-      return _buildFolderCard(context, item.folder);
-    }
-    if (item is MediaLibrarySmartFolderItem) {
-      return _buildSmartFolderCard(context, item.smartFolder);
-    }
-    return _buildCollectionCard(context, (item as MediaLibraryCollectionItem).collection);
+    return Obx(() {
+      if (item is MediaLibraryFolderItem) {
+        return _buildFolderCard(context, item.folder);
+      }
+      if (item is MediaLibrarySmartFolderItem) {
+        return _buildSmartFolderCard(context, item.smartFolder);
+      }
+      return _buildCollectionCard(context, (item as MediaLibraryCollectionItem).collection);
+    });
   }
 
   Widget _buildFolderCard(BuildContext context, folder) {

@@ -133,21 +133,6 @@ class _CollectionPictureScreenState
     return 'browse_$folderId';
   }
 
-  /// 方向感知的滑动切换过渡效果。
-  Widget _buildPageTransition(Widget child, Animation<double> animation) {
-    final isIncoming = (child.key as ValueKey<String>?)?.value == _pageContentKey;
-    final dir = _navForward ? 1.0 : -1.0;
-    final tween = isIncoming
-        ? Tween<Offset>(begin: Offset(dir, 0), end: Offset.zero)
-        : Tween<Offset>(begin: Offset.zero, end: Offset(-dir, 0));
-    return ClipRect(
-      child: SlideTransition(
-        position: tween.animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-        child: child,
-      ),
-    );
-  }
-
   @override
   void initState() {
     super.initState();
@@ -336,9 +321,11 @@ class _CollectionPictureScreenState
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       transitionBuilder: (child, animation) {
-                        return ColoredBox(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          child: _buildPageTransition(child, animation),
+                        return _AnimatedSwitcherWrapper(
+                          animation: animation,
+                          navForward: _navForward,
+                          pageContentKey: _pageContentKey,
+                          child: child,
                         );
                       },
                       child: KeyedSubtree(key: ValueKey(pageKey), child: pageContent),
@@ -958,19 +945,17 @@ class _CollectionPictureScreenState
   // ── Smart Folder Dialogs ─────────────────────────────────────────────────
 
   Future<void> _showCreateSmartFolderDialog() async {
-    // 确保文件夹列表是最新的
     await viewModel.loadFolders();
     if (!mounted) return;
-    // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
     final snapshotFolders = viewModel.folders.toList();
     final nameCtrl = TextEditingController();
     final patternCtrl = TextEditingController();
-    final selectedFolderIds = <String>{}; // empty = 全部集合
+    final selectedFolderIds = <String>{};
     var regexTarget = SmartFolderRegexTarget.collectionName;
     var fileTypeFilter = SmartFolderFileType.all;
-    // 目标节点：null = 本机，非空 = 指定远程节点
     String? targetNodeId;
     final enabledNodes = viewModel.enabledRemoteNodes;
+    final keywords = <String>[];
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -988,7 +973,6 @@ class _CollectionPictureScreenState
                       autofocus: true,
                       decoration: const InputDecoration(labelText: '文件夹名称', hintText: '例：我的收藏'),
                     ),
-                    // 远程节点选择（有可用节点时显示）
                     if (enabledNodes.isNotEmpty) ...[
                       SizedBox(height: appMetrics.kSpace12),
                       DropdownButtonFormField<String?>(
@@ -1004,7 +988,6 @@ class _CollectionPictureScreenState
                         onChanged: (v) => setState(() => targetNodeId = v),
                       ),
                     ],
-                    // 本机模式才显示目标文件夹选择（远程节点无法引用本机文件夹ID）
                     if (targetNodeId == null) ...[
                       SizedBox(height: appMetrics.kSpace12),
                       const Text('目标文件夹（可多选，空选则匹配全部集合）'),
@@ -1032,7 +1015,6 @@ class _CollectionPictureScreenState
                         ),
                     ],
                     SizedBox(height: appMetrics.kSpace12),
-                    // 正则匹配目标
                     const Text('正则匹配目标'),
                     SizedBox(height: appMetrics.kSpace4),
                     SegmentedButton<SmartFolderRegexTarget>(
@@ -1043,7 +1025,6 @@ class _CollectionPictureScreenState
                       onSelectionChanged: (s) => setState(() => regexTarget = s.first),
                       style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     ),
-                    // 文件类型过滤（仅匹配文件名时显示）
                     if (regexTarget == SmartFolderRegexTarget.fileName) ...[
                       SizedBox(height: appMetrics.kSpace8),
                       const Text('文件类型'),
@@ -1058,6 +1039,8 @@ class _CollectionPictureScreenState
                       ),
                     ],
                     SizedBox(height: appMetrics.kSpace12),
+                    _KeywordInputList(keywords: keywords, onChanged: () => setState(() {})),
+                    SizedBox(height: appMetrics.kSpace8),
                     TextField(
                       controller: patternCtrl,
                       decoration: InputDecoration(
@@ -1078,7 +1061,8 @@ class _CollectionPictureScreenState
                     Navigator.of(context).pop();
                     await viewModel.createSmartFolder(
                       nameCtrl.text,
-                      patternCtrl.text,
+                      patternCtrl.text.trim(),
+                      keywords: keywords,
                       targetFolderIds: selectedFolderIds.toList(),
                       regexTarget: regexTarget,
                       fileTypeFilter: fileTypeFilter,
@@ -1123,16 +1107,15 @@ class _CollectionPictureScreenState
   }
 
   Future<void> _showEditSmartFolderDialog(SmartFolder sf, {bool isRemote = false}) async {
-    // 确保文件夹列表是最新的
     await viewModel.loadFolders();
     if (!mounted) return;
-    // 快照为普通 List，避免 StatefulBuilder 不在 GetX 响应式上下文中无法正确读取 RxList
     final snapshotFolders = viewModel.folders.toList();
     final nameCtrl = TextEditingController(text: sf.name);
     final patternCtrl = TextEditingController(text: sf.regexPattern);
     final selectedFolderIds = <String>{...sf.targetFolderIds};
     var regexTarget = sf.regexTarget;
     var fileTypeFilter = sf.fileTypeFilter;
+    final keywords = <String>[...sf.keywords];
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -1175,7 +1158,6 @@ class _CollectionPictureScreenState
                         ],
                       ),
                     SizedBox(height: appMetrics.kSpace12),
-                    // 正则匹配目标
                     const Text('正则匹配目标'),
                     SizedBox(height: appMetrics.kSpace4),
                     SegmentedButton<SmartFolderRegexTarget>(
@@ -1186,7 +1168,6 @@ class _CollectionPictureScreenState
                       onSelectionChanged: (s) => setState(() => regexTarget = s.first),
                       style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     ),
-                    // 文件类型过滤（仅匹配文件名时显示）
                     if (regexTarget == SmartFolderRegexTarget.fileName) ...[
                       SizedBox(height: appMetrics.kSpace8),
                       const Text('文件类型'),
@@ -1201,6 +1182,8 @@ class _CollectionPictureScreenState
                       ),
                     ],
                     SizedBox(height: appMetrics.kSpace12),
+                    _KeywordInputList(keywords: keywords, onChanged: () => setState(() {})),
+                    SizedBox(height: appMetrics.kSpace8),
                     TextField(
                       controller: patternCtrl,
                       decoration: InputDecoration(
@@ -1223,7 +1206,8 @@ class _CollectionPictureScreenState
                       await viewModel.editRemoteSmartFolder(
                         sf.id,
                         name: nameCtrl.text,
-                        pattern: patternCtrl.text,
+                        pattern: patternCtrl.text.trim(),
+                        keywords: keywords,
                         targetFolderIds: selectedFolderIds.toList(),
                         regexTarget: regexTarget,
                         fileTypeFilter: fileTypeFilter,
@@ -1232,7 +1216,8 @@ class _CollectionPictureScreenState
                       await viewModel.editSmartFolder(
                         sf.id,
                         name: nameCtrl.text,
-                        pattern: patternCtrl.text,
+                        pattern: patternCtrl.text.trim(),
+                        keywords: keywords,
                         targetFolderIds: selectedFolderIds.toList(),
                         regexTarget: regexTarget,
                         fileTypeFilter: fileTypeFilter,
@@ -1636,5 +1621,129 @@ class _CollectionPictureScreenState
       confirmColor: Theme.of(context).colorScheme.error,
     );
     if (confirmed) await viewModel.deleteNodeLocalFilesForCollection(collectionId);
+  }
+}
+
+class _KeywordInputList extends StatefulWidget {
+  const _KeywordInputList({required this.keywords, required this.onChanged});
+
+  final List<String> keywords;
+  final VoidCallback onChanged;
+
+  @override
+  State<_KeywordInputList> createState() => _KeywordInputListState();
+}
+
+class _KeywordInputListState extends State<_KeywordInputList> {
+  final _newKeywordCtrl = TextEditingController();
+
+  void _addKeyword() {
+    final text = _newKeywordCtrl.text.trim();
+    if (text.isEmpty) return;
+    widget.keywords.add(text);
+    _newKeywordCtrl.clear();
+    widget.onChanged();
+  }
+
+  void _removeKeyword(int index) {
+    widget.keywords.removeAt(index);
+    widget.onChanged();
+  }
+
+  @override
+  void dispose() {
+    _newKeywordCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('关键词列表', style: Theme.of(context).textTheme.bodySmall),
+        SizedBox(height: appMetrics.kSpace4),
+        if (widget.keywords.isNotEmpty)
+          Wrap(
+            spacing: appMetrics.kSpace4,
+            runSpacing: appMetrics.kSpace4,
+            children: [
+              for (int i = 0; i < widget.keywords.length; i++)
+                Chip(
+                  label: Text(widget.keywords[i]),
+                  deleteIcon: const Icon(Icons.close, size: 16),
+                  onDeleted: () => _removeKeyword(i),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+            ],
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _newKeywordCtrl,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: '输入关键词',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                onSubmitted: (_) => _addKeyword(),
+              ),
+            ),
+            SizedBox(width: appMetrics.kSpace4),
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+              onPressed: _addKeyword,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
+        ),
+        if (widget.keywords.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: appMetrics.kSpace4),
+            child: Text(
+              '等效正则：${widget.keywords.map((k) => RegExp.escape(k)).join('|')}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AnimatedSwitcherWrapper extends StatelessWidget {
+  const _AnimatedSwitcherWrapper({
+    required this.animation,
+    required this.navForward,
+    required this.pageContentKey,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final bool navForward;
+  final String pageContentKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isIncoming = (child.key as ValueKey<String>?)?.value == pageContentKey;
+    final dir = navForward ? 1.0 : -1.0;
+    final tween = isIncoming
+        ? Tween<Offset>(begin: Offset(dir, 0), end: Offset.zero)
+        : Tween<Offset>(begin: Offset.zero, end: Offset(-dir, 0));
+    return ClipRect(
+      child: ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: SlideTransition(
+          position: tween.animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      ),
+    );
   }
 }
