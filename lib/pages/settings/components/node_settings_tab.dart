@@ -87,32 +87,32 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-          title: Text(initial == null ? '添加节点' : '编辑节点'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: '节点名'),
+        title: Text(initial == null ? '添加节点' : '编辑节点'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: '节点名'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: apiCtrl,
+                decoration: const InputDecoration(
+                  labelText: '请求节点API',
+                  hintText: 'http://127.0.0.1:17888',
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: apiCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '请求节点API',
-                    hintText: 'http://127.0.0.1:17888',
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
-          ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
+        ],
+      ),
     );
 
     if (confirmed != true || _service == null) {
@@ -131,10 +131,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
         await _service!.addRemoteNode(name: name, apiBaseUrl: api);
       } else {
         await _service!.updateRemoteNode(
-          initial.copyWith(
-            name: name.isEmpty ? initial.name : name,
-            apiBaseUrl: api,
-          ),
+          initial.copyWith(name: name.isEmpty ? initial.name : name, apiBaseUrl: api),
         );
       }
       await _service!.refreshNodeConnectivity();
@@ -158,8 +155,6 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('本机节点', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
               Card(
                 child: Padding(
                   padding: EdgeInsets.all(appMetrics.kSpace12),
@@ -202,7 +197,10 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                         ...service.localNodeApiList.map(
                           (api) => Padding(
                             padding: const EdgeInsets.only(bottom: 6),
-                            child: SelectableText(api, style: Theme.of(context).textTheme.bodyMedium),
+                            child: SelectableText(
+                              api,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
                           ),
                         ),
                     ],
@@ -228,22 +226,18 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
               const SizedBox(height: 12),
               if (service.remoteNodes.isEmpty)
                 const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('暂无远程节点，点击右上角添加。'),
-                  ),
+                  child: Padding(padding: EdgeInsets.all(16), child: Text('暂无远程节点，点击右上角添加。')),
                 )
               else
-                ...service.remoteNodes.map(
-                  (node) {
-                    final ok = service.nodeConnectivity[node.id];
-                    final dotColor = ok == null
-                        ? Colors.grey
-                        : ok
-                        ? Colors.green
-                        : Colors.red;
-                    final tip = service.nodeConnectivityError[node.id] ?? '';
-                    return Card(
+                ...service.remoteNodes.map((node) {
+                  final ok = service.nodeConnectivity[node.id];
+                  final dotColor = ok == null
+                      ? Colors.grey
+                      : ok
+                      ? Colors.green
+                      : Colors.red;
+                  final tip = service.nodeConnectivityError[node.id] ?? '';
+                  return Card(
                     child: ListTile(
                       title: Row(
                         children: [
@@ -258,9 +252,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                           ),
                         ],
                       ),
-                      subtitle: Text(
-                        node.apiBaseUrl,
-                      ),
+                      subtitle: Text(node.apiBaseUrl),
                       isThreeLine: true,
                       leading: Switch(
                         value: node.enabled,
@@ -281,8 +273,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                       ),
                     ),
                   );
-                  },
-                ),
+                }),
             ],
           ),
         ),

@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
-import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
-import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/picacg_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
+import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -25,9 +26,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
     super.initState();
     _tabs = [
       _SettingsTab(label: '主体设置', content: const ThemeSettingsTab()),
-      _SettingsTab(label: '节点设置', content: const NodeSettingsTab()),
-      _SettingsTab(label: '资源库', content: const _ResourcesSettingsTab()),
-      _SettingsTab(label: 'Ollama 设置', content: const OllamaSettingsTab()),
+      _SettingsTab(label: '节点设置', content: const _NodeSettingsWrapper()),
       _SettingsTab(
         label: '账户设置',
         content: const SettingsTabPlaceholder(title: '账户设置'),
@@ -36,7 +35,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
         label: '通知设置',
         content: const SettingsTabPlaceholder(title: '通知设置'),
       ),
-      _SettingsTab(label: 'PicACG', content: const PicAcgSettingsTab()),
+      _SettingsTab(label: '其他设置', content: const _OtherSettingsWrapper()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
   }
@@ -69,35 +68,83 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   }
 }
 
-/// 「资源库」二级设置页，包含「媒体设置」和「书籍设置」两个嵌套 Tab。
-class _ResourcesSettingsTab extends StatelessWidget {
-  const _ResourcesSettingsTab();
+class _NodeSettingsWrapper extends StatelessWidget {
+  const _NodeSettingsWrapper();
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      child: Column(
-        children: [
-          const TabBar(
-                tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(text: '媒体设置'),
-              Tab(text: '书籍设置'),
-            ],
-            dividerHeight: 0,
-          ),
-          const Expanded(
-            child: TabBarView(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            height: constraints.maxHeight,
+            child: Column(
+              crossAxisAlignment: .start,
               children: [
-                MediaSettingsTab(),
-                SettingsTabPlaceholder(title: '书籍设置'),
+                const TabBar(
+                  tabAlignment: TabAlignment.start,
+                  isScrollable: true,
+                  tabs: [
+                    Tab(text: '设置'),
+                    Tab(text: 'Ollama 设置'),
+                  ],
+                  dividerHeight: 0,
+                ),
+                Expanded(child: TabBarView(children: [NodeSettingsTab(), OllamaSettingsTab()])),
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
+  }
+}
+
+class _OtherSettingsWrapper extends StatelessWidget {
+  const _OtherSettingsWrapper();
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            height: constraints.maxHeight,
+            child: Column(
+              crossAxisAlignment: .start,
+              children: [
+                const TabBar(
+                  tabAlignment: TabAlignment.start,
+                  isScrollable: true,
+                  tabs: [
+                    Tab(text: '资源库'),
+                    Tab(text: 'PicACG'),
+                    Tab(text: '游戏设置'),
+                  ],
+                  dividerHeight: 0,
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [_ResourcesSettingsTab(), PicAcgSettingsTab(), GameSettingsTab()],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ResourcesSettingsTab extends StatelessWidget {
+  const _ResourcesSettingsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(length: 2, child: MediaSettingsTab());
   }
 }
 

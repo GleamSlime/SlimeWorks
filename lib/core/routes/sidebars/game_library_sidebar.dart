@@ -9,6 +9,5 @@ final SidebarGroup gameLibrarySidebarGroup = SidebarGroup(
     SidebarMenuItem(route: const GameLibraryRoute()),
     SidebarMenuItem(route: const GameCategoriesRoute()),
     SidebarMenuItem(route: const GameStatsRoute()),
-    SidebarMenuItem(route: const GameSettingsRoute()),
   ],
 );

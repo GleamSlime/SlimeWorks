@@ -178,7 +178,7 @@ class _DesktopTopBar extends StatelessWidget {
                         : const SizedBox.shrink()),
               ),
             ),
-            if (!chrome.hasLeading) const Spacer(),
+            // if (!chrome.hasLeading) const Spacer(),
             if (chrome.hasActions)
               Row(
                 spacing: AppTheme.metrics.kSpace12,
@@ -187,6 +187,7 @@ class _DesktopTopBar extends StatelessWidget {
               ),
             if (chrome.hasToolbar)
               Flexible(
+                flex: 2,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: SizedBox(
