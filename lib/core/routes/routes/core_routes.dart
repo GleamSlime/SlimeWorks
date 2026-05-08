@@ -39,7 +39,7 @@ class AboutRoute extends AppRouteData with $AboutRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, AppRoutes.buildPlaceholder('关于'));
+    return AppRoutes.buildPage(context, state, const AboutPage());
   }
 }
 

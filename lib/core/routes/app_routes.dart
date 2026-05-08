@@ -38,6 +38,7 @@ import 'package:slime_works/pages/picacg/picacg_history_screen.dart';
 import 'package:slime_works/pages/picacg/search/picacg_search_screen.dart';
 import 'package:slime_works/pages/picacg/reader/picacg_reader_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_downloads_screen.dart';
+import 'package:slime_works/pages/about/about_page.dart';
 
 part 'app_routes.g.dart';
 
