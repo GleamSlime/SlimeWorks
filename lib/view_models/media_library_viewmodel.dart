@@ -134,6 +134,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 是否启用瀑布流布局（详情页网格布局）。
   final useMasonryGrid = true.obs;
 
+  /// 是否显示媒体 tile 上的叠加层（类型标签 + 标题栏）。
+  final showMediaOverlay = true.obs;
+
   /// collectionId → 该集合内所有 MediaItem.fileSize 的总和（懒计算）。
   final _collectionSizes = <String, BigInt>{};
 

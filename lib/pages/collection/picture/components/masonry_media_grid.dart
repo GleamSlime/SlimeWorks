@@ -71,11 +71,16 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   /// 初始按行逐帧展开的最大行数；超过后一次性加载剩余全部。
   static const int _kInitialRevealRows = 12;
 
+  StreamSubscription<bool>? _overlaySub;
+
   @override
   void initState() {
     super.initState();
     _highlightId = widget.lastViewedItemId;
     _scheduleReveal();
+    _overlaySub = widget.viewModel.showMediaOverlay.listen((_) {
+      if (mounted) setState(() {});
+    });
     if (_highlightId != null) {
       // 等待首批 tiles 渲染后滚动到高亮项，并在 2.5s 后消退高亮
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,7 +110,8 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
         });
       });
     }
-    if (oldWidget.collectionId != widget.collectionId || oldWidget.columnCount != widget.columnCount) {
+    if (oldWidget.collectionId != widget.collectionId ||
+        oldWidget.columnCount != widget.columnCount) {
       // 切换了集合或列数变化：先立即显示前几行（避免空白闪烁），再继续逐行展开动画
       _revealTimer?.cancel();
       _itemKeys.clear();
@@ -172,6 +178,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
 
   @override
   void dispose() {
+    _overlaySub?.cancel();
     _revealTimer?.cancel();
     _highlightTimer?.cancel();
     _scrollController.dispose();
@@ -194,6 +201,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     final tileKey = _itemKeys.putIfAbsent(item.id, GlobalKey.new);
 
     final source = widget.viewModel.buildMediaSource(item, isCover: true);
+    final fullSource = widget.viewModel.buildMediaSource(item);
     final isVideo = item.kind == media_api.MediaKind.video;
     final isAudio = item.kind == media_api.MediaKind.audio;
     final defaultAr = (3.0 / 5.0);
@@ -229,6 +237,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       item: item,
       source: source,
       fixedHeight: tileHeight,
+      showOverlay: widget.viewModel.showMediaOverlay.value,
       onTap: () => widget.onOpenViewer(globalIndex),
       onRequestScrubFrames: (isVideo && !widget.isRemote)
           ? () => widget.viewModel.getVideoScrubFrames(item.filePath)
@@ -246,7 +255,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       deleteNodeLocalFileLabel: widget.isRemote ? '删除节点本地文件' : null,
       // 移动端图片支持保存到相册（本地和远程均支持）
       onSaveToGallery: (PlatformUtil.isMobile && !isVideo && !isAudio)
-          ? () => saveToGallery(context, source)
+          ? () => saveToGallery(context, fullSource)
           : null,
     );
 

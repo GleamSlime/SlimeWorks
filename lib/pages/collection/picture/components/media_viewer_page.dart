@@ -5,7 +5,6 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
@@ -13,7 +12,6 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:media_kit_video/media_kit_video_controls/media_kit_video_controls.dart'
     as media_controls;
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:slime_works/core/index.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -316,44 +314,29 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (source == null || source.isEmpty) return;
 
-    // 提前捕获 ScaffoldMessenger，避免跨异步间隙使用 BuildContext
-    final messenger = ScaffoldMessenger.of(context);
-
-    // 使用 permission_handler 授权，完全绕开 Gal.requestAccess（iOS native 冲突根源）
-    if (Platform.isAndroid || Platform.isIOS) {
-      final permission = Platform.isIOS
-          ? Permission
-                .photosAddOnly // 只需写入，对应 NSPhotoLibraryAddUsageDescription
-          : Permission.photos;
-
-      var status = await permission.status;
-      if (status.isDenied) {
-        status = await permission.request();
-      }
-      if (status.isPermanentlyDenied) {
-        if (mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: const Text('相册权限被拒绝，请在系统设置中手动开启'),
-              action: SnackBarAction(label: '去设置', onPressed: openAppSettings),
-            ),
-          );
-        }
-        return;
-      }
-      if (!status.isGranted && !status.isLimited) {
-        if (mounted) {
-          messenger.showSnackBar(const SnackBar(content: Text('没有相册写入权限')));
-        }
-        return;
+    const maxAttempts = 3;
+    bool hasAccess = await Gal.hasAccess(toAlbum: true);
+    for (int attempt = 0; !hasAccess && attempt < maxAttempts; attempt++) {
+      hasAccess = await Gal.requestAccess(toAlbum: true);
+      if (!hasAccess && attempt < maxAttempts - 1) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
       }
     }
+    if (!hasAccess) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('没有相册写入权限，请在系统设置中手动授权'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
-    if (!mounted) return;
-    EasyLoading.show(status: '正在保存...');
-    File? tmpFile;
     try {
       String localPath;
+      File? tmpFile;
       if (source.startsWith('http')) {
         final resp = await http.get(Uri.parse(source)).timeout(const Duration(seconds: 30));
         final tmpDir = await getTemporaryDirectory();
@@ -368,11 +351,18 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
         localPath = source;
       }
       await Gal.putImage(localPath);
-      EasyLoading.showSuccess('已保存到相册');
-    } catch (e) {
-      EasyLoading.showError('保存失败: $e');
-    } finally {
       tmpFile?.delete().ignore();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已保存到相册'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存失败: $e'), behavior: SnackBarBehavior.floating));
+      }
     }
   }
 

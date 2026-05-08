@@ -194,6 +194,23 @@ class PictureLibraryToolbar extends StatelessWidget {
                         )
                         .toList(),
                   ),
+                if (inDetail)
+                  Tooltip(
+                    message: viewModel.showMediaOverlay.value ? '隐藏叠加信息' : '显示叠加信息',
+                    child: DesktopHeadToolsButton(
+                      icon: Icon(
+                        viewModel.showMediaOverlay.value
+                            ? Icons.layers_rounded
+                            : Icons.layers_clear_rounded,
+                        color: viewModel.showMediaOverlay.value
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      size: AppTheme.metrics.kSpace40,
+                      onTap: () =>
+                          viewModel.showMediaOverlay.value = !viewModel.showMediaOverlay.value,
+                    ),
+                  ),
                 // 移动端详情模式：列数调节 + 资源排序 + 上传（桌面端此控件在 leading 区域）
                 if (showMobileDetailControls) ...[
                   if (onUpload != null)

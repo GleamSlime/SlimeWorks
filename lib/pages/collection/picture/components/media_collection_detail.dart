@@ -149,10 +149,15 @@ class MediaCollectionDetailView extends StatelessWidget {
               itemBuilder: (context, index) {
                 final item = sortedItems[index];
                 final source = viewModel.buildMediaSource(item, isCover: true);
+                final fullSource = viewModel.buildMediaSource(item);
                 return MediaItemTile(
                   key: ValueKey(item.id),
                   item: item,
                   source: source,
+                  showOverlay: viewModel.showMediaOverlay.value,
+                  onSaveToGallery: (PlatformUtil.isMobile && item.kind == media_api.MediaKind.image)
+                      ? () => MasonryMediaGridState.saveToGallery(context, fullSource)
+                      : null,
                   onTap: () {
                     if (collectionId.isEmpty) return;
                     viewModel.lastViewedItemId.value = item.id;

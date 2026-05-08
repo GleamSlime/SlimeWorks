@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
@@ -22,6 +23,7 @@ class MediaItemTile extends StatefulWidget {
     this.deleteNodeLocalFileLabel,
     this.onSaveToGallery,
     this.fixedHeight,
+    this.showOverlay = true,
   });
 
   final media_api.MediaItem item;
@@ -51,6 +53,9 @@ class MediaItemTile extends StatefulWidget {
 
   /// 瀑布流模式下由外部指定的固定高度（null = 填满格子）。
   final double? fixedHeight;
+
+  /// 是否显示叠加层（类型标签 + 标题栏）。
+  final bool showOverlay;
 
   @override
   State<MediaItemTile> createState() => _MediaItemTileState();
@@ -253,7 +258,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => Center(
                                     child: Icon(
-                                      _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
+                                      _isAudio
+                                          ? Icons.music_note_rounded
+                                          : Icons.smart_display_rounded,
                                       size: scaleW(44),
                                       color: theme.colorScheme.primary.withAlpha(180),
                                     ),
@@ -276,99 +283,104 @@ class _MediaItemTileState extends State<MediaItemTile> {
                           ),
                   ),
                 ),
-              // 悬停时视频进度条指示器
-              if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: LinearProgressIndicator(
-                    value: _hoverRatio,
-                    minHeight: scaleW(3),
-                    backgroundColor: Colors.white24,
-                    valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-                  ),
-                ),
-              Positioned(
-                right: appMetrics.kSpace8,
-                top: appMetrics.kSpace8,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: appMetrics.kSpace16,
-                    vertical: appMetrics.kSpace8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(120),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    widget.item.kind == media_api.MediaKind.image
-                        ? '图片'
-                        : widget.item.kind == media_api.MediaKind.audio
-                        ? '音频'
-                        : '视频',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: appMetrics.fontSize14,
-                      fontWeight: FontWeight.w600,
+                // 悬停时视频进度条指示器
+                if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: LinearProgressIndicator(
+                      value: _hoverRatio,
+                      minHeight: scaleW(3),
+                      backgroundColor: Colors.white24,
+                      valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
                     ),
                   ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
-                    ? scaleW(3)
-                    : 0,
-                child: ClipRRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(color: Colors.black.withAlpha(132)),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: appMetrics.kSpace16,
-                          vertical: appMetrics.kSpace8,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                widget.item.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: appMetrics.fontSize18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            if ((_isAudio || _isVideo) &&
-                                widget.item.durationMs != null &&
-                                widget.item.durationMs! > BigInt.zero) ...[
-                              SizedBox(width: appMetrics.kSpace4),
-                              Text(
-                                _formatDuration(widget.item.durationMs!),
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: appMetrics.fontSize10,
-                                ),
-                              ),
-                            ],
-                          ],
+                if (widget.showOverlay)
+                  Positioned(
+                    right: appMetrics.kSpace8,
+                    top: appMetrics.kSpace8,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? appMetrics.kSpace8 : appMetrics.kSpace16,
+                        vertical: isMobile ? appMetrics.kSpace4 : appMetrics.kSpace8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(120),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        widget.item.kind == media_api.MediaKind.image
+                            ? '图片'
+                            : widget.item.kind == media_api.MediaKind.audio
+                            ? '音频'
+                            : '视频',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isMobile ? appMetrics.fontSize8 : appMetrics.fontSize10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ],
+                if (widget.showOverlay)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom:
+                        (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
+                        ? scaleW(3)
+                        : 0,
+                    child: ClipRRect(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? appMetrics.kSpace8 : appMetrics.kSpace16,
+                              vertical: isMobile ? appMetrics.kSpace4 : appMetrics.kSpace8,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    widget.item.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: isMobile
+                                          ? appMetrics.fontSize10
+                                          : appMetrics.fontSize18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if ((_isAudio || _isVideo) &&
+                                    widget.item.durationMs != null &&
+                                    widget.item.durationMs! > BigInt.zero) ...[
+                                  SizedBox(width: appMetrics.kSpace4),
+                                  Text(
+                                    _formatDuration(widget.item.durationMs!),
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: appMetrics.fontSize10,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
     if (widget.fixedHeight != null) {
