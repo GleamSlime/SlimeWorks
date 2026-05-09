@@ -32,19 +32,19 @@ double _adaptiveScaleFactor() {
     return 1.0;
   }
   if (screenWidth >= 1600) {
-    return 1.04;
+    return 1.02;
   }
   if (screenWidth >= 1366) {
-    return 1.10;
+    return 1.04;
   }
-  return 1.16;
+  return 1.06;
 }
 
 double _adaptiveFontScaleFactor() {
   final double factor = _adaptiveScaleFactor();
 
   if (factor > 1.0) {
-    return 1.0 + ((factor - 1.0) * 0.75);
+    return 1.0 + ((factor - 1.0) * 0.5);
   }
   if (factor < 1.0) {
     return 1.0 - ((1.0 - factor) * 0.6);

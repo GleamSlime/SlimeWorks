@@ -10,7 +10,6 @@ export 'viewmodels/base_page.dart';
 // Theme
 export 'theme/app_colors.dart';
 export 'theme/app_theme.dart';
-export 'theme/app_text_styles.dart';
 
 // Services
 export 'services/websocket_manager.dart';

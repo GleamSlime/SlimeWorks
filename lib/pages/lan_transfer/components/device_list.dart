@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -120,8 +120,8 @@ class _DeviceCard extends StatelessWidget {
                       Flexible(
                         child: Text(
                           device.deviceName,
-                          style: AppTextStyles.body1(
-                            fontWeight: AppFontWeights.semiBold,
+                          style: TextStyle(fontSize: 15.0, height: 1.5,
+                            fontWeight: FontWeight.w600,
                             color: isSelected
                                 ? primaryColor
                                 : (isDark ? DarkColors.white100 : LightColors.black100),
@@ -145,7 +145,7 @@ class _DeviceCard extends StatelessWidget {
                             children: [
                               Icon(Icons.verified_user, size: scaleW(10), color: Colors.green),
                               SizedBox(width: scaleW(3)),
-                              Text('已信任', style: AppTextStyles.caption(color: Colors.green)),
+                              Text('已信任', style: TextStyle(fontSize: 11.0, height: 1.4, color: Colors.green)),
                             ],
                           ),
                         ),
@@ -155,7 +155,7 @@ class _DeviceCard extends StatelessWidget {
                   SizedBox(height: AppTheme.metrics.kSpace2),
                   Text(
                     '${device.deviceType} · ${device.ipAddress}',
-                    style: AppTextStyles.caption(
+                    style: TextStyle(fontSize: 11.0, height: 1.4,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
                   ),
@@ -184,7 +184,7 @@ class _DeviceCard extends StatelessWidget {
                       ),
                       child: Text(
                         '信任',
-                        style: AppTextStyles.caption(
+                        style: TextStyle(fontSize: 11.0, height: 1.4,
                           color: isDark ? DarkColors.white80 : LightColors.black80,
                         ),
                       ),

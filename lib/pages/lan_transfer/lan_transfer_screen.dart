@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
@@ -64,7 +64,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             ),
             child: Text(
               isRunning ? '停止' : '启动',
-              style: AppTextStyles.caption(color: isRunning ? Colors.red : Colors.green),
+              style: TextStyle(fontSize: 11.0, height: 1.4, color: isRunning ? Colors.red : Colors.green),
             ),
           ),
         );
@@ -106,7 +106,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
-                    style: AppTextStyles.caption(
+                    style: TextStyle(fontSize: 11.0, height: 1.4,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
                   ),
@@ -150,7 +150,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
               SizedBox(width: AppTheme.metrics.kSpace4),
               Text(
                 local != null ? local.ipAddress : '未连接',
-                style: AppTextStyles.caption(
+                style: TextStyle(fontSize: 11.0, height: 1.4,
                   color: isDark ? DarkColors.white80 : LightColors.black80,
                 ),
               ),
@@ -313,7 +313,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
               ),
               child: Text(
                 deviceName,
-                style: AppTextStyles.body2(fontWeight: AppFontWeights.semiBold),
+                style: TextStyle(fontSize: 13.0, height: 1.5, fontWeight: FontWeight.w600),
               ),
             ),
             Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
@@ -463,7 +463,7 @@ class _LanTransferToolbar extends StatelessWidget {
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Text(
                   local != null ? local.ipAddress : '未连接',
-                  style: AppTextStyles.caption(
+                  style: TextStyle(fontSize: 11.0, height: 1.4,
                     color: isDark ? DarkColors.white80 : LightColors.black80,
                   ),
                 ),
@@ -506,7 +506,7 @@ class _LanTransferToolbar extends StatelessWidget {
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
-                    style: AppTextStyles.caption(
+                    style: TextStyle(fontSize: 11.0, height: 1.4,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
                   ),
@@ -539,7 +539,7 @@ class _LanTransferToolbar extends StatelessWidget {
               ),
               child: Text(
                 isRunning ? '停止' : '启动',
-                style: AppTextStyles.caption(color: isRunning ? Colors.red : Colors.green),
+                style: TextStyle(fontSize: 11.0, height: 1.4, color: isRunning ? Colors.red : Colors.green),
               ),
             ),
           ),
@@ -599,7 +599,7 @@ class _DeviceSheetContent extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text('附近设备', style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold)),
+                Text('附近设备', style: TextStyle(fontSize: 15.0, height: 1.5, fontWeight: FontWeight.w600)),
                 if (devices.isNotEmpty) ...[
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Container(
@@ -611,7 +611,7 @@ class _DeviceSheetContent extends StatelessWidget {
                       color: isDark ? DarkColors.white10 : LightColors.black10,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('${devices.length}', style: AppTextStyles.caption()),
+                    child: Text('${devices.length}', style: TextStyle(fontSize: 11.0, height: 1.4)),
                   ),
                 ],
                 const Spacer(),
@@ -652,7 +652,7 @@ class _DeviceSheetContent extends StatelessWidget {
                         SizedBox(width: AppTheme.metrics.kSpace4),
                         Text(
                           isScanning ? '搜索中' : '搜索',
-                          style: AppTextStyles.caption(
+                          style: TextStyle(fontSize: 11.0, height: 1.4,
                             color: isScanning
                                 ? Colors.orange
                                 : (isDark ? DarkColors.primary : LightColors.primary),
@@ -729,7 +729,7 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
           Text(
             '点击「搜索」发现附近设备',
             textAlign: TextAlign.center,
-            style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80),
+            style: TextStyle(fontSize: 13.0, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
           ),
           SizedBox(height: AppTheme.metrics.kSpace16),
           GestureDetector(
@@ -745,7 +745,7 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
               ),
               child: Text(
                 '开始搜索',
-                style: AppTextStyles.body2(
+                style: TextStyle(fontSize: 13.0, height: 1.5,
                   color: isDark ? DarkColors.primary : LightColors.primary,
                 ),
               ),
@@ -799,14 +799,14 @@ class _PeerListSection extends StatelessWidget {
               SizedBox(height: AppTheme.metrics.kSpace16),
               Text(
                 '暂无会话',
-                style: AppTextStyles.body1(
+                style: TextStyle(fontSize: 15.0, height: 1.5,
                   color: isDark ? DarkColors.white40 : LightColors.black40,
                 ),
               ),
               SizedBox(height: AppTheme.metrics.kSpace8),
               Text(
                 '点击「附近设备」开始',
-                style: AppTextStyles.body2(
+                style: TextStyle(fontSize: 13.0, height: 1.5,
                   color: isDark ? DarkColors.white20 : LightColors.black20,
                 ),
               ),
@@ -916,7 +916,7 @@ class _PeerListItem extends StatelessWidget {
                           Expanded(
                             child: Text(
                               deviceName,
-                              style: AppTextStyles.body2(fontWeight: AppFontWeights.semiBold),
+                              style: TextStyle(fontSize: 13.0, height: 1.5, fontWeight: FontWeight.w600),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -924,7 +924,7 @@ class _PeerListItem extends StatelessWidget {
                           SizedBox(width: AppTheme.metrics.kSpace8),
                           Text(
                             timeStr,
-                            style: AppTextStyles.caption(
+                            style: TextStyle(fontSize: 11.0, height: 1.4,
                               color: isDark ? DarkColors.white40 : LightColors.black40,
                             ),
                           ),
@@ -933,7 +933,7 @@ class _PeerListItem extends StatelessWidget {
                       SizedBox(height: AppTheme.metrics.kSpace4),
                       Text(
                         preview,
-                        style: AppTextStyles.caption(
+                        style: TextStyle(fontSize: 11.0, height: 1.4,
                           color: isDark ? DarkColors.white40 : LightColors.black40,
                         ),
                         maxLines: 1,

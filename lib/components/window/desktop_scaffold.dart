@@ -16,6 +16,10 @@ class DesktopScaffold extends StatefulWidget {
 
   const DesktopScaffold({super.key, required this.child});
 
+  static const double _aspectRatio = 16.0 / 9.0;
+  static const double _minWidth = 1280.0;
+  static const double _minHeight = 720.0;
+
   static Future<void> initManager() async {
     if (Platform.isIOS || Platform.isAndroid) {
       return;
@@ -32,11 +36,16 @@ class DesktopScaffold extends StatefulWidget {
 
     DesktopScreenProvider desktopScreen = getIt.get<DesktopScreenProvider>();
 
-    desktopScreen.setWidth(positionService.windowWidth);
-    desktopScreen.setHeight(positionService.windowHeight);
+    double initWidth = positionService.windowWidth.clamp(_minWidth, double.infinity);
+    double initHeight = positionService.windowHeight.clamp(_minHeight, double.infinity);
+    initHeight = initWidth / _aspectRatio;
+
+    desktopScreen.setWidth(initWidth);
+    desktopScreen.setHeight(initHeight);
 
     WindowOptions windowOptions = WindowOptions(
-      size: desktopScreen.size.value,
+      size: Size(initWidth, initHeight),
+      minimumSize: const Size(_minWidth, _minHeight),
       center: false,
       titleBarStyle: TitleBarStyle.hidden,
       backgroundColor: Colors.white,
@@ -45,6 +54,8 @@ class DesktopScaffold extends StatefulWidget {
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setMinimumSize(const Size(_minWidth, _minHeight));
+      await windowManager.setAspectRatio(_aspectRatio);
       // 恢复上次的窗口位置
       await positionService.restorePosition();
       // 延迟到下一帧再计算度量，避免在 ScreenUtil 未初始化前访问它

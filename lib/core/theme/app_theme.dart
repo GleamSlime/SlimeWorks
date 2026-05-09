@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'app_colors.dart';
-import 'app_text_styles.dart';
 
 ThemeMetrics appMetrics = AppTheme.metrics;
 
@@ -138,9 +137,11 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: AppTextStyles.h6(
+        titleTextStyle: TextStyle(
+          fontSize: 18.0,
+          fontWeight: FontWeight.w600,
           color: LightColors.black100,
-          fontWeight: AppFontWeights.semiBold,
+          height: 1.4,
         ),
       ),
 
@@ -156,26 +157,92 @@ class AppTheme {
 
       // 文本主题
       textTheme: TextTheme(
-        displayLarge: AppTextStyles.h1(color: LightColors.black100, fontWeight: FontWeight.w500),
-        displayMedium: AppTextStyles.h2(color: LightColors.black100, fontWeight: FontWeight.w500),
-        displaySmall: AppTextStyles.h3(color: LightColors.black100, fontWeight: FontWeight.w500),
-        headlineLarge: AppTextStyles.h4(color: LightColors.black100, fontWeight: FontWeight.w500),
-        headlineMedium: AppTextStyles.h5(color: LightColors.black100, fontWeight: FontWeight.w500),
-        headlineSmall: AppTextStyles.h6(color: LightColors.black100, fontWeight: FontWeight.w500),
-        titleLarge: AppTextStyles.subtitle1(
-          color: LightColors.black100,
+        displayLarge: TextStyle(
+          fontSize: 72.0,
           fontWeight: FontWeight.w500,
-        ),
-        titleMedium: AppTextStyles.subtitle2(
           color: LightColors.black100,
-          fontWeight: FontWeight.w500,
+          height: 1.2,
         ),
-        bodyLarge: AppTextStyles.body1(color: LightColors.black80, fontWeight: FontWeight.w500),
-        bodyMedium: AppTextStyles.body2(color: LightColors.black80, fontWeight: FontWeight.w500),
-        bodySmall: AppTextStyles.body3(color: LightColors.black80, fontWeight: FontWeight.w500),
-        labelLarge: AppTextStyles.button(color: LightColors.black100, fontWeight: FontWeight.w500),
-        labelMedium: AppTextStyles.caption(color: LightColors.black40, fontWeight: FontWeight.w500),
-        labelSmall: AppTextStyles.overline(color: LightColors.black40, fontWeight: FontWeight.w500),
+        displayMedium: TextStyle(
+          fontSize: 48.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.2,
+        ),
+        displaySmall: TextStyle(
+          fontSize: 36.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.3,
+        ),
+        headlineLarge: TextStyle(
+          fontSize: 28.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.3,
+        ),
+        headlineMedium: TextStyle(
+          fontSize: 22.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.4,
+        ),
+        headlineSmall: TextStyle(
+          fontSize: 18.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.4,
+        ),
+        titleLarge: TextStyle(
+          fontSize: 15.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.5,
+        ),
+        titleMedium: TextStyle(
+          fontSize: 13.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.5,
+        ),
+        bodyLarge: TextStyle(
+          fontSize: 15.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black80,
+          height: 1.5,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 13.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black80,
+          height: 1.5,
+        ),
+        bodySmall: TextStyle(
+          fontSize: 11.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black80,
+          height: 1.5,
+        ),
+        labelLarge: TextStyle(
+          fontSize: 13.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black100,
+          height: 1.2,
+          letterSpacing: 0.5,
+        ),
+        labelMedium: TextStyle(
+          fontSize: 11.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black40,
+          height: 1.4,
+        ),
+        labelSmall: TextStyle(
+          fontSize: 9.0,
+          fontWeight: FontWeight.w500,
+          color: LightColors.black40,
+          height: 1.5,
+          letterSpacing: 1.5,
+        ),
       ),
       // 按钮主题
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -185,7 +252,12 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: AppTextStyles.button(),
+          textStyle: const TextStyle(
+            fontSize: 13.0,
+            fontWeight: FontWeight.w500,
+            height: 1.2,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
 
@@ -194,7 +266,12 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: LightColors.primary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          textStyle: AppTextStyles.button(),
+          textStyle: const TextStyle(
+            fontSize: 13.0,
+            fontWeight: FontWeight.w500,
+            height: 1.2,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
 
@@ -262,9 +339,11 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: AppTextStyles.h6(
+        titleTextStyle: TextStyle(
+          fontSize: 18.0,
+          fontWeight: FontWeight.w600,
           color: DarkColors.white100,
-          fontWeight: AppFontWeights.semiBold,
+          height: 1.4,
         ),
       ),
 
@@ -280,20 +359,30 @@ class AppTheme {
 
       // 文本主题
       textTheme: TextTheme(
-        displayLarge: AppTextStyles.h1(color: DarkColors.white100),
-        displayMedium: AppTextStyles.h2(color: DarkColors.white100),
-        displaySmall: AppTextStyles.h3(color: DarkColors.white100),
-        headlineLarge: AppTextStyles.h4(color: DarkColors.white100),
-        headlineMedium: AppTextStyles.h5(color: DarkColors.white100),
-        headlineSmall: AppTextStyles.h6(color: DarkColors.white100),
-        titleLarge: AppTextStyles.subtitle1(color: DarkColors.white100),
-        titleMedium: AppTextStyles.subtitle2(color: DarkColors.white100),
-        bodyLarge: AppTextStyles.body1(color: DarkColors.white80),
-        bodyMedium: AppTextStyles.body2(color: DarkColors.white80),
-        bodySmall: AppTextStyles.body3(color: DarkColors.white80),
-        labelLarge: AppTextStyles.button(color: DarkColors.white100),
-        labelMedium: AppTextStyles.caption(color: DarkColors.white40),
-        labelSmall: AppTextStyles.overline(color: DarkColors.white40),
+        displayLarge: TextStyle(fontSize: 72.0, color: DarkColors.white100, height: 1.2),
+        displayMedium: TextStyle(fontSize: 48.0, color: DarkColors.white100, height: 1.2),
+        displaySmall: TextStyle(fontSize: 36.0, color: DarkColors.white100, height: 1.3),
+        headlineLarge: TextStyle(fontSize: 28.0, color: DarkColors.white100, height: 1.3),
+        headlineMedium: TextStyle(fontSize: 22.0, color: DarkColors.white100, height: 1.4),
+        headlineSmall: TextStyle(fontSize: 18.0, color: DarkColors.white100, height: 1.4),
+        titleLarge: TextStyle(fontSize: 15.0, color: DarkColors.white100, height: 1.5),
+        titleMedium: TextStyle(fontSize: 13.0, color: DarkColors.white100, height: 1.5),
+        bodyLarge: TextStyle(fontSize: 15.0, color: DarkColors.white80, height: 1.5),
+        bodyMedium: TextStyle(fontSize: 13.0, color: DarkColors.white80, height: 1.5),
+        bodySmall: TextStyle(fontSize: 11.0, color: DarkColors.white80, height: 1.5),
+        labelLarge: TextStyle(
+          fontSize: 13.0,
+          color: DarkColors.white100,
+          height: 1.2,
+          letterSpacing: 0.5,
+        ),
+        labelMedium: TextStyle(fontSize: 11.0, color: DarkColors.white40, height: 1.4),
+        labelSmall: TextStyle(
+          fontSize: 9.0,
+          color: DarkColors.white40,
+          height: 1.5,
+          letterSpacing: 1.5,
+        ),
       ),
       // 按钮主题
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -303,7 +392,12 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: AppTextStyles.button(),
+          textStyle: const TextStyle(
+            fontSize: 13.0,
+            fontWeight: FontWeight.w500,
+            height: 1.2,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
 
@@ -312,7 +406,12 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: DarkColors.primary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          textStyle: AppTextStyles.button(),
+          textStyle: const TextStyle(
+            fontSize: 13.0,
+            fontWeight: FontWeight.w500,
+            height: 1.2,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
 
@@ -380,19 +479,16 @@ class ThemeMetrics {
   final BorderRadius radius24;
   final BorderRadius radius32;
 
-  final double fontSize6;
-  final double fontSize8;
-  final double fontSize10;
-  final double fontSize12;
-  final double fontSize14;
-  final double fontSize16;
+  final double fontSize9;
+  final double fontSize11;
+  final double fontSize13;
+  final double fontSize15;
   final double fontSize18;
-  final double fontSize20;
-  final double fontSize24;
-  final double fontSize34;
+  final double fontSize22;
+  final double fontSize28;
+  final double fontSize36;
   final double fontSize48;
-  final double fontSize60;
-  final double fontSize96;
+  final double fontSize72;
 
   final double kSpace2;
   final double kSpace4;
@@ -431,19 +527,16 @@ class ThemeMetrics {
       radius24 = BorderRadius.all(Radius.circular(scaleW(24.r))),
       radius32 = BorderRadius.all(Radius.circular(scaleW(32.r))),
 
-      fontSize6 = scaleS(6),
-      fontSize8 = scaleS(8),
-      fontSize10 = scaleS(10),
-      fontSize12 = scaleS(12),
-      fontSize14 = scaleS(14),
-      fontSize16 = scaleS(16),
+      fontSize9 = scaleS(9),
+      fontSize11 = scaleS(11),
+      fontSize13 = scaleS(13),
+      fontSize15 = scaleS(15),
       fontSize18 = scaleS(18),
-      fontSize20 = scaleS(20),
-      fontSize24 = scaleS(24),
-      fontSize34 = scaleS(34),
+      fontSize22 = scaleS(22),
+      fontSize28 = scaleS(28),
+      fontSize36 = scaleS(36),
       fontSize48 = scaleS(48),
-      fontSize60 = scaleS(60),
-      fontSize96 = scaleS(96),
+      fontSize72 = scaleS(72),
 
       kSpace2 = scaleW(2),
       kSpace4 = scaleW(4),

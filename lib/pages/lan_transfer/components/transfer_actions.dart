@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -83,7 +83,7 @@ class _TransferActionsState extends State<TransferActions> {
                     SizedBox(width: AppTheme.metrics.kSpace4),
                     Text(
                       isOnline ? '已连接' : '不在线·发送后排队',
-                      style: AppTextStyles.caption(
+                      style: TextStyle(fontSize: 11.0, height: 1.4,
                         color: isOnline
                             ? Colors.green
                             : (isDark ? DarkColors.white40 : LightColors.black40),
@@ -113,12 +113,12 @@ class _TransferActionsState extends State<TransferActions> {
                                 textInputAction: TextInputAction.send,
                                 maxLines: 1,
                                 minLines: 1,
-                                style: AppTextStyles.body2(
+                                style: TextStyle(fontSize: 13.0, height: 1.5,
                                   color: isDark ? DarkColors.white100 : LightColors.black100,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: '输入要发送的文本...',
-                                  hintStyle: AppTextStyles.body2(
+                                  hintStyle: TextStyle(fontSize: 13.0, height: 1.5,
                                     color: isDark ? DarkColors.white40 : LightColors.black40,
                                   ),
                                   filled: true,
@@ -245,7 +245,7 @@ class _TransferActionsState extends State<TransferActions> {
               SizedBox(height: AppTheme.metrics.kSpace4),
               Text(
                 label,
-                style: AppTextStyles.caption(
+                style: TextStyle(fontSize: 11.0, height: 1.4,
                   color: isActive
                       ? primaryColor
                       : (isDark ? DarkColors.white80 : LightColors.black80),

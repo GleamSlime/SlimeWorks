@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -174,7 +174,7 @@ class _TransferChatViewState extends State<TransferChatView> {
                   children: [
                     Icon(Icons.keyboard_double_arrow_down, size: scaleW(16), color: Colors.white),
                     SizedBox(width: AppTheme.metrics.kSpace4),
-                    Text('返回底部', style: AppTextStyles.caption(color: Colors.white)),
+                    Text('返回底部', style: TextStyle(fontSize: 11.0, height: 1.4, color: Colors.white)),
                   ],
                 ),
               ),
@@ -212,7 +212,7 @@ class _TransferChatViewState extends State<TransferChatView> {
           ),
           child: Text(
             label,
-            style: AppTextStyles.caption(color: isDark ? DarkColors.white40 : LightColors.black40),
+            style: TextStyle(fontSize: 11.0, height: 1.4, color: isDark ? DarkColors.white40 : LightColors.black40),
           ),
         ),
       ),
@@ -233,7 +233,7 @@ class _TransferChatViewState extends State<TransferChatView> {
           SizedBox(height: AppTheme.metrics.kSpace12),
           Text(
             '暂无传输记录',
-            style: AppTextStyles.body2(color: isDark ? DarkColors.white40 : LightColors.black40),
+            style: TextStyle(fontSize: 13.0, height: 1.5, color: isDark ? DarkColors.white40 : LightColors.black40),
           ),
         ],
       ),
@@ -343,7 +343,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                         ),
                         child: Text(
                           widget.item.senderDeviceName,
-                          style: AppTextStyles.caption(
+                          style: TextStyle(fontSize: 11.0, height: 1.4,
                             color: isDark ? DarkColors.white40 : LightColors.black40,
                           ),
                         ),
@@ -375,7 +375,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                           if (isSelf) SizedBox(width: AppTheme.metrics.kSpace4),
                           Text(
                             _formatTime(widget.item.createdAt),
-                            style: AppTextStyles.caption(
+                            style: TextStyle(fontSize: 11.0, height: 1.4,
                               color: isDark ? DarkColors.white20 : LightColors.black20,
                             ),
                           ),
@@ -447,7 +447,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
         horizontal: AppTheme.metrics.kSpace12,
         vertical: AppTheme.metrics.kSpace10,
       ),
-      child: SelectableText(item.textContent ?? '', style: AppTextStyles.body2(color: textColor)),
+      child: SelectableText(item.textContent ?? '', style: TextStyle(fontSize: 13.0, height: 1.5, color: textColor)),
     );
   }
 
@@ -556,9 +556,9 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 children: [
                   Text(
                     name,
-                    style: AppTextStyles.body2(
+                    style: TextStyle(fontSize: 13.0, height: 1.5,
                       color: textColor,
-                      fontWeight: AppFontWeights.semiBold,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -566,7 +566,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                   if (size.isNotEmpty)
                     Text(
                       size,
-                      style: AppTextStyles.caption(color: textColor.withValues(alpha: 0.65)),
+                      style: TextStyle(fontSize: 11.0, height: 1.4, color: textColor.withValues(alpha: 0.65)),
                     ),
                 ],
               ),
@@ -597,7 +597,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               '${item.progress.toStringAsFixed(1)}%',
-              style: AppTextStyles.caption(color: textColor.withValues(alpha: 0.65)),
+              style: TextStyle(fontSize: 11.0, height: 1.4, color: textColor.withValues(alpha: 0.65)),
             ),
           ],
         ],
@@ -618,7 +618,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             color: textColor.withValues(alpha: 0.5),
           ),
           SizedBox(width: AppTheme.metrics.kSpace8),
-          Text('文件已移除', style: AppTextStyles.caption(color: textColor.withValues(alpha: 0.6))),
+          Text('文件已移除', style: TextStyle(fontSize: 11.0, height: 1.4, color: textColor.withValues(alpha: 0.6))),
         ],
       ),
     );

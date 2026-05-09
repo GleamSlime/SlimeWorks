@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
@@ -103,7 +103,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
         children: [
           Text(
             widget.peerDeviceName,
-            style: AppTextStyles.body1(fontWeight: AppFontWeights.semiBold),
+            style: TextStyle(fontSize: 15.0, height: 1.5, fontWeight: FontWeight.w600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

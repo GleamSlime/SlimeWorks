@@ -6,7 +6,6 @@ import 'package:slime_works/core/provider/main.dart';
 
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
-import 'package:slime_works/core/theme/app_text_styles.dart';
 
 /// 主题演示页面
 /// 展示所有字体大小和颜色的效果
@@ -27,9 +26,9 @@ class ThemePreviewScreen extends StatelessWidget {
         children: [
           Text(
             '排版系统',
-            style: AppTextStyles.h5(
+            style: TextStyle(fontSize: 22.0, height: 1.4,
               color: isDark ? DarkColors.white100 : LightColors.black100,
-              fontWeight: AppFontWeights.semiBold,
+              fontWeight: FontWeight.w600,
             ),
           ),
 
@@ -37,28 +36,28 @@ class ThemePreviewScreen extends StatelessWidget {
           Obx(
             () => Text(
               "桌面尺寸: ${desktopScreen.width.value.toStringAsFixed(0)} x ${desktopScreen.height.value.toStringAsFixed(0)} (是否为移动端: ${desktopScreen.isMobile.value})",
-              style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80),
+              style: TextStyle(fontSize: 13.0, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
             ),
           ),
 
           const SizedBox(height: 16),
 
           // H1 - H6
-          _buildTextStyleItem('H1', AppTextStyles.h1(), '96px', isDark),
-          _buildTextStyleItem('H2', AppTextStyles.h2(), '60px', isDark),
-          _buildTextStyleItem('H3', AppTextStyles.h3(), '48px', isDark),
-          _buildTextStyleItem('H4', AppTextStyles.h4(), '34px', isDark),
-          _buildTextStyleItem('H5', AppTextStyles.h5(), '24px', isDark),
-          _buildTextStyleItem('H6', AppTextStyles.h6(), '20px', isDark),
+          _buildTextStyleItem('H1', TextStyle(fontSize: 72.0, height: 1.2,), '96px', isDark),
+          _buildTextStyleItem('H2', TextStyle(fontSize: 48.0, height: 1.2,), '60px', isDark),
+          _buildTextStyleItem('H3', TextStyle(fontSize: 36.0, height: 1.3,), '48px', isDark),
+          _buildTextStyleItem('H4', TextStyle(fontSize: 28.0, height: 1.3,), '34px', isDark),
+          _buildTextStyleItem('H5', TextStyle(fontSize: 22.0, height: 1.4), '24px', isDark),
+          _buildTextStyleItem('H6', TextStyle(fontSize: 18.0, height: 1.4,), '20px', isDark),
 
           const Divider(height: 32),
 
           // Subtitle & Body
-          _buildTextStyleItem('Subtitle1', AppTextStyles.subtitle1(), '16px', isDark),
-          _buildTextStyleItem('Subtitle2', AppTextStyles.subtitle2(), '14px', isDark),
-          _buildTextStyleItem('Body1', AppTextStyles.body1(), '16px', isDark),
-          _buildTextStyleItem('Body2', AppTextStyles.body2(), '14px', isDark),
-          _buildTextStyleItem('Body3', AppTextStyles.body3(), '12px', isDark),
+          _buildTextStyleItem('Subtitle1', TextStyle(fontSize: 15.0, height: 1.5,), '16px', isDark),
+          _buildTextStyleItem('Subtitle2', TextStyle(fontSize: 13.0, height: 1.5,), '14px', isDark),
+          _buildTextStyleItem('Body1', TextStyle(fontSize: 15.0, height: 1.5), '16px', isDark),
+          _buildTextStyleItem('Body2', TextStyle(fontSize: 13.0, height: 1.5), '14px', isDark),
+          _buildTextStyleItem('Body3', TextStyle(fontSize: 11.0, height: 1.5,), '12px', isDark),
 
           const Divider(height: 32),
 
@@ -180,7 +179,7 @@ class ThemePreviewScreen extends StatelessWidget {
               SwitchListTile(
                 title: Text(
                   '切换系统主题',
-                  style: AppTextStyles.body1(
+                  style: TextStyle(fontSize: 15.0, height: 1.5,
                     color: isDark ? DarkColors.white100 : LightColors.black100,
                   ),
                 ),
@@ -224,14 +223,14 @@ class ThemePreviewScreen extends StatelessWidget {
             width: 120,
             child: Text(
               name,
-              style: AppTextStyles.body2(color: isDark ? DarkColors.white80 : LightColors.black80),
+              style: TextStyle(fontSize: 13.0, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
             ),
           ),
           SizedBox(
             width: 80,
             child: Text(
               size,
-              style: AppTextStyles.body2(color: isDark ? DarkColors.white40 : LightColors.black40),
+              style: TextStyle(fontSize: 13.0, height: 1.5, color: isDark ? DarkColors.white40 : LightColors.black40),
             ),
           ),
           Expanded(
@@ -252,9 +251,9 @@ class ThemePreviewScreen extends StatelessWidget {
       children: [
         Text(
           '颜色系统',
-          style: AppTextStyles.h5(
+          style: TextStyle(fontSize: 22.0, height: 1.4,
             color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: AppFontWeights.semiBold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 16),
@@ -262,7 +261,7 @@ class ThemePreviewScreen extends StatelessWidget {
         // 黑白色系
         Text(
           '黑白色系',
-          style: AppTextStyles.subtitle1(
+          style: TextStyle(fontSize: 15.0, height: 1.5,
             color: isDark ? DarkColors.white100 : LightColors.black100,
           ),
         ),
@@ -293,7 +292,7 @@ class ThemePreviewScreen extends StatelessWidget {
         // 主色和次要颜色
         Text(
           '主色与次要颜色',
-          style: AppTextStyles.subtitle1(
+          style: TextStyle(fontSize: 15.0, height: 1.5,
             color: isDark ? DarkColors.white100 : LightColors.black100,
           ),
         ),
@@ -320,7 +319,7 @@ class ThemePreviewScreen extends StatelessWidget {
         // 背景色
         Text(
           '背景色',
-          style: AppTextStyles.subtitle1(
+          style: TextStyle(fontSize: 15.0, height: 1.5,
             color: isDark ? DarkColors.white100 : LightColors.black100,
           ),
         ),
@@ -372,9 +371,9 @@ class ThemePreviewScreen extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         name,
-        style: AppTextStyles.caption(
+        style: TextStyle(fontSize: 11.0, height: 1.4,
           color: _getContrastColor(color),
-          fontWeight: AppFontWeights.medium,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -393,9 +392,9 @@ class ThemePreviewScreen extends StatelessWidget {
       children: [
         Text(
           '组件示例',
-          style: AppTextStyles.h5(
+          style: TextStyle(fontSize: 22.0, height: 1.4,
             color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: AppFontWeights.semiBold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 16),
@@ -436,14 +435,14 @@ class ThemePreviewScreen extends StatelessWidget {
               children: [
                 Text(
                   '卡片标题',
-                  style: AppTextStyles.h6(
+                  style: TextStyle(fontSize: 18.0, height: 1.4,
                     color: isDark ? DarkColors.white100 : LightColors.black100,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '这是一个示例卡片，展示了卡片的样式效果。',
-                  style: AppTextStyles.body2(
+                  style: TextStyle(fontSize: 13.0, height: 1.5,
                     color: isDark ? DarkColors.white80 : LightColors.black80,
                   ),
                 ),

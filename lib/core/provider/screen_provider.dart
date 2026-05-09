@@ -11,16 +11,16 @@ bool isMobile = Platform.isAndroid || Platform.isIOS;
 
 abstract class DesktopScreenProvider {
   /// 最小宽度
-  double minWidth = 1200;
+  double minWidth = 1280;
 
   /// 最小高度
-  double minHeight = 800;
+  double minHeight = 720;
 
   /// 窗口尺寸
   Rx<Size> get size => Rx<Size>(
     Size(
       double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520"),
-      double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050"),
+      double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "855"),
     ),
   );
 
@@ -40,7 +40,7 @@ abstract class DesktopScreenProvider {
   RxDouble width = double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520").obs;
 
   /// 窗口高度
-  RxDouble height = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "1050").obs;
+  RxDouble height = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "855").obs;
 
   /// 是否为桌面端
   RxBool get isDesktop =>

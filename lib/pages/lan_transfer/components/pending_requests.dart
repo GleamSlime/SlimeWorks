@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -55,7 +55,7 @@ class PendingRequests extends StatelessWidget {
               Expanded(
                 child: Text(
                   '收到传输请求 (${requests.length})',
-                  style: AppTextStyles.h6(fontWeight: AppFontWeights.semiBold),
+                  style: TextStyle(fontSize: 18.0, height: 1.4, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -160,12 +160,12 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   children: [
                     Text(
                       widget.request.senderDeviceName,
-                      style: AppTextStyles.body2(fontWeight: AppFontWeights.semiBold),
+                      style: TextStyle(fontSize: 13.0, height: 1.5, fontWeight: FontWeight.w600),
                     ),
                     SizedBox(height: AppTheme.metrics.kSpace2),
                     Text(
                       '请求发送${_getTypeText(widget.request.transferType)}',
-                      style: AppTextStyles.caption(
+                      style: TextStyle(fontSize: 11.0, height: 1.4,
                         color: widget.isDark ? DarkColors.white80 : LightColors.black80,
                       ),
                     ),
@@ -192,7 +192,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   Expanded(
                     child: Text(
                       widget.request.fileName ?? widget.request.textContent ?? '',
-                      style: AppTextStyles.caption(),
+                      style: TextStyle(fontSize: 11.0, height: 1.4),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -201,7 +201,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     Text(
                       _formatFileSize(widget.request.fileSize!),
-                      style: AppTextStyles.caption(
+                      style: TextStyle(fontSize: 11.0, height: 1.4,
                         color: widget.isDark ? DarkColors.white80 : LightColors.black80,
                       ),
                     ),
@@ -231,7 +231,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 Text(
                   '信任此设备（下次自动接收）',
-                  style: AppTextStyles.caption(
+                  style: TextStyle(fontSize: 11.0, height: 1.4,
                     color: widget.isDark ? DarkColors.white80 : LightColors.black80,
                   ),
                 ),

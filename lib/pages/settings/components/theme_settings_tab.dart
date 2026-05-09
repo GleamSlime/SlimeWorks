@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
-import 'package:slime_works/core/theme/app_text_styles.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 
 class ThemeSettingsTab extends StatefulWidget {
@@ -102,7 +101,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     return ChoiceChip(
       label: Text(
         _themeModeLabel(mode),
-        style: AppTextStyles.body2(color: theme.colorScheme.onSurface),
+        style: TextStyle(fontSize: 13.0, height: 1.5, color: theme.colorScheme.onSurface),
       ),
       selected: _themeMode == mode,
       side: BorderSide(color: _themeMode == mode ? theme.colorScheme.primary : theme.dividerColor),
@@ -159,9 +158,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         children: [
           Text(
             '主题模式',
-            style: AppTextStyles.h5(
+            style: TextStyle(fontSize: 22.0, height: 1.4,
               color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -169,9 +168,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           const SizedBox(height: 24),
           Text(
             '主题配色',
-            style: AppTextStyles.h5(
+            style: TextStyle(fontSize: 22.0, height: 1.4,
               color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -183,9 +182,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           const SizedBox(height: 24),
           Text(
             '字号大小',
-            style: AppTextStyles.h5(
+            style: TextStyle(fontSize: 22.0, height: 1.4,
               color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -200,14 +199,14 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           const SizedBox(height: 4),
           Text(
             '当前缩放：${(_fontScale * 100).round()}%',
-            style: AppTextStyles.body2(color: theme.colorScheme.onSurface),
+            style: TextStyle(fontSize: 13.0, height: 1.5, color: theme.colorScheme.onSurface),
           ),
           const SizedBox(height: 32),
           Text(
             '预览样式',
-            style: AppTextStyles.h5(
+            style: TextStyle(fontSize: 22.0, height: 1.4,
               color: theme.colorScheme.onSurface,
-              fontWeight: AppFontWeights.semiBold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),

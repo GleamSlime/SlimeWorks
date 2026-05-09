@@ -353,7 +353,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                       color: Colors.white,
                                       fontSize: isMobile
                                           ? appMetrics.fontSize10
-                                          : appMetrics.fontSize18,
+                                          : appMetrics.fontSize14,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
