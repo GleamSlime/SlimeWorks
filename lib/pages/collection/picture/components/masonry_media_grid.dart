@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -27,6 +28,7 @@ class MasonryMediaGrid extends StatefulWidget {
     required this.onConfirmDelete,
     this.onConfirmDeleteNodeLocalFile,
     this.lastViewedItemId,
+    this.scrollController,
   });
 
   final List<media_api.MediaItem> items;
@@ -37,18 +39,20 @@ class MasonryMediaGrid extends StatefulWidget {
   final void Function(int index) onOpenViewer;
   final Future<void> Function(media_api.MediaItem) onConfirmDelete;
 
-  /// 删除节点本地文件的确认回调（仅远程集合需要）。
   final Future<void> Function(media_api.MediaItem)? onConfirmDeleteNodeLocalFile;
 
-  /// 从预览返回后应高亮并滚动到的资源 ID。
   final String? lastViewedItemId;
+
+  final ScrollController? scrollController;
 
   @override
   State<MasonryMediaGrid> createState() => MasonryMediaGridState();
 }
 
 class MasonryMediaGridState extends State<MasonryMediaGrid> {
-  final _scrollController = ScrollController();
+  ScrollController? _internalScrollController;
+  ScrollController get _scrollController =>
+      widget.scrollController ?? (_internalScrollController ??= ScrollController());
   // 缓存每张已加载图片的宽高比，key 为 source
   final Map<String, double> _aspectRatios = {};
 
@@ -85,7 +89,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       // 等待首批 tiles 渲染后滚动到高亮项，并在 2.5s 后消退高亮
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToHighlighted();
-        _highlightTimer = Timer(const Duration(milliseconds: 25000), () {
+        _highlightTimer = Timer(const Duration(milliseconds: 2500), () {
           if (mounted) setState(() => _highlightId = null);
           widget.viewModel.lastViewedItemId.value = null;
         });
@@ -181,7 +185,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     _overlaySub?.cancel();
     _revealTimer?.cancel();
     _highlightTimer?.cancel();
-    _scrollController.dispose();
+    _internalScrollController?.dispose();
     super.dispose();
   }
 
@@ -303,8 +307,9 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
 
   void _resolveAspectRatio(String source, File file) async {
     try {
-      final bytes = await file.readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
+      final bytes = await file.openRead(0, 65536).expand((c) => c).toList();
+      final bytesU8 = Uint8List.fromList(bytes);
+      final codec = await ui.instantiateImageCodec(bytesU8);
       final frame = await codec.getNextFrame();
       final ar = frame.image.width / frame.image.height;
       frame.image.dispose();
@@ -341,7 +346,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       String localPath;
       File? tmpFile;
       if (source.startsWith('http')) {
-        final resp = await http.get(Uri.parse(source));
+        final resp = await http.get(Uri.parse(source)).timeout(const Duration(seconds: 30));
+        if (resp.statusCode != 200) {
+          throw Exception('HTTP ${resp.statusCode}');
+        }
         final tmpDir = await getTemporaryDirectory();
         // 保留原始扩展名，部分平台按扩展名识别图片格式
         final ext = source.split('?').first.split('.').last.toLowerCase();

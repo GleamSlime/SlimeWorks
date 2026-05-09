@@ -24,7 +24,7 @@ class MediaSelectionBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text('已选择 $selectedCount 个集合'),
+          Text('已选择 $selectedCount 个项目'),
           const Spacer(),
           TextButton(onPressed: onCancel, child: const Text('取消选择')),
           SizedBox(width: appMetrics.kSpace8),

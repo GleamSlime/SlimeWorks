@@ -37,6 +37,7 @@ class MediaViewerPage extends StatefulWidget {
 
 class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderStateMixin {
   int _currentIndex = 0;
+  String? _currentItemId;
 
   // ── 跟手拖动状态 ─────────────────────────────────────────────────────────
   // 当前正在拖动时的像素偏移（horizontal drag → dx≠0，vertical drag → dy≠0）
@@ -99,16 +100,35 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    if (widget.items.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
+      return;
+    }
+    _currentIndex = widget.initialIndex.clamp(0, widget.items.length - 1);
+    _currentItemId = widget.items[_currentIndex].id;
     _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
     _snapCtrl.addListener(_onSnapTick);
     _snapCtrl.addStatusListener(_onSnapStatus);
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      // 移动端启动沉浸计时器
       _resetImmersiveTimer();
     }
-    // PC 端：不进入系统全屏，路由本身已覆盖全部应用区域；UI 永久可见，无需计时器
+  }
+
+  @override
+  void didUpdateWidget(MediaViewerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.items != oldWidget.items && _currentItemId != null) {
+      final newIndex = widget.items.indexWhere((item) => item.id == _currentItemId);
+      if (newIndex != -1 && newIndex != _currentIndex) {
+        _currentIndex = newIndex;
+        _prevPageWidget = null;
+        _currPageWidget = null;
+        _nextPageWidget = null;
+      }
+    }
   }
 
   @override
@@ -159,6 +179,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
             _nextPageWidget = null;
           }
           _currentIndex = pending;
+          _currentItemId = widget.items.isNotEmpty ? widget.items[_currentIndex].id : null;
         }
         _dragOffset = 0.0;
         _isDragging = false;
@@ -323,7 +344,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       }
     }
     if (!hasAccess) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('没有相册写入权限，请在系统设置中手动授权'),
@@ -339,6 +360,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       File? tmpFile;
       if (source.startsWith('http')) {
         final resp = await http.get(Uri.parse(source)).timeout(const Duration(seconds: 30));
+        if (resp.statusCode != 200) {
+          throw Exception('HTTP ${resp.statusCode}');
+        }
         final tmpDir = await getTemporaryDirectory();
         final ext = source.split('?').first.split('.').last.toLowerCase();
         final validExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext) ? ext : 'jpg';
@@ -352,13 +376,13 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       }
       await Gal.putImage(localPath);
       tmpFile?.delete().ignore();
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已保存到相册'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('保存失败: $e'), behavior: SnackBarBehavior.floating));
@@ -1038,8 +1062,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                     alignment: Alignment.center,
                     transform: Matrix4.identity()
                       ..rotateZ(_rotation)
-                      // ignore: deprecated_member_use
-                      ..scale(_scale),
+                      ..scaleByDouble(_scale, _scale, 1.0, 1.0),
                     child: SizedBox(width: w, height: h, child: imgWidget),
                   ),
                 );
@@ -1117,6 +1140,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
   @override
   void initState() {
     super.initState();
+    _initPlayer();
+  }
+
+  void _initPlayer() {
     final source = widget.source;
     if (source == null || source.isEmpty) return;
     _player = Player();
@@ -1124,8 +1151,18 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.loop);
-    // 通知系统 Now Playing 信息（封面 + 标题）
     _updateNowPlaying();
+  }
+
+  @override
+  void didUpdateWidget(_VideoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldEmpty = oldWidget.source == null || oldWidget.source!.isEmpty;
+    final newEmpty = widget.source == null || widget.source!.isEmpty;
+    if (oldEmpty && !newEmpty) {
+      _initPlayer();
+      setState(() {});
+    }
   }
 
   @override

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
@@ -160,6 +159,9 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// videoPath → scrub 帧路径列表的异步缓存（仅含非空结果）。
   final _videoFrameCache = <String, Future<List<String>>>{};
+
+  /// videoPath → 已完成的帧结果（同步可读，供 getCollectionVideoFrameAtFraction 使用）。
+  final _videoFrameResults = <String, List<String>>{};
 
   /// filePath → 音频封面缩略图路径的异步缓存。
   final _audioCoverCache = <String, Future<String?>>{};
@@ -861,19 +863,12 @@ class MediaLibraryViewModel extends BaseViewModel {
         ? 0
         : (slotFraction * (videoPaths.length - 1)).round().clamp(0, videoPaths.length - 1);
     final videoPath = videoPaths[slotIdx];
-    final cachedFramesFuture = _videoFrameCache[videoPath];
-    if (cachedFramesFuture == null) return null;
-    // 同步读取：Future 已完成则直接取值
-    String? result;
-    cachedFramesFuture.then((frames) {
-      if (frames.isNotEmpty) {
-        final frameIdx = frames.length == 1
-            ? 0
-            : (slotFraction * (frames.length - 1)).round().clamp(0, frames.length - 1);
-        result = frames[frameIdx];
-      }
-    });
-    return result;
+    final frames = _videoFrameResults[videoPath];
+    if (frames == null || frames.isEmpty) return null;
+    final frameIdx = frames.length == 1
+        ? 0
+        : (slotFraction * (frames.length - 1)).round().clamp(0, frames.length - 1);
+    return frames[frameIdx];
   }
 
   /// 将集合内视频的 scrub 帧任务提到 [_scrubQueue] 队首（高优先级预取）。
@@ -890,7 +885,6 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 结果写入 [_videoFrameCache]。
   void _enqueueOrPrioritizeScrub(String videoPath, {bool prioritize = false}) {
     if (_videoFrameCache.containsKey(videoPath)) {
-      // 已有缓存 future，仅尝试提升队内优先级（若仍在排队）
       if (prioritize) _scrubQueue.prioritize(videoPath, () async {});
       return;
     }
@@ -901,14 +895,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       try {
         final frames = await _doGetScrubFrames(videoPath);
         if (frames.isEmpty) {
-          _videoFrameCache.remove(videoPath); // 失败不缓存，允许重试
+          _videoFrameCache.remove(videoPath);
+          _videoFrameResults.remove(videoPath);
           completer.complete(const []);
         } else {
+          _videoFrameResults[videoPath] = frames;
           completer.complete(frames);
           _asyncCoverVersion.value++;
         }
       } catch (e) {
         _videoFrameCache.remove(videoPath);
+        _videoFrameResults.remove(videoPath);
         completer.complete(const []);
         debugPrint('[VideoThumb] scrub 帧失败: $videoPath err=$e');
       }
@@ -1026,7 +1023,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         logger.d('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count');
         if (count != prev) {
           logger.d('_pollCollectionFolders: 检测到变化，触发增量扫描: ${col.title}');
-          await compute((String fp) => media_api.importMediaFolder(folderPath: fp), col.folderPath);
+          await media_api.importMediaFolder(folderPath: col.folderPath);
           anyChanged = true;
         }
       } catch (e) {

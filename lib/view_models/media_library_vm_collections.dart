@@ -595,6 +595,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
       currentCollectionId.value = null;
       currentFolderId.value = null;
+      currentItems.clear();
+      exitSelection();
       _browseScrollOffsets.clear();
       savedScrollOffset.value = 0.0;
       await loadCollections();

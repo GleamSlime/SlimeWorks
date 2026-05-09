@@ -1581,7 +1581,7 @@ class _CollectionPictureScreenState
       builder: (context) {
         return AlertDialog(
           title: const Text('批量删除媒体项目'),
-          content: Text('确定删除已选中的 ${viewModel.selectedIds.length} 个项目吗？集合不会删除原始文件。'),
+          content: Text('确定从媒体库移除已选中的 ${viewModel.selectedIds.length} 个项目吗？原始文件不会被删除。'),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
