@@ -13,6 +13,7 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -35,6 +36,15 @@ Future<void> main() async {
   // 初始化桌面窗口管理器
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await DesktopScaffold.initManager();
+  }
+
+  // 初始化系统托盘
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    final trayService = await Get.putAsync(() async {
+      final service = SystemTrayService();
+      await service.init();
+      return service;
+    });
   }
 
   // 必须在任何 Rust FFI 调用前初始化

@@ -103,6 +103,16 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
   }
 
   @override
+  void onWindowClose() async {
+    // 关闭窗口时隐藏到系统托盘，而非退出应用
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      await windowManager.hide();
+    } else {
+      await windowManager.destroy();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
