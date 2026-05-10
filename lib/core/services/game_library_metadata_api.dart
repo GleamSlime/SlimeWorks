@@ -4,7 +4,7 @@ import 'package:dio/dio.dart';
 
 import 'package:slime_works/core/utils/logger.dart';
 
-final Loggers _metadataApiLogger = Loggers(name: '游戏库元数据API');
+const Loggers _metadataApiLogger = Loggers(name: '游戏库元数据API');
 
 class GameLibraryMetadataApi {
   GameLibraryMetadataApi()

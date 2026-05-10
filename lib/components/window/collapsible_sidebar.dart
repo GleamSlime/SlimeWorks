@@ -216,7 +216,7 @@ class CollapsibleSidebar extends StatelessWidget {
               width: 1.w,
               color: AppTheme.isLight(context)
                   ? Colors.white.withAlpha(150)
-                  : Color(0xFF333333).withAlpha((255 * 0.9).toInt()),
+                  : const Color(0xFF333333).withAlpha((255 * 0.9).toInt()),
             ),
           ),
           child: _buildSidebarContent(context, controller, isExpanded, showExtends),
@@ -243,7 +243,7 @@ class CollapsibleSidebar extends StatelessWidget {
       children: [
         Obx(
           () => getIt<DesktopScreenProvider>().isMobile.value
-              ? SizedBox.shrink()
+              ? const SizedBox.shrink()
               : Platform.isMacOS
               ? Padding(
                   padding: EdgeInsets.only(
@@ -256,7 +256,7 @@ class CollapsibleSidebar extends StatelessWidget {
                         : MainAxisAlignment.center,
                   ),
                 )
-              : SizedBox.shrink(),
+              : const SizedBox.shrink(),
         ),
 
         // 侧边栏头部
@@ -274,7 +274,7 @@ class CollapsibleSidebar extends StatelessWidget {
   /// 构建侧边栏头部
   Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
     if (desktopScreen.isMobile.value) {
-      return SizedBox.shrink();
+      return const SizedBox.shrink();
     }
 
     return AnimatedContainer(
@@ -286,7 +286,7 @@ class CollapsibleSidebar extends StatelessWidget {
       ),
       alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
       child: HoverSvgButton(
-        size: AppTheme.metrics.fontSize24,
+        size: AppTheme.metrics.fontSize22,
         svg: controller.isExpanded.value
             ? Assets.image.svg.sidebarOpen
             : Assets.image.svg.sidebarClose,
@@ -378,7 +378,7 @@ class CollapsibleSidebar extends StatelessWidget {
           if (group.title != null && isExpanded)
             InkWell(
               onTap: () => controller.toggleGroupCollapsed(group.id),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppTheme.metrics.radius6,
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: AppTheme.metrics.kSpace12,
@@ -390,7 +390,7 @@ class CollapsibleSidebar extends StatelessWidget {
                       child: Text(
                         group.title!,
                         style: TextStyle(
-                          fontSize: AppTheme.metrics.fontSize14,
+                          fontSize: AppTheme.metrics.fontSize13,
                           color: theme.hintColor,
                           fontWeight: FontWeight.w500,
                           decoration: TextDecoration.none,
@@ -400,7 +400,7 @@ class CollapsibleSidebar extends StatelessWidget {
                     AnimatedRotation(
                       turns: isCollapsed ? -0.25 : 0,
                       duration: const Duration(milliseconds: 200),
-                      child: Icon(Icons.expand_more, size: 16, color: theme.hintColor),
+                      child: Icon(Icons.expand_more, size: AppTheme.metrics.iconSize16, color: theme.hintColor),
                     ),
                   ],
                 ),
@@ -409,7 +409,7 @@ class CollapsibleSidebar extends StatelessWidget {
 
           if (group.title != null && !isExpanded)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
               child: Divider(
                 height: 1,
                 thickness: scaleW(0.5),
@@ -505,7 +505,7 @@ class CollapsibleSidebar extends StatelessWidget {
                                 turns: isItemExpanded ? 1 : 0.75,
                                 child: SvgPicture.asset(
                                   Assets.image.svg.arrowRight,
-                                  width: AppTheme.metrics.fontSize14,
+                                  width: AppTheme.metrics.fontSize13,
                                   colorFilter: ColorFilter.mode(
                                     theme.textTheme.bodySmall?.color ?? Colors.black.withAlpha(51),
                                     BlendMode.srcIn,
@@ -523,8 +523,8 @@ class CollapsibleSidebar extends StatelessWidget {
                               SvgPicture.asset(
                                 item.route.sidebarIcon!,
                                 width: isExpanded
-                                    ? AppTheme.metrics.fontSize20
-                                    : AppTheme.metrics.fontSize24,
+                                    ? AppTheme.metrics.fontSize18
+                                    : AppTheme.metrics.fontSize22,
                                 colorFilter: isSelected
                                     ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
                                     : ColorFilter.mode(
@@ -546,7 +546,7 @@ class CollapsibleSidebar extends StatelessWidget {
                                         child: Text(
                                           item.route.sidebarLabel,
                                           style: TextStyle(
-                                            fontSize: AppTheme.metrics.fontSize16,
+                                            fontSize: AppTheme.metrics.fontSize15,
                                             color: isSelected
                                                 ? theme.colorScheme.primary
                                                 : theme.textTheme.bodyMedium?.color,
@@ -573,7 +573,7 @@ class CollapsibleSidebar extends StatelessWidget {
                                             item.route.sidebarBadgeCount.toString(),
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
-                                              fontSize: AppTheme.metrics.fontSize8,
+                                              fontSize: AppTheme.metrics.fontSize9,
                                               color: theme.hintColor,
                                             ),
                                             maxLines: 1,
@@ -786,7 +786,7 @@ class MobileSidebarState extends State<MobileSidebar> {
                       });
                     }
                   },
-                  // child: Container(color: Colors.red),
+                  // child: Container(color: theme.colorScheme.error),
                   child: Container(color: Colors.transparent),
                 ),
               ),

@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:get/get.dart';
@@ -62,7 +62,7 @@ class _CollectionLibraryScreenState
 
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.offset;
-    final threshold = 500.0; // 距离底部500像素时触发加载
+    const threshold = 500.0; // 距离底部500像素时触发加载
 
     if (maxScroll - currentScroll <= threshold && viewModel.canLoadMore) {
       viewModel.loadMoreItems();
@@ -77,7 +77,7 @@ class _CollectionLibraryScreenState
         final activeTagCount = viewModel.selectedFilterTags.length;
         final isFavoritesOnly = viewModel.showFavoritesOnly.value;
         return Row(
-          spacing: AppTheme.metrics.fontSize8,
+          spacing: AppTheme.metrics.kSpace8,
           children: [
             DesktopHeadToolsButton(
               icon: const Icon(Icons.refresh),
@@ -118,17 +118,20 @@ class _CollectionLibraryScreenState
                     top: 0,
                     child: IgnorePointer(
                       child: Container(
-                        padding: const EdgeInsets.all(3),
+                        padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: AppTheme.metrics.radius10,
                         ),
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        constraints: BoxConstraints(
+                          minWidth: AppTheme.metrics.kSpace16,
+                          minHeight: AppTheme.metrics.kSpace16,
+                        ),
                         child: Text(
                           '$activeTagCount',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: AppTheme.metrics.fontSize10,
                             fontWeight: FontWeight.bold,
                           ),
                           textAlign: TextAlign.center,
@@ -225,7 +228,10 @@ class _CollectionLibraryScreenState
                                 viewModel.selectedFilterTags.clear();
                                 setMenuState(() {});
                               },
-                              child: const Text('清除', style: TextStyle(fontSize: 12)),
+                              child: Text(
+                                '清除',
+                                style: TextStyle(fontSize: AppTheme.metrics.fontSize12),
+                              ),
                             ),
                         ],
                       ),
@@ -264,7 +270,7 @@ class _CollectionLibraryScreenState
                           ),
                         ),
                       ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: AppTheme.metrics.kSpace4),
                   ],
                 ),
               );
@@ -342,7 +348,7 @@ class _CollectionLibraryScreenState
                           dense: true,
                           leading: Icon(
                             Icons.arrow_upward,
-                            size: 18,
+                            size: AppTheme.metrics.iconSize18,
                             color: isCurrentField && currentAscending
                                 ? Theme.of(context).colorScheme.primary
                                 : null,
@@ -350,7 +356,7 @@ class _CollectionLibraryScreenState
                           title: Text(
                             '$label升序',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: AppTheme.metrics.fontSize13,
                               color: isCurrentField && currentAscending
                                   ? Theme.of(context).colorScheme.primary
                                   : null,
@@ -362,7 +368,7 @@ class _CollectionLibraryScreenState
                           trailing: isCurrentField && currentAscending
                               ? Icon(
                                   Icons.check,
-                                  size: 18,
+                                  size: AppTheme.metrics.iconSize18,
                                   color: Theme.of(context).colorScheme.primary,
                                 )
                               : null,
@@ -376,7 +382,7 @@ class _CollectionLibraryScreenState
                           dense: true,
                           leading: Icon(
                             Icons.arrow_downward,
-                            size: 18,
+                            size: AppTheme.metrics.iconSize18,
                             color: isCurrentField && !currentAscending
                                 ? Theme.of(context).colorScheme.primary
                                 : null,
@@ -384,7 +390,7 @@ class _CollectionLibraryScreenState
                           title: Text(
                             '$label降序',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: AppTheme.metrics.fontSize13,
                               color: isCurrentField && !currentAscending
                                   ? Theme.of(context).colorScheme.primary
                                   : null,
@@ -396,7 +402,7 @@ class _CollectionLibraryScreenState
                           trailing: isCurrentField && !currentAscending
                               ? Icon(
                                   Icons.check,
-                                  size: 18,
+                                  size: AppTheme.metrics.iconSize18,
                                   color: Theme.of(context).colorScheme.primary,
                                 )
                               : null,
@@ -409,7 +415,7 @@ class _CollectionLibraryScreenState
                       ],
                     );
                   }),
-                  const SizedBox(height: 4),
+                  SizedBox(height: AppTheme.metrics.kSpace4),
                 ],
               ),
             );
@@ -437,8 +443,11 @@ class _CollectionLibraryScreenState
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('导入书籍时，若书内包含关键词则自动添加对应标签。', style: TextStyle(fontSize: 12)),
-                  const SizedBox(height: 12),
+                  Text(
+                    '导入书籍时，若书内包含关键词则自动添加对应标签。',
+                    style: TextStyle(fontSize: AppTheme.metrics.fontSize12),
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace12),
                   if (rules.isNotEmpty)
                     LimitedBox(
                       maxHeight: 200,
@@ -452,7 +461,7 @@ class _CollectionLibraryScreenState
                             dense: true,
                             title: Text('搜索 "$kw" → 添加标签 "$tag"'),
                             trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18),
+                              icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
                               onPressed: () async {
                                 await viewModel.removeKeywordRule(i);
                                 setModalState(() {});
@@ -463,9 +472,12 @@ class _CollectionLibraryScreenState
                       ),
                     )
                   else
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('暂无规则', style: TextStyle(color: Colors.grey)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
+                      child: Text(
+                        '暂无规则',
+                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                      ),
                     ),
                   const Divider(),
                   Row(
@@ -480,7 +492,7 @@ class _CollectionLibraryScreenState
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
                       Expanded(
                         child: TextField(
                           controller: tagCtrl,
@@ -491,7 +503,7 @@ class _CollectionLibraryScreenState
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
                       IconButton(
                         icon: const Icon(Icons.add),
                         onPressed: () async {
@@ -514,16 +526,16 @@ class _CollectionLibraryScreenState
             actions: [
               Obx(
                 () => viewModel.isScanning.value
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
+                    ? Padding(
+                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12),
                         child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          width: AppTheme.metrics.kSpace18,
+                          height: AppTheme.metrics.kSpace18,
+                          child: const CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
                     : TextButton.icon(
-                        icon: const Icon(Icons.auto_awesome, size: 16),
+                        icon: Icon(Icons.auto_awesome, size: AppTheme.metrics.iconSize16),
                         label: const Text('应用到所有书籍'),
                         onPressed: () async {
                           final pendingKeyword = keywordCtrl.text.trim();
@@ -549,7 +561,7 @@ class _CollectionLibraryScreenState
                 }
                 final completed = viewModel.keywordApplyCompleted.value;
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
                   child: Text('$completed/$total', style: Theme.of(context).textTheme.bodySmall),
                 );
               }),
@@ -748,7 +760,7 @@ class _CollectionLibraryScreenState
                             Text(
                               '支持 .txt / .epub 格式',
                               style: TextStyle(
-                                fontSize: appMetrics.fontSize14,
+                                fontSize: appMetrics.fontSize13,
                                 color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
                               ),
                             ),
@@ -1021,7 +1033,7 @@ class _CollectionLibraryScreenState
         cover = Image.file(File(meta.coverPath!), fit: BoxFit.cover);
       } else {
         cover = Container(
-          color: Colors.grey[300],
+          color: Theme.of(context).colorScheme.outline,
           child: Center(
             child: Icon(Icons.book, size: scaleW(28), color: Colors.white70),
           ),
@@ -1034,7 +1046,7 @@ class _CollectionLibraryScreenState
           opacity: 0.85,
           child: Material(
             elevation: 12,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTheme.metrics.radius8,
             clipBehavior: Clip.antiAlias,
             child: SizedBox(
               width: w,
@@ -1054,7 +1066,7 @@ class _CollectionLibraryScreenState
                         meta.title,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 9.0,
+                          fontSize: AppTheme.metrics.fontSize9,
                           fontWeight: FontWeight.w600,
                         ),
                         maxLines: 1,
@@ -1079,13 +1091,13 @@ class _CollectionLibraryScreenState
           opacity: 0.85,
           child: Material(
             elevation: 12,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppTheme.metrics.radius8,
             child: SizedBox(
               width: w,
               height: h,
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppTheme.metrics.radius8,
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -1101,7 +1113,10 @@ class _CollectionLibraryScreenState
                       padding: EdgeInsets.symmetric(horizontal: scaleW(6)),
                       child: Text(
                         item.folder.name,
-                        style: TextStyle(fontSize: 9.0, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: AppTheme.metrics.fontSize9,
+                          fontWeight: FontWeight.w600,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -1172,7 +1187,7 @@ class _CollectionLibraryScreenState
                     Text(
                       isDragHovering ? '移至上级' : '返回',
                       style: TextStyle(
-                        fontSize: appMetrics.fontSize12,
+                        fontSize: appMetrics.fontSize11,
                         color: isDragHovering
                             ? Theme.of(context).colorScheme.primary
                             : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1186,7 +1201,7 @@ class _CollectionLibraryScreenState
                         child: Text(
                           parentFolderName,
                           style: TextStyle(
-                            fontSize: appMetrics.fontSize10,
+                            fontSize: appMetrics.fontSize9,
                             color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(180),
                           ),
                           maxLines: 1,
@@ -1212,10 +1227,10 @@ class _CollectionLibraryScreenState
         children: [
           Icon(
             inFolder ? Icons.folder_open : Icons.library_books_outlined,
-            size: 64,
+            size: AppTheme.metrics.iconSize64,
             color: Theme.of(context).hintColor.withAlpha(80),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
           Text(
             inFolder ? '此文件夹暂无书籍' : '书籍库为空，点击右上角添加书籍',
             style: Theme.of(

@@ -5,8 +5,6 @@ import 'package:flutter_svg/svg.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
 class AboutPage extends StatelessWidget {
@@ -135,7 +133,7 @@ class AboutPage extends StatelessWidget {
     return _AboutCard(
       child: Column(
         children: [
-          _InfoRow(icon: Icons.info_outline, label: '版本', value: '$_appVersion ($_appBuild)'),
+          const _InfoRow(icon: Icons.info_outline, label: '版本', value: '$_appVersion ($_appBuild)'),
           Divider(height: 1, color: theme.dividerColor),
           _InfoRow(icon: Icons.phone_android_outlined, label: '平台', value: _platformName()),
           Divider(height: 1, color: theme.dividerColor),
@@ -148,10 +146,10 @@ class AboutPage extends StatelessWidget {
   Widget _buildTechStack(BuildContext context) {
     final theme = Theme.of(context);
     final items = [
-      _TechItem(icon: '🦀', name: 'Rust', desc: '高性能核心引擎'),
-      _TechItem(icon: '🎯', name: 'Dart', desc: '跨平台 UI 框架'),
-      _TechItem(icon: '⚡', name: 'GetX', desc: '状态管理与依赖注入'),
-      _TechItem(icon: '🔗', name: 'GoRouter', desc: '声明式路由导航'),
+      const _TechItem(icon: '🦀', name: 'Rust', desc: '高性能核心引擎'),
+      const _TechItem(icon: '🎯', name: 'Dart', desc: '跨平台 UI 框架'),
+      const _TechItem(icon: '⚡', name: 'GetX', desc: '状态管理与依赖注入'),
+      const _TechItem(icon: '🔗', name: 'GoRouter', desc: '声明式路由导航'),
     ];
 
     return _AboutCard(
@@ -190,7 +188,7 @@ class AboutPage extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(item.icon, style: TextStyle(fontSize: AppTheme.metrics.fontSize14)),
+          Text(item.icon, style: TextStyle(fontSize: AppTheme.metrics.fontSize13)),
           SizedBox(width: AppTheme.metrics.kSpace8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +370,7 @@ class _LinkRow extends StatelessWidget {
             SizedBox(width: AppTheme.metrics.kSpace4),
             Icon(
               Icons.chevron_right,
-              size: AppTheme.metrics.fontSize16,
+              size: AppTheme.metrics.fontSize15,
               color: theme.colorScheme.onSurface.withAlpha(80),
             ),
           ],

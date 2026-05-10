@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 class MediaSettingsTab extends StatefulWidget {
   const MediaSettingsTab({super.key});
@@ -91,11 +92,11 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       children: [
         // ── 视频清晰度 ──────────────────────────────────────────────────────
         _SectionHeader(title: '视频预览', theme: theme),
-        const SizedBox(height: 12),
+        SizedBox(height: AppTheme.metrics.kSpace12),
         _SettingsCard(
           theme: theme,
           child: Obx(() {
@@ -108,10 +109,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('视频清晰度', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         MediaPrefsService.levels[q - 1].label,
@@ -123,7 +124,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   '影响封面图片尺寸（${MediaPrefsService.levels[q - 1].scaleWidth}px 宽）与磁盘占用。'
                   '更改画质后需清空缓存以重新生成封面。',
@@ -131,7 +132,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppTheme.metrics.kSpace8),
                 Row(
                   children: [
                     Text('极低', style: theme.textTheme.labelSmall),
@@ -153,7 +154,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           }),
         ),
 
-        const SizedBox(height: 16),
+        SizedBox(height: AppTheme.metrics.kSpace16),
 
         // ── 远程封面清晰度 ──────────────────────────────────────────────────
         _SettingsCard(
@@ -171,10 +172,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('远程封面清晰度', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         currentLabel,
@@ -186,14 +187,14 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   '从远程节点获取集合封面图片时使用的目标宽度，降低清晰度可节省上行带宽。选"原图"则不压缩。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppTheme.metrics.kSpace8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 4,
@@ -213,7 +214,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           }),
         ),
 
-        const SizedBox(height: 16),
+        SizedBox(height: AppTheme.metrics.kSpace16),
 
         // ── 远程图片清晰度 ──────────────────────────────────────────────────
         _SettingsCard(
@@ -231,10 +232,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('远程图片清晰度', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         currentLabel,
@@ -246,14 +247,14 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   '点开图片预览时从远程节点拉取的最大宽度，与封面清晰度独立控制。选"原图"则不压缩（默认）。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppTheme.metrics.kSpace8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 4,
@@ -273,7 +274,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           }),
         ),
 
-        const SizedBox(height: 16),
+        SizedBox(height: AppTheme.metrics.kSpace16),
 
         // ── 本地预览图质量 ──────────────────────────────────────────────────
         _SettingsCard(
@@ -291,10 +292,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('本地预览图质量', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         currentLabel,
@@ -306,7 +307,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   '列表中本地图片解码时的 cacheWidth，降低分辨率可减少内存占用和加载时间。'
                   '选"原图"则按完整尺寸解码（适合高分辨率屏幕）。',
@@ -314,7 +315,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppTheme.metrics.kSpace8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 4,
@@ -334,7 +335,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           }),
         ),
 
-        const SizedBox(height: 16),
+        SizedBox(height: AppTheme.metrics.kSpace16),
 
         // ── 并发量 ─────────────────────────────────────────────────────────
         _SettingsCard(
@@ -349,10 +350,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('预览封面解析并发量', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         '$c',
@@ -364,14 +365,14 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   '同时解析的视频封面数量。值越大封面生成越快，但 CPU 占用也越高。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppTheme.metrics.kSpace8),
                 Row(
                   children: [
                     Text('1', style: theme.textTheme.labelSmall),
@@ -393,11 +394,11 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           }),
         ),
 
-        const SizedBox(height: 24),
+        SizedBox(height: AppTheme.metrics.kSpace24),
 
         // ── 缓存管理 ───────────────────────────────────────────────────────
         _SectionHeader(title: '缓存管理', theme: theme),
-        const SizedBox(height: 12),
+        SizedBox(height: AppTheme.metrics.kSpace12),
         _SettingsCard(
           theme: theme,
           child: Row(
@@ -407,14 +408,14 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('清空预览缓存', style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 4),
+                    SizedBox(height: AppTheme.metrics.kSpace4),
                     Text(
                       '当前缓存占用：${_formatBytes(_cacheSizeBytes)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withAlpha(150),
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: AppTheme.metrics.kSpace2),
                     Text(
                       '删除所有已生成的视频帧缓存和封面缩略图，下次打开集合时将重新生成。',
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -422,13 +423,13 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                       ),
                     ),
                     if (_cachePath.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      SizedBox(height: AppTheme.metrics.kSpace6),
                       GestureDetector(
                         onTap: _openCachePath,
                         child: Row(
                           children: [
-                            Icon(Icons.folder_outlined, size: 13, color: theme.colorScheme.primary),
-                            const SizedBox(width: 4),
+                            Icon(Icons.folder_outlined, size: AppTheme.metrics.iconSize13, color: theme.colorScheme.primary),
+                            SizedBox(width: AppTheme.metrics.kSpace4),
                             Expanded(
                               child: Text(
                                 _cachePath,
@@ -447,7 +448,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: AppTheme.metrics.kSpace16),
               _clearing
                   ? const SizedBox(
                       width: 36,
@@ -466,7 +467,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           ),
         ),
 
-        const SizedBox(height: 12),
+        SizedBox(height: AppTheme.metrics.kSpace12),
 
         // ── 缓存大小上限 ────────────────────────────────────────────────────
         Obx(() {
@@ -477,14 +478,14 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('缓存大小上限', style: theme.textTheme.titleSmall),
-                const SizedBox(height: 4),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   '超出上限时，将自动删除最旧的缓存文件，直到缓存降至上限的 50%（每次生成预览图后 1 分钟触发检查）。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(120),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: AppTheme.metrics.kSpace12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -504,7 +505,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         if (!Platform.isWindows && !Platform.isMacOS)
           Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
             child: Text(
               '注意：视频封面功能仅在 Windows / macOS 上可用。',
               style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
@@ -544,10 +545,10 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
         border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
       ),
       child: child,

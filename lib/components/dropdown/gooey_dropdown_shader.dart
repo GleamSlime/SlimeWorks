@@ -226,7 +226,7 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
     if (direction != DropdownDirection.auto) return direction;
 
     // 计算8个方向的可用空间
-    final padding = 20.0;
+    const padding = 20.0;
     final spaceTop = buttonPos.dy;
     final spaceBottom = screenSize.height - (buttonPos.dy + buttonSize.height);
     final spaceLeft = buttonPos.dx;
@@ -514,7 +514,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
 
                 // 屏幕边缘自适应：防止卡片在水平方向越界
                 final screenSize = MediaQuery.of(context).size;
-                final edgePadding = 8.0;
+                const edgePadding = 8.0;
                 final left = cardCenterX - width / 2;
                 final right = cardCenterX + width / 2;
                 if (left < edgePadding) {

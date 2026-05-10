@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 书籍阅读器页面
 class NovelReaderPage extends StatefulWidget {
@@ -67,11 +68,11 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                          const SizedBox(height: 16),
+                          Icon(Icons.error_outline, size: AppTheme.metrics.iconSize48, color: Theme.of(context).colorScheme.error),
+                          SizedBox(height: AppTheme.metrics.kSpace16),
                           Text(
                             controller.errorMessage.value,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
                           ),
                         ],
                       ),
@@ -134,7 +135,7 @@ class _ReaderToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
       child: Row(
         children: [
           // 章节列表切换
@@ -143,7 +144,7 @@ class _ReaderToolbar extends StatelessWidget {
             tooltip: '章节列表',
             onPressed: controller.toggleChapterList,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: AppTheme.metrics.kSpace8),
 
           // 上一章
           Obx(
@@ -195,7 +196,7 @@ class _ReaderToolbar extends StatelessWidget {
                     tooltip: '下一个搜索结果',
                     onPressed: controller.nextSearchResult,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
                 ],
               );
             }
@@ -279,14 +280,14 @@ class _ReaderContentState extends State<_ReaderContent> {
 
       return SingleChildScrollView(
         controller: _localController,
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 章节标题
             if (controller.chapters.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(bottom: 24),
+                padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace24),
                 child: Text(
                   controller.chapters[controller.currentChapterIndex.value].title,
                   style: Theme.of(

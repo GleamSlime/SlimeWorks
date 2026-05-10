@@ -97,7 +97,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                 controller: nameCtrl,
                 decoration: const InputDecoration(labelText: '节点名'),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: AppTheme.metrics.kSpace12),
               TextField(
                 controller: apiCtrl,
                 decoration: const InputDecoration(
@@ -167,20 +167,20 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                         value: service.localNodeEnabled.value,
                         onChanged: _saveLocalSettings,
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: AppTheme.metrics.kSpace8),
                       TextField(
                         controller: _localNameCtrl,
                         decoration: const InputDecoration(labelText: 'API节点名'),
                         onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: AppTheme.metrics.kSpace8),
                       TextField(
                         controller: _localPortCtrl,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: '节点端口'),
                         onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: AppTheme.metrics.kSpace12),
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton(
@@ -188,15 +188,15 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                           child: const Text('保存本机节点设置'),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: AppTheme.metrics.kSpace12),
                       Text('本机API地址', style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 6),
+                      SizedBox(height: AppTheme.metrics.kSpace6),
                       if (service.localNodeApiList.isEmpty)
                         const Text('暂无可用地址')
                       else
                         ...service.localNodeApiList.map(
                           (api) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
+                            padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace6),
                             child: SelectableText(
                               api,
                               style: Theme.of(context).textTheme.bodyMedium,
@@ -207,7 +207,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: AppTheme.metrics.kSpace20),
               Row(
                 children: [
                   Expanded(child: Text('远程节点', style: Theme.of(context).textTheme.titleLarge)),
@@ -223,10 +223,10 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: AppTheme.metrics.kSpace12),
               if (service.remoteNodes.isEmpty)
-                const Card(
-                  child: Padding(padding: EdgeInsets.all(16), child: Text('暂无远程节点，点击右上角添加。')),
+                Card(
+                  child: Padding(padding: EdgeInsets.all(AppTheme.metrics.kSpace16), child: const Text('暂无远程节点，点击右上角添加。')),
                 )
               else
                 ...service.remoteNodes.map((node) {
@@ -245,8 +245,8 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                           Tooltip(
                             message: ok == true ? '可连通' : (tip.isEmpty ? '不可连通' : tip),
                             child: Container(
-                              width: 10,
-                              height: 10,
+                              width: AppTheme.metrics.kSpace10,
+                              height: AppTheme.metrics.kSpace10,
                               decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
                             ),
                           ),

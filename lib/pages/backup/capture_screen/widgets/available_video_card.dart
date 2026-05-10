@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/pages/backup/capture_screen/models/recording_task.dart';
 import 'package:slime_works/pages/backup/capture_screen/widgets/stat_widgets.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 可录制视频卡片
 class AvailableVideoCard extends StatelessWidget {
@@ -9,18 +11,24 @@ class AvailableVideoCard extends StatelessWidget {
   final Function(bool?) onSelectChanged;
   final VoidCallback onCopy;
 
-  const AvailableVideoCard({super.key, required this.video, required this.onTap, required this.onSelectChanged, required this.onCopy});
+  const AvailableVideoCard({
+    super.key,
+    required this.video,
+    required this.onTap,
+    required this.onSelectChanged,
+    required this.onCopy,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace12),
       elevation: 2,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 500;
@@ -34,9 +42,9 @@ class AvailableVideoCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Checkbox(value: video.isSelected, onChanged: onSelectChanged),
-                        const SizedBox(width: 12),
-                        _buildThumbnail(),
-                        const SizedBox(width: 16),
+                        SizedBox(width: AppTheme.metrics.kSpace12),
+                        _buildThumbnail(context),
+                        SizedBox(width: AppTheme.metrics.kSpace16),
                       ],
                     ),
                   if (isNarrow)
@@ -45,19 +53,28 @@ class AvailableVideoCard extends StatelessWidget {
                         Row(
                           children: [
                             Checkbox(value: video.isSelected, onChanged: onSelectChanged),
-                            Expanded(child: _buildThumbnail()),
+                            Expanded(child: _buildThumbnail(context)),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: AppTheme.metrics.kSpace12),
                       ],
                     ),
                   Expanded(child: _buildVideoInfo(context)),
-                  if (!isNarrow) const SizedBox(width: 12),
-                  if (!isNarrow) IconButton(icon: const Icon(Icons.copy, size: 20), onPressed: onCopy, tooltip: '复制链接'),
+                  if (!isNarrow) SizedBox(width: AppTheme.metrics.kSpace12),
+                  if (!isNarrow)
+                    IconButton(
+                      icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
+                      onPressed: onCopy,
+                      tooltip: '复制链接',
+                    ),
                   if (isNarrow)
                     Align(
                       alignment: Alignment.centerRight,
-                      child: IconButton(icon: const Icon(Icons.copy, size: 20), onPressed: onCopy, tooltip: '复制链接'),
+                      child: IconButton(
+                        icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
+                        onPressed: onCopy,
+                        tooltip: '复制链接',
+                      ),
                     ),
                 ],
               );
@@ -68,22 +85,22 @@ class AvailableVideoCard extends StatelessWidget {
     );
   }
 
-  Widget _buildThumbnail() {
+  Widget _buildThumbnail(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppTheme.metrics.radius8,
       child: Container(
         width: 120,
         height: 68,
-        color: Colors.grey[300],
+        color: Theme.of(context).colorScheme.outline,
         child: video.thumbnail.isNotEmpty
             ? Image.network(
                 video.thumbnail,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.videocam, size: 32);
+                  return Icon(Icons.videocam, size: AppTheme.metrics.iconSize32);
                 },
               )
-            : const Icon(Icons.videocam, size: 32),
+            : Icon(Icons.videocam, size: AppTheme.metrics.iconSize32),
       ),
     );
   }
@@ -99,20 +116,28 @@ class AvailableVideoCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: AppTheme.metrics.kSpace8),
         Wrap(
           spacing: 12,
           runSpacing: 4,
           children: [
             InfoChip(icon: Icons.aspect_ratio, label: video.resolution, color: Colors.blue),
-            InfoChip(icon: Icons.speed, label: video.frameRate, color: Colors.green),
+            InfoChip(
+              icon: Icons.speed,
+              label: video.frameRate,
+              color: (Theme.of(context).brightness == Brightness.dark)
+                  ? DarkColors.success
+                  : LightColors.success,
+            ),
             InfoChip(icon: Icons.signal_cellular_alt, label: video.bitrate, color: Colors.orange),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: AppTheme.metrics.kSpace8),
         Text(
           video.url,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.outline),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),

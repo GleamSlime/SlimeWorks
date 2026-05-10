@@ -31,7 +31,7 @@ class FolderBreadcrumb extends StatelessWidget {
                 Text(
                   '返回',
                   style: TextStyle(
-                    fontSize: appMetrics.fontSize14,
+                    fontSize: appMetrics.fontSize13,
                     color: theme.colorScheme.primary,
                   ),
                 ),
@@ -39,12 +39,12 @@ class FolderBreadcrumb extends StatelessWidget {
             ),
           ),
           SizedBox(width: appMetrics.kSpace8),
-          Icon(Icons.chevron_right, size: appMetrics.fontSize14, color: theme.hintColor),
+          Icon(Icons.chevron_right, size: appMetrics.fontSize13, color: theme.hintColor),
           SizedBox(width: appMetrics.kSpace8),
           Text(
             folderName,
             style: TextStyle(
-              fontSize: appMetrics.fontSize14,
+              fontSize: appMetrics.fontSize13,
               fontWeight: FontWeight.w600,
               color: theme.textTheme.bodyMedium?.color,
             ),

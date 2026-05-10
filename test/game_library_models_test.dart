@@ -41,7 +41,7 @@ void main() {
 
   // ── GameItem ──────────────────────────────────────────────────────────────
 
-  final _baseItem = GameItem(
+  final baseItem = GameItem(
     id: 'g-001',
     name: '测试游戏',
     coverPath: '/covers/test.jpg',
@@ -61,30 +61,30 @@ void main() {
 
   group('GameItem 序列化', () {
     test('toJson/fromJson 往返一致（所有字段）', () {
-      final json = _baseItem.toJson();
+      final json = baseItem.toJson();
       final restored = GameItem.fromJson(json);
 
-      expect(restored.id, _baseItem.id);
-      expect(restored.name, _baseItem.name);
-      expect(restored.coverPath, _baseItem.coverPath);
-      expect(restored.company, _baseItem.company);
-      expect(restored.summary, _baseItem.summary);
-      expect(restored.rating, _baseItem.rating);
-      expect(restored.releaseDate, _baseItem.releaseDate);
-      expect(restored.path, _baseItem.path);
-      expect(restored.status, _baseItem.status);
-      expect(restored.createdAt, _baseItem.createdAt);
-      expect(restored.updatedAt, _baseItem.updatedAt);
+      expect(restored.id, baseItem.id);
+      expect(restored.name, baseItem.name);
+      expect(restored.coverPath, baseItem.coverPath);
+      expect(restored.company, baseItem.company);
+      expect(restored.summary, baseItem.summary);
+      expect(restored.rating, baseItem.rating);
+      expect(restored.releaseDate, baseItem.releaseDate);
+      expect(restored.path, baseItem.path);
+      expect(restored.status, baseItem.status);
+      expect(restored.createdAt, baseItem.createdAt);
+      expect(restored.updatedAt, baseItem.updatedAt);
       expect(restored.lastPlayedAt, isNull);
-      expect(restored.totalPlayTimeSec, _baseItem.totalPlayTimeSec);
-      expect(restored.tags, _baseItem.tags);
-      expect(restored.exePaths, _baseItem.exePaths);
-      expect(restored.gameDir, _baseItem.gameDir);
+      expect(restored.totalPlayTimeSec, baseItem.totalPlayTimeSec);
+      expect(restored.tags, baseItem.tags);
+      expect(restored.exePaths, baseItem.exePaths);
+      expect(restored.gameDir, baseItem.gameDir);
     });
 
     test('lastPlayedAt 非 null 时往返一致', () {
       final dt = DateTime.fromMillisecondsSinceEpoch(1710000000000);
-      final item = _baseItem.copyWith(lastPlayedAt: dt);
+      final item = baseItem.copyWith(lastPlayedAt: dt);
       final restored = GameItem.fromJson(item.toJson());
       expect(restored.lastPlayedAt, dt);
     });
@@ -113,14 +113,14 @@ void main() {
 
     test('所有 GameStatus 均可往返序列化', () {
       for (final s in GameStatus.values) {
-        final item = _baseItem.copyWith(status: s);
+        final item = baseItem.copyWith(status: s);
         final restored = GameItem.fromJson(item.toJson());
         expect(restored.status, s, reason: 'status=${s.name} 往返失败');
       }
     });
 
     test('tags/exePaths 列表正确序列化', () {
-      final item = _baseItem.copyWith(tags: ['a', 'b', 'c'], exePaths: ['x.exe', 'y.exe']);
+      final item = baseItem.copyWith(tags: ['a', 'b', 'c'], exePaths: ['x.exe', 'y.exe']);
       final restored = GameItem.fromJson(item.toJson());
       expect(restored.tags, ['a', 'b', 'c']);
       expect(restored.exePaths, ['x.exe', 'y.exe']);
@@ -129,34 +129,34 @@ void main() {
 
   group('GameItem.copyWith', () {
     test('不传参数时返回等值副本', () {
-      final copy = _baseItem.copyWith();
-      expect(copy.id, _baseItem.id);
-      expect(copy.name, _baseItem.name);
-      expect(copy.rating, _baseItem.rating);
-      expect(copy.tags, _baseItem.tags);
+      final copy = baseItem.copyWith();
+      expect(copy.id, baseItem.id);
+      expect(copy.name, baseItem.name);
+      expect(copy.rating, baseItem.rating);
+      expect(copy.tags, baseItem.tags);
     });
 
     test('只替换 name', () {
-      final updated = _baseItem.copyWith(name: '新名字');
+      final updated = baseItem.copyWith(name: '新名字');
       expect(updated.name, '新名字');
-      expect(updated.id, _baseItem.id); // 其余字段不变
+      expect(updated.id, baseItem.id); // 其余字段不变
     });
 
     test('替换 status', () {
-      final updated = _baseItem.copyWith(status: GameStatus.completed);
+      final updated = baseItem.copyWith(status: GameStatus.completed);
       expect(updated.status, GameStatus.completed);
-      expect(updated.rating, _baseItem.rating);
+      expect(updated.rating, baseItem.rating);
     });
 
     test('替换 totalPlayTimeSec 为 0', () {
-      final updated = _baseItem.copyWith(totalPlayTimeSec: 0);
+      final updated = baseItem.copyWith(totalPlayTimeSec: 0);
       expect(updated.totalPlayTimeSec, 0);
     });
   });
 
   // ── GameCategory ──────────────────────────────────────────────────────────
 
-  final _baseCategory = GameCategory(
+  final baseCategory = GameCategory(
     id: 'cat-001',
     name: 'RPG',
     emoji: '🎮',
@@ -167,19 +167,19 @@ void main() {
 
   group('GameCategory 序列化', () {
     test('toJson/fromJson 往返一致', () {
-      final json = _baseCategory.toJson();
+      final json = baseCategory.toJson();
       final restored = GameCategory.fromJson(json);
 
-      expect(restored.id, _baseCategory.id);
-      expect(restored.name, _baseCategory.name);
-      expect(restored.emoji, _baseCategory.emoji);
-      expect(restored.isSystem, _baseCategory.isSystem);
-      expect(restored.createdAt, _baseCategory.createdAt);
-      expect(restored.gameCount, _baseCategory.gameCount);
+      expect(restored.id, baseCategory.id);
+      expect(restored.name, baseCategory.name);
+      expect(restored.emoji, baseCategory.emoji);
+      expect(restored.isSystem, baseCategory.isSystem);
+      expect(restored.createdAt, baseCategory.createdAt);
+      expect(restored.gameCount, baseCategory.gameCount);
     });
 
     test('isSystem=true 往返正确', () {
-      final cat = _baseCategory.copyWith(isSystem: true);
+      final cat = baseCategory.copyWith(isSystem: true);
       final restored = GameCategory.fromJson(cat.toJson());
       expect(restored.isSystem, isTrue);
     });
@@ -195,15 +195,15 @@ void main() {
 
   group('GameCategory.copyWith', () {
     test('替换 gameCount', () {
-      final updated = _baseCategory.copyWith(gameCount: 99);
+      final updated = baseCategory.copyWith(gameCount: 99);
       expect(updated.gameCount, 99);
-      expect(updated.name, _baseCategory.name);
+      expect(updated.name, baseCategory.name);
     });
 
     test('不传参数时返回等值副本', () {
-      final copy = _baseCategory.copyWith();
-      expect(copy.id, _baseCategory.id);
-      expect(copy.emoji, _baseCategory.emoji);
+      final copy = baseCategory.copyWith();
+      expect(copy.id, baseCategory.id);
+      expect(copy.emoji, baseCategory.emoji);
     });
   });
 

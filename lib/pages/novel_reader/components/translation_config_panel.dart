@@ -63,7 +63,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
 
       _isReady.value = true;
     } catch (e) {
-      Loggers(name: 'TranslationConfig').error('初始化翻译配置失败', error: e);
+      const Loggers(name: 'TranslationConfig').error('初始化翻译配置失败', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('初始化翻译配置失败: $e')));
       }
@@ -77,7 +77,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
       final models = await _settingsService!.getModels();
       _models.value = models;
     } catch (e) {
-      Loggers(name: 'TranslationConfig').error('加载模型列表失败', error: e);
+      const Loggers(name: 'TranslationConfig').error('加载模型列表失败', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载模型列表失败: $e')));
       }
@@ -143,7 +143,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
           // 说明文字
           Text(
             '配置完成后，点击确定开启自动翻译。翻译将自动应用到当前及后续章节。',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
           ),
           SizedBox(height: appMetrics.spacingLarge),
 
@@ -211,7 +211,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
           ),
           Text(
             '建议：30-120秒。太短可能导致翻译失败，太长会影响体验。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
           ),
           SizedBox(height: appMetrics.spacingMedium),
 

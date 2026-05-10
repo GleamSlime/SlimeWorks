@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// Debug 模式下显示在封面右下角的图片大小 badge。
 /// Release 模式下渲染为零尺寸 [SizedBox.shrink]。
@@ -72,16 +73,16 @@ class _DebugImageSizeBadgeState extends State<DebugImageSizeBadge> {
           ? SizedBox.shrink(key: ValueKey('${_instanceId}_empty'))
           : Container(
               key: ValueKey('${_instanceId}_$b'),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace5, vertical: AppTheme.metrics.kSpace2),
               decoration: BoxDecoration(
                 color: Colors.deepPurple.withAlpha(210),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: AppTheme.metrics.radius4,
               ),
               child: Text(
                 _fmt(b),
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 9,
+                  fontSize: AppTheme.metrics.fontSize9,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.2,
                 ),

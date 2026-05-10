@@ -25,17 +25,17 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabs = [
-      _SettingsTab(label: '主体设置', content: const ThemeSettingsTab()),
-      _SettingsTab(label: '节点设置', content: const _NodeSettingsWrapper()),
-      _SettingsTab(
+      const _SettingsTab(label: '主体设置', content: ThemeSettingsTab()),
+      const _SettingsTab(label: '节点设置', content: _NodeSettingsWrapper()),
+      const _SettingsTab(
         label: '账户设置',
-        content: const SettingsTabPlaceholder(title: '账户设置'),
+        content: SettingsTabPlaceholder(title: '账户设置'),
       ),
-      _SettingsTab(
+      const _SettingsTab(
         label: '通知设置',
-        content: const SettingsTabPlaceholder(title: '通知设置'),
+        content: SettingsTabPlaceholder(title: '通知设置'),
       ),
-      _SettingsTab(label: '其他设置', content: const _OtherSettingsWrapper()),
+      const _SettingsTab(label: '其他设置', content: _OtherSettingsWrapper()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
   }
@@ -79,10 +79,10 @@ class _NodeSettingsWrapper extends StatelessWidget {
         builder: (context, constraints) {
           return SizedBox(
             height: constraints.maxHeight,
-            child: Column(
+            child: const Column(
               crossAxisAlignment: .start,
               children: [
-                const TabBar(
+                TabBar(
                   tabAlignment: TabAlignment.start,
                   isScrollable: true,
                   tabs: [
@@ -112,10 +112,10 @@ class _OtherSettingsWrapper extends StatelessWidget {
         builder: (context, constraints) {
           return SizedBox(
             height: constraints.maxHeight,
-            child: Column(
+            child: const Column(
               crossAxisAlignment: .start,
               children: [
-                const TabBar(
+                TabBar(
                   tabAlignment: TabAlignment.start,
                   isScrollable: true,
                   tabs: [
@@ -144,7 +144,7 @@ class _ResourcesSettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(length: 2, child: MediaSettingsTab());
+    return const DefaultTabController(length: 2, child: MediaSettingsTab());
   }
 }
 

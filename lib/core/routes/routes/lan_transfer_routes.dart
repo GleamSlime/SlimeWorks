@@ -36,8 +36,6 @@ class LanChatRoute extends GoRouteData with $LanChatRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return MaterialPage(
-      child: LanChatScreen(peerDeviceId: peerId, peerDeviceName: peerName),
-    );
+    return AppRoutes.buildPage(context, state, LanChatScreen(peerDeviceId: peerId, peerDeviceName: peerName));
   }
 }

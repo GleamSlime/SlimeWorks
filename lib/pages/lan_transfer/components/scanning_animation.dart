@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
@@ -64,7 +64,7 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
             SizedBox(height: AppTheme.metrics.kSpace12),
             Text(
               '正在搜索设备...',
-              style: TextStyle(fontSize: 13.0, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
+              style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
             ),
           ],
         ),

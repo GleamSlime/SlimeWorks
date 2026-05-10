@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -232,15 +233,15 @@ class Content extends StatelessWidget {
       child: Transform.translate(
         offset: Offset(0, (1 - show) * 20),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Messages', style: TextStyle(color: Colors.white, fontSize: 16)),
-              SizedBox(height: 12),
-              _Row(),
-              _Row(),
-              _Row(),
+            children: [
+              Text('Messages', style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize15)),
+              SizedBox(height: AppTheme.metrics.kSpace12),
+              const _Row(),
+              const _Row(),
+              const _Row(),
             ],
           ),
         ),
@@ -255,12 +256,12 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace6),
       child: Row(
-        children: const [
-          CircleAvatar(radius: 14),
-          SizedBox(width: 10),
-          Expanded(
+        children: [
+          const CircleAvatar(radius: 14),
+          SizedBox(width: AppTheme.metrics.kSpace10),
+          const Expanded(
             child: Text('Message preview text', style: TextStyle(color: Colors.white)),
           ),
         ],

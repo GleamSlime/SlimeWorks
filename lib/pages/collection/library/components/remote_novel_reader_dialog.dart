@@ -287,8 +287,8 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('阅读设置', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 12),
+                    Text('阅读设置', style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.w600)),
+                    SizedBox(height: AppTheme.metrics.kSpace12),
                     Row(
                       children: [
                         const Text('字体大小'),
@@ -325,9 +325,9 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                         setModalState(() {});
                       },
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: AppTheme.metrics.kSpace8),
                     const Text('背景色'),
-                    const SizedBox(height: 8),
+                    SizedBox(height: AppTheme.metrics.kSpace8),
                     Wrap(
                       spacing: 10,
                       children:

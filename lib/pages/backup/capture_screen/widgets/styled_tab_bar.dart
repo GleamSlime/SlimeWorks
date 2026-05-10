@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
-/// 优化的标签栏
 class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
   final TabController controller;
   final List<StyledTab> tabs;
@@ -13,25 +13,24 @@ class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA),
+        color: theme.colorScheme.surface,
         border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
       child: TabBar(
         controller: controller,
         isScrollable: true,
         tabAlignment: TabAlignment.start,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8),
         indicator: BoxDecoration(
           color: theme.colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(top: BorderSide(color: theme.colorScheme.primary, width: 3)),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+        labelPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8),
         dividerColor: Colors.transparent,
         tabs: tabs.map((tab) => _buildTab(context, tab)).toList(),
       ),
@@ -39,24 +38,25 @@ class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildTab(BuildContext context, StyledTab tab) {
+    final theme = Theme.of(context);
     return Tab(
       height: 56,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(tab.icon, size: 20),
-            const SizedBox(width: 8),
-            Text(tab.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            Icon(tab.icon, size: AppTheme.metrics.iconSize20),
+            SizedBox(width: AppTheme.metrics.kSpace8),
+            Text(tab.label, style: TextStyle(fontSize: AppTheme.metrics.fontSize13, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface)),
             if (tab.badge != null) ...[
-              const SizedBox(width: 8),
+              SizedBox(width: AppTheme.metrics.kSpace8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: tab.badgeColor ?? Colors.red, borderRadius: BorderRadius.circular(10)),
+                padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace6, vertical: AppTheme.metrics.kSpace2),
+                decoration: BoxDecoration(color: tab.badgeColor ?? theme.colorScheme.error, borderRadius: AppTheme.metrics.radius10),
                 child: Text(
                   tab.badge.toString(),
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: theme.colorScheme.onPrimary, fontSize: AppTheme.metrics.fontSize11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

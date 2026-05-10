@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -109,7 +110,7 @@ class AppRoutes {
       const DistributedRoute(),
       const RequestHostRoute(),
       const LanTransferRoute(),
-      LanChatRoute(peerId: '', peerName: ''),
+      const LanChatRoute(peerId: '', peerName: ''),
 
       const GameHomeRoute(),
       const GameLibraryRoute(),
@@ -125,7 +126,7 @@ class AppRoutes {
       const PicAcgHomeRoute(),
       const PicAcgComicDetailRoute(comicId: ''),
       const PicAcgSearchRoute(),
-      PicAcgReaderRoute(comicId: '', epsOrder: 0),
+      const PicAcgReaderRoute(comicId: '', epsOrder: 0),
       const PicAcgDownloadsRoute(),
     ];
 
@@ -174,13 +175,16 @@ class AppRoutes {
     return router!;
   }
 
+  static const Duration kTransitionDuration = Duration(milliseconds: 220);
+  static const Duration kReverseTransitionDuration = Duration(milliseconds: 180);
+  static const Duration kSlowTransitionDuration = Duration(milliseconds: 320);
+  static const Duration kSlowReverseTransitionDuration = Duration(milliseconds: 260);
+
   /// 构建带过渡动画的页面
   static Page<dynamic> buildPage(BuildContext context, GoRouterState state, Widget child) {
-    // iOS 上使用 CupertinoPage，保留原生左滑返回手势
     if (Platform.isIOS) {
       return CupertinoPage(
         key: state.pageKey,
-        // 用主题背景色包裹，避免透明页面在过渡动画中透出旧页面内容
         child: ColoredBox(
           color: Theme.of(context).scaffoldBackgroundColor,
           child: BindingWidget(child: child),
@@ -189,30 +193,57 @@ class AppRoutes {
     }
     return CustomTransitionPage(
       key: state.pageKey,
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 180),
+      transitionDuration: kTransitionDuration,
+      reverseTransitionDuration: kReverseTransitionDuration,
+      child: BindingWidget(child: child),
+      transitionsBuilder: _defaultTransitionsBuilder,
+    );
+  }
+
+  /// 构建纯淡入过渡页面（适用于详情页等需要较慢过渡的场景）
+  static Page<dynamic> buildFadePage(BuildContext context, GoRouterState state, Widget child) {
+    if (Platform.isIOS) {
+      return CupertinoPage(
+        key: state.pageKey,
+        child: ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: BindingWidget(child: child),
+        ),
+      );
+    }
+    return CustomTransitionPage(
+      key: state.pageKey,
+      transitionDuration: kSlowTransitionDuration,
+      reverseTransitionDuration: kSlowReverseTransitionDuration,
       child: BindingWidget(child: child),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
-
-        // 背景色放在 FadeTransition 外层，确保整个过渡期间背景始终不透明，
-        // 避免新页面内容透明时与旧页面内容重叠。
         return ColoredBox(
           color: Theme.of(context).scaffoldBackgroundColor,
           child: FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(scale: scale, child: child),
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic),
+            child: child,
           ),
         );
       },
     );
   }
 
+  static Widget _defaultTransitionsBuilder(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+    final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(scale: scale, child: child),
+      ),
+    );
+  }
+
   /// 构建占位页面
   static Widget buildPlaceholder(String title) {
     return Scaffold(
-      body: Center(child: Text('$title 页面开发中...', style: const TextStyle(fontSize: 24))),
+      body: Center(child: Text('$title 页面开发中...', style: TextStyle(fontSize: AppTheme.metrics.fontSize22))),
     );
   }
 }

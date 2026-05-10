@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 圆形加载进度环（模拟进度 0-99%，图片完成后消失）
 ///
@@ -16,7 +17,7 @@ class PicAcgProgressRing extends StatefulWidget {
   /// 环的整体尺寸（宽高相等）
   final double size;
 
-  /// 颜色（默认使用 Theme.colorScheme.primary）
+  /// 颜色（默认使用 Theme.of(context).colorScheme.primary）
   final Color? color;
 
   @override
@@ -142,7 +143,7 @@ class _PicAcgImageViewState extends State<PicAcgImageView> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return widget.loadingBuilder?.call(context) ??
-              Center(child: PicAcgProgressRing(size: 44));
+              Center(child: PicAcgProgressRing(size: AppTheme.metrics.iconSize44));
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
@@ -151,8 +152,8 @@ class _PicAcgImageViewState extends State<PicAcgImageView> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.broken_image_outlined, size: 32),
-                    const SizedBox(height: 8),
+                    Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize32),
+                    SizedBox(height: AppTheme.metrics.kSpace8),
                     TextButton(onPressed: _retry, child: const Text('重试')),
                   ],
                 ),

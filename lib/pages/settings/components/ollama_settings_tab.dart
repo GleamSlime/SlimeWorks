@@ -358,7 +358,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: const Text('删除'),
           ),
         ],

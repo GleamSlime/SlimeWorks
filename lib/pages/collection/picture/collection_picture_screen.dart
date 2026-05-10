@@ -351,7 +351,7 @@ class _CollectionPictureScreenState
                       left: 0,
                       top: 0,
                       bottom: 0,
-                      width: 24,
+                      width: AppTheme.metrics.kSpace24,
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onHorizontalDragEnd: (details) {
@@ -396,10 +396,10 @@ class _CollectionPictureScreenState
                                 children: [
                                   Icon(
                                     Icons.folder_open_rounded,
-                                    size: 64,
+                                    size: AppTheme.metrics.iconSize64,
                                     color: Theme.of(context).colorScheme.primary,
                                   ),
-                                  const SizedBox(height: 12),
+                                  SizedBox(height: AppTheme.metrics.kSpace12),
                                   Text(
                                     '松开以导入媒体',
                                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -993,7 +993,7 @@ class _CollectionPictureScreenState
                       const Text('目标文件夹（可多选，空选则匹配全部集合）'),
                       SizedBox(height: appMetrics.kSpace4),
                       if (snapshotFolders.isEmpty)
-                        const Text('（暂无文件夹）', style: TextStyle(color: Colors.grey))
+                        Text('（暂无文件夹）', style: TextStyle(color: Theme.of(context).colorScheme.outline))
                       else
                         Wrap(
                           spacing: appMetrics.kSpace8,
@@ -1137,7 +1137,7 @@ class _CollectionPictureScreenState
                     const Text('目标文件夹（可多选，空选则匹配全部集合）'),
                     SizedBox(height: appMetrics.kSpace4),
                     if (snapshotFolders.isEmpty)
-                      const Text('（暂无文件夹）', style: TextStyle(color: Colors.grey))
+                      Text('（暂无文件夹）', style: TextStyle(color: Theme.of(context).colorScheme.outline))
                     else
                       Wrap(
                         spacing: appMetrics.kSpace8,
@@ -1672,7 +1672,7 @@ class _KeywordInputListState extends State<_KeywordInputList> {
               for (int i = 0; i < widget.keywords.length; i++)
                 Chip(
                   label: Text(widget.keywords[i]),
-                  deleteIcon: const Icon(Icons.close, size: 16),
+                  deleteIcon: Icon(Icons.close, size: AppTheme.metrics.iconSize16),
                   onDeleted: () => _removeKeyword(i),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1684,20 +1684,20 @@ class _KeywordInputListState extends State<_KeywordInputList> {
             Expanded(
               child: TextField(
                 controller: _newKeywordCtrl,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   isDense: true,
                   hintText: '输入关键词',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace8),
                 ),
                 onSubmitted: (_) => _addKeyword(),
               ),
             ),
             SizedBox(width: appMetrics.kSpace4),
             IconButton(
-              icon: const Icon(Icons.add_circle_outline, size: 20),
+              icon: Icon(Icons.add_circle_outline, size: AppTheme.metrics.iconSize20),
               onPressed: _addKeyword,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: BoxConstraints(minWidth: AppTheme.metrics.kSpace32, minHeight: AppTheme.metrics.kSpace32),
             ),
           ],
         ),

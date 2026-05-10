@@ -31,7 +31,7 @@ class _GameLibraryHomeScreenState
       title: '首页',
       actions: <Widget>[
         IconButton(
-          onPressed: () => GameLibraryRoute().go(context),
+          onPressed: () => const GameLibraryRoute().go(context),
           icon: const Icon(Icons.library_books_outlined),
           tooltip: '游戏库',
         ),
@@ -85,7 +85,7 @@ class _GameLibraryHomeScreenState
 
             // ── 层 2：内容 ───────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
               child: Stack(
                 children: <Widget>[
                   // 左上：标题
@@ -103,7 +103,7 @@ class _GameLibraryHomeScreenState
                             shadows: <Shadow>[const Shadow(blurRadius: 8, color: Colors.black54)],
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: AppTheme.metrics.kSpace4),
                         Text(
                           '欢迎回来',
                           style: Theme.of(
@@ -122,8 +122,8 @@ class _GameLibraryHomeScreenState
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          const Icon(Icons.schedule, size: 20, color: Colors.white70),
-                          const SizedBox(width: 8),
+                          Icon(Icons.schedule, size: AppTheme.metrics.iconSize20, color: Colors.white70),
+                          SizedBox(width: AppTheme.metrics.kSpace8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
@@ -164,7 +164,7 @@ class _GameLibraryHomeScreenState
                               width: 200,
                               height: 280,
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: AppTheme.metrics.radius14,
                                 boxShadow: const <BoxShadow>[
                                   BoxShadow(
                                     color: Colors.black38,
@@ -174,12 +174,12 @@ class _GameLibraryHomeScreenState
                                 ],
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: AppTheme.metrics.radius14,
                                 child: _buildCoverImage(lastGame.coverPath),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 20),
+                          SizedBox(width: AppTheme.metrics.kSpace20),
                           // 游戏信息 + 继续游玩按钮
                           Expanded(
                             child: Column(
@@ -198,7 +198,7 @@ class _GameLibraryHomeScreenState
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 8),
+                                SizedBox(height: AppTheme.metrics.kSpace8),
                                 if (lastGame.lastPlayedAt != null)
                                   Text(
                                     '上次游玩: ${_formatDateTime(lastGame.lastPlayedAt!)}',
@@ -227,12 +227,12 @@ class _GameLibraryHomeScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          const Icon(
+                          Icon(
                             Icons.sports_esports_outlined,
-                            size: 64,
+                            size: AppTheme.metrics.iconSize64,
                             color: Colors.white38,
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: AppTheme.metrics.kSpace12),
                           Text(
                             '还没有游玩记录',
                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -240,20 +240,20 @@ class _GameLibraryHomeScreenState
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
                           Text(
                             '先去添加游戏，开始记录游玩时间吧。',
                             style: Theme.of(
                               context,
                             ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: AppTheme.metrics.kSpace16),
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.black87,
                             ),
-                            onPressed: () => GameLibraryRoute().go(context),
+                            onPressed: () => const GameLibraryRoute().go(context),
                             icon: const Icon(Icons.library_books),
                             label: const Text('浏览游戏库'),
                           ),
@@ -270,7 +270,7 @@ class _GameLibraryHomeScreenState
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black87,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24, vertical: AppTheme.metrics.kSpace16),
                         ),
                         onPressed: () async {
                           await viewModel.launchGame(lastGame);
@@ -292,9 +292,9 @@ class _GameLibraryHomeScreenState
     final String value = coverPath.trim();
     if (value.isEmpty) {
       return DecoratedBox(
-        decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(14)),
-        child: const Center(
-          child: Icon(Icons.image_not_supported_outlined, color: Colors.white38, size: 40),
+        decoration: BoxDecoration(color: Colors.white12, borderRadius: AppTheme.metrics.radius14),
+        child: Center(
+          child: Icon(Icons.image_not_supported_outlined, color: Colors.white38, size: AppTheme.metrics.iconSize40),
         ),
       );
     }
@@ -302,9 +302,9 @@ class _GameLibraryHomeScreenState
       return CachedNetworkImage(
         imageUrl: value,
         fit: BoxFit.cover,
-        placeholder: (_, __) =>
+        placeholder: (_, _) =>
             const DecoratedBox(decoration: BoxDecoration(color: Colors.white12)),
-        errorWidget: (_, __, ___) => const DecoratedBox(
+        errorWidget: (_, _, _) => const DecoratedBox(
           decoration: BoxDecoration(color: Colors.white12),
           child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38)),
         ),
@@ -340,8 +340,8 @@ class _BlurredCoverBackground extends StatelessWidget {
       image = CachedNetworkImage(
         imageUrl: value,
         fit: BoxFit.cover,
-        placeholder: (_, __) => const ColoredBox(color: Colors.black),
-        errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black),
+        placeholder: (_, _) => const ColoredBox(color: Colors.black),
+        errorWidget: (_, _, _) => const ColoredBox(color: Colors.black),
       );
     } else {
       final File file = File(value);
@@ -374,14 +374,14 @@ class _GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace12),
           decoration: BoxDecoration(
             color: Colors.white.withAlpha(40),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTheme.metrics.radius12,
             border: Border.all(color: Colors.white.withAlpha(60)),
           ),
           child: child,

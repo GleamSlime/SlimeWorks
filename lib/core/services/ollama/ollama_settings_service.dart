@@ -33,7 +33,7 @@ class OllamaSettingsService extends GetxService {
         _findAvailableServer();
       }
     } catch (e) {
-      Loggers(name: 'Ollama').error('初始化 Ollama 设置失败', error: e);
+      const Loggers(name: 'Ollama').error('初始化 Ollama 设置失败', error: e);
     }
   }
 
@@ -65,7 +65,7 @@ class OllamaSettingsService extends GetxService {
       // 加载默认模型
       defaultModel.value = _prefs.getString(_keyDefaultModel) ?? '';
     } catch (e) {
-      Loggers(name: 'Ollama').error('加载 Ollama 设置失败', error: e);
+      const Loggers(name: 'Ollama').error('加载 Ollama 设置失败', error: e);
     }
   }
 
@@ -77,9 +77,9 @@ class OllamaSettingsService extends GetxService {
       final json = jsonEncode(serverList.map((s) => s.toJson()).toList());
       await _prefs.setString(_keyServers, json);
       _ollamaService.setServers(serverList);
-      Loggers(name: 'Ollama').info('保存 Ollama 服务器列表成功');
+      const Loggers(name: 'Ollama').info('保存 Ollama 服务器列表成功');
     } catch (e) {
-      Loggers(name: 'Ollama').error('保存 Ollama 服务器列表失败', error: e);
+      const Loggers(name: 'Ollama').error('保存 Ollama 服务器列表失败', error: e);
       rethrow;
     }
   }
@@ -89,9 +89,9 @@ class OllamaSettingsService extends GetxService {
     try {
       defaultModel.value = model;
       await _prefs.setString(_keyDefaultModel, model);
-      Loggers(name: 'Ollama').info('保存默认模型成功: $model');
+      const Loggers(name: 'Ollama').info('保存默认模型成功: $model');
     } catch (e) {
-      Loggers(name: 'Ollama').error('保存默认模型失败', error: e);
+      const Loggers(name: 'Ollama').error('保存默认模型失败', error: e);
       rethrow;
     }
   }
@@ -129,7 +129,7 @@ class OllamaSettingsService extends GetxService {
     try {
       await _ollamaService.findAvailableServer();
     } catch (e) {
-      Loggers(name: 'Ollama').error('查找可用 Ollama 服务器失败', error: e);
+      const Loggers(name: 'Ollama').error('查找可用 Ollama 服务器失败', error: e);
     }
   }
 

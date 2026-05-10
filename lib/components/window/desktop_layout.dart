@@ -178,7 +178,7 @@ class _DesktopTopBar extends StatelessWidget {
                         : const SizedBox.shrink()),
               ),
             ),
-            // if (!chrome.hasLeading) const Spacer(),
+            // if (!chrome.hasLeading) Spacer(),
             if (chrome.hasActions)
               Row(
                 spacing: AppTheme.metrics.kSpace12,

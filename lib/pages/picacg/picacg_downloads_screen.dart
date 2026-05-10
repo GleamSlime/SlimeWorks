@@ -13,6 +13,7 @@ import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
 import 'package:slime_works/pages/picacg/models/picacg_download_models.dart';
 import 'package:slime_works/pages/picacg/view_models/picacg_downloads_viewmodel.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 
 class PicAcgDownloadsScreen extends BasePage<PicAcgDownloadsViewModel> {
   const PicAcgDownloadsScreen({super.key});
@@ -57,7 +58,7 @@ class _PicAcgDownloadsScreenState
                   size: scaleW(64),
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: AppTheme.metrics.kSpace16),
                 Text(
                   '还没有下载任何漫画',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -143,7 +144,7 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
     return Card(
       margin: EdgeInsets.only(bottom: metrics.kSpace12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
         onTap: widget.onOpenDetail,
         child: Padding(
           padding: EdgeInsets.all(metrics.kSpace12),
@@ -156,7 +157,7 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                   // 封面
                   if (entry.thumb != null)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: AppTheme.metrics.radius6,
                       child: SizedBox(
                         width: scaleW(56),
                         height: scaleW(75),
@@ -164,7 +165,7 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                           image: entry.thumb!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, e, _) =>
-                              const Icon(Icons.broken_image_outlined, size: 24),
+                              Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize24),
                         ),
                       ),
                     )
@@ -174,7 +175,7 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                       height: scaleW(75),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppTheme.metrics.radius6,
                       ),
                       child: const Icon(Icons.image_outlined),
                     ),
@@ -201,8 +202,8 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                         SizedBox(height: metrics.kSpace4),
                         LinearProgressIndicator(
                           value: entry.totalEps > 0 ? entry.completedEps / entry.totalEps : 0,
-                          minHeight: 4,
-                          borderRadius: BorderRadius.circular(2),
+                          minHeight: AppTheme.metrics.kSpace4,
+                          borderRadius: AppTheme.metrics.radius2,
                         ),
                       ],
                     ),
@@ -212,12 +213,12 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                   Column(
                     children: [
                       IconButton(
-                        icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 20),
+                        icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: AppTheme.metrics.iconSize20),
                         onPressed: () => setState(() => _expanded = !_expanded),
                         tooltip: '查看章节',
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
+                        icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize20),
                         onPressed: widget.onDelete,
                         tooltip: '删除全部',
                       ),
@@ -279,24 +280,24 @@ class _EpsStatusChip extends StatelessWidget {
       case PicAcgDownloadStatus.completed:
         bgColor = Colors.green.withValues(alpha: 0.15);
         fgColor = Colors.green;
-        trailing = const Icon(Icons.play_circle_outline, size: 13, color: Colors.green);
+        trailing = Icon(Icons.play_circle_outline, size: AppTheme.metrics.iconSize13, color: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success);
       case PicAcgDownloadStatus.downloading:
         bgColor = theme.colorScheme.primaryContainer;
         fgColor = theme.colorScheme.onPrimaryContainer;
         trailing = SizedBox(
-          width: 10,
-          height: 10,
+          width: AppTheme.metrics.kSpace10,
+          height: AppTheme.metrics.kSpace10,
           child: CircularProgressIndicator(
             strokeWidth: 1.5,
             value: info.progress > 0 ? info.progress : null,
           ),
         );
       case PicAcgDownloadStatus.error:
-        bgColor = Colors.red.withValues(alpha: 0.15);
+        bgColor = theme.colorScheme.error.withValues(alpha: 0.15);
         fgColor = Colors.red;
         trailing = GestureDetector(
           onTap: onRetry,
-          child: const Icon(Icons.refresh, size: 12, color: Colors.red),
+          child: Icon(Icons.refresh, size: AppTheme.metrics.iconSize12, color: theme.colorScheme.error),
         );
       case PicAcgDownloadStatus.waiting:
         bgColor = theme.colorScheme.surfaceContainerHighest;
@@ -312,13 +313,13 @@ class _EpsStatusChip extends StatelessWidget {
       onTap: info.status == PicAcgDownloadStatus.completed ? onRead : null,
       onLongPress: onDelete,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6)),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+        decoration: BoxDecoration(color: bgColor, borderRadius: AppTheme.metrics.radius6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('第${info.epsOrder}话', style: TextStyle(fontSize: 11, color: fgColor)),
-            if (trailing != null) ...[const SizedBox(width: 4), trailing],
+            Text('第${info.epsOrder}话', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: fgColor)),
+            if (trailing != null) ...[SizedBox(width: AppTheme.metrics.kSpace4), trailing],
           ],
         ),
       ),

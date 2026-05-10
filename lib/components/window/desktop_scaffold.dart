@@ -48,7 +48,7 @@ class DesktopScaffold extends StatefulWidget {
       minimumSize: const Size(_minWidth, _minHeight),
       center: false,
       titleBarStyle: TitleBarStyle.hidden,
-      backgroundColor: Colors.white,
+      backgroundColor: LightColors.background1,
       windowButtonVisibility: false,
       title: desktopScreen.title.value,
     );
@@ -124,7 +124,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                   }),
                 ),
                 widget.child,
-                Positioned(left: 0, top: 0, child: const ScreenTopBar()),
+                const Positioned(left: 0, top: 0, child: ScreenTopBar()),
               ],
             ),
     );
@@ -146,8 +146,8 @@ class _GlobalBlurBackground extends StatelessWidget {
         imageUrl: value,
         fit: BoxFit.cover,
         alignment: Alignment.center,
-        placeholder: (_, __) => const SizedBox.shrink(),
-        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+        placeholder: (_, _) => const SizedBox.shrink(),
+        errorWidget: (_, _, _) => const SizedBox.shrink(),
       );
     } else {
       final File file = File(value);

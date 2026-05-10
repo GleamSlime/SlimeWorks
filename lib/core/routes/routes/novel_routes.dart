@@ -25,16 +25,6 @@ class NovelReaderRoute extends GoRouteData with $NovelReaderRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return CustomTransitionPage(
-      key: state.pageKey,
-      transitionDuration: const Duration(milliseconds: 400),
-      reverseTransitionDuration: const Duration(milliseconds: 300),
-      child: BindingWidget(child: NovelReaderPage(novel: $extra)),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        // 配合 Hero 的淡入动画
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(opacity: curved, child: child);
-      },
-    );
+    return AppRoutes.buildFadePage(context, state, NovelReaderPage(novel: $extra));
   }
 }

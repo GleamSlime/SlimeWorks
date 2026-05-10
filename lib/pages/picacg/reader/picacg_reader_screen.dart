@@ -202,7 +202,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                               elevation: 0,
                               foregroundColor: Colors.black87,
                               leading: IconButton(
-                                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                                icon: Icon(Icons.arrow_back_ios_new_rounded, size: AppTheme.metrics.iconSize20),
                                 onPressed: _handleBack,
                                 color: Colors.black87,
                               ),
@@ -211,15 +211,15 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                                 epsTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.black87,
-                                  fontSize: 15,
+                                  fontSize: AppTheme.metrics.fontSize15,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               actions: [
                                 IconButton(
-                                  icon: const Icon(Icons.more_horiz_rounded, size: 22),
+                                  icon: Icon(Icons.more_horiz_rounded, size: AppTheme.metrics.iconSize22),
                                   onPressed: () => _showMoreMenu(context),
                                   color: Colors.black87,
                                 ),
@@ -300,7 +300,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
             ListTile(
               leading: const Icon(Icons.download_outlined),
               title: const Text('下载'),
-              subtitle: const Text('选择章节下载', style: TextStyle(fontSize: 12)),
+              subtitle: Text('选择章节下载', style: TextStyle(fontSize: AppTheme.metrics.fontSize11)),
               onTap: () {
                 Navigator.of(ctx).pop();
                 _showDownloadSheet(context);
@@ -310,7 +310,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
               ListTile(
                 leading: const Icon(Icons.save_alt),
                 title: const Text('离线保存到媒体库'),
-                subtitle: const Text('保存所有已加载图片', style: TextStyle(fontSize: 12)),
+                subtitle: Text('保存所有已加载图片', style: TextStyle(fontSize: AppTheme.metrics.fontSize11)),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   ScaffoldMessenger.of(
@@ -318,7 +318,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                   ).showSnackBar(const SnackBar(content: Text('待实现：保存到媒体库')));
                 },
               ),
-            const SizedBox(height: 8),
+            SizedBox(height: AppTheme.metrics.kSpace8),
           ],
         ),
       ),
@@ -385,9 +385,9 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: Row(
                           children: [
-                            const Text(
+                            Text(
                               '选择下载章节',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.bold),
                             ),
                             const Spacer(),
                             TextButton(
@@ -410,7 +410,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                       Expanded(
                         child: GridView.builder(
                           controller: controller,
-                          padding: const EdgeInsets.all(12),
+                          padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 4,
                             mainAxisSpacing: 8,
@@ -440,7 +440,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                                       : isSelected
                                       ? Theme.of(ctx2).colorScheme.primary.withValues(alpha: 0.3)
                                       : Theme.of(ctx2).colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: AppTheme.metrics.radius6,
                                   border: isSelected
                                       ? Border.all(
                                           color: Theme.of(ctx2).colorScheme.primary,
@@ -454,7 +454,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                                     color: isDownloaded
                                         ? Colors.green
                                         : Theme.of(ctx2).colorScheme.onSurface,
-                                    fontSize: 12,
+                                    fontSize: AppTheme.metrics.fontSize11,
                                   ),
                                 ),
                               ),
@@ -524,7 +524,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace12),
                 child: Text(
                   '章节列表',
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -533,7 +533,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
               Expanded(
                 child: Obx(
                   () => GridView.builder(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4,
                       mainAxisSpacing: 8,
@@ -559,7 +559,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                             color: isCurrent
                                 ? Theme.of(ctx).colorScheme.primary
                                 : Theme.of(ctx).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: AppTheme.metrics.radius6,
                           ),
                           child: Text(
                             '${eps.order}',
@@ -567,7 +567,7 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                               color: isCurrent
                                   ? Theme.of(ctx).colorScheme.onPrimary
                                   : Theme.of(ctx).colorScheme.onSurface,
-                              fontSize: 12,
+                              fontSize: AppTheme.metrics.fontSize11,
                             ),
                           ),
                         ),
@@ -588,20 +588,20 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, color: Colors.white70, size: 48),
-                const SizedBox(height: 16),
+                Icon(Icons.error_outline, color: Colors.white70, size: AppTheme.metrics.iconSize48),
+                SizedBox(height: AppTheme.metrics.kSpace16),
                 SelectableText(
                   error,
                   style: const TextStyle(color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: AppTheme.metrics.kSpace16),
                 FilledButton(
                   onPressed: () => viewModel.loadPages(widget.comicId, widget.epsOrder),
                   child: const Text('重试'),
@@ -628,9 +628,9 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
         itemBuilder: (ctx, i) {
           if (i >= viewModel.pages.length) {
             if (viewModel.hasMore) {
-              return const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator(color: Colors.white)),
+              return Padding(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
+                child: const Center(child: CircularProgressIndicator(color: Colors.white)),
               );
             }
             // 所有部分已加载完毕，显示下一章公告
@@ -691,7 +691,7 @@ class _ReaderBottomBar extends StatelessWidget {
               onTap: onEpsTap,
             ),
           ),
-          Container(width: 0.5, height: 32, color: Colors.black.withValues(alpha: 0.1)),
+          Container(width: 0.5, height: AppTheme.metrics.kSpace32, color: Colors.black.withValues(alpha: 0.1)),
           Expanded(
             child: _BarBtn(icon: Icons.tune_rounded, label: '设置', onTap: onSettingsTap),
           ),
@@ -717,31 +717,31 @@ class _BarBtn extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: AppTheme.metrics.radius10,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: iconColor, size: 22),
-            const SizedBox(height: 3),
+            Icon(icon, color: iconColor, size: AppTheme.metrics.iconSize22),
+            SizedBox(height: AppTheme.metrics.kSpace3),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 color: labelColor,
-                fontSize: 11,
+                fontSize: AppTheme.metrics.fontSize11,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.2,
               ),
             ),
             if (badge != null) ...[
-              const SizedBox(height: 1),
+              SizedBox(height: AppTheme.metrics.kSpace1),
               Text(
                 badge!,
-                style: const TextStyle(
+                style: TextStyle(
                   color: badgeColor,
-                  fontSize: 10,
+                  fontSize: AppTheme.metrics.fontSize10,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -819,16 +819,16 @@ class _ComicPageImageState extends State<_ComicPageImage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
-                const SizedBox(height: 12),
+                Icon(Icons.broken_image_outlined, color: Colors.white54, size: AppTheme.metrics.iconSize48),
+                SizedBox(height: AppTheme.metrics.kSpace12),
                 Text(
                   'P${widget.pageIndex} 加载失败',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize11),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: AppTheme.metrics.kSpace8),
                 TextButton.icon(
                   onPressed: onRetry,
-                  icon: const Icon(Icons.refresh, color: Colors.white70, size: 16),
+                  icon: Icon(Icons.refresh, color: Colors.white70, size: AppTheme.metrics.iconSize16),
                   label: const Text('重试', style: TextStyle(color: Colors.white70)),
                 ),
               ],
@@ -879,17 +879,17 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final labelStyle = TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 13);
-    final titleStyle = TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: 15);
+    final labelStyle = TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: AppTheme.metrics.fontSize13);
+    final titleStyle = TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize15);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20, vertical: AppTheme.metrics.kSpace8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('阅读设置', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 18),
+            SizedBox(height: AppTheme.metrics.kSpace18),
 
             // ── 图片左右间距 ──
             Row(
@@ -905,11 +905,11 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
               divisions: 8,
               onChanged: (v) => setState(() => _padding = v),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: AppTheme.metrics.kSpace12),
 
             // ── 预加载图片数量 ──
             Text('预加载图片数量', style: titleStyle),
-            const SizedBox(height: 8),
+            SizedBox(height: AppTheme.metrics.kSpace8),
             Wrap(
               spacing: 8,
               children: [1, 3, 5, 10].map((n) {
@@ -921,13 +921,13 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: AppTheme.metrics.kSpace16),
 
             // ── 自动进入沉浸式时间 ──
             Text('自动进入沉浸模式', style: titleStyle),
-            const SizedBox(height: 4),
+            SizedBox(height: AppTheme.metrics.kSpace4),
             Text('进入阅读器后自动隐藏顶底栏（0 = 关闭）', style: labelStyle),
-            const SizedBox(height: 8),
+            SizedBox(height: AppTheme.metrics.kSpace8),
             Wrap(
               spacing: 8,
               children: [0, 3, 5, 10, 30].map((s) {
@@ -939,7 +939,7 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: AppTheme.metrics.kSpace16),
 
             // ── 向下滚动自动沉浸 ──
             Row(
@@ -949,7 +949,7 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('向下滚动时自动沉浸', style: titleStyle),
-                      const SizedBox(height: 2),
+                      SizedBox(height: AppTheme.metrics.kSpace2),
                       Text('向下滚动时自动隐藏顶底栏', style: labelStyle),
                     ],
                   ),
@@ -960,7 +960,7 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: AppTheme.metrics.kSpace20),
 
             // ── 保存按钮 ──
             SizedBox(
@@ -989,20 +989,20 @@ class _NextChapterBanner extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Divider(color: theme.colorScheme.outlineVariant),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
           Text(
             '本章已读完',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppTheme.metrics.kSpace12),
           FilledButton.icon(
             onPressed: onTap,
             icon: const Icon(Icons.navigate_next),
             label: Text('下一章：第 ${nextEps.order} 话'),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: AppTheme.metrics.kSpace8),
         ],
       ),
     );

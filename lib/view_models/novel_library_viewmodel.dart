@@ -18,7 +18,7 @@ import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 part 'novel_library_viewmodel_novel.dart';
 part 'novel_library_viewmodel_actions.dart';
 
-Loggers logger = Loggers(name: '书库');
+Loggers logger = const Loggers(name: '书库');
 
 /// 书库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {

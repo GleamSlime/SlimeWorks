@@ -119,7 +119,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
             cursor: SystemMouseCursors.click,
             child: Row(
               children: [
-                Icon(Icons.drive_file_rename_outline, size: appMetrics.fontSize16),
+                Icon(Icons.drive_file_rename_outline, size: appMetrics.fontSize15),
                 SizedBox(width: appMetrics.kSpace12),
                 const Text('重命名'),
               ],
@@ -138,7 +138,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
               children: [
                 Icon(
                   Icons.delete_outline,
-                  size: appMetrics.fontSize16,
+                  size: appMetrics.fontSize15,
                   color: Theme.of(ctx).colorScheme.error,
                 ),
                 SizedBox(width: appMetrics.kSpace12),
@@ -354,7 +354,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                               focusNode: _editFocusNode,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: appMetrics.fontSize12,
+                                fontSize: appMetrics.fontSize11,
                                 fontWeight: FontWeight.w600,
                               ),
                               decoration: InputDecoration(
@@ -383,7 +383,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                               child: Text(
                                 widget.isBookHover ? '放入此文件夹' : widget.folder.name,
                                 style: TextStyle(
-                                  fontSize: appMetrics.fontSize12,
+                                  fontSize: appMetrics.fontSize11,
                                   fontWeight: FontWeight.w600,
                                   color: widget.isBookHover
                                       ? theme.colorScheme.tertiary
@@ -400,7 +400,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       Text(
                         '$folderBookCount 本',
                         style: TextStyle(
-                          fontSize: appMetrics.fontSize10,
+                          fontSize: appMetrics.fontSize9,
                           color: Colors.white.withAlpha(220),
                         ),
                       ),
@@ -426,7 +426,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       ),
                       child: Icon(
                         Icons.more_vert,
-                        size: appMetrics.fontSize14,
+                        size: appMetrics.fontSize13,
                         color: Colors.white,
                       ),
                     ),
@@ -447,7 +447,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       border: Border.all(color: Colors.white, width: scaleW(2)),
                     ),
                     child: widget.isSelected
-                        ? Icon(Icons.check, size: appMetrics.fontSize14, color: Colors.white)
+                        ? Icon(Icons.check, size: appMetrics.fontSize13, color: Colors.white)
                         : null,
                   ),
                 ),

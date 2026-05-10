@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,10 +18,10 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 64, color: Theme.of(context).hintColor.withValues(alpha: 0.5)),
-          const SizedBox(height: 16),
+          Icon(icon, size: AppTheme.metrics.iconSize64, color: Theme.of(context).hintColor.withValues(alpha: 0.5)),
+          SizedBox(height: AppTheme.metrics.kSpace16),
           Text(message, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor)),
-          const SizedBox(height: 24),
+          SizedBox(height: AppTheme.metrics.kSpace24),
           if (!isCapturing && onAction != null)
             FilledButton.icon(
               onPressed: onAction,
@@ -46,18 +47,18 @@ class UrlCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace12),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.1),
-          child: Icon(icon, color: color, size: 20),
+          child: Icon(icon, color: color, size: AppTheme.metrics.iconSize20),
         ),
         title: Text(url, maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.copy, size: 20),
+              icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
               onPressed: () {
                 if (onCopy != null) {
                   onCopy!();
@@ -68,7 +69,7 @@ class UrlCard extends StatelessWidget {
               },
               tooltip: '复制',
             ),
-            if (onOpen != null) IconButton(icon: const Icon(Icons.open_in_new, size: 20), onPressed: onOpen, tooltip: '打开'),
+            if (onOpen != null) IconButton(icon: Icon(Icons.open_in_new, size: AppTheme.metrics.iconSize20), onPressed: onOpen, tooltip: '打开'),
           ],
         ),
       ),
@@ -86,17 +87,17 @@ class JsonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace12),
       child: ExpansionTile(
         leading: CircleAvatar(
           backgroundColor: Colors.orange.withValues(alpha: 0.1),
-          child: const Icon(Icons.code, color: Colors.orange, size: 20),
+          child: Icon(Icons.code, color: Colors.orange, size: AppTheme.metrics.iconSize20),
         ),
         title: Text(json.length > 50 ? '${json.substring(0, 50)}...' : json, maxLines: 1, overflow: TextOverflow.ellipsis),
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,7 +106,7 @@ class JsonCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton.icon(
-                      icon: const Icon(Icons.copy, size: 18),
+                      icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize18),
                       label: const Text('复制'),
                       onPressed: () {
                         if (onCopy != null) {
@@ -118,8 +119,8 @@ class JsonCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                SelectableText(json, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                SizedBox(height: AppTheme.metrics.kSpace8),
+                SelectableText(json, style: TextStyle(fontFamily: 'monospace', fontSize: AppTheme.metrics.fontSize11)),
               ],
             ),
           ),
@@ -140,16 +141,16 @@ class InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: AppTheme.metrics.radius4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             label,
-            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: color, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -168,23 +169,23 @@ class StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppTheme.metrics.radius16,
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: AppTheme.metrics.fontSize11, fontWeight: FontWeight.w500)),
+          SizedBox(width: AppTheme.metrics.kSpace6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace2),
+            decoration: BoxDecoration(color: color, borderRadius: AppTheme.metrics.radius10),
             child: Text(
               count.toString(),
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize11, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -205,25 +206,25 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 12),
+          Icon(icon, color: color, size: AppTheme.metrics.iconSize24),
+          SizedBox(width: AppTheme.metrics.kSpace12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                const SizedBox(height: 4),
+                Text(label, style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor)),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
                   value,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                  style: TextStyle(fontSize: AppTheme.metrics.fontSize18, fontWeight: FontWeight.bold, color: color),
                 ),
               ],
             ),
@@ -245,20 +246,20 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             text,
-            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: color, fontWeight: FontWeight.w500),
           ),
         ],
       ),

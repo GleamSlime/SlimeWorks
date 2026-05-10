@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:slime_works/components/window/screen_chrome.dart';
@@ -232,7 +233,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
 
   Widget _buildRequestPanel() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -240,7 +241,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             '请求配置',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: AppTheme.metrics.kSpace24),
 
           // 模块名（下拉选择）
           DropdownButtonFormField<String>(
@@ -259,7 +260,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               }
             },
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
 
           // 函数名（下拉选择+编辑）
           Row(
@@ -289,7 +290,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
 
           // 参数 (JSON)
           Row(
@@ -297,45 +298,45 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               Expanded(child: Text('参数 (JSON)', style: Theme.of(context).textTheme.titleMedium)),
               TextButton.icon(
                 onPressed: _formatJson,
-                icon: const Icon(Icons.auto_fix_high, size: 18),
+                icon: Icon(Icons.auto_fix_high, size: AppTheme.metrics.iconSize18),
                 label: const Text('格式化'),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: AppTheme.metrics.kSpace8),
           Container(
             height: 300,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: AppTheme.metrics.radius4,
             ),
             child: TextField(
               controller: _paramsController,
               maxLines: null,
               expands: true,
               textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(
+              style: TextStyle(fontFamily: 'monospace', fontSize: AppTheme.metrics.fontSize13),
+              decoration: InputDecoration(
                 hintText: '输入 JSON 格式的参数',
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.all(12),
+                contentPadding: EdgeInsets.all(AppTheme.metrics.kSpace12),
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: AppTheme.metrics.kSpace24),
 
           // 发送按钮
           ElevatedButton.icon(
             onPressed: _isLoading ? null : _sendRequest,
             icon: _isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                ? SizedBox(
+                    width: AppTheme.metrics.kSpace16,
+                    height: AppTheme.metrics.kSpace16,
+                    child: const CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.send),
             label: Text(_isLoading ? '发送中...' : '发送请求'),
-            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+            style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace16)),
           ),
         ],
       ),
@@ -344,7 +345,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
 
   Widget _buildResponsePanel() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -362,20 +363,20 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 IconButton(icon: const Icon(Icons.clear), tooltip: '清除', onPressed: _clearResponse),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
 
           // 响应时间
           if (_responseTime != null)
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
               decoration: BoxDecoration(
                 color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTheme.metrics.radius8,
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.timer, size: 16),
-                  const SizedBox(width: 8),
+                  Icon(Icons.timer, size: AppTheme.metrics.iconSize16),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
                   Text(
                     '响应时间: $_responseTime ms',
                     style: const TextStyle(fontWeight: FontWeight.w500),
@@ -383,34 +384,40 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 ],
               ),
             ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
 
           // 错误消息
           if (_errorMessage != null)
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.red),
-                borderRadius: BorderRadius.circular(8),
+                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+                border: Border.all(color: Theme.of(context).colorScheme.error),
+                borderRadius: AppTheme.metrics.radius8,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.error, color: Colors.red),
-                      const SizedBox(width: 8),
+                      Icon(Icons.error, color: Theme.of(context).colorScheme.error),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
                       Text(
                         '错误',
-                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: AppTheme.metrics.kSpace8),
                   SelectableText(
                     _errorMessage!,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: AppTheme.metrics.fontSize11,
+                    ),
                   ),
                 ],
               ),
@@ -420,16 +427,16 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
           if (_response.isNotEmpty)
             Expanded(
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                 decoration: BoxDecoration(
                   color: Theme.of(context).cardColor,
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Theme.of(context).colorScheme.outline),
+                  borderRadius: AppTheme.metrics.radius8,
                 ),
                 child: SingleChildScrollView(
                   child: SelectableText(
                     _response,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                    style: TextStyle(fontFamily: 'monospace', fontSize: AppTheme.metrics.fontSize13),
                   ),
                 ),
               ),
@@ -442,9 +449,19 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.http, size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text('发送请求后，响应将显示在这里', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                    Icon(
+                      Icons.http,
+                      size: AppTheme.metrics.iconSize64,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    SizedBox(height: AppTheme.metrics.kSpace16),
+                    Text(
+                      '发送请求后，响应将显示在这里',
+                      style: TextStyle(
+                        fontSize: AppTheme.metrics.fontSize13,
+                        color: Theme.of(context).hintColor,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -469,27 +486,27 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const Text('1. 模块名称: 从下拉列表选择已注册的模块'),
-              const SizedBox(height: 8),
+              SizedBox(height: AppTheme.metrics.kSpace8),
               const Text('2. 函数名称: 从下拉列表选择已注册的函数'),
-              const SizedBox(height: 8),
+              SizedBox(height: AppTheme.metrics.kSpace8),
               const Text('3. 参数: 以 JSON 格式输入函数参数（会自动填充模板）'),
-              const SizedBox(height: 8),
+              SizedBox(height: AppTheme.metrics.kSpace8),
               const Text('4. 点击"发送请求"按钮'),
-              const SizedBox(height: 16),
+              SizedBox(height: AppTheme.metrics.kSpace16),
               const Text('已注册的接口:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
+              SizedBox(height: AppTheme.metrics.kSpace8),
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(4),
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: AppTheme.metrics.radius4,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (var module in _registeredModules)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace4),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -499,10 +516,13 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                             ),
                             for (var func in _registeredFunctions)
                               Padding(
-                                padding: const EdgeInsets.only(left: 16, top: 2),
+                                padding: EdgeInsets.only(left: AppTheme.metrics.kSpace16, top: AppTheme.metrics.kSpace2),
                                 child: Text(
                                   '- $func',
-                                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: AppTheme.metrics.fontSize11,
+                                  ),
                                 ),
                               ),
                           ],

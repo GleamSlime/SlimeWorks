@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'base_viewmodel.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 基础页面（StatefulWidget）
 abstract class BasePage<VM extends BaseViewModel> extends StatefulWidget {
@@ -114,20 +115,20 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
   Widget buildErrorPage(BuildContext context, String errorMessage) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
+            Icon(Icons.error_outline, size: AppTheme.metrics.iconSize64, color: Theme.of(context).colorScheme.error),
+            SizedBox(height: AppTheme.metrics.kSpace16),
             Text('页面加载失败', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
+            SizedBox(height: AppTheme.metrics.kSpace8),
             Text(
               errorMessage,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: AppTheme.metrics.kSpace24),
             ElevatedButton.icon(
               onPressed: _retryInitialization,
               icon: const Icon(Icons.refresh),

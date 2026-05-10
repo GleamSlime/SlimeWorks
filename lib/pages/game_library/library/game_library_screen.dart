@@ -53,18 +53,14 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
           icon: const Icon(Icons.drive_folder_upload_outlined),
           label: const Text('批量导入'),
         ),
-        FilledButton.icon(
-          onPressed: _showAddDialog,
-          icon: const Icon(Icons.add),
-          label: const Text('添加游戏'),
-        ),
+        FilledButton.icon(onPressed: _showAddDialog, icon: const Icon(Icons.add), label: const Text('添加游戏')),
         IconButton(
-          onPressed: () => GameCategoriesRoute().go(context),
+          onPressed: () => const GameCategoriesRoute().go(context),
           icon: const Icon(Icons.folder_copy_outlined),
           tooltip: '分类管理',
         ),
         IconButton(
-          onPressed: () => GameStatsRoute().go(context),
+          onPressed: () => const GameStatsRoute().go(context),
           icon: const Icon(Icons.query_stats),
           tooltip: '统计',
         ),
@@ -154,7 +150,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                     const Spacer(),
                     TextButton.icon(
                       onPressed: viewModel.selectAll,
-                      icon: const Icon(Icons.select_all, size: 18),
+                      icon: Icon(Icons.select_all, size: AppTheme.metrics.iconSize18),
                       label: Text(
                         viewModel.selectedIds.length == viewModel.filteredGames.length
                             ? '取消全选'
@@ -164,7 +160,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     OutlinedButton.icon(
                       onPressed: () => _batchRefreshMetadata(),
-                      icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                      icon: Icon(Icons.cloud_download_outlined, size: AppTheme.metrics.iconSize18),
                       label: const Text('刷新元数据'),
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
@@ -173,7 +169,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                         backgroundColor: Theme.of(context).colorScheme.error,
                       ),
                       onPressed: () => _confirmBatchDelete(),
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
                       label: const Text('批量删除'),
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
@@ -343,7 +339,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                             children: <Widget>[
                               Icon(
                                 Icons.inventory_2_outlined,
-                                size: 64,
+                                size: AppTheme.metrics.iconSize64,
                                 color: Theme.of(context).colorScheme.primary,
                               ),
                               SizedBox(height: AppTheme.metrics.kSpace12),
@@ -661,7 +657,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                       subtitle: Text(
                         p,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11),
+                        style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
                       ),
                       onTap: () => Navigator.of(ctx).pop(p),
                     );
@@ -849,13 +845,13 @@ class _GameCardState extends State<_GameCard> {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'delete',
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline, color: Colors.red),
-            title: Text('删除', style: TextStyle(color: Colors.red)),
+            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+            title: Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         ),
       ],
@@ -911,7 +907,7 @@ class _GameCardState extends State<_GameCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppTheme.metrics.radius12,
             border: isSelected
                 ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2.5)
                 : null,
@@ -938,27 +934,27 @@ class _GameCardState extends State<_GameCard> {
                         // 多选时左上角勾选标记
                         if (isSelected)
                           Positioned(
-                            top: 4,
-                            left: 4,
+                            top: AppTheme.metrics.kSpace4,
+                            left: AppTheme.metrics.kSpace4,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.primary,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.check, color: Colors.white, size: 16),
+                              child: Icon(Icons.check, color: Colors.white, size: AppTheme.metrics.iconSize16),
                             ),
                           ),
                         // 右上角收藏/菜单
                         Positioned(
-                          top: 4,
-                          right: 4,
+                          top: AppTheme.metrics.kSpace4,
+                          right: AppTheme.metrics.kSpace4,
                           child: PopupMenuButton<String>(
                             icon: Container(
                               decoration: const BoxDecoration(
                                 color: Colors.black38,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.more_vert, color: Colors.white, size: 18),
+                              child: Icon(Icons.more_vert, color: Colors.white, size: AppTheme.metrics.iconSize18),
                             ),
                             onSelected: (String value) {
                               switch (value) {
@@ -1006,13 +1002,19 @@ class _GameCardState extends State<_GameCard> {
                                   title: Text('打开所在文件夹'),
                                 ),
                               ),
-                              const PopupMenuItem<String>(
+                              PopupMenuItem<String>(
                                 value: 'delete',
                                 child: ListTile(
                                   dense: true,
                                   contentPadding: EdgeInsets.zero,
-                                  leading: Icon(Icons.delete_outline, color: Colors.red),
-                                  title: Text('删除', style: TextStyle(color: Colors.red)),
+                                  leading: Icon(
+                                    Icons.delete_outline,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                  title: Text(
+                                    '删除',
+                                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1020,17 +1022,17 @@ class _GameCardState extends State<_GameCard> {
                         ),
                         // 状态徽章（左下角）
                         Positioned(
-                          left: 6,
-                          bottom: 6,
+                          left: AppTheme.metrics.kSpace6,
+                          bottom: AppTheme.metrics.kSpace6,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace6, vertical: AppTheme.metrics.kSpace2),
                             decoration: BoxDecoration(
                               color: Colors.black54,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: AppTheme.metrics.radius4,
                             ),
                             child: Text(
                               widget.game.status.label,
-                              style: const TextStyle(color: Colors.white, fontSize: 10),
+                              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize10),
                             ),
                           ),
                         ),
@@ -1039,23 +1041,23 @@ class _GameCardState extends State<_GameCard> {
                           Positioned.fill(
                             child: DecoratedBox(
                               decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
-                              child: const Column(
+                              child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: <Widget>[
                                   SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
+                                    width: AppTheme.metrics.kSpace24,
+                                    height: AppTheme.metrics.kSpace24,
+                                    child: const CircularProgressIndicator(
                                       strokeWidth: 2,
                                       color: Colors.white,
                                     ),
                                   ),
-                                  SizedBox(height: 6),
+                                  SizedBox(height: AppTheme.metrics.kSpace6),
                                   Text(
                                     '游戏运行中',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 11,
+                                      fontSize: AppTheme.metrics.fontSize11,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -1082,7 +1084,7 @@ class _GameCardState extends State<_GameCard> {
                               context,
                             ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: AppTheme.metrics.kSpace2),
                           if (widget.game.company.isNotEmpty && widget.game.company != '未知')
                             Text(
                               widget.game.company,
@@ -1096,13 +1098,13 @@ class _GameCardState extends State<_GameCard> {
                           Row(
                             children: <Widget>[
                               if (widget.game.rating > 0) ...<Widget>[
-                                const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
-                                const SizedBox(width: 2),
+                                Icon(Icons.star_rounded, size: AppTheme.metrics.iconSize12, color: Colors.amber),
+                                SizedBox(width: AppTheme.metrics.kSpace2),
                                 Text(
                                   widget.game.rating.toStringAsFixed(1),
                                   style: Theme.of(context).textTheme.labelSmall,
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: AppTheme.metrics.kSpace8),
                               ],
                               Expanded(
                                 child: Text(
@@ -1114,7 +1116,7 @@ class _GameCardState extends State<_GameCard> {
                                 ),
                               ),
                               if (widget.isFavorite)
-                                const Icon(Icons.favorite, size: 12, color: Colors.pink),
+                                Icon(Icons.favorite, size: AppTheme.metrics.iconSize12, color: Colors.pink),
                             ],
                           ),
                         ],
@@ -1139,8 +1141,8 @@ class _GameCardState extends State<_GameCard> {
       return CachedNetworkImage(
         imageUrl: value,
         fit: BoxFit.cover,
-        placeholder: (_, __) => _placeholder(context),
-        errorWidget: (_, __, ___) => _placeholder(context),
+        placeholder: (_, _) => _placeholder(context),
+        errorWidget: (_, _, _) => _placeholder(context),
       );
     }
     final File file = File(value);
@@ -1168,14 +1170,14 @@ class _GameCardState extends State<_GameCard> {
           children: <Widget>[
             Icon(
               Icons.sports_esports_outlined,
-              size: 32,
+              size: AppTheme.metrics.iconSize32,
               color: Theme.of(context).colorScheme.primary,
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               widget.game.name.isNotEmpty ? widget.game.name[0].toUpperCase() : '?',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: AppTheme.metrics.fontSize20,
                 fontWeight: FontWeight.w700,
                 color: Theme.of(context).colorScheme.primary,
               ),

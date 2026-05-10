@@ -10,7 +10,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 
 // Loggers log = Loggers();
-Loggers logger = Loggers();
+Loggers logger = const Loggers();
 
 String deviceCode = '';
 

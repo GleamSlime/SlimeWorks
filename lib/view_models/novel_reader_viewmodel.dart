@@ -12,7 +12,7 @@ import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:html/parser.dart' as html_parser;
 
-final Loggers logger = Loggers(name: '书籍');
+const Loggers logger = Loggers(name: '书籍');
 
 /// 书籍阅读器 ViewModel
 class NovelReaderViewModel extends GetxController {
@@ -611,7 +611,7 @@ class NovelReaderViewModel extends GetxController {
               Navigator.of(dlgCtx).pop();
               _deleteNovel(true);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
             child: const Text('删除记录和文件'),
           ),
         ],

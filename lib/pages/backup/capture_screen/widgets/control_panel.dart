@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// 捕获控制面板
@@ -26,7 +27,7 @@ class CaptureControlPanel extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
@@ -56,8 +57,8 @@ class CaptureControlPanel extends StatelessWidget {
                       children: [
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
-                          width: 16,
-                          height: 16,
+                          width: AppTheme.metrics.kSpace16,
+                          height: AppTheme.metrics.kSpace16,
                           decoration: BoxDecoration(
                             color: isCapturing ? Colors.green : Colors.grey,
                             shape: BoxShape.circle,
@@ -72,7 +73,7 @@ class CaptureControlPanel extends StatelessWidget {
                                 : null,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: AppTheme.metrics.kSpace12),
                         Flexible(
                           child: Text(
                             isCapturing ? '捕获中' : '开启捕获',
@@ -81,15 +82,15 @@ class CaptureControlPanel extends StatelessWidget {
                             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
-                        if (!isNarrow) const SizedBox(width: 24),
+                        if (!isNarrow) SizedBox(width: AppTheme.metrics.kSpace24),
                         if (!isNarrow)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace6),
                             decoration: BoxDecoration(
                               color: isCertInstalled
                                   ? Colors.green.withValues(alpha: 0.1)
                                   : Colors.orange.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: AppTheme.metrics.radius16,
                               border: Border.all(
                                 color: isCertInstalled
                                     ? Colors.green.withValues(alpha: 0.3)
@@ -101,14 +102,14 @@ class CaptureControlPanel extends StatelessWidget {
                               children: [
                                 Icon(
                                   isCertInstalled ? Icons.verified : Icons.warning_amber,
-                                  size: 16,
+                                  size: AppTheme.metrics.iconSize16,
                                   color: isCertInstalled ? Colors.green : Colors.orange,
                                 ),
-                                const SizedBox(width: 6),
+                                SizedBox(width: AppTheme.metrics.kSpace6),
                                 Text(
                                   isCertInstalled ? 'CA证书已安装' : 'CA证书未安装',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: AppTheme.metrics.fontSize11,
                                     color: isCertInstalled ? Colors.green : Colors.orange,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -120,7 +121,7 @@ class CaptureControlPanel extends StatelessWidget {
                     ),
                   ),
 
-                  if (isNarrow) const SizedBox(height: 12),
+                  if (isNarrow) SizedBox(height: AppTheme.metrics.kSpace12),
 
                   // 控制按钮
                   Wrap(
@@ -149,7 +150,7 @@ class CaptureControlPanel extends StatelessWidget {
                           icon: const Icon(Icons.security),
                           label: const Text('安装CA证书'),
                           style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20, vertical: AppTheme.metrics.kSpace16),
                           ),
                         ),
                       FilledButton.tonalIcon(
@@ -158,7 +159,7 @@ class CaptureControlPanel extends StatelessWidget {
                         label: Text(isCapturing ? '停止捕获' : '开始捕获'),
                         style: FilledButton.styleFrom(
                           backgroundColor: isCapturing ? Colors.red : Colors.green,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24, vertical: AppTheme.metrics.kSpace16),
                         ),
                       ),
                     ],
@@ -210,7 +211,7 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
     return Dialog(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 500),
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,28 +220,28 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
               '捕获设置',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: AppTheme.metrics.kSpace24),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF252525) : const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppTheme.metrics.radius12,
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.settings_ethernet, size: 20),
-                      const SizedBox(width: 8),
+                      Icon(Icons.settings_ethernet, size: AppTheme.metrics.iconSize20),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
                       const Text('代理端口:'),
-                      const SizedBox(width: 12),
+                      SizedBox(width: AppTheme.metrics.kSpace12),
                       Expanded(
                         child: DropdownButtonFormField<int>(
                           initialValue: _port,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace8),
+                            border: const OutlineInputBorder(),
                           ),
                           items: [8080, 8433, 8888, 9000].map((port) {
                             return DropdownMenuItem(value: port, child: Text(port.toString()));
@@ -254,20 +255,20 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: AppTheme.metrics.kSpace16),
                   Row(
                     children: [
-                      const Icon(Icons.video_settings, size: 20),
-                      const SizedBox(width: 8),
+                      Icon(Icons.video_settings, size: AppTheme.metrics.iconSize20),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
                       const Text('录制格式:'),
-                      const SizedBox(width: 12),
+                      SizedBox(width: AppTheme.metrics.kSpace12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: _format,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace8),
+                            border: const OutlineInputBorder(),
                           ),
                           items: ['mp4', 'flv', 'ts', 'mkv'].map((format) {
                             return DropdownMenuItem(
@@ -287,12 +288,12 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: AppTheme.metrics.kSpace24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-                const SizedBox(width: 12),
+                SizedBox(width: AppTheme.metrics.kSpace12),
                 FilledButton(
                   onPressed: () {
                     widget.onPortChanged(_port);

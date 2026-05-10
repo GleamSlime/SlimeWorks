@@ -8,6 +8,7 @@ import 'package:slime_works/pages/collection/picture/components/masonry_media_gr
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 媒体集合详情层：显示当前打开集合内的瀑布流媒体网格。
 ///
@@ -60,7 +61,7 @@ class CollectionDetailSection extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: AppTheme.metrics.kSpace12),
                 Text('正在加载远程资源…', style: Theme.of(context).textTheme.bodySmall),
               ],
             ),

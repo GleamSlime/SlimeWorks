@@ -14,7 +14,7 @@ import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
 
-final Loggers _logger = Loggers(name: '游戏库ViewModel');
+const Loggers _logger = Loggers(name: '游戏库ViewModel');
 
 class GameLibraryViewModel extends BaseViewModel {
   final GameLibraryService _service = getIt<GameLibraryService>();

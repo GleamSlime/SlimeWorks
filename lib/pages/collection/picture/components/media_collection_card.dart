@@ -142,7 +142,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
 
   Widget _buildCoverImage(String? src, ThemeData theme) {
     if (src == null || src.isEmpty) {
-      return _CollectionPlaceholder(icon: Icons.collections_outlined);
+      return const _CollectionPlaceholder(icon: Icons.collections_outlined);
     }
     final cacheW = () {
       if (src.startsWith('http')) return null;
@@ -160,7 +160,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 width: double.infinity,
                 height: double.infinity,
                 errorBuilder: (_, _, _) =>
-                    _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+                    const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               )
             : Image.file(
                 File(src),
@@ -169,9 +169,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 height: double.infinity,
                 cacheWidth: cacheW,
                 errorBuilder: (_, _, _) =>
-                    _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+                    const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
               ),
-        if (kDebugMode) Positioned(right: 4, bottom: 4, child: DebugImageSizeBadge(src: src)),
+        if (kDebugMode) Positioned(right: AppTheme.metrics.kSpace4, bottom: AppTheme.metrics.kSpace4, child: DebugImageSizeBadge(src: src)),
       ],
     );
   }
@@ -374,7 +374,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                   '${widget.collection.itemCount} 项 · ${_formatBytes(widget.totalSize)}',
                                   style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: appMetrics.fontSize10,
+                                    fontSize: appMetrics.fontSize9,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -403,7 +403,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                               child: Text(
                                 widget.nodeName!,
                                 style: TextStyle(
-                                  fontSize: appMetrics.fontSize10,
+                                  fontSize: appMetrics.fontSize9,
                                   fontWeight: FontWeight.w600,
                                   color: theme.colorScheme.onPrimaryContainer,
                                 ),
@@ -522,7 +522,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: appMetrics.fontSize12,
+                                fontSize: appMetrics.fontSize11,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -560,7 +560,7 @@ class _CollectionPlaceholder extends StatelessWidget {
           ],
         ),
       ),
-      child: Center(child: Icon(icon, size: 48, color: theme.colorScheme.primary.withAlpha(150))),
+      child: Center(child: Icon(icon, size: AppTheme.metrics.iconSize48, color: theme.colorScheme.primary.withAlpha(150))),
     );
   }
 }

@@ -1,6 +1,6 @@
 part of '../app_sidebars.dart';
 
-final SidebarGroup demoSidebarGroup = SidebarGroup(
+const SidebarGroup demoSidebarGroup = SidebarGroup(
   id: 'demo',
   sort: 90,
   permission: Permission.accessDemo,

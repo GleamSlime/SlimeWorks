@@ -101,7 +101,11 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     return ChoiceChip(
       label: Text(
         _themeModeLabel(mode),
-        style: TextStyle(fontSize: 13.0, height: 1.5, color: theme.colorScheme.onSurface),
+        style: TextStyle(
+          fontSize: AppTheme.metrics.fontSize13,
+          height: 1.5,
+          color: theme.colorScheme.onSurface,
+        ),
       ),
       selected: _themeMode == mode,
       side: BorderSide(color: _themeMode == mode ? theme.colorScheme.primary : theme.dividerColor),
@@ -113,6 +117,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   Widget _buildAccentSwatch(Color color) {
+    final theme = Theme.of(context);
     final isSelected = _accentColor == color;
     return GestureDetector(
       onTap: () => _onAccentColorTap(color),
@@ -120,18 +125,18 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         duration: const Duration(milliseconds: 200),
         width: 56,
         height: 56,
-        margin: const EdgeInsets.only(bottom: 8),
+        margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace8),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: color,
           border: Border.all(
-            color: isSelected ? Colors.black87 : Colors.transparent,
+            color: isSelected ? theme.colorScheme.onSurface : Colors.transparent,
             width: isSelected ? 3 : 1,
           ),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: Colors.black.withValues(alpha: 64),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
                 blurRadius: 6,
                 offset: const Offset(0, 3),
               ),
@@ -141,7 +146,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             ? Icon(
                 Icons.check,
                 color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-                size: 28,
+                size: AppTheme.metrics.iconSize28,
               )
             : null,
       ),
@@ -152,42 +157,48 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '主题模式',
-            style: TextStyle(fontSize: 22.0, height: 1.4,
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize22,
+              height: 1.4,
               color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppTheme.metrics.kSpace12),
           Wrap(spacing: 12, children: ThemeMode.values.map(_buildModeChip).toList()),
-          const SizedBox(height: 24),
+          SizedBox(height: AppTheme.metrics.kSpace24),
           Text(
             '主题配色',
-            style: TextStyle(fontSize: 22.0, height: 1.4,
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize22,
+              height: 1.4,
               color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppTheme.metrics.kSpace12),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: _accentPalette.map(_buildAccentSwatch).toList(),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: AppTheme.metrics.kSpace24),
           Text(
             '字号大小',
-            style: TextStyle(fontSize: 22.0, height: 1.4,
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize22,
+              height: 1.4,
               color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppTheme.metrics.kSpace12),
           Slider(
             value: _fontScale,
             min: 0.8,
@@ -196,32 +207,34 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             label: '${(_fontScale * 100).round()}%',
             onChanged: _onFontScaleChanged,
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: AppTheme.metrics.kSpace4),
           Text(
             '当前缩放：${(_fontScale * 100).round()}%',
-            style: TextStyle(fontSize: 13.0, height: 1.5, color: theme.colorScheme.onSurface),
+            style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: theme.colorScheme.onSurface),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: AppTheme.metrics.kSpace32),
           Text(
             '预览样式',
-            style: TextStyle(fontSize: 22.0, height: 1.4,
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize22,
+              height: 1.4,
               color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppTheme.metrics.kSpace12),
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius12),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('标题文本', style: theme.textTheme.headlineSmall),
-                  const SizedBox(height: 8),
+                  SizedBox(height: AppTheme.metrics.kSpace8),
                   Text('正文示例：当前主题配色和字号大小将影响全局文本。', style: theme.textTheme.bodyMedium),
-                  const SizedBox(height: 12),
+                  SizedBox(height: AppTheme.metrics.kSpace12),
                   ElevatedButton(onPressed: () {}, child: const Text('操作按钮')),
                 ],
               ),

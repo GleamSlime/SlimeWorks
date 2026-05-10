@@ -7,6 +7,7 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
+import 'package:slime_works/core/theme/app_colors.dart';
 
 /// 折线图历史点数量（每秒采样 1 次，保留 60 秒）
 const int _kHistoryLength = 60;
@@ -145,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           title: '下行',
                           value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
                           history: _rxHistory,
-                          chartColor: Colors.green,
+                          chartColor: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success,
                         ),
                         _buildMetricCard(
                           context,
@@ -221,7 +222,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.note_outlined,
                     title: '笔记',
                     description: '快速记录和整理想法',
-                    color: Colors.green,
+                    color: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success,
                   ),
                 ];
                 return features[index];
@@ -255,7 +256,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,14 +306,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppTheme.metrics.radius16,
         side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
       ),
       child: InkWell(
         onTap: () {
           // TODO: 导航到对应页面
         },
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppTheme.metrics.radius16,
         child: Padding(
           padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
           child: Column(
@@ -325,7 +326,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: AppTheme.metrics.kSpace48,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppTheme.metrics.radius12,
                 ),
                 child: Icon(icon, size: AppTheme.metrics.kSpace24, color: color),
               ),

@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class SettingsTabPlaceholder extends StatelessWidget {
@@ -9,7 +10,7 @@ class SettingsTabPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Theme.of(context).textTheme.bodyMedium?.color;
     return Center(
-      child: Text('$title 敬请期待', style: TextStyle(fontSize: 13.0, height: 1.5, color: color)),
+      child: Text('$title 敬请期待', style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: color)),
     );
   }
 }

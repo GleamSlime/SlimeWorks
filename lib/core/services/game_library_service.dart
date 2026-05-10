@@ -9,7 +9,7 @@ import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
 import 'package:slime_works/src/rust/frb_generated.dart';
 
-final Loggers _log = Loggers(name: '游戏库服务');
+const Loggers _log = Loggers(name: '游戏库服务');
 
 /// 游戏库服务：数据持久化全部委托给 Rust/SQLite 层，Flutter 只处理 UI 相关数据转换。
 class GameLibraryService {

@@ -60,6 +60,6 @@ class SettingsRoute extends AppRouteData with $SettingsRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, SettingsPage());
+    return AppRoutes.buildPage(context, state, const SettingsPage());
   }
 }

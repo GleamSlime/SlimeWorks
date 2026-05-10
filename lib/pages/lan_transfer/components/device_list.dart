@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -85,7 +85,7 @@ class _DeviceCard extends StatelessWidget {
                 : (isDark ? DarkColors.white10 : LightColors.black10),
             width: isSelected ? 1.5 : 1,
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: AppTheme.metrics.radius14,
         ),
         child: Row(
           children: [
@@ -97,7 +97,7 @@ class _DeviceCard extends StatelessWidget {
                 color: isSelected
                     ? primaryColor.withValues(alpha: 0.18)
                     : (isDark ? DarkColors.white10 : LightColors.black10),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppTheme.metrics.radius12,
               ),
               child: Icon(
                 _getDeviceIcon(device.deviceType),
@@ -120,7 +120,7 @@ class _DeviceCard extends StatelessWidget {
                       Flexible(
                         child: Text(
                           device.deviceName,
-                          style: TextStyle(fontSize: 15.0, height: 1.5,
+                          style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,
                             fontWeight: FontWeight.w600,
                             color: isSelected
                                 ? primaryColor
@@ -138,14 +138,14 @@ class _DeviceCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.green.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: AppTheme.metrics.radius6,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.verified_user, size: scaleW(10), color: Colors.green),
+                              Icon(Icons.verified_user, size: scaleW(10), color: isDark ? DarkColors.success : LightColors.success),
                               SizedBox(width: scaleW(3)),
-                              Text('已信任', style: TextStyle(fontSize: 11.0, height: 1.4, color: Colors.green)),
+                              Text('已信任', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: isDark ? DarkColors.success : LightColors.success)),
                             ],
                           ),
                         ),
@@ -155,7 +155,7 @@ class _DeviceCard extends StatelessWidget {
                   SizedBox(height: AppTheme.metrics.kSpace2),
                   Text(
                     '${device.deviceType} · ${device.ipAddress}',
-                    style: TextStyle(fontSize: 11.0, height: 1.4,
+                    style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
                   ),
@@ -180,11 +180,11 @@ class _DeviceCard extends StatelessWidget {
                         border: Border.all(
                           color: isDark ? DarkColors.white20 : LightColors.black20,
                         ),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppTheme.metrics.radius8,
                       ),
                       child: Text(
                         '信任',
-                        style: TextStyle(fontSize: 11.0, height: 1.4,
+                        style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                           color: isDark ? DarkColors.white80 : LightColors.black80,
                         ),
                       ),

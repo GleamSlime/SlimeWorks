@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -130,7 +131,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
         : Center(
             child: Icon(
               Icons.menu_book_rounded,
-              size: 64,
+              size: AppTheme.metrics.iconSize64,
               color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
             ),
           );
@@ -144,13 +145,13 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
           if (_editing)
             Container(
               color: Colors.black45,
-              child: const Center(
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.edit, color: Colors.white, size: 28),
-                    SizedBox(height: 4),
-                    Text('更换封面', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    Icon(Icons.edit, color: Colors.white, size: AppTheme.metrics.iconSize28),
+                    SizedBox(height: AppTheme.metrics.kSpace4),
+                    Text('更换封面', style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize11)),
                   ],
                 ),
               ),
@@ -164,7 +165,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
 
   Widget _infoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -172,11 +173,11 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
             width: 72,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).colorScheme.outline, fontWeight: FontWeight.w500),
             ),
           ),
           // SelectableText 允许用户选中并复制内容
-          Expanded(child: SelectableText(value, style: const TextStyle(fontSize: 13))),
+          Expanded(child: SelectableText(value, style: TextStyle(fontSize: AppTheme.metrics.fontSize13))),
         ],
       ),
     );
@@ -184,7 +185,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
 
   Widget _editField(String label, TextEditingController ctrl, {int maxLines = 1}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace6),
       child: TextField(
         controller: ctrl,
         maxLines: maxLines,
@@ -192,9 +193,9 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
           labelText: label,
           isDense: true,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace8),
         ),
-        style: const TextStyle(fontSize: 13),
+        style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
       ),
     );
   }
@@ -208,7 +209,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius16),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 680),
         child: Column(
@@ -228,22 +229,22 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                   // 主要信息
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (!_editing) ...[
                             SelectableText(
                               m.title,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.bold),
                               maxLines: 2,
                             ),
-                            const SizedBox(height: 4),
+                            SizedBox(height: AppTheme.metrics.kSpace4),
                             if (m.author != null && m.author!.isNotEmpty)
                               SelectableText(
                                 m.author!,
                                 style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: AppTheme.metrics.fontSize13,
                                   color: cs.onSurface.withValues(alpha: 0.6),
                                 ),
                               ),
@@ -256,11 +257,11 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                           Row(
                             children: [
                               _formatBadge(context, m.format == NovelFormat.epub ? 'EPUB' : 'TXT'),
-                              const SizedBox(width: 8),
+                              SizedBox(width: AppTheme.metrics.kSpace8),
                               Text(
                                 _formatSize(m.fileSize),
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: AppTheme.metrics.fontSize11,
                                   color: cs.onSurface.withValues(alpha: 0.5),
                                 ),
                               ),
@@ -279,7 +280,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
             // ── 滚动信息区 ────────────────────────────────────────────────
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20, vertical: AppTheme.metrics.kSpace12),
                 child: _editing ? _buildEditBody() : _buildViewBody(m),
               ),
             ),
@@ -288,7 +289,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
 
             // ── 底部按钮 ──────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -306,7 +307,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                             }),
                       child: const Text('取消'),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: AppTheme.metrics.kSpace8),
                     FilledButton.icon(
                       onPressed: _saving ? null : _save,
                       icon: _saving
@@ -315,7 +316,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Icon(Icons.save_rounded, size: 16),
+                          : Icon(Icons.save_rounded, size: AppTheme.metrics.iconSize16),
                       label: const Text('保存'),
                     ),
                   ] else ...[
@@ -323,10 +324,10 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Text('关闭'),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: AppTheme.metrics.kSpace8),
                     FilledButton.icon(
                       onPressed: () => setState(() => _editing = true),
-                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      icon: Icon(Icons.edit_rounded, size: AppTheme.metrics.iconSize16),
                       label: const Text('编辑'),
                     ),
                   ],
@@ -353,17 +354,17 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
         if (m.lastReadAt != null) _infoRow('上次阅读', _formatDate(m.lastReadAt!.toInt())),
         // 标签（可点击搜索）
         if (m.tags.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          SizedBox(height: AppTheme.metrics.kSpace4),
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 72,
                   child: Text(
                     '标签',
-                    style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).colorScheme.outline, fontWeight: FontWeight.w500),
                   ),
                 ),
                 Expanded(
@@ -373,7 +374,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                     children: m.tags
                         .map(
                           (tag) => ActionChip(
-                            label: Text(tag, style: const TextStyle(fontSize: 12)),
+                            label: Text(tag, style: TextStyle(fontSize: AppTheme.metrics.fontSize11)),
                             onPressed: () => _searchByTag(tag),
                           ),
                         )
@@ -388,13 +389,13 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
         _infoRow('文件路径', m.filePath),
         // 备注
         if (m.notes != null && m.notes!.isNotEmpty) ...[
-          const Divider(height: 20),
-          const Text(
+          Divider(height: AppTheme.metrics.kSpace20),
+          Text(
             '备注',
-            style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).colorScheme.outline, fontWeight: FontWeight.w500),
           ),
-          const SizedBox(height: 4),
-          SelectableText(m.notes!, style: const TextStyle(fontSize: 13)),
+          SizedBox(height: AppTheme.metrics.kSpace4),
+          SelectableText(m.notes!, style: TextStyle(fontSize: AppTheme.metrics.fontSize13)),
         ],
       ],
     );
@@ -410,14 +411,14 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
   Widget _formatBadge(BuildContext context, String text) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace6, vertical: AppTheme.metrics.kSpace2),
       decoration: BoxDecoration(
         color: cs.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppTheme.metrics.radius4,
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cs.primary),
+        style: TextStyle(fontSize: AppTheme.metrics.fontSize10, fontWeight: FontWeight.bold, color: cs.primary),
       ),
     );
   }

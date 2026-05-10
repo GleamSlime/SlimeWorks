@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -28,7 +29,7 @@ class NovelCard extends StatelessWidget {
     return Card(
       elevation: 2,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius12),
       child: InkWell(
         onTap: onTap,
         child: Column(
@@ -39,7 +40,7 @@ class NovelCard extends StatelessWidget {
               aspectRatio: 0.85,
               child: Container(
                 width: double.infinity,
-                decoration: BoxDecoration(color: Colors.grey[200]),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant),
                 child: Stack(
                   children: [
                     // 封面图片或默认背景
@@ -47,19 +48,19 @@ class NovelCard extends StatelessWidget {
 
                     // 格式标签
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: AppTheme.metrics.kSpace8,
+                      right: AppTheme.metrics.kSpace8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppTheme.metrics.radius12,
                         ),
                         child: Text(
                           format,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: AppTheme.metrics.fontSize10,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -73,7 +74,7 @@ class NovelCard extends StatelessWidget {
                         left: 0,
                         right: 0,
                         child: SizedBox(
-                          height: 4,
+                          height: AppTheme.metrics.kSpace4,
                           child: LinearProgressIndicator(
                             value: progress,
                             backgroundColor: Colors.white.withValues(alpha: 0.3),
@@ -110,19 +111,19 @@ class NovelCard extends StatelessWidget {
                     final cramped = constraints.maxHeight < 36;
                     if (cramped) {
                       return Padding(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
                         child: Text(
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize13),
                         ),
                       );
                     }
 
                     // 普通布局（在有足够高度时显示作者与阅读记录）
                     return Padding(
-                      padding: const EdgeInsets.all(12.0),
+                      padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -131,29 +132,29 @@ class NovelCard extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize13),
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: AppTheme.metrics.kSpace6),
                           Row(
                             children: [
-                              Icon(Icons.person_outline, size: 12, color: Colors.grey[600]),
-                              const SizedBox(width: 4),
+                              Icon(Icons.person_outline, size: AppTheme.metrics.iconSize12, color: Theme.of(context).hintColor),
+                              SizedBox(width: AppTheme.metrics.kSpace4),
                               Expanded(
                                 child: Text(
                                   author,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                                 ),
                               ),
                             ],
                           ),
                           if (progress > 0) ...[
-                            const SizedBox(height: 4),
+                            SizedBox(height: AppTheme.metrics.kSpace4),
                             Text(
                               '阅读记录  已读 ${(progress * 100).toInt()}%',
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: AppTheme.metrics.fontSize10,
                                 color: Theme.of(context).primaryColor,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -169,7 +170,7 @@ class NovelCard extends StatelessWidget {
 
             // 底部操作栏
             SizedBox(
-              height: 40,
+              height: AppTheme.metrics.kSpace40,
               child: Container(
                 decoration: BoxDecoration(
                   border: Border(
@@ -180,7 +181,7 @@ class NovelCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20),
+                      icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize20),
                       color: Colors.red[400],
                       tooltip: '删除',
                       onPressed: () => _showDeleteDialog(),
@@ -214,18 +215,19 @@ class NovelCard extends StatelessWidget {
           colors: [Colors.blue.shade400, Colors.purple.shade400, Colors.pink.shade400],
         ),
       ),
-      child: const Center(child: Icon(Icons.menu_book, size: 64, color: Colors.white70)),
+      child: Center(child: Icon(Icons.menu_book, size: AppTheme.metrics.iconSize64, color: Colors.white70)),
     );
   }
 
   void _showDeleteDialog() {
+    final context = Get.context!;
     Get.dialog(
       AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('确认删除'),
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: AppTheme.metrics.kSpace8),
+            const Text('确认删除'),
           ],
         ),
         content: Text('确定要从库中删除《$title》吗？\n此操作不可撤销。'),
@@ -237,7 +239,7 @@ class NovelCard extends StatelessWidget {
               onDelete();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: Theme.of(context).colorScheme.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('删除'),

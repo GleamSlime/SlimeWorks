@@ -38,6 +38,11 @@ class LightColors {
   static const Color background5 = Color(0xFFE8E5F8);
   static const Color background6 = Color(0xFFE5F3FB);
   static const Color background7 = Color(0xFF424242);
+
+  static const Color success = Color(0xFF4CAF50);
+  static const Color warning = Color(0xFFFF9800);
+  static const Color overlay = Color(0xB3000000);
+  static const Color overlayLight = Color(0x66000000);
 }
 
 /// 暗色主题颜色定义
@@ -81,4 +86,9 @@ class DarkColors {
   static const Color background4 = Color(0xFF524A66);
   static const Color background5 = Color(0xFF2B4A5E);
   static const Color background6 = Color(0xFFFFFFFF);
+
+  static const Color success = Color(0xFF66BB6A);
+  static const Color warning = Color(0xFFFFA726);
+  static const Color overlay = Color(0xB3000000);
+  static const Color overlayLight = Color(0x66000000);
 }

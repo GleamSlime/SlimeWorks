@@ -1,14 +1,14 @@
 part of '../app_sidebars.dart';
 
-final SidebarGroup coreSidebarGroup = SidebarGroup(
+const SidebarGroup coreSidebarGroup = SidebarGroup(
   id: 'code',
   sort: 30,
   permission: Permission.accessCollection,
   items: [
-    SidebarMenuItem(route: const DashboardRoute()),
-    SidebarMenuItem(route: const CaptureRoute()),
-    SidebarMenuItem(route: const LanTransferRoute()),
+    SidebarMenuItem(route: DashboardRoute()),
+    SidebarMenuItem(route: CaptureRoute()),
+    SidebarMenuItem(route: LanTransferRoute()),
     // 将 PicACG 放到“互传”组下方，便于查找
-    SidebarMenuItem(route: const PicAcgHomeRoute()),
+    SidebarMenuItem(route: PicAcgHomeRoute()),
   ],
 );

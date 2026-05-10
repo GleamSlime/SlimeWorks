@@ -168,7 +168,7 @@ class _HistoryListItem extends StatelessWidget {
             children: [
               /// 封面缩略图
               ClipRRect(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: AppTheme.metrics.radius6,
                 child: item.thumbUrl.isNotEmpty
                     ? _ThumbImage(thumbUrl: item.thumbUrl)
                     : Container(
@@ -205,7 +205,7 @@ class _HistoryListItem extends StatelessWidget {
                       _formatTime(item.tick),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                        fontSize: 11,
+                        fontSize: AppTheme.metrics.fontSize11,
                       ),
                     ),
                   ],

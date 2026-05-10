@@ -65,7 +65,7 @@ class _GameCategoriesScreenState
             final GameCategory category = list[index];
             return Card(
               child: ListTile(
-                leading: Text(category.emoji, style: const TextStyle(fontSize: 20)),
+                leading: Text(category.emoji, style: TextStyle(fontSize: AppTheme.metrics.fontSize20)),
                 title: Text(category.name),
                 subtitle: Text('游戏数量 ${category.gameCount}${category.isSystem ? ' · 系统分类' : ''}'),
                 onTap: () {

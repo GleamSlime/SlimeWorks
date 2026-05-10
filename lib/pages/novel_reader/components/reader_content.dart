@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/rendering.dart';
@@ -354,8 +355,8 @@ class _ReaderContentState extends State<ReaderContent> {
 
       if (currentContent.isEmpty) {
         debugPrint('[Novel UI] Content is empty');
-        return const Center(
-          child: Text('暂无内容', style: TextStyle(color: Colors.grey)),
+        return Center(
+          child: Text('暂无内容', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
         );
       }
 
@@ -480,7 +481,7 @@ class _ReaderContentState extends State<ReaderContent> {
                 // 章节标题
                 if (controller.chapters.isNotEmpty && !isNarrow)
                   Container(
-                    padding: const EdgeInsets.only(bottom: 24),
+                    padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace24),
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
@@ -498,22 +499,22 @@ class _ReaderContentState extends State<ReaderContent> {
                             color: Theme.of(context).primaryColor,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: AppTheme.metrics.kSpace8),
                         Row(
                           children: [
                             Text(
                               '第 ${controller.currentChapterIndex.value + 1} / ${controller.chapters.length} 章',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                             ),
-                            const SizedBox(width: 16),
+                            SizedBox(width: AppTheme.metrics.kSpace16),
                             Text(
                               '本章 ${currentContent.length} 字',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                             ),
-                            const SizedBox(width: 16),
+                            SizedBox(width: AppTheme.metrics.kSpace16),
                             Text(
                               '进度 ${((controller.currentChapterIndex.value + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                             ),
                           ],
                         ),
@@ -536,7 +537,7 @@ class _ReaderContentState extends State<ReaderContent> {
                         icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
                         label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
                       ),
-                      if (kDebugMode) const SizedBox(width: 8),
+                      if (kDebugMode) SizedBox(width: AppTheme.metrics.kSpace8),
                       if (kDebugMode)
                         TextButton.icon(
                           onPressed: () {
@@ -876,9 +877,9 @@ class _ReaderContentState extends State<ReaderContent> {
                                 key: _searchTargetKey,
                                 decoration: BoxDecoration(
                                   color: Colors.orange.withValues(alpha: 0.5),
-                                  borderRadius: BorderRadius.circular(2),
+                                  borderRadius: AppTheme.metrics.radius2,
                                 ),
-                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
                                 child: Text(
                                   element.text,
                                   style: TextStyle(
@@ -923,7 +924,7 @@ class _ReaderContentState extends State<ReaderContent> {
                   },
                 ),
 
-                const SizedBox(height: 48),
+                SizedBox(height: AppTheme.metrics.kSpace48),
 
                 // 底部导航提示
                 Row(
@@ -936,7 +937,7 @@ class _ReaderContentState extends State<ReaderContent> {
                         label: const Text('上一章'),
                       ),
                     if (controller.hasPreviousChapter() && controller.hasNextChapter())
-                      const SizedBox(width: 16),
+                      SizedBox(width: AppTheme.metrics.kSpace16),
                     if (controller.hasNextChapter())
                       TextButton.icon(
                         onPressed: controller.nextChapter,
@@ -946,7 +947,7 @@ class _ReaderContentState extends State<ReaderContent> {
                   ],
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: AppTheme.metrics.kSpace24),
               ],
             ),
           ),
@@ -991,7 +992,7 @@ class _ReaderContentState extends State<ReaderContent> {
                   // 章节标题
                   if (controller.chapters.isNotEmpty && !isMobile)
                     Container(
-                      padding: const EdgeInsets.only(bottom: 24),
+                      padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace24),
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
@@ -1009,22 +1010,22 @@ class _ReaderContentState extends State<ReaderContent> {
                               color: Theme.of(context).primaryColor,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
                           Row(
                             children: [
                               Text(
                                 '第 ${currentChapterIndex + 1} / ${controller.chapters.length} 章',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                               ),
-                              const SizedBox(width: 16),
+                              SizedBox(width: AppTheme.metrics.kSpace16),
                               Text(
                                 '本章 ${currentContent.length} 字',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                               ),
-                              const SizedBox(width: 16),
+                              SizedBox(width: AppTheme.metrics.kSpace16),
                               Text(
                                 '进度 ${((currentChapterIndex + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                               ),
                             ],
                           ),
@@ -1093,7 +1094,7 @@ class _ReaderContentState extends State<ReaderContent> {
               ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppTheme.metrics.kSpace24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1104,7 +1105,7 @@ class _ReaderContentState extends State<ReaderContent> {
                           label: const Text('上一章'),
                         ),
                       if (controller.hasPreviousChapter() && controller.hasNextChapter())
-                        const SizedBox(width: 16),
+                        SizedBox(width: AppTheme.metrics.kSpace16),
                       if (controller.hasNextChapter())
                         TextButton.icon(
                           onPressed: controller.nextChapter,
@@ -1113,7 +1114,7 @@ class _ReaderContentState extends State<ReaderContent> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppTheme.metrics.kSpace24),
                 ]),
               ),
             ),
@@ -1197,9 +1198,9 @@ class _ReaderContentState extends State<ReaderContent> {
               key: _searchTargetKey,
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: AppTheme.metrics.radius2,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
               child: Text(
                 element.text,
                 style: TextStyle(
@@ -1747,7 +1748,7 @@ class _ReaderContentState extends State<ReaderContent> {
         final imgIdx = out.toLowerCase().indexOf('<img', idx);
         if (imgIdx == -1) break;
 
-        final srcKey = 'src=';
+        const srcKey = 'src=';
         final srcPos = out.toLowerCase().indexOf(srcKey, imgIdx);
         if (srcPos == -1) {
           idx = imgIdx + 4;
@@ -1908,7 +1909,7 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
             child: GestureDetector(
               onTap: widget.onRetry,
               child: Padding(
-                padding: const EdgeInsets.only(right: 4, top: 2),
+                padding: EdgeInsets.only(right: AppTheme.metrics.kSpace4, top: AppTheme.metrics.kSpace2),
                 child: Icon(
                   Icons.refresh,
                   size: widget.fontSize * 0.9,

@@ -363,10 +363,10 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           // 前 40 项加入场动画，超出部分跳过以免卡顿
           final delay = index < 40 ? index * 15 : 0;
           return Cue.onMount(
-            motion: .smooth(),
+            motion: const .smooth(),
             child: Actor(
               delay: Duration(milliseconds: delay),
-              acts: [.fadeIn(), .slideY(from: 0.12)],
+              acts: [const .fadeIn(), const .slideY(from: 0.12)],
               child: _buildCard(context, item),
             ),
           );

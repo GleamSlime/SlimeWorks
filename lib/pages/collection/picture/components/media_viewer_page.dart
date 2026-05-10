@@ -515,8 +515,8 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
             // ── 右下角：浮动操作菜单 ─────────────────────────────────────────
             Positioned(
               bottom: MediaQuery.paddingOf(context).bottom + 24,
-              left: 16,
-              right: 16,
+              left: AppTheme.metrics.kSpace16,
+              right: AppTheme.metrics.kSpace16,
               child: AnimatedOpacity(
                 opacity: _uiVisible ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 300),
@@ -557,10 +557,10 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                         tooltip: '返回',
                         onTap: () => Navigator.of(context).maybePop(),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: AppTheme.metrics.kSpace10),
                       Expanded(
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: AppTheme.metrics.radius10,
                           child: BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                             child: Container(
@@ -571,9 +571,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                               color: Colors.black.withValues(alpha: 0.42),
                               child: Text(
                                 widget.items[_currentIndex].title,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 14,
+                                  fontSize: AppTheme.metrics.fontSize13,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
@@ -609,7 +609,7 @@ class _GlassIconButton extends StatelessWidget {
     final btn = GestureDetector(
       onTap: onTap,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: AppTheme.metrics.radius22,
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: Container(
@@ -617,7 +617,7 @@ class _GlassIconButton extends StatelessWidget {
             height: 42,
             color: Colors.black.withValues(alpha: 0.42),
             alignment: Alignment.center,
-            child: Icon(icon, color: Colors.white, size: 22),
+            child: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
           ),
         ),
       ),
@@ -655,11 +655,11 @@ class _GlassChipState extends State<_GlassChip> {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: AppTheme.metrics.radius14,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace4),
           color: Colors.black.withValues(alpha: 0.42),
           // 固定宽度避免数字变化时容器宽度跳动
           child: Row(
@@ -684,13 +684,13 @@ class _GlassChipState extends State<_GlassChip> {
                 child: Text(
                   '${widget.current + 1}',
                   key: ValueKey(widget.current),
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
                 ),
               ),
               // 总数静止，无动画
               Text(
                 ' / ${widget.total}',
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
               ),
             ],
           ),
@@ -840,7 +840,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
       children: [
         // 展开的独立圆形按钮，每个之间有 10px 间距
         if (_expanded) ...[
-          for (final btn in actionBtns) ...[btn, const SizedBox(height: 10)],
+          for (final btn in actionBtns) ...[btn, SizedBox(height: AppTheme.metrics.kSpace10)],
         ],
         // 常驻折叠/展开总按钮
         _GlassIconButton(
@@ -1022,17 +1022,17 @@ class _ImageViewerState extends State<_ImageViewer> {
                               color: Colors.white70,
                               strokeWidth: 2.5,
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: AppTheme.metrics.kSpace12),
                             Text(
                               label,
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize11),
                             ),
                           ],
                         ),
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
+                      child: Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize64, color: Colors.white38),
                     ),
                   );
                 } else {
@@ -1052,7 +1052,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: Icon(Icons.broken_image_outlined, size: 64, color: Colors.white38),
+                      child: Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize64, color: Colors.white38),
                     ),
                   );
                 }
@@ -1073,17 +1073,17 @@ class _ImageViewerState extends State<_ImageViewer> {
         // 已变换时显示「复原」按钮
         if (_isTransformed)
           Positioned(
-            bottom: 24,
+            bottom: AppTheme.metrics.kSpace24,
             left: 0,
             right: 0,
             child: Center(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: AppTheme.metrics.radius22,
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: FilledButton.icon(
                     onPressed: _reset,
-                    icon: const Icon(Icons.zoom_out_map_rounded, size: 18),
+                    icon: Icon(Icons.zoom_out_map_rounded, size: AppTheme.metrics.iconSize18),
                     label: const Text('复原'),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.black.withAlpha(42),
@@ -1245,7 +1245,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
       if (isMobile)
         IconButton(
           tooltip: '画中画',
-          icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: 22),
+          icon: Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: AppTheme.metrics.iconSize22),
           onPressed: () => _enterPip(context),
         ),
       const media_controls.MaterialFullscreenButton(),
@@ -1259,10 +1259,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
         topButtonBar: const [],
         topButtonBarMargin: EdgeInsets.zero,
         // 进度条位于按钮栏正上方
-        seekBarMargin: EdgeInsets.only(bottom: bottomInset + 16 + buttonBarH, left: 8, right: 8),
+        seekBarMargin: EdgeInsets.only(bottom: bottomInset + 16 + buttonBarH, left: AppTheme.metrics.kSpace8, right: AppTheme.metrics.kSpace8),
         // 底部控制栏：上移 + 安全区保护
         bottomButtonBar: bottomBar,
-        bottomButtonBarMargin: EdgeInsets.only(bottom: bottomInset + 16, left: 8, right: 8),
+        bottomButtonBarMargin: EdgeInsets.only(bottom: bottomInset + 16, left: AppTheme.metrics.kSpace8, right: AppTheme.metrics.kSpace8),
       ),
       fullscreen: const media_controls.MaterialVideoControlsThemeData(),
       child: Video(controller: controller, fit: _videoFit),
@@ -1289,7 +1289,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                   // 封面图（若有）
                   if (widget.coverSource != null && widget.coverSource!.isNotEmpty)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppTheme.metrics.radius12,
                       child: widget.coverSource!.startsWith('http')
                           ? Image.network(
                               widget.coverSource!,
@@ -1305,21 +1305,21 @@ class _VideoPreviewState extends State<_VideoPreview> {
                             ),
                     )
                   else
-                    const Icon(Icons.music_note_rounded, color: Colors.white38, size: 96),
-                  const SizedBox(height: 16),
+                    Icon(Icons.music_note_rounded, color: Colors.white38, size: AppTheme.metrics.iconSize96),
+                  SizedBox(height: AppTheme.metrics.kSpace16),
                   if (widget.title != null && widget.title!.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace32),
                       child: Text(
                         widget.title!,
-                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                        style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize15),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                       ),
                     )
                   else
-                    const Text('音频播放中', style: TextStyle(color: Colors.white54, fontSize: 16)),
+                    Text('音频播放中', style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize15)),
                 ],
               ),
             ),
@@ -1330,7 +1330,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
           top: 0,
           left: 0,
           right: 0,
-          height: 48,
+          height: AppTheme.metrics.kSpace48,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onVerticalDragUpdate: (details) => widget.onSwipeDelta(details.delta.dy),
@@ -1339,7 +1339,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
         ),
         // 中间区域（避开底部控制栏）
         Positioned(
-          top: 48,
+          top: AppTheme.metrics.kSpace48,
           left: 0,
           right: 0,
           bottom: controlsHeight,
@@ -1386,8 +1386,8 @@ class _VideoSpeedButton extends StatelessWidget {
               .toList(),
           onSelected: player.setRate,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace12),
+            child: Text(label, style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize13)),
           ),
         );
       },
@@ -1410,7 +1410,7 @@ class _VideoFitButton extends StatelessWidget {
       icon: Icon(
         isCover ? Icons.fit_screen_rounded : Icons.crop_rounded,
         color: Colors.white,
-        size: 22,
+        size: AppTheme.metrics.iconSize22,
       ),
       onPressed: onToggle,
     );
@@ -1435,7 +1435,7 @@ class _VideoVolumeButton extends StatelessWidget {
             : (vol < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
         return IconButton(
           tooltip: vol == 0 ? '取消静音' : '静音',
-          icon: Icon(icon, color: Colors.white, size: 22),
+          icon: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
           onPressed: () => player.setVolume(vol == 0 ? 100.0 : 0.0),
           onLongPress: () => _showVolumeSlider(context),
         );
@@ -1448,7 +1448,7 @@ class _VideoVolumeButton extends StatelessWidget {
       context: context,
       backgroundColor: Colors.black87,
       builder: (_) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24, vertical: AppTheme.metrics.kSpace16),
         child: Row(
           children: [
             const Icon(Icons.volume_down_rounded, color: Colors.white70),

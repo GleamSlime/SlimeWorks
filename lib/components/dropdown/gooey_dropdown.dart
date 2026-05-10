@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 class GooeyDropdown extends StatefulWidget {
   final Widget child;
@@ -132,7 +133,7 @@ class _GooeyDropdownState extends State<GooeyDropdown> with SingleTickerProvider
                             boxShadow: [BoxShadow(blurRadius: 20 * _expandAnim.value, color: Colors.black.withAlpha(38))],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppTheme.metrics.radius16,
                             child: FadeTransition(
                               opacity: _fadeAnim,
                               child: Transform.translate(offset: Offset(0, 10 * (1 - _fadeAnim.value)), child: widget.dropdown),

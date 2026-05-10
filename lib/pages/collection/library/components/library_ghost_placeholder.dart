@@ -43,7 +43,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
         children: [
           meta.coverPath != null && File(meta.coverPath!).existsSync()
               ? Image.file(File(meta.coverPath!), fit: BoxFit.cover)
-              : Container(color: Colors.grey[300]),
+              : Container(color: Theme.of(context).colorScheme.outline),
           Positioned(
             left: 0,
             right: 0,
@@ -53,7 +53,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
               color: Colors.black.withAlpha(100),
               child: Text(
                 meta.title,
-                style: TextStyle(color: Colors.white, fontSize: appMetrics.fontSize12),
+                style: TextStyle(color: Colors.white, fontSize: appMetrics.fontSize11),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -70,7 +70,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
           children: [
             Icon(Icons.folder_rounded, size: scaleW(40), color: Colors.blue.withAlpha(180)),
             SizedBox(height: scaleW(4)),
-            Text(folder.name, style: TextStyle(fontSize: appMetrics.fontSize12), maxLines: 1),
+            Text(folder.name, style: TextStyle(fontSize: appMetrics.fontSize11), maxLines: 1),
           ],
         ),
       );

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -33,7 +33,7 @@ class PendingRequests extends StatelessWidget {
             height: scaleW(4),
             decoration: BoxDecoration(
               color: isDark ? DarkColors.white20 : LightColors.black20,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: AppTheme.metrics.radius2,
             ),
           ),
         ),
@@ -55,7 +55,7 @@ class PendingRequests extends StatelessWidget {
               Expanded(
                 child: Text(
                   '收到传输请求 (${requests.length})',
-                  style: TextStyle(fontSize: 18.0, height: 1.4, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: AppTheme.metrics.fontSize18, height: 1.4, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -132,7 +132,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
       decoration: BoxDecoration(
         color: widget.isDark ? DarkColors.background1 : LightColors.background1,
         border: Border.all(color: widget.isDark ? DarkColors.white10 : LightColors.black10),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppTheme.metrics.radius14,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +145,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 height: scaleW(40),
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppTheme.metrics.radius10,
                 ),
                 child: Icon(
                   _getTypeIcon(widget.request.transferType),
@@ -160,12 +160,12 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   children: [
                     Text(
                       widget.request.senderDeviceName,
-                      style: TextStyle(fontSize: 13.0, height: 1.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, fontWeight: FontWeight.w600),
                     ),
                     SizedBox(height: AppTheme.metrics.kSpace2),
                     Text(
                       '请求发送${_getTypeText(widget.request.transferType)}',
-                      style: TextStyle(fontSize: 11.0, height: 1.4,
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                         color: widget.isDark ? DarkColors.white80 : LightColors.black80,
                       ),
                     ),
@@ -185,14 +185,14 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
               ),
               decoration: BoxDecoration(
                 color: widget.isDark ? DarkColors.white10 : LightColors.black10,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppTheme.metrics.radius8,
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       widget.request.fileName ?? widget.request.textContent ?? '',
-                      style: TextStyle(fontSize: 11.0, height: 1.4),
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -201,7 +201,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     Text(
                       _formatFileSize(widget.request.fileSize!),
-                      style: TextStyle(fontSize: 11.0, height: 1.4,
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                         color: widget.isDark ? DarkColors.white80 : LightColors.black80,
                       ),
                     ),
@@ -231,7 +231,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 Text(
                   '信任此设备（下次自动接收）',
-                  style: TextStyle(fontSize: 11.0, height: 1.4,
+                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                     color: widget.isDark ? DarkColors.white80 : LightColors.black80,
                   ),
                 ),
@@ -248,10 +248,10 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 child: OutlinedButton(
                   onPressed: widget.onReject,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red, width: 0.8),
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    side: BorderSide(color: Theme.of(context).colorScheme.error, width: 0.8),
                     padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius10),
                   ),
                   child: const Text('拒绝'),
                 ),
@@ -269,7 +269,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius10),
                   ),
                   child: const Text('接受'),
                 ),

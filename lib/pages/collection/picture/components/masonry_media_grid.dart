@@ -208,7 +208,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     final fullSource = widget.viewModel.buildMediaSource(item);
     final isVideo = item.kind == media_api.MediaKind.video;
     final isAudio = item.kind == media_api.MediaKind.audio;
-    final defaultAr = (3.0 / 5.0);
+    const defaultAr = (3.0 / 5.0);
 
     // 优先使用 MediaItem 中已有的宽高字段（扫描时由 Rust 填入），避免在 build() 阶段
     // 同步读取图片文件来解码尺寸（会导致"一列一列"的加载顺序问题）。

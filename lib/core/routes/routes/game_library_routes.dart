@@ -44,13 +44,12 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    // 被游戏详情页覆盖时用 secondaryAnimation 淡出，避免透明详情页叠在列表上
     return CustomTransitionPage<void>(
       key: state.pageKey,
       name: state.name,
       arguments: state.extra,
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: AppRoutes.kTransitionDuration,
+      reverseTransitionDuration: AppRoutes.kTransitionDuration,
       child: const GameLibraryScreen(),
       transitionsBuilder: (
         BuildContext context,
@@ -58,14 +57,12 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
         Animation<double> secondaryAnimation,
         Widget child,
       ) {
-        // 自身淡入
         final Animation<double> fadeIn = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOut,
+          curve: Curves.easeOutCubic,
         );
-        // 被详情页压栈时淡出
         final Animation<double> fadeOut = Tween<double>(begin: 1.0, end: 0.0).animate(
-          CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeIn),
+          CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeInCubic),
         );
         return FadeTransition(
           opacity: fadeIn,
@@ -95,31 +92,7 @@ class GameDetailRoute extends AppRouteData with $GameDetailRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return CustomTransitionPage<void>(
-      key: state.pageKey,
-      name: state.name,
-      arguments: state.extra,
-      transitionDuration: const Duration(milliseconds: 320),
-      reverseTransitionDuration: const Duration(milliseconds: 260),
-      child: GameDetailScreen(gameId: gameId),
-      transitionsBuilder: (
-        BuildContext context,
-        Animation<double> animation,
-        Animation<double> secondaryAnimation,
-        Widget child,
-      ) {
-        // 纯淡入：封面背景已在 push 前由列表页预设，列表页同步通过 secondaryAnimation 淡出，
-        // 视觉上是封面背景 + 详情内容交叉淡入，不会看到列表叠加其下
-        return FadeTransition(
-          opacity: CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOut,
-            reverseCurve: Curves.easeIn,
-          ),
-          child: child,
-        );
-      },
-    );
+    return AppRoutes.buildFadePage(context, state, GameDetailScreen(gameId: gameId));
   }
 }
 

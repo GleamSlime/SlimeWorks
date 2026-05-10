@@ -69,10 +69,10 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
               Tooltip(
                 message: vm.currentUser.value?.name ?? '用户',
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppTheme.metrics.radius20,
                   onTap: () => _showUserMenu(context, vm),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace8),
                     child: ClipOval(
                       child: SizedBox(
                         width: 28,
@@ -91,7 +91,7 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                                 errorBuilder: (_, _, _) =>
                                     const Icon(Icons.account_circle_outlined),
                               )
-                            : const Icon(Icons.account_circle_outlined, size: 28),
+                            : Icon(Icons.account_circle_outlined, size: AppTheme.metrics.iconSize28),
                       ),
                     ),
                   ),
@@ -217,9 +217,9 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 Obx(
                   () => SliverToBoxAdapter(
                     child: vm.isLoadingMoreRandom.value
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Center(child: CircularProgressIndicator()),
+                        ? Padding(
+                            padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace24),
+                            child: const Center(child: CircularProgressIndicator()),
                           )
                         : SizedBox(height: metrics.kSpace24),
                   ),
@@ -230,8 +230,8 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
         ),
         // 返回顶部按钮
         Positioned(
-          bottom: 80,
-          right: 16,
+          bottom: AppTheme.metrics.kSpace80,
+          right: AppTheme.metrics.kSpace16,
           child: Obx(
             () => AnimatedScale(
               scale: _showBackToTop.value ? 1.0 : 0.0,
@@ -269,10 +269,10 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
           children: [
             Container(
               width: 3,
-              height: 18,
+              height: AppTheme.metrics.kSpace18,
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: AppTheme.metrics.radius2,
               ),
             ),
             SizedBox(width: metrics.kSpace8),
@@ -280,7 +280,7 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
             if (onRefresh != null) ...[
               const Spacer(),
               TextButton.icon(
-                icon: const Icon(Icons.refresh, size: 16),
+                icon: Icon(Icons.refresh, size: AppTheme.metrics.iconSize16),
                 label: const Text('换一批'),
                 onPressed: onRefresh,
               ),

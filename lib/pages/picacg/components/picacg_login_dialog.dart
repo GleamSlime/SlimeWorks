@@ -163,10 +163,10 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                 /// 错误信息
                 if (_errorMessage != null) ...[
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.error.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppTheme.metrics.radius8,
                     ),
                     child: Text(
                       _errorMessage!,
@@ -180,10 +180,10 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                 FilledButton(
                   onPressed: _isLoading ? null : _onLogin,
                   child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                      ? SizedBox(
+                          height: AppTheme.metrics.kSpace20,
+                          width: AppTheme.metrics.kSpace20,
+                          child: const CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text('登录'),
                 ),

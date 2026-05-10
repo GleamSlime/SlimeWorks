@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -83,7 +83,7 @@ class _TransferActionsState extends State<TransferActions> {
                     SizedBox(width: AppTheme.metrics.kSpace4),
                     Text(
                       isOnline ? '已连接' : '不在线·发送后排队',
-                      style: TextStyle(fontSize: 11.0, height: 1.4,
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                         color: isOnline
                             ? Colors.green
                             : (isDark ? DarkColors.white40 : LightColors.black40),
@@ -113,18 +113,18 @@ class _TransferActionsState extends State<TransferActions> {
                                 textInputAction: TextInputAction.send,
                                 maxLines: 1,
                                 minLines: 1,
-                                style: TextStyle(fontSize: 13.0, height: 1.5,
+                                style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
                                   color: isDark ? DarkColors.white100 : LightColors.black100,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: '输入要发送的文本...',
-                                  hintStyle: TextStyle(fontSize: 13.0, height: 1.5,
+                                  hintStyle: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
                                     color: isDark ? DarkColors.white40 : LightColors.black40,
                                   ),
                                   filled: true,
                                   fillColor: isDark ? DarkColors.white10 : LightColors.black10,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: AppTheme.metrics.radius10,
                                     borderSide: BorderSide.none,
                                   ),
                                   contentPadding: EdgeInsets.all(AppTheme.metrics.kSpace12),
@@ -146,7 +146,7 @@ class _TransferActionsState extends State<TransferActions> {
                                       color: hasText
                                           ? primaryColor.withValues(alpha: 0.15)
                                           : (isDark ? DarkColors.white10 : LightColors.black10),
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: AppTheme.metrics.radius10,
                                     ),
                                     child: Icon(
                                       Icons.send_rounded,
@@ -230,7 +230,7 @@ class _TransferActionsState extends State<TransferActions> {
             color: isActive
                 ? primaryColor.withValues(alpha: 0.12)
                 : (isDark ? DarkColors.white10 : LightColors.black10),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: AppTheme.metrics.radius10,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -245,7 +245,7 @@ class _TransferActionsState extends State<TransferActions> {
               SizedBox(height: AppTheme.metrics.kSpace4),
               Text(
                 label,
-                style: TextStyle(fontSize: 11.0, height: 1.4,
+                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
                   color: isActive
                       ? primaryColor
                       : (isDark ? DarkColors.white80 : LightColors.black80),

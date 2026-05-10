@@ -14,8 +14,8 @@ import 'package:flutter/material.dart';
 /// CuePressable(
 ///   onTap: () => doSomething(),
 ///   child: Container(
-///     padding: const EdgeInsets.all(12),
-///     child: const Text('点击我'),
+///     padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+///     child: Text('点击我'),
 ///   ),
 /// )
 /// ```

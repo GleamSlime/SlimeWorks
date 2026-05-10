@@ -231,8 +231,8 @@ class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicA
         itemCount: viewModel.results.length + (viewModel.hasMore ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i >= viewModel.results.length) {
-            return const Center(
-              child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()),
+            return Center(
+              child: Padding(padding: EdgeInsets.all(AppTheme.metrics.kSpace16), child: const CircularProgressIndicator()),
             );
           }
           final comic = viewModel.results[i];
@@ -288,7 +288,7 @@ class _SearchInputField extends StatelessWidget {
               : const SizedBox.shrink(),
         ),
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        contentPadding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
       ),
       onSubmitted: onSubmitted,
       onChanged: onChanged,
@@ -419,10 +419,10 @@ class _SortButton extends StatelessWidget {
       value: value,
       child: Row(
         children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 8),
+          Icon(icon, size: AppTheme.metrics.iconSize18),
+          SizedBox(width: AppTheme.metrics.kSpace8),
           Text(label),
-          if (current == value) ...[const Spacer(), const Icon(Icons.check, size: 16)],
+          if (current == value) ...[const Spacer(), Icon(Icons.check, size: AppTheme.metrics.iconSize16)],
         ],
       ),
     );
@@ -510,7 +510,7 @@ class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
                   onPressed: () => setState(() => _selected.clear()),
                   child: const Text('清空'),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: AppTheme.metrics.kSpace8),
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(context);

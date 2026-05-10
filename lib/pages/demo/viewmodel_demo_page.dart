@@ -51,7 +51,7 @@ class _ViewModelDemoScreenPageState
   Widget buildContent(BuildContext context) {
     return Column(
       children: [
-        Text('当前计数：${viewModel.a}', style: TextStyle(fontSize: AppTheme.metrics.fontSize16)),
+        Text('当前计数：${viewModel.a}', style: TextStyle(fontSize: AppTheme.metrics.fontSize15)),
         SizedBox(height: AppTheme.metrics.kSpace8),
         ElevatedButton(
           onPressed: () {
@@ -64,7 +64,7 @@ class _ViewModelDemoScreenPageState
 
         Text(
           '长期存在的模型计数：${longLivedViewModel.a}',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize16),
+          style: TextStyle(fontSize: AppTheme.metrics.fontSize15),
         ),
         SizedBox(height: AppTheme.metrics.kSpace8),
         ElevatedButton(

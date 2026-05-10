@@ -187,7 +187,7 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
     // 并与默认大小/粗细合并。这允许外层的 DefaultTextStyle（例如 overlay 中强制设置的样式）生效。
     final textStyle = widget.textStyle != null
         ? widget.textStyle!
-        : DefaultTextStyle.of(context).style.merge(const TextStyle(fontSize: 14, fontWeight: FontWeight.w500));
+        : DefaultTextStyle.of(context).style.merge(TextStyle(fontSize: AppTheme.metrics.fontSize13, fontWeight: FontWeight.w500));
     final svgSize = widget.svgSize ?? 20;
     final spacing = widget.spacing ?? 10;
     final svgColor = widget.svgColor ?? Theme.of(context).textTheme.bodyMedium?.color;

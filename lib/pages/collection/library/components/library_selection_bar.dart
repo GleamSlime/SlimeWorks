@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 多选状态时显示在底部的操作栏
 class LibrarySelectionBar extends StatelessWidget {
@@ -48,8 +49,8 @@ class LibrarySelectionBar extends StatelessWidget {
           if (contextFolderId != null)
             SimpleDialogOption(
               onPressed: () => Navigator.of(ctx2).pop('__ROOT__'),
-              child: const Row(
-                children: [Icon(Icons.home_outlined), SizedBox(width: 8), Text('移回根目录')],
+              child: Row(
+                children: [const Icon(Icons.home_outlined), SizedBox(width: AppTheme.metrics.kSpace8), const Text('移回根目录')],
               ),
             ),
           ...foldersToShow.map(
@@ -58,15 +59,15 @@ class LibrarySelectionBar extends StatelessWidget {
               child: Row(
                 children: [
                   const Icon(Icons.folder_outlined),
-                  const SizedBox(width: 8),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
                   Text(f.name),
                 ],
               ),
             ),
           ),
           if (foldersToShow.isEmpty && contextFolderId == null)
-            const SimpleDialogOption(
-              child: Text('暂无文件夹', style: TextStyle(color: Colors.grey)),
+            SimpleDialogOption(
+              child: Text('暂无文件夹', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
             ),
         ],
       ),
@@ -119,7 +120,7 @@ class LibrarySelectionBar extends StatelessWidget {
               ),
               tooltip: '全选',
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: AppTheme.metrics.kSpace4),
             Text(
               '已选 $count 项',
               style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
@@ -144,12 +145,12 @@ class LibrarySelectionBar extends StatelessWidget {
               icon: const Icon(Icons.drive_file_move_outlined),
               tooltip: '移动到文件夹',
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: AppTheme.metrics.kSpace4),
             TextButton(onPressed: viewModel.exitSelection, child: const Text('取消')),
-            const SizedBox(width: 8),
+            SizedBox(width: AppTheme.metrics.kSpace8),
             FilledButton.icon(
               onPressed: count > 0 ? () => _confirmDelete(context) : null,
-              icon: const Icon(Icons.delete_outline, size: 18),
+              icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
               label: const Text('删除'),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.error,

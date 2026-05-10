@@ -141,7 +141,7 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                         final name = entry.split(RegExp(r'[/\\]')).last;
                         return ListTile(
                           dense: true,
-                          leading: const Icon(Icons.folder_rounded, size: 20),
+                          leading: Icon(Icons.folder_rounded, size: AppTheme.metrics.iconSize20),
                           title: Text(name),
                           subtitle: Text(
                             entry,

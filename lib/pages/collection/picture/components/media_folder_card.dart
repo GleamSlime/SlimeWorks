@@ -168,8 +168,8 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                       ),
                                 if (kDebugMode)
                                   Positioned(
-                                    right: 4,
-                                    bottom: 4,
+                                    right: AppTheme.metrics.kSpace4,
+                                    bottom: AppTheme.metrics.kSpace4,
                                     child: DebugImageSizeBadge(src: resolvedCover),
                                   ),
                               ],
@@ -207,13 +207,13 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withAlpha(120),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: AppTheme.metrics.radius999,
                           ),
                           child: Text(
                             '${widget.collectionCount} 个集合',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: appMetrics.fontSize10,
+                              fontSize: appMetrics.fontSize9,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -233,12 +233,12 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                       ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer.withAlpha(220),
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         widget.nodeName!,
                         style: TextStyle(
-                          fontSize: appMetrics.fontSize10,
+                          fontSize: appMetrics.fontSize9,
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme.onPrimaryContainer,
                         ),
@@ -271,7 +271,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: appMetrics.fontSize16,
+                                  fontSize: appMetrics.fontSize15,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -280,7 +280,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                 '点击进入文件夹',
                                 style: TextStyle(
                                   color: Colors.white.withAlpha(210),
-                                  fontSize: appMetrics.fontSize12,
+                                  fontSize: appMetrics.fontSize11,
                                 ),
                               ),
                             ],
@@ -319,7 +319,7 @@ class _FolderPlaceholder extends StatelessWidget {
       child: Center(
         child: Icon(
           Icons.folder_off_outlined,
-          size: 48,
+          size: AppTheme.metrics.iconSize48,
           color: theme.colorScheme.primary.withAlpha(150),
         ),
       ),

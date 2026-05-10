@@ -307,7 +307,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black.withAlpha(120),
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: AppTheme.metrics.radius999,
                       ),
                       child: Text(
                         widget.item.kind == media_api.MediaKind.image
@@ -317,7 +317,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                             : '视频',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: isMobile ? appMetrics.fontSize8 : appMetrics.fontSize10,
+                          fontSize: appMetrics.fontSize9,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -352,8 +352,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: isMobile
-                                          ? appMetrics.fontSize10
-                                          : appMetrics.fontSize14,
+                                          ? appMetrics.fontSize9
+                                          : appMetrics.fontSize13,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -366,7 +366,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                     _formatDuration(widget.item.durationMs!),
                                     style: TextStyle(
                                       color: Colors.white70,
-                                      fontSize: appMetrics.fontSize10,
+                                      fontSize: appMetrics.fontSize9,
                                     ),
                                   ),
                                 ],

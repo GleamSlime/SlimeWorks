@@ -366,7 +366,7 @@ class LanTransferService {
         } catch (_) {}
 
         // 移动端 OS 释放端口可能需要更长时间，多次重试并递增等待间隔
-        final retryDelays = const [400, 800, 1500];
+        const retryDelays = [400, 800, 1500];
         final docsDir = await getApplicationDocumentsDirectory();
         final saveDir = '${docsDir.path}/LanTransfer';
         for (int attempt = 0; attempt < retryDelays.length; attempt++) {

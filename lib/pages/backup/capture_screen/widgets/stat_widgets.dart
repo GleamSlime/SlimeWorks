@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// 统计芯片
@@ -11,23 +12,23 @@ class StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppTheme.metrics.radius16,
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: AppTheme.metrics.fontSize11, fontWeight: FontWeight.w500)),
+          SizedBox(width: AppTheme.metrics.kSpace6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace2),
+            decoration: BoxDecoration(color: color, borderRadius: AppTheme.metrics.radius10),
             child: Text(
               count.toString(),
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize11, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -48,28 +49,28 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppTheme.metrics.radius12,
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 12),
+          Icon(icon, color: color, size: AppTheme.metrics.iconSize24),
+          SizedBox(width: AppTheme.metrics.kSpace12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                const SizedBox(height: 4),
+                Text(label, style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor)),
+                SizedBox(height: AppTheme.metrics.kSpace4),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                    style: TextStyle(fontSize: AppTheme.metrics.fontSize18, fontWeight: FontWeight.bold, color: color),
                   ),
                 ),
               ],
@@ -92,16 +93,16 @@ class InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: AppTheme.metrics.radius4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             label,
-            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: color, fontWeight: FontWeight.w500),
           ),
         ],
       ),

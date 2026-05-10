@@ -40,12 +40,12 @@ class ScreenTopBar extends StatelessWidget {
         // width: MediaQuery.of(context).size.width - scaleW(400),
         width: MediaQuery.of(context).size.width,
         padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
-        // color: Colors.red,
+        // color: theme.colorScheme.error,
         child: Platform.isMacOS
             ? Obx(
                 () => getIt<DesktopScreenProvider>().isMobile.value
                     ? const MacWindowButtons()
-                    : SizedBox.shrink(),
+                    : const SizedBox.shrink(),
               )
             : null,
       ),
@@ -68,13 +68,13 @@ class MacWindowButtons extends StatelessWidget {
           svg: Assets.image.svg.macToolsCloseNoHover,
           hoverSvg: Assets.image.svg.macToolsClose,
           onTap: windowManager.close,
-          size: 13,
+          size: AppTheme.metrics.iconSize13,
         ),
         HoverSvgButton(
           svg: Assets.image.svg.macToolsUnfoldNoHover,
           hoverSvg: Assets.image.svg.macToolsUnfold,
           onTap: windowManager.minimize,
-          size: 13,
+          size: AppTheme.metrics.iconSize13,
         ),
         HoverSvgButton(
           svg: Assets.image.svg.macToolsMaxNoHover,
@@ -82,7 +82,7 @@ class MacWindowButtons extends StatelessWidget {
               ? Assets.image.svg.macToolsMax
               : Assets.image.svg.macToolsMin,
           onTap: ScreenTopBar.handleDoubleTap,
-          size: 13,
+          size: AppTheme.metrics.iconSize13,
         ),
       ],
     );
@@ -112,7 +112,7 @@ class WindowsWindowButtons extends StatelessWidget {
             child: Center(
               child: SvgPicture.asset(
                 Assets.image.svg.windowsToolsUnfold,
-                width: AppTheme.metrics.fontSize16,
+                width: AppTheme.metrics.fontSize15,
               ),
             ),
           ),
@@ -132,7 +132,7 @@ class WindowsWindowButtons extends StatelessWidget {
                 ScreenTopBar.isMaximized
                     ? Assets.image.svg.windowsToolsMax
                     : Assets.image.svg.windowsToolsMin,
-                width: AppTheme.metrics.fontSize16,
+                width: AppTheme.metrics.fontSize15,
               ),
             ),
           ),
@@ -150,7 +150,7 @@ class WindowsWindowButtons extends StatelessWidget {
             child: Center(
               child: SvgPicture.asset(
                 Assets.image.svg.windowsToolsClose,
-                width: AppTheme.metrics.fontSize16,
+                width: AppTheme.metrics.fontSize15,
               ),
             ),
           ),

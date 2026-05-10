@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -15,7 +16,7 @@ class ReaderToolbar extends StatelessWidget {
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 16, vertical: AppTheme.metrics.kSpace8),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         boxShadow: [
@@ -40,7 +41,7 @@ class ReaderToolbar extends StatelessWidget {
           tooltip: '章节列表',
           onPressed: controller.toggleChapterList,
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: AppTheme.metrics.kSpace8),
 
         // 上一章
         Obx(
@@ -54,10 +55,10 @@ class ReaderToolbar extends StatelessWidget {
         // 章节信息
         Obx(
           () => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace4),
             decoration: BoxDecoration(
               color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppTheme.metrics.radius12,
             ),
             child: Text(
               controller.chapters.isEmpty
@@ -87,48 +88,48 @@ class ReaderToolbar extends StatelessWidget {
               children: [
                 // 搜索匹配信息
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppTheme.metrics.radius12,
                   ),
                   child: Text(
                     '${controller.selectedSearchIndex.value + 1}/${controller.searchMatches.length}',
-                    style: const TextStyle(
-                      fontSize: 12,
+                    style: TextStyle(
+                      fontSize: AppTheme.metrics.fontSize11,
                       fontWeight: FontWeight.bold,
                       color: Colors.orange,
                     ),
                   ),
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: AppTheme.metrics.kSpace4),
                 IconButton(
-                  icon: const Icon(Icons.arrow_upward, size: 20),
+                  icon: Icon(Icons.arrow_upward, size: AppTheme.metrics.iconSize20),
                   tooltip: '上一个结果',
                   onPressed: controller.previousSearchResult,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.list, size: 20),
+                  icon: Icon(Icons.list, size: AppTheme.metrics.iconSize20),
                   tooltip: '结果列表',
                   onPressed: controller.openSearchResultsList,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.arrow_downward, size: 20),
+                  icon: Icon(Icons.arrow_downward, size: AppTheme.metrics.iconSize20),
                   tooltip: '下一个结果',
                   onPressed: controller.nextSearchResult,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20),
+                  icon: Icon(Icons.close, size: AppTheme.metrics.iconSize20),
                   tooltip: '清除搜索',
                   onPressed: controller.clearSearch,
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: AppTheme.metrics.kSpace4),
                 IconButton(
-                  icon: const Icon(Icons.folder_open, size: 20),
+                  icon: Icon(Icons.folder_open, size: AppTheme.metrics.iconSize20),
                   tooltip: '在文件管理器中显示',
                   onPressed: controller.revealFileInFolder,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: AppTheme.metrics.kSpace8),
               ],
             );
           }
@@ -156,15 +157,15 @@ class ReaderToolbar extends StatelessWidget {
                       onPressed: () => _handleTranslateButton(context),
                     ),
                     if (isTranslating && total > 0) ...[
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      SizedBox(
+                        width: AppTheme.metrics.kSpace16,
+                        height: AppTheme.metrics.kSpace16,
+                        child: const CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: AppTheme.metrics.kSpace4),
                       Text(
                         '$progress/$total',
-                        style: const TextStyle(fontSize: 12, color: Colors.blue),
+                        style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Colors.blue),
                       ),
                     ],
                   ],
@@ -213,10 +214,10 @@ class ReaderToolbar extends StatelessWidget {
         ),
         Obx(
           () => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
             decoration: BoxDecoration(
               color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppTheme.metrics.radius12,
             ),
             child: Text(
               '${controller.fontSize.value.toInt()}',
@@ -230,7 +231,7 @@ class ReaderToolbar extends StatelessWidget {
           onPressed: controller.increaseFontSize,
         ),
 
-        const SizedBox(width: 8),
+        SizedBox(width: AppTheme.metrics.kSpace8),
         // 更多选项菜单
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
@@ -241,10 +242,10 @@ class ReaderToolbar extends StatelessWidget {
             }
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'delete',
               child: Row(
-                children: [Icon(Icons.delete, size: 20), SizedBox(width: 8), Text('删除书本')],
+                children: [Icon(Icons.delete, size: AppTheme.metrics.iconSize20), SizedBox(width: AppTheme.metrics.kSpace8), const Text('删除书本')],
               ),
             ),
           ],
@@ -278,17 +279,17 @@ class ReaderToolbar extends StatelessWidget {
               () => Expanded(
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
                     decoration: BoxDecoration(
                       color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppTheme.metrics.radius12,
                     ),
                     child: Text(
                       controller.chapters.isEmpty
                           ? '0/0'
                           : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: AppTheme.metrics.fontSize11,
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).primaryColor,
                       ),
@@ -336,10 +337,10 @@ class ReaderToolbar extends StatelessWidget {
                       height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: AppTheme.metrics.kSpace4),
                     Text(
                       '$progress/$total',
-                      style: const TextStyle(fontSize: 11, color: Colors.blue),
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Colors.blue),
                     ),
                   ],
                 ],
@@ -381,52 +382,52 @@ class ReaderToolbar extends StatelessWidget {
         Obx(() {
           if (controller.searchMatches.isNotEmpty) {
             return Container(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(top: AppTheme.metrics.kSpace4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppTheme.metrics.radius12,
                     ),
                     child: Text(
                       '${controller.selectedSearchIndex.value + 1}/${controller.searchMatches.length}',
-                      style: const TextStyle(
-                        fontSize: 11,
+                      style: TextStyle(
+                        fontSize: AppTheme.metrics.fontSize11,
                         fontWeight: FontWeight.bold,
                         color: Colors.orange,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: AppTheme.metrics.kSpace4),
                   IconButton(
                     icon: const Icon(Icons.arrow_upward),
                     onPressed: controller.previousSearchResult,
                     iconSize: 16,
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: const Icon(Icons.list),
                     onPressed: controller.openSearchResultsList,
                     iconSize: 16,
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: const Icon(Icons.arrow_downward),
                     onPressed: controller.nextSearchResult,
                     iconSize: 16,
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: controller.clearSearch,
                     iconSize: 16,
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                 ],

@@ -34,7 +34,7 @@ class _GameCategoryDetailScreenState
       title: '分类详情',
       actions: <Widget>[
         OutlinedButton.icon(
-          onPressed: () => GameCategoriesRoute().go(context),
+          onPressed: () => const GameCategoriesRoute().go(context),
           icon: const Icon(Icons.arrow_back),
           label: const Text('返回分类'),
         ),

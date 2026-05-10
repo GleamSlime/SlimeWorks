@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
@@ -44,8 +45,8 @@ class _ChapterListState extends State<ChapterList> {
   Widget build(BuildContext context) {
     return Obx(() {
       if (widget.controller.chapters.isEmpty) {
-        return const Center(
-          child: Text('暂无章节', style: TextStyle(color: Colors.grey)),
+        return Center(
+          child: Text('暂无章节', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
         );
       }
 
@@ -64,14 +65,14 @@ class _ChapterListState extends State<ChapterList> {
           children: [
             // 章节列表标题
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.list, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(Icons.list, size: AppTheme.metrics.iconSize20),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
                   Text(
                     '章节列表',
                     style: Theme.of(
@@ -81,7 +82,7 @@ class _ChapterListState extends State<ChapterList> {
                   const Spacer(),
                   Text(
                     '共 ${widget.controller.chapters.length} 章',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
                   ),
                 ],
               ),
@@ -105,7 +106,7 @@ class _ChapterListState extends State<ChapterList> {
                       child: InkWell(
                         onTap: () => widget.controller.goToChapter(index),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace12),
                           decoration: BoxDecoration(
                             border: Border(
                               bottom: BorderSide(
@@ -117,26 +118,26 @@ class _ChapterListState extends State<ChapterList> {
                             children: [
                               // 章节序号
                               Container(
-                                width: 32,
-                                height: 32,
+                                width: AppTheme.metrics.kSpace32,
+                                height: AppTheme.metrics.kSpace32,
                                 decoration: BoxDecoration(
                                   color: isCurrent
                                       ? Theme.of(context).primaryColor
-                                      : Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(4),
+                                      : Theme.of(context).colorScheme.outline,
+                                  borderRadius: AppTheme.metrics.radius4,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '${index + 1}',
                                     style: TextStyle(
                                       color: isCurrent ? Colors.white : Colors.black87,
-                                      fontSize: 12,
+                                      fontSize: AppTheme.metrics.fontSize11,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              SizedBox(width: AppTheme.metrics.kSpace12),
 
                               // 章节标题（去除 HTML 标签）
                               Expanded(
@@ -145,7 +146,7 @@ class _ChapterListState extends State<ChapterList> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: AppTheme.metrics.fontSize13,
                                     fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                                     color: isCurrent
                                         ? Theme.of(context).primaryColor
@@ -157,10 +158,10 @@ class _ChapterListState extends State<ChapterList> {
                               // 当前章节标记
                               if (isCurrent)
                                 Container(
-                                  margin: const EdgeInsets.only(left: 8),
+                                  margin: EdgeInsets.only(left: AppTheme.metrics.kSpace8),
                                   child: Icon(
                                     Icons.play_arrow,
-                                    size: 20,
+                                    size: AppTheme.metrics.iconSize20,
                                     color: Theme.of(context).primaryColor,
                                   ),
                                 ),

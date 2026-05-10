@@ -128,9 +128,9 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           value: 'delete',
           child: Row(
             children: [
-              Icon(Icons.delete_outlined, size: scaleW(18), color: Colors.red),
+              Icon(Icons.delete_outlined, size: scaleW(18), color: Theme.of(context).colorScheme.error),
               SizedBox(width: scaleW(8)),
-              const Text('删除', style: TextStyle(color: Colors.red)),
+              Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ),
         ),
@@ -222,8 +222,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           if (currentFolderId != null)
             SimpleDialogOption(
               onPressed: () => Navigator.of(ctx2).pop('__ROOT__'),
-              child: const Row(
-                children: [Icon(Icons.home_outlined), SizedBox(width: 8), Text('移回根目录')],
+              child: Row(
+                children: [const Icon(Icons.home_outlined), SizedBox(width: AppTheme.metrics.kSpace8), const Text('移回根目录')],
               ),
             ),
           ...foldersToShow
@@ -234,7 +234,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                   child: Row(
                     children: [
                       const Icon(Icons.folder_outlined),
-                      const SizedBox(width: 8),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
                       Text(f.name),
                     ],
                   ),
@@ -242,8 +242,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
               ),
           if (foldersToShow.where((f) => f.id != currentFolderId).isEmpty &&
               currentFolderId == null)
-            const SimpleDialogOption(
-              child: Text('暂无文件夹', style: TextStyle(color: Colors.grey)),
+            SimpleDialogOption(
+              child: Text('暂无文件夹', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
             ),
         ],
       ),
@@ -262,7 +262,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx2).pop(), child: const Text('取消')),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             onPressed: () {
               Navigator.of(ctx2).pop();
               widget.viewModel.deleteNovel(widget.metadata.id);
@@ -371,7 +371,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
             onExit: (_) => setState(() => _hovering = false),
             child: Container(
               width: double.infinity,
-              decoration: BoxDecoration(color: Colors.grey[200]),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant),
               child: Stack(
                 children: [
                   // 封面作为整个卡片背景
@@ -412,7 +412,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                       formatFileSize(widget.metadata.fileSize),
                                       style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: appMetrics.fontSize10,
+                                        fontSize: appMetrics.fontSize9,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -429,7 +429,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                       widget.metadata.format.name.toUpperCase(),
                                       style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: appMetrics.fontSize10,
+                                        fontSize: appMetrics.fontSize9,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -561,7 +561,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                                         tag,
                                                         style: TextStyle(
                                                           color: Colors.white,
-                                                          fontSize: appMetrics.fontSize10,
+                                                          fontSize: appMetrics.fontSize9,
                                                           fontWeight: FontWeight.w500,
                                                         ),
                                                       ),
@@ -648,7 +648,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         widget.metadata.title,
                                         style: TextStyle(
                                           color: Colors.white,
-                                          fontSize: appMetrics.fontSize14,
+                                          fontSize: appMetrics.fontSize13,
                                           fontWeight: FontWeight.bold,
                                         ),
                                         maxLines: 1,
@@ -658,7 +658,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                       Text(
                                         widget.metadata.author ?? '',
                                         style: TextStyle(
-                                          fontSize: appMetrics.fontSize12,
+                                          fontSize: appMetrics.fontSize11,
                                           color: Colors.white70,
                                         ),
                                         maxLines: 1,
@@ -669,7 +669,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         Text(
                                           '节点: ${widget.viewModel.getNovelNodeName(widget.metadata.id) ?? '未知'}',
                                           style: TextStyle(
-                                            fontSize: appMetrics.fontSize10,
+                                            fontSize: appMetrics.fontSize9,
                                             color: Colors.lightBlueAccent,
                                           ),
                                           maxLines: 1,
@@ -715,7 +715,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                             widget.metadata.format.toString(),
                                             style: TextStyle(
                                               color: Colors.white70,
-                                              fontSize: appMetrics.fontSize12,
+                                              fontSize: appMetrics.fontSize11,
                                             ),
                                           ),
                                         ),
@@ -726,7 +726,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                               '${(widget.metadata.progress * 100).toStringAsFixed(0)}% 阅读',
                                               style: TextStyle(
                                                 color: Colors.white70,
-                                                fontSize: appMetrics.fontSize12,
+                                                fontSize: appMetrics.fontSize11,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -756,7 +756,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   child: widget.isSelected
                                       ? Icon(
                                           Icons.check,
-                                          size: appMetrics.fontSize14,
+                                          size: appMetrics.fontSize13,
                                           color: Colors.white,
                                         )
                                       : null,
@@ -828,7 +828,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     return Hero(
       tag: 'book_cover_${widget.metadata.id}',
       child: Container(
-        color: Colors.grey[300],
+        color: Theme.of(context).colorScheme.outline,
         child: Center(
           child: Icon(Icons.book, size: scaleW(40), color: Colors.white70),
         ),

@@ -141,13 +141,13 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
       padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace16),
       children: [
         // ─── 账号 ─────────────────────────────────────────────
-        _SectionTitle('账号'),
+        const _SectionTitle('账号'),
         _AccountCard(service: _service, onChanged: () => setState(() {})),
 
         SizedBox(height: m.kSpace20),
 
         // ─── API 分流 ──────────────────────────────────────────
-        _SectionTitle('API 分流'),
+        const _SectionTitle('API 分流'),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -174,11 +174,11 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.speed, size: 16),
+                          : Icon(Icons.speed, size: AppTheme.metrics.iconSize16),
                       label: const Text('全部测速'),
                       onPressed: _testingAll ? null : _testAll,
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace6),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         visualDensity: VisualDensity.compact,
@@ -282,7 +282,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
         SizedBox(height: m.kSpace20),
 
         // ─── 代理 ──────────────────────────────────────────────
-        _SectionTitle('代理（使用分流时通常无需设置）'),
+        const _SectionTitle('代理（使用分流时通常无需设置）'),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -323,7 +323,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
         SizedBox(height: m.kSpace20),
 
         // ─── 图片服务器 ─────────────────────────────────────────
-        _SectionTitle('图片服务器'),
+        const _SectionTitle('图片服务器'),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -390,7 +390,7 @@ class _AccountCard extends StatelessWidget {
             style: theme.textTheme.bodySmall,
           ),
           trailing: TextButton.icon(
-            icon: const Icon(Icons.logout, size: 16),
+            icon: Icon(Icons.logout, size: AppTheme.metrics.iconSize16),
             label: const Text('退出'),
             onPressed: () async {
               await service.logout();
@@ -408,7 +408,7 @@ class _AccountCard extends StatelessWidget {
         padding: EdgeInsets.all(m.kSpace12),
         child: Row(
           children: [
-            const Icon(Icons.account_circle_outlined, size: 40),
+            Icon(Icons.account_circle_outlined, size: AppTheme.metrics.iconSize40),
             SizedBox(width: m.kSpace12),
             Expanded(
               child: Text(
@@ -419,7 +419,7 @@ class _AccountCard extends StatelessWidget {
               ),
             ),
             FilledButton.icon(
-              icon: const Icon(Icons.login, size: 16),
+              icon: Icon(Icons.login, size: AppTheme.metrics.iconSize16),
               label: const Text('登录'),
               onPressed: () async {
                 final ok = await showPicAcgLoginDialog(context);
@@ -465,7 +465,7 @@ class _ChannelRadioTile extends StatelessWidget {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     } else if (latency == -2) {
-      trailing = Text('不可达', style: TextStyle(color: theme.colorScheme.error, fontSize: 12));
+      trailing = Text('不可达', style: TextStyle(color: theme.colorScheme.error, fontSize: AppTheme.metrics.fontSize11));
     } else if (latency != null && latency! >= 0) {
       final color = latency! < 300
           ? Colors.green
@@ -474,7 +474,7 @@ class _ChannelRadioTile extends StatelessWidget {
           : theme.colorScheme.error;
       trailing = Text(
         '${latency}ms',
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize11),
       );
     }
 

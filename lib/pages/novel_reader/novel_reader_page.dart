@@ -84,8 +84,8 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('阅读设置', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 12),
+                    Text('阅读设置', style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.w600)),
+                    SizedBox(height: AppTheme.metrics.kSpace12),
                     Row(
                       children: [
                         const Text('字体大小'),
@@ -107,7 +107,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: AppTheme.metrics.kSpace8),
                     Row(
                       children: [
                         const Text('行间距'),
@@ -128,9 +128,9 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: AppTheme.metrics.kSpace8),
                     const Text('背景色'),
-                    const SizedBox(height: 8),
+                    SizedBox(height: AppTheme.metrics.kSpace8),
                     Wrap(
                       spacing: 10,
                       children:
@@ -474,7 +474,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
         titleWidget: Row(
           children: [
             _buildHeroCover(32),
-            const SizedBox(width: 8),
+            SizedBox(width: AppTheme.metrics.kSpace8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,7 +487,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                           .take(3)
                           .map(
                             (tag) => Chip(
-                              label: Text(tag, style: const TextStyle(fontSize: 10)),
+                              label: Text(tag, style: TextStyle(fontSize: AppTheme.metrics.fontSize10)),
                               padding: EdgeInsets.zero,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
@@ -542,7 +542,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                 controller.chapterListWidth.value = newWidth.clamp(200.0, 600.0);
                               },
                               child: Container(
-                                width: 8,
+                                width: AppTheme.metrics.kSpace8,
                                 color: Colors.transparent,
                                 child: Center(
                                   child: Container(width: 2, color: Theme.of(context).dividerColor),
@@ -589,14 +589,14 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.red),
-          const SizedBox(height: 16),
+          Icon(Icons.error_outline, size: AppTheme.metrics.iconSize64, color: Theme.of(context).colorScheme.error),
+          SizedBox(height: AppTheme.metrics.kSpace16),
           Text(
             controller.errorMessage.value,
-            style: const TextStyle(color: Colors.red, fontSize: 16),
+            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: AppTheme.metrics.fontSize15),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.metrics.kSpace16),
           ElevatedButton.icon(
             onPressed: () => controller.loadNovelContent(),
             icon: const Icon(Icons.refresh),
@@ -615,7 +615,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
         final file = File(novel.coverPath!);
         if (file.existsSync()) {
           cover = ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: AppTheme.metrics.radius4,
             child: Image.file(file, width: size, height: size * 1.4, fit: BoxFit.cover),
           );
         } else {
@@ -634,7 +634,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     return Container(
       width: size,
       height: size * 1.4,
-      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.outline, borderRadius: AppTheme.metrics.radius4),
       child: Icon(Icons.book, size: size * 0.5, color: Colors.white70),
     );
   }

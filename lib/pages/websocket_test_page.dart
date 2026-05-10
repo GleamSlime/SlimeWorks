@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/websocket_manager.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
 import 'dart:async';
@@ -312,7 +313,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
       data: const ScreenChromeData(title: 'WebSocket 测试'),
       child: Scaffold(
         body: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -328,7 +329,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
                   SizedBox(
                     width: 100,
                     child: TextField(
@@ -342,18 +343,18 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppTheme.metrics.kSpace16),
 
               // 服务器控制（仅 PC 端）
               if (_wsManager.isServerSupported) ...[
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text('服务器控制', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
+                        SizedBox(height: AppTheme.metrics.kSpace8),
                         Wrap(
                           spacing: 8,
                           children: [
@@ -373,36 +374,39 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                         ),
                         if (_isServerRunning) ...[
                           Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
+                            padding: EdgeInsets.only(top: AppTheme.metrics.kSpace8),
                             child: Row(
                               children: [
                                 Text(
                                   '在线客户端: $_clientCount',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: AppTheme.metrics.kSpace8),
                                 IconButton(
-                                  icon: const Icon(Icons.refresh, size: 16),
+                                  icon: Icon(Icons.refresh, size: AppTheme.metrics.iconSize16),
                                   onPressed: _updateClients,
                                   tooltip: '刷新列表',
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
                           const Text('客户端列表:', style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
+                          SizedBox(height: AppTheme.metrics.kSpace4),
                           Container(
                             height: 150,
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey),
-                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Theme.of(context).colorScheme.outline),
+                              borderRadius: AppTheme.metrics.radius4,
                             ),
                             child: _clients.isEmpty
-                                ? const Center(
+                                ? Center(
                                     child: Text(
                                       '暂无客户端连接',
-                                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                                      style: TextStyle(
+                                        fontSize: AppTheme.metrics.fontSize11,
+                                        color: Theme.of(context).colorScheme.outline,
+                                      ),
                                     ),
                                   )
                                 : ListView.builder(
@@ -420,14 +424,17 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                                         selected: isSelected,
                                         title: Text(
                                           '${client.address} ${client.authenticated ? "✓" : "✗"}',
-                                          style: const TextStyle(fontSize: 12),
+                                          style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
                                         ),
                                         subtitle: Text(
                                           '连接时长: ${duration.inMinutes}分${duration.inSeconds % 60}秒',
-                                          style: const TextStyle(fontSize: 10),
+                                          style: TextStyle(fontSize: AppTheme.metrics.fontSize10),
                                         ),
                                         trailing: IconButton(
-                                          icon: const Icon(Icons.close, size: 16),
+                                          icon: Icon(
+                                            Icons.close,
+                                            size: AppTheme.metrics.iconSize16,
+                                          ),
                                           onPressed: () => _disconnectClientById(client.id),
                                           tooltip: '断开连接',
                                         ),
@@ -445,18 +452,18 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: AppTheme.metrics.kSpace16),
               ],
 
               // 客户端控制
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text('客户端控制', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
+                      SizedBox(height: AppTheme.metrics.kSpace8),
                       Wrap(
                         spacing: 8,
                         children: [
@@ -482,7 +489,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppTheme.metrics.kSpace16),
 
               // 消息发送
               Row(
@@ -503,33 +510,39 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
                   if (_wsManager.isServerSupported && _isServerRunning)
                     ElevatedButton(onPressed: _broadcastMessage, child: const Text('广播')),
                   if (_isClientConnected)
                     ElevatedButton(onPressed: _sendMessage, child: const Text('发送')),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppTheme.metrics.kSpace16),
 
               // 日志
               Text('日志', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
+              SizedBox(height: AppTheme.metrics.kSpace8),
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Theme.of(context).colorScheme.outline),
+                    borderRadius: AppTheme.metrics.radius4,
                   ),
                   child: ListView.builder(
                     reverse: true,
                     itemCount: _logs.length,
                     itemBuilder: (context, index) {
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppTheme.metrics.kSpace8,
+                          vertical: AppTheme.metrics.kSpace4,
+                        ),
                         child: Text(
                           _logs[index],
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: AppTheme.metrics.fontSize11,
+                          ),
                         ),
                       );
                     },

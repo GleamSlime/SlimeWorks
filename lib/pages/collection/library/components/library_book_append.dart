@@ -36,12 +36,12 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
             child: StateTransitionAnimation(
               label: label,
               textStyle: TextStyle(
-                fontSize: AppTheme.metrics.fontSize14,
+                fontSize: AppTheme.metrics.fontSize13,
                 color: Theme.of(context).textTheme.bodyMedium?.color,
                 fontWeight: FontWeight.w500,
               ),
               svg: Assets.image.svg.libraryImport,
-              svgSize: AppTheme.metrics.fontSize16,
+              svgSize: AppTheme.metrics.fontSize15,
               loading: loading,
               height: AppTheme.metrics.kSpace40,
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
@@ -91,7 +91,7 @@ class _MessageContent extends StatelessWidget {
               label: '添加单个文件',
               onTap: viewModel.addSingleNovel,
             ),
-            Divider(),
+            const Divider(),
             _ImportOptionItem(
               icon: Icons.folder_outlined,
               label: '扫描文件夹',
@@ -159,7 +159,7 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
                 child: Text(
                   widget.label,
                   style: TextStyle(
-                    fontSize: AppTheme.metrics.fontSize14,
+                    fontSize: AppTheme.metrics.fontSize13,
                     color: Theme.of(context).textTheme.bodyMedium?.color,
                     decoration: TextDecoration.none,
                   ),

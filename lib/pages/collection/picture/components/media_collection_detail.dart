@@ -67,7 +67,7 @@ class MediaCollectionDetailView extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: AppTheme.metrics.kSpace12),
                 Text('正在加载远程资源…', style: Theme.of(context).textTheme.bodySmall),
               ],
             ),

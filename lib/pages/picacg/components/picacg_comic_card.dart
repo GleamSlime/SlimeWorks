@@ -101,7 +101,7 @@ class _PicAcgComicCardState extends State<PicAcgComicCard> with SingleTickerProv
                         widget.comic.author!,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: 10,
+                          fontSize: AppTheme.metrics.fontSize10,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -136,7 +136,7 @@ class _ComicCoverImage extends StatelessWidget {
       },
       errorBuilder: (_, e, _) => Container(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: const Center(child: Icon(Icons.broken_image_outlined, size: 32)),
+        child: Center(child: Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize32)),
       ),
     );
   }
@@ -198,7 +198,7 @@ class PicAcgComicListTile extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.photo_library_outlined,
-                        size: 12,
+                        size: AppTheme.metrics.iconSize12,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       SizedBox(width: scaleW(2)),
@@ -211,7 +211,7 @@ class PicAcgComicListTile extends StatelessWidget {
                       SizedBox(width: metrics.kSpace4),
                       Icon(
                         Icons.favorite_border,
-                        size: 12,
+                        size: AppTheme.metrics.iconSize12,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       SizedBox(width: scaleW(2)),
@@ -224,16 +224,16 @@ class PicAcgComicListTile extends StatelessWidget {
                       if (comic.finished) ...[
                         SizedBox(width: metrics.kSpace4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4, vertical: 1),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: AppTheme.metrics.radius3,
                           ),
                           child: Text(
                             '完结',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.primary,
-                              fontSize: 10,
+                              fontSize: AppTheme.metrics.fontSize10,
                             ),
                           ),
                         ),

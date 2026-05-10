@@ -17,6 +17,7 @@ import 'package:slime_works/pages/picacg/components/picacg_comic_card.dart';
 import 'package:slime_works/pages/picacg/components/picacg_image_view.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
 import 'package:slime_works/pages/picacg/view_models/picacg_comic_detail_viewmodel.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 
 class PicAcgComicDetailScreen extends BasePage<PicAcgComicDetailViewModel> {
   const PicAcgComicDetailScreen({super.key, required this.comicId});
@@ -109,7 +110,7 @@ class _PicAcgComicDetailScreenState
                       context,
                     ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: AppTheme.metrics.kSpace16),
                   FilledButton(
                     onPressed: () => viewModel.loadDetail(widget.comicId),
                     child: const Text('重试'),
@@ -175,9 +176,9 @@ class _PicAcgComicDetailScreenState
                                           image: comic.creator!.avatar!,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, _, _) =>
-                                              const Icon(Icons.person, size: 16),
+                                              Icon(Icons.person, size: AppTheme.metrics.iconSize16),
                                         )
-                                      : const Icon(Icons.person, size: 16),
+                                      : Icon(Icons.person, size: AppTheme.metrics.iconSize16),
                                 ),
                               ),
                               SizedBox(width: metrics.kSpace8),
@@ -286,7 +287,7 @@ class _PicAcgComicDetailScreenState
                     icon: vm.isFavourite.value ? Icons.favorite : Icons.favorite_border,
                     label: '收藏',
                     active: vm.isFavourite.value,
-                    activeColor: Colors.red,
+                    activeColor: Theme.of(context).colorScheme.error,
                     onTap: () => vm.toggleFavourite(comic.id),
                   ),
                 ),
@@ -329,7 +330,7 @@ class _PicAcgComicDetailScreenState
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.bookmark, size: 18, color: theme.colorScheme.primary),
+                      Icon(Icons.bookmark, size: AppTheme.metrics.iconSize18, color: theme.colorScheme.primary),
                       SizedBox(width: metrics.kSpace8),
                       Expanded(
                         child: Text(
@@ -339,7 +340,7 @@ class _PicAcgComicDetailScreenState
                           ),
                         ),
                       ),
-                      Icon(Icons.arrow_forward_ios, size: 14, color: theme.colorScheme.primary),
+                      Icon(Icons.arrow_forward_ios, size: AppTheme.metrics.iconSize14, color: theme.colorScheme.primary),
                     ],
                   ),
                 ),
@@ -425,7 +426,7 @@ class _PicAcgComicDetailScreenState
                   final count = entry?.episodes.values.where((e) => e.isCompleted).length ?? 0;
                   if (count == 0) return const SizedBox.shrink();
                   return OutlinedButton.icon(
-                    icon: const Icon(Icons.download_done, size: 16),
+                    icon: Icon(Icons.download_done, size: AppTheme.metrics.iconSize16),
                     label: Text('已下载 $count 话'),
                     onPressed: () => const PicAcgDownloadsRoute().push(context),
                   );
@@ -434,7 +435,7 @@ class _PicAcgComicDetailScreenState
                 Obx(() {
                   if (vm.recommendations.isEmpty) return const SizedBox.shrink();
                   return OutlinedButton.icon(
-                    icon: const Icon(Icons.recommend_outlined, size: 16),
+                    icon: Icon(Icons.recommend_outlined, size: AppTheme.metrics.iconSize16),
                     label: Text('相关推荐 ${vm.recommendations.length}'),
                     onPressed: () => _showRecommendationsSheet(context, vm),
                   );
@@ -457,10 +458,10 @@ class _PicAcgComicDetailScreenState
               children: [
                 Container(
                   width: 3,
-                  height: 16,
+                  height: AppTheme.metrics.kSpace16,
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: AppTheme.metrics.radius2,
                   ),
                 ),
                 SizedBox(width: metrics.kSpace8),
@@ -490,7 +491,7 @@ class _PicAcgComicDetailScreenState
                     epsTitle: ep.title,
                   ).push(context),
                   icon: isDownloaded
-                      ? const Icon(Icons.check_circle, size: 14, color: Colors.green)
+                      ? Icon(Icons.check_circle, size: AppTheme.metrics.iconSize14, color: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success)
                       : const SizedBox.shrink(),
                   label: Text(ep.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                 );
@@ -533,13 +534,13 @@ class _PicAcgComicDetailScreenState
         builder: (_, controller) => Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace12),
               child: Text('相关推荐', style: Theme.of(context).textTheme.titleMedium),
             ),
             Expanded(
               child: GridView.builder(
                 controller: controller,
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   mainAxisSpacing: 8,
@@ -584,8 +585,8 @@ class _PicAcgComicDetailScreenState
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 12, color: effectiveColor),
-        const SizedBox(width: 2),
+        Icon(icon, size: AppTheme.metrics.iconSize12, color: effectiveColor),
+        SizedBox(width: AppTheme.metrics.kSpace2),
         Text(label, style: theme.textTheme.labelSmall?.copyWith(color: effectiveColor)),
       ],
     );
@@ -618,9 +619,9 @@ class _PicAcgComicDetailScreenState
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: Row(
                         children: [
-                          const Text(
+                          Text(
                             '选择下载章节',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.bold),
                           ),
                           const Spacer(),
                           TextButton(
@@ -641,7 +642,7 @@ class _PicAcgComicDetailScreenState
                     Expanded(
                       child: GridView.builder(
                         controller: controller,
-                        padding: const EdgeInsets.all(12),
+                        padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 4,
                           mainAxisSpacing: 8,
@@ -673,12 +674,12 @@ class _PicAcgComicDetailScreenState
                                     : isSelected
                                     ? Theme.of(ctx).colorScheme.primary
                                     : Theme.of(ctx).colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: AppTheme.metrics.radius6,
                               ),
                               child: Text(
                                 '${ep.order}',
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: AppTheme.metrics.fontSize11,
                                   color: isDownloaded
                                       ? Colors.green
                                       : isSelected
@@ -693,7 +694,7 @@ class _PicAcgComicDetailScreenState
                     ),
                     SafeArea(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
                         child: FilledButton(
                           onPressed: selected.isEmpty
                               ? null
@@ -747,14 +748,14 @@ class _ActionButton extends StatelessWidget {
         : theme.colorScheme.onSurface.withValues(alpha: 0.6);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppTheme.metrics.radius8,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: color),
-            const SizedBox(height: 2),
+            Icon(icon, size: AppTheme.metrics.iconSize22, color: color),
+            SizedBox(height: AppTheme.metrics.kSpace2),
             Text(label, style: theme.textTheme.labelSmall?.copyWith(color: color)),
           ],
         ),
@@ -871,9 +872,9 @@ class _ComicDetailSkeletonState extends State<_ComicDetailSkeleton>
               box(40, 14),
               SizedBox(height: metrics.kSpace8),
               box(double.infinity, 12),
-              SizedBox(height: 6),
+              SizedBox(height: AppTheme.metrics.kSpace6),
               box(double.infinity, 12),
-              SizedBox(height: 6),
+              SizedBox(height: AppTheme.metrics.kSpace6),
               box(200, 12),
             ],
           ),
@@ -917,7 +918,7 @@ class _ExpandableTextState extends State<_ExpandableText> {
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: AppTheme.metrics.kSpace6),
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           alignment: Alignment.topCenter,
@@ -1018,7 +1019,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       builder: (_, sheetController) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace12),
             child: Text('评论', style: theme.textTheme.titleMedium),
           ),
           Expanded(
@@ -1042,14 +1043,14 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     },
                     child: ListView.separated(
                       controller: sheetController,
-                      padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 24),
+                      padding: EdgeInsets.only(left: AppTheme.metrics.kSpace12, right: AppTheme.metrics.kSpace12, top: AppTheme.metrics.kSpace12, bottom: AppTheme.metrics.kSpace24),
                       itemCount: _comments!.length + (_loadingMore ? 1 : (_hasMore ? 1 : 0)),
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         // 底部加载指示器 / 触发行
                         if (i >= _comments!.length) {
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace16),
                             child: Center(
                               child: _loadingMore
                                   ? const CircularProgressIndicator(strokeWidth: 2)
@@ -1059,7 +1060,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         }
                         final c = _comments![i];
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -1076,23 +1077,23 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                       : const Icon(Icons.person),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: AppTheme.metrics.kSpace8),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(c.user.name, style: theme.textTheme.labelMedium),
-                                    const SizedBox(height: 2),
+                                    SizedBox(height: AppTheme.metrics.kSpace2),
                                     Text(c.content, style: theme.textTheme.bodySmall),
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: AppTheme.metrics.kSpace4),
                                     Row(
                                       children: [
                                         Icon(
                                           Icons.thumb_up_outlined,
-                                          size: 12,
+                                          size: AppTheme.metrics.iconSize12,
                                           color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                                         ),
-                                        const SizedBox(width: 3),
+                                        SizedBox(width: AppTheme.metrics.kSpace3),
                                         Text('${c.likesCount}', style: theme.textTheme.labelSmall),
                                       ],
                                     ),

@@ -310,7 +310,7 @@ String embedLocalImages(String html) {
       final imgIdx = out.toLowerCase().indexOf('<img', idx);
       if (imgIdx == -1) break;
 
-      final srcKey = 'src=';
+      const srcKey = 'src=';
       final srcPos = out.toLowerCase().indexOf(srcKey, imgIdx);
       if (srcPos == -1) {
         idx = imgIdx + 4;

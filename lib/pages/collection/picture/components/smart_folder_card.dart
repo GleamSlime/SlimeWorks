@@ -138,7 +138,7 @@ class SmartFolderCard extends StatelessWidget {
                               errorBuilder: (_, _, _) => const _SmartPlaceholder(),
                             ),
                       if (kDebugMode)
-                        Positioned(right: 4, bottom: 4, child: DebugImageSizeBadge(src: src)),
+                        Positioned(right: AppTheme.metrics.kSpace4, bottom: AppTheme.metrics.kSpace4, child: DebugImageSizeBadge(src: src)),
                     ],
                   );
                 }
@@ -172,13 +172,13 @@ class SmartFolderCard extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: Colors.black.withAlpha(120),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: AppTheme.metrics.radius999,
                 ),
                 child: Text(
                   '$matchCount 个集合',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: appMetrics.fontSize10,
+                    fontSize: appMetrics.fontSize9,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -197,14 +197,14 @@ class SmartFolderCard extends StatelessWidget {
                   color: nodeName != null
                       ? theme.colorScheme.secondaryContainer.withAlpha(220)
                       : theme.colorScheme.tertiaryContainer.withAlpha(220),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: AppTheme.metrics.radius999,
                 ),
                 child: Text(
                   nodeName ?? '正则',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: appMetrics.fontSize10,
+                    fontSize: appMetrics.fontSize9,
                     fontWeight: FontWeight.w600,
                     color: nodeName != null
                         ? theme.colorScheme.onSecondaryContainer
@@ -228,7 +228,7 @@ class SmartFolderCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: appMetrics.fontSize16,
+                      fontSize: appMetrics.fontSize15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -239,7 +239,7 @@ class SmartFolderCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white.withAlpha(210),
-                      fontSize: appMetrics.fontSize12,
+                      fontSize: appMetrics.fontSize11,
                       fontFamily: smartFolder.regexPattern.isEmpty ? null : 'monospace',
                     ),
                   ),
@@ -273,7 +273,7 @@ class _SmartPlaceholder extends StatelessWidget {
       child: Center(
         child: Icon(
           Icons.auto_awesome_outlined,
-          size: 48,
+          size: AppTheme.metrics.iconSize48,
           color: theme.colorScheme.tertiary.withAlpha(150),
         ),
       ),

@@ -59,7 +59,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
 
       _isReady.value = true;
     } catch (e) {
-      Loggers(name: 'Translation').error('初始化翻译服务失败', error: e);
+      const Loggers(name: 'Translation').error('初始化翻译服务失败', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('初始化翻译服务失败: $e')));
       }
@@ -73,7 +73,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
       final models = await _settingsService!.getModels();
       _models.value = models;
     } catch (e) {
-      Loggers(name: 'Translation').error('加载模型列表失败', error: e);
+      const Loggers(name: 'Translation').error('加载模型列表失败', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载模型列表失败: $e')));
       }
@@ -96,7 +96,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
     _isTranslating.value = true;
     _translatedText.value = '';
 
-    Loggers(
+    const Loggers(
       name: 'Translation',
     ).info('开始翻译, model=$_selectedModel, lang=${_selectedLanguagePair.displayName}');
 
@@ -108,7 +108,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
         languagePair: _selectedLanguagePair,
         onChunk: (chunk) {
           _translatedText.value += chunk;
-          Loggers(name: 'Translation').info('收到 chunk: ${chunk.replaceAll('\n', '')}');
+          const Loggers(name: 'Translation').info('收到 chunk: ${chunk.replaceAll('\n', '')}');
         },
       );
 
@@ -119,13 +119,13 @@ class _TranslationPanelState extends State<TranslationPanel> {
         },
       );
 
-      Loggers(name: 'Translation').info('翻译完成, result length=${result.length}');
+      const Loggers(name: 'Translation').info('翻译完成, result length=${result.length}');
 
       if (_translatedText.value.isEmpty) {
         _translatedText.value = result;
       }
     } catch (e, st) {
-      Loggers(name: 'Translation').error('翻译失败', error: e, stackTrace: st);
+      const Loggers(name: 'Translation').error('翻译失败', error: e, stackTrace: st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('翻译失败: $e')));
       }
@@ -240,8 +240,8 @@ class _TranslationPanelState extends State<TranslationPanel> {
             child: Container(
               padding: EdgeInsets.all(appMetrics.paddingMedium),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Theme.of(context).colorScheme.outline),
+                borderRadius: AppTheme.metrics.radius8,
               ),
               child: SingleChildScrollView(
                 child: SelectableText(
@@ -275,12 +275,12 @@ class _TranslationPanelState extends State<TranslationPanel> {
               return Container(
                 padding: EdgeInsets.all(appMetrics.paddingLarge),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey[50],
+                  border: Border.all(color: Theme.of(context).colorScheme.outline),
+                  borderRadius: AppTheme.metrics.radius8,
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
                 ),
-                child: const Center(
-                  child: Text('翻译结果将显示在这里', style: TextStyle(color: Colors.grey)),
+                child: Center(
+                  child: Text('翻译结果将显示在这里', style: TextStyle(color: Theme.of(context).hintColor)),
                 ),
               );
             }
@@ -289,8 +289,8 @@ class _TranslationPanelState extends State<TranslationPanel> {
               child: Container(
                 padding: EdgeInsets.all(appMetrics.paddingMedium),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Theme.of(context).colorScheme.outline),
+                  borderRadius: AppTheme.metrics.radius8,
                   color: Theme.of(context).cardColor,
                 ),
                 child: SingleChildScrollView(
