@@ -126,7 +126,7 @@ class MediaCollectionDetailView extends StatelessWidget {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     onViewerStateChanged?.call(true);
                   });
-                  Navigator.of(context).push(route).whenComplete(() {
+                  Navigator.of(context, rootNavigator: true).push(route).whenComplete(() {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       onViewerStateChanged?.call(false);
                     });
@@ -190,7 +190,7 @@ class MediaCollectionDetailView extends StatelessWidget {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         onViewerStateChanged?.call(true);
                       });
-                      Navigator.of(context).push(route).whenComplete(() {
+                      Navigator.of(context, rootNavigator: true).push(route).whenComplete(() {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           onViewerStateChanged?.call(false);
                         });

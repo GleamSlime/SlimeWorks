@@ -120,7 +120,6 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
           ? widget.child
           : Stack(
               children: [
-                // 全局背景图（游戏详情页设置，AnimatedSwitcher 保证进出场均有淡入淡出过渡）
                 Positioned.fill(
                   child: Obx(() {
                     final String path = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
@@ -133,7 +132,12 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                     );
                   }),
                 ),
-                widget.child,
+                Column(
+                  children: [
+                    const DesktopTopBar(),
+                    Expanded(child: widget.child),
+                  ],
+                ),
                 const Positioned(left: 0, top: 0, child: ScreenTopBar()),
               ],
             ),
@@ -178,5 +182,63 @@ class _GlobalBlurBackground extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class DesktopTopBar extends StatelessWidget {
+  const DesktopTopBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final chrome = getIt<DesktopScreenProvider>().screenChrome.value.data;
+
+      return Container(
+        padding: EdgeInsets.only(
+          left: AppTheme.metrics.kSpace12,
+          right: AppTheme.metrics.kSpace16,
+          top: AppTheme.metrics.kSpace4,
+        ),
+        height: scaleW(60),
+        child: Row(
+          spacing: appMetrics.kSpace12,
+          children: [
+            if (chrome.hasLeading) chrome.leading!,
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child:
+                    chrome.titleWidget ??
+                    (chrome.title != null
+                        ? Text(chrome.title!, style: Theme.of(context).textTheme.titleMedium)
+                        : const SizedBox.shrink()),
+              ),
+            ),
+            if (chrome.hasActions)
+              Row(
+                spacing: AppTheme.metrics.kSpace12,
+                mainAxisSize: MainAxisSize.min,
+                children: chrome.actions,
+              ),
+            if (chrome.hasToolbar)
+              Flexible(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    height: chrome.toolbarHeight,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: Center(child: chrome.toolbar!),
+                    ),
+                  ),
+                ),
+              ),
+            if (Platform.isWindows) const WindowsWindowButtons(),
+          ],
+        ),
+      );
+    });
   }
 }

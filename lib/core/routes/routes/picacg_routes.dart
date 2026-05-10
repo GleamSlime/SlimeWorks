@@ -1,8 +1,5 @@
 part of '../app_routes.dart';
 
-/// PicACG 漫画平台路由定义
-
-@TypedGoRoute<PicAcgHomeRoute>(path: '/picacg')
 class PicAcgHomeRoute extends AppRouteData with $PicAcgHomeRoute {
   const PicAcgHomeRoute();
 
@@ -14,6 +11,9 @@ class PicAcgHomeRoute extends AppRouteData with $PicAcgHomeRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+
+  @override
+  String get sidebarGroupId => 'core';
 
   static const Permission routePermission = Permission.accessPicAcg;
 
@@ -94,7 +94,6 @@ class PicAcgReaderRoute extends AppRouteData with $PicAcgReaderRoute {
   }
 }
 
-@TypedGoRoute<PicAcgDownloadsRoute>(path: '/picacg/downloads')
 class PicAcgDownloadsRoute extends AppRouteData with $PicAcgDownloadsRoute {
   const PicAcgDownloadsRoute();
 
@@ -103,6 +102,9 @@ class PicAcgDownloadsRoute extends AppRouteData with $PicAcgDownloadsRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+
+  @override
+  String get sidebarGroupId => 'picacg';
 
   static const Permission routePermission = Permission.accessPicAcg;
 

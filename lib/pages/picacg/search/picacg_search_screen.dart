@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -89,7 +90,7 @@ class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicA
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: () {
-          if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+          if (context.canPop()) context.pop();
         },
       ),
       titleWidget: _SearchInputField(
@@ -232,7 +233,10 @@ class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicA
         itemBuilder: (ctx, i) {
           if (i >= viewModel.results.length) {
             return Center(
-              child: Padding(padding: EdgeInsets.all(AppTheme.metrics.kSpace16), child: const CircularProgressIndicator()),
+              child: Padding(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                child: const CircularProgressIndicator(),
+              ),
             );
           }
           final comic = viewModel.results[i];
@@ -422,7 +426,10 @@ class _SortButton extends StatelessWidget {
           Icon(icon, size: AppTheme.metrics.iconSize18),
           SizedBox(width: AppTheme.metrics.kSpace8),
           Text(label),
-          if (current == value) ...[const Spacer(), Icon(Icons.check, size: AppTheme.metrics.iconSize16)],
+          if (current == value) ...[
+            const Spacer(),
+            Icon(Icons.check, size: AppTheme.metrics.iconSize16),
+          ],
         ],
       ),
     );

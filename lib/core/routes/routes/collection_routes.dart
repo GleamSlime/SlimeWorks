@@ -1,6 +1,5 @@
 part of '../app_routes.dart';
 
-@TypedGoRoute<CollectionLibraryRoute>(path: '/collection/library')
 class CollectionLibraryRoute extends AppRouteData with $CollectionLibraryRoute {
   const CollectionLibraryRoute();
 
@@ -13,6 +12,9 @@ class CollectionLibraryRoute extends AppRouteData with $CollectionLibraryRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectLibrary;
 
+  @override
+  String get sidebarGroupId => 'collection';
+
   static const Permission routePermission = Permission.accessCollection;
 
   @override
@@ -21,7 +23,6 @@ class CollectionLibraryRoute extends AppRouteData with $CollectionLibraryRoute {
   }
 }
 
-@TypedGoRoute<CollectionPictureRoute>(path: '/collection/picture')
 class CollectionPictureRoute extends AppRouteData with $CollectionPictureRoute {
   const CollectionPictureRoute();
 
@@ -33,6 +34,9 @@ class CollectionPictureRoute extends AppRouteData with $CollectionPictureRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+
+  @override
+  String get sidebarGroupId => 'collection';
 
   static const Permission routePermission = Permission.accessCollection;
 

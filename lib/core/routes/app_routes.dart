@@ -57,93 +57,88 @@ part 'routes/lan_transfer_routes.dart';
 part 'routes/picacg_routes.dart';
 part 'routes/game_library_routes.dart';
 
-// // 导航到 Dashboard
-// DashboardRoute().go(context);
-
-// // 导航到书籍阅读器（带参数）
-// NovelReaderRoute($extra: novelMetadata).go(context);
-
-// // Push 导航
-// const CaptureRoute().push(context);
-
-// // 替换导航
-// const SettingsRoute().pushReplacement(context);
-
 /// 路由路径常量
 class Routes {
   Routes._();
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
+
+/// 带侧边栏的 ShellRoute
+@TypedShellRoute<AppShellRouteData>(
+  routes: <TypedRoute<RouteData>>[
+    TypedGoRoute<DashboardRoute>(path: '/dashboard'),
+    TypedGoRoute<CaptureRoute>(path: '/capture'),
+    TypedGoRoute<CollectionLibraryRoute>(path: '/collection/library'),
+    TypedGoRoute<CollectionPictureRoute>(path: '/collection/picture'),
+    TypedGoRoute<GameHomeRoute>(path: '/game/home'),
+    TypedGoRoute<GameLibraryRoute>(path: '/game/library'),
+    TypedGoRoute<GameCategoriesRoute>(path: '/game/categories'),
+    TypedGoRoute<GameStatsRoute>(path: '/game/stats'),
+    TypedGoRoute<GameSettingsRoute>(path: '/game/settings'),
+    TypedGoRoute<PicAcgHomeRoute>(path: '/picacg'),
+    TypedGoRoute<PicAcgDownloadsRoute>(path: '/picacg/downloads'),
+    TypedGoRoute<LanTransferRoute>(path: '/lan-transfer'),
+    TypedGoRoute<SettingsRoute>(path: '/settings'),
+    TypedGoRoute<AboutRoute>(path: '/about'),
+  ],
+)
+class AppShellRouteData extends ShellRouteData {
+  const AppShellRouteData();
+
+  static final GlobalKey<NavigatorState> $navigatorKey = shellNavigatorKey;
+
+  @override
+  Widget builder(BuildContext context, GoRouterState state, Widget navigator) {
+    return DesktopLayout(child: navigator);
+  }
+}
 
 /// 应用路由配置
 class AppRoutes {
   AppRoutes._();
 
-  // 全局 router 实例，供无法访问 context 的地方使用
   static GoRouter? router;
 
-  /// 创建 GoRouter 实例
   static GoRouter createRouter() {
     if (router != null) return router!;
 
     final controller = Get.put(SidebarController());
 
-    // 路由构造器列表
     final routeConstructors = <GoRouteData>[
       const DashboardRoute(),
       const CaptureRoute(),
-      const ModuleManagementRoute(),
-      const NovelLibraryRoute(),
-      const NovelReaderRoute(),
-      const ThemePreviewRoute(),
-      const HttpBridgeTestRoute(),
-      const WebSocketTestRoute(),
-      const SettingsRoute(),
-      const DatasourceRoute(),
-      const ClearwaterRoute(),
-      const AliyunRoute(),
-      const ImageToolsRoute(),
-      const ImageToolboxRoute(),
-      const MediaLibraryRoute(),
-      const CloudWordRoute(),
-      const DistributedRoute(),
-      const RequestHostRoute(),
-      const LanTransferRoute(),
-      const LanChatRoute(peerId: '', peerName: ''),
-
+      const CollectionLibraryRoute(),
+      const CollectionPictureRoute(),
       const GameHomeRoute(),
       const GameLibraryRoute(),
       const GameCategoriesRoute(),
       const GameStatsRoute(),
       const GameSettingsRoute(),
-      const GameDetailRoute(gameId: ''),
-      const GameCategoryDetailRoute(categoryId: ''),
-
-      const GooeyDemoRoute(),
-      const ViewModelDemoRoute(),
-
       const PicAcgHomeRoute(),
+      const PicAcgDownloadsRoute(),
+      const LanTransferRoute(),
+      const SettingsRoute(),
+      const AboutRoute(),
+
+      const NovelReaderRoute(),
       const PicAcgComicDetailRoute(comicId: ''),
       const PicAcgSearchRoute(),
       const PicAcgReaderRoute(comicId: '', epsOrder: 0),
-      const PicAcgDownloadsRoute(),
+      const PicAcgHistoryRoute(),
+      const GameDetailRoute(gameId: ''),
+      const GameCategoryDetailRoute(categoryId: ''),
+      const LanChatRoute(peerId: '', peerName: ''),
     ];
 
     router = GoRouter(
       initialLocation: '/dashboard',
-      routes: [
-        ShellRoute(
-          builder: (context, state, child) => DesktopLayout(child: child),
-          routes: $appRoutes,
-        ),
-      ],
+      routes: $appRoutes,
       navigatorKey: navigatorKey,
       debugLogDiagnostics: true,
       redirect: (context, state) {
-        // 权限检查 - 在路由级别进行权限控制
         final path = state.uri.path;
-        // 查找匹配的路由实例（直接从类定义读取 permission）
         GoRouteData? matched;
         for (final route in routeConstructors) {
           if (route.location == path) {
@@ -161,15 +156,10 @@ class AppRoutes {
         }
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          // 如果是阅读器页面，则侧边栏保持"书库"高亮
-          if (path == '/novel-reader') {
-            controller.selectedRoute.value = '/collection/library';
-          } else {
-            controller.selectedRoute.value = path;
-          }
+          controller.selectedRoute.value = path;
         });
 
-        return null; // 无重定向
+        return null;
       },
     );
     return router!;
@@ -180,7 +170,6 @@ class AppRoutes {
   static const Duration kSlowTransitionDuration = Duration(milliseconds: 320);
   static const Duration kSlowReverseTransitionDuration = Duration(milliseconds: 260);
 
-  /// 构建带过渡动画的页面
   static Page<dynamic> buildPage(BuildContext context, GoRouterState state, Widget child) {
     if (Platform.isIOS) {
       return CupertinoPage(
@@ -200,7 +189,6 @@ class AppRoutes {
     );
   }
 
-  /// 构建纯淡入过渡页面（适用于详情页等需要较慢过渡的场景）
   static Page<dynamic> buildFadePage(BuildContext context, GoRouterState state, Widget child) {
     if (Platform.isIOS) {
       return CupertinoPage(
@@ -220,7 +208,11 @@ class AppRoutes {
         return ColoredBox(
           color: Theme.of(context).scaffoldBackgroundColor,
           child: FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic),
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            ),
             child: child,
           ),
         );
@@ -228,7 +220,12 @@ class AppRoutes {
     );
   }
 
-  static Widget _defaultTransitionsBuilder(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+  static Widget _defaultTransitionsBuilder(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
     final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
     return ColoredBox(
@@ -240,41 +237,37 @@ class AppRoutes {
     );
   }
 
-  /// 构建占位页面
   static Widget buildPlaceholder(String title) {
     return Scaffold(
-      body: Center(child: Text('$title 页面开发中...', style: TextStyle(fontSize: AppTheme.metrics.fontSize22))),
+      body: Center(
+        child: Text('$title 页面开发中...', style: TextStyle(fontSize: AppTheme.metrics.fontSize22)),
+      ),
     );
   }
 }
 
-// 向后兼容 - 导出一个全局 goRouter 实例
 final goRouter = AppRoutes.createRouter();
 
 abstract class AppRouteData extends GoRouteData {
   const AppRouteData();
 
-  /// 标题
   String get title;
 
-  /// 侧边栏图标路径
   String? get sidebarIcon;
 
-  /// 侧边栏标签
   String get sidebarLabel => title;
 
-  /// 侧边栏提示
   String? get sidebarTooltip => sidebarLabel;
 
-  /// 侧边栏排序
   int? get sidebarOrder => null;
 
-  /// 侧边栏徽章数量
   int? get sidebarBadgeCount => null;
 
-  /// 权限
+  String? get sidebarGroupId => null;
+
+  bool get showInSidebar => sidebarIcon != null;
+
   Permission? get permission => AppRouteData.routePermission;
 
-  /// 路由权限
   static Permission routePermission = Permission.viewDashboard;
 }

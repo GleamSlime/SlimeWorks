@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
@@ -34,7 +35,7 @@ class _GameCategoryDetailScreenState
       title: '分类详情',
       actions: <Widget>[
         OutlinedButton.icon(
-          onPressed: () => const GameCategoriesRoute().go(context),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back),
           label: const Text('返回分类'),
         ),

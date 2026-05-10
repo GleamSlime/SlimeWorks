@@ -40,7 +40,7 @@ Future<void> main() async {
 
   // 初始化系统托盘
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-    final trayService = await Get.putAsync(() async {
+    await Get.putAsync(() async {
       final service = SystemTrayService();
       await service.init();
       return service;
@@ -144,6 +144,10 @@ class MyApp extends StatelessWidget {
             ],
 
             builder: (context, child) {
+              if (child == null) return const SizedBox.shrink();
+              if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+                return EasyLoading.init()(context, DesktopScaffold(child: child));
+              }
               return EasyLoading.init()(context, child);
             },
           );

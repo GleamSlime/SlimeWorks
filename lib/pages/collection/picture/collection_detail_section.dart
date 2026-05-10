@@ -118,7 +118,7 @@ class CollectionDetailSection extends StatelessWidget {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   onViewerActiveChanged(true);
                 });
-                Navigator.of(context).push(route).whenComplete(() {
+                Navigator.of(context, rootNavigator: true).push(route).whenComplete(() {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     onViewerActiveChanged(false);
                   });

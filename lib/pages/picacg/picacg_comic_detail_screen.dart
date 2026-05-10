@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -49,8 +50,8 @@ class _PicAcgComicDetailScreenState
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
+          if (context.canPop()) {
+            context.pop();
             return;
           }
           const PicAcgHomeRoute().go(context);
@@ -330,7 +331,11 @@ class _PicAcgComicDetailScreenState
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.bookmark, size: AppTheme.metrics.iconSize18, color: theme.colorScheme.primary),
+                      Icon(
+                        Icons.bookmark,
+                        size: AppTheme.metrics.iconSize18,
+                        color: theme.colorScheme.primary,
+                      ),
                       SizedBox(width: metrics.kSpace8),
                       Expanded(
                         child: Text(
@@ -340,7 +345,11 @@ class _PicAcgComicDetailScreenState
                           ),
                         ),
                       ),
-                      Icon(Icons.arrow_forward_ios, size: AppTheme.metrics.iconSize14, color: theme.colorScheme.primary),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: AppTheme.metrics.iconSize14,
+                        color: theme.colorScheme.primary,
+                      ),
                     ],
                   ),
                 ),
@@ -491,7 +500,13 @@ class _PicAcgComicDetailScreenState
                     epsTitle: ep.title,
                   ).push(context),
                   icon: isDownloaded
-                      ? Icon(Icons.check_circle, size: AppTheme.metrics.iconSize14, color: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success)
+                      ? Icon(
+                          Icons.check_circle,
+                          size: AppTheme.metrics.iconSize14,
+                          color: (Theme.of(context).brightness == Brightness.dark)
+                              ? DarkColors.success
+                              : LightColors.success,
+                        )
                       : const SizedBox.shrink(),
                   label: Text(ep.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                 );
@@ -621,7 +636,10 @@ class _PicAcgComicDetailScreenState
                         children: [
                           Text(
                             '选择下载章节',
-                            style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: AppTheme.metrics.fontSize15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const Spacer(),
                           TextButton(
@@ -694,7 +712,10 @@ class _PicAcgComicDetailScreenState
                     ),
                     SafeArea(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppTheme.metrics.kSpace16,
+                          vertical: AppTheme.metrics.kSpace8,
+                        ),
                         child: FilledButton(
                           onPressed: selected.isEmpty
                               ? null
@@ -750,7 +771,10 @@ class _ActionButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: AppTheme.metrics.radius8,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace10),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace16,
+          vertical: AppTheme.metrics.kSpace10,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1043,7 +1067,12 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     },
                     child: ListView.separated(
                       controller: sheetController,
-                      padding: EdgeInsets.only(left: AppTheme.metrics.kSpace12, right: AppTheme.metrics.kSpace12, top: AppTheme.metrics.kSpace12, bottom: AppTheme.metrics.kSpace24),
+                      padding: EdgeInsets.only(
+                        left: AppTheme.metrics.kSpace12,
+                        right: AppTheme.metrics.kSpace12,
+                        top: AppTheme.metrics.kSpace12,
+                        bottom: AppTheme.metrics.kSpace24,
+                      ),
                       itemCount: _comments!.length + (_loadingMore ? 1 : (_hasMore ? 1 : 0)),
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (_, i) {

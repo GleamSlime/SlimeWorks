@@ -174,7 +174,14 @@ class _TransferChatViewState extends State<TransferChatView> {
                   children: [
                     Icon(Icons.keyboard_double_arrow_down, size: scaleW(16), color: Colors.white),
                     SizedBox(width: AppTheme.metrics.kSpace4),
-                    Text('返回底部', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: Colors.white)),
+                    Text(
+                      '返回底部',
+                      style: TextStyle(
+                        fontSize: AppTheme.metrics.fontSize11,
+                        height: 1.4,
+                        color: Colors.white,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -212,7 +219,11 @@ class _TransferChatViewState extends State<TransferChatView> {
           ),
           child: Text(
             label,
-            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: isDark ? DarkColors.white40 : LightColors.black40),
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize11,
+              height: 1.4,
+              color: isDark ? DarkColors.white40 : LightColors.black40,
+            ),
           ),
         ),
       ),
@@ -233,7 +244,11 @@ class _TransferChatViewState extends State<TransferChatView> {
           SizedBox(height: AppTheme.metrics.kSpace12),
           Text(
             '暂无传输记录',
-            style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white40 : LightColors.black40),
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize13,
+              height: 1.5,
+              color: isDark ? DarkColors.white40 : LightColors.black40,
+            ),
           ),
         ],
       ),
@@ -343,7 +358,9 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                         ),
                         child: Text(
                           widget.item.senderDeviceName,
-                          style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                          style: TextStyle(
+                            fontSize: AppTheme.metrics.fontSize11,
+                            height: 1.4,
                             color: isDark ? DarkColors.white40 : LightColors.black40,
                           ),
                         ),
@@ -375,7 +392,9 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                           if (isSelf) SizedBox(width: AppTheme.metrics.kSpace4),
                           Text(
                             _formatTime(widget.item.createdAt),
-                            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                            style: TextStyle(
+                              fontSize: AppTheme.metrics.fontSize11,
+                              height: 1.4,
                               color: isDark ? DarkColors.white20 : LightColors.black20,
                             ),
                           ),
@@ -447,7 +466,10 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
         horizontal: AppTheme.metrics.kSpace12,
         vertical: AppTheme.metrics.kSpace10,
       ),
-      child: SelectableText(item.textContent ?? '', style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: textColor)),
+      child: SelectableText(
+        item.textContent ?? '',
+        style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: textColor),
+      ),
     );
   }
 
@@ -470,7 +492,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
           return ClipRRect(
             borderRadius: AppTheme.metrics.radius12,
             child: GestureDetector(
-              onTap: () => Navigator.of(context).push(
+              onTap: () => Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute(
                   builder: (_) =>
                       _ImagePreviewPage(filePath: file.path, title: item.fileName ?? '图片'),
@@ -491,7 +513,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
           return ClipRRect(
             borderRadius: AppTheme.metrics.radius12,
             child: GestureDetector(
-              onTap: () => Navigator.of(context).push(
+              onTap: () => Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute(
                   builder: (_) =>
                       _VideoPreviewPage(filePath: file.path, title: item.fileName ?? '视频'),
@@ -556,7 +578,9 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 children: [
                   Text(
                     name,
-                    style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
+                    style: TextStyle(
+                      fontSize: AppTheme.metrics.fontSize13,
+                      height: 1.5,
                       color: textColor,
                       fontWeight: FontWeight.w600,
                     ),
@@ -566,7 +590,11 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                   if (size.isNotEmpty)
                     Text(
                       size,
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: textColor.withValues(alpha: 0.65)),
+                      style: TextStyle(
+                        fontSize: AppTheme.metrics.fontSize11,
+                        height: 1.4,
+                        color: textColor.withValues(alpha: 0.65),
+                      ),
                     ),
                 ],
               ),
@@ -597,7 +625,11 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               '${item.progress.toStringAsFixed(1)}%',
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: textColor.withValues(alpha: 0.65)),
+              style: TextStyle(
+                fontSize: AppTheme.metrics.fontSize11,
+                height: 1.4,
+                color: textColor.withValues(alpha: 0.65),
+              ),
             ),
           ],
         ],
@@ -618,7 +650,14 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             color: textColor.withValues(alpha: 0.5),
           ),
           SizedBox(width: AppTheme.metrics.kSpace8),
-          Text('文件已移除', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: textColor.withValues(alpha: 0.6))),
+          Text(
+            '文件已移除',
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize11,
+              height: 1.4,
+              color: textColor.withValues(alpha: 0.6),
+            ),
+          ),
         ],
       ),
     );
@@ -642,10 +681,22 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             colorText: Colors.white,
           );
         },
-        child: Icon(Icons.error_outline, size: scaleW(14), color: Theme.of(context).colorScheme.error),
+        child: Icon(
+          Icons.error_outline,
+          size: scaleW(14),
+          color: Theme.of(context).colorScheme.error,
+        ),
       ),
-      TransferStatus.rejected => Icon(Icons.block, size: scaleW(14), color: Theme.of(context).colorScheme.error),
-      TransferStatus.cancelled => Icon(Icons.cancel_outlined, size: scaleW(14), color: Theme.of(context).colorScheme.outline),
+      TransferStatus.rejected => Icon(
+        Icons.block,
+        size: scaleW(14),
+        color: Theme.of(context).colorScheme.error,
+      ),
+      TransferStatus.cancelled => Icon(
+        Icons.cancel_outlined,
+        size: scaleW(14),
+        color: Theme.of(context).colorScheme.outline,
+      ),
       TransferStatus.transferring => SizedBox(
         width: scaleW(14),
         height: scaleW(14),
@@ -913,7 +964,12 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
                               title: const Text('分享到...'),
                               onTap: () {
                                 Navigator.of(ctx).pop();
-                                SharePlus.instance.share(ShareParams(files: [XFile(widget.filePath)], subject: widget.title));
+                                SharePlus.instance.share(
+                                  ShareParams(
+                                    files: [XFile(widget.filePath)],
+                                    subject: widget.title,
+                                  ),
+                                );
                               },
                             ),
                           ],
@@ -978,7 +1034,13 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
             width: MediaQuery.of(context).size.width / 2,
             height: 50,
           );
-    SharePlus.instance.share(ShareParams(files: [XFile(widget.filePath)], subject: widget.title, sharePositionOrigin: origin));
+    SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(widget.filePath)],
+        subject: widget.title,
+        sharePositionOrigin: origin,
+      ),
+    );
   }
 
   @override

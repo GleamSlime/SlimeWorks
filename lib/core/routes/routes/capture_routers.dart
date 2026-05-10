@@ -1,6 +1,5 @@
 part of '../app_routes.dart';
 
-@TypedGoRoute<CaptureRoute>(path: '/capture')
 class CaptureRoute extends AppRouteData with $CaptureRoute {
   const CaptureRoute();
 
@@ -12,6 +11,9 @@ class CaptureRoute extends AppRouteData with $CaptureRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCapture;
+
+  @override
+  String get sidebarGroupId => 'core';
 
   static const Permission routePermission = Permission.accessCapture;
 

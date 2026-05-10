@@ -100,7 +100,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     return ScreenChromeData(
       title: '游戏详情',
       leading: TextButton.icon(
-        onPressed: () => const GameLibraryRoute().go(context),
+        onPressed: () => context.pop(),
         icon: Icon(Icons.arrow_back_ios_new, size: AppTheme.metrics.iconSize16),
         label: const Text('返回'),
       ),
@@ -380,7 +380,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             ],
           );
         }),
-        Container(width: 1, height: AppTheme.metrics.kSpace24, color: Theme.of(context).dividerColor),
+        Container(
+          width: 1,
+          height: AppTheme.metrics.kSpace24,
+          color: Theme.of(context).dividerColor,
+        ),
 
         // 状态 Pills
         ...GameStatus.values.map(
@@ -391,7 +395,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             onTap: () async => viewModel.updateGame(game.copyWith(status: s)),
           ),
         ),
-        Container(width: 1, height: AppTheme.metrics.kSpace24, color: Theme.of(context).dividerColor),
+        Container(
+          width: 1,
+          height: AppTheme.metrics.kSpace24,
+          color: Theme.of(context).dividerColor,
+        ),
 
         // 收藏 Pill
         _StatusPill(

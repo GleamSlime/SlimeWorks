@@ -128,7 +128,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           value: 'delete',
           child: Row(
             children: [
-              Icon(Icons.delete_outlined, size: scaleW(18), color: Theme.of(context).colorScheme.error),
+              Icon(
+                Icons.delete_outlined,
+                size: scaleW(18),
+                color: Theme.of(context).colorScheme.error,
+              ),
               SizedBox(width: scaleW(8)),
               Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
@@ -223,7 +227,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
             SimpleDialogOption(
               onPressed: () => Navigator.of(ctx2).pop('__ROOT__'),
               child: Row(
-                children: [const Icon(Icons.home_outlined), SizedBox(width: AppTheme.metrics.kSpace8), const Text('移回根目录')],
+                children: [
+                  const Icon(Icons.home_outlined),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  const Text('移回根目录'),
+                ],
               ),
             ),
           ...foldersToShow
@@ -317,7 +325,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   }
 
   void _pushBookOpenRoute(Widget page) {
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 420),
         reverseTransitionDuration: const Duration(milliseconds: 260),
@@ -545,28 +553,28 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                           children: displayTags
                                               .map(
                                                 (tag) => GestureDetector(
-                                                    onTap: tag.startsWith('章节 ')
-                                                        ? null
-                                                        : () => _onTagTap(tag),
-                                                    child: Container(
-                                                      padding: EdgeInsets.symmetric(
-                                                        horizontal: scaleW(5),
-                                                        vertical: scaleW(1),
-                                                      ),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.white.withAlpha(40),
-                                                        borderRadius: appMetrics.radius8,
-                                                      ),
-                                                      child: Text(
-                                                        tag,
-                                                        style: TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: appMetrics.fontSize9,
-                                                          fontWeight: FontWeight.w500,
-                                                        ),
+                                                  onTap: tag.startsWith('章节 ')
+                                                      ? null
+                                                      : () => _onTagTap(tag),
+                                                  child: Container(
+                                                    padding: EdgeInsets.symmetric(
+                                                      horizontal: scaleW(5),
+                                                      vertical: scaleW(1),
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white.withAlpha(40),
+                                                      borderRadius: appMetrics.radius8,
+                                                    ),
+                                                    child: Text(
+                                                      tag,
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: appMetrics.fontSize9,
+                                                        fontWeight: FontWeight.w500,
                                                       ),
                                                     ),
                                                   ),
+                                                ),
                                               )
                                               .toList(growable: false),
                                         );

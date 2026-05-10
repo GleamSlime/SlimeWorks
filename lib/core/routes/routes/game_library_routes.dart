@@ -1,6 +1,5 @@
 part of '../app_routes.dart';
 
-@TypedGoRoute<GameHomeRoute>(path: '/game/home')
 class GameHomeRoute extends AppRouteData with $GameHomeRoute {
   const GameHomeRoute();
 
@@ -13,6 +12,9 @@ class GameHomeRoute extends AppRouteData with $GameHomeRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuAggregation;
 
+  @override
+  String get sidebarGroupId => 'game-library';
+
   static const Permission routePermission = Permission.accessGameLibrary;
 
   @override
@@ -24,7 +26,6 @@ class GameHomeRoute extends AppRouteData with $GameHomeRoute {
   }
 }
 
-@TypedGoRoute<GameLibraryRoute>(path: '/game/library')
 class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
   const GameLibraryRoute();
 
@@ -36,6 +37,9 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectLibrary;
+
+  @override
+  String get sidebarGroupId => 'game-library';
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -51,24 +55,26 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
       transitionDuration: AppRoutes.kTransitionDuration,
       reverseTransitionDuration: AppRoutes.kTransitionDuration,
       child: const GameLibraryScreen(),
-      transitionsBuilder: (
-        BuildContext context,
-        Animation<double> animation,
-        Animation<double> secondaryAnimation,
-        Widget child,
-      ) {
-        final Animation<double> fadeIn = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        final Animation<double> fadeOut = Tween<double>(begin: 1.0, end: 0.0).animate(
-          CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeInCubic),
-        );
-        return FadeTransition(
-          opacity: fadeIn,
-          child: FadeTransition(opacity: fadeOut, child: child),
-        );
-      },
+      transitionsBuilder:
+          (
+            BuildContext context,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+            Widget child,
+          ) {
+            final Animation<double> fadeIn = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            );
+            final Animation<double> fadeOut = Tween<double>(
+              begin: 1.0,
+              end: 0.0,
+            ).animate(CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeInCubic));
+            return FadeTransition(
+              opacity: fadeIn,
+              child: FadeTransition(opacity: fadeOut, child: child),
+            );
+          },
     );
   }
 }
@@ -96,7 +102,6 @@ class GameDetailRoute extends AppRouteData with $GameDetailRoute {
   }
 }
 
-@TypedGoRoute<GameCategoriesRoute>(path: '/game/categories')
 class GameCategoriesRoute extends AppRouteData with $GameCategoriesRoute {
   const GameCategoriesRoute();
 
@@ -108,6 +113,9 @@ class GameCategoriesRoute extends AppRouteData with $GameCategoriesRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCollectFile;
+
+  @override
+  String get sidebarGroupId => 'game-library';
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -143,7 +151,6 @@ class GameCategoryDetailRoute extends AppRouteData with $GameCategoryDetailRoute
   }
 }
 
-@TypedGoRoute<GameStatsRoute>(path: '/game/stats')
 class GameStatsRoute extends AppRouteData with $GameStatsRoute {
   const GameStatsRoute();
 
@@ -156,6 +163,9 @@ class GameStatsRoute extends AppRouteData with $GameStatsRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuBill;
 
+  @override
+  String get sidebarGroupId => 'game-library';
+
   static const Permission routePermission = Permission.accessGameLibrary;
 
   @override
@@ -167,7 +177,6 @@ class GameStatsRoute extends AppRouteData with $GameStatsRoute {
   }
 }
 
-@TypedGoRoute<GameSettingsRoute>(path: '/game/settings')
 class GameSettingsRoute extends AppRouteData with $GameSettingsRoute {
   const GameSettingsRoute();
 
@@ -179,6 +188,9 @@ class GameSettingsRoute extends AppRouteData with $GameSettingsRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuSetting;
+
+  @override
+  String get sidebarGroupId => 'game-library';
 
   static const Permission routePermission = Permission.accessGameLibrary;
 

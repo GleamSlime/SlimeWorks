@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide MenuItem;
 import 'package:get/get.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';

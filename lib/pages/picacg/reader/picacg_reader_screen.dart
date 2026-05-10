@@ -11,6 +11,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
@@ -71,8 +72,8 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
 
   void _handleBack() {
     _isImmersive.value = false;
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
+    if (context.canPop()) {
+      context.pop();
       return;
     }
     PicAcgComicDetailRoute(comicId: widget.comicId).go(context);
@@ -202,7 +203,10 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                               elevation: 0,
                               foregroundColor: Colors.black87,
                               leading: IconButton(
-                                icon: Icon(Icons.arrow_back_ios_new_rounded, size: AppTheme.metrics.iconSize20),
+                                icon: Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: AppTheme.metrics.iconSize20,
+                                ),
                                 onPressed: _handleBack,
                                 color: Colors.black87,
                               ),
@@ -219,7 +223,10 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                               ),
                               actions: [
                                 IconButton(
-                                  icon: Icon(Icons.more_horiz_rounded, size: AppTheme.metrics.iconSize22),
+                                  icon: Icon(
+                                    Icons.more_horiz_rounded,
+                                    size: AppTheme.metrics.iconSize22,
+                                  ),
                                   onPressed: () => _showMoreMenu(context),
                                   color: Colors.black87,
                                 ),
@@ -310,7 +317,10 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
               ListTile(
                 leading: const Icon(Icons.save_alt),
                 title: const Text('离线保存到媒体库'),
-                subtitle: Text('保存所有已加载图片', style: TextStyle(fontSize: AppTheme.metrics.fontSize11)),
+                subtitle: Text(
+                  '保存所有已加载图片',
+                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                ),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   ScaffoldMessenger.of(
@@ -387,7 +397,10 @@ class _PicAcgReaderScreenState extends BasePageState<PicAcgReaderViewModel, PicA
                           children: [
                             Text(
                               '选择下载章节',
-                              style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: AppTheme.metrics.fontSize15,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const Spacer(),
                             TextButton(
@@ -691,7 +704,11 @@ class _ReaderBottomBar extends StatelessWidget {
               onTap: onEpsTap,
             ),
           ),
-          Container(width: 0.5, height: AppTheme.metrics.kSpace32, color: Colors.black.withValues(alpha: 0.1)),
+          Container(
+            width: 0.5,
+            height: AppTheme.metrics.kSpace32,
+            color: Colors.black.withValues(alpha: 0.1),
+          ),
           Expanded(
             child: _BarBtn(icon: Icons.tune_rounded, label: '设置', onTap: onSettingsTap),
           ),
@@ -719,7 +736,10 @@ class _BarBtn extends StatelessWidget {
       onTap: onTap,
       borderRadius: AppTheme.metrics.radius10,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace8),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace16,
+          vertical: AppTheme.metrics.kSpace8,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -819,7 +839,11 @@ class _ComicPageImageState extends State<_ComicPageImage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.broken_image_outlined, color: Colors.white54, size: AppTheme.metrics.iconSize48),
+                Icon(
+                  Icons.broken_image_outlined,
+                  color: Colors.white54,
+                  size: AppTheme.metrics.iconSize48,
+                ),
                 SizedBox(height: AppTheme.metrics.kSpace12),
                 Text(
                   'P${widget.pageIndex} 加载失败',
@@ -828,7 +852,11 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                 SizedBox(height: AppTheme.metrics.kSpace8),
                 TextButton.icon(
                   onPressed: onRetry,
-                  icon: Icon(Icons.refresh, color: Colors.white70, size: AppTheme.metrics.iconSize16),
+                  icon: Icon(
+                    Icons.refresh,
+                    color: Colors.white70,
+                    size: AppTheme.metrics.iconSize16,
+                  ),
                   label: const Text('重试', style: TextStyle(color: Colors.white70)),
                 ),
               ],
@@ -879,11 +907,21 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final labelStyle = TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: AppTheme.metrics.fontSize13);
-    final titleStyle = TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize15);
+    final labelStyle = TextStyle(
+      color: cs.onSurface.withValues(alpha: 0.6),
+      fontSize: AppTheme.metrics.fontSize13,
+    );
+    final titleStyle = TextStyle(
+      color: cs.onSurface,
+      fontWeight: FontWeight.bold,
+      fontSize: AppTheme.metrics.fontSize15,
+    );
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20, vertical: AppTheme.metrics.kSpace8),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace20,
+          vertical: AppTheme.metrics.kSpace8,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

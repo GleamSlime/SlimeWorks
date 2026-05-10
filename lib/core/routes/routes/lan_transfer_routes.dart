@@ -1,7 +1,5 @@
 part of '../app_routes.dart';
 
-/// 局域网传输路由
-@TypedGoRoute<LanTransferRoute>(path: '/lan-transfer')
 class LanTransferRoute extends AppRouteData with $LanTransferRoute {
   const LanTransferRoute();
 
@@ -13,6 +11,9 @@ class LanTransferRoute extends AppRouteData with $LanTransferRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuCloudAccess;
+
+  @override
+  String get sidebarGroupId => 'core';
 
   static const Permission routePermission = Permission.viewDashboard;
 
@@ -36,6 +37,10 @@ class LanChatRoute extends GoRouteData with $LanChatRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, LanChatScreen(peerDeviceId: peerId, peerDeviceName: peerName));
+    return AppRoutes.buildPage(
+      context,
+      state,
+      LanChatScreen(peerDeviceId: peerId, peerDeviceName: peerName),
+    );
   }
 }

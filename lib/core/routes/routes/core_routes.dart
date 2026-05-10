@@ -1,7 +1,5 @@
 part of '../app_routes.dart';
 
-/// 核心路由：Dashboard、Settings
-@TypedGoRoute<DashboardRoute>(path: '/dashboard')
 class DashboardRoute extends AppRouteData with $DashboardRoute {
   const DashboardRoute();
 
@@ -14,6 +12,9 @@ class DashboardRoute extends AppRouteData with $DashboardRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuDistributed;
 
+  @override
+  String get sidebarGroupId => 'core';
+
   static const Permission routePermission = Permission.viewDashboard;
 
   @override
@@ -22,7 +23,6 @@ class DashboardRoute extends AppRouteData with $DashboardRoute {
   }
 }
 
-@TypedGoRoute<AboutRoute>(path: '/about')
 class AboutRoute extends AppRouteData with $AboutRoute {
   const AboutRoute();
 
@@ -35,6 +35,9 @@ class AboutRoute extends AppRouteData with $AboutRoute {
   @override
   String get sidebarIcon => Assets.image.svg.menuAbout;
 
+  @override
+  String get sidebarGroupId => 'bottom';
+
   static const Permission routePermission = Permission.viewDashboard;
 
   @override
@@ -43,7 +46,6 @@ class AboutRoute extends AppRouteData with $AboutRoute {
   }
 }
 
-@TypedGoRoute<SettingsRoute>(path: '/settings')
 class SettingsRoute extends AppRouteData with $SettingsRoute {
   const SettingsRoute();
 
@@ -55,6 +57,9 @@ class SettingsRoute extends AppRouteData with $SettingsRoute {
 
   @override
   String get sidebarIcon => Assets.image.svg.menuSetting;
+
+  @override
+  String get sidebarGroupId => 'bottom';
 
   static const Permission routePermission = Permission.accessSettings;
 
