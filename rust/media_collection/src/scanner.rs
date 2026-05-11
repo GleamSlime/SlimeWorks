@@ -34,6 +34,9 @@ fn file_name_without_extension(path: &Path) -> String {
         })
 }
 
+const MIN_IMAGE_FILE_SIZE: u64 = 10 * 1024;
+const MIN_IMAGE_DIMENSION: u32 = 100;
+
 fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<MediaItem> {
     let metadata = fs::metadata(path)
         .map_err(|error| anyhow::anyhow!("Cannot read metadata for {:?}: {}", path, error))?;
@@ -48,7 +51,15 @@ fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<Medi
         .map(DateTime::<Utc>::from)
         .unwrap_or_else(|_| Utc::now());
 
-    // Only attempt dimension reading for known-decodable formats; skip for HEIC/TIFF etc.
+    if matches!(kind, MediaKind::Image) && metadata.len() < MIN_IMAGE_FILE_SIZE {
+        return Err(anyhow::anyhow!(
+            "Image too small ({}B < {}B): {:?}",
+            metadata.len(),
+            MIN_IMAGE_FILE_SIZE,
+            path
+        ));
+    }
+
     let decodable = matches!(
         ext.to_ascii_lowercase().as_str(),
         "jpg" | "jpeg" | "jfif" | "png" | "gif" | "webp" | "bmp"
@@ -61,6 +72,21 @@ fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<Medi
         None
     }
     .unwrap_or((None, None));
+
+    if matches!(kind, MediaKind::Image) {
+        if let (Some(w), Some(h)) = (width, height) {
+            if w < MIN_IMAGE_DIMENSION || h < MIN_IMAGE_DIMENSION {
+                return Err(anyhow::anyhow!(
+                    "Image resolution too low ({}x{} < {}x{}): {:?}",
+                    w,
+                    h,
+                    MIN_IMAGE_DIMENSION,
+                    MIN_IMAGE_DIMENSION,
+                    path
+                ));
+            }
+        }
+    }
 
     let duration_ms = if matches!(kind, MediaKind::Audio | MediaKind::Video) {
         read_duration_ms(path)

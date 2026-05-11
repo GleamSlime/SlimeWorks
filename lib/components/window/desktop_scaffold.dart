@@ -132,12 +132,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                     );
                   }),
                 ),
-                Column(
-                  children: [
-                    const DesktopTopBar(),
-                    Expanded(child: widget.child),
-                  ],
-                ),
+                widget.child,
                 const Positioned(left: 0, top: 0, child: ScreenTopBar()),
               ],
             ),

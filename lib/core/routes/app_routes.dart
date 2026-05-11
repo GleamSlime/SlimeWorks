@@ -1,4 +1,5 @@
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/services/app_info_service.dart';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';

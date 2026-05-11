@@ -283,23 +283,35 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         showSnack('提示', '未发现媒体集合，请确认目录内含有图片或视频文件（支持 jpg/png/heic/mp4 等格式）');
         return;
       }
+      final emptyCollections = imported.where((c) => c.itemCount == BigInt.zero).toList();
+      final validCollections = imported.where((c) => c.itemCount > BigInt.zero).toList();
+      for (final empty in emptyCollections) {
+        media_api.deleteMediaCollection(collectionId: empty.id);
+      }
+      if (validCollections.isEmpty) {
+        await loadCollections();
+        scanStatusText.value = '';
+        showSnack('提示', '未发现有效媒体集合，图片文件过小或分辨率过低已被过滤');
+        return;
+      }
       if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
-        // 分批归档并逐步刷新进度
-        for (int i = 0; i < imported.length; i++) {
-          scanStatusText.value = '归档 ${i + 1}/${imported.length}...';
+        for (int i = 0; i < validCollections.length; i++) {
+          scanStatusText.value = '归档 ${i + 1}/${validCollections.length}...';
           media_api.moveMediaCollectionToFolder(
-            collectionId: imported[i].id,
+            collectionId: validCollections[i].id,
             folderId: targetFolderId,
           );
-          // 每处理 5 条或最后一条时让出事件循环，使 UI 可见进度更新
-          if (i % 5 == 4 || i == imported.length - 1) {
+          if (i % 5 == 4 || i == validCollections.length - 1) {
             await Future.delayed(Duration.zero);
           }
         }
       }
       await loadCollections();
       scanStatusText.value = '';
-      showSnack('成功', '扫描完成，共导入 ${imported.length} 个集合');
+      final skippedMsg = emptyCollections.isNotEmpty
+          ? '（${emptyCollections.length} 个集合因图片过小已跳过）'
+          : '';
+      showSnack('成功', '扫描完成，共导入 ${validCollections.length} 个集合$skippedMsg');
     } catch (error) {
       scanStatusText.value = '';
       showSnack('错误', '扫描目录失败: $error');
@@ -359,6 +371,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
       scanStatusText.value = '导入中...';
       final collection = await media_api.importMediaFolder(folderPath: selectedPath);
+      if (collection.itemCount == BigInt.zero) {
+        media_api.deleteMediaCollection(collectionId: collection.id);
+        await loadCollections();
+        scanStatusText.value = '';
+        showSnack('提示', '该目录无有效媒体文件，图片文件过小或分辨率过低已被过滤');
+        return;
+      }
       if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
         media_api.moveMediaCollectionToFolder(
           collectionId: collection.id,
@@ -419,7 +438,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       scanStatusText.value = '扫描: ${dir.split(Platform.pathSeparator).last}';
       try {
         final collections = await media_api.scanMediaFolders(folderPath: dir);
-        for (final collection in collections) {
+        final validCollections = collections.where((c) => c.itemCount > BigInt.zero).toList();
+        final emptyCollections = collections.where((c) => c.itemCount == BigInt.zero).toList();
+        for (final empty in emptyCollections) {
+          media_api.deleteMediaCollection(collectionId: empty.id);
+        }
+        for (final collection in validCollections) {
           if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
             media_api.moveMediaCollectionToFolder(
               collectionId: collection.id,
@@ -427,9 +451,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             );
           }
         }
-        success += collections.length;
+        success += validCollections.length;
         if (collections.isEmpty) {
           debugPrint('[DragDrop] 目录无媒体: $dir');
+        } else if (emptyCollections.isNotEmpty) {
+          debugPrint(
+            '[DragDrop] 目录 ${dir.split(Platform.pathSeparator).last} 跳过 ${emptyCollections.length} 个空集合',
+          );
         }
       } catch (e) {
         fail++;
@@ -442,6 +470,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       scanStatusText.value = '导入: ${dir.split(Platform.pathSeparator).last}';
       try {
         final collection = await media_api.importMediaFolder(folderPath: dir);
+        if (collection.itemCount == BigInt.zero) {
+          media_api.deleteMediaCollection(collectionId: collection.id);
+          debugPrint('[DragDrop] 空集合已删除: ${dir.split(Platform.pathSeparator).last}');
+          continue;
+        }
         if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
           media_api.moveMediaCollectionToFolder(
             collectionId: collection.id,

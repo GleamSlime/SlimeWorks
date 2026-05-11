@@ -1013,7 +1013,7 @@ class MediaLibraryViewModel extends BaseViewModel {
           'ts',
         };
         int count = 0;
-        await for (final e in dir.list(recursive: false, followLinks: false)) {
+        await for (final e in dir.list(recursive: true, followLinks: false)) {
           if (e is File) {
             final ext = e.path.split('.').last.toLowerCase();
             if (exts.contains(ext)) count++;

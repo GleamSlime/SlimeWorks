@@ -5,14 +5,12 @@ import 'package:flutter_svg/svg.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
-  static const String _appVersion = '1.0.0';
-  static const String _appBuild = '15';
-  static const String _appName = '史莱姆工坊';
   static const String _appDescription = '一站式数字内容管理与创作平台';
   static const String _copyright = '© 2026 gleamslime.com';
 
@@ -88,7 +86,7 @@ class AboutPage extends StatelessWidget {
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),
         Text(
-          _appName,
+          AppInfoService.appName,
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
@@ -105,7 +103,7 @@ class AboutPage extends StatelessWidget {
             borderRadius: AppTheme.metrics.radius8,
           ),
           child: Text(
-            'v$_appVersion+$_appBuild',
+            AppInfoService.versionWithBuild,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w600,
@@ -133,7 +131,11 @@ class AboutPage extends StatelessWidget {
     return _AboutCard(
       child: Column(
         children: [
-          const _InfoRow(icon: Icons.info_outline, label: '版本', value: '$_appVersion ($_appBuild)'),
+          _InfoRow(
+            icon: Icons.info_outline,
+            label: '版本',
+            value: '${AppInfoService.version} (${AppInfoService.buildNumber})',
+          ),
           Divider(height: 1, color: theme.dividerColor),
           _InfoRow(icon: Icons.phone_android_outlined, label: '平台', value: _platformName()),
           Divider(height: 1, color: theme.dividerColor),
@@ -234,8 +236,8 @@ class AboutPage extends StatelessWidget {
             onTap: () {
               showLicensePage(
                 context: context,
-                applicationName: _appName,
-                applicationVersion: '$_appVersion+$_appBuild',
+                applicationName: AppInfoService.appName,
+                applicationVersion: '${AppInfoService.version}+${AppInfoService.buildNumber}',
                 applicationIcon: Padding(
                   padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
                   child: SvgPicture.asset(

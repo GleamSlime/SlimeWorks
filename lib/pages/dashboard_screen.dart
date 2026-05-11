@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -91,151 +93,158 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '欢迎使用工坊系统',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: AppTheme.metrics.kSpace16),
-                  Text(
-                    // '这是一个功能强大的 macOS 和 Windows 桌面应用',
-                    '',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),
-                  ),
-                  SizedBox(height: AppTheme.metrics.kSpace48),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Wrap(
-                      spacing: AppTheme.metrics.kSpace12,
-                      runSpacing: AppTheme.metrics.kSpace12,
-                      children: [
-                        _buildMetricCard(
-                          context,
-                          icon: Icons.memory,
-                          title: 'CPU',
-                          value: _snapshot == null
-                              ? '--'
-                              : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
-                          history: _cpuHistory,
-                          chartColor: Colors.blue,
-                        ),
-                        _buildMetricCard(
-                          context,
-                          icon: Icons.storage,
-                          title: '内存',
-                          value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
-                          history: _memHistory,
-                          chartColor: Colors.orange,
-                        ),
-                        _buildMetricCard(
-                          context,
-                          icon: Icons.download,
-                          title: '下行',
-                          value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
-                          history: _rxHistory,
-                          chartColor: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success,
-                        ),
-                        _buildMetricCard(
-                          context,
-                          icon: Icons.upload,
-                          title: '上行',
-                          value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
-                          history: _txHistory,
-                          chartColor: Colors.purple,
-                        ),
-                        if (_nodeSettingsService.isLocalServerRunning)
+    return ScreenChrome(
+      data: const ScreenChromeData(title: '概览'),
+      child: SafeArea(
+        bottom: false,
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '欢迎使用工坊系统',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: AppTheme.metrics.kSpace16),
+                    Text(
+                      // '这是一个功能强大的 macOS 和 Windows 桌面应用',
+                      '',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),
+                    ),
+                    SizedBox(height: AppTheme.metrics.kSpace48),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        spacing: AppTheme.metrics.kSpace12,
+                        runSpacing: AppTheme.metrics.kSpace12,
+                        children: [
                           _buildMetricCard(
                             context,
-                            icon: Icons.hub,
-                            title: '节点请求数',
-                            value: _nodeSettingsService.nodeRequestCount.value.toString(),
-                            history: _reqHistory,
-                            chartColor: Colors.teal,
+                            icon: Icons.memory,
+                            title: 'CPU',
+                            value: _snapshot == null
+                                ? '--'
+                                : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
+                            history: _cpuHistory,
+                            chartColor: Colors.blue,
                           ),
-                      ],
+                          _buildMetricCard(
+                            context,
+                            icon: Icons.storage,
+                            title: '内存',
+                            value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
+                            history: _memHistory,
+                            chartColor: Colors.orange,
+                          ),
+                          _buildMetricCard(
+                            context,
+                            icon: Icons.download,
+                            title: '下行',
+                            value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
+                            history: _rxHistory,
+                            chartColor: (Theme.of(context).brightness == Brightness.dark)
+                                ? DarkColors.success
+                                : LightColors.success,
+                          ),
+                          _buildMetricCard(
+                            context,
+                            icon: Icons.upload,
+                            title: '上行',
+                            value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
+                            history: _txHistory,
+                            chartColor: Colors.purple,
+                          ),
+                          if (_nodeSettingsService.isLocalServerRunning)
+                            _buildMetricCard(
+                              context,
+                              icon: Icons.hub,
+                              title: '节点请求数',
+                              value: _nodeSettingsService.nodeRequestCount.value.toString(),
+                              history: _reqHistory,
+                              chartColor: Colors.teal,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  SizedBox(height: AppTheme.metrics.kSpace24),
-                ],
+                    SizedBox(height: AppTheme.metrics.kSpace24),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          SliverPadding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace12,
-              vertical: AppTheme.metrics.kSpace12,
-            ),
-            sliver: SliverGrid(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final features = [
-                  _buildFeatureCard(
-                    context,
-                    icon: Icons.account_tree_outlined,
-                    title: '数据捕获',
-                    description: '强大的数据采集和处理功能',
-                    color: Colors.blue,
-                  ),
-                  _buildFeatureCard(
-                    context,
-                    icon: Icons.water_drop_outlined,
-                    title: '流水账',
-                    description: '清晰的财务流水记录',
-                    color: Colors.cyan,
-                  ),
-                  _buildFeatureCard(
-                    context,
-                    icon: Icons.cloud_outlined,
-                    title: '阿里云',
-                    description: '云服务管理工具',
-                    color: Colors.orange,
-                  ),
-                  _buildFeatureCard(
-                    context,
-                    icon: Icons.build_circle_outlined,
-                    title: '工具箱',
-                    description: '丰富的实用工具集合',
-                    color: Colors.purple,
-                  ),
-                  _buildFeatureCard(
-                    context,
-                    icon: Icons.video_library_outlined,
-                    title: '媒体库',
-                    description: '媒体文件管理中心',
-                    color: Colors.pink,
-                  ),
-                  _buildFeatureCard(
-                    context,
-                    icon: Icons.note_outlined,
-                    title: '笔记',
-                    description: '快速记录和整理想法',
-                    color: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success,
-                  ),
-                ];
-                return features[index];
-              }, childCount: 6),
-              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 320,
-                mainAxisSpacing: 24,
-                crossAxisSpacing: 24,
-                mainAxisExtent: scaleW(230).clamp(180.0, 320.0),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace12,
+                vertical: AppTheme.metrics.kSpace12,
+              ),
+              sliver: SliverGrid(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final features = [
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.account_tree_outlined,
+                      title: '数据捕获',
+                      description: '强大的数据采集和处理功能',
+                      color: Colors.blue,
+                    ),
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.water_drop_outlined,
+                      title: '流水账',
+                      description: '清晰的财务流水记录',
+                      color: Colors.cyan,
+                    ),
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.cloud_outlined,
+                      title: '阿里云',
+                      description: '云服务管理工具',
+                      color: Colors.orange,
+                    ),
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.build_circle_outlined,
+                      title: '工具箱',
+                      description: '丰富的实用工具集合',
+                      color: Colors.purple,
+                    ),
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.video_library_outlined,
+                      title: '媒体库',
+                      description: '媒体文件管理中心',
+                      color: Colors.pink,
+                    ),
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.note_outlined,
+                      title: '笔记',
+                      description: '快速记录和整理想法',
+                      color: (Theme.of(context).brightness == Brightness.dark)
+                          ? DarkColors.success
+                          : LightColors.success,
+                    ),
+                  ];
+                  return features[index];
+                }, childCount: 6),
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 320,
+                  mainAxisSpacing: 24,
+                  crossAxisSpacing: 24,
+                  mainAxisExtent: scaleW(230).clamp(180.0, 320.0),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

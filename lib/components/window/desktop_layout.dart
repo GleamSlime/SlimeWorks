@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
+import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
@@ -55,7 +56,14 @@ class _DesktopShell extends StatelessWidget {
     return Row(
       children: [
         sidebar,
-        Expanded(child: child),
+        Expanded(
+          child: Column(
+            children: [
+              const DesktopTopBar(),
+              Expanded(child: child),
+            ],
+          ),
+        ),
       ],
     );
   }

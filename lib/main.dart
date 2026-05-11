@@ -15,6 +15,7 @@ import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
+import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -27,6 +28,9 @@ Future<void> main() async {
 
   // 确保 Flutter 绑定初始化
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 初始化应用信息（版本号等）
+  await AppInfoService.init();
 
   // 加载环境变量
   await dotenv.load(fileName: '.env');

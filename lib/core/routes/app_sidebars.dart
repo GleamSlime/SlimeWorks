@@ -16,8 +16,6 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const GameLibraryRoute(),
     const GameCategoriesRoute(),
     const GameStatsRoute(),
-    const GameSettingsRoute(),
-    const PicAcgDownloadsRoute(),
     const AboutRoute(),
     const SettingsRoute(),
   ];
@@ -31,8 +29,18 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
 
   final groupConfigs = <String, _GroupConfig>{
     'core': _GroupConfig(id: 'core', sort: 10, permission: Permission.viewDashboard),
-    'collection': _GroupConfig(id: 'collection', title: '收藏夹', sort: 20, permission: Permission.accessCollection),
-    'game-library': _GroupConfig(id: 'game-library', title: '游戏', sort: 30, permission: Permission.accessGameLibrary),
+    'collection': _GroupConfig(
+      id: 'collection',
+      title: '收藏夹',
+      sort: 20,
+      permission: Permission.accessCollection,
+    ),
+    'game-library': _GroupConfig(
+      id: 'game-library',
+      title: '游戏',
+      sort: 30,
+      permission: Permission.accessGameLibrary,
+    ),
     'picacg': _GroupConfig(id: 'picacg', sort: 40, permission: Permission.accessPicAcg),
     'bottom': _GroupConfig(id: 'bottom', sort: 90, permission: Permission.accessSettings),
   };
@@ -42,13 +50,15 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     final config = groupConfigs[entry.key] ?? _GroupConfig(id: entry.key, sort: 50);
     if (config.permission != null && !RoleManager.canAccess(config.permission!)) continue;
 
-    groups.add(SidebarGroup(
-      id: config.id,
-      title: config.title,
-      sort: config.sort,
-      permission: config.permission,
-      items: entry.value.map((route) => SidebarMenuItem(route: route)).toList(),
-    ));
+    groups.add(
+      SidebarGroup(
+        id: config.id,
+        title: config.title,
+        sort: config.sort,
+        permission: config.permission,
+        items: entry.value.map((route) => SidebarMenuItem(route: route)).toList(),
+      ),
+    );
   }
 
   groups.sort((a, b) => (a.sort ?? 50).compareTo(b.sort ?? 50));
@@ -62,10 +72,5 @@ class _GroupConfig {
   final int? sort;
   final Permission? permission;
 
-  const _GroupConfig({
-    required this.id,
-    this.title,
-    this.sort,
-    this.permission,
-  });
+  const _GroupConfig({required this.id, this.title, this.sort, this.permission});
 }

@@ -27,10 +27,10 @@ class AboutRoute extends AppRouteData with $AboutRoute {
   const AboutRoute();
 
   @override
-  String get title => '关于';
+  String get title => '关于（${AppInfoService.versionWithBuild}）';
 
   @override
-  String get sidebarLabel => title;
+  String get sidebarLabel => '关于 ${AppInfoService.versionWithBuild}';
 
   @override
   String get sidebarIcon => Assets.image.svg.menuAbout;
