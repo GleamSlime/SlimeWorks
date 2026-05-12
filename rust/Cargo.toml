@@ -65,6 +65,9 @@ lan_transfer = { path = "lan_transfer" }
 # PicACG 漫画平台模块（独立 crate）
 picacg_module = { path = "picacg_module" }
 
+# 解压工具模块（独立 crate）
+extract_module = { path = "extract_module" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]
@@ -83,6 +86,7 @@ members = [
   "novel_reader",
   "db_module",
   "game_library",
+  "extract_module",
   # "ffmpeg_lib",
 ]
 

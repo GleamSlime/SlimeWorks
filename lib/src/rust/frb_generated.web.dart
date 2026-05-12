@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/capture.dart';
+import 'api/extract.dart';
 import 'api/ffmpeg.dart';
 import 'api/game_library.dart';
 import 'api/http_bridge.dart';

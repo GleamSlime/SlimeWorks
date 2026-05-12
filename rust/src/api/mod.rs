@@ -1,4 +1,5 @@
 pub mod capture;
+pub mod extract;
 pub mod ffmpeg;
 pub mod game_library;
 pub mod http_bridge;

@@ -41,6 +41,7 @@ import 'package:slime_works/pages/picacg/search/picacg_search_screen.dart';
 import 'package:slime_works/pages/picacg/reader/picacg_reader_screen.dart';
 import 'package:slime_works/pages/picacg/picacg_downloads_screen.dart';
 import 'package:slime_works/pages/about/about_page.dart';
+import 'package:slime_works/pages/tools/tools_screen.dart';
 
 part 'app_routes.g.dart';
 
@@ -83,6 +84,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<LanTransferRoute>(path: '/lan-transfer'),
     TypedGoRoute<SettingsRoute>(path: '/settings'),
     TypedGoRoute<AboutRoute>(path: '/about'),
+    TypedGoRoute<ToolsRoute>(path: '/tools'),
   ],
 )
 class AppShellRouteData extends ShellRouteData {
@@ -122,6 +124,7 @@ class AppRoutes {
       const LanTransferRoute(),
       const SettingsRoute(),
       const AboutRoute(),
+      const ToolsRoute(),
 
       const NovelReaderRoute(),
       const PicAcgComicDetailRoute(comicId: ''),

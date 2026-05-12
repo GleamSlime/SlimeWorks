@@ -8,6 +8,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
   final shellRoutes = <AppRouteData>[
     const DashboardRoute(),
     const CaptureRoute(),
+    const ToolsRoute(),
     const LanTransferRoute(),
     const PicAcgHomeRoute(),
     const CollectionPictureRoute(),
@@ -42,6 +43,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
       permission: Permission.accessGameLibrary,
     ),
     'picacg': _GroupConfig(id: 'picacg', sort: 40, permission: Permission.accessPicAcg),
+    'tools': _GroupConfig(id: 'tools', title: '工具', sort: 45, permission: Permission.accessTools),
     'bottom': _GroupConfig(id: 'bottom', sort: 90, permission: Permission.accessSettings),
   };
 

@@ -905,6 +905,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "extract_module"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "db_module",
+ "flutter_rust_bridge",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2777,6 +2791,7 @@ dependencies = [
  "db_module",
  "dotenv",
  "env_logger 0.11.8",
+ "extract_module",
  "flutter_rust_bridge",
  "game_library",
  "http_bridge",

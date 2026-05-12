@@ -1,0 +1,20 @@
+[package]
+name = "extract_module"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flutter_rust_bridge = "=2.11.1"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.49.0", features = [
+  "rt-multi-thread",
+  "sync",
+], default-features = false }
+db_module = { path = "../db_module" }
+
+[lib]
+crate-type = ["staticlib", "rlib"]

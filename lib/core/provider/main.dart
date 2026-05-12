@@ -12,6 +12,7 @@ import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
+import 'package:slime_works/core/services/extract_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -54,6 +55,9 @@ void getItInit() {
   getIt.registerLazySingleton<GameProcessTracker>(
     () => GameProcessTracker(service: getIt<GameLibraryService>()),
   );
+
+  // 解压服务
+  getIt.registerLazySingleton<ExtractService>(() => ExtractService());
 
   isInitialized = true;
 }

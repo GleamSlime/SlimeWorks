@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
@@ -35,6 +36,7 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
         label: '通知设置',
         content: SettingsTabPlaceholder(title: '通知设置'),
       ),
+      const _SettingsTab(label: '工具设置', content: _ToolsSettingsWrapper()),
       const _SettingsTab(label: '其他设置', content: _OtherSettingsWrapper()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
@@ -130,6 +132,36 @@ class _OtherSettingsWrapper extends StatelessWidget {
                     children: [_ResourcesSettingsTab(), PicAcgSettingsTab(), GameSettingsTab()],
                   ),
                 ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ToolsSettingsWrapper extends StatelessWidget {
+  const _ToolsSettingsWrapper();
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            height: constraints.maxHeight,
+            child: const Column(
+              crossAxisAlignment: .start,
+              children: [
+                TabBar(
+                  tabAlignment: TabAlignment.start,
+                  isScrollable: true,
+                  tabs: [Tab(text: '解压设置')],
+                  dividerHeight: 0,
+                ),
+                Expanded(child: TabBarView(children: [ExtractSettingsTab()])),
               ],
             ),
           );

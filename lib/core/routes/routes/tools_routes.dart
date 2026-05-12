@@ -1,6 +1,5 @@
 part of '../app_routes.dart';
 
-/// 工具类路由：ImageTools、ImageToolbox、MediaLibrary
 @TypedGoRoute<ImageToolsRoute>(path: '/image-tools')
 class ImageToolsRoute extends GoRouteData with $ImageToolsRoute {
   const ImageToolsRoute();
@@ -37,5 +36,28 @@ class MediaLibraryRoute extends GoRouteData with $MediaLibraryRoute {
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return AppRoutes.buildPage(context, state, const CollectionPictureScreen());
+  }
+}
+
+class ToolsRoute extends AppRouteData with $ToolsRoute {
+  const ToolsRoute();
+
+  @override
+  String get title => '工具';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuTools;
+
+  @override
+  String get sidebarGroupId => 'tools';
+
+  static const Permission routePermission = Permission.accessTools;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const ToolsScreen());
   }
 }
