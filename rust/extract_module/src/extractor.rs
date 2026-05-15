@@ -163,7 +163,7 @@ fn extract_tar_xz(archive_path: &str, output_dir: &str) -> Result<()> {
 
     let file = File::open(archive_path)
         .with_context(|| format!("无法打开 tar.xz 文件: {}", archive_path))?;
-    let xz = xz2::read::XzDecoder::new(file);
+    let xz = liblzma::read::XzDecoder::new(file);
     let mut archive = tar::Archive::new(xz);
     archive
         .unpack(output)
@@ -219,7 +219,7 @@ fn extract_xz(archive_path: &str, output_dir: &str) -> Result<()> {
 
     let file =
         File::open(archive_path).with_context(|| format!("无法打开 xz 文件: {}", archive_path))?;
-    let mut xz = xz2::read::XzDecoder::new(file);
+    let mut xz = liblzma::read::XzDecoder::new(file);
 
     let p = Path::new(archive_path);
     let stem = p

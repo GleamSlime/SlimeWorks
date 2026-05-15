@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/tools/components/extract_card.dart';
+import 'package:slime_works/pages/tools/components/sentry_log_card.dart';
 
 class ToolsScreen extends StatefulWidget {
   const ToolsScreen({super.key});
@@ -21,7 +23,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
         child: Wrap(
           spacing: AppTheme.metrics.kSpace16,
           runSpacing: AppTheme.metrics.kSpace16,
-          children: const [ExtractCard()],
+          children: const [ExtractCard(), SentryLogCard()],
         ),
       ),
     );

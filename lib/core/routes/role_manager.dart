@@ -32,6 +32,7 @@ enum Permission {
   accessDemo,
   accessPicAcg,
   accessTools,
+  accessSentryLog,
 }
 
 class RoleManager {
@@ -54,6 +55,7 @@ class RoleManager {
       Permission.accessWebSocketTest,
       Permission.accessPicAcg,
       Permission.accessTools,
+      Permission.accessSentryLog,
     ],
     UserRole.editor: [
       Permission.viewDashboard,

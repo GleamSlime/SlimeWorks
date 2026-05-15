@@ -9,6 +9,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const DashboardRoute(),
     const CaptureRoute(),
     const ToolsRoute(),
+    const SentryLogRoute(),
     const LanTransferRoute(),
     const PicAcgHomeRoute(),
     const CollectionPictureRoute(),

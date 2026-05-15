@@ -68,6 +68,9 @@ picacg_module = { path = "picacg_module" }
 # 解压工具模块（独立 crate）
 extract_module = { path = "extract_module" }
 
+# Sentry日志收集模块（独立 crate）
+sentry_log = { path = "sentry_log" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]
@@ -87,6 +90,7 @@ members = [
   "db_module",
   "game_library",
   "extract_module",
+  "sentry_log",
   # "ffmpeg_lib",
 ]
 

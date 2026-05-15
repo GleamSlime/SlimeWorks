@@ -27,8 +27,8 @@ zip = { version = "8", default-features = false, features = [
 ] }
 tar = "0.4"
 flate2 = "1"
-bzip2 = "0.5"
-xz2 = "0.1"
+bzip2 = "0.6"
+liblzma = { version = "0.1", features = ["static"] }
 
 [lib]
 crate-type = ["staticlib", "rlib"]

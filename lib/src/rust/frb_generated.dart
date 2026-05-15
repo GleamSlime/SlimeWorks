@@ -15,6 +15,7 @@ import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
 import 'api/picacg.dart';
+import 'api/sentry_log.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
 import 'api/websocket.dart';
@@ -80,7 +81,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1037620898;
+  int get rustContentHash => 133248456;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -784,6 +785,49 @@ abstract class RustLibApi extends BaseApi {
   Future<List<SearchMatch>> crateApiNovelReaderSearchInNovel({
     required String filePath,
     required String keyword,
+  });
+
+  Future<BigInt> crateApiSentryLogSentryLogClearProjectEvents({
+    required String projectId,
+  });
+
+  Future<bool> crateApiSentryLogSentryLogDeleteEvent({required String eventId});
+
+  Future<BigInt> crateApiSentryLogSentryLogDeleteEvents({
+    required List<String> eventIds,
+  });
+
+  Future<String> crateApiSentryLogSentryLogExportJson({
+    String? projectId,
+    String? level,
+    String? query,
+    String? environment,
+    String? startTime,
+    String? endTime,
+  });
+
+  Future<String> crateApiSentryLogSentryLogGetEvent({required String eventId});
+
+  Future<String> crateApiSentryLogSentryLogGetProjects();
+
+  Future<String> crateApiSentryLogSentryLogGetStats();
+
+  String crateApiSentryLogSentryLogInit({required String dbPath});
+
+  Future<String> crateApiSentryLogSentryLogQuery({
+    String? projectId,
+    String? level,
+    String? query,
+    String? environment,
+    String? startTime,
+    String? endTime,
+    required BigInt offset,
+    required BigInt limit,
+  });
+
+  Future<void> crateApiSentryLogSentryLogUpdateProjectName({
+    required String projectId,
+    required String name,
   });
 
   void crateApiNovelReaderSetNovelFavorite({
@@ -7036,6 +7080,367 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiSentryLogSentryLogClearProjectEvents({
+    required String projectId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(projectId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 197,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogClearProjectEventsConstMeta,
+        argValues: [projectId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogClearProjectEventsConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_clear_project_events",
+        argNames: ["projectId"],
+      );
+
+  @override
+  Future<bool> crateApiSentryLogSentryLogDeleteEvent({
+    required String eventId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(eventId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 198,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogDeleteEventConstMeta,
+        argValues: [eventId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogDeleteEventConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_delete_event",
+        argNames: ["eventId"],
+      );
+
+  @override
+  Future<BigInt> crateApiSentryLogSentryLogDeleteEvents({
+    required List<String> eventIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_String(eventIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 199,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogDeleteEventsConstMeta,
+        argValues: [eventIds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogDeleteEventsConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_delete_events",
+        argNames: ["eventIds"],
+      );
+
+  @override
+  Future<String> crateApiSentryLogSentryLogExportJson({
+    String? projectId,
+    String? level,
+    String? query,
+    String? environment,
+    String? startTime,
+    String? endTime,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_String(projectId, serializer);
+          sse_encode_opt_String(level, serializer);
+          sse_encode_opt_String(query, serializer);
+          sse_encode_opt_String(environment, serializer);
+          sse_encode_opt_String(startTime, serializer);
+          sse_encode_opt_String(endTime, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 200,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogExportJsonConstMeta,
+        argValues: [projectId, level, query, environment, startTime, endTime],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogExportJsonConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_export_json",
+        argNames: [
+          "projectId",
+          "level",
+          "query",
+          "environment",
+          "startTime",
+          "endTime",
+        ],
+      );
+
+  @override
+  Future<String> crateApiSentryLogSentryLogGetEvent({required String eventId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(eventId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 201,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogGetEventConstMeta,
+        argValues: [eventId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogGetEventConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_get_event",
+        argNames: ["eventId"],
+      );
+
+  @override
+  Future<String> crateApiSentryLogSentryLogGetProjects() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 202,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogGetProjectsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogGetProjectsConstMeta =>
+      const TaskConstMeta(debugName: "sentry_log_get_projects", argNames: []);
+
+  @override
+  Future<String> crateApiSentryLogSentryLogGetStats() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 203,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogGetStatsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogGetStatsConstMeta =>
+      const TaskConstMeta(debugName: "sentry_log_get_stats", argNames: []);
+
+  @override
+  String crateApiSentryLogSentryLogInit({required String dbPath}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 204,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogInitConstMeta,
+        argValues: [dbPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogInitConstMeta =>
+      const TaskConstMeta(debugName: "sentry_log_init", argNames: ["dbPath"]);
+
+  @override
+  Future<String> crateApiSentryLogSentryLogQuery({
+    String? projectId,
+    String? level,
+    String? query,
+    String? environment,
+    String? startTime,
+    String? endTime,
+    required BigInt offset,
+    required BigInt limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_String(projectId, serializer);
+          sse_encode_opt_String(level, serializer);
+          sse_encode_opt_String(query, serializer);
+          sse_encode_opt_String(environment, serializer);
+          sse_encode_opt_String(startTime, serializer);
+          sse_encode_opt_String(endTime, serializer);
+          sse_encode_u_64(offset, serializer);
+          sse_encode_u_64(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 205,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogQueryConstMeta,
+        argValues: [
+          projectId,
+          level,
+          query,
+          environment,
+          startTime,
+          endTime,
+          offset,
+          limit,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogQueryConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_query",
+        argNames: [
+          "projectId",
+          "level",
+          "query",
+          "environment",
+          "startTime",
+          "endTime",
+          "offset",
+          "limit",
+        ],
+      );
+
+  @override
+  Future<void> crateApiSentryLogSentryLogUpdateProjectName({
+    required String projectId,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 206,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSentryLogSentryLogUpdateProjectNameConstMeta,
+        argValues: [projectId, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSentryLogSentryLogUpdateProjectNameConstMeta =>
+      const TaskConstMeta(
+        debugName: "sentry_log_update_project_name",
+        argNames: ["projectId", "name"],
+      );
+
+  @override
   void crateApiNovelReaderSetNovelFavorite({
     required String novelId,
     required bool isFavorite,
@@ -7049,7 +7454,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 197,
+            funcId: 207,
           )!;
         },
         codec: SseCodec(
@@ -7083,7 +7488,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 198,
+            funcId: 208,
           )!;
         },
         codec: SseCodec(
@@ -7119,7 +7524,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 199,
+            funcId: 209,
           )!;
         },
         codec: SseCodec(
@@ -7149,7 +7554,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 200,
+            funcId: 210,
           )!;
         },
         codec: SseCodec(
@@ -7178,7 +7583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 201,
+            funcId: 211,
           )!;
         },
         codec: SseCodec(
@@ -7209,7 +7614,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 202,
+            funcId: 212,
           )!;
         },
         codec: SseCodec(
@@ -7243,7 +7648,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 203,
+            funcId: 213,
             port: port_,
           );
         },
@@ -7284,7 +7689,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 204,
+            funcId: 214,
           )!;
         },
         codec: SseCodec(
@@ -7318,7 +7723,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 205,
+            funcId: 215,
           )!;
         },
         codec: SseCodec(
@@ -7352,7 +7757,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 206,
+            funcId: 216,
           )!;
         },
         codec: SseCodec(
@@ -7386,7 +7791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 207,
+            funcId: 217,
           )!;
         },
         codec: SseCodec(
@@ -7420,7 +7825,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 208,
+            funcId: 218,
           )!;
         },
         codec: SseCodec(
@@ -7450,7 +7855,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 209,
+            funcId: 219,
           )!;
         },
         codec: SseCodec(
@@ -7477,7 +7882,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 210,
+            funcId: 220,
           )!;
         },
         codec: SseCodec(
@@ -7507,7 +7912,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 211,
+            funcId: 221,
             port: port_,
           );
         },
@@ -7538,7 +7943,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 212,
+            funcId: 222,
             port: port_,
           );
         },
@@ -7574,7 +7979,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 213,
+            funcId: 223,
             port: port_,
           );
         },
@@ -7611,7 +8016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 214,
+            funcId: 224,
             port: port_,
           );
         },
@@ -7642,7 +8047,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 215,
+            funcId: 225,
           )!;
         },
         codec: SseCodec(
@@ -7675,7 +8080,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 216,
+            funcId: 226,
             port: port_,
           );
         },
@@ -7714,7 +8119,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 217,
+            funcId: 227,
             port: port_,
           );
         },
@@ -7752,7 +8157,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 218,
+            funcId: 228,
             port: port_,
           );
         },
@@ -7786,7 +8191,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 219,
+            funcId: 229,
           )!;
         },
         codec: SseCodec(
@@ -7821,7 +8226,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 220,
+            funcId: 230,
           )!;
         },
         codec: SseCodec(
@@ -7854,7 +8259,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 221,
+            funcId: 231,
           )!;
         },
         codec: SseCodec(
@@ -7887,7 +8292,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 222,
+            funcId: 232,
           )!;
         },
         codec: SseCodec(
@@ -7924,7 +8329,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 223,
+            funcId: 233,
             port: port_,
           );
         },
@@ -7960,7 +8365,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 224,
+            funcId: 234,
             port: port_,
           );
         },
@@ -7995,7 +8400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 225,
+            funcId: 235,
           )!;
         },
         codec: SseCodec(
@@ -8029,7 +8434,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 226,
+            funcId: 236,
             port: port_,
           );
         },
@@ -8060,7 +8465,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 227,
+            funcId: 237,
             port: port_,
           );
         },

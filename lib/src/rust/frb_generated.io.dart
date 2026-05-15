@@ -15,6 +15,7 @@ import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
 import 'api/picacg.dart';
+import 'api/sentry_log.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
 import 'api/websocket.dart';

@@ -255,7 +255,6 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         // ── PicACG 中转路由 ────────────────────────────────────────────────────
         // 移动端在选择 "PC中转" 分流模式后，所有 PicACG 请求都会发到这里。
         // PC 使用其自身的分流配置（channel + token）代为请求 PicACG 并返回数据。
-
         ("GET", "/picacg/ping") => (
             200,
             serde_json::json!({"success": true, "data": "pong"}).to_string(),
@@ -336,9 +335,8 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                     return;
                 }
                 Err(e) => {
-                    let err_body =
-                        serde_json::json!({"success": false, "error": format!("{}", e)})
-                            .to_string();
+                    let err_body = serde_json::json!({"success": false, "error": format!("{}", e)})
+                        .to_string();
                     let header = format!(
                         "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
                         err_body.len()
@@ -348,6 +346,175 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                     return;
                 }
             }
+        }
+
+        // ── Sentry 兼容路由 ──────────────────────────────────────────────────
+        // 兼容 Sentry SDK 的 store 和 envelope 端点
+        // POST /api/{project_id}/store/ - 旧版 JSON 事件提交
+        // POST /api/{project_id}/envelope/ - 新版 Envelope 格式提交
+        // GET  /sentry/logs - 内部查询接口
+        // GET  /sentry/stats - 统计接口
+        // GET  /sentry/projects - 项目列表
+        // DELETE /sentry/events/{event_id} - 删除事件
+        ("POST", p) if p.starts_with("/api/") && p.contains("/store") => {
+            let project_id = extract_sentry_project_id(&path);
+            let body_str = String::from_utf8_lossy(&body).to_string();
+            match sentry_log::api::sentry_log_store_raw_event(project_id, body_str) {
+                Ok(()) => {
+                    let resp = serde_json::json!({"id": "ok"});
+                    (200, resp.to_string())
+                }
+                Err(e) => {
+                    println!("[sentry] 存储事件失败: {}", e);
+                    (400, serde_json::json!({"error": e}).to_string())
+                }
+            }
+        }
+
+        ("POST", p) if p.starts_with("/api/") && p.contains("/envelope") => {
+            let project_id = extract_sentry_project_id(&path);
+            let body_str = String::from_utf8_lossy(&body).to_string();
+            match sentry_log::api::sentry_log_store_envelope(project_id, body_str) {
+                Ok(()) => {
+                    let resp = serde_json::json!({"id": "ok"});
+                    (200, resp.to_string())
+                }
+                Err(e) => {
+                    println!("[sentry] 存储envelope失败: {}", e);
+                    (400, serde_json::json!({"error": e}).to_string())
+                }
+            }
+        }
+
+        ("GET", "/sentry/logs") => {
+            let query = path.splitn(2, '?').nth(1).unwrap_or("");
+            let filter = parse_sentry_log_filter(query);
+            match sentry_log::api::sentry_log_query(filter) {
+                Ok(result) => (
+                    200,
+                    serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string()),
+                ),
+                Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+            }
+        }
+
+        ("GET", "/sentry/stats") => match sentry_log::api::sentry_log_get_stats() {
+            Ok(stats) => (
+                200,
+                serde_json::to_string(&stats).unwrap_or_else(|_| "{}".to_string()),
+            ),
+            Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+        },
+
+        ("GET", "/sentry/projects") => match sentry_log::api::sentry_log_get_projects() {
+            Ok(projects) => (
+                200,
+                serde_json::to_string(&projects).unwrap_or_else(|_| "[]".to_string()),
+            ),
+            Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+        },
+
+        ("GET", p) if p.starts_with("/sentry/events/") => {
+            let event_id = path
+                .trim_start_matches("/sentry/events/")
+                .trim_end_matches('/')
+                .to_string();
+            match sentry_log::api::sentry_log_get_event(event_id) {
+                Ok(Some(event)) => (
+                    200,
+                    serde_json::to_string(&event).unwrap_or_else(|_| "{}".to_string()),
+                ),
+                Ok(None) => (404, serde_json::json!({"error": "事件不存在"}).to_string()),
+                Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+            }
+        }
+
+        ("DELETE", p) if p.starts_with("/sentry/events/") => {
+            let event_id = path
+                .trim_start_matches("/sentry/events/")
+                .trim_end_matches('/')
+                .to_string();
+            match sentry_log::api::sentry_log_delete_event(event_id) {
+                Ok(true) => (200, serde_json::json!({"success": true}).to_string()),
+                Ok(false) => (404, serde_json::json!({"error": "事件不存在"}).to_string()),
+                Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+            }
+        }
+
+        ("POST", "/sentry/events/delete_batch") => {
+            let req_str = String::from_utf8_lossy(&body).to_string();
+            #[derive(serde::Deserialize)]
+            struct BatchDeleteReq {
+                event_ids: Vec<String>,
+            }
+            match serde_json::from_str::<BatchDeleteReq>(&req_str) {
+                Ok(req) => match sentry_log::api::sentry_log_delete_events(req.event_ids) {
+                    Ok(count) => (200, serde_json::json!({"deleted": count}).to_string()),
+                    Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+                },
+                Err(e) => (
+                    400,
+                    serde_json::json!({"error": format!("解析请求失败: {}", e)}).to_string(),
+                ),
+            }
+        }
+
+        ("POST", "/sentry/projects/rename") => {
+            let req_str = String::from_utf8_lossy(&body).to_string();
+            #[derive(serde::Deserialize)]
+            struct RenameReq {
+                project_id: String,
+                name: String,
+            }
+            match serde_json::from_str::<RenameReq>(&req_str) {
+                Ok(req) => {
+                    match sentry_log::api::sentry_log_update_project_name(req.project_id, req.name)
+                    {
+                        Ok(()) => (200, serde_json::json!({"success": true}).to_string()),
+                        Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+                    }
+                }
+                Err(e) => (
+                    400,
+                    serde_json::json!({"error": format!("解析请求失败: {}", e)}).to_string(),
+                ),
+            }
+        }
+
+        ("POST", "/sentry/export") => {
+            let req_str = String::from_utf8_lossy(&body).to_string();
+            match serde_json::from_str::<sentry_log::types::SentryLogFilter>(&req_str) {
+                Ok(filter) => match sentry_log::api::sentry_log_export_json(filter) {
+                    Ok(json) => (200, json),
+                    Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+                },
+                Err(e) => (
+                    400,
+                    serde_json::json!({"error": format!("解析过滤条件失败: {}", e)}).to_string(),
+                ),
+            }
+        }
+
+        ("DELETE", p) if p.starts_with("/sentry/projects/") && p.contains("/events") => {
+            let project_id = path
+                .trim_start_matches("/sentry/projects/")
+                .trim_end_matches("/events")
+                .trim_end_matches('/')
+                .to_string();
+            match sentry_log::api::sentry_log_clear_project_events(project_id) {
+                Ok(count) => (200, serde_json::json!({"deleted": count}).to_string()),
+                Err(e) => (500, serde_json::json!({"error": e}).to_string()),
+            }
+        }
+
+        // OPTIONS 预检请求（CORS）
+        ("OPTIONS", _) => {
+            // 直接返回并提前退出
+            let header = format!(
+                "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, X-Sentry-Auth\r\nAccess-Control-Max-Age: 86400\r\nContent-Length: 0\r\n\r\n"
+            );
+            let _ = stream.write_all(header.as_bytes());
+            return;
         }
 
         _ => (
@@ -371,10 +538,54 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
 fn status_text(code: u16) -> &'static str {
     match code {
         200 => "200 OK",
+        204 => "204 No Content",
         400 => "400 Bad Request",
         404 => "404 Not Found",
         500 => "500 Internal Server Error",
         _ => "200 OK",
+    }
+}
+
+/// 从Sentry路径中提取project_id
+/// 例如: /api/1/store/ -> "1"
+///       /api/2/envelope/ -> "2"
+fn extract_sentry_project_id(path: &str) -> String {
+    let path = path.trim_end_matches('/');
+    let parts: Vec<&str> = path.split('/').collect();
+    // /api/{project_id}/store 或 /api/{project_id}/envelope
+    if parts.len() >= 3 && parts[1] == "api" {
+        parts[2].to_string()
+    } else {
+        "1".to_string()
+    }
+}
+
+/// 从查询字符串解析Sentry日志过滤条件
+fn parse_sentry_log_filter(query: &str) -> sentry_log::types::SentryLogFilter {
+    let params: Vec<(String, String)> = url::form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect();
+
+    let get_param = |key: &str| -> Option<String> {
+        params
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+    };
+
+    sentry_log::types::SentryLogFilter {
+        project_id: get_param("project_id"),
+        level: get_param("level").map(|l| sentry_log::types::SentryLevel::from_str(&l)),
+        query: get_param("query"),
+        environment: get_param("environment"),
+        start_time: get_param("start_time"),
+        end_time: get_param("end_time"),
+        offset: get_param("offset")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
+        limit: get_param("limit")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(50),
     }
 }
 

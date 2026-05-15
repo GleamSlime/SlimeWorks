@@ -39,6 +39,31 @@ class MediaLibraryRoute extends GoRouteData with $MediaLibraryRoute {
   }
 }
 
+@TypedGoRoute<SentryLogRoute>(path: '/sentry-log')
+class SentryLogRoute extends AppRouteData with $SentryLogRoute {
+  const SentryLogRoute();
+
+  @override
+  String get title => '日志';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuTools;
+
+  @override
+  String get sidebarGroupId => 'tools';
+
+  static const Permission routePermission = Permission.accessSentryLog;
+  Permission get permission => SentryLogRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const SentryLogScreen());
+  }
+}
+
 class ToolsRoute extends AppRouteData with $ToolsRoute {
   const ToolsRoute();
 

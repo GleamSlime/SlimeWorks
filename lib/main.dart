@@ -20,6 +20,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
+import 'package:slime_works/src/rust/api/sentry_log.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -80,6 +81,18 @@ Future<void> main() async {
 
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   initializeLogger();
+
+  // 初始化Sentry日志存储
+  try {
+    final appDir = Platform.isMacOS || Platform.isLinux
+        ? '${Platform.environment['HOME']}/.slime_works'
+        : Platform.isWindows
+        ? '${Platform.environment['APPDATA']}/slime_works'
+        : '.';
+    await sentryLogInit(dbPath: '$appDir/sentry_log.db');
+  } catch (e) {
+    debugPrint('初始化Sentry日志存储失败: $e');
+  }
 
   // 配置 EasyLoading
   configLoading();
