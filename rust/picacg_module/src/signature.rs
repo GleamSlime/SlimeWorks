@@ -120,3 +120,105 @@ pub fn build_headers(path: &str, method: &str, token: Option<&str>) -> Vec<(Stri
 
     headers
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_nonce_is_32_hex_chars() {
+        let nonce = generate_nonce();
+        assert_eq!(nonce.len(), 32);
+        assert!(nonce.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn generate_nonce_unique() {
+        let a = generate_nonce();
+        let b = generate_nonce();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn current_timestamp_is_numeric() {
+        let ts = current_timestamp();
+        assert!(ts.chars().all(|c| c.is_ascii_digit()));
+        let val: u64 = ts.parse().unwrap();
+        assert!(val > 1700000000);
+    }
+
+    #[test]
+    fn hmac_sha256_deterministic() {
+        let a = hmac_sha256("hello", "key");
+        let b = hmac_sha256("hello", "key");
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn hmac_sha256_different_inputs() {
+        let a = hmac_sha256("hello", "key");
+        let b = hmac_sha256("world", "key");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn hmac_sha256_case_insensitive_src() {
+        let a = hmac_sha256("Hello", "key");
+        let b = hmac_sha256("hello", "key");
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn build_signature_deterministic() {
+        let a = build_signature("auth/sign-in", "1700000000", "abc123", "POST");
+        let b = build_signature("auth/sign-in", "1700000000", "abc123", "POST");
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn build_signature_different_paths() {
+        let a = build_signature("auth/sign-in", "1700000000", "abc123", "POST");
+        let b = build_signature("comics", "1700000000", "abc123", "GET");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn build_headers_contains_required_keys() {
+        let headers = build_headers("auth/sign-in", "POST", None);
+        let keys: Vec<&str> = headers.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(keys.contains(&"api-key"));
+        assert!(keys.contains(&"signature"));
+        assert!(keys.contains(&"nonce"));
+        assert!(keys.contains(&"time"));
+        assert!(keys.contains(&"Content-Type"));
+    }
+
+    #[test]
+    fn build_headers_post_has_content_type() {
+        let headers = build_headers("auth/sign-in", "POST", None);
+        let has_ct = headers.iter().any(|(k, v)| k == "Content-Type" && v.contains("application/json"));
+        assert!(has_ct);
+    }
+
+    #[test]
+    fn build_headers_get_no_content_type() {
+        let headers = build_headers("comics", "GET", None);
+        let has_ct = headers.iter().any(|(k, _)| k == "Content-Type");
+        assert!(!has_ct);
+    }
+
+    #[test]
+    fn build_headers_with_token() {
+        let headers = build_headers("auth/sign-in", "POST", Some("my-token"));
+        let auth = headers.iter().find(|(k, _)| k == "authorization");
+        assert!(auth.is_some());
+        assert_eq!(auth.unwrap().1, "my-token");
+    }
+
+    #[test]
+    fn build_headers_without_token() {
+        let headers = build_headers("comics", "GET", None);
+        let auth = headers.iter().find(|(k, _)| k == "authorization");
+        assert!(auth.is_none());
+    }
+}

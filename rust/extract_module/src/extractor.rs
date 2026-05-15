@@ -1,8 +1,7 @@
-use std::io::{BufRead, BufReader, Read};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::fs::{self, File};
+use std::io::BufReader;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -24,43 +23,215 @@ pub fn is_cancelled() -> bool {
     CANCEL_FLAG.load(Ordering::SeqCst)
 }
 
-fn find_7z_binary() -> Result<String> {
-    if cfg!(target_os = "windows") {
-        let candidates = [
-            r"C:\Program Files\7-Zip\7z.exe",
-            r"C:\Program Files (x86)\7-Zip\7z.exe",
-        ];
-        for c in &candidates {
-            if Path::new(c).exists() {
-                return Ok(c.to_string());
-            }
-        }
-        let output = Command::new("where").arg("7z.exe").output();
-        if let Ok(out) = output {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                let line = s.lines().next().unwrap_or("").trim();
-                if !line.is_empty() {
-                    return Ok(line.to_string());
-                }
-            }
-        }
-        anyhow::bail!("未找到 7z，请安装 7-Zip: https://7-zip.org/");
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ArchiveFormat {
+    SevenZ,
+    Zip,
+    Tar,
+    TarGz,
+    TarBz2,
+    TarXz,
+    Gz,
+    Bz2,
+    Xz,
+    Rar,
+}
+
+fn detect_format(path: &str) -> Option<ArchiveFormat> {
+    let p = Path::new(path);
+    let lower = p.to_string_lossy().to_lowercase();
+    if lower.ends_with(".7z") {
+        Some(ArchiveFormat::SevenZ)
+    } else if lower.ends_with(".zip") {
+        Some(ArchiveFormat::Zip)
+    } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        Some(ArchiveFormat::TarGz)
+    } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") {
+        Some(ArchiveFormat::TarBz2)
+    } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
+        Some(ArchiveFormat::TarXz)
+    } else if lower.ends_with(".tar") {
+        Some(ArchiveFormat::Tar)
+    } else if lower.ends_with(".rar") {
+        Some(ArchiveFormat::Rar)
+    } else if lower.ends_with(".gz") {
+        Some(ArchiveFormat::Gz)
+    } else if lower.ends_with(".bz2") {
+        Some(ArchiveFormat::Bz2)
+    } else if lower.ends_with(".xz") {
+        Some(ArchiveFormat::Xz)
     } else {
-        for cmd in &["7z", "7zz"] {
-            let output = Command::new("which").arg(cmd).output();
-            if let Ok(out) = output {
-                if out.status.success() {
-                    let s = String::from_utf8_lossy(&out.stdout);
-                    let line = s.lines().next().unwrap_or("").trim();
-                    if !line.is_empty() {
-                        return Ok(line.to_string());
-                    }
-                }
-            }
-        }
-        anyhow::bail!("未找到 7z，请安装：brew install sevenzip");
+        None
     }
+}
+
+fn extract_7z(archive_path: &str, output_dir: &str, password: Option<&str>) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    if let Some(pw) = password {
+        if !pw.is_empty() {
+            sevenz_rust2::decompress_file_with_password(archive_path, output_dir, pw.into())
+                .with_context(|| format!("7z 解压失败: {}", archive_path))?;
+            return Ok(());
+        }
+    }
+    sevenz_rust2::decompress_file(archive_path, output_dir)
+        .with_context(|| format!("7z 解压失败: {}", archive_path))?;
+    Ok(())
+}
+
+fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file =
+        File::open(archive_path).with_context(|| format!("无法打开 zip 文件: {}", archive_path))?;
+    let mut archive = zip::ZipArchive::new(BufReader::new(file))
+        .with_context(|| format!("无法读取 zip 文件: {}", archive_path))?;
+
+    for i in 0..archive.len() {
+        if is_cancelled() {
+            anyhow::bail!("用户取消");
+        }
+        let mut entry = archive
+            .by_index(i)
+            .with_context(|| format!("无法读取 zip 条目 #{}", i))?;
+        let outpath = match entry.enclosed_name() {
+            Some(path) => output.join(path),
+            None => continue,
+        };
+
+        if entry.is_dir() {
+            fs::create_dir_all(&outpath)?;
+        } else {
+            if let Some(parent) = outpath.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut outfile = File::create(&outpath)
+                .with_context(|| format!("无法创建文件: {}", outpath.display()))?;
+            std::io::copy(&mut entry, &mut outfile)?;
+        }
+    }
+    Ok(())
+}
+
+fn extract_tar(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file =
+        File::open(archive_path).with_context(|| format!("无法打开 tar 文件: {}", archive_path))?;
+    let mut archive = tar::Archive::new(file);
+    archive
+        .unpack(output)
+        .with_context(|| format!("tar 解压失败: {}", archive_path))?;
+    Ok(())
+}
+
+fn extract_tar_gz(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file = File::open(archive_path)
+        .with_context(|| format!("无法打开 tar.gz 文件: {}", archive_path))?;
+    let gz = flate2::read::GzDecoder::new(file);
+    let mut archive = tar::Archive::new(gz);
+    archive
+        .unpack(output)
+        .with_context(|| format!("tar.gz 解压失败: {}", archive_path))?;
+    Ok(())
+}
+
+fn extract_tar_bz2(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file = File::open(archive_path)
+        .with_context(|| format!("无法打开 tar.bz2 文件: {}", archive_path))?;
+    let bz2 = bzip2::read::BzDecoder::new(file);
+    let mut archive = tar::Archive::new(bz2);
+    archive
+        .unpack(output)
+        .with_context(|| format!("tar.bz2 解压失败: {}", archive_path))?;
+    Ok(())
+}
+
+fn extract_tar_xz(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file = File::open(archive_path)
+        .with_context(|| format!("无法打开 tar.xz 文件: {}", archive_path))?;
+    let xz = xz2::read::XzDecoder::new(file);
+    let mut archive = tar::Archive::new(xz);
+    archive
+        .unpack(output)
+        .with_context(|| format!("tar.xz 解压失败: {}", archive_path))?;
+    Ok(())
+}
+
+fn extract_gz(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file =
+        File::open(archive_path).with_context(|| format!("无法打开 gz 文件: {}", archive_path))?;
+    let mut gz = flate2::read::GzDecoder::new(file);
+
+    let p = Path::new(archive_path);
+    let stem = p
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let outpath = output.join(&stem);
+    let mut outfile =
+        File::create(&outpath).with_context(|| format!("无法创建文件: {}", outpath.display()))?;
+    std::io::copy(&mut gz, &mut outfile)?;
+    Ok(())
+}
+
+fn extract_bz2(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file =
+        File::open(archive_path).with_context(|| format!("无法打开 bz2 文件: {}", archive_path))?;
+    let mut bz2 = bzip2::read::BzDecoder::new(file);
+
+    let p = Path::new(archive_path);
+    let stem = p
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let outpath = output.join(&stem);
+    let mut outfile =
+        File::create(&outpath).with_context(|| format!("无法创建文件: {}", outpath.display()))?;
+    std::io::copy(&mut bz2, &mut outfile)?;
+    Ok(())
+}
+
+fn extract_xz(archive_path: &str, output_dir: &str) -> Result<()> {
+    let output = Path::new(output_dir);
+    fs::create_dir_all(output)?;
+
+    let file =
+        File::open(archive_path).with_context(|| format!("无法打开 xz 文件: {}", archive_path))?;
+    let mut xz = xz2::read::XzDecoder::new(file);
+
+    let p = Path::new(archive_path);
+    let stem = p
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let outpath = output.join(&stem);
+    let mut outfile =
+        File::create(&outpath).with_context(|| format!("无法创建文件: {}", outpath.display()))?;
+    std::io::copy(&mut xz, &mut outfile)?;
+    Ok(())
 }
 
 pub fn scan_archives(dir: &str) -> Result<Vec<ArchiveInfo>> {
@@ -129,73 +300,26 @@ pub fn extract_archive(
     password: Option<&str>,
     progress_callback: &dyn Fn(f64),
 ) -> Result<()> {
-    let binary = find_7z_binary()?;
-    let output = Path::new(output_dir);
-    std::fs::create_dir_all(output)?;
+    let format = detect_format(archive_path)
+        .with_context(|| format!("无法识别压缩格式: {}", archive_path))?;
 
-    let mut cmd = Command::new(&binary);
-    cmd.arg("x")
-        .arg("-y")
-        .arg("-bsp1")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    if let Some(pw) = password {
-        if !pw.is_empty() {
-            cmd.arg(format!("-p{}", pw));
-        }
-    } else {
-        cmd.arg("-p");
-    }
-
-    cmd.arg(format!("-o{}", output_dir));
-    cmd.arg("--").arg(archive_path);
-
-    let mut child = cmd.spawn()?;
-    let stdout = child.stdout.take();
-    if let Some(stdout) = stdout {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if is_cancelled() {
-                let _ = child.kill();
-                anyhow::bail!("用户取消");
-            }
-            if let Ok(line) = line {
-                if let Some(pct) = parse_7z_progress(&line) {
-                    progress_callback(pct);
-                }
-            }
+    match format {
+        ArchiveFormat::SevenZ => extract_7z(archive_path, output_dir, password)?,
+        ArchiveFormat::Zip => extract_zip(archive_path, output_dir, password)?,
+        ArchiveFormat::Tar => extract_tar(archive_path, output_dir)?,
+        ArchiveFormat::TarGz => extract_tar_gz(archive_path, output_dir)?,
+        ArchiveFormat::TarBz2 => extract_tar_bz2(archive_path, output_dir)?,
+        ArchiveFormat::TarXz => extract_tar_xz(archive_path, output_dir)?,
+        ArchiveFormat::Gz => extract_gz(archive_path, output_dir)?,
+        ArchiveFormat::Bz2 => extract_bz2(archive_path, output_dir)?,
+        ArchiveFormat::Xz => extract_xz(archive_path, output_dir)?,
+        ArchiveFormat::Rar => {
+            anyhow::bail!("RAR 格式暂不支持纯 Rust 解压，请使用 7z 或 zip 格式");
         }
     }
 
-    let status = child.wait()?;
-    if !status.success() {
-        let stderr_output = if let Some(mut stderr) = child.stderr.take() {
-            let mut buf = String::new();
-            let _ = stderr.read_to_string(&mut buf);
-            buf
-        } else {
-            String::new()
-        };
-        anyhow::bail!(
-            "解压失败: {} | stderr: {}",
-            archive_path,
-            stderr_output.trim()
-        );
-    }
+    progress_callback(1.0);
     Ok(())
-}
-
-fn parse_7z_progress(line: &str) -> Option<f64> {
-    let trimmed = line.trim();
-    if trimmed.ends_with('%') {
-        let pct_str = trimmed.trim_end_matches('%');
-        let pct: f64 = pct_str.parse().ok()?;
-        if (0.0..=100.0).contains(&pct) {
-            return Some(pct / 100.0);
-        }
-    }
-    None
 }
 
 pub fn calculate_output_dir(
@@ -439,4 +563,162 @@ pub fn get_dir_size(path: &str) -> Result<u64> {
     }
     walk(p, &mut total)?;
     Ok(total)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── detect_format ──────────────────────────────────────────────────────
+
+    #[test]
+    fn detect_format_7z() {
+        assert_eq!(detect_format("archive.7z"), Some(ArchiveFormat::SevenZ));
+    }
+
+    #[test]
+    fn detect_format_zip() {
+        assert_eq!(detect_format("archive.zip"), Some(ArchiveFormat::Zip));
+    }
+
+    #[test]
+    fn detect_format_tar() {
+        assert_eq!(detect_format("archive.tar"), Some(ArchiveFormat::Tar));
+    }
+
+    #[test]
+    fn detect_format_tar_gz() {
+        assert_eq!(detect_format("archive.tar.gz"), Some(ArchiveFormat::TarGz));
+        assert_eq!(detect_format("archive.tgz"), Some(ArchiveFormat::TarGz));
+    }
+
+    #[test]
+    fn detect_format_tar_bz2() {
+        assert_eq!(
+            detect_format("archive.tar.bz2"),
+            Some(ArchiveFormat::TarBz2)
+        );
+        assert_eq!(detect_format("archive.tbz2"), Some(ArchiveFormat::TarBz2));
+    }
+
+    #[test]
+    fn detect_format_tar_xz() {
+        assert_eq!(detect_format("archive.tar.xz"), Some(ArchiveFormat::TarXz));
+        assert_eq!(detect_format("archive.txz"), Some(ArchiveFormat::TarXz));
+    }
+
+    #[test]
+    fn detect_format_gz() {
+        assert_eq!(detect_format("file.gz"), Some(ArchiveFormat::Gz));
+    }
+
+    #[test]
+    fn detect_format_bz2() {
+        assert_eq!(detect_format("file.bz2"), Some(ArchiveFormat::Bz2));
+    }
+
+    #[test]
+    fn detect_format_xz() {
+        assert_eq!(detect_format("file.xz"), Some(ArchiveFormat::Xz));
+    }
+
+    #[test]
+    fn detect_format_rar() {
+        assert_eq!(detect_format("archive.rar"), Some(ArchiveFormat::Rar));
+    }
+
+    #[test]
+    fn detect_format_unknown() {
+        assert_eq!(detect_format("file.txt"), None);
+        assert_eq!(detect_format("file.pdf"), None);
+        assert_eq!(detect_format("archive.abc"), None);
+    }
+
+    #[test]
+    fn detect_format_case_insensitive() {
+        assert_eq!(detect_format("archive.ZIP"), Some(ArchiveFormat::Zip));
+        assert_eq!(detect_format("archive.7Z"), Some(ArchiveFormat::SevenZ));
+        assert_eq!(detect_format("archive.Rar"), Some(ArchiveFormat::Rar));
+    }
+
+    #[test]
+    fn detect_format_path_with_dirs() {
+        assert_eq!(
+            detect_format("/some/path/to/archive.zip"),
+            Some(ArchiveFormat::Zip)
+        );
+        assert_eq!(
+            detect_format("C:\\Users\\test\\file.7z"),
+            Some(ArchiveFormat::SevenZ)
+        );
+    }
+
+    // ── calculate_output_dir ───────────────────────────────────────────────
+
+    #[test]
+    fn calculate_output_dir_same_directory() {
+        let result = calculate_output_dir(
+            "/source/sub/archive.zip",
+            "/output",
+            "/source",
+            &ExtractOutputMode::SameDirectory,
+        );
+        assert_eq!(result, "/source/sub");
+    }
+
+    #[test]
+    fn calculate_output_dir_flat_to_output() {
+        let result = calculate_output_dir(
+            "/source/sub/archive.zip",
+            "/output",
+            "/source",
+            &ExtractOutputMode::FlatToOutput,
+        );
+        assert_eq!(result, "/output");
+    }
+
+    #[test]
+    fn calculate_output_dir_by_archive_name() {
+        let result = calculate_output_dir(
+            "/source/archive.zip",
+            "/output",
+            "/source",
+            &ExtractOutputMode::ByArchiveName,
+        );
+        assert_eq!(result, "/output/archive");
+    }
+
+    #[test]
+    fn calculate_output_dir_preserve_structure() {
+        let result = calculate_output_dir(
+            "/source/sub/deep/archive.zip",
+            "/output",
+            "/source",
+            &ExtractOutputMode::PreserveStructure,
+        );
+        assert_eq!(result, "/output/sub/deep");
+    }
+
+    #[test]
+    fn calculate_output_dir_preserve_structure_top_level() {
+        let result = calculate_output_dir(
+            "/source/archive.zip",
+            "/output",
+            "/source",
+            &ExtractOutputMode::PreserveStructure,
+        );
+        assert_eq!(result, "/output/");
+    }
+
+    // ── cancel flag ────────────────────────────────────────────────────────
+
+    #[test]
+    fn cancel_flag_reset_and_check() {
+        reset_cancel();
+        assert!(!is_cancelled());
+        request_cancel();
+        assert!(is_cancelled());
+        reset_cancel();
+        assert!(!is_cancelled());
+    }
 }

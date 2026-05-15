@@ -126,3 +126,101 @@ pub struct NovelFolder {
     /// 父文件夹ID（None 表示顶级文件夹）
     pub parent_id: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn novel_format_from_extension_txt() {
+        assert_eq!(NovelFormat::from_extension("txt"), Some(NovelFormat::Txt));
+        assert_eq!(NovelFormat::from_extension("TXT"), Some(NovelFormat::Txt));
+        assert_eq!(NovelFormat::from_extension("Txt"), Some(NovelFormat::Txt));
+    }
+
+    #[test]
+    fn novel_format_from_extension_epub() {
+        assert_eq!(NovelFormat::from_extension("epub"), Some(NovelFormat::Epub));
+        assert_eq!(NovelFormat::from_extension("EPUB"), Some(NovelFormat::Epub));
+    }
+
+    #[test]
+    fn novel_format_from_extension_unknown() {
+        assert_eq!(NovelFormat::from_extension("pdf"), None);
+        assert_eq!(NovelFormat::from_extension("doc"), None);
+        assert_eq!(NovelFormat::from_extension(""), None);
+    }
+
+    #[test]
+    fn novel_format_as_str() {
+        assert_eq!(NovelFormat::Txt.as_str(), "txt");
+        assert_eq!(NovelFormat::Epub.as_str(), "epub");
+    }
+
+    #[test]
+    fn novel_format_serde_round_trip() {
+        for fmt in &[NovelFormat::Txt, NovelFormat::Epub] {
+            let json = serde_json::to_string(fmt).expect("serialize");
+            let restored: NovelFormat = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(&restored, fmt);
+        }
+    }
+
+    #[test]
+    fn novel_chapter_serde_round_trip() {
+        let chapter = NovelChapter {
+            id: "ch-001".to_string(),
+            title: "第一章".to_string(),
+            index: 0,
+            content: Some("内容".to_string()),
+        };
+        let json = serde_json::to_string(&chapter).expect("serialize");
+        let restored: NovelChapter = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.id, chapter.id);
+        assert_eq!(restored.title, chapter.title);
+        assert_eq!(restored.index, chapter.index);
+        assert_eq!(restored.content, chapter.content);
+    }
+
+    #[test]
+    fn novel_chapter_content_none() {
+        let chapter = NovelChapter {
+            id: "ch-002".to_string(),
+            title: "第二章".to_string(),
+            index: 1,
+            content: None,
+        };
+        let json = serde_json::to_string(&chapter).expect("serialize");
+        let restored: NovelChapter = serde_json::from_str(&json).expect("deserialize");
+        assert!(restored.content.is_none());
+    }
+
+    #[test]
+    fn scan_progress_serde_round_trip() {
+        let progress = ScanProgress {
+            scanned: 10,
+            found: 3,
+            current_file: Some("book.epub".to_string()),
+        };
+        let json = serde_json::to_string(&progress).expect("serialize");
+        let restored: ScanProgress = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.scanned, 10);
+        assert_eq!(restored.found, 3);
+        assert_eq!(restored.current_file, Some("book.epub".to_string()));
+    }
+
+    #[test]
+    fn search_result_serde_round_trip() {
+        let result = SearchResult {
+            novel_id: "n-001".to_string(),
+            title: "测试小说".to_string(),
+            snippet: "匹配片段".to_string(),
+            chapter_title: Some("第三章".to_string()),
+            score: 0.95,
+        };
+        let json = serde_json::to_string(&result).expect("serialize");
+        let restored: SearchResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.novel_id, result.novel_id);
+        assert_eq!(restored.score, result.score);
+    }
+}

@@ -168,3 +168,111 @@ pub struct HomePageData {
     pub total_games: i64,
     pub total_play_time_sec: i64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn game_status_from_str_known() {
+        assert_eq!(GameStatus::from_str("playing"), GameStatus::Playing);
+        assert_eq!(GameStatus::from_str("completed"), GameStatus::Completed);
+        assert_eq!(GameStatus::from_str("on_hold"), GameStatus::OnHold);
+        assert_eq!(GameStatus::from_str("dropped"), GameStatus::Dropped);
+        assert_eq!(GameStatus::from_str("not_started"), GameStatus::NotStarted);
+    }
+
+    #[test]
+    fn game_status_from_str_unknown_defaults_to_not_started() {
+        assert_eq!(GameStatus::from_str("unknown"), GameStatus::NotStarted);
+        assert_eq!(GameStatus::from_str(""), GameStatus::NotStarted);
+        assert_eq!(GameStatus::from_str("random"), GameStatus::NotStarted);
+    }
+
+    #[test]
+    fn game_status_to_db_str_round_trip() {
+        for status in &[
+            GameStatus::NotStarted,
+            GameStatus::Playing,
+            GameStatus::Completed,
+            GameStatus::OnHold,
+            GameStatus::Dropped,
+        ] {
+            let db_str = status.to_db_str();
+            let restored = GameStatus::from_str(db_str);
+            assert_eq!(&restored, status);
+        }
+    }
+
+    #[test]
+    fn game_status_serde_round_trip() {
+        for status in &[
+            GameStatus::NotStarted,
+            GameStatus::Playing,
+            GameStatus::Completed,
+            GameStatus::OnHold,
+            GameStatus::Dropped,
+        ] {
+            let json = serde_json::to_string(status).expect("serialize");
+            let restored: GameStatus = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(&restored, status);
+        }
+    }
+
+    #[test]
+    fn scanned_game_serde_round_trip() {
+        let game = ScannedGame {
+            folder_path: "/games/rpg".to_string(),
+            folder_name: "RPG Game".to_string(),
+            exe_paths: vec!["/games/rpg/game.exe".to_string()],
+        };
+        let json = serde_json::to_string(&game).expect("serialize");
+        let restored: ScannedGame = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.folder_path, game.folder_path);
+        assert_eq!(restored.folder_name, game.folder_name);
+        assert_eq!(restored.exe_paths, game.exe_paths);
+    }
+
+    #[test]
+    fn day_play_time_serde_round_trip() {
+        let day = DayPlayTime {
+            date: "2026-04-20".to_string(),
+            duration_sec: 3600,
+        };
+        let json = serde_json::to_string(&day).expect("serialize");
+        let restored: DayPlayTime = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.date, day.date);
+        assert_eq!(restored.duration_sec, day.duration_sec);
+    }
+
+    #[test]
+    fn category_serde_round_trip() {
+        let cat = Category {
+            id: "cat-001".to_string(),
+            name: "RPG".to_string(),
+            emoji: "🎮".to_string(),
+            is_system: false,
+            game_count: 5,
+            created_at: 1700000000,
+        };
+        let json = serde_json::to_string(&cat).expect("serialize");
+        let restored: Category = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.id, cat.id);
+        assert_eq!(restored.emoji, cat.emoji);
+        assert_eq!(restored.is_system, cat.is_system);
+    }
+
+    #[test]
+    fn play_session_serde_round_trip() {
+        let session = PlaySession {
+            id: "ps-001".to_string(),
+            game_id: "g-001".to_string(),
+            start_time: 1700000000,
+            end_time: 1700003600,
+            duration_sec: 3600,
+        };
+        let json = serde_json::to_string(&session).expect("serialize");
+        let restored: PlaySession = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.duration_sec, 3600);
+    }
+}

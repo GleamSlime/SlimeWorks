@@ -183,3 +183,37 @@ pub fn extract_format_file_size(bytes: u64) -> String {
         format!("{} B", bytes)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_file_size_bytes() {
+        assert_eq!(extract_format_file_size(0), "0 B");
+        assert_eq!(extract_format_file_size(512), "512 B");
+    }
+
+    #[test]
+    fn format_file_size_kb() {
+        assert_eq!(extract_format_file_size(1024), "1.00 KB");
+        assert_eq!(extract_format_file_size(1536), "1.50 KB");
+    }
+
+    #[test]
+    fn format_file_size_mb() {
+        assert_eq!(extract_format_file_size(1024 * 1024), "1.00 MB");
+        assert_eq!(extract_format_file_size(5 * 1024 * 1024 + 512 * 1024), "5.50 MB");
+    }
+
+    #[test]
+    fn format_file_size_gb() {
+        assert_eq!(extract_format_file_size(1024 * 1024 * 1024), "1.00 GB");
+        assert_eq!(extract_format_file_size(2 * 1024 * 1024 * 1024 + 512 * 1024 * 1024), "2.50 GB");
+    }
+
+    #[test]
+    fn format_file_size_tb() {
+        assert_eq!(extract_format_file_size(1024u64 * 1024 * 1024 * 1024), "1.00 TB");
+    }
+}
