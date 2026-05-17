@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:get_it/get_it.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -21,12 +25,31 @@ class SentryLogScreen extends StatefulWidget {
 class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProviderStateMixin {
   late SentryLogViewModel _viewModel;
   late TabController _tabController;
+  SentrySettingsService? _sentrySettings;
+  NodeSettingsService? _nodeService;
+
+  StreamSubscription? _nodeListSub;
+  StreamSubscription? _nodeConnectivitySub;
+  StreamSubscription? _currentNodeSub;
 
   @override
   void initState() {
     super.initState();
     _viewModel = Get.put(SentryLogViewModel());
     _tabController = TabController(length: 2, vsync: this);
+    _sentrySettings = GetIt.instance.get<SentrySettingsService>();
+    _nodeService = GetIt.instance.get<NodeSettingsService>();
+
+    _nodeListSub = _nodeService!.remoteNodes.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _nodeConnectivitySub = _nodeService!.nodeConnectivity.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _currentNodeSub = _viewModel.currentNodeId.listen((_) {
+      if (mounted) setState(() {});
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _viewModel.loadInitialData();
     });
@@ -34,6 +57,9 @@ class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProv
 
   @override
   void dispose() {
+    _nodeListSub?.cancel();
+    _nodeConnectivitySub?.cancel();
+    _currentNodeSub?.cancel();
     _tabController.dispose();
     try {
       Get.delete<SentryLogViewModel>(force: true);
@@ -51,6 +77,8 @@ class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProv
       data: ScreenChromeData(
         title: '日志中心',
         actions: [
+          _buildNodeSwitcher(context, theme, m, isDark),
+          SizedBox(width: m.kSpace8),
           _buildActionButton(
             context: context,
             icon: Icons.refresh_rounded,
@@ -141,6 +169,63 @@ class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProv
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+    if (_sentrySettings == null || _nodeService == null) return const SizedBox.shrink();
+
+    final currentNodeId = _viewModel.currentNodeId.value;
+    final remoteNodes = _nodeService!.enabledRemoteNodes;
+
+    final items = <DropdownMenuItem<String>>[
+      DropdownMenuItem<String>(
+        value: '',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.computer, size: m.iconSize16, color: theme.hintColor),
+            SizedBox(width: m.kSpace4),
+            const Text('本机'),
+          ],
+        ),
+      ),
+      ...remoteNodes.map((node) {
+        final ok = _nodeService!.nodeConnectivity[node.id] == true;
+        return DropdownMenuItem<String>(
+          value: node.id,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.dns_outlined, size: m.iconSize16, color: ok ? Colors.green : Colors.red),
+              SizedBox(width: m.kSpace4),
+              Text(node.name, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        );
+      }),
+    ];
+
+    return Container(
+      height: m.kSpace32,
+      decoration: BoxDecoration(
+        color: isDark ? DarkColors.background2 : LightColors.background2,
+        borderRadius: m.radius8,
+        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+      ),
+      child: DropdownButton<String>(
+        value: currentNodeId.isEmpty ? '' : currentNodeId,
+        icon: Icon(Icons.swap_horiz, size: m.iconSize16, color: theme.hintColor),
+        style: theme.textTheme.bodySmall,
+        underline: const SizedBox.shrink(),
+        padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
+        items: items,
+        onChanged: (value) async {
+          if (value != null && value != currentNodeId) {
+            await _viewModel.switchNode(value);
+          }
+        },
       ),
     );
   }

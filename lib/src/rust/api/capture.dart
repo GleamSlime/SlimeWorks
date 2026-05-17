@@ -59,7 +59,8 @@ String installCaCertificate({required String password, String? installDir}) =>
 bool isCaCertificateInstalled({String? installDir}) => RustLib.instance.api
     .crateApiCaptureIsCaCertificateInstalled(installDir: installDir);
 
-Future<bool> isRunningAsAdministrator() =>
+/// 检查是否以管理员身份运行（Windows）
+bool isRunningAsAdministrator() =>
     RustLib.instance.api.crateApiCaptureIsRunningAsAdministrator();
 
 /// 初始化日志系统

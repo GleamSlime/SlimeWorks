@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:get_it/get_it.dart';
+import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
 
@@ -19,6 +21,33 @@ class SentryLogViewModel extends GetxController {
   final RxInt currentOffset = 0.obs;
   final int pageSize = 50;
 
+  final RxString currentNodeId = ''.obs;
+
+  SentrySettingsService? _sentrySettings;
+
+  bool get isLocal => currentNodeId.value.isEmpty;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _sentrySettings = GetIt.instance.get<SentrySettingsService>();
+    currentNodeId.value = _sentrySettings?.selectedNodeId.value ?? '';
+  }
+
+  Future<void> switchNode(String nodeId) async {
+    currentNodeId.value = nodeId;
+    if (_sentrySettings != null) {
+      await _sentrySettings!.setSelectedNodeId(nodeId);
+    }
+    events.clear();
+    projects.clear();
+    stats.clear();
+    totalEvents.value = 0;
+    currentOffset.value = 0;
+    errorMessage.value = '';
+    await loadInitialData();
+  }
+
   Future<void> loadInitialData() async {
     isLoading.value = true;
     try {
@@ -33,23 +62,42 @@ class SentryLogViewModel extends GetxController {
 
   Future<void> loadEvents() async {
     try {
-      final result = await sentryLogQuery(
-        projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
-        level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
-        query: searchQuery.value.isEmpty ? null : searchQuery.value,
-        environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
-        startTime: null,
-        endTime: null,
-        offset: BigInt.from(currentOffset.value),
-        limit: BigInt.from(pageSize),
-      );
+      if (isLocal) {
+        final result = await sentryLogQuery(
+          projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
+          level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
+          query: searchQuery.value.isEmpty ? null : searchQuery.value,
+          environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
+          startTime: null,
+          endTime: null,
+          offset: BigInt.from(currentOffset.value),
+          limit: BigInt.from(pageSize),
+        );
 
-      final parsed = jsonDecode(result) as Map<String, dynamic>;
-      final eventList =
-          (parsed['events'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ??
-          [];
-      totalEvents.value = (parsed['total'] as num?)?.toInt() ?? 0;
-      events.value = eventList;
+        final parsed = jsonDecode(result) as Map<String, dynamic>;
+        final eventList =
+            (parsed['events'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ??
+            [];
+        totalEvents.value = (parsed['total'] as num?)?.toInt() ?? 0;
+        events.value = eventList;
+      } else {
+        final result = await _sentrySettings!.fetchRemoteLogs(
+          projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
+          level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
+          query: searchQuery.value.isEmpty ? null : searchQuery.value,
+          environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
+          startTime: null,
+          endTime: null,
+          offset: currentOffset.value,
+          limit: pageSize,
+        );
+
+        final eventList =
+            (result['events'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ??
+            [];
+        totalEvents.value = (result['total'] as num?)?.toInt() ?? 0;
+        events.value = eventList;
+      }
     } catch (e) {
       errorMessage.value = '加载事件失败: $e';
       logger.e('加载Sentry事件失败: $e');
@@ -58,9 +106,14 @@ class SentryLogViewModel extends GetxController {
 
   Future<void> loadProjects() async {
     try {
-      final result = await sentryLogGetProjects();
-      final parsed = jsonDecode(result) as List<dynamic>;
-      projects.value = parsed.map((e) => e as Map<String, dynamic>).toList();
+      if (isLocal) {
+        final result = await sentryLogGetProjects();
+        final parsed = jsonDecode(result) as List<dynamic>;
+        projects.value = parsed.map((e) => e as Map<String, dynamic>).toList();
+      } else {
+        final result = await _sentrySettings!.fetchRemoteProjects();
+        projects.value = result;
+      }
     } catch (e) {
       logger.e('加载Sentry项目失败: $e');
     }
@@ -68,8 +121,13 @@ class SentryLogViewModel extends GetxController {
 
   Future<void> loadStats() async {
     try {
-      final result = await sentryLogGetStats();
-      stats.value = jsonDecode(result) as Map<String, dynamic>;
+      if (isLocal) {
+        final result = await sentryLogGetStats();
+        stats.value = jsonDecode(result) as Map<String, dynamic>;
+      } else {
+        final result = await _sentrySettings!.fetchRemoteStats();
+        stats.value = result;
+      }
     } catch (e) {
       logger.e('加载Sentry统计失败: $e');
     }
@@ -94,22 +152,40 @@ class SentryLogViewModel extends GetxController {
     if ((currentOffset.value + pageSize) >= totalEvents.value) return;
     currentOffset.value += pageSize;
     try {
-      final result = await sentryLogQuery(
-        projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
-        level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
-        query: searchQuery.value.isEmpty ? null : searchQuery.value,
-        environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
-        startTime: null,
-        endTime: null,
-        offset: BigInt.from(currentOffset.value),
-        limit: BigInt.from(pageSize),
-      );
+      if (isLocal) {
+        final result = await sentryLogQuery(
+          projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
+          level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
+          query: searchQuery.value.isEmpty ? null : searchQuery.value,
+          environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
+          startTime: null,
+          endTime: null,
+          offset: BigInt.from(currentOffset.value),
+          limit: BigInt.from(pageSize),
+        );
 
-      final parsed = jsonDecode(result) as Map<String, dynamic>;
-      final eventList =
-          (parsed['events'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ??
-          [];
-      events.addAll(eventList);
+        final parsed = jsonDecode(result) as Map<String, dynamic>;
+        final eventList =
+            (parsed['events'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ??
+            [];
+        events.addAll(eventList);
+      } else {
+        final result = await _sentrySettings!.fetchRemoteLogs(
+          projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
+          level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
+          query: searchQuery.value.isEmpty ? null : searchQuery.value,
+          environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
+          startTime: null,
+          endTime: null,
+          offset: currentOffset.value,
+          limit: pageSize,
+        );
+
+        final eventList =
+            (result['events'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ??
+            [];
+        events.addAll(eventList);
+      }
     } catch (e) {
       logger.e('加载更多Sentry事件失败: $e');
     }
@@ -117,7 +193,12 @@ class SentryLogViewModel extends GetxController {
 
   Future<bool> deleteEvent(String eventId) async {
     try {
-      final result = await sentryLogDeleteEvent(eventId: eventId);
+      bool result;
+      if (isLocal) {
+        result = await sentryLogDeleteEvent(eventId: eventId);
+      } else {
+        result = await _sentrySettings!.deleteRemoteEvent(eventId);
+      }
       if (result) {
         events.removeWhere((e) => e['event_id'] == eventId);
         totalEvents.value--;
@@ -132,11 +213,17 @@ class SentryLogViewModel extends GetxController {
 
   Future<int> deleteEvents(List<String> eventIds) async {
     try {
-      final count = await sentryLogDeleteEvents(eventIds: eventIds);
+      int count;
+      if (isLocal) {
+        final c = await sentryLogDeleteEvents(eventIds: eventIds);
+        count = c.toInt();
+      } else {
+        count = await _sentrySettings!.deleteRemoteEvents(eventIds);
+      }
       events.removeWhere((e) => eventIds.contains(e['event_id']));
-      totalEvents.value -= count.toInt();
+      totalEvents.value -= count;
       await loadStats();
-      return count.toInt();
+      return count;
     } catch (e) {
       logger.e('批量删除Sentry事件失败: $e');
       return 0;
@@ -145,14 +232,25 @@ class SentryLogViewModel extends GetxController {
 
   Future<String> exportLogs() async {
     try {
-      return await sentryLogExportJson(
-        projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
-        level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
-        query: searchQuery.value.isEmpty ? null : searchQuery.value,
-        environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
-        startTime: null,
-        endTime: null,
-      );
+      if (isLocal) {
+        return await sentryLogExportJson(
+          projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
+          level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
+          query: searchQuery.value.isEmpty ? null : searchQuery.value,
+          environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
+          startTime: null,
+          endTime: null,
+        );
+      } else {
+        return await _sentrySettings!.exportRemoteLogs(
+          projectId: selectedProjectId.value.isEmpty ? null : selectedProjectId.value,
+          level: selectedLevel.value.isEmpty ? null : selectedLevel.value,
+          query: searchQuery.value.isEmpty ? null : searchQuery.value,
+          environment: selectedEnvironment.value.isEmpty ? null : selectedEnvironment.value,
+          startTime: null,
+          endTime: null,
+        );
+      }
     } catch (e) {
       logger.e('导出Sentry日志失败: $e');
       return '';
@@ -161,7 +259,11 @@ class SentryLogViewModel extends GetxController {
 
   Future<void> updateProjectName(String projectId, String name) async {
     try {
-      await sentryLogUpdateProjectName(projectId: projectId, name: name);
+      if (isLocal) {
+        await sentryLogUpdateProjectName(projectId: projectId, name: name);
+      } else {
+        logger.i('远程节点不支持更新项目名称');
+      }
       await loadProjects();
     } catch (e) {
       logger.e('更新项目名称失败: $e');
@@ -170,7 +272,11 @@ class SentryLogViewModel extends GetxController {
 
   Future<void> clearProjectEvents(String projectId) async {
     try {
-      await sentryLogClearProjectEvents(projectId: projectId);
+      if (isLocal) {
+        await sentryLogClearProjectEvents(projectId: projectId);
+      } else {
+        logger.i('远程节点不支持清空项目事件');
+      }
       await loadInitialData();
     } catch (e) {
       logger.e('清空项目事件失败: $e');

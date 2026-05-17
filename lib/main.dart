@@ -13,6 +13,7 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
@@ -69,6 +70,9 @@ Future<void> main() async {
 
   // 在 UI 启动前完成 NodeSettingsService 初始化，避免 ViewModel 与 _postAppInit 并发竞争
   await getIt<NodeSettingsService>().init();
+
+  // 初始化 Sentry 设置服务
+  await getIt<SentrySettingsService>().init();
 
   // 提前加载持久化主题配置（仅解析输入参数，不依赖 ScreenUtil）
   await AppTheme.loadSavedTheme();

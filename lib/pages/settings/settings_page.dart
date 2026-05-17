@@ -8,6 +8,7 @@ import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/picacg_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/sentry_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
 
@@ -109,7 +110,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(
@@ -124,12 +125,18 @@ class _OtherSettingsWrapper extends StatelessWidget {
                     Tab(text: '资源库'),
                     Tab(text: 'PicACG'),
                     Tab(text: '游戏设置'),
+                    Tab(text: 'Sentry'),
                   ],
                   dividerHeight: 0,
                 ),
                 Expanded(
                   child: TabBarView(
-                    children: [_ResourcesSettingsTab(), PicAcgSettingsTab(), GameSettingsTab()],
+                    children: [
+                      _ResourcesSettingsTab(),
+                      PicAcgSettingsTab(),
+                      GameSettingsTab(),
+                      SentrySettingsTab(),
+                    ],
                   ),
                 ),
               ],

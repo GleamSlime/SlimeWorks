@@ -13,6 +13,7 @@ import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/core/services/sentry_settings_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -58,6 +59,9 @@ void getItInit() {
 
   // 解压服务
   getIt.registerLazySingleton<ExtractService>(() => ExtractService());
+
+  // Sentry 设置服务
+  getIt.registerLazySingleton<SentrySettingsService>(() => SentrySettingsService());
 
   isInitialized = true;
 }
