@@ -575,7 +575,7 @@ fn parse_sentry_log_filter(query: &str) -> sentry_log::types::SentryLogFilter {
 
     sentry_log::types::SentryLogFilter {
         project_id: get_param("project_id"),
-        level: get_param("level").map(|l| sentry_log::types::SentryLevel::from_str(&l)),
+        level: get_param("level").map(|l| sentry_log::types::SentryLevel::parse(&l)),
         query: get_param("query"),
         environment: get_param("environment"),
         start_time: get_param("start_time"),

@@ -62,7 +62,6 @@ pub fn sentry_log_store_envelope(project_id: String, envelope_body: String) -> R
     let mut i = 1;
     while i + 1 < lines.len() {
         let item_header_line = lines[i].trim();
-        let payload_line = lines[i + 1].trim();
 
         if item_header_line.is_empty() {
             i += 1;
@@ -77,17 +76,55 @@ pub fn sentry_log_store_envelope(project_id: String, envelope_body: String) -> R
             }
         };
 
+        let payload_length = item_header.length.unwrap_or(0);
+
+        let payload = if payload_length > 0 {
+            let mut payload_lines = Vec::new();
+            let mut consumed = 0;
+            let mut j = i + 1;
+            while j < lines.len() {
+                let line_bytes = lines[j].len();
+                if consumed > 0 {
+                    payload_lines.push("\n");
+                }
+                payload_lines.push(lines[j]);
+                consumed += line_bytes + if consumed > 0 { 1 } else { 0 };
+                if consumed >= payload_length {
+                    break;
+                }
+                j += 1;
+            }
+            payload_lines.join("").trim().to_string()
+        } else if i + 1 < lines.len() {
+            lines[i + 1].trim().to_string()
+        } else {
+            String::new()
+        };
+
         match item_header.item_type.as_str() {
             "event" | "transaction" => {
-                if !payload_line.is_empty() {
-                    let _ =
-                        sentry_log_store_raw_event(project_id.clone(), payload_line.to_string());
+                if !payload.is_empty() {
+                    let _ = sentry_log_store_raw_event(project_id.clone(), payload);
                 }
             }
             _ => {}
         }
 
-        i += 2;
+        if payload_length > 0 {
+            let mut j = i + 1;
+            let mut consumed = 0;
+            while j < lines.len() {
+                let line_bytes = lines[j].len();
+                consumed += line_bytes + if consumed > 0 { 1 } else { 0 };
+                j += 1;
+                if consumed >= payload_length {
+                    break;
+                }
+            }
+            i = j;
+        } else {
+            i += 2;
+        }
     }
 
     Ok(())

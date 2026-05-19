@@ -430,6 +430,7 @@ class SentryLogStatsPanel extends StatelessWidget {
 
   void _confirmClearProject(BuildContext context, String projectId, String projectName) {
     final m = AppTheme.metrics;
+    final navigator = Navigator.of(context);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -444,12 +445,12 @@ class SentryLogStatsPanel extends StatelessWidget {
         content: Text('确定要清空项目 "$projectName" 的所有事件吗？此操作不可撤销。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => navigator.pop(),
             child: const Text('取消'),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              navigator.pop();
               await viewModel.clearProjectEvents(projectId);
             },
             style: ElevatedButton.styleFrom(

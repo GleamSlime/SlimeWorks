@@ -381,6 +381,7 @@ class SentryLogList extends StatelessWidget {
 
   void _confirmDelete(BuildContext context, String eventId) {
     final m = AppTheme.metrics;
+    final navigator = Navigator.of(context);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -394,10 +395,10 @@ class SentryLogList extends StatelessWidget {
         ),
         content: const Text('确定要删除这条日志吗？此操作不可撤销。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          TextButton(onPressed: () => navigator.pop(), child: const Text('取消')),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              navigator.pop();
               await viewModel.deleteEvent(eventId);
             },
             style: ElevatedButton.styleFrom(

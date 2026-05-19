@@ -260,11 +260,12 @@ class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProv
   }
 
   void _exportLogs(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final json = await _viewModel.exportLogs();
       if (json.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: const Text('没有可导出的日志'),
             behavior: SnackBarBehavior.floating,
@@ -280,7 +281,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProv
       await file.writeAsString(json);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('日志已导出到: $directory/sentry_log_export_$timestamp.json'),
           behavior: SnackBarBehavior.floating,
@@ -290,7 +291,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with SingleTickerProv
     } catch (e) {
       logger.e('导出日志失败: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('导出失败: $e'),
           behavior: SnackBarBehavior.floating,

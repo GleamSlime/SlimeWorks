@@ -135,7 +135,7 @@ impl SentryLogStorage {
         if let Some(ref project_id) = filter.project_id {
             let prefix = format!("{}:", project_id);
             for item in pe_table.iter()? {
-                let (key, timestamp) = item?;
+                let (key, _timestamp) = item?;
                 let key_str = key.value();
                 if key_str.starts_with(&prefix) {
                     let event_id = &key_str[prefix.len()..];
@@ -164,10 +164,10 @@ impl SentryLogStorage {
         }
 
         if let Some(ref start) = filter.start_time {
-            all_events.retain(|e| e.timestamp.as_ref().map_or(true, |t| t >= start));
+            all_events.retain(|e| e.timestamp.as_ref().is_none_or(|t| t >= start));
         }
         if let Some(ref end) = filter.end_time {
-            all_events.retain(|e| e.timestamp.as_ref().map_or(true, |t| t <= end));
+            all_events.retain(|e| e.timestamp.as_ref().is_none_or(|t| t <= end));
         }
 
         if let Some(ref query) = filter.query {
@@ -183,7 +183,7 @@ impl SentryLogStorage {
                 )
                 .to_lowercase();
                 searchable.contains(&q)
-                    || e.exception.as_ref().map_or(false, |ex| {
+                    || e.exception.as_ref().is_some_and(|ex| {
                         ex.values.iter().any(|v| {
                             let s = format!(
                                 "{} {}",
@@ -399,21 +399,29 @@ impl SentryLogStorage {
 mod tests {
     use super::*;
 
+    fn create_temp_storage() -> SentryLogStorage {
+        let temp_dir = std::env::temp_dir().join("sentry_log_test");
+        let db_path = temp_dir.join(format!("test_{}.db", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).ok();
+        SentryLogStorage::new(&db_path).unwrap()
+    }
+
+    fn create_test_event(event_id: &str, level: SentryLevel, message: &str) -> SentryEvent {
+        SentryEvent {
+            event_id: event_id.to_string(),
+            message: Some(message.to_string()),
+            level: Some(level),
+            timestamp: Some("2024-01-01T00:00:00Z".to_string()),
+            platform: Some("javascript".to_string()),
+            environment: Some("production".to_string()),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_store_and_query_event() {
-        let temp_dir = std::env::temp_dir().join("sentry_log_test");
-        let db_path = temp_dir.join("test.db");
-
-        let storage = SentryLogStorage::new(&db_path).unwrap();
-
-        let event = SentryEvent {
-            event_id: "test123".to_string(),
-            message: Some("测试事件".to_string()),
-            level: Some(SentryLevel::error),
-            timestamp: Some("2024-01-01T00:00:00Z".to_string()),
-            ..Default::default()
-        };
-
+        let storage = create_temp_storage();
+        let event = create_test_event("test123", SentryLevel::error, "测试事件");
         storage.store_event("1", &event).unwrap();
 
         let filter = SentryLogFilter {
@@ -423,7 +431,386 @@ mod tests {
         let result = storage.query_events(&filter).unwrap();
         assert_eq!(result.total, 1);
         assert_eq!(result.events[0].event_id, "test123");
+        assert_eq!(result.events[0].message.as_deref(), Some("测试事件"));
+    }
 
-        std::fs::remove_dir_all(temp_dir).ok();
+    #[test]
+    fn test_query_filter_by_level() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "错误消息"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e2", SentryLevel::warning, "警告消息"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e3", SentryLevel::info, "信息消息"),
+            )
+            .unwrap();
+
+        let filter_error = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            level: Some(SentryLevel::error),
+            ..Default::default()
+        };
+        let result_error = storage.query_events(&filter_error).unwrap();
+        assert_eq!(result_error.total, 1);
+        assert_eq!(result_error.events[0].event_id, "e1");
+
+        let filter_warning = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            level: Some(SentryLevel::warning),
+            ..Default::default()
+        };
+        let result_warning = storage.query_events(&filter_warning).unwrap();
+        assert_eq!(result_warning.total, 1);
+        assert_eq!(result_warning.events[0].event_id, "e2");
+    }
+
+    #[test]
+    fn test_query_filter_by_environment() {
+        let storage = create_temp_storage();
+        let mut event_prod = create_test_event("e1", SentryLevel::error, "生产环境错误");
+        event_prod.environment = Some("production".to_string());
+        storage.store_event("proj1", &event_prod).unwrap();
+
+        let mut event_dev = create_test_event("e2", SentryLevel::error, "开发环境错误");
+        event_dev.environment = Some("development".to_string());
+        storage.store_event("proj1", &event_dev).unwrap();
+
+        let filter_prod = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            environment: Some("production".to_string()),
+            ..Default::default()
+        };
+        let result_prod = storage.query_events(&filter_prod).unwrap();
+        assert_eq!(result_prod.total, 1);
+        assert_eq!(
+            result_prod.events[0].environment.as_deref(),
+            Some("production")
+        );
+
+        let filter_dev = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            environment: Some("development".to_string()),
+            ..Default::default()
+        };
+        let result_dev = storage.query_events(&filter_dev).unwrap();
+        assert_eq!(result_dev.total, 1);
+        assert_eq!(
+            result_dev.events[0].environment.as_deref(),
+            Some("development")
+        );
+    }
+
+    #[test]
+    fn test_query_filter_by_query_string() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "数据库连接失败"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e2", SentryLevel::error, "用户认证成功"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e3", SentryLevel::warning, "网络延迟较高"),
+            )
+            .unwrap();
+
+        let filter_db = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            query: Some("数据库".to_string()),
+            ..Default::default()
+        };
+        let result_db = storage.query_events(&filter_db).unwrap();
+        assert_eq!(result_db.total, 1);
+        assert_eq!(result_db.events[0].event_id, "e1");
+
+        let filter_user = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            query: Some("用户".to_string()),
+            ..Default::default()
+        };
+        let result_user = storage.query_events(&filter_user).unwrap();
+        assert_eq!(result_user.total, 1);
+        assert_eq!(result_user.events[0].event_id, "e2");
+    }
+
+    #[test]
+    fn test_delete_event() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "待删除事件"),
+            )
+            .unwrap();
+
+        let filter = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(storage.query_events(&filter).unwrap().total, 1);
+
+        let deleted = storage.delete_event("e1").unwrap();
+        assert!(deleted);
+        assert_eq!(storage.query_events(&filter).unwrap().total, 0);
+
+        let not_found = storage.delete_event("nonexistent").unwrap();
+        assert!(!not_found);
+    }
+
+    #[test]
+    fn test_batch_delete_events() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "事件1"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e2", SentryLevel::warning, "事件2"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e3", SentryLevel::info, "事件3"),
+            )
+            .unwrap();
+
+        let count = storage
+            .delete_events(&["e1".to_string(), "e3".to_string()])
+            .unwrap();
+        assert_eq!(count, 2);
+
+        let filter = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(storage.query_events(&filter).unwrap().total, 1);
+        assert_eq!(
+            storage.query_events(&filter).unwrap().events[0].event_id,
+            "e2"
+        );
+    }
+
+    #[test]
+    fn test_get_projects() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "project-a",
+                &create_test_event("e1", SentryLevel::error, "A项目事件"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "project-b",
+                &create_test_event("e2", SentryLevel::warning, "B项目事件"),
+            )
+            .unwrap();
+
+        let projects = storage.get_projects().unwrap();
+        assert_eq!(projects.len(), 2);
+
+        let project_ids: Vec<&str> = projects.iter().map(|p| p.id.as_str()).collect();
+        assert!(project_ids.contains(&"project-a"));
+        assert!(project_ids.contains(&"project-b"));
+    }
+
+    #[test]
+    fn test_update_project_name() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "初始事件"),
+            )
+            .unwrap();
+
+        let projects_before = storage.get_projects().unwrap();
+        let project_before = projects_before.iter().find(|p| p.id == "proj1").unwrap();
+        assert_eq!(project_before.name, "项目 proj1");
+
+        storage
+            .update_project_name("proj1", "生产环境项目")
+            .unwrap();
+
+        let projects_after = storage.get_projects().unwrap();
+        let project_after = projects_after.iter().find(|p| p.id == "proj1").unwrap();
+        assert_eq!(project_after.name, "生产环境项目");
+    }
+
+    #[test]
+    fn test_get_stats() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "错误1"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e2", SentryLevel::error, "错误2"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e3", SentryLevel::warning, "警告1"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e4", SentryLevel::info, "信息1"),
+            )
+            .unwrap();
+
+        let stats = storage.get_stats().unwrap();
+        assert_eq!(stats.total_events, 4);
+        assert_eq!(stats.level_counts.len(), 3);
+
+        let error_count = stats
+            .level_counts
+            .iter()
+            .find(|lc| lc.level == "error")
+            .map(|lc| lc.count)
+            .unwrap_or(0);
+        assert_eq!(error_count, 2);
+    }
+
+    #[test]
+    fn test_export_events_json() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "导出测试事件"),
+            )
+            .unwrap();
+
+        let filter = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            ..Default::default()
+        };
+        let json = storage.export_events_json(&filter).unwrap();
+        assert!(json.contains("导出测试事件"));
+        assert!(json.contains("e1"));
+
+        let parsed: Vec<SentryEvent> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].event_id, "e1");
+    }
+
+    #[test]
+    fn test_clear_project_events() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e1", SentryLevel::error, "事件1"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("e2", SentryLevel::warning, "事件2"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj2",
+                &create_test_event("e3", SentryLevel::info, "其他项目事件"),
+            )
+            .unwrap();
+
+        let cleared = storage.clear_project_events("proj1").unwrap();
+        assert_eq!(cleared, 2);
+
+        let proj1_filter = SentryLogFilter {
+            project_id: Some("proj1".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(storage.query_events(&proj1_filter).unwrap().total, 0);
+
+        let proj2_filter = SentryLogFilter {
+            project_id: Some("proj2".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(storage.query_events(&proj2_filter).unwrap().total, 1);
+    }
+
+    #[test]
+    fn test_get_event() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj1",
+                &create_test_event("found-event", SentryLevel::fatal, "致命错误"),
+            )
+            .unwrap();
+
+        let found = storage.get_event("found-event").unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().event_id, "found-event");
+
+        let not_found = storage.get_event("nonexistent").unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_multi_project_isolation() {
+        let storage = create_temp_storage();
+        storage
+            .store_event(
+                "proj-a",
+                &create_test_event("a1", SentryLevel::error, "A项目错误"),
+            )
+            .unwrap();
+        storage
+            .store_event(
+                "proj-b",
+                &create_test_event("b1", SentryLevel::warning, "B项目警告"),
+            )
+            .unwrap();
+
+        let filter_a = SentryLogFilter {
+            project_id: Some("proj-a".to_string()),
+            ..Default::default()
+        };
+        let filter_b = SentryLogFilter {
+            project_id: Some("proj-b".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(storage.query_events(&filter_a).unwrap().total, 1);
+        assert_eq!(storage.query_events(&filter_b).unwrap().total, 1);
+
+        let stats = storage.get_stats().unwrap();
+        assert_eq!(stats.total_events, 2);
+        assert_eq!(stats.projects.len(), 2);
     }
 }

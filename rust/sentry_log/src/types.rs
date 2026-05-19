@@ -1,8 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-/// Sentry事件级别
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+#[allow(non_camel_case_types)]
 pub enum SentryLevel {
     fatal,
     error,
@@ -22,7 +23,7 @@ impl SentryLevel {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             "fatal" => SentryLevel::fatal,
             "error" => SentryLevel::error,

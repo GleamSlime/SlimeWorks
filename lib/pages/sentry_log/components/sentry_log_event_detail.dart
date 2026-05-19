@@ -246,17 +246,30 @@ class SentryLogEventDetail extends StatelessWidget {
 
   Widget _buildInfoGrid(ThemeData theme, ThemeMetrics m, bool isDark) {
     final entries = <_InfoEntry>[];
-    if (event['event_id'] != null) entries.add(_InfoEntry('事件ID', event['event_id'].toString()));
-    if (event['timestamp'] != null)
+    if (event['event_id'] != null) {
+      entries.add(_InfoEntry('事件ID', event['event_id'].toString()));
+    }
+    if (event['timestamp'] != null) {
       entries.add(_InfoEntry('时间', viewModel.formatTimestamp(event['timestamp'].toString())));
-    if (event['platform'] != null) entries.add(_InfoEntry('平台', event['platform'].toString()));
-    if (event['logger'] != null) entries.add(_InfoEntry('Logger', event['logger'].toString()));
-    if (event['culprit'] != null) entries.add(_InfoEntry('来源', event['culprit'].toString()));
-    if (event['transaction'] != null)
+    }
+    if (event['platform'] != null) {
+      entries.add(_InfoEntry('平台', event['platform'].toString()));
+    }
+    if (event['logger'] != null) {
+      entries.add(_InfoEntry('Logger', event['logger'].toString()));
+    }
+    if (event['culprit'] != null) {
+      entries.add(_InfoEntry('来源', event['culprit'].toString()));
+    }
+    if (event['transaction'] != null) {
       entries.add(_InfoEntry('事务', event['transaction'].toString()));
-    if (event['release'] != null) entries.add(_InfoEntry('版本', event['release'].toString()));
-    if (event['server_name'] != null)
+    }
+    if (event['release'] != null) {
+      entries.add(_InfoEntry('版本', event['release'].toString()));
+    }
+    if (event['server_name'] != null) {
       entries.add(_InfoEntry('服务器', event['server_name'].toString()));
+    }
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),

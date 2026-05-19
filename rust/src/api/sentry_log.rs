@@ -19,7 +19,7 @@ pub fn sentry_log_query(
 ) -> Result<String, String> {
     let filter = sentry_log::types::SentryLogFilter {
         project_id,
-        level: level.map(|l| sentry_log::types::SentryLevel::from_str(&l)),
+        level: level.map(|l| sentry_log::types::SentryLevel::parse(&l)),
         query,
         environment,
         start_time,
@@ -79,7 +79,7 @@ pub fn sentry_log_export_json(
 ) -> Result<String, String> {
     let filter = sentry_log::types::SentryLogFilter {
         project_id,
-        level: level.map(|l| sentry_log::types::SentryLevel::from_str(&l)),
+        level: level.map(|l| sentry_log::types::SentryLevel::parse(&l)),
         query,
         environment,
         start_time,
