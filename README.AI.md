@@ -46,21 +46,22 @@
 
 - 尽可能使用const构造函数
 - 避免深度嵌套（拆分为小组件）
-- 使用ConsumerWidget + Riverpod
-- 或BlocBuilder + flutter_bloc
+- 使用 GetxController + Obx 做状态管理
+- 页面继承 BasePage 类，ViewModel 继承 BaseViewModel
 
 ‌### 2. 性能优化
 
 - ListView.builder用于长列表
 - const修饰不可变组件
 - 最小化重绘范围
-- 使用compute()处理耗时操作
+- 耗时操作委托 Rust FFI 处理，Dart 层禁止承担业务逻辑
 
 ‌### 3. 错误处理
 
-- 使用SelectableText.rich显示错误
-- AsyncValue处理异步状态
-- Either<Failure, Success>模式
+- Rust FFI 层返回 Result 类型，Dart 侧用 try-catch 处理
+- 页面初始化状态使用 BasePageState 的 PageInitState（loading / success / error）
+- 使用 SnackBar 或 BasePage 内置 buildErrorPage 展示错误
+- 弹窗使用 showDialog(context: context, ...) 而非 Get.dialog（GoRouter 兼容）
 - 全局异常处理
 
 ‌## 静态分析
