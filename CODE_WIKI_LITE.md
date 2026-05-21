@@ -135,7 +135,7 @@ rust/
 | 响应式 | 桌面端窗口≤600 强制移动端模式，用 `SizeUtils.isMobile/isDesktop` |
 | 尺寸 | 参考 `AppTheme.metrics`，禁止直接数字或 `int.w`，未定义用 `scaleW()` |
 | 日志 | Dart: `Loggers` class，Rust: `logger::{log_error, log_info}`，关键流程中文 |
-| 注释 | 必须中文 |
+| 注释 | 必须中文, 不要删除已有注释 |
 | 弹窗 | `showDialog` 而非 `Get.dialog` |
 | 校验 | Flutter → `flutter analyze`，Rust → `cargo build` |
 | 新模块 | 静态链接参考 `ws_module/`，动态载入参考 `capture_proxy/` |
