@@ -43,11 +43,21 @@ abstract class DesktopScreenProvider {
   RxDouble height = double.parse(dotenv.env['APP_SIZE_HEIGHT'] ?? "855").obs;
 
   /// 是否为桌面端
-  RxBool get isDesktop =>
-      RxBool(width.value > 600 || Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+  RxBool get isDesktop => isDesktopObs;
+  final RxBool isDesktopObs =
+      (double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520") > 600 ||
+              Platform.isWindows ||
+              Platform.isLinux ||
+              Platform.isMacOS)
+          .obs;
 
   /// 是否为移动端
-  RxBool get isMobile => RxBool(width.value <= 600 || Platform.isAndroid || Platform.isIOS);
+  RxBool get isMobile => isMobileObs;
+  final RxBool isMobileObs =
+      (double.parse(dotenv.env['APP_SIZE_WIDTH'] ?? "1520") <= 600 ||
+              Platform.isAndroid ||
+              Platform.isIOS)
+          .obs;
 
   /// 全局背景图路径（详情页设置，空字符串表示无背景）
   RxString globalBackgroundPath = ''.obs;

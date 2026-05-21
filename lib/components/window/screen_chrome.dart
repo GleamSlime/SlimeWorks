@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -17,11 +16,7 @@ class ScreenChrome extends StatefulWidget {
   final ScreenChromeData data;
   final Widget child;
 
-  const ScreenChrome({
-    super.key,
-    required this.data,
-    required this.child,
-  });
+  const ScreenChrome({super.key, required this.data, required this.child});
 
   @override
   State<ScreenChrome> createState() => _ScreenChromeState();
@@ -43,19 +38,19 @@ class _ScreenChromeState extends State<ScreenChrome> {
   @override
   void initState() {
     super.initState();
-    if (!_useLocalChrome) _publishChrome();
+    _schedulePublishChrome();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_useLocalChrome) _publishChrome();
+    _schedulePublishChrome();
   }
 
   @override
   void didUpdateWidget(covariant ScreenChrome oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_useLocalChrome) _publishChrome();
+    _schedulePublishChrome();
   }
 
   @override
@@ -72,14 +67,15 @@ class _ScreenChromeState extends State<ScreenChrome> {
 
   void _publishChrome() {
     if (!mounted) return;
-    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _desktopScreen.setScreenChrome(widget.data, owner: _owner);
-      });
-    } else {
-      _desktopScreen.setScreenChrome(widget.data, owner: _owner);
-    }
+    _desktopScreen.setScreenChrome(widget.data, owner: _owner);
+  }
+
+  void _schedulePublishChrome() {
+    if (_useLocalChrome) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _publishChrome();
+    });
   }
 
   @override

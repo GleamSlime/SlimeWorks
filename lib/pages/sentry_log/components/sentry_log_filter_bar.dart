@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 
 class SentryLogFilterBar extends StatelessWidget {
@@ -59,12 +60,8 @@ class SentryLogFilterBar extends StatelessWidget {
         ),
       ];
 
-      return Container(
-        width: 160,
-        decoration: BoxDecoration(
-          color: isDark ? DarkColors.background2 : LightColors.background2,
-          borderRadius: m.radius8,
-        ),
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: scaleW(160)),
         child: DropdownButtonFormField<String>(
           initialValue: viewModel.selectedProjectId.value.isEmpty
               ? null
@@ -78,9 +75,11 @@ class SentryLogFilterBar extends StatelessWidget {
             ],
           ),
           decoration: InputDecoration(
+            filled: true,
+            fillColor: isDark ? DarkColors.background2 : LightColors.background2,
             contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace8),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
+            border: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(
               borderRadius: m.radius8,
               borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),

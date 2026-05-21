@@ -1,13 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
-/// 平台检测工具类
 class PlatformUtil {
-  /// 是否是桌面平台 (macOS 或 Windows)
   static bool get isDesktop => Platform.isMacOS || Platform.isWindows;
 
-  /// 是否是移动平台 (iOS 或 Android)
   static bool get isMobile => Platform.isIOS || Platform.isAndroid;
 }
 
@@ -62,6 +60,11 @@ double scaleH(double h, {bool large = false}) {
 
 double scaleS(double fontSize, {bool large = false}) {
   return ScreenUtil().setSp(fontSize * _adaptiveFontScaleFactor());
+}
+
+double scaleSWithUserFont(double fontSize) {
+  final double userScale = AppTheme.fontScaleObs.value;
+  return ScreenUtil().setSp(fontSize * _adaptiveFontScaleFactor() * userScale);
 }
 
 bool get isPhone => ScreenUtil().screenWidth < 600;

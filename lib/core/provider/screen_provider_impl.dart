@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 
@@ -7,6 +8,8 @@ class DesktopScreenProviderImpl extends DesktopScreenProvider {
   @override
   void setWidth(double w) {
     width.value = w;
+    isDesktopObs.value = w > 600 || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+    isMobileObs.value = w <= 600 || Platform.isAndroid || Platform.isIOS;
   }
 
   @override

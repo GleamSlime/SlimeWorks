@@ -28,6 +28,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final NodeSettingsService _nodeSettingsService = getIt<NodeSettingsService>();
   double _appRxKbps = 0;
   double _appTxKbps = 0;
+  bool _isLocalServerRunning = false;
+  int _nodeRequestCount = 0;
 
   /// 历史数据缓冲区（CPU%、内存MB、下行kbps、上行kbps、节点请求数/s）
   final List<double> _cpuHistory = [];
@@ -71,6 +73,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _appRxKbps = rxKbps;
         _appTxKbps = txKbps;
         _lastNodeRequestCount = reqCount;
+        _isLocalServerRunning = _nodeSettingsService.isLocalServerRunning;
+        _nodeRequestCount = reqCount;
         _appendHistory(_cpuHistory, next.cpuUsagePercent);
         _appendHistory(_memHistory, next.memoryUsedMb.toDouble());
         _appendHistory(_rxHistory, rxKbps);
@@ -162,12 +166,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             history: _txHistory,
                             chartColor: Colors.purple,
                           ),
-                          if (_nodeSettingsService.isLocalServerRunning)
+                          if (_isLocalServerRunning)
                             _buildMetricCard(
                               context,
                               icon: Icons.hub,
                               title: '节点请求数',
-                              value: _nodeSettingsService.nodeRequestCount.value.toString(),
+                              value: _nodeRequestCount.toString(),
                               history: _reqHistory,
                               chartColor: Colors.teal,
                             ),

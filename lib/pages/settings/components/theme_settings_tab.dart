@@ -76,6 +76,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     setState(() => _fontScale = value);
     _saveFontScale(value);
     _applyTheme();
+    AppTheme.resetMetrics();
   }
 
   void _applyTheme() {
@@ -210,7 +211,11 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           SizedBox(height: AppTheme.metrics.kSpace4),
           Text(
             '当前缩放：${(_fontScale * 100).round()}%',
-            style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: theme.colorScheme.onSurface),
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize13,
+              height: 1.5,
+              color: theme.colorScheme.onSurface,
+            ),
           ),
           SizedBox(height: AppTheme.metrics.kSpace32),
           Text(
