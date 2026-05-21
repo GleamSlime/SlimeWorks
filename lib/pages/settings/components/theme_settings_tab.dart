@@ -35,7 +35,6 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   @override
   void initState() {
     super.initState();
-    // AppTheme 在 main() 中已提前加载持久化配置，直接从响应式变量读取即可
     _themeMode = AppTheme.themeModeObs.value;
     _accentColor = AppTheme.accentColorObs.value;
     _fontScale = AppTheme.fontScaleObs.value;
@@ -80,7 +79,6 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   void _applyTheme() {
-    // 更新 AppTheme 响应式变量 — MyApp.build 中的 Obx 监听这些变量并重建 MaterialApp
     AppTheme.themeModeObs.value = _themeMode;
     AppTheme.accentColorObs.value = _accentColor;
     AppTheme.fontScaleObs.value = _fontScale;
@@ -97,49 +95,84 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     }
   }
 
+  IconData _themeModeIcon(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return Icons.light_mode_rounded;
+      case ThemeMode.dark:
+        return Icons.dark_mode_rounded;
+      case ThemeMode.system:
+        return Icons.brightness_auto_rounded;
+    }
+  }
+
   Widget _buildModeChip(ThemeMode mode) {
     final theme = Theme.of(context);
-    return ChoiceChip(
-      label: Text(
-        _themeModeLabel(mode),
-        style: TextStyle(
-          fontSize: AppTheme.metrics.fontSize13,
-          height: 1.5,
-          color: theme.colorScheme.onSurface,
+    final m = AppTheme.metrics;
+    final isSelected = _themeMode == mode;
+    return GestureDetector(
+      onTap: () => _onThemeModeChanged(mode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary.withAlpha(25)
+              : theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+          borderRadius: m.radius12,
+          border: Border.all(
+            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant.withAlpha(80),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _themeModeIcon(mode),
+              size: m.iconSize20,
+              color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withAlpha(120),
+            ),
+            SizedBox(width: m.kSpace8),
+            Text(
+              _themeModeLabel(mode),
+              style: TextStyle(
+                fontSize: m.fontSize13,
+                height: 1.5,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+              ),
+            ),
+          ],
         ),
       ),
-      selected: _themeMode == mode,
-      side: BorderSide(color: _themeMode == mode ? theme.colorScheme.primary : theme.dividerColor),
-      selectedColor: theme.colorScheme.primary.withValues(
-        alpha: (theme.colorScheme.primary.a * 255.0 * 0.15).round().clamp(0, 255).toDouble(),
-      ),
-      onSelected: (_) => _onThemeModeChanged(mode),
     );
   }
 
   Widget _buildAccentSwatch(Color color) {
     final theme = Theme.of(context);
-    final isSelected = _accentColor == color;
+    final m = AppTheme.metrics;
+    final isSelected = _accentColor.toARGB32() == color.toARGB32();
     return GestureDetector(
       onTap: () => _onAccentColorTap(color),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 56,
-        height: 56,
-        margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace8),
+        width: m.iconSize44,
+        height: m.iconSize44,
+        margin: EdgeInsets.only(bottom: m.kSpace4),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: color,
           border: Border.all(
             color: isSelected ? theme.colorScheme.onSurface : Colors.transparent,
-            width: isSelected ? 3 : 1,
+            width: isSelected ? 3 : 0,
           ),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
+                color: color.withAlpha(100),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
           ],
         ),
@@ -147,102 +180,181 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             ? Icon(
                 Icons.check,
                 color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-                size: AppTheme.metrics.iconSize28,
+                size: m.iconSize20,
               )
             : null,
       ),
     );
   }
 
+  Widget _buildSectionTitle(String title, IconData icon) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Row(
+      children: [
+        Container(
+          width: m.kSpace24,
+          height: m.kSpace24,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withAlpha(20),
+            borderRadius: m.radius6,
+          ),
+          child: Icon(
+            icon,
+            size: m.iconSize12,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        SizedBox(width: m.kSpace8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: m.fontSize15,
+            height: 1.4,
+            color: theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+
     return SingleChildScrollView(
-      padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
+      padding: EdgeInsets.all(m.kSpace24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '主题模式',
-            style: TextStyle(
-              fontSize: AppTheme.metrics.fontSize22,
-              height: 1.4,
-              color: theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
+          _buildSectionTitle('主题模式', Icons.palette_outlined),
+          SizedBox(height: m.kSpace12),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(m.kSpace16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              borderRadius: m.radius12,
+              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+            ),
+            child: Wrap(
+              spacing: m.kSpace12,
+              runSpacing: m.kSpace8,
+              children: ThemeMode.values.map(_buildModeChip).toList(),
             ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
-          Wrap(spacing: 12, children: ThemeMode.values.map(_buildModeChip).toList()),
-          SizedBox(height: AppTheme.metrics.kSpace24),
+          SizedBox(height: m.kSpace24),
+          _buildSectionTitle('主题配色', Icons.color_lens_outlined),
+          SizedBox(height: m.kSpace4),
           Text(
-            '主题配色',
+            '选择全局强调色，将影响按钮、标签、滑块等组件',
             style: TextStyle(
-              fontSize: AppTheme.metrics.fontSize22,
-              height: 1.4,
-              color: theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _accentPalette.map(_buildAccentSwatch).toList(),
-          ),
-          SizedBox(height: AppTheme.metrics.kSpace24),
-          Text(
-            '字号大小',
-            style: TextStyle(
-              fontSize: AppTheme.metrics.fontSize22,
-              height: 1.4,
-              color: theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
-          Slider(
-            value: _fontScale,
-            min: 0.8,
-            max: 1.3,
-            divisions: 10,
-            label: '${(_fontScale * 100).round()}%',
-            onChanged: _onFontScaleChanged,
-          ),
-          SizedBox(height: AppTheme.metrics.kSpace4),
-          Text(
-            '当前缩放：${(_fontScale * 100).round()}%',
-            style: TextStyle(
-              fontSize: AppTheme.metrics.fontSize13,
+              fontSize: m.fontSize12,
               height: 1.5,
-              color: theme.colorScheme.onSurface,
+              color: theme.colorScheme.onSurface.withAlpha(120),
             ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace32),
+          SizedBox(height: m.kSpace12),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(m.kSpace16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              borderRadius: m.radius12,
+              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+            ),
+            child: Wrap(
+              spacing: m.kSpace12,
+              runSpacing: m.kSpace12,
+              children: _accentPalette.map(_buildAccentSwatch).toList(),
+            ),
+          ),
+          SizedBox(height: m.kSpace24),
+          _buildSectionTitle('字号大小', Icons.text_fields_rounded),
+          SizedBox(height: m.kSpace4),
           Text(
-            '预览样式',
+            '调整全局文本缩放比例，影响所有页面的文字大小',
             style: TextStyle(
-              fontSize: AppTheme.metrics.fontSize22,
-              height: 1.4,
-              color: theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
+              fontSize: m.fontSize12,
+              height: 1.5,
+              color: theme.colorScheme.onSurface.withAlpha(120),
             ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius12),
-            child: Padding(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('标题文本', style: theme.textTheme.headlineSmall),
-                  SizedBox(height: AppTheme.metrics.kSpace8),
-                  Text('正文示例：当前主题配色和字号大小将影响全局文本。', style: theme.textTheme.bodyMedium),
-                  SizedBox(height: AppTheme.metrics.kSpace12),
-                  ElevatedButton(onPressed: () {}, child: const Text('操作按钮')),
-                ],
-              ),
+          SizedBox(height: m.kSpace12),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(m.kSpace16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              borderRadius: m.radius12,
+              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: _fontScale,
+                        min: 0.8,
+                        max: 1.3,
+                        divisions: 10,
+                        label: '${(_fontScale * 100).round()}%',
+                        onChanged: _onFontScaleChanged,
+                      ),
+                    ),
+                    SizedBox(width: m.kSpace8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace3),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: m.radius999,
+                      ),
+                      child: Text(
+                        '${(_fontScale * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: m.fontSize12,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: m.kSpace32),
+          _buildSectionTitle('预览样式', Icons.preview_outlined),
+          SizedBox(height: m.kSpace12),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(m.kSpace20),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              borderRadius: m.radius12,
+              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('标题文本', style: theme.textTheme.headlineSmall),
+                SizedBox(height: m.kSpace8),
+                Text('正文示例：当前主题配色和字号大小将影响全局文本。', style: theme.textTheme.bodyMedium),
+                SizedBox(height: m.kSpace16),
+                Row(
+                  children: [
+                    ElevatedButton(onPressed: () {}, child: const Text('操作按钮')),
+                    SizedBox(width: m.kSpace12),
+                    OutlinedButton(onPressed: () {}, child: const Text('次要按钮')),
+                    SizedBox(width: m.kSpace12),
+                    TextButton(onPressed: () {}, child: const Text('文字按钮')),
+                  ],
+                ),
+              ],
             ),
           ),
         ],

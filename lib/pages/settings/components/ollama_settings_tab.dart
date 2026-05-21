@@ -3,10 +3,10 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
-/// Ollama 设置页面
 class OllamaSettingsTab extends StatefulWidget {
   const OllamaSettingsTab({super.key});
 
@@ -59,6 +59,49 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     }
   }
 
+  Widget _buildSectionTitle(String title, IconData icon) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Row(
+      children: [
+        Container(
+          width: m.kSpace24,
+          height: m.kSpace24,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withAlpha(20),
+            borderRadius: m.radius6,
+          ),
+          child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+        ),
+        SizedBox(width: m.kSpace8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: m.fontSize15,
+            height: 1.4,
+            color: theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsCard({required Widget child}) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(m.kSpace16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        borderRadius: m.radius12,
+        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
@@ -84,27 +127,67 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Widget _buildServerSection() {
+    final m = AppTheme.metrics;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brandColor = isDark ? DarkColors.primary : LightColors.primary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Ollama 服务器', style: Theme.of(context).textTheme.titleLarge),
+            _buildSectionTitle('Ollama 服务器', Icons.smart_toy_outlined),
+            Spacer(),
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: _showAddServerDialog,
               tooltip: '添加服务器',
+              iconSize: m.iconSize18,
             ),
           ],
         ),
         SizedBox(height: appMetrics.spacingMedium),
         Obx(() {
           if (_settingsService!.servers.isEmpty) {
-            return Card(
-              child: Padding(
-                padding: EdgeInsets.all(appMetrics.paddingLarge),
-                child: const Center(child: Text('暂无配置的服务器')),
+            return Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace32),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(60),
+                borderRadius: m.radius12,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant.withAlpha(60),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: m.kSpace40,
+                    height: m.kSpace40,
+                    decoration: BoxDecoration(
+                      color: brandColor.withAlpha(20),
+                      borderRadius: m.radius10,
+                    ),
+                    child: Icon(Icons.dns_outlined, size: m.iconSize20, color: brandColor),
+                  ),
+                  SizedBox(height: m.kSpace12),
+                  Text(
+                    '暂无配置的服务器',
+                    style: TextStyle(
+                      fontSize: m.fontSize13,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  SizedBox(height: m.kSpace4),
+                  Text(
+                    '点击右上角 + 添加 Ollama 服务器',
+                    style: TextStyle(
+                      fontSize: m.fontSize12,
+                      color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -123,29 +206,61 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Widget _buildServerCard(OllamaServer server) {
-    return Card(
-      margin: EdgeInsets.only(bottom: appMetrics.spacingMedium),
-      child: ListTile(
-        leading: Icon(
-          server.isAvailable ? Icons.check_circle : Icons.error_outline,
-          color: server.isAvailable ? Colors.green : Colors.grey,
-        ),
-        title: Text(server.url),
-        subtitle: server.lastChecked != null
-            ? Text('最后检查: ${_formatDateTime(server.lastChecked!)}')
-            : null,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+    final m = AppTheme.metrics;
+    final statusColor = server.isAvailable ? Colors.green : Colors.grey;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: m.kSpace8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
+        borderRadius: m.radius12,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80)),
+      ),
+      child: ClipRRect(
+        borderRadius: m.radius12,
+        child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => _showEditServerDialog(server),
-              tooltip: '编辑',
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () => _deleteServer(server.url),
-              tooltip: '删除',
+            Container(width: 4, height: 56, color: statusColor),
+            Expanded(
+              child: ListTile(
+                leading: Container(
+                  width: m.kSpace32,
+                  height: m.kSpace32,
+                  decoration: BoxDecoration(
+                    color: statusColor.withAlpha(25),
+                    borderRadius: m.radius8,
+                  ),
+                  child: Icon(
+                    server.isAvailable ? Icons.check_circle_outline : Icons.error_outline,
+                    size: m.iconSize16,
+                    color: statusColor,
+                  ),
+                ),
+                title: Text(server.url, style: TextStyle(fontSize: m.fontSize12)),
+                subtitle: server.lastChecked != null
+                    ? Text(
+                        '最后检查: ${_formatDateTime(server.lastChecked!)}',
+                        style: TextStyle(fontSize: m.fontSize10),
+                      )
+                    : null,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _showEditServerDialog(server),
+                      tooltip: '编辑',
+                      iconSize: m.iconSize18,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () => _deleteServer(server.url),
+                      tooltip: '删除',
+                      iconSize: m.iconSize18,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -157,43 +272,40 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('默认 AI 模型', style: Theme.of(context).textTheme.titleLarge),
+        _buildSectionTitle('默认 AI 模型', Icons.psychology_outlined),
         SizedBox(height: appMetrics.spacingMedium),
         Obx(() {
-          return Card(
-            child: Padding(
-              padding: EdgeInsets.all(appMetrics.paddingMedium),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _settingsService!.defaultModel.value.isEmpty
-                          ? null
-                          : _settingsService!.defaultModel.value,
-                      decoration: const InputDecoration(
-                        labelText: '选择默认模型',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _models
-                          .map(
-                            (model) => DropdownMenuItem(value: model.name, child: Text(model.name)),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          _settingsService!.saveDefaultModel(value);
-                        }
-                      },
+          return _buildSettingsCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _settingsService!.defaultModel.value.isEmpty
+                        ? null
+                        : _settingsService!.defaultModel.value,
+                    decoration: const InputDecoration(
+                      labelText: '选择默认模型',
+                      border: OutlineInputBorder(),
                     ),
+                    items: _models
+                        .map(
+                          (model) => DropdownMenuItem(value: model.name, child: Text(model.name)),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        _settingsService!.saveDefaultModel(value);
+                      }
+                    },
                   ),
-                  SizedBox(width: appMetrics.spacingMedium),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _loadModels,
-                    tooltip: '刷新模型列表',
-                  ),
-                ],
-              ),
+                ),
+                SizedBox(width: appMetrics.spacingMedium),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadModels,
+                  tooltip: '刷新模型列表',
+                ),
+              ],
             ),
           );
         }),
@@ -205,30 +317,27 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('连接测试', style: Theme.of(context).textTheme.titleLarge),
+        _buildSectionTitle('连接测试', Icons.wifi_find_outlined),
         SizedBox(height: appMetrics.spacingMedium),
-        Card(
-          child: Padding(
-            padding: EdgeInsets.all(appMetrics.paddingLarge),
-            child: Column(
-              children: [
-                const Text('测试所有服务器的连接状态'),
-                SizedBox(height: appMetrics.spacingMedium),
-                Obx(() {
-                  return ElevatedButton.icon(
-                    onPressed: _isLoading.value ? null : _testAllServers,
-                    icon: _isLoading.value
-                        ? SizedBox(
-                            width: scaleW(16),
-                            height: scaleW(16),
-                            child: const CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.wifi_find),
-                    label: Text(_isLoading.value ? '测试中...' : '测试所有服务器'),
-                  );
-                }),
-              ],
-            ),
+        _buildSettingsCard(
+          child: Column(
+            children: [
+              Text('测试所有服务器的连接状态'),
+              SizedBox(height: appMetrics.spacingMedium),
+              Obx(() {
+                return ElevatedButton.icon(
+                  onPressed: _isLoading.value ? null : _testAllServers,
+                  icon: _isLoading.value
+                      ? SizedBox(
+                          width: scaleW(16),
+                          height: scaleW(16),
+                          child: const CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.wifi_find),
+                  label: Text(_isLoading.value ? '测试中...' : '测试所有服务器'),
+                );
+              }),
+            ],
           ),
         ),
       ],
@@ -377,7 +486,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     _isLoading.value = true;
     try {
       await _settingsService!.refreshServerStatus();
-      _loadModels(); // 重新加载模型列表
+      _loadModels();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('服务器测试完成')));
       }

@@ -45,6 +45,49 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
       ..showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
   }
 
+  Widget _buildSectionTitle(String title, IconData icon) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Row(
+      children: [
+        Container(
+          width: m.kSpace24,
+          height: m.kSpace24,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withAlpha(20),
+            borderRadius: m.radius6,
+          ),
+          child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+        ),
+        SizedBox(width: m.kSpace8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: m.fontSize15,
+            height: 1.4,
+            color: theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsCard({required Widget child}) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(m.kSpace12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        borderRadius: m.radius12,
+        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading || _service == null || _nodeService == null) {
@@ -56,53 +99,112 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     final m = appMetrics;
     final theme = Theme.of(context);
 
-    return Obx(() => Scaffold(
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(m.kSpace16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(m.kSpace12),
+    return Obx(
+      () => Scaffold(
+        body: SingleChildScrollView(
+          padding: EdgeInsets.all(m.kSpace16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionTitle('Sentry 日志收集', Icons.radar_rounded),
+              SizedBox(height: m.kSpace12),
+              _buildSettingsCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      secondary: Icon(
-                        Icons.radar_rounded,
-                        color: service.enabled.value
-                            ? theme.colorScheme.primary
-                            : theme.hintColor,
+                    Row(
+                      children: [
+                        Container(
+                          width: m.kSpace32,
+                          height: m.kSpace32,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withAlpha(25),
+                            borderRadius: m.radius8,
+                          ),
+                          child: Icon(
+                            Icons.radar_rounded,
+                            size: m.iconSize16,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        SizedBox(width: m.kSpace10),
+                        Expanded(
+                          child: Text(
+                            'Sentry 日志收集',
+                            style: TextStyle(
+                              fontSize: m.fontSize13,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: service.enabled.value,
+                          onChanged: (v) async {
+                            await service.setEnabled(v);
+                            _showSnack(v ? 'Sentry 日志收集已启用' : 'Sentry 日志收集已禁用');
+                          },
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: m.kSpace4),
+                    Text(
+                      '接收并存储 Sentry SDK 发送的事件日志',
+                      style: TextStyle(
+                        fontSize: m.fontSize12,
+                        color: theme.colorScheme.onSurface.withAlpha(120),
                       ),
-                      title: const Text('启用 Sentry 日志收集'),
-                      subtitle: const Text('接收并存储 Sentry SDK 发送的事件日志'),
-                      value: service.enabled.value,
-                      onChanged: (v) async {
-                        await service.setEnabled(v);
-                        _showSnack(v ? 'Sentry 日志收集已启用' : 'Sentry 日志收集已禁用');
-                      },
                     ),
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: m.kSpace16),
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(m.kSpace12),
+              SizedBox(height: m.kSpace16),
+              _buildSectionTitle('日志来源', Icons.swap_horiz),
+              SizedBox(height: m.kSpace12),
+              _buildSettingsCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.swap_horiz, color: theme.colorScheme.primary),
-                      title: const Text('日志来源节点'),
-                      subtitle: Text(
-                        service.isLocal ? '本机' : '远程节点',
-                        style: theme.textTheme.bodySmall,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: m.kSpace32,
+                          height: m.kSpace32,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withAlpha(25),
+                            borderRadius: m.radius8,
+                          ),
+                          child: Icon(
+                            Icons.swap_horiz,
+                            size: m.iconSize16,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        SizedBox(width: m.kSpace10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '日志来源节点',
+                                style: TextStyle(
+                                  fontSize: m.fontSize13,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              SizedBox(height: m.kSpace2),
+                              Text(
+                                service.isLocal ? '本机' : '远程节点',
+                                style: TextStyle(
+                                  fontSize: m.fontSize12,
+                                  color: theme.colorScheme.onSurface.withAlpha(120),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     SizedBox(height: m.kSpace8),
                     _buildNodeSelector(service, nodeService, theme, m),
@@ -111,28 +213,65 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: m.kSpace16),
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(m.kSpace12),
+              SizedBox(height: m.kSpace16),
+              _buildSectionTitle('自动刷新', Icons.autorenew),
+              SizedBox(height: m.kSpace12),
+              _buildSettingsCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      secondary: Icon(
-                        Icons.autorenew,
-                        color: service.autoRefresh.value
-                            ? theme.colorScheme.primary
-                            : theme.hintColor,
-                      ),
-                      title: const Text('自动刷新'),
-                      subtitle: Text('每隔 ${service.refreshIntervalSeconds.value} 秒自动刷新日志'),
-                      value: service.autoRefresh.value,
-                      onChanged: (v) async {
-                        await service.setAutoRefresh(v);
-                      },
+                    Row(
+                      children: [
+                        Container(
+                          width: m.kSpace32,
+                          height: m.kSpace32,
+                          decoration: BoxDecoration(
+                            color:
+                                (service.autoRefresh.value
+                                        ? theme.colorScheme.primary
+                                        : theme.hintColor)
+                                    .withAlpha(25),
+                            borderRadius: m.radius8,
+                          ),
+                          child: Icon(
+                            Icons.autorenew,
+                            size: m.iconSize16,
+                            color: service.autoRefresh.value
+                                ? theme.colorScheme.primary
+                                : theme.hintColor,
+                          ),
+                        ),
+                        SizedBox(width: m.kSpace10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '自动刷新',
+                                style: TextStyle(
+                                  fontSize: m.fontSize13,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              SizedBox(height: m.kSpace2),
+                              Text(
+                                '每隔 ${service.refreshIntervalSeconds.value} 秒自动刷新日志',
+                                style: TextStyle(
+                                  fontSize: m.fontSize12,
+                                  color: theme.colorScheme.onSurface.withAlpha(120),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: service.autoRefresh.value,
+                          onChanged: (v) async {
+                            await service.setAutoRefresh(v);
+                          },
+                        ),
+                      ],
                     ),
                     if (service.autoRefresh.value) ...[
                       SizedBox(height: m.kSpace8),
@@ -141,19 +280,53 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: m.kSpace16),
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(m.kSpace12),
+              SizedBox(height: m.kSpace16),
+              _buildSectionTitle('DSN 配置', Icons.info_outline),
+              SizedBox(height: m.kSpace12),
+              _buildSettingsCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.info_outline, color: theme.colorScheme.primary),
-                      title: const Text('Sentry DSN 配置说明'),
-                      subtitle: const Text('在其他项目的 Sentry SDK 中配置以下 DSN 地址'),
+                    Row(
+                      children: [
+                        Container(
+                          width: m.kSpace32,
+                          height: m.kSpace32,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withAlpha(25),
+                            borderRadius: m.radius8,
+                          ),
+                          child: Icon(
+                            Icons.info_outline,
+                            size: m.iconSize16,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        SizedBox(width: m.kSpace10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sentry DSN 配置说明',
+                                style: TextStyle(
+                                  fontSize: m.fontSize13,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              SizedBox(height: m.kSpace2),
+                              Text(
+                                '在其他项目的 Sentry SDK 中配置以下 DSN 地址',
+                                style: TextStyle(
+                                  fontSize: m.fontSize12,
+                                  color: theme.colorScheme.onSurface.withAlpha(120),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     SizedBox(height: m.kSpace8),
                     Container(
@@ -170,14 +343,17 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                         children: [
                           Text(
                             'DSN 格式',
-                            style: theme.textTheme.labelMedium?.copyWith(
+                            style: TextStyle(
+                              fontSize: m.fontSize12,
                               fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface.withAlpha(180),
                             ),
                           ),
                           SizedBox(height: m.kSpace4),
                           SelectableText(
                             service.currentDsn,
-                            style: theme.textTheme.bodySmall?.copyWith(
+                            style: TextStyle(
+                              fontSize: m.fontSize12,
                               fontFamily: 'monospace',
                               color: theme.colorScheme.primary,
                             ),
@@ -185,8 +361,10 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                           SizedBox(height: m.kSpace8),
                           Text(
                             'Sentry SDK 初始化示例 (Python)',
-                            style: theme.textTheme.labelMedium?.copyWith(
+                            style: TextStyle(
+                              fontSize: m.fontSize12,
                               fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface.withAlpha(180),
                             ),
                           ),
                           SizedBox(height: m.kSpace4),
@@ -195,8 +373,10 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             '  dsn="${service.currentDsn}",\n'
                             '  traces_sample_rate=1.0,\n'
                             ')',
-                            style: theme.textTheme.bodySmall?.copyWith(
+                            style: TextStyle(
+                              fontSize: m.fontSize12,
                               fontFamily: 'monospace',
+                              color: theme.colorScheme.onSurface.withAlpha(180),
                             ),
                           ),
                         ],
@@ -205,11 +385,11 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ));
+    );
   }
 
   Widget _buildNodeSelector(
@@ -236,9 +416,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
             context: context,
             nodeId: '',
             label: '本机',
-            subtitle: localNodeEnabled
-                ? '本机节点服务运行中'
-                : '本机节点未启用',
+            subtitle: localNodeEnabled ? '本机节点服务运行中' : '本机节点未启用',
             icon: Icons.computer,
             isSelected: service.selectedNodeId.value.isEmpty,
             isAvailable: true,
@@ -283,7 +461,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
               padding: EdgeInsets.all(m.kSpace12),
               child: Text(
                 '暂无可用节点，请在节点设置中添加或启用节点',
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                style: TextStyle(fontSize: m.fontSize12, color: theme.hintColor),
               ),
             ),
         ],
@@ -309,13 +487,9 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace10),
         decoration: BoxDecoration(
-          border: isSelected
-              ? Border.all(color: theme.colorScheme.primary, width: 1.5)
-              : null,
+          border: isSelected ? Border.all(color: theme.colorScheme.primary, width: 1.5) : null,
           borderRadius: m.radius8,
-          color: isSelected
-              ? theme.colorScheme.primary.withAlpha(20)
-              : Colors.transparent,
+          color: isSelected ? theme.colorScheme.primary.withAlpha(20) : Colors.transparent,
         ),
         child: Row(
           children: [
@@ -333,14 +507,16 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                 children: [
                   Text(
                     label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: TextStyle(
+                      fontSize: m.fontSize13,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isAvailable ? null : theme.disabledColor,
+                      color: isAvailable ? theme.colorScheme.onSurface : theme.disabledColor,
                     ),
                   ),
                   Text(
                     subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: m.fontSize12,
                       color: isAvailable ? theme.hintColor : theme.disabledColor,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -356,11 +532,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     );
   }
 
-  Widget _buildDsnInfo(
-    SentrySettingsService service,
-    ThemeData theme,
-    ThemeMetrics m,
-  ) {
+  Widget _buildDsnInfo(SentrySettingsService service, ThemeData theme, ThemeMetrics m) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace10),
@@ -377,7 +549,8 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
           Expanded(
             child: SelectableText(
               service.currentDsn,
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: TextStyle(
+                fontSize: m.fontSize12,
                 fontFamily: 'monospace',
                 color: theme.colorScheme.primary,
               ),
@@ -405,7 +578,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
       padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
       child: Row(
         children: [
-          Text('刷新间隔', style: theme.textTheme.bodySmall),
+          Text('刷新间隔', style: TextStyle(fontSize: m.fontSize12)),
           SizedBox(width: m.kSpace8),
           Expanded(
             child: Slider(
@@ -423,7 +596,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
             width: m.kSpace48,
             child: Text(
               '${service.refreshIntervalSeconds.value}秒',
-              style: theme.textTheme.bodySmall,
+              style: TextStyle(fontSize: m.fontSize12),
               textAlign: TextAlign.end,
             ),
           ),

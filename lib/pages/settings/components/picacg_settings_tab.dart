@@ -141,13 +141,13 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
       padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace16),
       children: [
         // ─── 账号 ─────────────────────────────────────────────
-        const _SectionTitle('账号'),
+        const _SectionTitle('账号', icon: Icons.person_outline),
         _AccountCard(service: _service, onChanged: () => setState(() {})),
 
         SizedBox(height: m.kSpace20),
 
         // ─── API 分流 ──────────────────────────────────────────
-        const _SectionTitle('API 分流'),
+        const _SectionTitle('API 分流', icon: Icons.alt_route_rounded),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -178,7 +178,10 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                       label: const Text('全部测速'),
                       onPressed: _testingAll ? null : _testAll,
                       style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppTheme.metrics.kSpace10,
+                          vertical: AppTheme.metrics.kSpace6,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         visualDensity: VisualDensity.compact,
@@ -194,10 +197,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                   child: Column(
                     children: [
                       for (final mode in PicAcgChannelMode.values)
-                        _ChannelRadioTile(
-                          mode: mode,
-                          latency: _latencyMap[mode],
-                        ),
+                        _ChannelRadioTile(mode: mode, latency: _latencyMap[mode]),
                     ],
                   ),
                 ),
@@ -282,7 +282,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
         SizedBox(height: m.kSpace20),
 
         // ─── 代理 ──────────────────────────────────────────────
-        const _SectionTitle('代理（使用分流时通常无需设置）'),
+        const _SectionTitle('代理（使用分流时通常无需设置）', icon: Icons.vpn_lock_outlined),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -323,7 +323,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
         SizedBox(height: m.kSpace20),
 
         // ─── 图片服务器 ─────────────────────────────────────────
-        const _SectionTitle('图片服务器'),
+        const _SectionTitle('图片服务器', icon: Icons.image_outlined),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -344,11 +344,7 @@ class _PicAcgSettingsTabState extends State<PicAcgSettingsTab> {
                   child: Column(
                     children: [
                       for (final server in _imageServers)
-                        RadioListTile<String>(
-                          title: Text(server),
-                          value: server,
-                          dense: true,
-                        ),
+                        RadioListTile<String>(title: Text(server), value: server, dense: true),
                     ],
                   ),
                 ),
@@ -408,14 +404,36 @@ class _AccountCard extends StatelessWidget {
         padding: EdgeInsets.all(m.kSpace12),
         child: Row(
           children: [
-            Icon(Icons.account_circle_outlined, size: AppTheme.metrics.iconSize40),
+            Container(
+              width: m.iconSize40,
+              height: m.iconSize40,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withAlpha(25),
+                borderRadius: m.radius10,
+              ),
+              child: Icon(
+                Icons.account_circle_outlined,
+                size: m.iconSize24,
+                color: theme.colorScheme.primary,
+              ),
+            ),
             SizedBox(width: m.kSpace12),
             Expanded(
-              child: Text(
-                '尚未登录',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '尚未登录',
+                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  SizedBox(height: m.kSpace2),
+                  Text(
+                    '登录后可收藏、下载漫画',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(120),
+                    ),
+                  ),
+                ],
               ),
             ),
             FilledButton.icon(
@@ -439,10 +457,7 @@ class _ChannelRadioTile extends StatelessWidget {
   final PicAcgChannelMode mode;
   final int? latency; // null=未测, -1=测速中, -2=不可达, >=0=ms
 
-  const _ChannelRadioTile({
-    required this.mode,
-    this.latency,
-  });
+  const _ChannelRadioTile({required this.mode, this.latency});
 
   static const _subtitles = {
     PicAcgChannelMode.direct: '标准 DNS 解析，网络环境良好时使用',
@@ -465,7 +480,10 @@ class _ChannelRadioTile extends StatelessWidget {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     } else if (latency == -2) {
-      trailing = Text('不可达', style: TextStyle(color: theme.colorScheme.error, fontSize: AppTheme.metrics.fontSize11));
+      trailing = Text(
+        '不可达',
+        style: TextStyle(color: theme.colorScheme.error, fontSize: AppTheme.metrics.fontSize11),
+      );
     } else if (latency != null && latency! >= 0) {
       final color = latency! < 300
           ? Colors.green
@@ -474,7 +492,11 @@ class _ChannelRadioTile extends StatelessWidget {
           : theme.colorScheme.error;
       trailing = Text(
         '${latency}ms',
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize11),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: AppTheme.metrics.fontSize11,
+        ),
       );
     }
 
@@ -492,8 +514,9 @@ class _ChannelRadioTile extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String text;
+  final IconData icon;
 
-  const _SectionTitle(this.text);
+  const _SectionTitle(this.text, {this.icon = Icons.settings_outlined});
 
   @override
   Widget build(BuildContext context) {
@@ -501,12 +524,26 @@ class _SectionTitle extends StatelessWidget {
     final m = AppTheme.metrics;
     return Padding(
       padding: EdgeInsets.only(bottom: m.kSpace8),
-      child: Text(
-        text,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Row(
+        children: [
+          Container(
+            width: m.kSpace24,
+            height: m.kSpace24,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withAlpha(20),
+              borderRadius: m.radius6,
+            ),
+            child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          ),
+          SizedBox(width: m.kSpace8),
+          Text(
+            text,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
