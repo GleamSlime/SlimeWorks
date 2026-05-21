@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -72,7 +73,10 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                   borderRadius: AppTheme.metrics.radius20,
                   onTap: () => _showUserMenu(context, vm),
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace8),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppTheme.metrics.kSpace8,
+                      vertical: AppTheme.metrics.kSpace8,
+                    ),
                     child: ClipOval(
                       child: SizedBox(
                         width: 28,
@@ -91,7 +95,10 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                                 errorBuilder: (_, _, _) =>
                                     const Icon(Icons.account_circle_outlined),
                               )
-                            : Icon(Icons.account_circle_outlined, size: AppTheme.metrics.iconSize28),
+                            : Icon(
+                                Icons.account_circle_outlined,
+                                size: AppTheme.metrics.iconSize28,
+                              ),
                       ),
                     ),
                   ),
@@ -118,34 +125,72 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
   Widget _buildLoginPrompt(BuildContext context) {
     final theme = Theme.of(context);
     final metrics = appMetrics;
+    final isDark = theme.brightness == Brightness.dark;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.lock_person_outlined,
-            size: scaleW(64),
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-          ),
-          SizedBox(height: metrics.kSpace12),
-          Text(
-            '请先登录以使用 PicACG',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+      child: Container(
+        padding: EdgeInsets.all(metrics.kSpace32),
+        margin: EdgeInsets.symmetric(horizontal: metrics.kSpace24),
+        decoration: BoxDecoration(
+          color: isDark ? DarkColors.background2 : LightColors.background1,
+          borderRadius: metrics.radius16,
+          boxShadow: [
+            BoxShadow(
+              color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
-          ),
-          SizedBox(height: metrics.kSpace20),
-          FilledButton.icon(
-            icon: const Icon(Icons.login),
-            label: const Text('登录'),
-            onPressed: () async {
-              final success = await showPicAcgLoginDialog(context);
-              if (success) {
-                await viewModel.onLoginSuccess();
-              }
-            },
-          ),
-        ],
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: scaleW(72),
+              height: scaleW(72),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                borderRadius: metrics.radius16,
+              ),
+              child: Icon(
+                Icons.lock_person_outlined,
+                size: scaleW(36),
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            SizedBox(height: metrics.kSpace20),
+            Text(
+              '请先登录以使用 PicACG',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: metrics.kSpace8),
+            Text(
+              '登录后可浏览、搜索和收藏漫画',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
+            ),
+            SizedBox(height: metrics.kSpace24),
+            FilledButton.icon(
+              icon: const Icon(Icons.login),
+              label: const Text('登录'),
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.kSpace24,
+                  vertical: metrics.kSpace12,
+                ),
+              ),
+              onPressed: () async {
+                final success = await showPicAcgLoginDialog(context);
+                if (success) {
+                  await viewModel.onLoginSuccess();
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -268,14 +313,21 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
         child: Row(
           children: [
             Container(
-              width: 3,
-              height: AppTheme.metrics.kSpace18,
+              width: 4,
+              height: AppTheme.metrics.kSpace20,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.primary,
+                    theme.colorScheme.primary.withValues(alpha: 0.4),
+                  ],
+                ),
                 borderRadius: AppTheme.metrics.radius2,
               ),
             ),
-            SizedBox(width: metrics.kSpace8),
+            SizedBox(width: metrics.kSpace10),
             Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             if (onRefresh != null) ...[
               const Spacer(),
@@ -294,6 +346,7 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
   /// 推荐集合（纵向列表每个集合）
   Widget _buildCollections(BuildContext context, List<PicAcgCollection> collections) {
     final metrics = appMetrics;
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -303,21 +356,27 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
               metrics.kSpace16,
               metrics.kSpace8,
               metrics.kSpace16,
-              metrics.kSpace4,
+              metrics.kSpace6,
             ),
-            child: Text(collection.title, style: Theme.of(context).textTheme.titleSmall),
+            child: Text(
+              collection.title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
           ),
           SizedBox(
-            height: scaleW(200),
+            height: scaleW(220),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
               itemCount: collection.comics.length,
-              separatorBuilder: (_, i) => SizedBox(width: metrics.kSpace8),
+              separatorBuilder: (_, i) => SizedBox(width: metrics.kSpace10),
               itemBuilder: (ctx, i) {
                 final comic = collection.comics[i];
                 return SizedBox(
-                  width: scaleW(120),
+                  width: scaleW(130),
                   child: PicAcgComicCard(comic: comic, onTap: () => _goToDetail(context, comic.id)),
                 );
               },
@@ -360,21 +419,86 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
   void _showUserMenu(BuildContext context, PicAcgHomeViewModel vm) {
     if (_isMenuOpen) return;
     _isMenuOpen = true;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.account_circle_outlined),
-              title: Text(vm.currentUser.value?.name ?? '未知用户'),
-              subtitle: Text('Lv.${vm.currentUser.value?.level ?? 0}'),
+            Padding(
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+              child: Row(
+                children: [
+                  ClipOval(
+                    child: SizedBox(
+                      width: scaleW(44),
+                      height: scaleW(44),
+                      child: vm.currentUser.value?.avatar != null
+                          ? PicAcgImageView(
+                              image: vm.currentUser.value!.avatar!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                                child: Icon(
+                                  Icons.account_circle_outlined,
+                                  size: AppTheme.metrics.iconSize28,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                              child: Icon(
+                                Icons.account_circle_outlined,
+                                size: AppTheme.metrics.iconSize28,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                    ),
+                  ),
+                  SizedBox(width: AppTheme.metrics.kSpace12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vm.currentUser.value?.name ?? '未知用户',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        SizedBox(height: AppTheme.metrics.kSpace2),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppTheme.metrics.kSpace8,
+                            vertical: AppTheme.metrics.kSpace2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                            borderRadius: AppTheme.metrics.radius4,
+                          ),
+                          child: Text(
+                            'Lv.${vm.currentUser.value?.level ?? 0}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.favorite_outline),
-              title: const Text('我的收藏'),
+            Divider(height: 1, color: theme.dividerColor),
+            _MenuTile(
+              icon: Icons.favorite_outline,
+              iconColor: Colors.red,
+              title: '我的收藏',
               onTap: () {
                 Navigator.of(ctx).pop();
                 Navigator.of(
@@ -382,33 +506,38 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 ).push(MaterialPageRoute(builder: (_) => const PicAcgFavouritesScreen()));
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.history_outlined),
-              title: const Text('观看记录'),
+            _MenuTile(
+              icon: Icons.history_outlined,
+              iconColor: theme.colorScheme.primary,
+              title: '观看记录',
               onTap: () {
                 Navigator.of(ctx).pop();
                 const PicAcgHistoryRoute().push(context);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.block_outlined),
-              title: const Text('屏蔽词管理'),
+            _MenuTile(
+              icon: Icons.block_outlined,
+              iconColor: Colors.orange,
+              title: '屏蔽词管理',
               onTap: () {
                 Navigator.of(ctx).pop();
                 showPicAcgBlockWordsDialog(context);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.download_outlined),
-              title: const Text('下载管理'),
+            _MenuTile(
+              icon: Icons.download_outlined,
+              iconColor: isDark ? DarkColors.blue : LightColors.blue,
+              title: '下载管理',
               onTap: () {
                 Navigator.of(ctx).pop();
                 const PicAcgDownloadsRoute().push(context);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('退出登录'),
+            Divider(height: 1, color: theme.dividerColor),
+            _MenuTile(
+              icon: Icons.logout,
+              iconColor: theme.colorScheme.error,
+              title: '退出登录',
               onTap: () async {
                 Navigator.of(ctx).pop();
                 await getIt<PicAcgService>().logout();
@@ -418,9 +547,63 @@ class _PicAcgHomeScreenState extends BasePageState<PicAcgHomeViewModel, PicAcgHo
                 if (context.mounted) setState(() {});
               },
             ),
+            SizedBox(height: AppTheme.metrics.kSpace8),
           ],
         ),
       ),
     ).whenComplete(() => _isMenuOpen = false);
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace16,
+          vertical: AppTheme.metrics.kSpace12,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: AppTheme.metrics.kSpace32,
+              height: AppTheme.metrics.kSpace32,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                borderRadius: AppTheme.metrics.radius8,
+              ),
+              child: Icon(icon, size: AppTheme.metrics.iconSize18, color: iconColor),
+            ),
+            SizedBox(width: AppTheme.metrics.kSpace12),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: AppTheme.metrics.iconSize20,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

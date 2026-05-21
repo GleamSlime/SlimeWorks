@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -75,23 +76,55 @@ class _PicAcgHistoryScreenState extends BasePageState<PicAcgHistoryViewModel, Pi
 
     return Obx(() {
       if (viewModel.items.isEmpty) {
+        final isDark = theme.brightness == Brightness.dark;
         return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.history_outlined,
-                size: scaleW(64),
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-              ),
-              SizedBox(height: appMetrics.kSpace12),
-              Text(
-                '暂无观看记录',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          child: Container(
+            padding: EdgeInsets.all(appMetrics.kSpace32),
+            margin: EdgeInsets.symmetric(horizontal: appMetrics.kSpace24),
+            decoration: BoxDecoration(
+              color: isDark ? DarkColors.background2 : LightColors.background1,
+              borderRadius: appMetrics.radius16,
+              boxShadow: [
+                BoxShadow(
+                  color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: scaleW(72),
+                  height: scaleW(72),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: appMetrics.radius16,
+                  ),
+                  child: Icon(
+                    Icons.history_outlined,
+                    size: scaleW(36),
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                SizedBox(height: appMetrics.kSpace20),
+                Text(
+                  '暂无观看记录',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: appMetrics.kSpace8),
+                Text(
+                  '阅读漫画后会自动记录在这里',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }

@@ -323,13 +323,19 @@ class _SearchHistorySection extends StatelessWidget {
     return Obx(() {
       if (history.isEmpty) return const SizedBox.shrink();
       return Container(
-        padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16, vertical: metrics.kSpace8),
+        padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16, vertical: metrics.kSpace12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
+                Icon(
+                  Icons.history,
+                  size: scaleW(16),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+                SizedBox(width: metrics.kSpace6),
                 Text(
                   '搜索历史',
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -340,18 +346,30 @@ class _SearchHistorySection extends StatelessWidget {
                 const Spacer(),
                 GestureDetector(
                   onTap: onClear,
-                  child: Icon(
-                    Icons.delete_sweep_outlined,
-                    size: scaleW(18),
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.delete_sweep_outlined,
+                        size: scaleW(14),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                      ),
+                      SizedBox(width: metrics.kSpace3),
+                      Text(
+                        '清空',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            SizedBox(height: metrics.kSpace8),
+            SizedBox(height: metrics.kSpace10),
             Wrap(
               spacing: scaleW(8),
-              runSpacing: scaleW(6),
+              runSpacing: scaleW(8),
               children: history
                   .map(
                     (tag) => _HistoryTag(
@@ -381,15 +399,35 @@ class _HistoryTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final metrics = appMetrics;
     return GestureDetector(
       onTap: onTap,
-      child: Chip(
-        label: Text(label, style: theme.textTheme.bodySmall),
-        deleteIcon: Icon(Icons.close, size: scaleW(14)),
-        onDeleted: onDelete,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.symmetric(horizontal: scaleW(4)),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: metrics.kSpace10, vertical: metrics.kSpace6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: metrics.radius12,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            SizedBox(width: metrics.kSpace4),
+            GestureDetector(
+              onTap: onDelete,
+              child: Icon(
+                Icons.close,
+                size: scaleW(12),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

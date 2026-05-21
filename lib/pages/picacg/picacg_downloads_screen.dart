@@ -49,23 +49,56 @@ class _PicAcgDownloadsScreenState
       child: Obx(() {
         final entries = viewModel.entries;
         if (entries.isEmpty) {
+          final theme = Theme.of(context);
+          final isDark = theme.brightness == Brightness.dark;
           return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.download_outlined,
-                  size: scaleW(64),
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
-                ),
-                SizedBox(height: AppTheme.metrics.kSpace16),
-                Text(
-                  '还没有下载任何漫画',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+            child: Container(
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
+              margin: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+              decoration: BoxDecoration(
+                color: isDark ? DarkColors.background2 : LightColors.background1,
+                borderRadius: AppTheme.metrics.radius16,
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
-                ),
-              ],
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: scaleW(72),
+                    height: scaleW(72),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: AppTheme.metrics.radius16,
+                    ),
+                    child: Icon(
+                      Icons.download_outlined,
+                      size: scaleW(36),
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace20),
+                  Text(
+                    '还没有下载任何漫画',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace8),
+                  Text(
+                    '在漫画详情页选择章节进行下载',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -202,8 +235,10 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                         SizedBox(height: metrics.kSpace4),
                         LinearProgressIndicator(
                           value: entry.totalEps > 0 ? entry.completedEps / entry.totalEps : 0,
-                          minHeight: AppTheme.metrics.kSpace4,
-                          borderRadius: AppTheme.metrics.radius2,
+                          minHeight: AppTheme.metrics.kSpace6,
+                          borderRadius: AppTheme.metrics.radius3,
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                          color: theme.colorScheme.primary,
                         ),
                       ],
                     ),
@@ -213,7 +248,10 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                   Column(
                     children: [
                       IconButton(
-                        icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: AppTheme.metrics.iconSize20),
+                        icon: Icon(
+                          _expanded ? Icons.expand_less : Icons.expand_more,
+                          size: AppTheme.metrics.iconSize20,
+                        ),
                         onPressed: () => setState(() => _expanded = !_expanded),
                         tooltip: '查看章节',
                       ),
@@ -280,7 +318,13 @@ class _EpsStatusChip extends StatelessWidget {
       case PicAcgDownloadStatus.completed:
         bgColor = Colors.green.withValues(alpha: 0.15);
         fgColor = Colors.green;
-        trailing = Icon(Icons.play_circle_outline, size: AppTheme.metrics.iconSize13, color: (Theme.of(context).brightness == Brightness.dark) ? DarkColors.success : LightColors.success);
+        trailing = Icon(
+          Icons.play_circle_outline,
+          size: AppTheme.metrics.iconSize13,
+          color: (Theme.of(context).brightness == Brightness.dark)
+              ? DarkColors.success
+              : LightColors.success,
+        );
       case PicAcgDownloadStatus.downloading:
         bgColor = theme.colorScheme.primaryContainer;
         fgColor = theme.colorScheme.onPrimaryContainer;
@@ -297,7 +341,11 @@ class _EpsStatusChip extends StatelessWidget {
         fgColor = Colors.red;
         trailing = GestureDetector(
           onTap: onRetry,
-          child: Icon(Icons.refresh, size: AppTheme.metrics.iconSize12, color: theme.colorScheme.error),
+          child: Icon(
+            Icons.refresh,
+            size: AppTheme.metrics.iconSize12,
+            color: theme.colorScheme.error,
+          ),
         );
       case PicAcgDownloadStatus.waiting:
         bgColor = theme.colorScheme.surfaceContainerHighest;
@@ -313,12 +361,18 @@ class _EpsStatusChip extends StatelessWidget {
       onTap: info.status == PicAcgDownloadStatus.completed ? onRead : null,
       onLongPress: onDelete,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace8,
+          vertical: AppTheme.metrics.kSpace4,
+        ),
         decoration: BoxDecoration(color: bgColor, borderRadius: AppTheme.metrics.radius6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('第${info.epsOrder}话', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: fgColor)),
+            Text(
+              '第${info.epsOrder}话',
+              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: fgColor),
+            ),
             if (trailing != null) ...[SizedBox(width: AppTheme.metrics.kSpace4), trailing],
           ],
         ),

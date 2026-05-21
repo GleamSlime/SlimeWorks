@@ -92,22 +92,48 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
     final metrics = appMetrics;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(metrics.kSpace12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(metrics.kSpace16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360, maxHeight: 520),
+        constraints: const BoxConstraints(maxWidth: 380, maxHeight: 540),
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(metrics.kSpace16),
+          padding: EdgeInsets.all(metrics.kSpace20),
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                /// 标题
                 Row(
                   children: [
-                    Text('PicACG 登录', style: theme.textTheme.titleLarge),
-                    const Spacer(),
+                    Container(
+                      width: metrics.kSpace40,
+                      height: metrics.kSpace40,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                        borderRadius: metrics.radius10,
+                      ),
+                      child: Icon(
+                        Icons.auto_stories,
+                        size: AppTheme.metrics.iconSize22,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    SizedBox(width: metrics.kSpace12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('PicACG 登录', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                          SizedBox(height: metrics.kSpace2),
+                          Text(
+                            '登录后即可浏览和收藏漫画',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: () => Navigator.of(context).pop(false),
@@ -115,9 +141,8 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                     ),
                   ],
                 ),
-                SizedBox(height: metrics.kSpace12),
+                SizedBox(height: metrics.kSpace20),
 
-                /// 邮箱
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(
@@ -128,9 +153,8 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                   textInputAction: TextInputAction.next,
                   validator: (v) => (v == null || v.trim().isEmpty) ? '请输入账号' : null,
                 ),
-                SizedBox(height: metrics.kSpace8),
+                SizedBox(height: metrics.kSpace10),
 
-                /// 密码
                 TextFormField(
                   controller: _passwordController,
                   decoration: InputDecoration(
@@ -145,9 +169,8 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                   textInputAction: TextInputAction.next,
                   validator: (v) => (v == null || v.isEmpty) ? '请输入密码' : null,
                 ),
-                SizedBox(height: metrics.kSpace8),
+                SizedBox(height: metrics.kSpace10),
 
-                /// 代理设置（可选）
                 TextFormField(
                   controller: _proxyController,
                   decoration: const InputDecoration(
@@ -158,27 +181,41 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _onLogin(),
                 ),
-                SizedBox(height: metrics.kSpace12),
+                SizedBox(height: metrics.kSpace16),
 
-                /// 错误信息
                 if (_errorMessage != null) ...[
                   Container(
-                    padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace10),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.error.withValues(alpha: 0.1),
+                      color: theme.colorScheme.error.withValues(alpha: 0.08),
                       borderRadius: AppTheme.metrics.radius8,
+                      border: Border.all(
+                        color: theme.colorScheme.error.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
                     ),
-                    child: Text(
-                      _errorMessage!,
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, size: AppTheme.metrics.iconSize16, color: theme.colorScheme.error),
+                        SizedBox(width: AppTheme.metrics.kSpace8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(height: metrics.kSpace8),
+                  SizedBox(height: metrics.kSpace12),
                 ],
 
-                /// 登录按钮
                 FilledButton(
                   onPressed: _isLoading ? null : _onLogin,
+                  style: FilledButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: metrics.kSpace14),
+                    shape: RoundedRectangleBorder(borderRadius: metrics.radius10),
+                  ),
                   child: _isLoading
                       ? SizedBox(
                           height: AppTheme.metrics.kSpace20,
@@ -188,10 +225,10 @@ class _PicAcgLoginDialogState extends State<_PicAcgLoginDialog> {
                       : const Text('登录'),
                 ),
               ],
-            ), // Column
-          ), // Form
-        ), // SingleChildScrollView
-      ), // ConstrainedBox
-    ); // Dialog
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

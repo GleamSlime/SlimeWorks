@@ -738,19 +738,19 @@ class _BarBtn extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: AppTheme.metrics.kSpace16,
-          vertical: AppTheme.metrics.kSpace8,
+          vertical: AppTheme.metrics.kSpace6,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: iconColor, size: AppTheme.metrics.iconSize22),
-            SizedBox(height: AppTheme.metrics.kSpace3),
+            Icon(icon, color: iconColor, size: AppTheme.metrics.iconSize20),
+            SizedBox(height: AppTheme.metrics.kSpace2),
             Text(
               label,
               style: TextStyle(
                 color: labelColor,
-                fontSize: AppTheme.metrics.fontSize11,
+                fontSize: AppTheme.metrics.fontSize10,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.2,
               ),
@@ -761,7 +761,7 @@ class _BarBtn extends StatelessWidget {
                 badge!,
                 style: TextStyle(
                   color: badgeColor,
-                  fontSize: AppTheme.metrics.fontSize10,
+                  fontSize: AppTheme.metrics.fontSize9,
                   fontWeight: FontWeight.w400,
                 ),
               ),

@@ -141,12 +141,11 @@ class _PicAcgComicDetailScreenState
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 封面
                 ClipRRect(
                   borderRadius: BorderRadius.circular(metrics.kSpace12),
                   child: SizedBox(
-                    width: scaleW(100),
-                    height: scaleW(133),
+                    width: scaleW(110),
+                    height: scaleW(146),
                     child: PicAcgImageView(
                       image: comic.thumb,
                       fit: BoxFit.cover,
@@ -154,14 +153,18 @@ class _PicAcgComicDetailScreenState
                     ),
                   ),
                 ),
-                SizedBox(width: metrics.kSpace12),
+                SizedBox(width: metrics.kSpace14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SelectableText(comic.title, style: theme.textTheme.titleMedium),
+                      Text(
+                        comic.title,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       SizedBox(height: metrics.kSpace8),
-                      // 发布者行
                       if (comic.creator != null)
                         GestureDetector(
                           onTap: () =>
@@ -188,6 +191,7 @@ class _PicAcgComicDetailScreenState
                                   comic.creator!.name,
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -197,7 +201,6 @@ class _PicAcgComicDetailScreenState
                           ),
                         ),
 
-                      // 作者/汉化组
                       if (comic.author?.isNotEmpty == true)
                         GestureDetector(
                           onTap: () => PicAcgSearchRoute(keyword: comic.author!).push(context),
@@ -213,32 +216,34 @@ class _PicAcgComicDetailScreenState
                           '汉化: ${comic.chineseTeam}',
                           style: theme.textTheme.bodySmall,
                         ),
-                      SizedBox(height: metrics.kSpace4),
+                      SizedBox(height: metrics.kSpace6),
 
-                      // 统计 chips
                       Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          _buildChip(context, '${comic.epsCount} 章', Icons.photo_library_outlined),
-                          _buildChip(context, '${comic.pagesCount} 张', Icons.image_outlined),
-                          _buildChip(
+                          _buildInfoChip(
                             context,
-                            '${comic.viewsCount} 浏览',
+                            '${comic.epsCount} 章',
+                            Icons.photo_library_outlined,
+                          ),
+                          _buildInfoChip(context, '${comic.pagesCount} 页', Icons.image_outlined),
+                          _buildInfoChip(
+                            context,
+                            _formatViewsCount(comic.viewsCount),
                             Icons.remove_red_eye_outlined,
                           ),
                           if (comic.finished)
-                            _buildChip(
+                            _buildInfoChip(
                               context,
                               '完结',
                               Icons.check_circle_outline,
-                              color: theme.colorScheme.primary,
+                              highlight: true,
                             ),
                         ],
                       ),
-                      SizedBox(height: metrics.kSpace4),
+                      SizedBox(height: metrics.kSpace6),
 
-                      // 分类
                       if (comic.categories.isNotEmpty)
                         Wrap(
                           spacing: 4,
@@ -247,11 +252,22 @@ class _PicAcgComicDetailScreenState
                               .map(
                                 (c) => GestureDetector(
                                   onTap: () => PicAcgSearchRoute(category: c).push(context),
-                                  child: Chip(
-                                    label: Text(c),
-                                    labelStyle: theme.textTheme.labelSmall,
-                                    padding: EdgeInsets.zero,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: metrics.kSpace8,
+                                      vertical: metrics.kSpace3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                      borderRadius: metrics.radius12,
+                                    ),
+                                    child: Text(
+                                      c,
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               )
@@ -375,7 +391,10 @@ class _PicAcgComicDetailScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Tags', style: theme.textTheme.titleSmall),
+                  Text(
+                    'Tags',
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                   SizedBox(height: metrics.kSpace8),
                   Wrap(
                     spacing: 6,
@@ -384,11 +403,25 @@ class _PicAcgComicDetailScreenState
                         .map(
                           (t) => GestureDetector(
                             onTap: () => PicAcgSearchRoute(keyword: t).push(context),
-                            child: Chip(
-                              label: Text(t),
-                              labelStyle: theme.textTheme.labelSmall,
-                              padding: EdgeInsets.zero,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: metrics.kSpace10,
+                                vertical: metrics.kSpace4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: metrics.radius12,
+                                border: Border.all(
+                                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                t,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                ),
+                              ),
                             ),
                           ),
                         )
@@ -466,14 +499,21 @@ class _PicAcgComicDetailScreenState
             child: Row(
               children: [
                 Container(
-                  width: 3,
-                  height: AppTheme.metrics.kSpace16,
+                  width: 4,
+                  height: AppTheme.metrics.kSpace20,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        theme.colorScheme.primary,
+                        theme.colorScheme.primary.withValues(alpha: 0.4),
+                      ],
+                    ),
                     borderRadius: AppTheme.metrics.radius2,
                   ),
                 ),
-                SizedBox(width: metrics.kSpace8),
+                SizedBox(width: metrics.kSpace10),
                 Text(
                   '章节列表',
                   style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -594,17 +634,44 @@ class _PicAcgComicDetailScreenState
     );
   }
 
-  Widget _buildChip(BuildContext context, String label, IconData icon, {Color? color}) {
+  Widget _buildInfoChip(
+    BuildContext context,
+    String label,
+    IconData icon, {
+    bool highlight = false,
+  }) {
     final theme = Theme.of(context);
-    final effectiveColor = color ?? theme.colorScheme.onSurface.withValues(alpha: 0.6);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: AppTheme.metrics.iconSize12, color: effectiveColor),
-        SizedBox(width: AppTheme.metrics.kSpace2),
-        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: effectiveColor)),
-      ],
+    final metrics = appMetrics;
+    final bgColor = highlight
+        ? theme.colorScheme.primary.withValues(alpha: 0.15)
+        : theme.colorScheme.surfaceContainerHighest;
+    final fgColor = highlight
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: metrics.kSpace8, vertical: metrics.kSpace3),
+      decoration: BoxDecoration(color: bgColor, borderRadius: metrics.radius12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: AppTheme.metrics.iconSize12, color: fgColor),
+          SizedBox(width: metrics.kSpace3),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: fgColor,
+              fontWeight: highlight ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  String _formatViewsCount(int count) {
+    if (count >= 10000) return '${(count / 10000).toStringAsFixed(1)}万';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}k';
+    return '$count';
   }
 
   void _showDownloadSheet(BuildContext context) {
@@ -767,20 +834,30 @@ class _ActionButton extends StatelessWidget {
     final color = active
         ? (activeColor ?? theme.colorScheme.primary)
         : theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final bgColor = active
+        ? (activeColor ?? theme.colorScheme.primary).withValues(alpha: 0.1)
+        : theme.colorScheme.surfaceContainerHighest;
     return InkWell(
       onTap: onTap,
-      borderRadius: AppTheme.metrics.radius8,
-      child: Padding(
+      borderRadius: AppTheme.metrics.radius10,
+      child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: AppTheme.metrics.kSpace16,
           vertical: AppTheme.metrics.kSpace10,
         ),
+        decoration: BoxDecoration(color: bgColor, borderRadius: AppTheme.metrics.radius10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: AppTheme.metrics.iconSize22, color: color),
-            SizedBox(height: AppTheme.metrics.kSpace2),
-            Text(label, style: theme.textTheme.labelSmall?.copyWith(color: color)),
+            SizedBox(height: AppTheme.metrics.kSpace4),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
