@@ -40,14 +40,7 @@ class SentryLogFilterBar extends StatelessWidget {
       final items = <DropdownMenuItem<String>>[
         DropdownMenuItem<String>(
           value: '',
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.apps, size: m.iconSize16, color: theme.hintColor),
-              SizedBox(width: m.kSpace4),
-              const Text('全部项目'),
-            ],
-          ),
+          child: Text('全部项目', overflow: TextOverflow.ellipsis),
         ),
         ...viewModel.projects.map(
           (p) => DropdownMenuItem<String>(
@@ -60,24 +53,23 @@ class SentryLogFilterBar extends StatelessWidget {
         ),
       ];
 
-      return ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: scaleW(160)),
+      return SizedBox(
+        width: scaleW(120),
         child: DropdownButtonFormField<String>(
           initialValue: viewModel.selectedProjectId.value.isEmpty
               ? null
               : viewModel.selectedProjectId.value,
-          hint: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.apps, size: m.iconSize16, color: theme.hintColor),
-              SizedBox(width: m.kSpace4),
-              Text('全部项目', style: TextStyle(color: theme.hintColor)),
-            ],
+          hint: Text(
+            '全部项目',
+            style: TextStyle(color: theme.hintColor, fontSize: 13),
+            overflow: TextOverflow.ellipsis,
           ),
+          isDense: true,
+          isExpanded: true,
           decoration: InputDecoration(
             filled: true,
             fillColor: isDark ? DarkColors.background2 : LightColors.background2,
-            contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace8),
+            contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace6),
             border: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(
@@ -85,8 +77,8 @@ class SentryLogFilterBar extends StatelessWidget {
               borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
             ),
           ),
-          icon: Icon(Icons.unfold_more, size: m.iconSize18, color: theme.hintColor),
-          style: theme.textTheme.bodyMedium,
+          icon: Icon(Icons.unfold_more, size: m.iconSize16, color: theme.hintColor),
+          style: theme.textTheme.bodySmall,
           items: items,
           onChanged: (value) {
             viewModel.selectedProjectId.value = value ?? '';
