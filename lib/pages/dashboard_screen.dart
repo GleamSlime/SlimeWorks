@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:ui';
 import 'dart:math' as math;
 
 import 'package:slime_works/components/window/screen_chrome.dart';
@@ -22,7 +23,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
   Timer? _resourceTimer;
   rust_sys.SystemResourceSnapshot? _snapshot;
   final NodeSettingsService _nodeSettingsService = getIt<NodeSettingsService>();
@@ -39,18 +40,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<double> _reqHistory = [];
   int _lastNodeRequestCount = 0;
 
+  late final AnimationController _entranceController;
+  late final List<Animation<double>> _cardAnimations;
+
   @override
   void initState() {
     super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    _cardAnimations = List.generate(11, (index) {
+      final start = (index * 0.06).clamp(0.0, 0.7);
+      return CurvedAnimation(
+        parent: _entranceController,
+        curve: Interval(start, (start + 0.3).clamp(0.0, 1.0), curve: Curves.easeOutCubic),
+      );
+    });
+
     _refreshResourceSnapshot();
     _resourceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _refreshResourceSnapshot();
+    });
+
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) _entranceController.forward();
     });
   }
 
   @override
   void dispose() {
     _resourceTimer?.cancel();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -97,6 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ScreenChrome(
       data: const ScreenChromeData(title: '概览'),
       child: SafeArea(
@@ -104,268 +127,544 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: CustomScrollView(
           slivers: [
             SliverPadding(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '欢迎使用工坊系统',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: AppTheme.metrics.kSpace16),
-                    Text(
-                      // '这是一个功能强大的 macOS 和 Windows 桌面应用',
-                      '',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),
-                    ),
-                    SizedBox(height: AppTheme.metrics.kSpace48),
-                    SizedBox(
-                      width: double.infinity,
-                      child: Wrap(
-                        spacing: AppTheme.metrics.kSpace12,
-                        runSpacing: AppTheme.metrics.kSpace12,
-                        children: [
-                          _buildMetricCard(
-                            context,
-                            icon: Icons.memory,
-                            title: 'CPU',
-                            value: _snapshot == null
-                                ? '--'
-                                : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
-                            history: _cpuHistory,
-                            chartColor: Colors.blue,
-                          ),
-                          _buildMetricCard(
-                            context,
-                            icon: Icons.storage,
-                            title: '内存',
-                            value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
-                            history: _memHistory,
-                            chartColor: Colors.orange,
-                          ),
-                          _buildMetricCard(
-                            context,
-                            icon: Icons.download,
-                            title: '下行',
-                            value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
-                            history: _rxHistory,
-                            chartColor: (Theme.of(context).brightness == Brightness.dark)
-                                ? DarkColors.success
-                                : LightColors.success,
-                          ),
-                          _buildMetricCard(
-                            context,
-                            icon: Icons.upload,
-                            title: '上行',
-                            value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
-                            history: _txHistory,
-                            chartColor: Colors.purple,
-                          ),
-                          if (_isLocalServerRunning)
-                            _buildMetricCard(
-                              context,
-                              icon: Icons.hub,
-                              title: '节点请求数',
-                              value: _nodeRequestCount.toString(),
-                              history: _reqHistory,
-                              chartColor: Colors.teal,
-                            ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: AppTheme.metrics.kSpace24),
-                  ],
-                ),
-              ),
-            ),
-
-            SliverPadding(
               padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.metrics.kSpace12,
-                vertical: AppTheme.metrics.kSpace12,
+                horizontal: AppTheme.metrics.kSpace20,
+                vertical: AppTheme.metrics.kSpace16,
               ),
+              sliver: SliverToBoxAdapter(child: _buildHeader(context, isDark)),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20),
+              sliver: SliverToBoxAdapter(child: _buildMetricSection(context, isDark)),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                AppTheme.metrics.kSpace20,
+                AppTheme.metrics.kSpace24,
+                AppTheme.metrics.kSpace20,
+                AppTheme.metrics.kSpace24,
+              ),
+              sliver: SliverToBoxAdapter(child: _buildSectionLabel(context, '功能模块')),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20),
               sliver: SliverGrid(
                 delegate: SliverChildBuilderDelegate((context, index) {
-                  final features = [
-                    _buildFeatureCard(
-                      context,
-                      icon: Icons.account_tree_outlined,
-                      title: '数据捕获',
-                      description: '强大的数据采集和处理功能',
-                      color: Colors.blue,
-                    ),
-                    _buildFeatureCard(
-                      context,
-                      icon: Icons.water_drop_outlined,
-                      title: '流水账',
-                      description: '清晰的财务流水记录',
-                      color: Colors.cyan,
-                    ),
-                    _buildFeatureCard(
-                      context,
-                      icon: Icons.cloud_outlined,
-                      title: '阿里云',
-                      description: '云服务管理工具',
-                      color: Colors.orange,
-                    ),
-                    _buildFeatureCard(
-                      context,
-                      icon: Icons.build_circle_outlined,
-                      title: '工具箱',
-                      description: '丰富的实用工具集合',
-                      color: Colors.purple,
-                    ),
-                    _buildFeatureCard(
-                      context,
-                      icon: Icons.video_library_outlined,
-                      title: '媒体库',
-                      description: '媒体文件管理中心',
-                      color: Colors.pink,
-                    ),
-                    _buildFeatureCard(
-                      context,
-                      icon: Icons.note_outlined,
-                      title: '笔记',
-                      description: '快速记录和整理想法',
-                      color: (Theme.of(context).brightness == Brightness.dark)
-                          ? DarkColors.success
-                          : LightColors.success,
-                    ),
-                  ];
-                  return features[index];
+                  return _buildFeatureItem(context, index, isDark);
                 }, childCount: 6),
                 gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 320,
-                  mainAxisSpacing: 24,
-                  crossAxisSpacing: 24,
-                  mainAxisExtent: scaleW(230).clamp(180.0, 320.0),
+                  mainAxisSpacing: AppTheme.metrics.kSpace16,
+                  crossAxisSpacing: AppTheme.metrics.kSpace16,
+                  mainAxisExtent: scaleW(200).clamp(160.0, 260.0),
                 ),
               ),
             ),
+            SliverToBoxAdapter(child: SizedBox(height: AppTheme.metrics.kSpace40)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMetricCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String value,
-    required List<double> history,
-    required Color chartColor,
-  }) {
-    return Container(
-      width: ((MediaQuery.of(context).size.width - scaleW(36)) / 2).clamp(70.0, 200.0),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.metrics.kSpace12,
-        vertical: AppTheme.metrics.kSpace10,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: AppTheme.metrics.radius12,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 顶部：图标 + 当前值
-          Row(
-            children: [
-              Icon(icon, size: AppTheme.metrics.kSpace16),
-              SizedBox(width: AppTheme.metrics.kSpace8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.bodySmall),
-                    Text(
-                      value,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
+  Widget _buildHeader(BuildContext context, bool isDark) {
+    final anim = _cardAnimations[0];
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        return Opacity(
+          opacity: anim.value.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - anim.value)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: AppTheme.metrics.kSpace12),
+                ShaderMask(
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      colors: isDark
+                          ? [DarkColors.primary, DarkColors.purple, DarkColors.blue]
+                          : [LightColors.primary, LightColors.purple, LightColors.indigo],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds);
+                  },
+                  child: Text(
+                    '工坊系统',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontSize: scaleS(32),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: AppTheme.metrics.kSpace6),
+                Text(
+                  '实时监控 · 模块管理 · 一站式工具',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).hintColor,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace8),
-          // 底部：迷你折线图
-          SizedBox(
-            height: scaleW(36).clamp(28.0, 48.0),
-            child: _SparklineChart(data: List<double>.from(history), color: chartColor),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionLabel(BuildContext context, String label) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace12),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: scaleW(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          SizedBox(width: AppTheme.metrics.kSpace8),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.5),
           ),
         ],
       ),
     );
   }
 
-  /// 构建功能卡片
-  Widget _buildFeatureCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String description,
-    required Color color,
-  }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppTheme.metrics.radius16,
-        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+  Widget _buildMetricSection(BuildContext context, bool isDark) {
+    final metrics = [
+      _MetricData(
+        icon: Icons.memory_rounded,
+        title: 'CPU',
+        value: _snapshot == null ? '--' : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
+        history: _cpuHistory,
+        chartColor: const Color(0xFF6FB8E8),
+        gradientColors: const [Color(0xFF6FB8E8), Color(0xFFA8B8F6)],
       ),
-      child: InkWell(
-        onTap: () {
-          // TODO: 导航到对应页面
-        },
-        borderRadius: AppTheme.metrics.radius16,
-        child: Padding(
-          padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 图标
-              Container(
-                width: AppTheme.metrics.kSpace48,
-                height: AppTheme.metrics.kSpace48,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: AppTheme.metrics.radius12,
+      _MetricData(
+        icon: Icons.storage_rounded,
+        title: '内存',
+        value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
+        history: _memHistory,
+        chartColor: const Color(0xFFF5A569),
+        gradientColors: const [Color(0xFFF5A569), Color(0xFFFFCB3A)],
+      ),
+      _MetricData(
+        icon: Icons.download_rounded,
+        title: '下行',
+        value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
+        history: _rxHistory,
+        chartColor: isDark ? DarkColors.success : LightColors.success,
+        gradientColors: isDark
+            ? const [Color(0xFF66BB6A), Color(0xFF82D7BB)]
+            : const [Color(0xFF4CAF50), Color(0xFF82D7BB)],
+      ),
+      _MetricData(
+        icon: Icons.upload_rounded,
+        title: '上行',
+        value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
+        history: _txHistory,
+        chartColor: const Color(0xFFBBA8F6),
+        gradientColors: const [Color(0xFFBBA8F6), Color(0xFFA89FEE)],
+      ),
+    ];
+
+    if (_isLocalServerRunning) {
+      metrics.add(
+        _MetricData(
+          icon: Icons.hub_rounded,
+          title: '节点请求',
+          value: _nodeRequestCount.toString(),
+          history: _reqHistory,
+          chartColor: const Color(0xFF9AC8DD),
+          gradientColors: const [Color(0xFF9AC8DD), Color(0xFF6FB8E8)],
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: AppTheme.metrics.kSpace12,
+      runSpacing: AppTheme.metrics.kSpace12,
+      children: [
+        for (int i = 0; i < metrics.length; i++) _buildMetricCard(context, metrics[i], i, isDark),
+      ],
+    );
+  }
+
+  Widget _buildMetricCard(BuildContext context, _MetricData data, int animIndex, bool isDark) {
+    final anim = _cardAnimations[(animIndex + 1).clamp(0, _cardAnimations.length - 1)];
+    final cardWidth = ((MediaQuery.of(context).size.width - scaleW(44)) / 2).clamp(100.0, 240.0);
+
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        return Opacity(
+          opacity: anim.value.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 16 * (1 - anim.value)),
+            child: _MetricCardWidget(width: cardWidth, data: data, isDark: isDark),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFeatureItem(BuildContext context, int index, bool isDark) {
+    final features = [
+      _FeatureData(
+        icon: Icons.account_tree_outlined,
+        title: '数据捕获',
+        description: '强大的数据采集和处理功能',
+        gradientColors: const [Color(0xFF6FB8E8), Color(0xFFA8B8F6)],
+      ),
+      _FeatureData(
+        icon: Icons.water_drop_outlined,
+        title: '流水账',
+        description: '清晰的财务流水记录',
+        gradientColors: const [Color(0xFF9AC8DD), Color(0xFF82D7BB)],
+      ),
+      _FeatureData(
+        icon: Icons.cloud_outlined,
+        title: '阿里云',
+        description: '云服务管理工具',
+        gradientColors: const [Color(0xFFF5A569), Color(0xFFFFCB3A)],
+      ),
+      _FeatureData(
+        icon: Icons.build_circle_outlined,
+        title: '工具箱',
+        description: '丰富的实用工具集合',
+        gradientColors: const [Color(0xFFBBA8F6), Color(0xFFA89FEE)],
+      ),
+      _FeatureData(
+        icon: Icons.video_library_outlined,
+        title: '媒体库',
+        description: '媒体文件管理中心',
+        gradientColors: const [Color(0xFFFF6C74), Color(0xFFF5A569)],
+      ),
+      _FeatureData(
+        icon: Icons.note_outlined,
+        title: '笔记',
+        description: '快速记录和整理想法',
+        gradientColors: isDark
+            ? const [Color(0xFF66BB6A), Color(0xFF82D7BB)]
+            : const [Color(0xFF4CAF50), Color(0xFF82D7BB)],
+      ),
+    ];
+
+    final feature = features[index];
+    final anim = _cardAnimations[(index + 5).clamp(0, _cardAnimations.length - 1)];
+
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        return Opacity(
+          opacity: anim.value.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - anim.value)),
+            child: _FeatureCardWidget(feature: feature, isDark: isDark),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MetricData {
+  final IconData icon;
+  final String title;
+  final String value;
+  final List<double> history;
+  final Color chartColor;
+  final List<Color> gradientColors;
+
+  const _MetricData({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.history,
+    required this.chartColor,
+    required this.gradientColors,
+  });
+}
+
+class _FeatureData {
+  final IconData icon;
+  final String title;
+  final String description;
+  final List<Color> gradientColors;
+
+  const _FeatureData({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.gradientColors,
+  });
+}
+
+class _MetricCardWidget extends StatefulWidget {
+  final double width;
+  final _MetricData data;
+  final bool isDark;
+
+  const _MetricCardWidget({required this.width, required this.data, required this.isDark});
+
+  @override
+  State<_MetricCardWidget> createState() => _MetricCardWidgetState();
+}
+
+class _MetricCardWidgetState extends State<_MetricCardWidget> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        width: widget.width,
+        padding: EdgeInsets.all(m.kSpace14),
+        decoration: BoxDecoration(
+          color: widget.isDark
+              ? DarkColors.background2.withValues(alpha: _hovered ? 0.95 : 0.75)
+              : Colors.white.withValues(alpha: _hovered ? 0.95 : 0.80),
+          borderRadius: m.radius16,
+          border: Border.all(
+            color: widget.isDark
+                ? DarkColors.white10.withValues(alpha: _hovered ? 0.3 : 0.08)
+                : LightColors.black10.withValues(alpha: _hovered ? 0.15 : 0.06),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: widget.data.chartColor.withValues(alpha: _hovered ? 0.18 : 0.06),
+              blurRadius: _hovered ? 20 : 8,
+              offset: Offset(0, _hovered ? 6 : 2),
+            ),
+            if (!widget.isDark)
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: m.radius16,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: m.iconSize28,
+                      height: m.iconSize28,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: widget.data.gradientColors,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: m.radius8,
+                      ),
+                      child: Center(
+                        child: Icon(widget.data.icon, size: m.iconSize16, color: Colors.white),
+                      ),
+                    ),
+                    SizedBox(width: m.kSpace10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.data.title,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).hintColor,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          SizedBox(height: m.kSpace2),
+                          Text(
+                            widget.data.value,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, size: AppTheme.metrics.kSpace24, color: color),
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace16),
+                SizedBox(height: m.kSpace10),
+                SizedBox(
+                  height: scaleW(40).clamp(32.0, 52.0),
+                  child: _SparklineChart(
+                    data: List<double>.from(widget.data.history),
+                    color: widget.data.chartColor,
+                    gradientColors: widget.data.gradientColors,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-              // 标题
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace4),
+class _FeatureCardWidget extends StatefulWidget {
+  final _FeatureData feature;
+  final bool isDark;
 
-              // 描述
-              Text(
-                description,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+  const _FeatureCardWidget({required this.feature, required this.isDark});
+
+  @override
+  State<_FeatureCardWidget> createState() => _FeatureCardWidgetState();
+}
+
+class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () {},
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: widget.isDark
+                ? DarkColors.background2.withValues(alpha: _hovered ? 0.95 : 0.70)
+                : Colors.white.withValues(alpha: _hovered ? 0.95 : 0.78),
+            borderRadius: m.radius20,
+            border: Border.all(
+              color: widget.isDark
+                  ? DarkColors.white10.withValues(alpha: _hovered ? 0.25 : 0.06)
+                  : LightColors.black10.withValues(alpha: _hovered ? 0.12 : 0.04),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: widget.feature.gradientColors.first.withValues(
+                  alpha: _hovered ? 0.15 : 0.04,
+                ),
+                blurRadius: _hovered ? 24 : 8,
+                offset: Offset(0, _hovered ? 8 : 2),
               ),
+              if (!widget.isDark)
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: m.radius20,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Padding(
+                padding: EdgeInsets.all(m.kSpace20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutCubic,
+                      width: m.iconSize44,
+                      height: m.iconSize44,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: widget.feature.gradientColors,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: m.radius14,
+                        boxShadow: [
+                          BoxShadow(
+                            color: widget.feature.gradientColors.first.withValues(
+                              alpha: _hovered ? 0.4 : 0.2,
+                            ),
+                            blurRadius: _hovered ? 12 : 6,
+                            offset: Offset(0, _hovered ? 4 : 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Icon(widget.feature.icon, size: m.iconSize24, color: Colors.white),
+                      ),
+                    ),
+                    SizedBox(height: m.kSpace16),
+                    Text(
+                      widget.feature.title,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: m.kSpace6),
+                    Text(
+                      widget.feature.description,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).hintColor,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Text(
+                          '进入',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: widget.feature.gradientColors.first,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(width: m.kSpace4),
+                        AnimatedRotation(
+                          duration: const Duration(milliseconds: 250),
+                          turns: _hovered ? 0.0 : 0.0,
+                          child: AnimatedSlide(
+                            duration: const Duration(milliseconds: 250),
+                            offset: Offset(_hovered ? 0.15 : 0.0, 0),
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              size: m.iconSize16,
+                              color: widget.feature.gradientColors.first,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -375,37 +674,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 /// 迷你折线图（Sparkline），通过 [CustomPainter] 绘制渐变填充面积图。
 class _SparklineChart extends StatelessWidget {
-  const _SparklineChart({required this.data, required this.color});
+  const _SparklineChart({required this.data, required this.color, required this.gradientColors});
 
   final List<double> data;
   final Color color;
+  final List<Color> gradientColors;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _SparklinePainter(data: data, color: color),
+      painter: _SparklinePainter(data: data, color: color, gradientColors: gradientColors),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _SparklinePainter extends CustomPainter {
-  _SparklinePainter({required this.data, required this.color});
+  _SparklinePainter({required this.data, required this.color, required this.gradientColors});
 
   final List<double> data;
   final Color color;
+  final List<Color> gradientColors;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (data.length < 2) return;
 
     final maxVal = data.reduce(math.max);
-    // 至少保留一个非零上限，防止全零时除以零
     final scale = maxVal > 0 ? maxVal : 1.0;
+    final chartHeight = size.height * 0.85;
+    final bottomPadding = size.height * 0.15;
+
+    final glowPaint = Paint()
+      ..color = color.withValues(alpha: 0.15)
+      ..strokeWidth = 6
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
     final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
+      ..shader = LinearGradient(
+        colors: gradientColors,
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ).createShader(Offset.zero & size)
+      ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
@@ -414,36 +728,73 @@ class _SparklinePainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [color.withAlpha(80), color.withAlpha(0)],
+        colors: [
+          gradientColors.first.withValues(alpha: 0.25),
+          gradientColors.last.withValues(alpha: 0.02),
+        ],
       ).createShader(Offset.zero & size)
       ..style = PaintingStyle.fill;
 
-    final linePath = Path();
-    final fillPath = Path();
-
+    final points = <Offset>[];
     final step = size.width / (data.length - 1);
 
     for (int i = 0; i < data.length; i++) {
       final x = i * step;
-      final y = size.height - (data[i] / scale) * size.height;
-      if (i == 0) {
-        linePath.moveTo(x, y);
-        fillPath.moveTo(x, size.height);
-        fillPath.lineTo(x, y);
-      } else {
-        linePath.lineTo(x, y);
-        fillPath.lineTo(x, y);
-      }
+      final normalizedVal = (data[i] / scale).clamp(0.0, 1.0);
+      final y = size.height - bottomPadding - normalizedVal * chartHeight;
+      points.add(Offset(x, y));
     }
 
-    // 完成填充路径
-    fillPath.lineTo((data.length - 1) * step, size.height);
+    final linePath = _buildSmoothPath(points);
+    final fillPath = Path.from(linePath);
+    fillPath.lineTo(points.last.dx, size.height);
+    fillPath.lineTo(points.first.dx, size.height);
     fillPath.close();
 
     canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(linePath, glowPaint);
     canvas.drawPath(linePath, linePaint);
+
+    if (points.isNotEmpty) {
+      final lastPoint = points.last;
+      final dotPaint = Paint()..color = color;
+      final dotGlow = Paint()
+        ..color = color.withValues(alpha: 0.3)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      canvas.drawCircle(lastPoint, 4, dotGlow);
+      canvas.drawCircle(lastPoint, 2.5, dotPaint);
+    }
+  }
+
+  Path _buildSmoothPath(List<Offset> points) {
+    final path = Path();
+    if (points.isEmpty) return path;
+
+    path.moveTo(points.first.dx, points.first.dy);
+
+    if (points.length == 2) {
+      path.lineTo(points.last.dx, points.last.dy);
+      return path;
+    }
+
+    for (int i = 0; i < points.length - 1; i++) {
+      final p0 = i > 0 ? points[i - 1] : points[i];
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      final p3 = i < points.length - 2 ? points[i + 2] : points[i + 1];
+
+      final cp1x = p1.dx + (p2.dx - p0.dx) / 6;
+      final cp1y = p1.dy + (p2.dy - p0.dy) / 6;
+      final cp2x = p2.dx - (p3.dx - p1.dx) / 6;
+      final cp2y = p2.dy - (p3.dy - p1.dy) / 6;
+
+      path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.dx, p2.dy);
+    }
+
+    return path;
   }
 
   @override
-  bool shouldRepaint(_SparklinePainter old) => old.data != data || old.color != color;
+  bool shouldRepaint(_SparklinePainter old) =>
+      old.data != data || old.color != color || old.gradientColors != gradientColors;
 }

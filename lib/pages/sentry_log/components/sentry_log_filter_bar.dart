@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -5,6 +6,7 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 
+/// 日志筛选栏组件
 class SentryLogFilterBar extends StatelessWidget {
   final SentryLogViewModel viewModel;
   final VoidCallback onFilterChanged;
@@ -19,22 +21,44 @@ class SentryLogFilterBar extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace12, m.kSpace16, m.kSpace4),
-      child: Row(
-        children: [
-          _buildProjectFilter(context, theme, m, isDark),
-          SizedBox(width: m.kSpace8),
-          _buildLevelChips(context, theme, m, isDark),
-          SizedBox(width: m.kSpace8),
-          _buildEnvironmentField(context, theme, m, isDark),
-          SizedBox(width: m.kSpace8),
-          Expanded(child: _buildSearchField(context, theme, m, isDark)),
-          SizedBox(width: m.kSpace8),
-          _buildFilterButton(context, theme, m, isDark),
-        ],
+      child: ClipRRect(
+        borderRadius: m.radius12,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace6),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? DarkColors.background1.withAlpha(120)
+                  : LightColors.background1.withAlpha(160),
+              borderRadius: m.radius12,
+              border: Border.all(
+                color: isDark
+                    ? DarkColors.white10.withAlpha(30)
+                    : LightColors.black10.withAlpha(20),
+                width: 0.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                _buildProjectFilter(context, theme, m, isDark),
+                SizedBox(width: m.kSpace8),
+                _buildLevelChips(context, theme, m, isDark),
+                SizedBox(width: m.kSpace8),
+                _buildEnvironmentField(context, theme, m, isDark),
+                SizedBox(width: m.kSpace8),
+                Expanded(child: _buildSearchField(context, theme, m, isDark)),
+                SizedBox(width: m.kSpace8),
+                _buildFilterButton(context, theme, m, isDark),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
+  /// 构建项目筛选下拉框
   Widget _buildProjectFilter(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
     return Obx(() {
       final items = <DropdownMenuItem<String>>[
@@ -89,6 +113,7 @@ class SentryLogFilterBar extends StatelessWidget {
     });
   }
 
+  /// 构建日志级别筛选标签组
   Widget _buildLevelChips(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
     const levels = ['', 'fatal', 'error', 'warning', 'info', 'debug'];
     const levelLabels = ['全部', '致命', '错误', '警告', '信息', '调试'];
@@ -107,6 +132,10 @@ class SentryLogFilterBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? DarkColors.background2 : LightColors.background2,
           borderRadius: m.radius8,
+          border: Border.all(
+            color: isDark ? DarkColors.white10.withAlpha(20) : LightColors.black10.withAlpha(15),
+            width: 0.5,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -124,7 +153,7 @@ class SentryLogFilterBar extends StatelessWidget {
                   onFilterChanged();
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
                   padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
                   decoration: BoxDecoration(
@@ -132,6 +161,15 @@ class SentryLogFilterBar extends StatelessWidget {
                         ? (color ?? theme.colorScheme.primary).withAlpha(40)
                         : Colors.transparent,
                     borderRadius: m.radius6,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: (color ?? theme.colorScheme.primary).withAlpha(30),
+                              blurRadius: scaleW(6),
+                              offset: Offset(0, scaleW(2)),
+                            ),
+                          ]
+                        : null,
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -150,6 +188,7 @@ class SentryLogFilterBar extends StatelessWidget {
     );
   }
 
+  /// 构建环境筛选输入框
   Widget _buildEnvironmentField(
     BuildContext context,
     ThemeData theme,
@@ -193,6 +232,7 @@ class SentryLogFilterBar extends StatelessWidget {
     );
   }
 
+  /// 构建搜索输入框
   Widget _buildSearchField(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
     return Obx(
       () => SizedBox(
@@ -236,44 +276,85 @@ class SentryLogFilterBar extends StatelessWidget {
     );
   }
 
+  /// 构建筛选按钮（渐变 + 发光阴影）
   Widget _buildFilterButton(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
-    return Container(
-      height: m.kSpace32,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withAlpha(180)],
-        ),
-        borderRadius: m.radius8,
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withAlpha(60),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: m.radius8,
-        child: InkWell(
-          borderRadius: m.radius8,
-          onTap: onFilterChanged,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.tune_rounded, size: m.iconSize16, color: Colors.white),
-                SizedBox(width: m.kSpace4),
-                Text(
-                  '筛选',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+    return _FilterButtonWidget(
+      onFilterChanged: onFilterChanged,
+      isDark: isDark,
+    );
+  }
+}
+
+/// 筛选按钮组件（带悬停发光效果）
+class _FilterButtonWidget extends StatefulWidget {
+  final VoidCallback onFilterChanged;
+  final bool isDark;
+
+  const _FilterButtonWidget({
+    required this.onFilterChanged,
+    required this.isDark,
+  });
+
+  @override
+  State<_FilterButtonWidget> createState() => _FilterButtonWidgetState();
+}
+
+class _FilterButtonWidgetState extends State<_FilterButtonWidget> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    final theme = Theme.of(context);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onFilterChanged,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          height: m.kSpace32,
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: _hovered
+                  ? [
+                      theme.colorScheme.primary,
+                      theme.colorScheme.primary.withAlpha(200),
+                    ]
+                  : [
+                      theme.colorScheme.primary,
+                      theme.colorScheme.primary.withAlpha(180),
+                    ],
             ),
+            borderRadius: m.radius8,
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.primary.withAlpha(_hovered ? 80 : 60),
+                blurRadius: _hovered ? scaleW(12) : scaleW(6),
+                offset: Offset(0, _hovered ? scaleW(3) : scaleW(2)),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: _hovered ? 1.1 : 1.0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: Icon(Icons.tune_rounded, size: m.iconSize16, color: Colors.white),
+              ),
+              SizedBox(width: m.kSpace4),
+              Text(
+                '筛选',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),
