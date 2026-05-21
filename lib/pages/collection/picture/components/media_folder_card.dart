@@ -253,9 +253,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withAlpha(100),
-                        ),
+                        decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
                         child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: appMetrics.kSpace10,
@@ -271,17 +269,29 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: appMetrics.fontSize15,
+                                  fontSize: appMetrics.fontSize13,
                                   fontWeight: FontWeight.w700,
+                                  height: 1.3,
                                 ),
                               ),
                               SizedBox(height: appMetrics.kSpace4),
-                              Text(
-                                '点击进入文件夹',
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(210),
-                                  fontSize: appMetrics.fontSize11,
-                                ),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.folder_outlined,
+                                    size: scaleW(12),
+                                    color: Colors.white.withAlpha(180),
+                                  ),
+                                  SizedBox(width: appMetrics.kSpace4),
+                                  Text(
+                                    '${widget.collectionCount} 个集合',
+                                    style: TextStyle(
+                                      color: Colors.white.withAlpha(180),
+                                      fontSize: appMetrics.fontSize9,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

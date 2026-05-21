@@ -509,22 +509,63 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                               ? Colors.black.withAlpha(140)
                               : Colors.black.withAlpha(100),
                           padding: EdgeInsets.symmetric(
-                            horizontal: appMetrics.kSpace8,
-                            vertical: appMetrics.kSpace8,
+                            horizontal: appMetrics.kSpace10,
+                            vertical: appMetrics.kSpace10,
                           ),
                           child: AnimatedSlide(
                             offset: _hovering ? Offset.zero : const Offset(0, 0.05),
                             duration: _kAnimDur,
                             curve: _kAnimCurve,
-                            child: Text(
-                              widget.collection.title,
-                              maxLines: _hovering ? 5 : 4,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: appMetrics.fontSize11,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  widget.collection.title,
+                                  maxLines: _hovering ? 3 : 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: appMetrics.fontSize12,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                SizedBox(height: appMetrics.kSpace4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.photo_library_outlined,
+                                      size: scaleW(12),
+                                      color: Colors.white.withAlpha(180),
+                                    ),
+                                    SizedBox(width: appMetrics.kSpace4),
+                                    Text(
+                                      '${widget.collection.itemCount} 项',
+                                      style: TextStyle(
+                                        color: Colors.white.withAlpha(180),
+                                        fontSize: appMetrics.fontSize9,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    SizedBox(width: appMetrics.kSpace8),
+                                    Icon(
+                                      Icons.sd_card_outlined,
+                                      size: scaleW(12),
+                                      color: Colors.white.withAlpha(180),
+                                    ),
+                                    SizedBox(width: appMetrics.kSpace4),
+                                    Text(
+                                      _formatBytes(widget.totalSize),
+                                      style: TextStyle(
+                                        color: Colors.white.withAlpha(180),
+                                        fontSize: appMetrics.fontSize9,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ),

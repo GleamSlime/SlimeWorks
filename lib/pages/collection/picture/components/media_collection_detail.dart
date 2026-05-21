@@ -78,7 +78,57 @@ class MediaCollectionDetailView extends StatelessWidget {
 
       // ── 空集合 ────────────────────────────────────────────────────────────
       if (sortedItems.isEmpty) {
-        return Center(child: Text('该集合暂无可预览媒体', style: Theme.of(context).textTheme.bodyMedium));
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Center(
+          child: Container(
+            padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
+            margin: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+            decoration: BoxDecoration(
+              color: isDark ? DarkColors.background2 : LightColors.background1,
+              borderRadius: AppTheme.metrics.radius16,
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: scaleW(72),
+                  height: scaleW(72),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: AppTheme.metrics.radius16,
+                  ),
+                  child: Icon(
+                    Icons.collections_outlined,
+                    size: scaleW(36),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                SizedBox(height: AppTheme.metrics.kSpace20),
+                Text(
+                  '该集合暂无可预览媒体',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: AppTheme.metrics.kSpace8),
+                Text(
+                  '导入文件后即可在此浏览',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       }
 
       // ── 瀑布流/网格布局切换 ───────────────────────────────────────────────────

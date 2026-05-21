@@ -302,24 +302,39 @@ class _MediaItemTileState extends State<MediaItemTile> {
                     top: appMetrics.kSpace8,
                     child: Container(
                       padding: EdgeInsets.symmetric(
-                        horizontal: isMobile ? appMetrics.kSpace8 : appMetrics.kSpace16,
-                        vertical: isMobile ? appMetrics.kSpace4 : appMetrics.kSpace8,
+                        horizontal: isMobile ? appMetrics.kSpace6 : appMetrics.kSpace10,
+                        vertical: isMobile ? appMetrics.kSpace3 : appMetrics.kSpace5,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(120),
+                        color: Colors.black.withAlpha(140),
                         borderRadius: AppTheme.metrics.radius999,
                       ),
-                      child: Text(
-                        widget.item.kind == media_api.MediaKind.image
-                            ? '图片'
-                            : widget.item.kind == media_api.MediaKind.audio
-                            ? '音频'
-                            : '视频',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: appMetrics.fontSize9,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            widget.item.kind == media_api.MediaKind.image
+                                ? Icons.image_outlined
+                                : widget.item.kind == media_api.MediaKind.audio
+                                ? Icons.music_note_rounded
+                                : Icons.play_circle_outline_rounded,
+                            size: scaleW(10),
+                            color: Colors.white.withAlpha(200),
+                          ),
+                          SizedBox(width: appMetrics.kSpace3),
+                          Text(
+                            widget.item.kind == media_api.MediaKind.image
+                                ? '图片'
+                                : widget.item.kind == media_api.MediaKind.audio
+                                ? '音频'
+                                : '视频',
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(200),
+                              fontSize: appMetrics.fontSize9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -338,7 +353,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                           decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
                           child: Padding(
                             padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? appMetrics.kSpace8 : appMetrics.kSpace16,
+                              horizontal: isMobile ? appMetrics.kSpace8 : appMetrics.kSpace12,
                               vertical: isMobile ? appMetrics.kSpace4 : appMetrics.kSpace8,
                             ),
                             child: Row(
@@ -353,8 +368,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                       color: Colors.white,
                                       fontSize: isMobile
                                           ? appMetrics.fontSize9
-                                          : appMetrics.fontSize13,
+                                          : appMetrics.fontSize12,
                                       fontWeight: FontWeight.w600,
+                                      height: 1.3,
                                     ),
                                   ),
                                 ),

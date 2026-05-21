@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -138,7 +139,11 @@ class SmartFolderCard extends StatelessWidget {
                               errorBuilder: (_, _, _) => const _SmartPlaceholder(),
                             ),
                       if (kDebugMode)
-                        Positioned(right: AppTheme.metrics.kSpace4, bottom: AppTheme.metrics.kSpace4, child: DebugImageSizeBadge(src: src)),
+                        Positioned(
+                          right: AppTheme.metrics.kSpace4,
+                          bottom: AppTheme.metrics.kSpace4,
+                          child: DebugImageSizeBadge(src: src),
+                        ),
                     ],
                   );
                 }
@@ -215,35 +220,79 @@ class SmartFolderCard extends StatelessWidget {
             ),
             // Title + pattern
             Positioned(
-              left: appMetrics.kSpace12,
-              right: appMetrics.kSpace12,
-              bottom: appMetrics.kSpace12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    smartFolder.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: appMetrics.fontSize15,
-                      fontWeight: FontWeight.w700,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: appMetrics.kSpace10,
+                        vertical: appMetrics.kSpace10,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            smartFolder.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: appMetrics.fontSize13,
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
+                            ),
+                          ),
+                          SizedBox(height: appMetrics.kSpace4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.auto_awesome_outlined,
+                                size: scaleW(12),
+                                color: Colors.white.withAlpha(180),
+                              ),
+                              SizedBox(width: appMetrics.kSpace4),
+                              Text(
+                                '$matchCount 个集合',
+                                style: TextStyle(
+                                  color: Colors.white.withAlpha(180),
+                                  fontSize: appMetrics.fontSize9,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (smartFolder.regexPattern.isNotEmpty) ...[
+                                SizedBox(width: appMetrics.kSpace8),
+                                Icon(
+                                  Icons.code_rounded,
+                                  size: scaleW(12),
+                                  color: Colors.white.withAlpha(180),
+                                ),
+                                SizedBox(width: appMetrics.kSpace4),
+                                Flexible(
+                                  child: Text(
+                                    smartFolder.regexPattern,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white.withAlpha(150),
+                                      fontSize: appMetrics.fontSize9,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  SizedBox(height: appMetrics.kSpace4),
-                  Text(
-                    smartFolder.regexPattern.isEmpty ? '全部集合' : smartFolder.regexPattern,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withAlpha(210),
-                      fontSize: appMetrics.fontSize11,
-                      fontFamily: smartFolder.regexPattern.isEmpty ? null : 'monospace',
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],

@@ -332,17 +332,56 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     return Obx(() {
       final items = vm.visibleItems;
       if (items.isEmpty) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isRoot = vm.currentFolderId.value == null;
         return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.perm_media_outlined, size: scaleW(64), color: Theme.of(context).hintColor),
-              SizedBox(height: appMetrics.kSpace12),
-              Text(
-                vm.currentFolderId.value == null ? '媒体库为空，使用上方操作导入集合' : '当前文件夹为空',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
+          child: Container(
+            padding: EdgeInsets.all(appMetrics.kSpace32),
+            margin: EdgeInsets.symmetric(horizontal: appMetrics.kSpace24),
+            decoration: BoxDecoration(
+              color: isDark ? DarkColors.background2 : LightColors.background1,
+              borderRadius: appMetrics.radius16,
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: scaleW(72),
+                  height: scaleW(72),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: appMetrics.radius16,
+                  ),
+                  child: Icon(
+                    Icons.perm_media_outlined,
+                    size: scaleW(36),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                SizedBox(height: appMetrics.kSpace20),
+                Text(
+                  isRoot ? '媒体库为空' : '当前文件夹为空',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: appMetrics.kSpace8),
+                Text(
+                  isRoot ? '使用上方操作按钮导入集合' : '拖拽或导入媒体到此处',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }
