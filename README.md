@@ -44,12 +44,15 @@ cargo build --target aarch64-apple-ios-sim
 
 open build/ios/archive/Runner.xcarchive
 ```
+IOS打包：flutter build ipa --release --tree-shake-icons --obfuscate --split-debug-info=./symbols --dart-define=APP_ENV=production
+IOS发蒲公英：python3 ./scripts/publish_ios.py --use-xcodebuild
 
 ### Android
 
 ```shell
 cargo build --target aarch64-linux-android
 ```
+安卓发布：python3 ./scripts/publish.py -desc="增加应用稳定性" 
 
 ### 可用指令
 
