@@ -103,21 +103,26 @@ class _PicAcgComicDetailScreenState
           }
           if (viewModel.errorMessage != null) {
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    viewModel.errorMessage!,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
-                  ),
-                  SizedBox(height: AppTheme.metrics.kSpace16),
-                  FilledButton(
-                    onPressed: () => viewModel.loadDetail(widget.comicId),
-                    child: const Text('重试'),
-                  ),
-                ],
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      viewModel.errorMessage!,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
+                      maxLines: 10,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: AppTheme.metrics.kSpace16),
+                    FilledButton(
+                      onPressed: () => viewModel.loadDetail(widget.comicId),
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
