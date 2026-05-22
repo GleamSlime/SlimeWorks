@@ -33,13 +33,11 @@ class _GameCategoryDetailScreenState
   ScreenChromeData _buildChromeData() {
     return ScreenChromeData(
       title: '分类详情',
-      actions: <Widget>[
-        OutlinedButton.icon(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back),
-          label: const Text('返回分类'),
-        ),
-      ],
+      forceLocalChrome: true,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => context.pop(),
+      ),
     );
   }
 

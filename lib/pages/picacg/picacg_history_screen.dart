@@ -37,6 +37,7 @@ class _PicAcgHistoryScreenState extends BasePageState<PicAcgHistoryViewModel, Pi
     return ScreenChrome(
       data: ScreenChromeData(
         title: '观看记录',
+        forceLocalChrome: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {

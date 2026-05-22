@@ -99,11 +99,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   ScreenChromeData _buildChromeData() {
     return ScreenChromeData(
       title: '游戏详情',
-      leading: TextButton.icon(
-        onPressed: () => context.pop(),
-        icon: Icon(Icons.arrow_back_ios_new, size: AppTheme.metrics.iconSize16),
-        label: const Text('返回'),
-      ),
+      forceLocalChrome: true,
+      leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
     );
   }
 

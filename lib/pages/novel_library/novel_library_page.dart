@@ -1,6 +1,7 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 
@@ -21,13 +22,23 @@ class NovelLibraryPage extends StatelessWidget {
       items: [
         PopupMenuItem(
           value: 'move_to_folder',
-          child: Row(children: [Icon(Icons.folder, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('移动到文件夹')]),
+          child: Row(
+            children: [
+              Icon(Icons.folder, size: AppTheme.metrics.iconSize18),
+              SizedBox(width: AppTheme.metrics.kSpace8),
+              const Text('移动到文件夹'),
+            ],
+          ),
         ),
         PopupMenuItem(
           value: 'delete',
           child: Row(
             children: [
-              Icon(Icons.delete, size: AppTheme.metrics.iconSize18, color: Theme.of(context).colorScheme.error),
+              Icon(
+                Icons.delete,
+                size: AppTheme.metrics.iconSize18,
+                color: Theme.of(context).colorScheme.error,
+              ),
               SizedBox(width: AppTheme.metrics.kSpace8),
               Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
@@ -63,6 +74,13 @@ class NovelLibraryPage extends StatelessWidget {
     return ScreenChrome(
       data: ScreenChromeData(
         title: '书籍库',
+        forceLocalChrome: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) context.pop();
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.folder_open),
@@ -222,7 +240,10 @@ class NovelLibraryPage extends StatelessWidget {
                                         )
                                       : TextButton.icon(
                                           onPressed: () => controller.cancelSearch(),
-                                          icon: Icon(Icons.cancel, size: AppTheme.metrics.iconSize18),
+                                          icon: Icon(
+                                            Icons.cancel,
+                                            size: AppTheme.metrics.iconSize18,
+                                          ),
                                           label: const Text('取消'),
                                           style: TextButton.styleFrom(
                                             foregroundColor: Theme.of(context).colorScheme.error,

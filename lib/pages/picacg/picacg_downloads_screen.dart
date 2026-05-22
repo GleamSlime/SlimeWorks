@@ -35,6 +35,7 @@ class _PicAcgDownloadsScreenState
     return ScreenChrome(
       data: ScreenChromeData(
         title: '下载管理',
+        forceLocalChrome: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {

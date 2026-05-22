@@ -87,6 +87,7 @@ class _PicAcgSearchScreenState extends BasePageState<PicAcgSearchViewModel, PicA
   ScreenChromeData _buildChromeData(BuildContext context) {
     final theme = Theme.of(context);
     return ScreenChromeData(
+      forceLocalChrome: true,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: () {

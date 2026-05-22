@@ -26,8 +26,9 @@ class _ScreenChromeState extends State<ScreenChrome> {
   final Object _owner = Object();
   late final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
 
-  /// 是否使用本地 Scaffold 渲染（移动端 或 桌面端窄屏模式）
+  /// 是否使用本地 Scaffold 渲染（移动端 或 桌面端窄屏模式 或 forceLocalChrome）
   bool get _useLocalChrome {
+    if (widget.data.forceLocalChrome) return true;
     if (Platform.isAndroid || Platform.isIOS) return true;
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
       return getIt<DesktopScreenProvider>().isMobile.value;

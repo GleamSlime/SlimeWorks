@@ -47,6 +47,7 @@ class _PicAcgComicDetailScreenState
 
     return ScreenChromeData(
       title: comic?.title ?? '漫画详情',
+      forceLocalChrome: true,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: () {

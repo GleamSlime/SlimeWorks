@@ -17,6 +17,10 @@ class ScreenChromeData {
   /// 移动端顶部 AppBar 背景色（null 则使用主题 appBarTheme.backgroundColor）
   final Color? mobileAppBarColor;
 
+  /// 强制使用本地 Scaffold + AppBar 渲染（不受桌面宽屏模式影响）
+  /// 适用于不在 ShellRoute 内的子页面（如详情页），这些页面没有全局 DesktopTopBar
+  final bool forceLocalChrome;
+
   const ScreenChromeData({
     this.title,
     this.leading,
@@ -30,6 +34,7 @@ class ScreenChromeData {
     this.mobileBodyHandlesInsets = false,
     this.mobileImmersivePadding = EdgeInsets.zero,
     this.mobileAppBarColor,
+    this.forceLocalChrome = false,
   });
 
   static const ScreenChromeData empty = ScreenChromeData();

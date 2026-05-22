@@ -50,6 +50,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
       data: ScreenChromeData(
         titleWidget: _buildChatTitleWidget(context),
         toolbarHeight: AppTheme.metrics.kSpace48,
+        forceLocalChrome: true,
         leading: IconButton(
           padding: EdgeInsets.zero,
           constraints: BoxConstraints(minWidth: scaleW(32), minHeight: scaleW(32)),

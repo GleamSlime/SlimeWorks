@@ -461,6 +461,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     // 桌面端布局
     return ScreenChrome(
       data: ScreenChromeData(
+        forceLocalChrome: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
