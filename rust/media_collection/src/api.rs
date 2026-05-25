@@ -1,5 +1,5 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use chrono::Utc;
-use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -90,7 +90,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         || lower.ends_with(".aiff")
         || lower.ends_with(".alac");
     if !is_image && !is_video && !is_audio {
-        debug!("[thumb] skip non-visual: {}", file_path);
+        sw_debug!("[thumb] skip non-visual: {}", file_path);
         return None;
     }
 
@@ -105,7 +105,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     if cache_path.exists() {
         if let Ok(meta) = std::fs::metadata(&cache_path) {
             if meta.len() > 0 {
-                debug!(
+                sw_debug!(
                     "[thumb] cache-hit | src={} | orig={}B | cached={}B | w={}",
                     file_path,
                     orig_size,
@@ -124,7 +124,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     let _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
 
     let t0 = std::time::Instant::now();
-    info!(
+    sw_info!(
         "[thumb] generate | src={} | orig={}B | w={}",
         file_path, orig_size, width
     );
@@ -134,7 +134,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         if try_ffmpeg_video_frame(&file_path, &cache_path, width, t0, orig_size) {
             return Some(cache_path.to_string_lossy().into_owned());
         }
-        warn!("[thumb] video frame extraction failed | src={}", file_path);
+        sw_warn!("[thumb] video frame extraction failed | src={}", file_path);
         return None;
     }
 
@@ -143,7 +143,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         if try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
             return Some(cache_path.to_string_lossy().into_owned());
         }
-        debug!(
+        sw_debug!(
             "[thumb] audio has no embedded cover art | src={}",
             file_path
         );
@@ -160,7 +160,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
-    warn!(
+    sw_warn!(
         "[thumb] all methods failed | src={} | w={} | elapsed={:?}",
         file_path,
         width,
@@ -201,7 +201,7 @@ fn try_ffmpeg_audio_cover(
     let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
-        debug!(
+        sw_debug!(
             "[thumb] audio-cover OK | orig={}B | thumb={}B | w={} | elapsed={:?}",
             orig_size,
             thumb_size,
@@ -212,7 +212,7 @@ fn try_ffmpeg_audio_cover(
         if dst.exists() {
             let _ = std::fs::remove_file(dst);
         }
-        debug!(
+        sw_debug!(
             "[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}",
             src,
             t0.elapsed()
@@ -253,7 +253,7 @@ fn try_ffmpeg_video_frame(
         let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
         if success {
             let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
-            debug!(
+            sw_debug!(
                 "[thumb] ffmpeg video-frame OK | ss={} | orig={}B | thumb={}B | w={} | elapsed={:?}",
                 seek_secs, orig_size, thumb_size, width, t0.elapsed()
             );
@@ -264,7 +264,7 @@ fn try_ffmpeg_video_frame(
             let _ = std::fs::remove_file(dst);
         }
     }
-    warn!(
+    sw_warn!(
         "[thumb] ffmpeg video-frame failed | src={} | elapsed={:?}",
         src,
         t0.elapsed()
@@ -305,7 +305,7 @@ fn try_ffmpeg_resize(
         } else {
             0
         };
-        debug!(
+        sw_debug!(
             "[thumb] ffmpeg OK | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
             orig_size,
             thumb_size,
@@ -314,7 +314,7 @@ fn try_ffmpeg_resize(
             t0.elapsed()
         );
     } else {
-        debug!(
+        sw_debug!(
             "[thumb] ffmpeg failed | src={} | elapsed={:?}",
             src,
             t0.elapsed()
@@ -333,14 +333,14 @@ fn try_rust_image_resize(
     let bytes = match std::fs::read(src) {
         Ok(b) => b,
         Err(e) => {
-            warn!("[thumb] rust-image read failed | src={} | err={}", src, e);
+            sw_warn!("[thumb] rust-image read failed | src={} | err={}", src, e);
             return false;
         }
     };
     let img = match image::load_from_memory(&bytes) {
         Ok(i) => i,
         Err(e) => {
-            warn!("[thumb] rust-image decode failed | src={} | err={}", src, e);
+            sw_warn!("[thumb] rust-image decode failed | src={} | err={}", src, e);
             return false;
         }
     };
@@ -357,14 +357,14 @@ fn try_rust_image_resize(
             } else {
                 0
             };
-            debug!(
+            sw_debug!(
                 "[thumb] rust-image OK | orig={}x{} | orig={}B | thumb={}B | ratio={}% | w={} | elapsed={:?}",
                 orig_w, orig_h, orig_size, thumb_size, ratio, width, t0.elapsed()
             );
             dst.exists() && thumb_size > 0
         }
         Err(e) => {
-            warn!(
+            sw_warn!(
                 "[thumb] rust-image save failed | src={} | err={} | elapsed={:?}",
                 src,
                 e,
@@ -426,14 +426,14 @@ fn thumbnail_cache_dir() -> std::path::PathBuf {
 pub fn initialize_db() -> Result<(), String> {
     let result = DB_INIT_RESULT.get_or_init(|| {
         let path = default_db_path();
-        info!("[media_db] Initializing DB at: {}", path);
+        sw_info!("[media_db] Initializing DB at: {}", path);
         match db_module::db_init(path) {
             Ok(_) => {
-                info!("[media_db] DB initialized successfully");
+                sw_info!("[media_db] DB initialized successfully");
                 None
             }
             Err(e) => {
-                info!("[media_db] DB init failed: {}", e);
+                sw_info!("[media_db] DB init failed: {}", e);
                 Some(e)
             }
         }
@@ -649,7 +649,7 @@ fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
                 }
             }
         }
-        info!(
+        sw_info!(
             "[media_cache] 从数据库加载媒体条目到内存，共 {} 条",
             data.len()
         );
@@ -666,7 +666,7 @@ pub fn release_items_from_memory() {
             if count > 0 {
                 *guard = None;
                 LAST_MEDIA_ITEMS_ACCESS_SECS.store(0, Ordering::Relaxed);
-                info!("[media_cache] 已释放媒体条目内存缓存，共 {} 条", count);
+                sw_info!("[media_cache] 已释放媒体条目内存缓存，共 {} 条", count);
             }
         }
     }
@@ -760,18 +760,18 @@ fn upsert_collection_from_folder(
     folder: &Path,
     recursive: bool,
 ) -> Result<MediaCollection, String> {
-    debug!(
+    sw_debug!(
         "[media_scan] upsert_collection_from_folder: {:?} (recursive={})",
         folder, recursive
     );
     if !folder.exists() || !folder.is_dir() {
         let err = format!("Path is not a directory: {:?}", folder);
-        debug!("[media_scan] {}", err);
+        sw_debug!("[media_scan] {}", err);
         return Err(err);
     }
 
     let normalized_path = normalize_folder_path(folder)?;
-    debug!("[media_scan] normalized_path = {:?}", normalized_path);
+    sw_debug!("[media_scan] normalized_path = {:?}", normalized_path);
 
     let existing = {
         let collections = get_collections()
@@ -790,14 +790,14 @@ fn upsert_collection_from_folder(
 
     let items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
         .map_err(|error| error.to_string())?;
-    debug!(
+    sw_debug!(
         "[media_scan] collect_media_items returned {} items for {:?}",
         items.len(),
         folder
     );
     if items.is_empty() {
         let err = format!("No media found in {:?}", folder);
-        debug!("[media_scan] {}", err);
+        sw_debug!("[media_scan] {}", err);
         return Err(err);
     }
 
@@ -816,7 +816,7 @@ fn upsert_collection_from_folder(
         }
         for item in &items {
             if let Err(error) = persist_item(item) {
-                debug!(
+                sw_debug!(
                     "[media_scan] persist_item failed for {:?}: {}",
                     item.file_path, error
                 );
@@ -859,7 +859,7 @@ fn upsert_collection_from_folder(
         }
     }
     persist_collection(&updated_collection)?;
-    debug!(
+    sw_debug!(
         "[media_scan] collection persisted: id={} title={:?} item_count={}",
         updated_collection.id, updated_collection.title, updated_collection.item_count
     );
@@ -1077,38 +1077,38 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
 
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {
     let root = Path::new(&folder_path);
-    debug!("[media_scan] scan_media_folders called: {:?}", root);
-    debug!(
+    sw_debug!("[media_scan] scan_media_folders called: {:?}", root);
+    sw_debug!(
         "[media_scan] root.exists()={} root.is_dir()={}",
         root.exists(),
         root.is_dir()
     );
     let directories = MediaFolderScanner::scan_media_directories(root).map_err(|error| {
-        debug!("[media_scan] scan_media_directories error: {}", error);
+        sw_debug!("[media_scan] scan_media_directories error: {}", error);
         error.to_string()
     })?;
-    debug!(
+    sw_debug!(
         "[media_scan] scan_media_directories found {} dirs with media under {:?}",
         directories.len(),
         root
     );
     for (i, dir) in directories.iter().enumerate() {
-        debug!("[media_scan]   dir[{}] = {:?}", i, dir);
+        sw_debug!("[media_scan]   dir[{}] = {:?}", i, dir);
     }
     let mut collections = Vec::new();
     for directory in &directories {
         match upsert_collection_from_folder(directory, false) {
             Ok(collection) => {
-                debug!(
+                sw_debug!(
                     "scan_media_folders: imported '{}' from {:?}",
                     collection.title, directory
                 );
                 collections.push(collection);
             }
-            Err(error) => debug!("scan_media_folders: failed {:?}: {}", directory, error),
+            Err(error) => sw_debug!("scan_media_folders: failed {:?}: {}", directory, error),
         }
     }
-    debug!(
+    sw_debug!(
         "scan_media_folders: result {}/{} collections imported",
         collections.len(),
         directories.len()

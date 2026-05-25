@@ -17,8 +17,8 @@ import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
 
 part 'novel_library_viewmodel_novel.dart';
 part 'novel_library_viewmodel_actions.dart';
+const Loggers _logger = Loggers(name: '书库');
 
-Loggers logger = const Loggers(name: '书库');
 
 /// 书库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {
@@ -176,7 +176,7 @@ class NovelLibraryViewModel extends BaseViewModel {
         final nodeId = getRemoteNodeId(n.id);
         return nodeId == remoteParsed.$1 && n.folderId == remoteParsed.$2;
       }).toList();
-      logger.log(
+      _logger.log(
         '[RemoteDebug] 进入远程目录: folder=$folderId, node=${remoteParsed.$1}, rawFolder=${remoteParsed.$2}, books=${books.length}',
         name: '书库',
       );
@@ -207,7 +207,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
     final list = map.values.toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    logger.log('[RemoteDebug] 构建远程目录卡片数: ${list.length}', name: '书库');
+    _logger.log('[RemoteDebug] 构建远程目录卡片数: ${list.length}', name: '书库');
     return list;
   }
 
@@ -292,7 +292,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     final allCount = filteredItems.length;
     final newCount = (displayedItemCount.value + itemsPerPage).clamp(0, allCount);
     displayedItemCount.value = newCount;
-    logger.info('加载更多：当前显示 $newCount / $allCount');
+    _logger.info('加载更多：当前显示 $newCount / $allCount');
   }
 
   /// 重置分页（切换文件夹或筛选时调用）
@@ -368,14 +368,14 @@ class NovelLibraryViewModel extends BaseViewModel {
   void setSortOption(String field, bool ascending) {
     sortField.value = field;
     sortAscending.value = ascending;
-    logger.info('排序设置: $field ${ascending ? "升序" : "降序"}');
+    _logger.info('排序设置: $field ${ascending ? "升序" : "降序"}');
   }
 
   /// 过滤后的书籍列表
   List<NovelMetadata> get filteredNovels {
     final sortTest = TimeConsumptionTest()..start(log: false);
     final result = filteredItems.whereType<LibraryBookItem>().map((i) => i.metadata).toList();
-    logger.log('书库 ${result.length} 本，耗时 +${sortTest.end(log: false)}ms', name: '书库');
+    _logger.log('书库 ${result.length} 本，耗时 +${sortTest.end(log: false)}ms', name: '书库');
     return result;
   }
 
@@ -413,7 +413,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     for (final node in nodeSettingsService.enabledRemoteNodes) {
       try {
         final payloads = await nodeSettingsService.fetchNodeNovels(node);
-        logger.log('[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}', name: '书库');
+        _logger.log('[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}', name: '书库');
         for (final payload in payloads) {
           final remoteId = (payload['id'] ?? '').toString();
           if (remoteId.isEmpty) continue;
@@ -432,7 +432,7 @@ class NovelLibraryViewModel extends BaseViewModel {
             final folderName =
                 payload['folder_name']?.toString() ?? payload['folder_title']?.toString() ?? '远程目录';
             remoteFolderNames[syntheticFolderId] = folderName;
-            logger.log(
+            _logger.log(
               '[RemoteDebug] 映射远程目录: node=${node.name}, folderId=$folderId, name=$folderName, synthetic=$syntheticFolderId',
               name: '书库',
             );
@@ -444,7 +444,7 @@ class NovelLibraryViewModel extends BaseViewModel {
           }
         }
       } catch (e) {
-        logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
+        _logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
       }
     }
 
@@ -453,7 +453,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     remoteNovelNodeName.assignAll(nodeNameMap);
     remoteNovelRawId.assignAll(rawIdMap);
     remoteFolderDisplayNames.assignAll(remoteFolderNames);
-    logger.log(
+    _logger.log(
       '[RemoteDebug] 汇总: remoteNovels=${allRemote.length}, remoteFolders=${remoteFolderNames.length}',
       name: '书库',
     );
@@ -574,7 +574,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     final t = TimeConsumptionTest()..start(log: false);
     try {
       novels.value = getAllNovels();
-      logger.log('加载书籍 ${novels.length} 本(+${t.end(log: false)}ms)', name: '书库');
+      _logger.log('加载书籍 ${novels.length} 本(+${t.end(log: false)}ms)', name: '书库');
     } catch (e) {
       showSnack('错误', '加载书籍列表失败: $e');
     }

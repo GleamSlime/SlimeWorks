@@ -11,11 +11,13 @@ import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_filter_bar.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_list.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_stats_panel.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
+const Loggers _logger = Loggers(name: 'Sentry日志');
 
 /// 日志中心页面
 class SentryLogScreen extends StatefulWidget {
@@ -336,7 +338,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
         ),
       );
     } catch (e) {
-      logger.e('导出日志失败: $e');
+      _logger.error('导出日志失败: $e');
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(

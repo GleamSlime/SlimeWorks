@@ -6,6 +6,9 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: '窗口位置');
+
 
 /// 窗口位置存储服务
 class WindowPositionService extends GetxService {
@@ -68,7 +71,7 @@ class WindowPositionService extends GetxService {
     }
 
     if (kDebugMode) {
-      print(
+      _logger.info(
         '保存窗口位置: x=${position.dx}, y=${position.dy}, width=${size.width}, height=${size.height}',
       );
     }
@@ -98,7 +101,7 @@ class WindowPositionService extends GetxService {
     }
 
     if (kDebugMode) {
-      print('恢复窗口位置: x=$x, y=$y, width=$width, height=$height');
+      _logger.info('恢复窗口位置: x=$x, y=$y, width=$width, height=$height');
     }
   }
 
@@ -120,7 +123,7 @@ class WindowPositionService extends GetxService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('获取屏幕边界失败: $e');
+        _logger.error('获取屏幕边界失败: $e');
       }
       return null;
     }

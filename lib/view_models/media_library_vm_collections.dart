@@ -67,7 +67,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           for (final item in items) {
             final srcFile = File(item.filePath);
             if (!srcFile.existsSync()) {
-              debugPrint('[Transfer] 源文件不存在，跳过: ${item.filePath}');
+              _logger.info('[转移] 源文件不存在，跳过: ${item.filePath}');
               continue;
             }
             final fileName = srcFile.uri.pathSegments.last;
@@ -79,7 +79,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
                 await srcFile.copy(destFile.path);
                 await srcFile.delete();
               } catch (copyErr) {
-                debugPrint('[Transfer] copy+delete 失败: ${item.filePath} err=$copyErr');
+                _logger.error('[转移] copy+delete 失败: ${item.filePath} err=$copyErr');
               }
             }
           }
@@ -104,7 +104,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           successCount++;
         } catch (e) {
           failCount++;
-          debugPrint('[Transfer] 集合"${collection.title}"转移失败: $e');
+          _logger.error('[转移] 集合"${collection.title}"转移失败: $e');
         }
       }
 
@@ -116,7 +116,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
     } catch (e) {
       showSnack('错误', '转移失败: $e');
-      debugPrint('[Transfer] 转移异常: $e');
+      _logger.error('[转移] 转移异常: $e');
     } finally {
       isScanning.value = false;
       scanStatusText.value = '';
@@ -453,15 +453,15 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         }
         success += validCollections.length;
         if (collections.isEmpty) {
-          debugPrint('[DragDrop] 目录无媒体: $dir');
+          _logger.info('[拖拽] 目录无媒体: $dir');
         } else if (emptyCollections.isNotEmpty) {
-          debugPrint(
-            '[DragDrop] 目录 ${dir.split(Platform.pathSeparator).last} 跳过 ${emptyCollections.length} 个空集合',
+          _logger.info(
+            '[拖拽] 目录 ${dir.split(Platform.pathSeparator).last} 跳过 ${emptyCollections.length} 个空集合',
           );
         }
       } catch (e) {
         fail++;
-        debugPrint('[DragDrop] 扫描目录失败: $dir => $e');
+        _logger.error('[拖拽] 扫描目录失败: $dir => $e');
       }
     }
 
@@ -472,7 +472,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         final collection = await media_api.importMediaFolder(folderPath: dir);
         if (collection.itemCount == BigInt.zero) {
           media_api.deleteMediaCollection(collectionId: collection.id);
-          debugPrint('[DragDrop] 空集合已删除: ${dir.split(Platform.pathSeparator).last}');
+          _logger.info('[拖拽] 空集合已删除: ${dir.split(Platform.pathSeparator).last}');
           continue;
         }
         if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
@@ -484,7 +484,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         success++;
       } catch (e) {
         fail++;
-        debugPrint('[DragDrop] 导入失败: $dir => $e');
+        _logger.error('[拖拽] 导入失败: $dir => $e');
       }
     }
 

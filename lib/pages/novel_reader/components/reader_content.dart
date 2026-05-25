@@ -6,8 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:slime_works/core/utils/logger.dart';
 import 'dart:convert';
 import 'dart:io';
+
+final _logger = Loggers(name: '阅读器');
 
 /// String扩展：统计子字符串出现次数
 extension StringOccurrences on String {
@@ -71,9 +74,9 @@ class _ReaderContentState extends State<ReaderContent> {
       try {
         final matchCount = widget.controller.searchMatches.length;
         final sel = widget.controller.selectedSearchIndex.value;
-        debugPrint('[Reader] searchScrollTrigger fired: matches=$matchCount selectedIndex=$sel');
+        _logger.info('[Reader] searchScrollTrigger fired: matches=$matchCount selectedIndex=$sel');
       } catch (e) {
-        debugPrint('[Reader] searchScrollTrigger log error: $e');
+        _logger.error('[Reader] searchScrollTrigger log error: $e');
       }
       _scrollToCurrentSearchResult();
     });
@@ -81,7 +84,7 @@ class _ReaderContentState extends State<ReaderContent> {
     // 当选中搜索索引变化时强制重建以确保高亮更新（某些 .isNotEmpty 访问可能未触发 Obx 重建）
     ever(widget.controller.selectedSearchIndex, (_) {
       try {
-        debugPrint(
+        _logger.info(
           '[Reader] selectedSearchIndex changed: ${widget.controller.selectedSearchIndex.value}',
         );
       } catch (_) {
@@ -142,7 +145,7 @@ class _ReaderContentState extends State<ReaderContent> {
           final adjustedEnd = start + imgMatch.end;
           if (adjustedEnd < processedContent.length) {
             end = adjustedEnd;
-            debugPrint('[VirtualScroll] Adjusted split to avoid breaking img tag at position $end');
+            _logger.info('[VirtualScroll] Adjusted split to avoid breaking img tag at position $end');
           }
         } else {
           // 优先在段落结束标签后分割
@@ -186,7 +189,7 @@ class _ReaderContentState extends State<ReaderContent> {
         final imgCount = RegExp(r'<img[^>]*>', caseSensitive: false).allMatches(chunk).length;
         final imgOpenCount = chunk.allOccurrences('<img');
         if (imgOpenCount != imgCount) {
-          debugPrint(
+          _logger.info(
             '[VirtualScroll] WARNING: Chunk may contain incomplete img tag! imgOpen=$imgOpenCount complete=$imgCount',
           );
         }
@@ -195,7 +198,7 @@ class _ReaderContentState extends State<ReaderContent> {
       start = end;
     }
 
-    debugPrint(
+    _logger.info(
       '[VirtualScroll] Split content into ${chunks.length} chunks, total length: ${processedContent.length}',
     );
     return chunks;
@@ -278,7 +281,7 @@ class _ReaderContentState extends State<ReaderContent> {
 
   // 滚动到搜索结果位置
   void _scrollToSearchResult(int position) {
-    debugPrint('[Reader] _scrollToSearchResult: position=$position, using ensureVisible');
+    _logger.info('[Reader] _scrollToSearchResult: position=$position, using ensureVisible');
 
     // 使用 GlobalKey + ensureVisible，避免手动计算offset
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -291,14 +294,14 @@ class _ReaderContentState extends State<ReaderContent> {
             curve: Curves.easeOut,
             alignment: 0.25, // 将目标显示在屏幕上方25%的位置
           );
-          debugPrint('[Reader] Scrolled to search target using ensureVisible');
+          _logger.info('[Reader] Scrolled to search target using ensureVisible');
         } else {
-          debugPrint('[Reader] Search target key context is null, falling back to estimation');
+          _logger.info('[Reader] Search target key context is null, falling back to estimation');
           // 如果Key找不到context，回退到简单估算
           _scrollToSearchResultFallback(position);
         }
       } catch (e) {
-        debugPrint('[Reader] ensureVisible error: $e, fallback to estimation');
+        _logger.error('[Reader] ensureVisible error: $e, fallback to estimation');
         _scrollToSearchResultFallback(position);
       }
     });
@@ -348,13 +351,13 @@ class _ReaderContentState extends State<ReaderContent> {
 
     return Obx(() {
       final buildStart = DateTime.now();
-      debugPrint('[Novel UI] ReaderContent build started');
+      _logger.info('[Novel UI] ReaderContent build started');
 
       final currentContent = controller.currentContent.value;
       final resolvedLineHeight = controller.lineHeight.value;
 
       if (currentContent.isEmpty) {
-        debugPrint('[Novel UI] Content is empty');
+        _logger.info('[Novel UI] Content is empty');
         return Center(
           child: Text('暂无内容', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
         );
@@ -392,32 +395,32 @@ class _ReaderContentState extends State<ReaderContent> {
             keyword: keyword,
             selectedOccurrence: selectedOccurrence,
           );
-          debugPrint('[VirtualScroll] Enabled for content size: ${currentContent.length} chars');
+          _logger.info('[VirtualScroll] Enabled for content size: ${currentContent.length} chars');
         } else {
           _contentChunks = [];
-          debugPrint('[VirtualScroll] Disabled, using standard rendering');
+          _logger.info('[VirtualScroll] Disabled, using standard rendering');
         }
       }
 
-      debugPrint('[Novel UI] Building content view, length: ${currentContent.length} chars');
+      _logger.info('[Novel UI] Building content view, length: ${currentContent.length} chars');
 
       // 调试日志：输出 content 中是否包含 class 与 img 引用，便于定位样式和图片问题
       try {
         final previewLen = currentContent.length > 300 ? 300 : currentContent.length;
-        debugPrint('[Novel UI] content preview: ${currentContent.substring(0, previewLen)}');
+        _logger.info('[Novel UI] content preview: ${currentContent.substring(0, previewLen)}');
         if (currentContent.contains('class="') || currentContent.contains("class='")) {
-          debugPrint('[Novel UI] content contains class attributes');
+          _logger.info('[Novel UI] content contains class attributes');
         }
 
         // 检查img标签
         final imgReg = RegExp(r'''<img[^>]*src=["']([^"']+)["']''', caseSensitive: false);
         final imgMatches = imgReg.allMatches(currentContent).toList();
         if (imgMatches.isNotEmpty) {
-          debugPrint('[Novel UI] Found ${imgMatches.length} img tags');
+          _logger.info('[Novel UI] Found ${imgMatches.length} img tags');
           for (int i = 0; i < imgMatches.length && i < 3; i++) {
             final src = imgMatches[i].group(1) ?? '';
             final srcPreview = src.length > 100 ? '${src.substring(0, 100)}...' : src;
-            debugPrint(
+            _logger.info(
               '[Novel UI] Image $i src type: ${src.startsWith('data:image') ? 'base64' : 'url'}, preview: $srcPreview',
             );
           }
@@ -427,12 +430,12 @@ class _ReaderContentState extends State<ReaderContent> {
         final imgOpenCount = currentContent.allOccurrences('<img');
         final imgCompleteCount = imgMatches.length;
         if (imgOpenCount != imgCompleteCount) {
-          debugPrint(
+          _logger.info(
             '[Novel UI] WARNING: Found $imgOpenCount <img but only $imgCompleteCount complete tags!',
           );
         }
       } catch (e) {
-        debugPrint('[Novel UI] content debug error: $e');
+        _logger.error('[Novel UI] content debug error: $e');
       }
 
       // 是否包含 HTML 标签或图片（用于决定默认使用 HTML 渲染或允许切换为纯文本）
@@ -504,17 +507,26 @@ class _ReaderContentState extends State<ReaderContent> {
                           children: [
                             Text(
                               '第 ${controller.currentChapterIndex.value + 1} / ${controller.chapters.length} 章',
-                              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                              style: TextStyle(
+                                fontSize: AppTheme.metrics.fontSize11,
+                                color: Theme.of(context).hintColor,
+                              ),
                             ),
                             SizedBox(width: AppTheme.metrics.kSpace16),
                             Text(
                               '本章 ${currentContent.length} 字',
-                              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                              style: TextStyle(
+                                fontSize: AppTheme.metrics.fontSize11,
+                                color: Theme.of(context).hintColor,
+                              ),
                             ),
                             SizedBox(width: AppTheme.metrics.kSpace16),
                             Text(
                               '进度 ${((controller.currentChapterIndex.value + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                              style: TextStyle(
+                                fontSize: AppTheme.metrics.fontSize11,
+                                color: Theme.of(context).hintColor,
+                              ),
                             ),
                           ],
                         ),
@@ -544,7 +556,7 @@ class _ReaderContentState extends State<ReaderContent> {
                             setState(() {
                               _showPlainTextMode = true;
                             });
-                            debugPrint('[Reader][PlainDebug] forced plain mode by debug button');
+                            _logger.info('[Reader][PlainDebug] forced plain mode by debug button');
                           },
                           icon: const Icon(Icons.bug_report),
                           label: const Text('强制纯文本'),
@@ -557,7 +569,7 @@ class _ReaderContentState extends State<ReaderContent> {
                   builder: (context) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       final duration = DateTime.now().difference(buildStart);
-                      debugPrint(
+                      _logger.info(
                         '[Novel UI] ReaderContent fully rendered in ${duration.inMilliseconds}ms',
                       );
 
@@ -576,17 +588,17 @@ class _ReaderContentState extends State<ReaderContent> {
                     final hasSearch = controller.searchMatches.isNotEmpty;
                     // 调试：记录 searchMatches 长度与当前章节索引，方便定位高亮是否会被执行
                     try {
-                      debugPrint(
+                      _logger.info(
                         '[Reader] build: hasSearch=$hasSearch searchMatches=${controller.searchMatches.length} currentChapter=${controller.currentChapterIndex.value} selectedIndex=${controller.selectedSearchIndex.value}',
                       );
                       if (controller.searchMatches.isNotEmpty) {
                         final first = controller.searchMatches.first;
-                        debugPrint(
+                        _logger.info(
                           '[Reader] build: firstMatch chapterIndex=${first.chapterIndex} position=${first.position} snippet="${first.snippet}"',
                         );
                       }
                     } catch (e) {
-                      debugPrint('[Reader] build log error: $e');
+                      _logger.error('[Reader] build log error: $e');
                     }
 
                     // 检查是否包含图片标签（epub内容）
@@ -594,7 +606,7 @@ class _ReaderContentState extends State<ReaderContent> {
 
                     // 如果内容包含 HTML（或图片），使用 HTML 渲染（优先级最高）
                     if (shouldRenderHtml) {
-                      debugPrint(
+                      _logger.info(
                         '[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)',
                       );
 
@@ -606,7 +618,7 @@ class _ReaderContentState extends State<ReaderContent> {
                       if (cachedHtml != null && !hasSearch) {
                         // 使用缓存（仅在无搜索时使用缓存）
                         embeddedHtml = cachedHtml;
-                        debugPrint('[Reader] Using cached HTML for chapter $currentChapterIdx');
+                        _logger.info('[Reader] Using cached HTML for chapter $currentChapterIdx');
                       } else {
                         // 处理HTML
                         final htmlProcessStart = DateTime.now();
@@ -644,7 +656,7 @@ class _ReaderContentState extends State<ReaderContent> {
                             final keyword = controller.lastSearchQuery.value.trim().isNotEmpty
                                 ? controller.lastSearchQuery.value.trim()
                                 : chapterMatches.first.snippet.trim();
-                            debugPrint(
+                            _logger.info(
                               '[Reader] Preparing HTML highlight: keyword="$keyword" selectedOccurrence=$selectedOccurrence chapterMatches=${chapterMatches.length}',
                             );
                             htmlData = _highlightHtml(
@@ -671,18 +683,18 @@ class _ReaderContentState extends State<ReaderContent> {
                             // 将剩余单个换行转为 <br/>
                             t = t.replaceAll(RegExp(r'\r?\n'), '<br/>');
                             embeddedHtml = '<p>$t</p>';
-                            debugPrint(
+                            _logger.info(
                               '[Reader][HTMLTransform] converted plain newlines to <p>/<br/>',
                             );
                           } catch (e) {
-                            debugPrint('[Reader][HTMLTransform] failed: $e');
+                            _logger.error('[Reader][HTMLTransform] failed: $e');
                           }
                         }
 
                         final htmlProcessDuration = DateTime.now()
                             .difference(htmlProcessStart)
                             .inMilliseconds;
-                        debugPrint('[Reader] HTML processing took ${htmlProcessDuration}ms');
+                        _logger.info('[Reader] HTML processing took ${htmlProcessDuration}ms');
 
                         // 缓存处理后的HTML（仅在无搜索时缓存）
                         if (!hasSearch) {
@@ -690,7 +702,7 @@ class _ReaderContentState extends State<ReaderContent> {
                         }
                       }
 
-                      debugPrint(
+                      _logger.info(
                         '[Reader] Embedded HTML length=${embeddedHtml.length} contains_mark_selected=${embeddedHtml.contains("<mark_selected>")}',
                       );
                       // 提供“纯文本模式”切换：如果用户需要选择/复制文本，可切换为纯文本视图（丢失部分 HTML 格式）
@@ -741,14 +753,14 @@ class _ReaderContentState extends State<ReaderContent> {
 
                         // 调试输出：记录纯文本长度、是否包含换行，以及前 400 字符样例
                         try {
-                          debugPrint(
+                          _logger.info(
                             '[Reader][PlainDebug] length=${plain.length} containsNewline=${plain.contains('\n')}',
                           );
-                          debugPrint(
+                          _logger.info(
                             '[Reader][PlainDebug] sample=${plain.substring(0, plain.length.clamp(0, 400))}',
                           );
                         } catch (e) {
-                          debugPrint('[Reader][PlainDebug] debug print failed: $e');
+                          _logger.error('[Reader][PlainDebug] debug print failed: $e');
                         }
 
                         // 在纯文本模式下复用高亮构建逻辑
@@ -773,14 +785,14 @@ class _ReaderContentState extends State<ReaderContent> {
                           r'<div\b',
                           caseSensitive: false,
                         ).allMatches(embeddedHtml).length;
-                        debugPrint(
+                        _logger.info(
                           '[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs',
                         );
-                        debugPrint(
+                        _logger.info(
                           '[Reader][HTMLDebug] sample=${embeddedHtml.substring(0, embeddedHtml.length.clamp(0, 800))}',
                         );
                       } catch (e) {
-                        debugPrint('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
+                        _logger.error('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
                       }
 
                       return SelectionArea(
@@ -802,11 +814,11 @@ class _ReaderContentState extends State<ReaderContent> {
                               );
                               if (target != -1) {
                                 if (target == controller.currentChapterIndex.value) {
-                                  debugPrint(
+                                  _logger.info(
                                     '[Reader] Link tapped points to current chapter: $basename',
                                   );
                                 } else {
-                                  debugPrint(
+                                  _logger.info(
                                     '[Reader] Link tapped, navigating to chapter index $target (basename=$basename)',
                                   );
                                   controller.goToChapter(target);
@@ -815,7 +827,7 @@ class _ReaderContentState extends State<ReaderContent> {
                                 Get.snackbar('提示', '未找到目标章节: $url');
                               }
                             } catch (e) {
-                              debugPrint('[Reader] onTapUrl error: $e');
+                              _logger.error('[Reader] onTapUrl error: $e');
                             }
                             return true;
                           },
@@ -1015,17 +1027,26 @@ class _ReaderContentState extends State<ReaderContent> {
                             children: [
                               Text(
                                 '第 ${currentChapterIndex + 1} / ${controller.chapters.length} 章',
-                                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                                style: TextStyle(
+                                  fontSize: AppTheme.metrics.fontSize11,
+                                  color: Theme.of(context).hintColor,
+                                ),
                               ),
                               SizedBox(width: AppTheme.metrics.kSpace16),
                               Text(
                                 '本章 ${currentContent.length} 字',
-                                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                                style: TextStyle(
+                                  fontSize: AppTheme.metrics.fontSize11,
+                                  color: Theme.of(context).hintColor,
+                                ),
                               ),
                               SizedBox(width: AppTheme.metrics.kSpace16),
                               Text(
                                 '进度 ${((currentChapterIndex + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                                style: TextStyle(
+                                  fontSize: AppTheme.metrics.fontSize11,
+                                  color: Theme.of(context).hintColor,
+                                ),
                               ),
                             ],
                           ),
@@ -1062,7 +1083,7 @@ class _ReaderContentState extends State<ReaderContent> {
                   if (index == 0) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       final duration = DateTime.now().difference(buildStart);
-                      debugPrint(
+                      _logger.info(
                         '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
                       );
                     });
@@ -1152,7 +1173,7 @@ class _ReaderContentState extends State<ReaderContent> {
               controller.goToChapter(target);
             }
           } catch (e) {
-            debugPrint('[Reader] onTapUrl error: $e');
+            _logger.error('[Reader] onTapUrl error: $e');
           }
           return true;
         },
@@ -1467,15 +1488,15 @@ class _ReaderContentState extends State<ReaderContent> {
     // 调试：记录匹配信息与选中索引，帮助定位高亮为何未出现
     try {
       final selIdx = controller.selectedSearchIndex.value;
-      debugPrint(
+      _logger.info(
         '[Reader] _buildHighlightedText: chapterMatches=${chapterMatches.length} selectedSearchIndex=$selIdx',
       );
       for (int i = 0; i < chapterMatches.length; i++) {
         final m = chapterMatches[i];
-        debugPrint('[Reader] match[$i] pos=${m.position} snippet="${m.snippet}"');
+        _logger.info('[Reader] match[$i] pos=${m.position} snippet="${m.snippet}"');
       }
     } catch (e) {
-      debugPrint('[Reader] _buildHighlightedText log error: $e');
+      _logger.error('[Reader] _buildHighlightedText log error: $e');
     }
 
     // 构建高亮文本片段
@@ -1556,7 +1577,7 @@ class _ReaderContentState extends State<ReaderContent> {
         }
 
         if (!resolved) {
-          debugPrint(
+          _logger.info(
             '[Reader] Warning: could not resolve non-empty highlight for match at pos=${match.position}. Skipping highlight.',
           );
           continue;
@@ -1580,7 +1601,7 @@ class _ReaderContentState extends State<ReaderContent> {
 
       // 添加高亮文本（黄色文字+淡黄色背景）
       final isSelected = i == currentSelectedInChapter;
-      debugPrint(
+      _logger.info(
         '[Reader] building span for match[$i]: start=$matchStart end=$matchEnd isSelected=$isSelected',
       );
       spans.add(
@@ -1617,7 +1638,7 @@ class _ReaderContentState extends State<ReaderContent> {
       );
     }
 
-    debugPrint(
+    _logger.info(
       '[Reader] built spans count=${spans.length} lastEnd=$lastEnd contentLength=${content.length} currentSelectedInChapter=$currentSelectedInChapter',
     );
     return SelectableText.rich(TextSpan(children: spans), textAlign: TextAlign.justify);
@@ -1630,7 +1651,7 @@ class _ReaderContentState extends State<ReaderContent> {
     final escaped = RegExp.escape(keyword);
 
     try {
-      debugPrint(
+      _logger.info(
         '[Reader] _highlightHtml start: keyword="$keyword" selectedOccurrence=$selectedOccurrence',
       );
 
@@ -1674,7 +1695,7 @@ class _ReaderContentState extends State<ReaderContent> {
       // 使用传入的选中序号
       final selectedOccurrenceIndex = selectedOccurrence;
 
-      debugPrint(
+      _logger.info(
         '[Reader] _highlightHtml: plainLen=${plain.length} matches=${allMatches.length} selectedOcc=$selectedOccurrenceIndex',
       );
 
@@ -1727,10 +1748,10 @@ class _ReaderContentState extends State<ReaderContent> {
       if (pos < src.length) sb.write(src.substring(pos));
 
       final result = sb.toString();
-      debugPrint('[Reader] _highlightHtml done: produced length=${result.length}');
+      _logger.info('[Reader] _highlightHtml done: produced length=${result.length}');
       return result;
     } catch (e) {
-      debugPrint('[Reader] _highlightHtml error: $e');
+      _logger.error('[Reader] _highlightHtml error: $e');
       // 兜底：回退到简单替换
       return html.replaceAllMapped(
         RegExp('($escaped)', caseSensitive: false),
@@ -1835,7 +1856,7 @@ class _ReaderContentState extends State<ReaderContent> {
             }
           }
           if (!file.existsSync()) {
-            debugPrint('[Reader] Image file not found: $path');
+            _logger.error('[Reader] Image file not found: $path');
             idx = endQuote + 1;
             continue;
           }
@@ -1858,14 +1879,14 @@ class _ReaderContentState extends State<ReaderContent> {
           out = out.substring(0, q + 1) + dataUrl + out.substring(endQuote);
           idx = q + 1 + dataUrl.length;
         } catch (e) {
-          debugPrint('[Reader] Failed to embed image src="$src": $e');
+          _logger.error('[Reader] Failed to embed image src="$src": $e');
           idx = endQuote + 1;
           continue;
         }
       }
       return out;
     } catch (e) {
-      debugPrint('[Reader] _embedLocalImages error: $e');
+      _logger.error('[Reader] _embedLocalImages error: $e');
       return html;
     }
   }
@@ -1909,7 +1930,10 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
             child: GestureDetector(
               onTap: widget.onRetry,
               child: Padding(
-                padding: EdgeInsets.only(right: AppTheme.metrics.kSpace4, top: AppTheme.metrics.kSpace2),
+                padding: EdgeInsets.only(
+                  right: AppTheme.metrics.kSpace4,
+                  top: AppTheme.metrics.kSpace2,
+                ),
                 child: Icon(
                   Icons.refresh,
                   size: widget.fontSize * 0.9,

@@ -51,11 +51,10 @@ md5 = "0.7"
 # 工具
 anyhow = "1.0"
 thiserror = "1.0"
-log = "0.4"
+slime_logger = { path = "../slime_logger" }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 regex = "1.12.2"
-env_logger = "0.10"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

@@ -73,7 +73,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
   /// 将 [oldIndex] 的 item 移动到 [newIndex]（同类型之间才生效）
   Future<void> reorderItems(int oldIndex, int newIndex) async {
     final items = filteredItems;
-    logger.log('reorderItems start: $oldIndex -> $newIndex, items=${items.length}', name: '书库');
+    _logger.log('reorderItems start: $oldIndex -> $newIndex, items=${items.length}', name: '书库');
     if (oldIndex == newIndex) return;
     if (oldIndex < 0 || oldIndex >= items.length) return;
     if (newIndex < 0 || newIndex >= items.length) return;
@@ -85,7 +85,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       final folderList = items.whereType<LibraryFolderItem>().map((f) => f.folder).toList();
       final from = folderList.indexWhere((f) => f.id == moved.id);
       final to = folderList.indexWhere((f) => f.id == target.id);
-      logger.log('reorderFolders from $from to $to', name: '书库');
+      _logger.log('reorderFolders from $from to $to', name: '书库');
       if (from == -1 || to == -1) return;
       final item = folderList.removeAt(from);
       folderList.insert(to, item);
@@ -95,7 +95,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       final bookList = items.whereType<LibraryBookItem>().map((b) => b.metadata).toList();
       final from = bookList.indexWhere((b) => b.id == moved.id);
       final to = bookList.indexWhere((b) => b.id == target.id);
-      logger.log(
+      _logger.log(
         'reorderBooks index from $from to $to (moved=${moved.id} target=${target.id})',
         name: '书库',
       );
@@ -108,14 +108,14 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       _applyBookOrderLocally(orderedIds);
       // 拖拽排序后,切换到customOrder排序模式
       sortField.value = 'customOrder';
-      logger.log(
+      _logger.log(
         'scheduling async persist of changed novel orders for ${orderedIds.length} novels',
         name: '书库',
       );
       Future<void>(() async {
-        logger.log('persist changed orders started', name: '书库');
+        _logger.log('persist changed orders started', name: '书库');
         await _persistNovelOrdersChanged(oldOrderMap, orderedIds);
-        logger.log('persist changed orders finished', name: '书库');
+        _logger.log('persist changed orders finished', name: '书库');
       });
     }
     // 跨类型拖拽忽略
@@ -124,7 +124,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
   /// 根据 item id 进行重排 —— 将 movedId 插入到 targetId 的前面（前置语义）
   Future<void> reorderItemsById(String movedId, String targetId) async {
     final items = filteredItems;
-    logger.log(
+    _logger.log(
       'reorderItemsById start: moved=$movedId target=$targetId, items=${items.length}',
       name: '书库',
     );
@@ -136,7 +136,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       final bookList = items.whereType<LibraryBookItem>().map((b) => b.metadata).toList();
       final from = bookList.indexWhere((b) => b.id == movedId);
       final to = bookList.indexWhere((b) => b.id == targetId);
-      logger.log(
+      _logger.log(
         'reorderBooksById from $from to $to (moved=$movedId target=$targetId)',
         name: '书库',
       );
@@ -151,14 +151,14 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       _applyBookOrderLocally(orderedIds);
       // 拖拽排序后,切换到customOrder排序模式
       sortField.value = 'customOrder';
-      logger.log(
+      _logger.log(
         'scheduling async persist of changed novel orders for ${orderedIds.length} novels (byId)',
         name: '书库',
       );
       Future<void>(() async {
-        logger.log('persist changed orders (byId) started', name: '书库');
+        _logger.log('persist changed orders (byId) started', name: '书库');
         await _persistNovelOrdersChanged(oldOrderMap, orderedIds);
-        logger.log('persist changed orders (byId) finished', name: '书库');
+        _logger.log('persist changed orders (byId) finished', name: '书库');
       });
     } else if (items[movedIdx] is LibraryFolderItem && items[targetIdx] is LibraryFolderItem) {
       final folderList = items.whereType<LibraryFolderItem>().map((f) => f.folder).toList();
@@ -175,7 +175,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
 
   void _applyBookOrderLocally(List<String> orderedIds) {
     final orderMap = <String, int>{for (int i = 0; i < orderedIds.length; i++) orderedIds[i]: i};
-    logger.log('Applying local book order for ${orderedIds.length} ids', name: '书库');
+    _logger.log('Applying local book order for ${orderedIds.length} ids', name: '书库');
 
     final updated = novels.map((novel) {
       final order = orderMap[novel.id];
@@ -202,7 +202,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
     }).toList();
 
     novels.assignAll(updated);
-    logger.log('Local book order applied, novels updated count=${novels.length}', name: '书库');
+    _logger.log('Local book order applied, novels updated count=${novels.length}', name: '书库');
   }
 
   /// Persist only changed novel orders by calling `updateNovelOrder` per item.
@@ -220,7 +220,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       if (old == null || old != newOrder) changed.add(MapEntry(id, newOrder));
     }
 
-    logger.log('persist changed count=${changed.length}', name: '书库');
+    _logger.log('persist changed count=${changed.length}', name: '书库');
     if (changed.isEmpty) return;
 
     try {
@@ -233,14 +233,14 @@ extension NovelLibraryActions on NovelLibraryViewModel {
           try {
             rust_api.updateNovelOrder(novelId: entry.key, order: entry.value);
           } catch (err) {
-            logger.log('updateNovelOrder failed for ${entry.key}: $err', name: '书库');
+            _logger.log('updateNovelOrder failed for ${entry.key}: $err', name: '书库');
           }
         }
         // yield to event loop
         await Future.delayed(const Duration(milliseconds: 1));
       }
     } catch (e) {
-      logger.log('persistNovelOrdersChanged error: $e', name: '书库');
+      _logger.log('persistNovelOrdersChanged error: $e', name: '书库');
     }
   }
 
@@ -326,7 +326,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       rust_api.cancelSearch();
       await Future.delayed(const Duration(milliseconds: 100));
     } catch (e) {
-      if (kDebugMode) print('取消搜索失败: $e');
+      if (kDebugMode) _logger.error('[书库] 取消搜索失败: $e');
     } finally {
       isCancelling.value = false;
     }

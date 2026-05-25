@@ -11,7 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/core/utils/size_utils.dart';
+const Loggers _logger = Loggers(name: '屏蔽词');
 
 // ==================== 数据模型 ====================
 
@@ -87,7 +89,7 @@ class PicAcgBlockWordsService {
       _cache = PicAcgBlockWordsConfig.fromJson(jsonDecode(raw) as Map<String, dynamic>);
       return _cache!;
     } catch (e) {
-      logger.error('加载屏蔽词失败: $e');
+      _logger.error('加载屏蔽词失败: $e');
       return const PicAcgBlockWordsConfig();
     }
   }
@@ -99,7 +101,7 @@ class PicAcgBlockWordsService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kBlockWordsKey, jsonEncode(config.toJson()));
     } catch (e) {
-      logger.error('保存屏蔽词失败: $e');
+      _logger.error('保存屏蔽词失败: $e');
     }
   }
 

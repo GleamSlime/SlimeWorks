@@ -1,10 +1,13 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/src/rust/api/module_manager.dart';
+import 'package:slime_works/core/utils/logger.dart';
+
 
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+const Loggers _logger = Loggers(name: '模块管理');
 
 /// 模块管理页面
 class ModuleManagementScreen extends StatefulWidget {
@@ -75,7 +78,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
 
     try {
       final modules = await moduleListAll(manager: _manager!);
-      debugPrint("Loaded modules: ${modules.length}");
+      _logger.info("Loaded modules: ${modules.length}");
       setState(() {
         _modules = modules;
         _isLoading = false;

@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/src/rust/api/extract.dart' as rust_api;
+const Loggers _logger = Loggers(name: '解压服务');
 
 enum ExtractOutputMode { sameDirectory, flatToOutput, byArchiveName, preserveStructure }
 
@@ -113,7 +115,7 @@ class ExtractService extends GetxService {
       rust_api.extractInitPasswordTable(dbPath: dbPath);
       await _loadPasswords();
     } catch (e) {
-      logger.e('初始化解压密码表失败: $e');
+      _logger.error('初始化解压密码表失败: $e');
     }
   }
 
@@ -132,7 +134,7 @@ class ExtractService extends GetxService {
           )
           .toList();
     } catch (e) {
-      logger.e('加载解压密码失败: $e');
+      _logger.error('加载解压密码失败: $e');
     }
   }
 
@@ -149,7 +151,7 @@ class ExtractService extends GetxService {
         ),
       );
     } catch (e) {
-      logger.e('添加解压密码失败: $e');
+      _logger.error('添加解压密码失败: $e');
     }
   }
 
@@ -158,7 +160,7 @@ class ExtractService extends GetxService {
       rust_api.extractRemovePassword(id: id);
       passwords.removeWhere((e) => e.id == id);
     } catch (e) {
-      logger.e('删除解压密码失败: $e');
+      _logger.error('删除解压密码失败: $e');
     }
   }
 
@@ -176,7 +178,7 @@ class ExtractService extends GetxService {
         );
       }
     } catch (e) {
-      logger.e('更新解压密码备注失败: $e');
+      _logger.error('更新解压密码备注失败: $e');
     }
   }
 
@@ -204,7 +206,7 @@ class ExtractService extends GetxService {
           )
           .toList();
     } catch (e) {
-      logger.e('扫描压缩包失败: $e');
+      _logger.error('扫描压缩包失败: $e');
       return [];
     }
   }
@@ -241,7 +243,7 @@ class ExtractService extends GetxService {
 
       _startPolling();
     } catch (e) {
-      logger.e('启动解压失败: $e');
+      _logger.error('启动解压失败: $e');
       lastResult.value = ExtractResultInfo(success: false, errorMessage: e.toString());
       progress.value = const ExtractProgressInfo(status: ExtractStatus.failed);
       isExtracting.value = false;
@@ -289,7 +291,7 @@ class ExtractService extends GetxService {
         _finalizeResult(newProgress);
       }
     } catch (e) {
-      logger.e('轮询进度失败: $e');
+      _logger.error('轮询进度失败: $e');
     }
   }
 
@@ -317,7 +319,7 @@ class ExtractService extends GetxService {
         );
       }
     } catch (e) {
-      logger.e('获取解压结果失败: $e');
+      _logger.error('获取解压结果失败: $e');
       lastResult.value = ExtractResultInfo(
         success: finalProgress.status == ExtractStatus.completed,
         totalArchives: finalProgress.totalArchives,
@@ -333,7 +335,7 @@ class ExtractService extends GetxService {
     try {
       rust_api.extractCancel();
     } catch (e) {
-      logger.e('取消解压失败: $e');
+      _logger.error('取消解压失败: $e');
     }
   }
 

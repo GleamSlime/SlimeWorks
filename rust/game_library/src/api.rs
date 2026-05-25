@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -54,7 +55,9 @@ fn open_db(db_path: &str) -> Result<Connection> {
 
 fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
     let guard = DB_CONN.lock();
-    let conn = guard.as_ref().context("游戏库未初始化，请先调用 game_library_init")?;
+    let conn = guard
+        .as_ref()
+        .context("游戏库未初始化，请先调用 game_library_init")?;
     f(conn)
 }
 
@@ -293,15 +296,21 @@ pub async fn game_library_get_game_by_id(game_id: String) -> Result<Option<Game>
 
 pub async fn game_library_delete_game(game_id: String) -> Result<()> {
     with_conn(|conn| {
-        conn.execute("DELETE FROM game_progress WHERE game_id = ?1", params![game_id.clone()])
-            .context("删除游戏进度失败")?;
+        conn.execute(
+            "DELETE FROM game_progress WHERE game_id = ?1",
+            params![game_id.clone()],
+        )
+        .context("删除游戏进度失败")?;
         conn.execute(
             "DELETE FROM game_categories WHERE game_id = ?1",
             params![game_id.clone()],
         )
         .context("删除游戏分类关联失败")?;
-        conn.execute("DELETE FROM play_sessions WHERE game_id = ?1", params![game_id.clone()])
-            .context("删除游玩记录失败")?;
+        conn.execute(
+            "DELETE FROM play_sessions WHERE game_id = ?1",
+            params![game_id.clone()],
+        )
+        .context("删除游玩记录失败")?;
         conn.execute("DELETE FROM games WHERE id = ?1", params![game_id])
             .context("删除游戏失败")?;
         Ok(())
@@ -762,7 +771,8 @@ pub async fn game_library_get_home_page_data() -> Result<HomePageData> {
             .context("准备查询首页最近游玩失败")?;
 
         let mut rows = stmt.query([]).context("查询首页最近游玩失败")?;
-        let last_played_game = if let Some(row) = rows.next().context("读取首页最近游玩失败")? {
+        let last_played_game = if let Some(row) = rows.next().context("读取首页最近游玩失败")?
+        {
             Some(Game {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -1044,7 +1054,8 @@ pub async fn game_library_scan_directory(paths: Vec<String>) -> Result<Vec<Scann
 
             // macOS .app 包
             if path.is_dir() && name.to_lowercase().ends_with(".app") {
-                let folder_name = game_library_derive_game_name(path.to_string_lossy().into_owned());
+                let folder_name =
+                    game_library_derive_game_name(path.to_string_lossy().into_owned());
                 out.push(ScannedGame {
                     folder_path: path.to_string_lossy().into_owned(),
                     folder_name,
@@ -1057,7 +1068,8 @@ pub async fn game_library_scan_directory(paths: Vec<String>) -> Result<Vec<Scann
                 let exes = find_top_exes(&path);
                 if !exes.is_empty() {
                     // 当前目录含有可执行文件 → 视为游戏根目录，不再继续向下
-                    let folder_name = game_library_derive_game_name(path.to_string_lossy().into_owned());
+                    let folder_name =
+                        game_library_derive_game_name(path.to_string_lossy().into_owned());
                     out.push(ScannedGame {
                         folder_path: path.to_string_lossy().into_owned(),
                         folder_name,
@@ -1081,7 +1093,10 @@ pub async fn game_library_scan_directory(paths: Vec<String>) -> Result<Vec<Scann
         let p = std::path::Path::new(p_str);
 
         if p.is_file() {
-            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             if is_exe(&name) {
                 let folder_name = game_library_derive_game_name(p_str.to_string());
                 result.push(ScannedGame {
@@ -1190,14 +1205,26 @@ pub async fn game_library_check_paths_exist(paths: Vec<String>) -> Result<Vec<St
 // HTTP 工具（代理检测 + 浏览器 Client 构建）
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[cfg(target_os = "macos")]
 static BROWSER_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
+#[cfg(target_os = "windows")]
+static BROWSER_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+static BROWSER_UA: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 static BROWSER_ACCEPT: &str = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
 static BROWSER_ACCEPT_LANG: &str = "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,ja;q=0.6,zh-TW;q=0.5";
 
-/// 检测系统代理：优先读取环境变量，macOS 额外尝试 `scutil --proxy`。
+/// 检测系统代理：优先读取环境变量，macOS 额外尝试 `scutil --proxy`，Windows 额外尝试注册表。
 fn detect_system_proxy() -> Option<String> {
     // 1. 标准环境变量
-    for var in &["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"] {
+    for var in &[
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ] {
         if let Ok(v) = std::env::var(var) {
             if !v.is_empty() {
                 return Some(v);
@@ -1209,6 +1236,14 @@ fn detect_system_proxy() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
         if let Some(p) = macos_scutil_proxy() {
+            return Some(p);
+        }
+    }
+
+    // 3. Windows 系统代理（注册表）
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(p) = windows_registry_proxy() {
             return Some(p);
         }
     }
@@ -1225,7 +1260,8 @@ fn macos_scutil_proxy() -> Option<String> {
     let text = String::from_utf8_lossy(&out.stdout);
 
     // 优先 HTTPS
-    let enabled = text.lines()
+    let enabled = text
+        .lines()
         .find(|l| l.contains("HTTPSEnable"))
         .and_then(|l| l.split(':').nth(1))
         .map(|v| v.trim() == "1")
@@ -1233,27 +1269,74 @@ fn macos_scutil_proxy() -> Option<String> {
     let (host_key, port_key) = if enabled {
         ("HTTPSProxy", "HTTPSPort")
     } else {
-        let http_enabled = text.lines()
+        let http_enabled = text
+            .lines()
             .find(|l| l.contains("HTTPEnable"))
             .and_then(|l| l.split(':').nth(1))
             .map(|v| v.trim() == "1")
             .unwrap_or(false);
-        if !http_enabled { return None; }
+        if !http_enabled {
+            return None;
+        }
         ("HTTPProxy", "HTTPPort")
     };
 
-    let host = text.lines()
+    let host = text
+        .lines()
         .find(|l| l.contains(host_key))
         .and_then(|l| l.split(':').nth(1))
         .map(|v| v.trim().to_string())?;
-    let port = text.lines()
+    let port = text
+        .lines()
         .find(|l| l.contains(port_key))
         .and_then(|l| l.split(':').nth(1))
         .map(|v| v.trim().to_string())
         .unwrap_or_else(|| "7890".to_string());
 
-    if host.is_empty() { return None; }
+    if host.is_empty() {
+        return None;
+    }
     Some(format!("http://{}:{}", host, port))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_registry_proxy() -> Option<String> {
+    use std::process::Command;
+    let key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+    let out = Command::new("reg")
+        .args(["query", key, "/v", "ProxyEnable"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let enabled = text
+        .lines()
+        .any(|l| l.contains("ProxyEnable") && l.contains("REG_DWORD") && l.trim().ends_with("0x1"));
+    if !enabled {
+        return None;
+    }
+    let out = Command::new("reg")
+        .args(["query", key, "/v", "ProxyServer"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let server = text
+        .lines()
+        .find(|l| l.contains("ProxyServer"))?
+        .split("REG_SZ")
+        .nth(1)?
+        .trim()
+        .to_string();
+    if server.is_empty() {
+        return None;
+    }
+    if server.starts_with("http://")
+        || server.starts_with("https://")
+        || server.starts_with("socks")
+    {
+        Some(server)
+    } else {
+        Some(format!("http://{}", server))
+    }
 }
 
 /// 构建带浏览器 UA、60s 超时、系统代理的阻塞式 HTTP Client，并缓存为全局单例。
@@ -1277,7 +1360,7 @@ fn get_browser_client() -> Result<Client> {
 /// 连接失败后重置 Client，让下次请求重新握手。
 fn reset_browser_client() {
     *client_registry().lock() = None;
-    log::info!("[http] Client 已重置，下次请求将重新建立 TLS 连接");
+    sw_info!("[http] Client 已重置，下次请求将重新建立 TLS 连接");
 }
 
 /// 执行一次 GET 请求，遇到连接错误时重置 Client 并重试一次。
@@ -1286,10 +1369,13 @@ fn get_with_retry(url: &str) -> Result<reqwest::blocking::Response> {
     match client.get(url).send() {
         Ok(r) => Ok(r),
         Err(e) if e.is_connect() || e.is_timeout() => {
-            log::warn!("[http] 连接失败（{}），重置 Client 后重试: {}", url, e);
+            sw_warn!("[http] 连接失败（{}），重置 Client 后重试: {}", url, e);
             reset_browser_client();
             let client2 = get_browser_client()?;
-            client2.get(url).send().context(format!("请求失败（重试后）: {}", url))
+            client2
+                .get(url)
+                .send()
+                .context(format!("请求失败（重试后）: {}", url))
         }
         Err(e) => Err(anyhow::anyhow!(e)),
     }
@@ -1298,7 +1384,10 @@ fn get_with_retry(url: &str) -> Result<reqwest::blocking::Response> {
 fn build_browser_client() -> Result<Client> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(reqwest::header::ACCEPT, BROWSER_ACCEPT.parse().unwrap());
-    headers.insert(reqwest::header::ACCEPT_LANGUAGE, BROWSER_ACCEPT_LANG.parse().unwrap());
+    headers.insert(
+        reqwest::header::ACCEPT_LANGUAGE,
+        BROWSER_ACCEPT_LANG.parse().unwrap(),
+    );
 
     let mut builder = Client::builder()
         .timeout(std::time::Duration::from_secs(60))
@@ -1309,10 +1398,14 @@ fn build_browser_client() -> Result<Client> {
         .redirect(reqwest::redirect::Policy::limited(10));
 
     if let Some(proxy_url) = detect_system_proxy() {
-        log::info!("使用系统代理: {}", proxy_url);
+        sw_info!("使用系统代理: {}", proxy_url);
         match reqwest::Proxy::all(&proxy_url) {
-            Ok(proxy) => { builder = builder.proxy(proxy); }
-            Err(e) => { log::warn!("代理配置失败，跳过: {}", e); }
+            Ok(proxy) => {
+                builder = builder.proxy(proxy);
+            }
+            Err(e) => {
+                sw_warn!("代理配置失败，跳过: {}", e);
+            }
         }
     }
 
@@ -1331,7 +1424,6 @@ pub async fn game_library_fetch_moegirl(game_name: String) -> Result<String> {
 fn fetch_moegirl_sync(game_name: &str) -> Result<String> {
     let encoded = utf8_percent_encode(game_name, WIKI_PATH).to_string();
     let url = format!("https://zh.moegirl.org.cn/{}", encoded);
-    log::info!("[moegirl] 请求 URL: {}", url);
     let resp = get_with_retry(&url).context("萌娘百科请求失败")?;
     let status = resp.status();
     if !status.is_success() {
@@ -1346,14 +1438,25 @@ fn fetch_moegirl_sync(game_name: &str) -> Result<String> {
 }
 
 fn clean_moegirl_html(raw: &str) -> String {
-    if raw.is_empty() { return String::new(); }
+    if raw.is_empty() {
+        return String::new();
+    }
     let doc = Html::parse_document(raw);
     // 按优先级尝试萌娘百科 / MediaWiki 的内容容器
-    let candidates = ["#moe-body-content", "#mw-content-text", "#bodyContent", "#content"];
+    let candidates = [
+        "#moe-body-content",
+        "#mw-content-text",
+        "#bodyContent",
+        "#content",
+    ];
     let root_opt = candidates.iter().find_map(|sel| {
-        Selector::parse(sel).ok().and_then(|s| doc.select(&s).next())
+        Selector::parse(sel)
+            .ok()
+            .and_then(|s| doc.select(&s).next())
     });
-    let Some(root) = root_opt else { return String::new(); };
+    let Some(root) = root_opt else {
+        return String::new();
+    };
 
     // 收集需要剔除的公告节点（class 以 xUkJeF1d7d_ 开头）
     // scraper 不支持原地修改，直接序列化并在字符串层面移除对应标签块
@@ -1361,7 +1464,9 @@ fn clean_moegirl_html(raw: &str) -> String {
     let inner = root.inner_html();
 
     // 二次解析，移除公告 class 元素
-    let Ok(sel_notice) = Selector::parse("[class]") else { return inner; };
+    let Ok(sel_notice) = Selector::parse("[class]") else {
+        return inner;
+    };
     let fragment = Html::parse_fragment(&inner);
     let mut result = inner.clone();
 
@@ -1375,7 +1480,11 @@ fn clean_moegirl_html(raw: &str) -> String {
     }
     // 移除公告 class 元素、<table>、<img>、<style>、<script>
     let result = strip_problematic_tags(&result);
-    if result.trim().is_empty() { String::new() } else { result }
+    if result.trim().is_empty() {
+        String::new()
+    } else {
+        result
+    }
 }
 
 /// 删除会导致 Flutter HtmlWidget / LayoutBuilder 崩溃的标签：
@@ -1395,8 +1504,7 @@ fn strip_problematic_tags(html: &str) -> String {
 /// 但保留这些标签内部的文字内容（只摘掉标签包装，不抹内容）。
 fn strip_table_structure_tags(html: &str) -> String {
     const TABLE_TAGS: &[&str] = &[
-        "table", "thead", "tbody", "tfoot", "tr", "td", "th",
-        "caption", "colgroup", "col",
+        "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "colgroup", "col",
     ];
     let mut result = html.to_string();
     for tag in TABLE_TAGS {
@@ -1422,7 +1530,9 @@ fn strip_open_tag_keep_content(html: &str, tag: &str) -> String {
         };
         // 确认后跟空白 / > 而非字母（避免误匹配 <tableX>）
         let after = &rest[start + open_l.len()..];
-        let boundary = after.chars().next()
+        let boundary = after
+            .chars()
+            .next()
             .map_or(true, |c| !c.is_alphanumeric() && c != '-' && c != '_');
         if !boundary {
             result.push_str(&rest[..start + open_l.len()]);
@@ -1469,10 +1579,20 @@ fn strip_paired_tags(html: &str, tag: &str) -> String {
         result.push_str(&rest[..start]);
         // 找对应的闭标签（支持嵌套，如 <table> 内嵌 <table>）
         let search_from = &rest[start..];
-        let end = find_paired_close(search_from, &open_lower, &open_upper, &close_lower, &close_upper);
+        let end = find_paired_close(
+            search_from,
+            &open_lower,
+            &open_upper,
+            &close_lower,
+            &close_upper,
+        );
         match end {
-            Some(end_pos) => { rest = &rest[start + end_pos..]; }
-            None => { break; } // 没有闭标签，截断
+            Some(end_pos) => {
+                rest = &rest[start + end_pos..];
+            }
+            None => {
+                break;
+            } // 没有闭标签，截断
         }
     }
     result
@@ -1491,7 +1611,13 @@ fn find_case_insensitive(haystack: &str, lower: &str, upper: &str) -> Option<usi
 }
 
 /// 在 `html`（从某个开标签开始）中找到对应的闭标签位置（闭标签结束后的索引），支持同名嵌套。
-fn find_paired_close(html: &str, open_l: &str, open_u: &str, close_l: &str, close_u: &str) -> Option<usize> {
+fn find_paired_close(
+    html: &str,
+    open_l: &str,
+    open_u: &str,
+    close_l: &str,
+    close_u: &str,
+) -> Option<usize> {
     let mut depth = 0usize;
     let mut pos = 0usize;
     while pos < html.len() {
@@ -1502,7 +1628,11 @@ fn find_paired_close(html: &str, open_l: &str, open_u: &str, close_l: &str, clos
             (Some(o), Some(c)) if o < c => {
                 // 确认是真正的开标签
                 let after = &rest[o + open_l.len()..];
-                if after.chars().next().map_or(true, |ch| !ch.is_alphanumeric() && ch != '-' && ch != '_') {
+                if after
+                    .chars()
+                    .next()
+                    .map_or(true, |ch| !ch.is_alphanumeric() && ch != '-' && ch != '_')
+                {
                     depth += 1;
                 }
                 pos += o + open_l.len();
@@ -1567,10 +1697,14 @@ pub async fn game_library_search_2dfan_subject(game_name: String) -> Result<Stri
 fn search_2dfan_subject_sync(game_name: &str) -> Result<String> {
     let encoded = utf8_percent_encode(game_name, WIKI_PATH).to_string();
     let url = format!("{}/subjects/search?keyword={}", TWODFAN_BASE, encoded);
-    let html = get_with_retry(&url)?.text()?;;
+    let html = get_with_retry(&url)?.text()?;
     let doc = Html::parse_document(&html);
-    let Ok(sel) = Selector::parse("#subjects > li a") else { return Ok(String::new()); };
-    Ok(doc.select(&sel).next()
+    let Ok(sel) = Selector::parse("#subjects > li a") else {
+        return Ok(String::new());
+    };
+    Ok(doc
+        .select(&sel)
+        .next()
         .and_then(|el| el.value().attr("href"))
         .unwrap_or("")
         .to_string())
@@ -1584,7 +1718,7 @@ pub async fn game_library_fetch_2dfan_download_path(subject_path: String) -> Res
 /// 返回下载列表页所有条目：JSON 数组 `[{"path": "...", "title": "..."}]`。
 fn fetch_2dfan_download_path_sync(subject_path: &str) -> Result<String> {
     let url = format!("{}{}/downloads/kind/cg_save", TWODFAN_BASE, subject_path);
-    let html = get_with_retry(&url)?.text()?;;
+    let html = get_with_retry(&url)?.text()?;
     let doc = Html::parse_document(&html);
 
     let mut items: Vec<serde_json::Value> = Vec::new();
@@ -1599,7 +1733,9 @@ fn fetch_2dfan_download_path_sync(subject_path: &str) -> Result<String> {
     for li_s in &li_candidates {
         if let (Ok(li_sel), Some(ref a_sel)) = (Selector::parse(li_s), a_inner.as_ref()) {
             let lis: Vec<_> = doc.select(&li_sel).collect();
-            if lis.is_empty() { continue; }
+            if lis.is_empty() {
+                continue;
+            }
             for li in lis {
                 if let Some(a) = li.select(a_sel).next() {
                     if let Some(href) = a.value().attr("href") {
@@ -1612,7 +1748,9 @@ fn fetch_2dfan_download_path_sync(subject_path: &str) -> Result<String> {
                     }
                 }
             }
-            if !items.is_empty() { break; }
+            if !items.is_empty() {
+                break;
+            }
         }
     }
 
@@ -1646,7 +1784,7 @@ pub async fn game_library_fetch_2dfan_download_info(download_path: String) -> Re
 
 fn fetch_2dfan_download_info_sync(download_path: &str) -> Result<String> {
     let url = format!("{}{}", TWODFAN_BASE, download_path);
-    let html = get_with_retry(&url)?.text()?;;
+    let html = get_with_retry(&url)?.text()?;
     let doc = Html::parse_document(&html);
 
     // 下载按钮
@@ -1692,7 +1830,11 @@ fn download_file_sync(url: &str, save_path: &str) -> Result<()> {
         Ok(r) => r,
         Err(e) if e.is_connect() || e.is_timeout() => {
             reset_browser_client();
-            get_browser_client()?.get(url).send().context("下载请求失败")?}
+            get_browser_client()?
+                .get(url)
+                .send()
+                .context("下载请求失败")?
+        }
         Err(e) => return Err(anyhow::anyhow!(e)),
     };
     if !resp.status().is_success() {

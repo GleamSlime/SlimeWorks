@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: '媒体偏好');
+
 
 /// 视频预览质量等级 → ffmpeg 参数映射。
 class ThumbQualityLevel {
@@ -200,7 +203,7 @@ class MediaPrefsService {
       }
       return total;
     } catch (e) {
-      debugPrint('[MediaPrefs] calcCacheSizeBytes error: $e');
+      _logger.error('[MediaPrefs] calcCacheSizeBytes error: $e');
       return 0;
     }
   }
@@ -213,9 +216,9 @@ class MediaPrefsService {
           await dir.delete(recursive: true);
         }
       }
-      debugPrint('[MediaPrefs] 缓存已清除');
+      _logger.info('[MediaPrefs] 缓存已清除');
     } catch (e) {
-      debugPrint('[MediaPrefs] clearCache error: $e');
+      _logger.error('[MediaPrefs] clearCache error: $e');
     }
   }
 
@@ -258,12 +261,12 @@ class MediaPrefsService {
         } catch (_) {}
       }
 
-      debugPrint(
+      _logger.info(
         '[MediaPrefs] trimCacheToLimit: 删除 ${(deletedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
         '  (剩余 ${((totalBytes - deletedBytes) / 1024 / 1024).toStringAsFixed(1)} MB)',
       );
     } catch (e) {
-      debugPrint('[MediaPrefs] trimCacheToLimit error: $e');
+      _logger.error('[MediaPrefs] trimCacheToLimit error: $e');
     }
   }
 }

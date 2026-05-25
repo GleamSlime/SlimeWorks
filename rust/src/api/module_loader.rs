@@ -2,14 +2,13 @@
 ///
 /// 负责加载和管理动态链接库（.dll / .dylib / .so）
 use libloading::{Library, Symbol};
-use log::{debug, error, info};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use super::logger::log_info;
 use super::module_downloader::ModuleDownloader;
+use slime_logger::{sw_debug, sw_error, sw_info, sw_warn};
 
 lazy_static::lazy_static! {
     static ref MODULE_MANAGER: Mutex<LegacyModuleManager> = Mutex::new(LegacyModuleManager::new());
@@ -46,12 +45,12 @@ impl LegacyModuleManager {
     /// 加载模块
     fn load_module(&mut self, name: &str, lib_path: &str) -> Result<(), String> {
         if self.loaded_modules.contains_key(name) {
-            log_info(&format!("Module {} already loaded", name));
+            sw_info!("Module {} already loaded", name);
             return Ok(());
         }
 
-        log_info(&format!("Loading module from: {}", lib_path));
-        info!(
+        sw_info!("Loading module from: {}", lib_path);
+        sw_info!(
             "[module_loader] load_module: checking existence for {}",
             lib_path
         );
@@ -59,40 +58,40 @@ impl LegacyModuleManager {
         // 检查文件是否存在
         if !std::path::Path::new(lib_path).exists() {
             let err = format!("Module library file not found: {}", lib_path);
-            error!("[module_loader] {}", err);
-            log_info(&err);
+            sw_error!("[module_loader] {}", err);
+            sw_info!("{}", err);
             return Err(err);
         }
 
         unsafe {
-            info!("[module_loader] attempting Library::new({})", lib_path);
+            sw_info!("[module_loader] attempting Library::new({})", lib_path);
             let lib = Library::new(lib_path).map_err(|e| {
                 let err = format!("Failed to load library {}: {}", lib_path, e);
-                error!("[module_loader] {}", err);
-                log_info(&err);
+                sw_error!("[module_loader] {}", err);
+                sw_info!("{}", err);
                 err
             })?;
 
-            info!("[module_loader] library loaded, searching for module_init");
+            sw_info!("[module_loader] library loaded, searching for module_init");
             // 调用模块初始化函数
             let init_fn: Symbol<extern "C" fn() -> *const CModuleInfo> =
                 lib.get(b"module_init").map_err(|e| {
                     let err = format!("Failed to find module_init: {}", e);
-                    error!("[module_loader] {}", err);
-                    log_info(&err);
+                    sw_error!("[module_loader] {}", err);
+                    sw_info!("{}", err);
                     err
                 })?;
 
-            info!("[module_loader] calling module_init()");
+            sw_info!("[module_loader] calling module_init()");
             let module_info_ptr = init_fn();
             if module_info_ptr.is_null() {
                 let err = "module_init returned null".to_string();
-                error!("[module_loader] {}", err);
-                log_info(&err);
+                sw_error!("[module_loader] {}", err);
+                sw_info!("{}", err);
                 return Err(err);
             }
 
-            info!("[module_loader] module_init returned non-null pointer");
+            sw_info!("[module_loader] module_init returned non-null pointer");
             let module_info = &*module_info_ptr;
             let name_str = unsafe { CStr::from_ptr(module_info.name) }.to_string_lossy();
             let version_str = unsafe { CStr::from_ptr(module_info.version) }.to_string_lossy();
@@ -101,12 +100,12 @@ impl LegacyModuleManager {
                 "Loaded module: {} v{} (API: {})",
                 name_str, version_str, module_info.api_version
             );
-            info!("[module_loader] {}", success_msg);
-            log_info(&success_msg);
+            sw_info!("[module_loader] {}", success_msg);
+            sw_info!("{}", success_msg);
             println!("{}", success_msg);
 
             self.loaded_modules.insert(name.to_string(), lib);
-            info!("[module_loader] inserted library into loaded_modules");
+            sw_info!("[module_loader] inserted library into loaded_modules");
             Ok(())
         }
     }
@@ -156,7 +155,7 @@ impl CaptureProxyModule {
 
         if installed.is_empty() {
             // 未安装，先安装最新版本
-            log_info("capture_proxy not installed, installing...");
+            sw_info!("capture_proxy not installed, installing...");
             module_mgr
                 .install_module("capture_proxy", None, false, true)
                 .await?;
@@ -172,7 +171,7 @@ impl CaptureProxyModule {
         let latest = installed.first().unwrap();
         let lib_path = &latest.file_path;
 
-        log_info(&format!("Loading capture_proxy from: {}", lib_path));
+        sw_info!("Loading capture_proxy from: {}", lib_path);
 
         // 加载模块到旧的管理器（保持向后兼容）
         let mut manager_lock = MODULE_MANAGER.lock().unwrap();
@@ -188,7 +187,7 @@ impl CaptureProxyModule {
 
         // 如果已加载，直接返回
         if manager.loaded_modules.contains_key("capture_proxy") {
-            debug!("Capture proxy module already loaded");
+            sw_debug!("Capture proxy module already loaded");
             drop(manager); // 释放锁
             return Ok(());
         }
@@ -196,7 +195,7 @@ impl CaptureProxyModule {
         // 获取模块路径
         let downloader = ModuleDownloader::new(PathBuf::from(install_dir));
 
-        log_info(&format!("Install dir: {}", install_dir));
+        sw_info!("Install dir: {}", install_dir);
 
         // 根据平台确定文件扩展名和路径
         #[cfg(target_os = "windows")]
@@ -214,7 +213,7 @@ impl CaptureProxyModule {
         // 优先使用带前缀的路径作为初始检查路径
         let lib_path = downloader.get_library_path("capture_proxy", &lib_filename_with_prefix);
 
-        log_info(&format!("Checking for module at: {}", lib_path.display()));
+        sw_info!("Checking for module at: {}", lib_path.display());
 
         // 检查多个可能的位置
         let mut checked_paths = vec![];
@@ -235,10 +234,7 @@ impl CaptureProxyModule {
                     .join(filename);
                 checked_paths.push(dev_path.clone());
                 if dev_path.exists() {
-                    log_info(&format!(
-                        "Found module in dev location: {}",
-                        dev_path.display()
-                    ));
+                    sw_info!("Found module in dev location: {}", dev_path.display());
                     found_path = Some(dev_path);
                     break;
                 }
@@ -251,10 +247,7 @@ impl CaptureProxyModule {
                 let rust_path = PathBuf::from("rust/target/release").join(filename);
                 checked_paths.push(rust_path.clone());
                 if rust_path.exists() {
-                    log_info(&format!(
-                        "Found module in rust target: {}",
-                        rust_path.display()
-                    ));
+                    sw_info!("Found module in rust target: {}", rust_path.display());
                     found_path = Some(rust_path);
                     break;
                 }
@@ -264,7 +257,7 @@ impl CaptureProxyModule {
         match found_path {
             Some(path) => {
                 let path_str = path.to_str().unwrap();
-                log_info(&format!("Loading module from: {}", path_str));
+                sw_info!("Loading module from: {}", path_str);
                 manager.load_module("capture_proxy", path_str)?;
                 // 成功加载后立即释放锁
                 drop(manager);
@@ -282,8 +275,8 @@ impl CaptureProxyModule {
                         .collect::<Vec<_>>()
                         .join("\n")
                 );
-                error!("{}", err_msg);
-                log_info(&err_msg);
+                sw_error!("{}", err_msg);
+                sw_info!("{}", err_msg);
                 Err(format!(
                     "{}\nPlease download it first using download_capture_proxy_module().",
                     err_msg
@@ -299,12 +292,12 @@ impl CaptureProxyModule {
             return Err("Dynamic module loading is not supported on mobile platforms. Please use static compilation.".to_string());
         }
 
-        info!("[module_loader] start(): ensure_loaded start");
+        sw_info!("[module_loader] start(): ensure_loaded start");
         println!("[module_loader] start(): ensure_loaded start");
 
         // 尝试同步确保已加载；如果失败（例如模块不存在），则在临时 Tokio 运行时中尝试异步下载并加载
         if let Err(e) = Self::ensure_loaded(install_dir) {
-            info!(
+            sw_info!(
                 "[module_loader] start(): ensure_loaded failed: {}. attempting async download/load",
                 e
             );
@@ -318,40 +311,40 @@ impl CaptureProxyModule {
                     let res = rt.block_on(Self::ensure_loaded_async(install_dir));
                     if let Err(e2) = res {
                         let err = format!("Failed to ensure module loaded asynchronously: {}", e2);
-                        error!("[module_loader] {}", err);
+                        sw_error!("[module_loader] {}", err);
                         return Err(err);
                     }
                 }
                 Err(e_rt) => {
                     let err = format!("Failed to create runtime for async download: {}", e_rt);
-                    error!("[module_loader] {}", err);
+                    sw_error!("[module_loader] {}", err);
                     return Err(err);
                 }
             }
         }
 
-        info!("[module_loader] start(): ensure_loaded done");
+        sw_info!("[module_loader] start(): ensure_loaded done");
         println!("[module_loader] start(): ensure_loaded done");
 
         // 获取函数指针后立即释放锁，避免在 FFI 调用期间持有锁
-        info!("[module_loader] start(): acquiring lock to get symbol");
+        sw_info!("[module_loader] start(): acquiring lock to get symbol");
         println!("[module_loader] start(): acquiring lock to get symbol");
         let start_fn: extern "C" fn(u16) -> c_int = {
             let manager = MODULE_MANAGER.lock().unwrap();
             let lib = manager.get_module("capture_proxy")?;
-            info!("[module_loader] start(): got module reference, locating symbol proxy_start");
+            sw_info!("[module_loader] start(): got module reference, locating symbol proxy_start");
             println!("[module_loader] start(): got module reference, locating symbol proxy_start");
             unsafe {
                 let symbol = lib
                     .get::<extern "C" fn(u16) -> c_int>(b"proxy_start")
                     .map_err(|e| e.to_string())?;
                 let func = *symbol;
-                info!("[module_loader] start(): symbol proxy_start located");
+                sw_info!("[module_loader] start(): symbol proxy_start located");
                 println!("[module_loader] start(): symbol proxy_start located");
                 func
             }
         }; // manager 在这里被释放
-        info!(
+        sw_info!(
             "[module_loader] start(): calling proxy_start with port {}",
             port
         );
@@ -360,7 +353,7 @@ impl CaptureProxyModule {
             port
         );
         let result = start_fn(port);
-        info!("[module_loader] start(): proxy_start returned {}", result);
+        sw_info!("[module_loader] start(): proxy_start returned {}", result);
         println!("[module_loader] start(): proxy_start returned {}", result);
         match result {
             0 => Ok(format!("Proxy started on port {}", port)),
@@ -376,28 +369,28 @@ impl CaptureProxyModule {
             return Err("Dynamic module loading is not supported on mobile platforms.".to_string());
         }
 
-        info!("[module_loader] stop(): ensure_loaded start");
+        sw_info!("[module_loader] stop(): ensure_loaded start");
         Self::ensure_loaded(install_dir)?;
-        info!("[module_loader] stop(): ensure_loaded done");
+        sw_info!("[module_loader] stop(): ensure_loaded done");
 
-        info!("[module_loader] stop(): acquiring lock to get symbol");
+        sw_info!("[module_loader] stop(): acquiring lock to get symbol");
         let stop_fn: extern "C" fn() -> c_int = {
             let manager = MODULE_MANAGER.lock().unwrap();
             let lib = manager.get_module("capture_proxy")?;
 
-            info!("[module_loader] stop(): locating symbol proxy_stop");
+            sw_info!("[module_loader] stop(): locating symbol proxy_stop");
             unsafe {
                 let symbol = lib
                     .get::<extern "C" fn() -> c_int>(b"proxy_stop")
                     .map_err(|e| e.to_string())?;
-                info!("[module_loader] stop(): symbol proxy_stop located");
+                sw_info!("[module_loader] stop(): symbol proxy_stop located");
                 *symbol
             }
         };
 
-        info!("[module_loader] stop(): calling proxy_stop");
+        sw_info!("[module_loader] stop(): calling proxy_stop");
         let result = stop_fn();
-        info!("[module_loader] stop(): proxy_stop returned {}", result);
+        sw_info!("[module_loader] stop(): proxy_stop returned {}", result);
         match result {
             0 => Ok("Proxy stopped".to_string()),
             -1 => Err("Proxy not running".to_string()),
@@ -412,28 +405,28 @@ impl CaptureProxyModule {
             return Err("Dynamic module loading is not supported on mobile platforms.".to_string());
         }
 
-        info!("[module_loader] is_running(): ensure_loaded start");
+        sw_info!("[module_loader] is_running(): ensure_loaded start");
         Self::ensure_loaded(install_dir)?;
-        info!("[module_loader] is_running(): ensure_loaded done");
+        sw_info!("[module_loader] is_running(): ensure_loaded done");
 
-        info!("[module_loader] is_running(): acquiring lock to get symbol");
+        sw_info!("[module_loader] is_running(): acquiring lock to get symbol");
         let is_running_fn: extern "C" fn() -> c_int = {
             let manager = MODULE_MANAGER.lock().unwrap();
             let lib = manager.get_module("capture_proxy")?;
 
-            info!("[module_loader] is_running(): locating symbol proxy_is_running");
+            sw_info!("[module_loader] is_running(): locating symbol proxy_is_running");
             unsafe {
                 let symbol = lib
                     .get::<extern "C" fn() -> c_int>(b"proxy_is_running")
                     .map_err(|e| e.to_string())?;
-                info!("[module_loader] is_running(): symbol located");
+                sw_info!("[module_loader] is_running(): symbol located");
                 *symbol
             }
         };
 
-        info!("[module_loader] is_running(): calling proxy_is_running");
+        sw_info!("[module_loader] is_running(): calling proxy_is_running");
         let res = is_running_fn();
-        info!(
+        sw_info!(
             "[module_loader] is_running(): proxy_is_running returned {}",
             res
         );
@@ -488,58 +481,58 @@ impl CaptureProxyModule {
 
     /// 清除捕获的数据
     pub fn clear_data(install_dir: &str) -> Result<(), String> {
-        info!("[module_loader] clear_data(): ensure_loaded start");
+        sw_info!("[module_loader] clear_data(): ensure_loaded start");
         Self::ensure_loaded(install_dir)?;
-        info!("[module_loader] clear_data(): ensure_loaded done");
+        sw_info!("[module_loader] clear_data(): ensure_loaded done");
 
-        info!("[module_loader] clear_data(): acquiring lock to get symbol");
+        sw_info!("[module_loader] clear_data(): acquiring lock to get symbol");
         let clear_fn: extern "C" fn() = {
             let manager = MODULE_MANAGER.lock().unwrap();
             let lib = manager.get_module("capture_proxy")?;
 
-            info!("[module_loader] clear_data(): locating symbol proxy_clear_items");
+            sw_info!("[module_loader] clear_data(): locating symbol proxy_clear_items");
             unsafe {
                 let sym = lib
                     .get::<extern "C" fn()>(b"proxy_clear_items")
                     .map_err(|e| e.to_string())?;
-                info!("[module_loader] clear_data(): symbol located");
+                sw_info!("[module_loader] clear_data(): symbol located");
                 *sym
             }
         };
 
-        info!("[module_loader] clear_data(): calling proxy_clear_items");
+        sw_info!("[module_loader] clear_data(): calling proxy_clear_items");
         clear_fn();
-        info!("[module_loader] clear_data(): proxy_clear_items returned");
+        sw_info!("[module_loader] clear_data(): proxy_clear_items returned");
         Ok(())
     }
 
     /// 安装 CA 证书
     pub fn install_certificate(password: &str, install_dir: &str) -> Result<(), String> {
-        info!("[module_loader] install_certificate(): ensure_loaded start");
+        sw_info!("[module_loader] install_certificate(): ensure_loaded start");
         Self::ensure_loaded(install_dir)?;
-        info!("[module_loader] install_certificate(): ensure_loaded done");
+        sw_info!("[module_loader] install_certificate(): ensure_loaded done");
 
-        info!("[module_loader] install_certificate(): acquiring lock to get symbol");
+        sw_info!("[module_loader] install_certificate(): acquiring lock to get symbol");
         let install_fn: extern "C" fn(*const c_char) -> c_int = {
             let manager = MODULE_MANAGER.lock().unwrap();
             let lib = manager.get_module("capture_proxy")?;
 
-            info!(
+            sw_info!(
                 "[module_loader] install_certificate(): locating symbol proxy_install_certificate"
             );
             unsafe {
                 let sym = lib
                     .get::<extern "C" fn(*const c_char) -> c_int>(b"proxy_install_certificate")
                     .map_err(|e| e.to_string())?;
-                info!("[module_loader] install_certificate(): symbol located");
+                sw_info!("[module_loader] install_certificate(): symbol located");
                 *sym
             }
         };
 
-        info!("[module_loader] install_certificate(): calling proxy_install_certificate");
+        sw_info!("[module_loader] install_certificate(): calling proxy_install_certificate");
         let c_password = CString::new(password).unwrap();
         let result = install_fn(c_password.as_ptr());
-        info!(
+        sw_info!(
             "[module_loader] install_certificate(): proxy_install_certificate returned {}",
             result
         );
@@ -552,28 +545,30 @@ impl CaptureProxyModule {
 
     /// 检查证书是否已安装
     pub fn is_certificate_installed(install_dir: &str) -> Result<bool, String> {
-        info!("[module_loader] is_certificate_installed(): ensure_loaded start");
+        sw_info!("[module_loader] is_certificate_installed(): ensure_loaded start");
         Self::ensure_loaded(install_dir)?;
-        info!("[module_loader] is_certificate_installed(): ensure_loaded done");
+        sw_info!("[module_loader] is_certificate_installed(): ensure_loaded done");
 
-        info!("[module_loader] is_certificate_installed(): acquiring lock to get symbol");
+        sw_info!("[module_loader] is_certificate_installed(): acquiring lock to get symbol");
         let is_installed_fn: extern "C" fn() -> c_int = {
             let manager = MODULE_MANAGER.lock().unwrap();
             let lib = manager.get_module("capture_proxy")?;
 
-            info!("[module_loader] is_certificate_installed(): locating symbol proxy_is_certificate_installed");
+            sw_info!("[module_loader] is_certificate_installed(): locating symbol proxy_is_certificate_installed");
             unsafe {
                 let sym = lib
                     .get::<extern "C" fn() -> c_int>(b"proxy_is_certificate_installed")
                     .map_err(|e| e.to_string())?;
-                info!("[module_loader] is_certificate_installed(): symbol located");
+                sw_info!("[module_loader] is_certificate_installed(): symbol located");
                 *sym
             }
         };
 
-        info!("[module_loader] is_certificate_installed(): calling proxy_is_certificate_installed");
+        sw_info!(
+            "[module_loader] is_certificate_installed(): calling proxy_is_certificate_installed"
+        );
         let res = is_installed_fn();
-        info!(
+        sw_info!(
             "[module_loader] is_certificate_installed(): returned {}",
             res
         );

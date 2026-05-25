@@ -20,11 +20,14 @@ import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 import 'package:media_kit/media_kit.dart';
+const Loggers _logger = Loggers(name: '主程序');
 
 Future<void> main() async {
   TimeConsumptionTest desktopTest = TimeConsumptionTest(tag: "应用初始化")..start();
@@ -96,7 +99,7 @@ Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
         : '.';
     await sentryLogInit(dbPath: '$appDir/sentry_log.db');
   } catch (e) {
-    debugPrint('初始化Sentry日志存储失败: $e');
+    _logger.error('[主程序] 初始化Sentry日志存储失败: $e');
   }
 
   // 配置 EasyLoading

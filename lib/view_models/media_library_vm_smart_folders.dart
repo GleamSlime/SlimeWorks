@@ -17,16 +17,16 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
           try {
             final ids = (jsonDecode(json) as List).cast<String>();
             _collectionOrders[orderKey] = ids;
-            logger.d('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
+            _logger.info('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
             loaded++;
           } catch (e) {
-            logger.e('_loadCollectionOrders: 解析失败 key=$key err=$e');
+            _logger.error('_loadCollectionOrders: 解析失败 key=$key err=$e');
           }
         }
       }
-      logger.d('_loadCollectionOrders: 共加载 $loaded 条排序记录');
+      _logger.info('_loadCollectionOrders: 共加载 $loaded 条排序记录');
     } catch (e) {
-      logger.e('加载集合排序失败: $e');
+      _logger.error('加载集合排序失败: $e');
     }
   }
 
@@ -36,14 +36,14 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       final key = '${MediaLibraryViewModel._collectionOrderPrefsKeyPrefix}$orderKey';
       if (ids.isEmpty) {
         await prefs.remove(key);
-        logger.d('_saveCollectionOrder: removed key=$key (empty)');
+        _logger.info('_saveCollectionOrder: removed key=$key (empty)');
       } else {
         final encoded = jsonEncode(ids);
         final success = await prefs.setString(key, encoded);
-        logger.d('_saveCollectionOrder: key=$key count=${ids.length} success=$success');
+        _logger.info('_saveCollectionOrder: key=$key count=${ids.length} success=$success');
       }
     } catch (e) {
-      logger.e('保存集合排序失败: key=$orderKey err=$e');
+      _logger.error('保存集合排序失败: key=$orderKey err=$e');
     }
   }
 
@@ -87,7 +87,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     ids.insert(toIdx, moved);
     _collectionOrders[orderKey] = ids;
     collectionOrderVersion.value++;
-    logger.d('reorderCollection: orderKey=$orderKey newOrder=${ids.join(",")}');
+    _logger.info('reorderCollection: orderKey=$orderKey newOrder=${ids.join(",")}');
     await _saveCollectionOrder(orderKey, ids);
   }
 
@@ -101,40 +101,40 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   Future<void> _loadSmartFolders() async {
     try {
       final file = await _getSmartFoldersFile();
-      debugPrint('[MediaLibrary] _loadSmartFolders: 文件路径=${file.path}');
+      _logger.info('[智能文件夹] 文件路径=${file.path}');
       final dirExists = await file.parent.exists();
-      debugPrint('[MediaLibrary] _loadSmartFolders: 父目录存在=$dirExists');
+      _logger.info('[智能文件夹] 父目录存在=$dirExists');
       final fileExists = await file.exists();
-      debugPrint('[MediaLibrary] _loadSmartFolders: 文件存在=$fileExists');
+      _logger.info('[智能文件夹] 文件存在=$fileExists');
       if (fileExists) {
         final json = await file.readAsString();
-        debugPrint('[MediaLibrary] _loadSmartFolders: 读取 ${json.length} 字节');
+        _logger.info('[智能文件夹] 读取 ${json.length} 字节');
         if (json.isNotEmpty) {
           final loaded = SmartFolder.listFromJson(json);
           smartFolders.assignAll(loaded);
-          debugPrint('[MediaLibrary] _loadSmartFolders: ✅ 加载成功，${loaded.length} 个智能文件夹');
+          _logger.info('[智能文件夹] ✅ 加载成功，${loaded.length} 个智能文件夹');
         } else {
-          debugPrint('[MediaLibrary] _loadSmartFolders: 文件内容为空');
+          _logger.info('[智能文件夹] 文件内容为空');
         }
       } else {
         // 迁移：从 SharedPreferences 读取旧数据
-        debugPrint('[MediaLibrary] _loadSmartFolders: 文件不存在，尝试从 SharedPreferences 迁移');
+        _logger.info('[智能文件夹] 文件不存在，尝试从 SharedPreferences 迁移');
         final prefs = await SharedPreferences.getInstance();
         final oldJson = prefs.getString(MediaLibraryViewModel._smartFoldersPrefsKey);
         if (oldJson != null && oldJson.isNotEmpty) {
-          debugPrint('[MediaLibrary] _loadSmartFolders: SharedPreferences 迁移 ${oldJson.length} 字节');
+          _logger.info('[智能文件夹] SharedPreferences 迁移 ${oldJson.length} 字节');
           final List<SmartFolder> loaded = SmartFolder.listFromJson(oldJson);
           smartFolders.assignAll(loaded);
           await _saveSmartFolders();
           await prefs.remove(MediaLibraryViewModel._smartFoldersPrefsKey);
-          debugPrint('[MediaLibrary] _loadSmartFolders: 迁移完成，${loaded.length} 个智能文件夹');
+          _logger.info('[智能文件夹] 迁移完成，${loaded.length} 个智能文件夹');
         } else {
-          debugPrint('[MediaLibrary] _loadSmartFolders: 无历史数据，首次使用');
+          _logger.info('[智能文件夹] 无历史数据，首次使用');
         }
       }
     } catch (err, stack) {
-      debugPrint('[MediaLibrary] _loadSmartFolders: ❌ 加载失败 err=$err');
-      debugPrint('[MediaLibrary] _loadSmartFolders: stack=$stack');
+      _logger.info('[智能文件夹] ❌ 加载失败 err=$err');
+      _logger.info('[智能文件夹] stack=$stack');
     }
   }
 
@@ -144,7 +144,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   Future<void> _saveSmartFolders() async {
     try {
       final file = await _getSmartFoldersFile();
-      debugPrint('[MediaLibrary] _saveSmartFolders: 目标路径=${file.path}');
+      _logger.info('[智能文件夹] 目标路径=${file.path}');
       // 确保父目录存在（Windows 上 AppData 子目录可能尚未创建）
       await file.parent.create(recursive: true);
       final json = SmartFolder.listToJson(smartFolders);
@@ -152,17 +152,17 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       // 回读验证写入成功
       final written = await file.readAsString();
       if (written == json) {
-        debugPrint(
+        _logger.info(
           '[MediaLibrary] _saveSmartFolders: ✅ 写入验证通过，${smartFolders.length} 个智能文件夹，${json.length} 字节',
         );
       } else {
-        debugPrint(
+        _logger.info(
           '[MediaLibrary] _saveSmartFolders: ❌ 内容不符！期望 ${json.length} 字节，实际 ${written.length} 字节',
         );
       }
     } catch (err, stack) {
-      debugPrint('[MediaLibrary] _saveSmartFolders: ❌ 保存失败 err=$err');
-      debugPrint('[MediaLibrary] _saveSmartFolders: stack=$stack');
+      _logger.info('[智能文件夹] ❌ 保存失败 err=$err');
+      _logger.info('[智能文件夹] stack=$stack');
     }
   }
 

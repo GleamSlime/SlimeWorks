@@ -11,8 +11,8 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:html/parser.dart' as html_parser;
+const Loggers _logger = Loggers(name: '书籍');
 
-const Loggers logger = Loggers(name: '书籍');
 
 /// 书籍阅读器 ViewModel
 class NovelReaderViewModel extends GetxController {
@@ -102,7 +102,7 @@ class NovelReaderViewModel extends GetxController {
   @override
   void onClose() {
     // 关闭页面时，立即取消所有翻译任务
-    logger.info('[Novel UI] onClose: 开始清理资源');
+    _logger.info('[Novel UI] onClose: 开始清理资源');
     _cancelTranslation();
 
     // 清除翻译相关状态
@@ -118,9 +118,9 @@ class NovelReaderViewModel extends GetxController {
     // 先清除 Rust 内容解析缓存，确保下次打开重新解压图片
     try {
       clearNovelCache(filePath: novel.filePath);
-      logger.info('Cleared Rust content cache for: ${novel.filePath}');
+      _logger.info('Cleared Rust content cache for: ${novel.filePath}');
     } catch (e) {
-      logger.info('[Novel UI] Failed to clear Rust content cache: $e');
+      _logger.info('[Novel UI] Failed to clear Rust content cache: $e');
     }
 
     // 尝试删除基于 novel.id 的临时目录（如果存在）
@@ -130,10 +130,10 @@ class NovelReaderViewModel extends GetxController {
       );
       if (base.existsSync()) {
         base.deleteSync(recursive: true);
-        logger.info('[Novel UI] Cleared epub image cache: ${base.path}');
+        _logger.info('[Novel UI] Cleared epub image cache: ${base.path}');
       }
     } catch (e) {
-      logger.info('[Novel UI] Failed to clear epub image cache: $e');
+      _logger.info('[Novel UI] Failed to clear epub image cache: $e');
     }
 
     // 退出阅读器时保存当前阅读位置
@@ -141,10 +141,10 @@ class NovelReaderViewModel extends GetxController {
       if (chapters.isNotEmpty) {
         final progress = (currentChapterIndex.value + 1) / (chapters.length);
         updateReadingProgress(novelId: novel.id, progress: progress);
-        logger.info('[Novel UI] Saved progress $progress for novel ${novel.id} on close');
+        _logger.info('[Novel UI] Saved progress $progress for novel ${novel.id} on close');
       }
     } catch (e) {
-      logger.info('[Novel UI] Failed to save progress on close: $e');
+      _logger.info('[Novel UI] Failed to save progress on close: $e');
     }
 
     super.onClose();
@@ -177,26 +177,26 @@ class NovelReaderViewModel extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      logger.info('[Novel UI] ========== Loading novel ==========');
-      logger.info('[Novel UI] Title: ${novel.title}');
-      logger.info('[Novel UI] File: ${novel.filePath}');
+      _logger.info('[Novel UI] ========== Loading novel ==========');
+      _logger.info('[Novel UI] Title: ${novel.title}');
+      _logger.info('[Novel UI] File: ${novel.filePath}');
       final fileSize = File(novel.filePath).existsSync() ? File(novel.filePath).lengthSync() : 0;
       final fileSizeMB = (fileSize / 1024 / 1024).toStringAsFixed(2);
-      logger.info('[Novel UI] File size: ${fileSizeMB}MB');
-      logger.info('[Novel UI] Start time: $startTime');
+      _logger.info('[Novel UI] File size: ${fileSizeMB}MB');
+      _logger.info('[Novel UI] Start time: $startTime');
 
-      logger.info('[Novel UI] Calling Rust getNovelContent...');
+      _logger.info('[Novel UI] Calling Rust getNovelContent...');
       final callStart = DateTime.now();
       final beforeRust = DateTime.now();
       final content = await getNovelContent(filePath: novel.filePath);
       final afterRust = DateTime.now();
       final rustDuration = afterRust.difference(beforeRust);
-      logger.info('[Novel UI] Rust getNovelContent completed in ${rustDuration.inMilliseconds}ms');
+      _logger.info('[Novel UI] Rust getNovelContent completed in ${rustDuration.inMilliseconds}ms');
 
       // 记录从调用到 Dart 层收到结果的总时长（包含 FFI + 序列化开销）
       final afterReceive = DateTime.now();
       final totalCallMs = afterReceive.difference(callStart).inMilliseconds;
-      logger.info(
+      _logger.info(
         '[Novel UI] getNovelContent total await elapsed: ${totalCallMs}ms (includes FFI/serialization)',
       );
 
@@ -205,7 +205,7 @@ class NovelReaderViewModel extends GetxController {
       chapters.value = content.chapters;
       final assignDuration = DateTime.now().difference(assignStart).inMilliseconds;
       final chaptersLen = chapters.length;
-      logger.info('[Novel UI] Loaded $chaptersLen chapters (assign took ${assignDuration}ms)');
+      _logger.info('[Novel UI] Loaded $chaptersLen chapters (assign took ${assignDuration}ms)');
 
       // TODO: 暂时注释掉章节标题翻译，避免加载时卡顿
       // if (isAutoTranslateEnabled.value && translationModel.value != null) {
@@ -226,27 +226,27 @@ class NovelReaderViewModel extends GetxController {
         } catch (_) {
           startIndex = 0;
         }
-        logger.info(
+        _logger.info(
           '[Novel UI] Restoring chapter index $startIndex (progress=${(novel.progress * 100).toStringAsFixed(1)}%)',
         );
         // 先设置索引以更新 UI 选中状态，再加载章节内容
         currentChapterIndex.value = startIndex;
-        logger.info('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
+        _logger.info('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
 
         final beforeChapter = DateTime.now();
         await loadChapterContent(startIndex);
         final chapterLoadMs = DateTime.now().difference(beforeChapter).inMilliseconds;
-        logger.info('[Novel UI] Initial chapter load took ${chapterLoadMs}ms');
+        _logger.info('[Novel UI] Initial chapter load took ${chapterLoadMs}ms');
       }
 
       final now = DateTime.now();
       final totalDuration = now.millisecondsSinceEpoch - startMs;
-      logger.info('[Novel UI] ========== Total load time: ${totalDuration}ms ==========');
+      _logger.info('[Novel UI] ========== Total load time: ${totalDuration}ms ==========');
     } catch (e, stackTrace) {
       final now = DateTime.now();
       final duration = now.millisecondsSinceEpoch - startMs;
-      logger.info('[Novel UI] *** ERROR after ${duration}ms: $e ***');
-      logger.info('[Novel UI] Stack trace: $stackTrace');
+      _logger.info('[Novel UI] *** ERROR after ${duration}ms: $e ***');
+      _logger.info('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载失败: $e';
     } finally {
       isLoading.value = false;
@@ -270,9 +270,9 @@ class NovelReaderViewModel extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      logger.info('[Novel UI] --- Loading chapter $index ---');
+      _logger.info('[Novel UI] --- Loading chapter $index ---');
       final chTitle = chapters[index].title;
-      logger.info('[Novel UI] Chapter title: $chTitle');
+      _logger.info('[Novel UI] Chapter title: $chTitle');
 
       final beforeRust = DateTime.now();
       final content = await getChapterContent(
@@ -282,29 +282,29 @@ class NovelReaderViewModel extends GetxController {
       final rustDuration = DateTime.now().difference(beforeRust);
       final contentLenKB = (content.length / 1024).toStringAsFixed(1);
 
-      logger.info(
+      _logger.info(
         '[Novel UI] Chapter loaded in ${rustDuration.inMilliseconds}ms, length: ${content.length} chars (${contentLenKB}KB)',
       );
 
       // currentChapterIndex 已由 goToChapter 设置，此处不再重复设置
       currentContent.value = content;
-      logger.info('[Novel UI] Updated currentContent.value');
+      _logger.info('[Novel UI] Updated currentContent.value');
 
       // 更新阅读进度
       final progress = (index + 1) / chapters.length;
       updateReadingProgress(novelId: novel.id, progress: progress);
-      debugPrint(
+      _logger.info(
         '[Reader] Updated progress for ${novel.title} to ${(progress * 100).toStringAsFixed(1)}% (chapter ${index + 1}/${chapters.length})',
       );
 
       final now = DateTime.now();
       final totalDuration = now.millisecondsSinceEpoch - startMs;
-      logger.info('[Novel UI] --- Chapter display ready in ${totalDuration}ms ---');
+      _logger.info('[Novel UI] --- Chapter display ready in ${totalDuration}ms ---');
     } catch (e, stackTrace) {
       final now = DateTime.now();
       final duration = now.millisecondsSinceEpoch - startMs;
-      logger.info('[Novel UI] *** ERROR loading chapter after ${duration}ms: $e ***');
-      logger.info('[Novel UI] Stack trace: $stackTrace');
+      _logger.info('[Novel UI] *** ERROR loading chapter after ${duration}ms: $e ***');
+      _logger.info('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载章节失败: $e';
     } finally {
       isLoading.value = false;
@@ -418,7 +418,7 @@ class NovelReaderViewModel extends GetxController {
       final matches = await searchInNovel(filePath: novel.filePath, keyword: keyword);
       searchMatches.value = matches;
       selectedSearchIndex.value = matches.isNotEmpty ? 0 : -1;
-      logger.info(
+      _logger.info(
         '[Novel VM] searchKeyword: matches=${matches.length} selectedIndex=${selectedSearchIndex.value}',
       );
 
@@ -584,7 +584,7 @@ class NovelReaderViewModel extends GetxController {
         NovelReaderRoute($extra: targetNovel).go(context);
       });
     } catch (e) {
-      logger.info('[Novel VM] Failed to switch book: $e');
+      _logger.info('[Novel VM] Failed to switch book: $e');
     }
   }
 
@@ -638,7 +638,7 @@ class NovelReaderViewModel extends GetxController {
         await Process.run('xdg-open', [dir]);
       }
     } catch (e) {
-      logger.info('[Novel VM] revealFileInFolder failed: $e');
+      _logger.info('[Novel VM] revealFileInFolder failed: $e');
       _showSnack('错误', '无法打开所在文件夹: $e');
     }
   }
@@ -689,12 +689,12 @@ class NovelReaderViewModel extends GetxController {
       // 创建新的取消令牌
       _translationCancelToken = CancelToken();
 
-      logger.info('开始翻译章节, model=$model, lang=${translationLanguagePair.value.displayName}');
+      _logger.info('开始翻译章节, model=$model, lang=${translationLanguagePair.value.displayName}');
 
       // 解析 HTML，创建可修改的 document
       final document = html_parser.parse(_originalContent);
       final textNodes = _extractTextNodesFromDocument(document);
-      logger.info('提取到 ${textNodes.length} 个文本节点');
+      _logger.info('提取到 ${textNodes.length} 个文本节点');
 
       if (textNodes.isEmpty) {
         _showSnack('提示', '当前章节没有可翻译的内容');
@@ -720,7 +720,7 @@ class NovelReaderViewModel extends GetxController {
       for (int i = 0; i < textNodes.length; i++) {
         // 检查是否已取消翻译
         if (_translationCancelToken?.isCancelled ?? false) {
-          logger.info('翻译已取消，退出循环 (${i + 1}/${textNodes.length})');
+          _logger.info('翻译已取消，退出循环 (${i + 1}/${textNodes.length})');
           break;
         }
 
@@ -733,7 +733,7 @@ class NovelReaderViewModel extends GetxController {
         }
 
         try {
-          logger.info('正在翻译节点 ${i + 1}/${textNodes.length}');
+          _logger.info('正在翻译节点 ${i + 1}/${textNodes.length}');
 
           // 翻译单个段落（带超时控制）
           final translated = await ollamaService
@@ -761,14 +761,14 @@ class NovelReaderViewModel extends GetxController {
               .timeout(
                 Duration(seconds: translationTimeout.value),
                 onTimeout: () {
-                  logger.error('翻译节点 ${i + 1} 超时 (${translationTimeout.value}秒)');
+                  _logger.error('翻译节点 ${i + 1} 超时 (${translationTimeout.value}秒)');
                   throw TimeoutException('翻译超时', Duration(seconds: translationTimeout.value));
                 },
               );
 
           // 清理翻译结果中的标签
           final cleanedTranslation = _cleanTranslationResult(translated);
-          logger.info(
+          _logger.info(
             '节点 ${i + 1} 翻译完成, 原文=${originalText.substring(0, originalText.length > 20 ? 20 : originalText.length)}... => 译文=${cleanedTranslation.substring(0, cleanedTranslation.length > 20 ? 20 : cleanedTranslation.length)}...',
           );
 
@@ -803,10 +803,10 @@ class NovelReaderViewModel extends GetxController {
             currentContent.value = document.outerHtml;
             lastUpdateIndex = i;
             lastUpdateTime = now;
-            logger.info('更新UI: 已翻译 ${i + 1}/${textNodes.length} 个节点');
+            _logger.info('更新UI: 已翻译 ${i + 1}/${textNodes.length} 个节点');
           }
         } catch (e) {
-          logger.error('翻译节点 ${i + 1} 失败', error: e);
+          _logger.error('翻译节点 ${i + 1} 失败', error: e);
           // 失败时保留原文，并记录失败段落
           if (!failedTranslations.contains(originalText)) {
             failedTranslations.add(originalText);
@@ -816,13 +816,13 @@ class NovelReaderViewModel extends GetxController {
 
       // 翻译完成，确保最终UI更新
       currentContent.value = document.outerHtml;
-      logger.info('章节翻译完成，最终UI已更新');
+      _logger.info('章节翻译完成，最终UI已更新');
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
-        logger.info('翻译已取消');
+        _logger.info('翻译已取消');
         // 取消时不显示错误
       } else {
-        logger.error('翻译失败', error: e);
+        _logger.error('翻译失败', error: e);
         _showSnack('错误', '翻译失败: $e');
         // 恢复原文
         if (_originalContent != null) {
@@ -830,7 +830,7 @@ class NovelReaderViewModel extends GetxController {
         }
       }
     } catch (e, st) {
-      logger.error('翻译失败', error: e, stackTrace: st);
+      _logger.error('翻译失败', error: e, stackTrace: st);
       _showSnack('错误', '翻译失败: $e');
       // 恢复原文
       if (_originalContent != null) {
@@ -917,10 +917,10 @@ class NovelReaderViewModel extends GetxController {
       }
 
       extractFromNode(document.body ?? document);
-      logger.info('成功提取 ${textNodes.length} 个有效文本节点');
+      _logger.info('成功提取 ${textNodes.length} 个有效文本节点');
       return textNodes;
     } catch (e) {
-      logger.error('提取文本节点失败', error: e);
+      _logger.error('提取文本节点失败', error: e);
       return [];
     }
   }
@@ -950,7 +950,7 @@ class NovelReaderViewModel extends GetxController {
   /// 取消正在进行的翻译
   void _cancelTranslation() {
     if (_translationCancelToken != null && !_translationCancelToken!.isCancelled) {
-      logger.info('取消正在进行的翻译请求');
+      _logger.info('取消正在进行的翻译请求');
       _translationCancelToken!.cancel('切换章节');
     }
     _translationCancelToken = null;
@@ -961,7 +961,7 @@ class NovelReaderViewModel extends GetxController {
   void toggleAutoTranslate() {
     isAutoTranslateEnabled.value = !isAutoTranslateEnabled.value;
     if (isAutoTranslateEnabled.value) {
-      logger.info('开启自动翻译');
+      _logger.info('开启自动翻译');
       // TODO: 暂时注释掉章节标题翻译
       // if (translationModel.value != null) {
       //   _translateChapterTitles();
@@ -971,7 +971,7 @@ class NovelReaderViewModel extends GetxController {
         translateCurrentChapter();
       }
     } else {
-      logger.info('关闭自动翻译');
+      _logger.info('关闭自动翻译');
       // 取消正在进行的翻译
       _cancelTranslation();
       // 恢复原文
@@ -996,9 +996,9 @@ class NovelReaderViewModel extends GetxController {
       // 使用 Flutter 的剪贴板API
       await Clipboard.setData(ClipboardData(text: content));
       _showSnack('成功', '已复制原始HTML (${content.length}字符) 到剪贴板');
-      logger.info('已复制HTML到剪贴板, length=${content.length}');
+      _logger.info('已复制HTML到剪贴板, length=${content.length}');
     } catch (e) {
-      logger.error('复制HTML失败', error: e);
+      _logger.error('复制HTML失败', error: e);
       _showSnack('错误', '复制失败: $e');
     }
   }
@@ -1030,7 +1030,7 @@ class NovelReaderViewModel extends GetxController {
     }
 
     try {
-      logger.info('重试翻译段落: $originalText');
+      _logger.info('重试翻译段落: $originalText');
 
       final ollamaService = getIt.get<OllamaService>();
       final cancelToken = CancelToken();
@@ -1075,7 +1075,7 @@ class NovelReaderViewModel extends GetxController {
           if (textNodes.isNotEmpty) {
             textNodes.first.text = cleanedTranslation;
             currentContent.value = document.outerHtml;
-            logger.info('成功重试翻译段落');
+            _logger.info('成功重试翻译段落');
             _showSnack('成功', '已重新翻译该段落');
 
             // 从失败列表中移除（如果存在）
@@ -1087,7 +1087,7 @@ class NovelReaderViewModel extends GetxController {
 
       _showSnack('错误', '找不到指定段落');
     } catch (e) {
-      logger.error('重试翻译失败', error: e);
+      _logger.error('重试翻译失败', error: e);
       _showSnack('错误', '重试翻译失败: $e');
     }
   }
@@ -1100,7 +1100,7 @@ class NovelReaderViewModel extends GetxController {
     }
 
     final failedList = List<String>.from(failedTranslations);
-    logger.info('开始重试 ${failedList.length} 个失败段落');
+    _logger.info('开始重试 ${failedList.length} 个失败段落');
 
     for (final text in failedList) {
       await retryTranslateParagraph(text);

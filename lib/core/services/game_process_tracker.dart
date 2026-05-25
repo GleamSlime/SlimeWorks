@@ -6,8 +6,8 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
-
 const Loggers _logger = Loggers(name: '游戏进程追踪');
+
 
 /// 如果主进程在这个秒数内退出，认为它可能是一个启动器（Launcher）
 const int _launcherExitThresholdSec = 45;

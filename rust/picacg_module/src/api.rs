@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 /// PicACG FFI API
 ///
 /// 通过 flutter_rust_bridge 暴露给 Dart 层
@@ -5,7 +6,6 @@ use crate::client::{ChannelMode, PicAcgClient};
 use anyhow::{anyhow, Result};
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
-use log::{info, warn};
 use serde_json::json;
 
 lazy_static! {
@@ -21,7 +21,7 @@ pub fn picacg_init() {}
 
 #[frb(sync)]
 pub fn picacg_set_proxy(proxy_url: String) {
-    info!(
+    sw_info!(
         "[PicACG] 设置代理: {}",
         if proxy_url.is_empty() {
             "无"
@@ -34,7 +34,7 @@ pub fn picacg_set_proxy(proxy_url: String) {
 
 #[frb(sync)]
 pub fn picacg_set_token(token: String) {
-    info!("[PicACG] 设置 token (len={})", token.len());
+    sw_info!("[PicACG] 设置 token (len={})", token.len());
     CLIENT.set_token(&token);
 }
 
@@ -45,7 +45,7 @@ pub fn picacg_get_token() -> String {
 
 #[frb(sync)]
 pub fn picacg_logout() {
-    info!("[PicACG] 退出登录，清除 token");
+    sw_info!("[PicACG] 退出登录，清除 token");
     CLIENT.clear_token();
 }
 
@@ -70,7 +70,7 @@ pub fn picacg_set_channel(mode: i32, custom: String) {
         7 => ChannelMode::LanRelay(custom.trim().to_string()),
         _ => ChannelMode::Direct,
     };
-    info!(
+    sw_info!(
         "[PicACG] 分流模式已切换: mode={} custom={:?} effective_custom={:?} -> {:?}",
         mode, custom, cdn_ip, channel
     );
@@ -117,7 +117,7 @@ pub async fn picacg_test_channel(mode: i32, custom: String) -> Result<u64> {
         7 => crate::client::ChannelMode::LanRelay(custom.trim().to_string()),
         _ => crate::client::ChannelMode::Direct,
     };
-    info!(
+    sw_info!(
         "[PicACG测速] 节点测试参数 mode={} custom={:?} effective_custom={:?}",
         mode, custom, cdn_ip
     );
@@ -130,10 +130,10 @@ pub async fn picacg_test_channel(mode: i32, custom: String) -> Result<u64> {
 // ==================== 认证 ====================
 
 pub async fn picacg_login(email: String, password: String) -> Result<String> {
-    info!("[PicACG] 开始登录: email={}", email);
+    sw_info!("[PicACG] 开始登录: email={}", email);
     let body = json!({ "email": email, "password": password });
     let resp = CLIENT.post("auth/sign-in", body).await.map_err(|e| {
-        warn!("[PicACG] 登录失败: {}", e);
+        sw_warn!("[PicACG] 登录失败: {}", e);
         anyhow!("{}", e)
     })?;
     let token = resp
@@ -142,7 +142,7 @@ pub async fn picacg_login(email: String, password: String) -> Result<String> {
         .and_then(|t| t.as_str())
         .ok_or_else(|| anyhow!("登录响应中未找到 token"))?
         .to_string();
-    info!("[PicACG] 登录成功, token len={}", token.len());
+    sw_info!("[PicACG] 登录成功, token len={}", token.len());
     CLIENT.set_token(&token);
     Ok(serde_json::to_string(&json!({ "token": token }))?)
 }

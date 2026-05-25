@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'base_viewmodel.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: '网络监听');
+
 
 /// 基础页面（StatefulWidget）
 abstract class BasePage<VM extends BaseViewModel> extends StatefulWidget {
@@ -119,7 +122,11 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: AppTheme.metrics.iconSize64, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: AppTheme.metrics.iconSize64,
+              color: Theme.of(context).colorScheme.error,
+            ),
             SizedBox(height: AppTheme.metrics.kSpace16),
             Text('页面加载失败', style: Theme.of(context).textTheme.titleLarge),
             SizedBox(height: AppTheme.metrics.kSpace8),
@@ -193,43 +200,41 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
       final initial = await _connectivity.checkConnectivity();
       _wasConnected = _isConnected(initial);
       if (kDebugMode) {
-        print('[网络监听] 初始网络状态: ${initial.map((e) => e.name).join(", ")} | 已连接: $_wasConnected');
+        _logger.info('[网络监听] 初始网络状态: ${initial.map((e) => e.name).join(", ")} | 已连接: $_wasConnected');
       }
     } catch (e) {
       _wasConnected = true;
       if (kDebugMode) {
-        print('[网络监听] 获取初始状态失败: $e');
+        _logger.error('[网络监听] 获取初始状态失败: $e');
       }
     }
 
     _connectivitySub = _connectivity.onConnectivityChanged.listen((results) {
       final isConnected = _isConnected(results);
       if (kDebugMode) {
-        print(
+        _logger.info(
           '[网络监听] 网络状态变化: ${results.map((e) => e.name).join(", ")} | 已连接: $isConnected | 之前状态: $_wasConnected',
         );
       }
 
       if (!_wasConnected && isConnected) {
-        // 从断网恢复到连网
         _wasConnected = true;
         if (kDebugMode) {
-          print('[网络监听] 检测到网络恢复，触发 onNetworkReconnected()');
+          _logger.info('[网络监听] 检测到网络恢复，触发 onNetworkReconnected()');
         }
         if (mounted) {
           onNetworkReconnected();
         }
       } else if (_wasConnected && !isConnected) {
-        // 从连网变为断网
         _wasConnected = false;
         if (kDebugMode) {
-          print('[网络监听] 检测到网络断开');
+          _logger.info('[网络监听] 检测到网络断开');
         }
       }
     });
 
     if (kDebugMode) {
-      print('[网络监听] 已启用：根据设备网络状态触发数据刷新');
+      _logger.info('[网络监听] 已启用：根据设备网络状态触发数据刷新');
     }
   }
 

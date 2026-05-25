@@ -2,6 +2,9 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: '书籍卡片');
+
 
 /// 书籍卡片组件
 class NovelCard extends StatelessWidget {
@@ -51,7 +54,10 @@ class NovelCard extends StatelessWidget {
                       top: AppTheme.metrics.kSpace8,
                       right: AppTheme.metrics.kSpace8,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppTheme.metrics.kSpace8,
+                          vertical: AppTheme.metrics.kSpace4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.7),
                           borderRadius: AppTheme.metrics.radius12,
@@ -99,9 +105,7 @@ class NovelCard extends StatelessWidget {
                     // 记录卡片信息区在不同布局下的尺寸，便于调试溢出问题
                     // 仅在 debug 模式打印，避免生产日志污染
                     assert(() {
-                      // 打印宽高信息
-                      // ignore: avoid_print
-                      print(
+                      _logger.info(
                         '[NovelCard] info area constraints: w=${constraints.maxWidth}, h=${constraints.maxHeight}',
                       );
                       return true;
@@ -116,7 +120,10 @@ class NovelCard extends StatelessWidget {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize13),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: AppTheme.metrics.fontSize13,
+                          ),
                         ),
                       );
                     }
@@ -132,19 +139,29 @@ class NovelCard extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: AppTheme.metrics.fontSize13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: AppTheme.metrics.fontSize13,
+                            ),
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace6),
                           Row(
                             children: [
-                              Icon(Icons.person_outline, size: AppTheme.metrics.iconSize12, color: Theme.of(context).hintColor),
+                              Icon(
+                                Icons.person_outline,
+                                size: AppTheme.metrics.iconSize12,
+                                color: Theme.of(context).hintColor,
+                              ),
                               SizedBox(width: AppTheme.metrics.kSpace4),
                               Expanded(
                                 child: Text(
                                   author,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                                  style: TextStyle(
+                                    fontSize: AppTheme.metrics.fontSize11,
+                                    color: Theme.of(context).hintColor,
+                                  ),
                                 ),
                               ),
                             ],
@@ -215,7 +232,9 @@ class NovelCard extends StatelessWidget {
           colors: [Colors.blue.shade400, Colors.purple.shade400, Colors.pink.shade400],
         ),
       ),
-      child: Center(child: Icon(Icons.menu_book, size: AppTheme.metrics.iconSize64, color: Colors.white70)),
+      child: Center(
+        child: Icon(Icons.menu_book, size: AppTheme.metrics.iconSize64, color: Colors.white70),
+      ),
     );
   }
 

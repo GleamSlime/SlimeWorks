@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: '缩略图队列');
+
 
 /// 单个缩略图任务。
 class _ThumbTask {
@@ -50,13 +53,13 @@ class VideoThumbQueue {
   /// 返回 future，任务完成时 resolve。
   Future<void> enqueue(String key, Future<void> Function() work) {
     if (_pending.containsKey(key)) {
-      debugPrint('[Queue] enqueue skip (已存在) key=$key');
+      _logger.info('[Queue] enqueue skip (已存在) key=$key');
       return _pending[key]!.done;
     }
     final task = _ThumbTask(key: key, work: work);
     _pending[key] = task;
     _queue.addLast(task);
-    debugPrint('[Queue] enqueue key=$key queueLen=${_queue.length}');
+    _logger.info('[Queue] enqueue key=$key queueLen=${_queue.length}');
     _tick();
     return task.done;
   }
@@ -68,14 +71,14 @@ class VideoThumbQueue {
       final existing = _pending[key]!;
       _queue.remove(existing);
       _queue.addFirst(existing);
-      debugPrint('[Queue] prioritize (移到队首) key=$key queueLen=${_queue.length}');
+      _logger.info('[Queue] prioritize (移到队首) key=$key queueLen=${_queue.length}');
       return existing.done;
     }
     // 若已在执行中（不在 _pending），直接等待
     final task = _ThumbTask(key: key, work: work);
     _pending[key] = task;
     _queue.addFirst(task);
-    debugPrint('[Queue] prioritize (新建到队首) key=$key queueLen=${_queue.length}');
+    _logger.info('[Queue] prioritize (新建到队首) key=$key queueLen=${_queue.length}');
     _tick();
     return task.done;
   }
@@ -87,7 +90,7 @@ class VideoThumbQueue {
     task._cancelled = true;
     _queue.remove(task);
     if (!task._completer.isCompleted) task._completer.complete();
-    debugPrint('[Queue] cancel key=$key');
+    _logger.info('[Queue] cancel key=$key');
   }
 
   /// 批量取消 [keys] 中每个 key 的等待任务。
@@ -105,7 +108,7 @@ class VideoThumbQueue {
     }
     _queue.clear();
     _pending.clear();
-    debugPrint('[Queue] cancelAll');
+    _logger.info('[Queue] cancelAll');
   }
 
   /// 查询 key 是否已在队列或执行中。
@@ -117,19 +120,19 @@ class VideoThumbQueue {
       _pending.remove(task.key);
       if (task.isCancelled) continue;
       _running++;
-      debugPrint('[Queue] 开始执行 key=${task.key} running=$_running');
+      _logger.info('[Queue] 开始执行 key=${task.key} running=$_running');
       task
           .work()
           .then((_) {
             if (!task._completer.isCompleted) task._completer.complete();
           })
           .catchError((e) {
-            debugPrint('[Queue] 执行异常 key=${task.key} err=$e');
+            _logger.error('[Queue] 执行异常 key=${task.key} err=$e');
             if (!task._completer.isCompleted) task._completer.complete();
           })
           .whenComplete(() {
             _running--;
-            debugPrint('[Queue] 执行完毕 key=${task.key} running=$_running');
+            _logger.info('[Queue] 执行完毕 key=${task.key} running=$_running');
             onTaskComplete?.call();
             _tick();
           });

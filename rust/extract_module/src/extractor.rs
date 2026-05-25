@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::Path;
@@ -5,7 +6,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use log::{error, info};
 
 use crate::types::*;
 
@@ -392,7 +392,7 @@ pub fn run_extract(
     let mut failed_archives: Vec<String> = Vec::new();
     let mut completed_count: u32 = 0;
 
-    info!(
+    sw_info!(
         "开始解压: 共 {} 个压缩包, 总大小 {} 字节",
         total_count, total_size
     );
@@ -412,7 +412,7 @@ pub fn run_extract(
 
     for (idx, archive) in archives.iter().enumerate() {
         if is_cancelled() {
-            info!("解压已取消");
+            sw_info!("解压已取消");
             return ExtractResult {
                 success: false,
                 total_archives: total_count,
@@ -474,10 +474,10 @@ pub fn run_extract(
         ) {
             Ok(()) => {
                 extracted_size += archive.file_size;
-                info!("解压成功: {}", archive.file_name);
+                sw_info!("解压成功: {}", archive.file_name);
             }
             Err(e) => {
-                error!("解压失败: {} - {}", archive.file_name, e);
+                sw_error!("解压失败: {} - {}", archive.file_name, e);
                 failed_archives.push(archive.file_name.clone());
             }
         }

@@ -11,8 +11,8 @@ import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
-
 const Loggers _logger = Loggers(name: '游戏详情ViewModel');
+
 
 class GameLibraryDetailViewModel extends BaseViewModel {
   final GameLibraryService _service = getIt<GameLibraryService>();
@@ -336,14 +336,17 @@ class GameLibraryDetailViewModel extends BaseViewModel {
     moegirlLoading.value = true;
     moegirlHtml.value = '';
     moegirlError.value = '';
+    final String url = 'https://zh.moegirl.org.cn/${Uri.encodeComponent(name)}';
+    _logger.info('[萌娘百科] 请求 URL: $url');
     rust_api
         .gameLibraryFetchMoegirl(gameName: name)
         .then((String html) {
+          _logger.info('[萌娘百科] 请求成功: $url');
           moegirlHtml.value = html;
           moegirlLoading.value = false;
         })
         .catchError((Object e) {
-          _logger.info('萌娘百科加载失败: $e');
+          _logger.info('[萌娘百科] 请求失败: $url -> $e');
           moegirlError.value = e.toString();
           moegirlLoading.value = false;
         });
@@ -373,14 +376,20 @@ class GameLibraryDetailViewModel extends BaseViewModel {
       } else {
         // Step 1: 搜索
         twodfanStatus.value = '正在搜索游戏...';
+        _logger.info(
+          '[2DFan] 搜索游戏: https://2dfan.com/subjects/search?keyword=${Uri.encodeComponent(name)}',
+        );
         final String subjectPath = await rust_api.gameLibrarySearch2DfanSubject(gameName: name);
         if (subjectPath.isEmpty) {
+          _logger.info('[2DFan] 未找到游戏: $name');
           twodfanStatus.value = '未在 2DFan 找到该游戏';
           return;
         }
+        _logger.info('[2DFan] 找到游戏 subject: https://2dfan.com$subjectPath');
 
         // Step 2: 获取存档下载列表（JSON 数组）
         twodfanStatus.value = '正在获取存档列表...';
+        _logger.info('[2DFan] 获取存档列表: https://2dfan.com$subjectPath/downloads/kind/cg_save');
         final String itemsJson = await rust_api.gameLibraryFetch2DfanDownloadPath(
           subjectPath: subjectPath,
         );
@@ -399,6 +408,7 @@ class GameLibraryDetailViewModel extends BaseViewModel {
       }
 
       // Step 3: 获取下载链接与简介
+      _logger.info('[2DFan] 获取下载详情: https://2dfan.com$actualDownloadPath');
       final String infoJson = await rust_api.gameLibraryFetch2DfanDownloadInfo(
         downloadPath: actualDownloadPath,
       );
@@ -423,12 +433,14 @@ class GameLibraryDetailViewModel extends BaseViewModel {
           .replaceAll(RegExp(r'[^\w.\-]'), '_');
       final String destPath = '$downloadsDir/$filename';
 
+      _logger.info('[2DFan] 开始下载: $fileUrl -> $destPath');
       // Rust 直接下载（内部已处理代理）
       await rust_api.gameLibraryDownloadFile(url: fileUrl, savePath: destPath);
+      _logger.info('[2DFan] 下载完成: $destPath');
       twodfanStatus.value = '下载完成: $destPath';
     } catch (e) {
       twodfanStatus.value = '下载失败: $e';
-      _logger.info('2DFan下载失败: $e');
+      _logger.info('[2DFan] 下载失败: $e');
     } finally {
       twodfanProcessing.value = false;
     }
@@ -438,8 +450,12 @@ class GameLibraryDetailViewModel extends BaseViewModel {
   Future<List<Map<String, String>>> fetchTwodfanDownloadItems() async {
     final String? name = game.value?.name;
     if (name == null || name.trim().isEmpty) return const <Map<String, String>>[];
+    _logger.info(
+      '[2DFan] 搜索游戏(选择器): https://2dfan.com/subjects/search?keyword=${Uri.encodeComponent(name)}',
+    );
     final String subjectPath = await rust_api.gameLibrarySearch2DfanSubject(gameName: name);
     if (subjectPath.isEmpty) return const <Map<String, String>>[];
+    _logger.info('[2DFan] 获取存档列表(选择器): https://2dfan.com$subjectPath/downloads/kind/cg_save');
     final String itemsJson = await rust_api.gameLibraryFetch2DfanDownloadPath(
       subjectPath: subjectPath,
     );

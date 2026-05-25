@@ -3,8 +3,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'app_colors.dart';
+const Loggers _logger = Loggers(name: '主题');
+
 
 ThemeMetrics appMetrics = AppTheme.metrics;
 
@@ -463,7 +466,7 @@ class AppTheme {
   }
 
   static void resetMetrics() {
-    debugPrint("重新计算界面尺寸中...");
+    _logger.info('[主题] 重新计算界面尺寸中...');
     metrics = ThemeMetrics();
     metricsVersion.value++;
   }

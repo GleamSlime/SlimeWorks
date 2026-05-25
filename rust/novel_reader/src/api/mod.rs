@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 mod api_metadata;
 mod api_search;
 
@@ -446,15 +447,8 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     use std::fs;
     use std::sync::Once;
     use std::time::Instant;
-    // 初始化日志（确保只初始化一次）以便将 Rust 层的 logger.info/debug! 输出到控制台
-    static INIT_LOGGER: Once = Once::new();
-    INIT_LOGGER.call_once(|| {
-        let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("info"))
-            .try_init();
-    });
-
     let start_time = Instant::now();
-    println!("[Novel] Starting to load novel: {}", file_path);
+    sw_info!("[Novel] Starting to load novel: {}", file_path);
 
     let path = PathBuf::from(&file_path);
 

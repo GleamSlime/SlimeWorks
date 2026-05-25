@@ -36,7 +36,7 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
           rawIdMap[syntheticId] = rawId;
         }
       } catch (error) {
-        logger.log('刷新远程媒体文件夹失败: ${node.name} -> $error', name: '媒体库');
+        _logger.error('刷新远程媒体文件夹失败: ${node.name} -> $error');
       }
     }
 
@@ -73,7 +73,7 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
           }
         }
       } catch (error) {
-        logger.log('刷新远程媒体集合失败: ${node.name} -> $error', name: '媒体库');
+        _logger.error('刷新远程媒体集合失败: ${node.name} -> $error');
       }
 
       // 获取远程节点的智能文件夹，并以 "smart-folder:remote:<nodeId>:<rawId>" 命名
@@ -95,7 +95,7 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
         }
         remoteSfMap[node.id] = nodeSfs;
       } catch (error) {
-        logger.log('刷新远程智能文件夹失败: ${node.name} -> $error', name: '媒体库');
+        _logger.error('刷新远程智能文件夹失败: ${node.name} -> $error');
       }
     }
 

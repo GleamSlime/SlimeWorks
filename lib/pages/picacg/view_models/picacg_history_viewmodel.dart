@@ -9,8 +9,10 @@ import 'dart:convert';
 
 import 'package:get/get.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/src/rust/api/picacg.dart' as rust;
+const Loggers _logger = Loggers(name: '观看记录');
 
 /// 单条观看记录数据
 class PicAcgHistoryItem {
@@ -77,7 +79,7 @@ class PicAcgHistoryViewModel extends BaseViewModel {
       items.assignAll(list.map((e) => PicAcgHistoryItem.fromJson(e as Map<String, dynamic>)));
       clearError();
     } catch (e) {
-      logger.error('加载观看记录失败: $e');
+      _logger.error('加载观看记录失败: $e');
       setError('加载失败');
     } finally {
       setLoading(false);
@@ -90,7 +92,7 @@ class PicAcgHistoryViewModel extends BaseViewModel {
       items.removeWhere((e) => e.comicId == comicId);
       await _persist();
     } catch (e) {
-      logger.error('删除观看记录失败: $e');
+      _logger.error('删除观看记录失败: $e');
     }
   }
 
@@ -100,7 +102,7 @@ class PicAcgHistoryViewModel extends BaseViewModel {
       items.clear();
       rust.picacgClearHistory();
     } catch (e) {
-      logger.error('清空观看记录失败: $e');
+      _logger.error('清空观看记录失败: $e');
     }
   }
 
@@ -151,9 +153,9 @@ class PicAcgHistoryViewModel extends BaseViewModel {
 
       final encoded = jsonEncode(list.map((e) => e.toJson()).toList());
       rust.picacgSaveHistoryRaw(json: encoded);
-      logger.info('保存观看记录成功: $comicTitle 第$epsOrder话');
+      _logger.info('保存观看记录成功: $comicTitle 第$epsOrder话');
     } catch (e) {
-      logger.error('保存观看记录失败: $e');
+      _logger.error('保存观看记录失败: $e');
     }
   }
 }

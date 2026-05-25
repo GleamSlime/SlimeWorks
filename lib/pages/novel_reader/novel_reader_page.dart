@@ -11,12 +11,15 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
+
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/pages/novel_reader/components/chapter_list.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_toolbar.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_content.dart';
+const Loggers _logger = Loggers(name: '阅读器');
 
 /// 书籍阅读器页面
 class NovelReaderPage extends StatefulWidget {
@@ -43,7 +46,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     // 优先使用传入的 novel，如果没有则尝试从 Get.arguments 获取（兼容旧代码）
     novel = widget.novel ?? Get.arguments as NovelMetadata;
     controller = Get.put(NovelReaderViewModel(novel), tag: novel.id);
-    debugPrint('NovelReaderPage initialized with novel: ${novel.title} (ID: ${novel.id})');
+    _logger.info('[阅读器] 初始化: ${novel.title} (ID: ${novel.id})');
   }
 
   @override
@@ -84,7 +87,13 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('阅读设置', style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.w600)),
+                    Text(
+                      '阅读设置',
+                      style: TextStyle(
+                        fontSize: AppTheme.metrics.fontSize15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     SizedBox(height: AppTheme.metrics.kSpace12),
                     Row(
                       children: [
@@ -440,9 +449,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                               child: Material(
                                 color: theme.colorScheme.surface,
                                 child: Column(
-                                  children: [
-                                    Expanded(child: ChapterList(controller: controller)),
-                                  ],
+                                  children: [Expanded(child: ChapterList(controller: controller))],
                                 ),
                               ),
                             ),
@@ -488,7 +495,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                           .take(3)
                           .map(
                             (tag) => Chip(
-                              label: Text(tag, style: TextStyle(fontSize: AppTheme.metrics.fontSize10)),
+                              label: Text(
+                                tag,
+                                style: TextStyle(fontSize: AppTheme.metrics.fontSize10),
+                              ),
                               padding: EdgeInsets.zero,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
@@ -590,11 +600,18 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: AppTheme.metrics.iconSize64, color: Theme.of(context).colorScheme.error),
+          Icon(
+            Icons.error_outline,
+            size: AppTheme.metrics.iconSize64,
+            color: Theme.of(context).colorScheme.error,
+          ),
           SizedBox(height: AppTheme.metrics.kSpace16),
           Text(
             controller.errorMessage.value,
-            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: AppTheme.metrics.fontSize15),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: AppTheme.metrics.fontSize15,
+            ),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: AppTheme.metrics.kSpace16),
@@ -635,7 +652,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     return Container(
       width: size,
       height: size * 1.4,
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.outline, borderRadius: AppTheme.metrics.radius4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outline,
+        borderRadius: AppTheme.metrics.radius4,
+      ),
       child: Icon(Icons.book, size: size * 0.5, color: Colors.white70),
     );
   }

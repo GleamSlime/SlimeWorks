@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 /// PicACG HTTP 客户端
 ///
 /// 基于 reqwest 封装，支持代理配置、分流（Channel Routing）和 Token 管理。
@@ -19,7 +20,6 @@ use hyper_util::{
     client::legacy::{connect::dns::Name, connect::HttpConnector, Client as HyperClient},
     rt::TokioExecutor,
 };
-use log::{debug, info, warn};
 use parking_lot::RwLock;
 use reqwest::{Client, Url};
 use rustls::{
@@ -405,7 +405,7 @@ impl PicAcgClient {
             ChannelMode::ReverseProxy(url) => format!("反代:{}", url),
             ChannelMode::LanRelay(addr) => format!("PC中转:{}", addr),
         };
-        info!("[PicACG测速] 开始测试节点: {}", channel_desc);
+        sw_info!("[PicACG测速] 开始测试节点: {}", channel_desc);
 
         // PC 中转模式：对 /picacg/ping 探头测速
         if let ChannelMode::LanRelay(relay_addr) = &mode {
@@ -417,11 +417,11 @@ impl PicAcgClient {
                 .map_err(|e| PicAcgError::Network(e.to_string()))?;
             client.get(&url).send().await.map_err(|e| {
                 let msg = format!("中转服务器 {} 不可达: {}", relay_addr, e);
-                warn!("[PicACG测速] {}", msg);
+                sw_warn!("[PicACG测速] {}", msg);
                 PicAcgError::Network(msg)
             })?;
             let elapsed = t0.elapsed().as_millis() as u64;
-            info!("[PicACG测速] PC中转[{}] 延迟={}ms", relay_addr, elapsed);
+            sw_info!("[PicACG测速] PC中转[{}] 延迟={}ms", relay_addr, elapsed);
             return Ok(elapsed);
         }
 
@@ -434,7 +434,7 @@ impl PicAcgClient {
         // build_headers 传 Some("") 使签名中包含空 authorization header（原项目行为）
         let mut headers = signature::build_headers(path, "GET", Some(""));
         Self::rewrite_headers_for_channel(&mut headers, &mode);
-        debug!("[PicACG测速] 目标URL: {}", url);
+        sw_debug!("[PicACG测速] 目标URL: {}", url);
 
         let t0 = Instant::now();
         let mut req = client.get(&url);
@@ -448,12 +448,12 @@ impl PicAcgClient {
             .map_err(|e| {
                 let detail = Self::format_error_chain(&e);
                 let msg = format!("节点[{}]连接失败: {}", channel_desc, detail);
-                warn!("[PicACG测速] {}", msg);
+                sw_warn!("[PicACG测速] {}", msg);
                 PicAcgError::Network(msg)
             })?;
 
         let elapsed = t0.elapsed().as_millis() as u64;
-        info!(
+        sw_info!(
             "[PicACG测速] 节点[{}] 延迟={}ms HTTP={}",
             channel_desc, elapsed, status
         );
@@ -534,7 +534,7 @@ impl PicAcgClient {
                     }
                     src = cause.source();
                 }
-                warn!("[PicACG] send_via_fixed_ip 连接失败 ip={} url={} err={}", ip_str, url, chain);
+                sw_warn!("[PicACG] send_via_fixed_ip 连接失败 ip={} url={} err={}", ip_str, url, chain);
                 PicAcgError::Network(format!("网络错误: {}", chain))
             })?;
         let status = response.status().as_u16();
@@ -620,7 +620,7 @@ impl PicAcgClient {
                         PicAcgError::Network(format!("图片重定向地址无效 '{}': {}", location, e))
                     })?
                 };
-                debug!("[PicACG IMG] 跟随图片重定向 -> {}", current_url);
+                sw_debug!("[PicACG IMG] 跟随图片重定向 -> {}", current_url);
                 continue;
             }
 
@@ -666,7 +666,7 @@ impl PicAcgClient {
 
         for raw_url in candidate_urls {
             let request_url = Self::compose_image_url_for_channel(&raw_url, &channel)?;
-            debug!(
+            sw_debug!(
                 "[PicACG IMG] 下载图片 url={} channel={:?}",
                 request_url, channel
             );
@@ -681,7 +681,7 @@ impl PicAcgClient {
                         {
                             Ok(bytes) => return Ok(bytes),
                             Err(err) => {
-                                warn!(
+                                sw_warn!(
                                     "[PicACG IMG] 分流IP下载失败 ip={} url={} err={}",
                                     candidate_ip, request_url, err
                                 );
@@ -732,7 +732,7 @@ impl PicAcgClient {
             match result {
                 Ok(bytes) => return Ok(bytes),
                 Err(err) => {
-                    warn!(
+                    sw_warn!(
                         "[PicACG IMG] 图片候选地址失败 url={} err={}",
                         request_url, err
                     );
@@ -830,7 +830,7 @@ impl PicAcgClient {
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
-        debug!("[PicACG GET] {}", url);
+        sw_debug!("[PicACG GET] {}", url);
 
         // PC 中转模式：转发到局域网节点服务器
         if let ChannelMode::LanRelay(relay_addr) = &channel {
@@ -855,7 +855,7 @@ impl PicAcgClient {
                 {
                     Ok((status, body)) => {
                         if status != 200 {
-                            warn!(
+                            sw_warn!(
                                 "[PicACG GET] 非200响应 path={} status={} body={}",
                                 path, status, body
                             );
@@ -863,7 +863,7 @@ impl PicAcgClient {
                         return check_api_response(status, body);
                     }
                     Err(e) => {
-                        warn!(
+                        sw_warn!(
                             "[PicACG GET] 分流IP失败 ip={} path={} err={}",
                             candidate_ip, path, e
                         );
@@ -885,7 +885,7 @@ impl PicAcgClient {
 
         let resp = req.send().await.map_err(|e| {
             let detail = Self::format_error_chain(&e);
-            warn!("[PicACG GET] 请求失败 path={} err={}", path, detail);
+            sw_warn!("[PicACG GET] 请求失败 path={} err={}", path, detail);
             PicAcgError::Network(format!("网络错误: {}", detail))
         })?;
         let status = resp.status().as_u16();
@@ -893,9 +893,9 @@ impl PicAcgClient {
             .json()
             .await
             .map_err(|e| PicAcgError::Parse(e.to_string()))?;
-        debug!("[PicACG GET] 响应 path={} status={}", path, status);
+        sw_debug!("[PicACG GET] 响应 path={} status={}", path, status);
         if status != 200 {
-            warn!(
+            sw_warn!(
                 "[PicACG GET] 非200响应 path={} status={} body={}",
                 path, status, body
             );
@@ -923,7 +923,7 @@ impl PicAcgClient {
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
-        debug!("[PicACG POST] {} [{}]", url, channel_desc);
+        sw_debug!("[PicACG POST] {} [{}]", url, channel_desc);
 
         // PC 中转模式：转发到局域网节点服务器
         if let ChannelMode::LanRelay(relay_addr) = &channel {
@@ -954,7 +954,7 @@ impl PicAcgClient {
                 {
                     Ok((status, resp_body)) => {
                         if status != 200 {
-                            warn!(
+                            sw_warn!(
                                 "[PicACG POST] 非200响应 path={} status={} body={}",
                                 path, status, resp_body
                             );
@@ -962,7 +962,7 @@ impl PicAcgClient {
                         return check_api_response(status, resp_body);
                     }
                     Err(e) => {
-                        warn!(
+                        sw_warn!(
                             "[PicACG POST] 分流IP失败 ip={} path={} err={}",
                             candidate_ip, path, e
                         );
@@ -984,7 +984,7 @@ impl PicAcgClient {
 
         let resp = req.send().await.map_err(|e| {
             let detail = Self::format_error_chain(&e);
-            warn!("[PicACG POST] 请求失败 path={} err={}", path, detail);
+            sw_warn!("[PicACG POST] 请求失败 path={} err={}", path, detail);
             PicAcgError::Network(format!("网络错误: {}", detail))
         })?;
         let status = resp.status().as_u16();
@@ -992,9 +992,9 @@ impl PicAcgClient {
             .json()
             .await
             .map_err(|e| PicAcgError::Parse(e.to_string()))?;
-        debug!("[PicACG POST] 响应 path={} status={}", path, status);
+        sw_debug!("[PicACG POST] 响应 path={} status={}", path, status);
         if status != 200 {
-            warn!(
+            sw_warn!(
                 "[PicACG POST] 非200响应 path={} status={} body={}",
                 path, status, resp_body
             );
@@ -1022,7 +1022,7 @@ impl PicAcgClient {
         };
 
         let url = Self::compose_url_for_channel(path, &channel);
-        debug!("[PicACG PUT] {} [{}]", url, channel_desc);
+        sw_debug!("[PicACG PUT] {} [{}]", url, channel_desc);
 
         // PC 中转模式：转发到局域网节点服务器
         if let ChannelMode::LanRelay(relay_addr) = &channel {
@@ -1047,7 +1047,7 @@ impl PicAcgClient {
                 {
                     Ok((status, resp_body)) => {
                         if status != 200 {
-                            warn!(
+                            sw_warn!(
                                 "[PicACG PUT] 非200响应 path={} status={} body={}",
                                 path, status, resp_body
                             );
@@ -1055,7 +1055,7 @@ impl PicAcgClient {
                         return check_api_response(status, resp_body);
                     }
                     Err(e) => {
-                        warn!(
+                        sw_warn!(
                             "[PicACG PUT] 分流IP失败 ip={} path={} err={}",
                             candidate_ip, path, e
                         );
@@ -1077,7 +1077,7 @@ impl PicAcgClient {
 
         let resp = req.send().await.map_err(|e| {
             let detail = Self::format_error_chain(&e);
-            warn!("[PicACG PUT] 请求失败 path={} err={}", path, detail);
+            sw_warn!("[PicACG PUT] 请求失败 path={} err={}", path, detail);
             PicAcgError::Network(format!("网络错误: {}", detail))
         })?;
         let status = resp.status().as_u16();
@@ -1085,9 +1085,9 @@ impl PicAcgClient {
             .json()
             .await
             .map_err(|e| PicAcgError::Parse(e.to_string()))?;
-        debug!("[PicACG PUT] 响应 path={} status={}", path, status);
+        sw_debug!("[PicACG PUT] 响应 path={} status={}", path, status);
         if status != 200 {
-            warn!(
+            sw_warn!(
                 "[PicACG PUT] 非200响应 path={} status={} body={}",
                 path, status, resp_body
             );
@@ -1257,7 +1257,7 @@ fn check_api_response(http_status: u16, body: Value) -> PicAcgResult<Value> {
             .and_then(|v| v.as_str())
             .unwrap_or("未知错误")
             .to_string();
-        warn!(
+        sw_warn!(
             "[PicACG API] 业务错误 http_status={} code={} message={}",
             http_status, code, msg
         );

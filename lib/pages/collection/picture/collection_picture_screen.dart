@@ -15,6 +15,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/media_browse_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_detail.dart';
@@ -22,6 +23,7 @@ import 'package:slime_works/pages/collection/picture/components/media_selection_
 import 'package:slime_works/pages/collection/picture/components/picture_library_toolbar.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+const Loggers _logger = Loggers(name: '图片浏览');
 
 class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
   const CollectionPictureScreen({super.key});
@@ -60,12 +62,12 @@ class _CollectionPictureScreenState
 
   /// 导航时重建 [_scrollController]，并同步保存当前滚动位置到 viewModel。
   void _replaceScrollController() {
-    logger.d(
+    _logger.info(
       '[Scroll] _replaceScrollController START: hasClients=${_scrollController.hasClients}, offset=${_scrollController.hasClients ? _scrollController.offset : "N/A"}',
     );
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
-      logger.d(
+      _logger.info(
         '[Scroll] _replaceScrollController: saved offset=${_scrollController.offset} to viewModel',
       );
     }
@@ -73,7 +75,7 @@ class _CollectionPictureScreenState
     _scrollController.dispose();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
-    logger.d(
+    _logger.info(
       '[Scroll] _replaceScrollController END: new controller with initialScrollOffset=${_scrollController.initialScrollOffset}',
     );
   }
@@ -100,21 +102,21 @@ class _CollectionPictureScreenState
   }
 
   void _enterCollection(String id) {
-    logger.d(
+    _logger.info(
       '[Scroll] _enterCollection START: id=$id, savedScrollOffset=${viewModel.savedScrollOffset.value}',
     );
     setState(() => _navForward = true);
     viewModel.enterCollection(id);
-    logger.d('[Scroll] _enterCollection END');
+    _logger.info('[Scroll] _enterCollection END');
   }
 
   void _exitCollection() {
-    logger.d(
+    _logger.info(
       '[Scroll] _exitCollection START: savedScrollOffset=${viewModel.savedScrollOffset.value}',
     );
     setState(() => _navForward = false);
     viewModel.exitCollection();
-    logger.d(
+    _logger.info(
       '[Scroll] _exitCollection END: scrollRestoreTarget=${viewModel.scrollRestoreTarget.value}',
     );
   }
@@ -137,24 +139,24 @@ class _CollectionPictureScreenState
   void initState() {
     super.initState();
     final initialOffset = viewModel.savedScrollOffset.value;
-    logger.d(
+    _logger.info(
       '[Scroll] initState: creating ScrollController with initialScrollOffset=$initialOffset',
     );
     _scrollController = ScrollController(initialScrollOffset: initialOffset);
     _scrollController.addListener(_onScroll);
     // Consume scroll-restore signals emitted by the viewmodel on exitCollection / exitFolder
     _scrollRestoreWorker = ever<double?>(viewModel.scrollRestoreTarget, (offset) {
-      logger.d('[Scroll] _scrollRestoreWorker triggered: offset=$offset');
+      _logger.info('[Scroll] _scrollRestoreWorker triggered: offset=$offset');
       if (offset == null) return;
       final scrollController = _scrollController;
       int attempts = 0;
       void performRestore() {
         attempts++;
         if (!mounted) {
-          logger.d('[Scroll] _scrollRestoreWorker: not mounted, abort');
+          _logger.info('[Scroll] _scrollRestoreWorker: not mounted, abort');
           return;
         }
-        logger.d(
+        _logger.info(
           '[Scroll] _scrollRestoreWorker attempt $attempts: hasClients=${scrollController.hasClients}, offset=$offset',
         );
         if (!scrollController.hasClients && attempts < 10) {
@@ -166,14 +168,14 @@ class _CollectionPictureScreenState
             scrollController.position.minScrollExtent,
             scrollController.position.maxScrollExtent,
           );
-          logger.d('[Scroll] _scrollRestoreWorker: jumpTo $clamped (from $offset)');
+          _logger.info('[Scroll] _scrollRestoreWorker: jumpTo $clamped (from $offset)');
           scrollController.jumpTo(clamped);
-          logger.d(
+          _logger.info(
             '[Scroll] _scrollRestoreWorker: after jumpTo, position=${scrollController.offset}',
           );
         }
         viewModel.scrollRestoreTarget.value = null;
-        logger.d('[Scroll] _scrollRestoreWorker: set scrollRestoreTarget=null');
+        _logger.info('[Scroll] _scrollRestoreWorker: set scrollRestoreTarget=null');
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) => performRestore());
@@ -183,7 +185,7 @@ class _CollectionPictureScreenState
   void _onScroll() {
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
-      logger.d('[Scroll] _onScroll: saved offset=${_scrollController.offset}');
+      _logger.info('[Scroll] _onScroll: saved offset=${_scrollController.offset}');
     }
   }
 

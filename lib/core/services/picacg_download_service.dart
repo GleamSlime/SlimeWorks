@@ -16,8 +16,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/pages/picacg/models/picacg_download_models.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
+const Loggers _logger = Loggers(name: 'PicACG下载');
 
 const String _kDownloadMetaKey = 'picacg_downloads_meta_v1';
 
@@ -50,9 +52,9 @@ class PicAcgDownloadService {
         entries.value = PicAcgDownloadEntry.decodeAll(raw);
       }
     } catch (e) {
-      logger.error('PicACG 下载服务初始化失败: $e');
+      _logger.error('PicACG 下载服务初始化失败: $e');
     }
-    logger.info('PicACG 下载服务已初始化，共 ${entries.length} 条记录');
+    _logger.info('PicACG 下载服务已初始化，共 ${entries.length} 条记录');
   }
 
   /// ---- 外部 API ----
@@ -199,7 +201,7 @@ class PicAcgDownloadService {
           info.downloadedPages++;
           entries.refresh();
         } catch (e) {
-          logger.error('PicACG 图片下载失败 $comicId/$epsOrder/p${i + 1}: $e');
+          _logger.error('PicACG 图片下载失败 $comicId/$epsOrder/p${i + 1}: $e');
           // 单张失败不中断整体，继续下载剩余
         }
       }
@@ -213,7 +215,7 @@ class PicAcgDownloadService {
     } catch (e) {
       info.status = PicAcgDownloadStatus.error;
       info.errorMsg = e.toString();
-      logger.error('PicACG 章节下载失败 $comicId/$epsOrder: $e');
+      _logger.error('PicACG 章节下载失败 $comicId/$epsOrder: $e');
     }
 
     entries.refresh();
@@ -237,7 +239,7 @@ class PicAcgDownloadService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kDownloadMetaKey, PicAcgDownloadEntry.encodeAll(entries));
     } catch (e) {
-      logger.error('PicACG 下载元数据持久化失败: $e');
+      _logger.error('PicACG 下载元数据持久化失败: $e');
     }
   }
 }

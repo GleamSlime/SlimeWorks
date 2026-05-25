@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
+import 'package:slime_works/core/utils/logger.dart';
+
+final _logger = Loggers(name: '阅读器');
 
 /// 构建纯文本模式下带搜索高亮的文本
 Widget buildHighlightedText({
@@ -30,15 +33,15 @@ Widget buildHighlightedText({
 
   try {
     final selIdx = controller.selectedSearchIndex.value;
-    debugPrint(
+    _logger.info(
       '[Reader] buildHighlightedText: chapterMatches=${chapterMatches.length} selectedSearchIndex=$selIdx',
     );
     for (int i = 0; i < chapterMatches.length; i++) {
       final m = chapterMatches[i];
-      debugPrint('[Reader] match[$i] pos=${m.position} snippet="${m.snippet}"');
+      _logger.info('[Reader] match[$i] pos=${m.position} snippet="${m.snippet}"');
     }
   } catch (e) {
-    debugPrint('[Reader] buildHighlightedText log error: $e');
+    _logger.error('[Reader] buildHighlightedText log error: $e');
   }
 
   // 构建高亮文本片段
@@ -114,7 +117,7 @@ Widget buildHighlightedText({
       }
 
       if (!resolved) {
-        debugPrint(
+        _logger.info(
           '[Reader] Warning: could not resolve non-empty highlight for match at pos=${match.position}. Skipping.',
         );
         continue;
@@ -138,7 +141,7 @@ Widget buildHighlightedText({
 
     // 添加高亮文本
     final isSelected = i == currentSelectedInChapter;
-    debugPrint(
+    _logger.info(
       '[Reader] building span for match[$i]: start=$matchStart end=$matchEnd isSelected=$isSelected',
     );
     spans.add(
@@ -175,7 +178,7 @@ Widget buildHighlightedText({
     );
   }
 
-  debugPrint(
+  _logger.info(
     '[Reader] built spans count=${spans.length} lastEnd=$lastEnd contentLength=${content.length} currentSelectedInChapter=$currentSelectedInChapter',
   );
   return SelectableText.rich(TextSpan(children: spans), textAlign: TextAlign.justify);
@@ -190,7 +193,7 @@ String highlightHtml(String html, String keyword, {int? selectedOccurrence}) {
   final escaped = RegExp.escape(keyword);
 
   try {
-    debugPrint(
+    _logger.info(
       '[Reader] highlightHtml start: htmlLen=$htmlLen, keyword="$keyword" selectedOccurrence=$selectedOccurrence',
     );
 
@@ -227,7 +230,7 @@ String highlightHtml(String html, String keyword, {int? selectedOccurrence}) {
     final allMatches = RegExp('($escaped)', caseSensitive: false).allMatches(plain).toList();
     final selectedOccurrenceIndex = selectedOccurrence;
 
-    debugPrint(
+    _logger.info(
       '[Reader] highlightHtml: plainLen=${plain.length} matches=${allMatches.length} selectedOcc=$selectedOccurrenceIndex',
     );
 
@@ -251,7 +254,7 @@ String highlightHtml(String html, String keyword, {int? selectedOccurrence}) {
 
     if (intervals.isEmpty) {
       final ms = DateTime.now().difference(highlightStart).inMilliseconds;
-      debugPrint('[Reader] highlightHtml: no intervals found, took ${ms}ms');
+      _logger.info('[Reader] highlightHtml: no intervals found, took ${ms}ms');
       return html;
     }
 
@@ -283,13 +286,13 @@ String highlightHtml(String html, String keyword, {int? selectedOccurrence}) {
 
     final result = sb.toString();
     final ms = DateTime.now().difference(highlightStart).inMilliseconds;
-    debugPrint(
+    _logger.info(
       '[Reader] highlightHtml done in ${ms}ms: produced length=${result.length}, added ${intervals.length} highlights',
     );
     return result;
   } catch (e) {
     final ms = DateTime.now().difference(highlightStart).inMilliseconds;
-    debugPrint('[Reader] highlightHtml error after ${ms}ms: $e');
+    _logger.error('[Reader] highlightHtml error after ${ms}ms: $e');
     return html.replaceAllMapped(
       RegExp('($escaped)', caseSensitive: false),
       (m) => '<mark>${m[0]}</mark>',
@@ -392,7 +395,7 @@ String embedLocalImages(String html) {
           }
         }
         if (!file.existsSync()) {
-          debugPrint('[Reader] Image file not found: $path');
+          _logger.error('[Reader] Image file not found: $path');
           idx = endQuote + 1;
           continue;
         }
@@ -417,7 +420,7 @@ String embedLocalImages(String html) {
         idx = q + 1 + dataUrl.length;
         embeddedCount++;
       } catch (e) {
-        debugPrint('[Reader] Failed to embed image src="$src": $e');
+        _logger.error('[Reader] Failed to embed image src="$src": $e');
         idx = endQuote + 1;
         continue;
       }
@@ -426,7 +429,7 @@ String embedLocalImages(String html) {
     final embedMs = DateTime.now().difference(embedStart).inMilliseconds;
     final totalKB = (totalBytes / 1024).toStringAsFixed(1);
     if (embeddedCount > 0) {
-      debugPrint(
+      _logger.info(
         '[Reader] embedLocalImages: $embeddedCount images, ${totalKB}KB total, took ${embedMs}ms',
       );
     }
@@ -434,7 +437,7 @@ String embedLocalImages(String html) {
     return out;
   } catch (e) {
     final embedMs = DateTime.now().difference(embedStart).inMilliseconds;
-    debugPrint('[Reader] embedLocalImages error after ${embedMs}ms: $e');
+    _logger.error('[Reader] embedLocalImages error after ${embedMs}ms: $e');
     return html;
   }
 }
@@ -453,7 +456,7 @@ String processHtmlForCompute(Map params) {
         : null;
     final bool embedImages = params['embedImages'] == true;
 
-    debugPrint(
+    _logger.info(
       '[Isolate] processHtmlForCompute started: ${htmlLenKB}KB, keyword="$keyword", embedImages=$embedImages',
     );
 
@@ -462,7 +465,7 @@ String processHtmlForCompute(Map params) {
       final highlightStart = DateTime.now();
       html = highlightHtml(html, keyword, selectedOccurrence: selectedOccurrence);
       final highlightMs = DateTime.now().difference(highlightStart).inMilliseconds;
-      debugPrint('[Isolate] highlightHtml took ${highlightMs}ms');
+      _logger.info('[Isolate] highlightHtml took ${highlightMs}ms');
     }
 
     // Step 2: Embed images
@@ -470,7 +473,7 @@ String processHtmlForCompute(Map params) {
       final embedStart = DateTime.now();
       html = embedLocalImages(html);
       final embedMs = DateTime.now().difference(embedStart).inMilliseconds;
-      debugPrint('[Isolate] embedLocalImages took ${embedMs}ms');
+      _logger.info('[Isolate] embedLocalImages took ${embedMs}ms');
     }
 
     // Step 3: Ensure paragraphs for plain-text-like content
@@ -485,20 +488,18 @@ String processHtmlForCompute(Map params) {
       } catch (_) {}
     }
     final paragraphMs = DateTime.now().difference(paragraphStart).inMilliseconds;
-    debugPrint(
+    _logger.info(
       '[Isolate] paragraph processing took ${paragraphMs}ms (hasParagraphLike=$hasParagraphLike)',
     );
 
     final totalMs = DateTime.now().difference(isolateStart).inMilliseconds;
     final outputLenKB = (html.length / 1024).toStringAsFixed(1);
-    debugPrint(
-      '[Isolate] processHtmlForCompute completed: ${outputLenKB}KB output in ${totalMs}ms',
-    );
+    _logger.info('[Isolate] processHtmlForCompute completed: ${outputLenKB}KB output in ${totalMs}ms');
 
     return html;
   } catch (e) {
     final errorMs = DateTime.now().difference(isolateStart).inMilliseconds;
-    debugPrint('[Isolate] *** processHtmlForCompute ERROR after ${errorMs}ms: $e ***');
+    _logger.error('[Isolate] *** processHtmlForCompute ERROR after ${errorMs}ms: $e ***');
     return params['html']?.toString() ?? '';
   }
 }

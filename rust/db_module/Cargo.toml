@@ -28,7 +28,7 @@ rand = "0.8"
 # 工具
 anyhow = "1.0"
 thiserror = "1.0"
-log = "0.4"
+slime_logger = { path = "../slime_logger" }
 
 [lib]
 crate-type = ["staticlib", "rlib"]

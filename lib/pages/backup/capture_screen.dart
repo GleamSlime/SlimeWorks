@@ -6,10 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/ffmpeg.dart';
+import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/pages/backup/capture_screen/models/recording_task.dart';
 import 'package:slime_works/pages/backup/capture_screen/widgets/dialogs.dart';
 import 'package:slime_works/pages/backup/capture_screen/widgets/list_builders.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+const Loggers _logger = Loggers(name: '截图');
 
 /// 数据捕获页面
 class CaptureScreen extends StatefulWidget {
@@ -50,7 +53,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    _loadCapturedData().catchError((e) => debugPrint('Load data error: $e'));
+    _loadCapturedData().catchError((e) => _logger.error('Load data error: $e'));
     _checkProxyStatus();
     _checkCertificateStatus();
     _loadAvailableVideos();
@@ -85,7 +88,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
           try {
             thumbnailPath = await generateVideoThumbnail(videoUrl: url, cacheDir: cacheDir.path);
           } catch (e) {
-            debugPrint('生成缩略图失败 $url: $e');
+            _logger.error('生成缩略图失败 $url: $e');
           }
 
           tasks.add(
@@ -100,7 +103,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
             ),
           );
         } catch (e) {
-          debugPrint('处理视频失败 $url: $e');
+          _logger.error('处理视频失败 $url: $e');
           // 如果获取元数据失败，使用默认值
           tasks.add(
             RecordingTask(
@@ -230,7 +233,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         // 启动定时刷新（每2秒刷新一次数据）
         _refreshTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
           if (mounted) {
-            _loadCapturedData().catchError((e) => debugPrint('Refresh error: $e'));
+            _loadCapturedData().catchError((e) => _logger.error('Refresh error: $e'));
           }
         });
       }

@@ -79,7 +79,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   final NodeSettingsService nodeSettingsService = getIt<NodeSettingsService>();
   final MediaPrefsService mediaPrefs = getIt<MediaPrefsService>();
-  final Loggers logger = Loggers(name: '媒体库');
+  final Loggers _logger = Loggers(name: '媒体库');
 
   final folders = <media_api.MediaFolder>[].obs;
   final remoteFolders = <media_api.MediaFolder>[].obs;
@@ -193,7 +193,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   @override
   Future<void> onInitAsync() async {
-    debugPrint('[MediaLibrary] onInitAsync: isInitialized=$isInitialized');
+    _logger.info('[媒体库] onInitAsync: isInitialized=$isInitialized');
     // 初始化媒体偏好设置，并将并发量同步到队列
     await mediaPrefs.init();
     _coverQueue.concurrency = mediaPrefs.concurrency.value;
@@ -221,7 +221,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     });
     if (isInitialized) {
       // 永久 ViewModel 再次进入页面时：刷新数据 + 重新加载智能文件夹（磁盘上的数据描和内存始终保持同步）
-      debugPrint('[MediaLibrary] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
+      _logger.info('[媒体库] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
       await _loadSmartFolders();
       await refreshAll();
       return;
@@ -229,16 +229,16 @@ class MediaLibraryViewModel extends BaseViewModel {
     await super.onInitAsync();
     // nodeSettingsService 在 main() 中已 await 初始化，此处为兜底
     if (!nodeSettingsService.isInitialized) {
-      debugPrint('[MediaLibrary] onInitAsync: nodeSettingsService 尚未初始化，等待...');
+      _logger.info('[媒体库] onInitAsync: nodeSettingsService 尚未初始化，等待...');
       await nodeSettingsService.init();
     }
     await _loadSmartFolders();
     await _loadCollectionOrders();
     await _loadFavorites();
-    debugPrint('[MediaLibrary] onInitAsync: 开始 refreshAll');
+    _logger.info('[媒体库] onInitAsync: 开始 refreshAll');
     await refreshAll();
-    debugPrint(
-      '[MediaLibrary] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
+    _logger.info(
+      '[媒体库] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
     );
     // 启动集合文件夹自动扫描定时器（每 30 秒轮询）
     _folderWatchTimer?.cancel();
@@ -433,7 +433,7 @@ class MediaLibraryViewModel extends BaseViewModel {
       // 再叠加拖拽自定义排序：保留拖拽指定的相对位置，未设定的按创建时间顺序填入
       final customOrder = _collectionOrders[orderKey];
       if (customOrder != null && customOrder.isNotEmpty) {
-        logger.d(
+        _logger.info(
           '_applySortOrder: combinedSort orderKey=$orderKey applying ${customOrder.length}-item custom order',
         );
         result.sort((a, b) {
@@ -449,7 +449,7 @@ class MediaLibraryViewModel extends BaseViewModel {
           return 0;
         });
       } else {
-        logger.d(
+        _logger.info(
           '_applySortOrder: combinedSort orderKey=$orderKey NO custom order, using createdAt',
         );
       }
@@ -488,7 +488,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     // dateUpdated：按 updatedAt 降序排列，不应用拖拽顺序
     final result = [...list];
     result.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    logger.d('_applySortOrder: dateUpdated orderKey=$orderKey sorted by updatedAt desc');
+    _logger.info('_applySortOrder: dateUpdated orderKey=$orderKey sorted by updatedAt desc');
     return result;
   }
 
@@ -715,42 +715,42 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   void _generateCollectionVideoThumbnailAsync(String collectionId, String videoPath) {
-    debugPrint('[VideoThumb] 入队封面: collectionId=$collectionId');
+    _logger.info('[VideoThumb] 入队封面: collectionId=$collectionId');
     _currentFolderCoverKeys.add(collectionId);
     _coverQueue.enqueue(collectionId, () async {
       _currentFolderCoverKeys.remove(collectionId);
       try {
         final frames = await _doGetScrubFrames(videoPath);
         if (frames.isEmpty) {
-          debugPrint('[VideoThumb] 帧为空，不缓存: collectionId=$collectionId');
+          _logger.info('[VideoThumb] 帧为空，不缓存: collectionId=$collectionId');
           return;
         }
         final thumb = frames[frames.length ~/ 2];
-        debugPrint('[VideoThumb] ✅ 封面生成成功: collectionId=$collectionId');
+        _logger.info('[VideoThumb] 封面生成成功: collectionId=$collectionId');
         _collectionVideoThumbnails[collectionId] = thumb;
         _asyncCoverVersion.value++;
       } catch (e) {
-        debugPrint('[VideoThumb] ❌ 封面生成失败: collectionId=$collectionId err=$e');
+        _logger.error('[VideoThumb] 封面生成失败: collectionId=$collectionId err=$e');
       }
     });
   }
 
   void _generateCollectionAudioCoverAsync(String collectionId, String audioPath) {
-    debugPrint('[AudioCover] 入队集合封面: collectionId=$collectionId');
+    _logger.info('[AudioCover] 入队集合封面: collectionId=$collectionId');
     _currentFolderCoverKeys.add(collectionId);
     _coverQueue.enqueue(collectionId, () async {
       _currentFolderCoverKeys.remove(collectionId);
       try {
         final coverPath = await getAudioCoverSource(audioPath);
         if (coverPath == null || coverPath.isEmpty) {
-          debugPrint('[AudioCover] 无嵌入封面: collectionId=$collectionId');
+          _logger.info('[AudioCover] 无嵌入封面: collectionId=$collectionId');
           return;
         }
-        debugPrint('[AudioCover] ✅ 封面提取成功: collectionId=$collectionId');
+        _logger.info('[AudioCover] 封面提取成功: collectionId=$collectionId');
         _collectionVideoThumbnails[collectionId] = coverPath;
         _asyncCoverVersion.value++;
       } catch (e) {
-        debugPrint('[AudioCover] ❌ 封面提取失败: collectionId=$collectionId err=$e');
+        _logger.error('[AudioCover] 封面提取失败: collectionId=$collectionId err=$e');
       }
     });
   }
@@ -847,7 +847,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         }
         _asyncCoverVersion.value++;
       } catch (e) {
-        debugPrint('[VideoThumb] hover 封面生成失败: collectionId=$collectionId slotIdx=$slotIdx err=$e');
+        _logger.error('[VideoThumb] hover 封面生成失败: collectionId=$collectionId slotIdx=$slotIdx err=$e');
       }
     });
   }
@@ -907,7 +907,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         _videoFrameCache.remove(videoPath);
         _videoFrameResults.remove(videoPath);
         completer.complete(const []);
-        debugPrint('[VideoThumb] scrub 帧失败: $videoPath err=$e');
+        _logger.error('[VideoThumb] scrub 帧失败: $videoPath err=$e');
       }
     }
 
@@ -971,7 +971,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     isLoadingRemote.value = true;
     refreshRemoteLibrary()
         .catchError((Object e) {
-          debugPrint('[MediaLibrary] 远程刷新失败: $e');
+          _logger.error('[媒体库] 远程刷新失败: $e');
         })
         .whenComplete(() {
           isLoadingRemote.value = false;
@@ -982,14 +982,14 @@ class MediaLibraryViewModel extends BaseViewModel {
   Future<void> _pollCollectionFolders() async {
     // 只处理本地集合，跳过远程
     final localCols = collections.toList(growable: false);
-    logger.d('_pollCollectionFolders: 开始轮询 ${localCols.length} 个本地集合');
+    _logger.info('_pollCollectionFolders: 开始轮询 ${localCols.length} 个本地集合');
     bool anyChanged = false;
     for (final col in localCols) {
       try {
         final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount;
         final dir = Directory(col.folderPath);
         if (!dir.existsSync()) {
-          logger.d('_pollCollectionFolders: 目录不存在，跳过: ${col.folderPath}');
+          _logger.info('_pollCollectionFolders: 目录不存在，跳过: ${col.folderPath}');
           continue;
         }
         final exts = {
@@ -1020,18 +1020,18 @@ class MediaLibraryViewModel extends BaseViewModel {
           }
         }
         _collectionItemCountSnapshot[col.id] = count;
-        logger.d('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count');
+        _logger.info('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count');
         if (count != prev) {
-          logger.d('_pollCollectionFolders: 检测到变化，触发增量扫描: ${col.title}');
+          _logger.info('_pollCollectionFolders: 检测到变化，触发增量扫描: ${col.title}');
           await media_api.importMediaFolder(folderPath: col.folderPath);
           anyChanged = true;
         }
       } catch (e) {
-        logger.d('_pollCollectionFolders: 集合 ${col.id} 检查异常: $e');
+        _logger.info('_pollCollectionFolders: 集合 ${col.id} 检查异常: $e');
       }
     }
     if (anyChanged) {
-      logger.d('_pollCollectionFolders: 有变化，刷新集合列表');
+      _logger.info('_pollCollectionFolders: 有变化，刷新集合列表');
       await loadCollections();
       if (currentCollectionId.value != null && !isRemoteCollection(currentCollectionId.value!)) {
         await loadCurrentCollectionItems();
@@ -1042,7 +1042,7 @@ class MediaLibraryViewModel extends BaseViewModel {
   Future<void> loadFolders() async {
     try {
       final raw = media_api.getAllMediaFolders();
-      debugPrint('[MediaLibrary] loadFolders: 加载到 ${raw.length} 个文件夹');
+      _logger.info('[媒体库] loadFolders: 加载到 ${raw.length} 个文件夹');
       folders.assignAll(raw);
       // 仅当不在智能文件夹中时才自动退出：智能文件夹不在 mergedFolders 里，不应被误清除
       if (currentFolderId.value != null &&
@@ -1051,7 +1051,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         currentFolderId.value = null;
       }
     } catch (error) {
-      debugPrint('[MediaLibrary] loadFolders 异常: $error');
+      _logger.error('[媒体库] loadFolders 异常: $error');
       showSnack('错误', '加载媒体文件夹失败: $error');
     }
   }
@@ -1059,7 +1059,7 @@ class MediaLibraryViewModel extends BaseViewModel {
   Future<void> loadCollections() async {
     try {
       final rawCollections = media_api.getAllMediaCollections();
-      debugPrint('[MediaLibrary] loadCollections: 加载到 ${rawCollections.length} 个集合');
+      _logger.info('[媒体库] loadCollections: 加载到 ${rawCollections.length} 个集合');
       collections.assignAll(rawCollections);
       _hoverSourcesCache.clear(); // 集合更新时清空封面缓存
       // 集合大小异步计算，避免阻塞 assignAll 后的 UI 渲染
@@ -1068,7 +1068,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         exitCollection();
       }
     } catch (error) {
-      debugPrint('[MediaLibrary] loadCollections 异常: $error');
+      _logger.error('[媒体库] loadCollections 异常: $error');
       showSnack('错误', '加载媒体集合失败: $error');
     }
   }
@@ -1083,7 +1083,7 @@ class MediaLibraryViewModel extends BaseViewModel {
           _collectionItemPaths[s.collectionId] = s.filePaths;
         }
       } catch (e) {
-        debugPrint('[MediaLibrary] _computeCollectionSizesAsync 批量统计失败，降级逐条查询: $e');
+        _logger.error('[媒体库] _computeCollectionSizesAsync 批量统计失败，降级逐条查询: $e');
         // 降级：逐条查询（兜底）
         for (final col in cols) {
           if (!_collectionSizes.containsKey(col.id) || !_collectionItemPaths.containsKey(col.id)) {
@@ -1123,7 +1123,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         favoriteCollectionIds.assignAll(list.toSet());
       }
     } catch (e) {
-      logger.e('加载收藏列表失败: $e');
+      _logger.error('加载收藏列表失败: $e');
     }
   }
 
@@ -1132,7 +1132,7 @@ class MediaLibraryViewModel extends BaseViewModel {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_favoritesPrefsKey, jsonEncode(favoriteCollectionIds.toList()));
     } catch (e) {
-      logger.e('保存收藏列表失败: $e');
+      _logger.error('保存收藏列表失败: $e');
     }
   }
 
@@ -1174,12 +1174,12 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   Future<void> enterCollection(String collectionId) async {
-    logger.d(
+    _logger.info(
       '[Scroll] enterCollection START: collectionId=$collectionId, savedScrollOffset=${savedScrollOffset.value}, _savedBrowseScrollOffset=$_savedBrowseScrollOffset',
     );
     _savedBrowseScrollOffset = savedScrollOffset.value;
     _browseScrollOffsets[currentFolderId.value] = savedScrollOffset.value;
-    logger.d(
+    _logger.info(
       '[Scroll] enterCollection: saved browse offset to _savedBrowseScrollOffset=$_savedBrowseScrollOffset, _browseScrollOffsets[${currentFolderId.value}]=${_browseScrollOffsets[currentFolderId.value]}',
     );
     currentItems.clear();
@@ -1188,44 +1188,44 @@ class MediaLibraryViewModel extends BaseViewModel {
     exitSelection();
 
     final previousOffset = _browseScrollOffsets[collectionId];
-    logger.d(
+    _logger.info(
       '[Scroll] enterCollection: previousOffset for collectionId=$collectionId is $previousOffset',
     );
     if (previousOffset != null) {
       savedScrollOffset.value = previousOffset;
-      logger.d(
+      _logger.info(
         '[Scroll] enterCollection: restored savedScrollOffset to previousOffset=$previousOffset',
       );
     } else {
       savedScrollOffset.value = 0.0;
-      logger.d('[Scroll] enterCollection: no previousOffset, set savedScrollOffset=0');
+      _logger.info('[Scroll] enterCollection: no previousOffset, set savedScrollOffset=0');
     }
 
     await loadCurrentCollectionItems();
-    logger.d('[Scroll] enterCollection END: savedScrollOffset=${savedScrollOffset.value}');
+    _logger.info('[Scroll] enterCollection END: savedScrollOffset=${savedScrollOffset.value}');
   }
 
   void exitCollection() {
     final collectionId = currentCollectionId.value;
-    logger.d(
+    _logger.info(
       '[Scroll] exitCollection START: collectionId=$collectionId, savedScrollOffset=${savedScrollOffset.value}, _savedBrowseScrollOffset=$_savedBrowseScrollOffset',
     );
     if (collectionId != null) {
       _browseScrollOffsets[collectionId] = savedScrollOffset.value;
-      logger.d(
+      _logger.info(
         '[Scroll] exitCollection: saved collection offset to _browseScrollOffsets[$collectionId]=${savedScrollOffset.value}',
       );
     }
     final browseOffset = _savedBrowseScrollOffset;
     savedScrollOffset.value = browseOffset;
     scrollRestoreTarget.value = browseOffset;
-    logger.d(
+    _logger.info(
       '[Scroll] exitCollection: restored browse offset: savedScrollOffset=$browseOffset, scrollRestoreTarget=$browseOffset',
     );
     currentCollectionId.value = null;
     currentItems.clear();
     exitSelection();
-    logger.d('[Scroll] exitCollection END');
+    _logger.info('[Scroll] exitCollection END');
   }
 
   void enterFolder(String folderId) {
@@ -1238,7 +1238,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     // Debug: show what custom order (if any) will be applied for this folder
     final orderKey = folderId;
     final savedOrder = _collectionOrders[orderKey];
-    logger.d(
+    _logger.info(
       'enterFolder: folderId=$folderId, savedOrder=${savedOrder == null ? "NONE" : savedOrder.join(",")}',
     );
     exitCollection();
@@ -1363,13 +1363,13 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   Future<List<String>> _doGetScrubFrames(String videoPath) async {
-    debugPrint('[VideoThumb] _doGetScrubFrames: 解析 ffmpeg 路径...');
+    _logger.info('[VideoThumb] _doGetScrubFrames: 解析 ffmpeg 路径...');
     final ffmpegExe = await RustFFmpeg.resolvePath();
     if (ffmpegExe == null) {
-      debugPrint('[VideoThumb] _doGetScrubFrames: ffmpeg 不可用，返回空');
+      _logger.info('[VideoThumb] _doGetScrubFrames: ffmpeg 不可用，返回空');
       return const <String>[];
     }
-    debugPrint('[VideoThumb] _doGetScrubFrames: ffmpegExe=$ffmpegExe, 提取帧中...');
+    _logger.info('[VideoThumb] _doGetScrubFrames: ffmpegExe=$ffmpegExe, 提取帧中...');
     return _doExtractScrubFrames(videoPath, ffmpegExe);
   }
 
@@ -1383,9 +1383,9 @@ class MediaLibraryViewModel extends BaseViewModel {
         '${appDir.path}${sep}library${sep}media${sep}thumbnails${sep}scrub$sep$key',
       );
       await frameDir.create(recursive: true);
-      debugPrint('[VideoThumb] 帧目录: ${frameDir.path}');
+      _logger.info('[VideoThumb] 帧目录: ${frameDir.path}');
     } catch (e) {
-      debugPrint('[VideoThumb] 帧目录创建失败: $e');
+      _logger.error('[VideoThumb] 帧目录创建失败: $e');
       return const <String>[];
     }
 
@@ -1394,7 +1394,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     try {
       final ffprobeExe = await RustFFmpeg.resolveProbe();
       if (ffprobeExe != null) {
-        debugPrint('[VideoThumb] ffprobe: $ffprobeExe');
+        _logger.info('[VideoThumb] ffprobe: $ffprobeExe');
         final probe = await Process.run(ffprobeExe, [
           '-v',
           'error',
@@ -1407,17 +1407,17 @@ class MediaLibraryViewModel extends BaseViewModel {
         final parsed = double.tryParse((probe.stdout as String).trim());
         if (parsed != null && parsed > 0) {
           probedDuration = parsed;
-          debugPrint('[VideoThumb] ffprobe 时长: ${probedDuration}s');
+          _logger.info('[VideoThumb] ffprobe 时长: ${probedDuration}s');
         } else {
-          debugPrint(
+          _logger.info(
             '[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
           );
         }
       } else {
-        debugPrint('[VideoThumb] ffprobe 不可用，跳过时长探测');
+        _logger.info('[VideoThumb] ffprobe 不可用，跳过时长探测');
       }
     } catch (e) {
-      debugPrint('[VideoThumb] ffprobe 异常: $e');
+      _logger.error('[VideoThumb] ffprobe 异常: $e');
     }
 
     // 若 ffprobe 失败则只取前几秒以防 seek 越界（短视频 EINVAL）
@@ -1430,7 +1430,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     } else {
       frameCount = qualityLevel.frameCountFallback;
       duration = 4.0; // 保守值：只在前 4 秒内提取
-      debugPrint('[VideoThumb] ffprobe 失败，降级为 $frameCount 帧 / ${duration}s');
+      _logger.info('[VideoThumb] ffprobe 失败，降级为 $frameCount 帧 / ${duration}s');
     }
 
     final sep = Platform.pathSeparator;
@@ -1475,19 +1475,19 @@ class MediaLibraryViewModel extends BaseViewModel {
           try {
             if (outFile.existsSync()) outFile.deleteSync();
           } catch (_) {}
-          debugPrint('[VideoThumb] ffmpeg 帧$i 失败: exitCode=${result.exitCode} seek=$seek');
+          _logger.error('[VideoThumb] ffmpeg 帧$i 失败: exitCode=${result.exitCode} seek=$seek');
           consecutiveFails++;
           if (consecutiveFails >= 3) {
-            debugPrint('[VideoThumb] 连续 3 帧失败，提前终止');
+            _logger.info('[VideoThumb] 连续 3 帧失败，提前终止');
             break;
           }
         }
       } catch (e) {
-        debugPrint('[VideoThumb] ffmpeg 帧$i 异常: $e');
+        _logger.error('[VideoThumb] ffmpeg 帧$i 异常: $e');
         consecutiveFails++;
       }
     }
-    debugPrint('[VideoThumb] 提取完成: ${paths.length}/$frameCount 帧成功');
+    _logger.info('[VideoThumb] 提取完成: ${paths.length}/$frameCount 帧成功');
     return paths;
   }
 

@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::extractor;
@@ -18,10 +19,10 @@ const EXTRACT_PASSWORDS_TABLE: &str = "extract_passwords";
 
 pub fn extract_init_password_table(db_path: String) {
     if let Err(e) = db_module::db_init(db_path) {
-        log::error!("初始化数据库失败: {}", e);
+        sw_error!("初始化数据库失败: {}", e);
     }
     if let Err(e) = db_module::db_register_table(EXTRACT_PASSWORDS_TABLE.to_string()) {
-        log::error!("注册密码表失败: {}", e);
+        sw_error!("注册密码表失败: {}", e);
     }
 }
 
@@ -47,7 +48,7 @@ pub fn extract_add_password(password: String, remark: Option<String>) -> String 
     };
     let json = serde_json::to_string(&entry).unwrap_or_default();
     if let Err(e) = db_module::db_set(EXTRACT_PASSWORDS_TABLE.to_string(), entry.id.clone(), json) {
-        log::error!("保存密码失败: {}", e);
+        sw_error!("保存密码失败: {}", e);
     }
     serde_json::to_string(&entry).unwrap_or_default()
 }
@@ -120,7 +121,7 @@ pub fn extract_run_async(config_json: String) {
                 failed_archives: vec![],
                 error_message: Some(format!("解析配置失败: {}", e)),
             });
-            log::error!("解析配置失败: {}", e);
+            sw_error!("解析配置失败: {}", e);
             return;
         }
     };

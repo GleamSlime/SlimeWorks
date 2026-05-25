@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use crate::types::{
     DeviceInfo, EventType, HeartbeatPayload, MessageType, TransferEvent, TransferMessage,
 };
@@ -6,7 +7,6 @@ use async_channel::{Receiver, Sender};
 use chrono::Utc;
 use if_addrs::get_if_addrs;
 use lazy_static::lazy_static;
-use log::{debug, error, info};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
@@ -134,7 +134,7 @@ impl DiscoveryService {
         // Host name 使用 ASCII，避免设备名中的空格或非 ASCII 导致 Bonjour 兼容问题。
         let host_name = format!("slimeworks-{}.local.", device_id.replace('-', ""));
         let local_ips = collect_local_ips()?;
-        info!(
+        sw_info!(
             "mDNS broadcast register: service_name={}, host_name={}, port={}, ips={:?}",
             service_name, host_name, self.service_port, local_ips
         );
@@ -163,7 +163,7 @@ impl DiscoveryService {
             .register(my_service)
             .map_err(|e| anyhow!("Failed to register service: {}", e))?;
 
-        info!("Started broadcasting service: {}", service_name);
+        sw_info!("Started broadcasting service: {}", service_name);
         Ok(())
     }
 
@@ -182,7 +182,7 @@ impl DiscoveryService {
             while let Ok(event) = receiver.recv_async().await {
                 match event {
                     ServiceEvent::ServiceResolved(info) => {
-                        debug!("Service resolved: {:?}", info);
+                        sw_debug!("Service resolved: {:?}", info);
 
                         // 提取设备信息
                         let device_id = info
@@ -225,7 +225,7 @@ impl DiscoveryService {
                         drop(devices);
 
                         if is_new {
-                            info!(
+                            sw_info!(
                                 "New device discovered: {} ({}) ip={} port={}",
                                 device.device_name,
                                 device.device_id,
@@ -246,7 +246,7 @@ impl DiscoveryService {
                         }
                     }
                     ServiceEvent::ServiceRemoved(_type_name, fullname) => {
-                        debug!("Service removed: {}", fullname);
+                        sw_debug!("Service removed: {}", fullname);
 
                         // 从设备列表中移除
                         let mut devices = discovered_devices.write().await;
@@ -258,7 +258,7 @@ impl DiscoveryService {
                             devices.remove(&device_id);
                             drop(devices);
 
-                            info!("Device lost: {} ({})", device.device_name, device.device_id);
+                            sw_info!("Device lost: {} ({})", device.device_name, device.device_id);
 
                             // 发送事件
                             let _ = event_sender
@@ -277,7 +277,7 @@ impl DiscoveryService {
             }
         });
 
-        info!("Started browsing for services");
+        sw_info!("Started browsing for services");
         Ok(())
     }
 
@@ -362,13 +362,13 @@ impl DiscoveryService {
                 }
             }
             total_found += found;
-            info!(
+            sw_info!(
                 "Fallback scan done: subnet={}, local_ip={}, found={} (port={})",
                 prefix, local_ip, found, self.service_port
             );
         }
 
-        info!(
+        sw_info!(
             "Fallback scan total: subnets={}, total_found={}",
             subnets.len(),
             total_found
@@ -387,7 +387,7 @@ impl DiscoveryService {
         drop(devices);
 
         if is_new {
-            info!(
+            sw_info!(
                 "Fallback discovered device: {} ({}) ip={} port={}",
                 device.device_name, device.device_id, device.ip_address, device.port
             );
@@ -404,7 +404,7 @@ impl DiscoveryService {
         self.mdns
             .shutdown()
             .map_err(|e| anyhow!("Failed to shutdown mDNS: {}", e))?;
-        info!("Discovery service shutdown");
+        sw_info!("Discovery service shutdown");
         Ok(())
     }
 }
@@ -427,7 +427,7 @@ fn collect_local_ips() -> Result<Vec<IpAddr>> {
     }
 
     if ipv4.is_empty() && ipv6.is_empty() {
-        error!("No active local network interface found for mDNS broadcast");
+        sw_error!("No active local network interface found for mDNS broadcast");
         return Err(anyhow!("No active local network interface found"));
     }
 

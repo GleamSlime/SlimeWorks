@@ -4,7 +4,9 @@ import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/src/rust/api/sentry_log.dart';
+const Loggers _logger = Loggers(name: 'Sentry日志VM');
 
 class SentryLogViewModel extends GetxController {
   final RxList<Map<String, dynamic>> events = <Map<String, dynamic>>[].obs;
@@ -54,7 +56,7 @@ class SentryLogViewModel extends GetxController {
       await Future.wait([loadProjects(), loadStats(), loadEvents()]);
     } catch (e) {
       errorMessage.value = '加载数据失败: $e';
-      logger.e('加载Sentry日志数据失败: $e');
+      _logger.error('加载Sentry日志数据失败: $e');
     } finally {
       isLoading.value = false;
     }
@@ -100,7 +102,7 @@ class SentryLogViewModel extends GetxController {
       }
     } catch (e) {
       errorMessage.value = '加载事件失败: $e';
-      logger.e('加载Sentry事件失败: $e');
+      _logger.error('加载Sentry事件失败: $e');
     }
   }
 
@@ -115,7 +117,7 @@ class SentryLogViewModel extends GetxController {
         projects.value = result;
       }
     } catch (e) {
-      logger.e('加载Sentry项目失败: $e');
+      _logger.error('加载Sentry项目失败: $e');
     }
   }
 
@@ -129,7 +131,7 @@ class SentryLogViewModel extends GetxController {
         stats.value = result;
       }
     } catch (e) {
-      logger.e('加载Sentry统计失败: $e');
+      _logger.error('加载Sentry统计失败: $e');
     }
   }
 
@@ -187,7 +189,7 @@ class SentryLogViewModel extends GetxController {
         events.addAll(eventList);
       }
     } catch (e) {
-      logger.e('加载更多Sentry事件失败: $e');
+      _logger.error('加载更多Sentry事件失败: $e');
     }
   }
 
@@ -206,7 +208,7 @@ class SentryLogViewModel extends GetxController {
       }
       return result;
     } catch (e) {
-      logger.e('删除Sentry事件失败: $e');
+      _logger.error('删除Sentry事件失败: $e');
       return false;
     }
   }
@@ -225,7 +227,7 @@ class SentryLogViewModel extends GetxController {
       await loadStats();
       return count;
     } catch (e) {
-      logger.e('批量删除Sentry事件失败: $e');
+      _logger.error('批量删除Sentry事件失败: $e');
       return 0;
     }
   }
@@ -252,7 +254,7 @@ class SentryLogViewModel extends GetxController {
         );
       }
     } catch (e) {
-      logger.e('导出Sentry日志失败: $e');
+      _logger.error('导出Sentry日志失败: $e');
       return '';
     }
   }
@@ -262,11 +264,11 @@ class SentryLogViewModel extends GetxController {
       if (isLocal) {
         await sentryLogUpdateProjectName(projectId: projectId, name: name);
       } else {
-        logger.i('远程节点不支持更新项目名称');
+        _logger.info('远程节点不支持更新项目名称');
       }
       await loadProjects();
     } catch (e) {
-      logger.e('更新项目名称失败: $e');
+      _logger.error('更新项目名称失败: $e');
     }
   }
 
@@ -275,11 +277,11 @@ class SentryLogViewModel extends GetxController {
       if (isLocal) {
         await sentryLogClearProjectEvents(projectId: projectId);
       } else {
-        logger.i('远程节点不支持清空项目事件');
+        _logger.info('远程节点不支持清空项目事件');
       }
       await loadInitialData();
     } catch (e) {
-      logger.e('清空项目事件失败: $e');
+      _logger.error('清空项目事件失败: $e');
     }
   }
 

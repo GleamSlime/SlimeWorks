@@ -1,9 +1,9 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use crate::discovery::DiscoveryService;
 use crate::types::*;
 use anyhow::{anyhow, Result};
 use async_channel::{Receiver, Sender};
 use chrono::Utc;
-use log::{error, info, warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -88,7 +88,7 @@ impl TransferService {
         let listener = bind_listener_with_recovery(port).await?;
         let (event_sender, event_receiver) = async_channel::unbounded();
         let save_dir = std::env::temp_dir().to_str().unwrap_or("/tmp").to_string();
-        info!("传输服务已创建，端口 {}", port);
+        sw_info!("传输服务已创建，端口 {}", port);
         Ok(Self {
             port,
             device_id,
@@ -107,7 +107,7 @@ impl TransferService {
 
     /// 设置文件保存目录（由 Dart 注入 path_provider 的 documents 路径）
     pub async fn set_save_dir(&self, dir: String) {
-        info!("文件保存目录: {}", dir);
+        sw_info!("文件保存目录: {}", dir);
         *self.save_dir.write().await = dir;
     }
 
@@ -136,7 +136,7 @@ impl TransferService {
             loop {
                 tokio::select! {
                     _ = &mut stop_rx => {
-                        info!("传输监听器收到停止信号");
+                        sw_info!("传输监听器收到停止信号");
                         break;
                     }
                     result = listener.accept() => {
@@ -169,26 +169,26 @@ impl TransferService {
                                             && !msg.contains("unexpected eof")
                                             && !msg.contains("broken pipe")
                                         {
-                                            error!("处理连接 {} 错误: {}", addr, e);
+                                            sw_error!("处理连接 {} 错误: {}", addr, e);
                                         }
                                     }
                                 });
                             }
                             Err(e) => {
-                                error!("接受连接失败: {}", e);
+                                sw_error!("接受连接失败: {}", e);
                                 tokio::time::sleep(Duration::from_millis(50)).await;
                             }
                         }
                     }
                 }
             }
-            info!("传输监听器已停止");
+            sw_info!("传输监听器已停止");
         });
 
         self.stop_signal = Some(stop_tx);
         self.listen_task = Some(handle);
 
-        info!("已开始监听传入连接");
+        sw_info!("已开始监听传入连接");
         Ok(())
     }
 
@@ -202,10 +202,10 @@ impl TransferService {
             match tokio::time::timeout(Duration::from_secs(2), handle).await {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => {
-                    warn!("传输监听任务异常: {}", e);
+                    sw_warn!("传输监听任务异常: {}", e);
                 }
                 Err(_) => {
-                    warn!("等待传输监听任务超时");
+                    sw_warn!("等待传输监听任务超时");
                 }
             }
         }
@@ -367,7 +367,7 @@ impl TransferService {
             )
             .await
             {
-                error!("发送失败 {}: {}", transfer_id, e);
+                sw_error!("发送失败 {}: {}", transfer_id, e);
                 let mut t = transfers.write().await;
                 if let Some(item) = t.get_mut(&transfer_id) {
                     item.status = TransferStatus::Failed;
@@ -410,7 +410,7 @@ impl TransferService {
                     timestamp: Utc::now().to_rfc3339(),
                 })
                 .await;
-            info!("传输已接受: {}", transfer_id);
+            sw_info!("传输已接受: {}", transfer_id);
         }
         Ok(())
     }
@@ -436,7 +436,7 @@ impl TransferService {
                     timestamp: Utc::now().to_rfc3339(),
                 })
                 .await;
-            info!("传输已拒绝: {}", transfer_id);
+            sw_info!("传输已拒绝: {}", transfer_id);
         }
         Ok(())
     }
@@ -461,7 +461,7 @@ impl TransferService {
                     timestamp: Utc::now().to_rfc3339(),
                 })
                 .await;
-            info!("传输已取消: {}", transfer_id);
+            sw_info!("传输已取消: {}", transfer_id);
             Ok(())
         } else {
             Err(anyhow!("传输不存在: {}", transfer_id))
@@ -528,7 +528,7 @@ async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
             #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
             {
                 if force_kill_port_process(port) {
-                    warn!(
+                    sw_warn!(
                         "Port {} was occupied; killed process and retrying bind once",
                         port
                     );
@@ -543,7 +543,7 @@ async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
             // 这通常发生在 App 被杀死又快速重启时端口处于 TIME_WAIT 状态
             #[cfg(any(target_os = "ios", target_os = "android"))]
             {
-                warn!(
+                sw_warn!(
                     "Port {} in use on mobile, waiting for OS to release (TIME_WAIT)...",
                     port
                 );
@@ -551,7 +551,7 @@ async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
                 for &delay in retry_delays_ms {
                     tokio::time::sleep(Duration::from_millis(delay)).await;
                     if let Ok(listener) = TcpListener::bind(&addr).await {
-                        info!("Port {} bind succeeded after {}ms delay", port, delay);
+                        sw_info!("Port {} bind succeeded after {}ms delay", port, delay);
                         return Ok(listener);
                     }
                 }
@@ -572,7 +572,7 @@ fn force_kill_port_process(port: u16) -> bool {
     {
         Ok(output) => output,
         Err(e) => {
-            warn!("Failed to run lsof for port {}: {}", port, e);
+            sw_warn!("Failed to run lsof for port {}: {}", port, e);
             return false;
         }
     };
@@ -583,16 +583,16 @@ fn force_kill_port_process(port: u16) -> bool {
         match Command::new("kill").args(["-9", pid]).status() {
             Ok(status) if status.success() => {
                 killed_any = true;
-                info!("Killed process {} on tcp:{}", pid, port);
+                sw_info!("Killed process {} on tcp:{}", pid, port);
             }
             Ok(status) => {
-                warn!(
+                sw_warn!(
                     "Failed to kill process {} on tcp:{} (status={})",
                     pid, port, status
                 );
             }
             Err(e) => {
-                warn!(
+                sw_warn!(
                     "Failed to execute kill for pid {} on tcp:{}: {}",
                     pid, port, e
                 );
@@ -611,7 +611,7 @@ fn force_kill_port_process(port: u16) -> bool {
     let output = match Command::new("netstat").args(["-ano", "-p", "tcp"]).output() {
         Ok(output) => output,
         Err(e) => {
-            warn!("Failed to run netstat for port {}: {}", port, e);
+            sw_warn!("Failed to run netstat for port {}: {}", port, e);
             return false;
         }
     };
@@ -638,16 +638,16 @@ fn force_kill_port_process(port: u16) -> bool {
         match Command::new("taskkill").args(["/F", "/PID", &pid]).status() {
             Ok(status) if status.success() => {
                 killed_any = true;
-                info!("Killed process {} on tcp:{}", pid, port);
+                sw_info!("Killed process {} on tcp:{}", pid, port);
             }
             Ok(status) => {
-                warn!(
+                sw_warn!(
                     "Failed to kill process {} on tcp:{} (status={})",
                     pid, port, status
                 );
             }
             Err(e) => {
-                warn!(
+                sw_warn!(
                     "Failed to execute taskkill for pid {} on tcp:{}: {}",
                     pid, port, e
                 );
@@ -680,7 +680,7 @@ async fn do_send(
     .map_err(|_| anyhow!("连接超时"))?
     .map_err(|e| anyhow!("连接失败: {}", e))?;
 
-    info!("已连接到 {}:{}, 发送请求 {}", target_ip, target_port, tid);
+    sw_info!("已连接到 {}:{}, 发送请求 {}", target_ip, target_port, tid);
 
     // 2. 发送 TransferRequest
     send_msg(
@@ -730,7 +730,7 @@ async fn do_send(
                 })
                 .await;
         }
-        info!("传输被拒绝: {}", tid);
+        sw_info!("传输被拒绝: {}", tid);
         return Ok(());
     }
 
@@ -789,7 +789,7 @@ async fn do_send(
         }
     }
 
-    info!("传输发送完成: {}", tid);
+    sw_info!("传输发送完成: {}", tid);
     Ok(())
 }
 
@@ -882,7 +882,7 @@ async fn handle_connection(
 
             // 判断是否接受
             let accepted = if is_trusted {
-                info!(
+                sw_info!(
                     "信任设备自动接受: {} from {}",
                     tid, request.sender_device_name
                 );
@@ -915,11 +915,11 @@ async fn handle_connection(
                     .await
                 {
                     Ok(Ok(v)) => {
-                        info!("用户{}传输 {}", if v { "接受" } else { "拒绝" }, tid);
+                        sw_info!("用户{}传输 {}", if v { "接受" } else { "拒绝" }, tid);
                         v
                     }
                     _ => {
-                        info!("传输请求超时自动拒绝: {}", tid);
+                        sw_info!("传输请求超时自动拒绝: {}", tid);
                         pending_accept.write().await.remove(&tid);
                         false
                     }
@@ -991,7 +991,7 @@ async fn handle_connection(
                     {
                         Ok(()) => Some(save_path),
                         Err(e) => {
-                            error!("接收文件失败 {}: {}", tid, e);
+                            sw_error!("接收文件失败 {}: {}", tid, e);
                             let mut t = transfers.write().await;
                             if let Some(item) = t.get_mut(&tid) {
                                 item.status = TransferStatus::Failed;
@@ -1033,11 +1033,11 @@ async fn handle_connection(
                 }
             }
 
-            info!("传输接收完成: {}", tid);
+            sw_info!("传输接收完成: {}", tid);
         }
 
         _ => {
-            warn!("未处理的消息类型: {:?}", msg.message_type);
+            sw_warn!("未处理的消息类型: {:?}", msg.message_type);
         }
     }
 
@@ -1093,7 +1093,7 @@ async fn stream_file_to(
 
     // 发送 EOF 标记（长度为 0 的帧）
     write_frame(stream, &[]).await?;
-    info!("文件流发送完成: {} ({} bytes)", file_path, bytes_sent);
+    sw_info!("文件流发送完成: {} ({} bytes)", file_path, bytes_sent);
     Ok(())
 }
 
@@ -1146,7 +1146,7 @@ async fn receive_file_from_stream(
     }
 
     file.flush().await?;
-    info!("文件接收完成: {} ({} bytes)", save_path, bytes_received);
+    sw_info!("文件接收完成: {} ({} bytes)", save_path, bytes_received);
     Ok(())
 }
 

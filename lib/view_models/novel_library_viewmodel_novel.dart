@@ -105,7 +105,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       chapterCountMap.assignAll(loaded);
     } catch (e) {
       if (kDebugMode) {
-        print('[ChapterCount] load failed: $e');
+        _logger.error('[章节数] 加载失败: $e');
       }
     }
   }
@@ -117,7 +117,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       await file.writeAsString(jsonEncode(chapterCountMap), encoding: const Utf8Codec());
     } catch (e) {
       if (kDebugMode) {
-        print('[ChapterCount] save failed: $e');
+        _logger.error('[章节数] 保存失败: $e');
       }
     }
   }
@@ -138,7 +138,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         chapterCountMap[novel.id] = content.chapters.length;
         changed = true;
       } catch (e) {
-        logger.log('[ChapterCount] compute failed for ${novel.id}: $e');
+        _logger.log('[ChapterCount] compute failed for ${novel.id}: $e');
       }
     }
 
@@ -231,7 +231,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 扫描文件夹（优化版，支持大量书籍）。如果当前在文件夹内，自动将扫描到的书籍归入该文件夹
   Future<void> scanFolder() async {
     try {
-      logger.log('[ScanDebug] 触发 scanFolder，platform=${Platform.operatingSystem}', name: '书库');
+      _logger.log('[ScanDebug] 触发 scanFolder，platform=${Platform.operatingSystem}', name: '书库');
       scanStatusText.value = '准备扫描...';
       scanProgressText.value = '';
       if (Platform.isIOS || Platform.isAndroid) {
@@ -273,11 +273,11 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       final result = await FilePicker.platform.getDirectoryPath();
       if (result == null) {
         showSnack('提示', '已取消扫描');
-        logger.log('[ScanDebug] 用户取消目录选择', name: '书库');
+        _logger.log('[ScanDebug] 用户取消目录选择', name: '书库');
         return;
       }
       showSnack('扫描中', '正在扫描目录，请稍候...', duration: const Duration(seconds: 1));
-      logger.log('[ScanDebug] 已选择目录: $result', name: '书库');
+      _logger.log('[ScanDebug] 已选择目录: $result', name: '书库');
       scanStatusText.value = '扫描中...';
 
       isScanning.value = true;
@@ -294,7 +294,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         folderPath: scanRoot,
         batchSize: BigInt.from(100),
       );
-      logger.log('[ScanDebug] Rust返回批次数: ${batches.length}', name: '书库');
+      _logger.log('[ScanDebug] Rust返回批次数: ${batches.length}', name: '书库');
 
       int totalFound = 0;
       final allScannedPaths = <String>[];
@@ -325,7 +325,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
                 folderName: leafFolder,
                 cache: childFolderIdCache,
               );
-              logger.log(
+              _logger.log(
                 '[ScanDebug] 目录映射: file=${novel.filePath} -> childFolder=$leafFolder($targetFolderId)',
                 name: '书库',
               );
@@ -463,11 +463,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程节点映射不存在');
         }
-        await nodeSettingsService.updateNodeNovelInfo(
-          nodeId: nodeId,
-          novelId: rawId,
-          title: title,
-        );
+        await nodeSettingsService.updateNodeNovelInfo(nodeId: nodeId, novelId: rawId, title: title);
         await refreshRemoteNovels();
         return;
       }
@@ -641,9 +637,9 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
           .whereType<Map<String, dynamic>>()
           .map((m) => Map<String, String>.from(m))
           .toList();
-      logger.log('[KeywordRules] loaded ${keywordRules.length} rules from $_keywordRulesFilePath');
+      _logger.log('[KeywordRules] loaded ${keywordRules.length} rules from $_keywordRulesFilePath');
     } catch (e) {
-      if (kDebugMode) print('[KeywordRules] load failed: $e');
+      if (kDebugMode) _logger.error('[关键词规则] 加载失败: $e');
     }
   }
 
@@ -654,7 +650,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       await file.parent.create(recursive: true);
       await file.writeAsString(jsonEncode(keywordRules.toList()), encoding: const Utf8Codec());
     } catch (e) {
-      if (kDebugMode) print('[KeywordRules] save failed: $e');
+      if (kDebugMode) _logger.error('[关键词规则] 保存失败: $e');
     }
   }
 
@@ -679,7 +675,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 对指定书籍应用关键词规则，匹配的关键词自动添加对应 tag
   Future<void> applyKeywordRulesToNovel(String novelId, String filePath) async {
     if (keywordRules.isEmpty) return;
-    logger.log(
+    _logger.log(
       '[KeywordRules] apply to novel $novelId, rules=${keywordRules.length}, file=$filePath',
     );
     final currentNovel = novels.firstWhereOrNull((n) => n.id == novelId);
@@ -690,21 +686,21 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       final tag = rule['tag'] ?? keyword;
       if (keyword.isEmpty || tag.isEmpty) continue;
       try {
-        logger.log('[KeywordRules] checking keyword="$keyword" -> tag="$tag" for novel=$novelId');
+        _logger.log('[KeywordRules] checking keyword="$keyword" -> tag="$tag" for novel=$novelId');
         final matches = await searchInNovel(filePath: filePath, keyword: keyword);
-        logger.log(
+        _logger.log(
           '[KeywordRules] search returned ${matches.length} matches for keyword="$keyword"',
         );
         if (matches.isNotEmpty) {
           matchedTags.add(tag);
         }
       } catch (e) {
-        logger.log('[KeywordRules] searchInNovel error for keyword="$keyword" novel=$novelId: $e');
+        _logger.log('[KeywordRules] searchInNovel error for keyword="$keyword" novel=$novelId: $e');
       }
     }
     // 仅在有新 tag 时才更新
     if (matchedTags.length > currentNovel.tags.length) {
-      logger.log('[KeywordRules] updating tags for $novelId -> ${matchedTags.toList()}');
+      _logger.log('[KeywordRules] updating tags for $novelId -> ${matchedTags.toList()}');
       rust_api.updateNovelTags(novelId: novelId, tags: matchedTags.toList());
     }
   }
@@ -778,10 +774,10 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 导入后对指定路径对应的新书籍追港应用关键词规则
   Future<void> _autoTagByPaths(List<String> filePaths) async {
     if (keywordRules.isEmpty) {
-      logger.log('[KeywordRules] no rules to apply, skip auto-tag');
+      _logger.log('[KeywordRules] no rules to apply, skip auto-tag');
       return;
     }
-    logger.log(
+    _logger.log(
       '[KeywordRules] auto-tagging paths: ${filePaths.length}, rules=${keywordRules.length}',
     );
     for (final path in filePaths) {

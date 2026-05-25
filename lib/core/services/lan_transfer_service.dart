@@ -5,8 +5,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/src/rust/api/lan_transfer.dart' as rust_api;
 import 'package:slime_works/src/rust/frb_generated.dart';
+const Loggers _logger = Loggers(name: '局域网互传');
 
 /// 设备信息模型
 class DeviceInfo {
@@ -318,7 +320,7 @@ class LanTransferService {
     List<String> preTrustedJson = const [],
   }) async {
     if (_isRunning) {
-      logger.d('LAN Transfer service already running');
+      _logger.info('LAN Transfer service already running');
       return;
     }
 
@@ -345,7 +347,7 @@ class LanTransferService {
 
     try {
       await _ensureRustReady();
-      logger.i('LAN Transfer start begin, port=$port');
+      _logger.info('LAN Transfer start begin, port=$port');
       rust_api.lanTransferInit();
       // 获取 documents 目录才能在 iOS 等移动端保存文件
       final docsDir = await getApplicationDocumentsDirectory();
@@ -356,11 +358,11 @@ class LanTransferService {
       // 定期刷新设备列表
       _startDeviceRefresh();
 
-      logger.i('LAN Transfer service started on port $port');
+      _logger.info('LAN Transfer service started on port $port');
       await runSelfCheck(reason: 'start-service-success');
     } catch (e) {
       if (_isAddressInUseError(e)) {
-        logger.i('Port $port is in use, try restart with stop + retry');
+        _logger.info('Port $port is in use, try restart with stop + retry');
         try {
           await rust_api.lanTransferStop();
         } catch (_) {}
@@ -379,15 +381,15 @@ class LanTransferService {
             );
             _isRunning = true;
             _startDeviceRefresh();
-            logger.i('LAN Transfer service restarted on port $port (attempt ${attempt + 1})');
+            _logger.info('LAN Transfer service restarted on port $port (attempt ${attempt + 1})');
             await runSelfCheck(reason: 'start-service-restarted');
             return;
           } catch (retryErr) {
             if (!_isAddressInUseError(retryErr) || attempt >= retryDelays.length - 1) {
-              logger.e('LAN Transfer restart attempt ${attempt + 1} failed: $retryErr');
+              _logger.error('LAN Transfer restart attempt ${attempt + 1} failed: $retryErr');
               rethrow;
             }
-            logger.info('Port $port still in use, retrying (attempt ${attempt + 1})...');
+            _logger.info('Port $port still in use, retrying (attempt ${attempt + 1})...');
           }
         }
         return;
@@ -396,12 +398,12 @@ class LanTransferService {
       if (_isManagerAlreadyStartedError(e)) {
         _isRunning = true;
         _startDeviceRefresh();
-        logger.i('LAN Transfer manager already started, sync local running state');
+        _logger.info('LAN Transfer manager already started, sync local running state');
         await runSelfCheck(reason: 'manager-already-started');
         return;
       }
 
-      logger.e('Failed to start LAN Transfer service: $e');
+      _logger.error('Failed to start LAN Transfer service: $e');
       rethrow;
     }
   }
@@ -428,13 +430,13 @@ class LanTransferService {
   Future<void> _stopServiceInternal() async {
     try {
       await _ensureRustReady();
-      logger.i('LAN Transfer stop begin');
+      _logger.info('LAN Transfer stop begin');
       _stopDeviceRefresh();
       await rust_api.lanTransferStop();
       _isRunning = false;
-      logger.i('LAN Transfer service stopped');
+      _logger.info('LAN Transfer service stopped');
     } catch (e) {
-      logger.e('Failed to stop LAN Transfer service: $e');
+      _logger.error('Failed to stop LAN Transfer service: $e');
       rethrow;
     }
   }
@@ -456,7 +458,7 @@ class LanTransferService {
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
       return DeviceInfo.fromJson(json);
     } catch (e) {
-      logger.e('Failed to get local device: $e');
+      _logger.error('Failed to get local device: $e');
       rethrow;
     }
   }
@@ -469,10 +471,10 @@ class LanTransferService {
       final devices = jsonStrList
           .map((jsonStr) => DeviceInfo.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))
           .toList();
-      logger.i('LAN Transfer discovered devices count=${devices.length}');
+      _logger.info('LAN Transfer discovered devices count=${devices.length}');
       return devices;
     } catch (e) {
-      logger.e('Failed to get devices: $e');
+      _logger.error('Failed to get devices: $e');
       return [];
     }
   }
@@ -507,7 +509,7 @@ class LanTransferService {
       'discovered_devices': devices.map((d) => d.toJson()).toList(),
     };
 
-    logger.i('LAN Transfer self-check: ${jsonEncode(report)}');
+    _logger.info('LAN Transfer self-check: ${jsonEncode(report)}');
     return report;
   }
 
@@ -542,10 +544,10 @@ class LanTransferService {
         targetDeviceId: targetDeviceId,
         text: text,
       );
-      logger.i('Started text transfer: $transferId');
+      _logger.info('Started text transfer: $transferId');
       return transferId;
     } catch (e) {
-      logger.e('Failed to send text: $e');
+      _logger.error('Failed to send text: $e');
       rethrow;
     }
   }
@@ -565,10 +567,10 @@ class LanTransferService {
         targetDeviceId: targetDeviceId,
         filePath: filePath,
       );
-      logger.i('Started file transfer: $transferId');
+      _logger.info('Started file transfer: $transferId');
       return transferId;
     } catch (e) {
-      logger.e('Failed to send file: $e');
+      _logger.error('Failed to send file: $e');
       rethrow;
     }
   }
@@ -578,9 +580,9 @@ class LanTransferService {
     try {
       await _ensureRustReady();
       await rust_api.lanTransferAccept(transferId: transferId);
-      logger.i('Transfer accepted: $transferId');
+      _logger.info('Transfer accepted: $transferId');
     } catch (e) {
-      logger.e('Failed to accept transfer: $e');
+      _logger.error('Failed to accept transfer: $e');
       rethrow;
     }
   }
@@ -590,9 +592,9 @@ class LanTransferService {
     try {
       await _ensureRustReady();
       await rust_api.lanTransferReject(transferId: transferId);
-      logger.i('Transfer rejected: $transferId');
+      _logger.info('Transfer rejected: $transferId');
     } catch (e) {
-      logger.e('Failed to reject transfer: $e');
+      _logger.error('Failed to reject transfer: $e');
       rethrow;
     }
   }
@@ -602,9 +604,9 @@ class LanTransferService {
     try {
       await _ensureRustReady();
       await rust_api.lanTransferCancel(transferId: transferId);
-      logger.i('Transfer cancelled: $transferId');
+      _logger.info('Transfer cancelled: $transferId');
     } catch (e) {
-      logger.e('Failed to cancel transfer: $e');
+      _logger.error('Failed to cancel transfer: $e');
       rethrow;
     }
   }
@@ -618,7 +620,7 @@ class LanTransferService {
           .map((jsonStr) => TransferItem.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      logger.e('Failed to get transfers: $e');
+      _logger.error('Failed to get transfers: $e');
       return [];
     }
   }
@@ -628,9 +630,9 @@ class LanTransferService {
     try {
       await _ensureRustReady();
       await rust_api.lanTransferAddTrusted(deviceId: deviceId, deviceName: deviceName);
-      logger.i('Device trusted: $deviceName');
+      _logger.info('Device trusted: $deviceName');
     } catch (e) {
-      logger.e('Failed to trust device: $e');
+      _logger.error('Failed to trust device: $e');
       rethrow;
     }
   }
@@ -640,9 +642,9 @@ class LanTransferService {
     try {
       await _ensureRustReady();
       await rust_api.lanTransferRemoveTrusted(deviceId: deviceId);
-      logger.i('Device untrusted: $deviceId');
+      _logger.info('Device untrusted: $deviceId');
     } catch (e) {
-      logger.e('Failed to untrust device: $e');
+      _logger.error('Failed to untrust device: $e');
       rethrow;
     }
   }
@@ -653,7 +655,7 @@ class LanTransferService {
       await _ensureRustReady();
       return await rust_api.lanTransferIsTrusted(deviceId: deviceId);
     } catch (e) {
-      logger.e('Failed to check trusted device: $e');
+      _logger.error('Failed to check trusted device: $e');
       return false;
     }
   }
@@ -667,7 +669,7 @@ class LanTransferService {
           .map((jsonStr) => TrustedDevice.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      logger.e('Failed to get trusted devices: $e');
+      _logger.error('Failed to get trusted devices: $e');
       return [];
     }
   }

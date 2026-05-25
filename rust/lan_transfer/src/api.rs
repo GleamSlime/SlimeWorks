@@ -1,3 +1,4 @@
+use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 /// 局域网传输模块 API
 ///
 /// 为 Flutter Rust Bridge 提供局域网传输功能
@@ -6,7 +7,6 @@ use crate::types::*;
 use anyhow::Result;
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
-use log::{info, warn};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -22,7 +22,6 @@ pub use crate::types::{
 /// 初始化局域网传输服务
 #[frb(sync)]
 pub fn lan_transfer_init() -> Result<()> {
-    env_logger::try_init().ok();
     Ok(())
 }
 
@@ -38,11 +37,11 @@ pub async fn lan_transfer_start(
     let mut manager_guard = MANAGER.write().await;
 
     if manager_guard.is_some() {
-        warn!("lan_transfer_start ignored because manager already started");
+        sw_warn!("lan_transfer_start ignored because manager already started");
         return Ok(());
     }
 
-    info!(
+    sw_info!(
         "lan_transfer_start begin, port={}, save_dir={}, pre_trusted={}",
         port,
         save_dir,
@@ -71,9 +70,9 @@ pub async fn lan_transfer_start(
                 .to_string();
             if !id.is_empty() {
                 if let Err(e) = manager.add_trusted_device(id.clone(), name).await {
-                    warn!("预注入信任设备失败 {}: {}", id, e);
+                    sw_warn!("预注入信任设备失败 {}: {}", id, e);
                 } else {
-                    info!("预注入信任设备: {}", id);
+                    sw_info!("预注入信任设备: {}", id);
                 }
             }
         }
@@ -99,7 +98,7 @@ async fn load_or_create_device_id(save_dir: &str) -> String {
     if let Ok(content) = fs::read_to_string(&id_file).await {
         let id = content.trim().to_string();
         if !id.is_empty() {
-            info!("已加载持久化设备 ID: {}", id);
+            sw_info!("已加载持久化设备 ID: {}", id);
             return id;
         }
     }
@@ -107,12 +106,12 @@ async fn load_or_create_device_id(save_dir: &str) -> String {
     // 首次：生成新 UUID 并写入文件
     let new_id = Uuid::new_v4().to_string();
     if let Err(e) = fs::create_dir_all(dir).await {
-        warn!("创建互传目录失败: {}", e);
+        sw_warn!("创建互传目录失败: {}", e);
     }
     if let Err(e) = fs::write(&id_file, &new_id).await {
-        warn!("写入设备 ID 文件失败: {}", e);
+        sw_warn!("写入设备 ID 文件失败: {}", e);
     } else {
-        info!("已生成并保存新设备 ID: {}", new_id);
+        sw_info!("已生成并保存新设备 ID: {}", new_id);
     }
     new_id
 }
@@ -120,14 +119,14 @@ async fn load_or_create_device_id(save_dir: &str) -> String {
 /// 停止传输管理器
 pub async fn lan_transfer_stop() -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
-    info!("lan_transfer_stop begin");
+    sw_info!("lan_transfer_stop begin");
 
     if let Some(manager) = manager_guard.as_ref() {
         manager.stop().await?;
     }
 
     *manager_guard = None;
-    info!("lan_transfer_stop done");
+    sw_info!("lan_transfer_stop done");
 
     Ok(())
 }
@@ -161,7 +160,7 @@ pub async fn lan_transfer_get_devices() -> Result<Vec<String>> {
                 .filter(|d| d.device_id != local_device_id)
                 .collect();
             let is_empty = devices.is_empty();
-            info!("lan_transfer_get_devices count={}", devices.len());
+            sw_info!("lan_transfer_get_devices count={}", devices.len());
             let serialized: Result<Vec<String>> = devices
                 .iter()
                 .map(|d| serde_json::to_string(d).map_err(|e| anyhow::anyhow!(e)))

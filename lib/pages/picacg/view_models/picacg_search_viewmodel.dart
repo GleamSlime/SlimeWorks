@@ -7,9 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/picacg/components/picacg_block_words_dialog.dart';
 import 'package:slime_works/pages/picacg/models/picacg_models.dart';
+const Loggers _logger = Loggers(name: '搜索历史');
 
 /// 搜索历史存储 Key（SharedPreferences）
 const String _kSearchHistoryKey = 'picacg_search_history';
@@ -57,7 +59,7 @@ class PicAcgSearchViewModel extends BaseViewModel {
       final list = prefs.getStringList(_kSearchHistoryKey) ?? [];
       searchHistory.assignAll(list);
     } catch (e) {
-      logger.log('加载搜索历史失败: $e');
+      _logger.error('加载搜索历史失败: $e');
     }
   }
 
@@ -75,7 +77,7 @@ class PicAcgSearchViewModel extends BaseViewModel {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_kSearchHistoryKey, list);
     } catch (e) {
-      logger.log('保存搜索历史失败: $e');
+      _logger.error('保存搜索历史失败: $e');
     }
   }
 
@@ -86,7 +88,7 @@ class PicAcgSearchViewModel extends BaseViewModel {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_kSearchHistoryKey, List<String>.from(searchHistory));
     } catch (e) {
-      logger.log('删除搜索历史失败: $e');
+      _logger.error('删除搜索历史失败: $e');
     }
   }
 
@@ -97,7 +99,7 @@ class PicAcgSearchViewModel extends BaseViewModel {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kSearchHistoryKey);
     } catch (e) {
-      logger.log('清空搜索历史失败: $e');
+      _logger.error('清空搜索历史失败: $e');
     }
   }
 

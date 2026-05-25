@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/src/rust/api/http_bridge.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: 'HTTP桥测试');
+
 
 /// HTTP Bridge 测试页面 - 类似 Postman
 class HttpBridgeTestPage extends StatefulWidget {
@@ -52,10 +55,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
       // 初始化HTTP Bridge（注册所有接口）
       final success = initHttpBridge();
       if (success) {
-        debugPrint('HTTP Bridge initialized successfully');
+        _logger.info('HTTP Bridge initialized successfully');
       }
     } catch (e) {
-      debugPrint('Failed to initialize HTTP Bridge: $e');
+      _logger.error('Failed to initialize HTTP Bridge: $e');
     }
     _loadRegisteredHandlers();
   }
@@ -79,9 +82,9 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
         _registeredFunctions = functions.toList();
       });
 
-      debugPrint('Loaded ${handlers.length} registered handlers');
+      _logger.info('Loaded ${handlers.length} registered handlers');
     } catch (e) {
-      debugPrint('Failed to load registered handlers: $e');
+      _logger.error('Failed to load registered handlers: $e');
     }
   }
 
@@ -336,7 +339,9 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                   )
                 : const Icon(Icons.send),
             label: Text(_isLoading ? '发送中...' : '发送请求'),
-            style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace16)),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace16),
+            ),
           ),
         ],
       ),
@@ -436,7 +441,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 child: SingleChildScrollView(
                   child: SelectableText(
                     _response,
-                    style: TextStyle(fontFamily: 'monospace', fontSize: AppTheme.metrics.fontSize13),
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: AppTheme.metrics.fontSize13,
+                    ),
                   ),
                 ),
               ),
@@ -516,7 +524,10 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                             ),
                             for (var func in _registeredFunctions)
                               Padding(
-                                padding: EdgeInsets.only(left: AppTheme.metrics.kSpace16, top: AppTheme.metrics.kSpace2),
+                                padding: EdgeInsets.only(
+                                  left: AppTheme.metrics.kSpace16,
+                                  top: AppTheme.metrics.kSpace2,
+                                ),
                                 child: Text(
                                   '- $func',
                                   style: TextStyle(

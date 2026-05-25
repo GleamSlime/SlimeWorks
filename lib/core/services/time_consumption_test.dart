@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:slime_works/core/utils/logger.dart';
+const Loggers _logger = Loggers(name: '耗时测试');
+
 
 class TimeConsumptionTest {
   TimeConsumptionTest({this.tag});
@@ -9,7 +12,7 @@ class TimeConsumptionTest {
 
   void start({bool? log = true}) {
     if (kDebugMode && log == true) {
-      debugPrint('>>> ${tag ?? ""} 耗时开始计时 <<<');
+      _logger.info('>>> ${tag ?? ""} 耗时开始计时 <<<');
     }
     startTime = DateTime.now().millisecondsSinceEpoch;
   }
@@ -19,7 +22,7 @@ class TimeConsumptionTest {
     final duration = endTime - startTime;
 
     if (kDebugMode && log == true) {
-      debugPrint('>>> ${tag ?? ""} 耗时: $duration ms <<<');
+      _logger.info('>>> ${tag ?? ""} 耗时: $duration ms <<<');
     }
 
     return duration;

@@ -5,6 +5,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slime_works/core/utils/logger.dart';
+
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
@@ -59,6 +61,7 @@ part 'routes/capture_routers.dart';
 part 'routes/lan_transfer_routes.dart';
 part 'routes/picacg_routes.dart';
 part 'routes/game_library_routes.dart';
+const Loggers _logger = Loggers(name: '路由');
 
 /// 路由路径常量
 class Routes {
@@ -157,7 +160,7 @@ class AppRoutes {
         if (matched != null) {
           final permission = (matched as dynamic).permission;
           if (!RoleManager.canAccess(permission)) {
-            debugPrint('无权限访问 $path (需要 $permission)，重定向到 /dashboard');
+            _logger.info('[路由] 无权限访问 $path (需要 $permission)，重定向到 /dashboard');
             return '/dashboard';
           }
         }

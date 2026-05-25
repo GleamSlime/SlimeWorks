@@ -28,16 +28,16 @@ class GameLibraryMetadataApi {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
-          _metadataApiLogger.info('[REQ] ${options.method} ${options.uri}');
+          _metadataApiLogger.info('[元数据→] ${options.method} ${options.uri}');
           handler.next(options);
         },
         onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
-          _metadataApiLogger.info('[RES] ${response.statusCode} ${response.requestOptions.uri}');
+          _metadataApiLogger.info('[元数据←] ${response.statusCode} ${response.requestOptions.uri}');
           handler.next(response);
         },
         onError: (DioException error, ErrorInterceptorHandler handler) {
           _metadataApiLogger.info(
-            '[ERR] ${error.requestOptions.method} ${error.requestOptions.uri} -> ${error.message}',
+            '[元数据✗] ${error.requestOptions.method} ${error.requestOptions.uri} -> ${error.message}',
           );
           handler.next(error);
         },
@@ -129,7 +129,7 @@ class GameLibraryMetadataApi {
           final GameSearchMetadata? result = await searcher(query);
           if (result != null) return result;
         } catch (e) {
-          _metadataApiLogger.info('元数据搜索失败(query=$query): $e');
+          _metadataApiLogger.info('[元数据] 搜索失败(query=$query): $e');
         }
       }
     }
