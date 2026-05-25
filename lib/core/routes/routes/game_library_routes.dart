@@ -4,13 +4,13 @@ class GameHomeRoute extends AppRouteData with $GameHomeRoute {
   const GameHomeRoute();
 
   @override
-  String get title => '游戏主页';
+  String get title => '游戏';
 
   @override
-  String get sidebarLabel => '游戏主页';
+  String get sidebarLabel => '游戏';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuAggregation;
+  String get sidebarIcon => Assets.image.svg.menuGame;
 
   @override
   String get sidebarGroupId => 'game-library';
@@ -22,7 +22,7 @@ class GameHomeRoute extends AppRouteData with $GameHomeRoute {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, const GameLibraryHomeScreen());
+    return AppRoutes.buildPage(context, state, const GameHubScreen());
   }
 }
 
@@ -115,7 +115,7 @@ class GameCategoriesRoute extends AppRouteData with $GameCategoriesRoute {
   String get sidebarIcon => Assets.image.svg.menuCollectFile;
 
   @override
-  String get sidebarGroupId => 'game-library';
+  bool get showInSidebar => false;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -164,7 +164,7 @@ class GameStatsRoute extends AppRouteData with $GameStatsRoute {
   String get sidebarIcon => Assets.image.svg.menuBill;
 
   @override
-  String get sidebarGroupId => 'game-library';
+  bool get showInSidebar => false;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -190,7 +190,7 @@ class GameSettingsRoute extends AppRouteData with $GameSettingsRoute {
   String get sidebarIcon => Assets.image.svg.menuSetting;
 
   @override
-  String get sidebarGroupId => 'game-library';
+  bool get showInSidebar => false;
 
   static const Permission routePermission = Permission.accessGameLibrary;
 

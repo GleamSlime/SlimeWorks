@@ -93,6 +93,12 @@ class $AssetsImageSvgGen {
   /// File path: assets/image/svg/menu_distributed.svg
   String get menuDistributed => 'assets/image/svg/menu_distributed.svg';
 
+  /// File path: assets/image/svg/menu_game.svg
+  String get menuGame => 'assets/image/svg/menu_game.svg';
+
+  /// File path: assets/image/svg/menu_log.svg
+  String get menuLog => 'assets/image/svg/menu_log.svg';
+
   /// File path: assets/image/svg/menu_media_library.svg
   String get menuMediaLibrary => 'assets/image/svg/menu_media_library.svg';
 
@@ -160,6 +166,8 @@ class $AssetsImageSvgGen {
     menuCollectNote,
     menuCollectPictures,
     menuDistributed,
+    menuGame,
+    menuLog,
     menuMediaLibrary,
     menuPlugins,
     menuSetting,

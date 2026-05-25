@@ -50,12 +50,13 @@ class SentryLogRoute extends AppRouteData with $SentryLogRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuTools;
+  String get sidebarIcon => Assets.image.svg.menuLog;
 
   @override
   String get sidebarGroupId => 'tools';
 
   static const Permission routePermission = Permission.accessSentryLog;
+  @override
   Permission get permission => SentryLogRoute.routePermission;
 
   @override

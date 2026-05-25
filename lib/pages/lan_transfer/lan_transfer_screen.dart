@@ -41,30 +41,69 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
     final isDark = Get.isDarkMode;
+    final m = AppTheme.metrics;
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
 
     return ScreenChromeData(
       title: '互传',
-      toolbarHeight: AppTheme.metrics.kSpace48,
+      toolbarHeight: m.kSpace48,
       leading: Obx(() {
         final isRunning = viewModel.isServiceRunning.value;
 
-        // 服务启停
         return GestureDetector(
           onTap: isRunning ? viewModel.stopService : viewModel.startService,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace10,
-              vertical: AppTheme.metrics.kSpace4,
-            ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
             decoration: BoxDecoration(
-              color: isRunning
-                  ? Theme.of(context).colorScheme.error.withValues(alpha: 0.1)
-                  : Colors.green.withValues(alpha: 0.1),
-              borderRadius: AppTheme.metrics.radius8,
+              gradient: isRunning
+                  ? null
+                  : LinearGradient(
+                      colors: [
+                        Colors.green.withValues(alpha: 0.25),
+                        Colors.green.withValues(alpha: 0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              color: isRunning ? Theme.of(context).colorScheme.error.withValues(alpha: 0.12) : null,
+              borderRadius: m.radius8,
+              border: Border.all(
+                color: isRunning
+                    ? Theme.of(context).colorScheme.error.withValues(alpha: 0.2)
+                    : Colors.green.withValues(alpha: 0.3),
+                width: 1,
+              ),
             ),
-            child: Text(
-              isRunning ? '停止' : '启动',
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: isRunning ? Colors.red : Colors.green),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: m.kSpace6,
+                  height: m.kSpace6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isRunning ? Colors.red : Colors.green,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isRunning ? Colors.red : Colors.green).withValues(alpha: 0.4),
+                        blurRadius: scaleW(4),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: m.kSpace6),
+                Text(
+                  isRunning ? '停止服务' : '启动服务',
+                  style: TextStyle(
+                    fontSize: m.fontSize11,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: isRunning ? Colors.red : Colors.green,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -77,43 +116,44 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
           return GestureDetector(
             onTap: () => _showDeviceSheet(context),
             child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.metrics.kSpace10,
-                vertical: AppTheme.metrics.kSpace4,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.background2 : LightColors.background2,
-                borderRadius: AppTheme.metrics.radius8,
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withValues(alpha: 0.12),
+                    primaryColor.withValues(alpha: 0.04),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: m.radius8,
+                border: Border.all(color: primaryColor.withValues(alpha: 0.15), width: 1),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (isScanning)
                     SizedBox(
-                      width: AppTheme.metrics.kSpace10,
-                      height: AppTheme.metrics.kSpace10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: isDark ? DarkColors.primary : LightColors.primary,
-                      ),
+                      width: m.kSpace10,
+                      height: m.kSpace10,
+                      child: CircularProgressIndicator(strokeWidth: 1.5, color: primaryColor),
                     )
                   else
-                    Icon(
-                      Icons.devices,
-                      size: AppTheme.metrics.iconSize14,
-                      color: isDark ? DarkColors.white80 : LightColors.black80,
-                    ),
-                  SizedBox(width: AppTheme.metrics.kSpace4),
+                    Icon(Icons.radar, size: m.iconSize14, color: primaryColor),
+                  SizedBox(width: m.kSpace6),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
-                    style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                    style: TextStyle(
+                      fontSize: m.fontSize11,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
                   ),
-                  SizedBox(width: AppTheme.metrics.kSpace4),
+                  SizedBox(width: m.kSpace4),
                   Icon(
                     Icons.expand_more,
-                    size: AppTheme.metrics.iconSize14,
+                    size: m.iconSize14,
                     color: isDark ? DarkColors.white40 : LightColors.black40,
                   ),
                 ],
@@ -127,30 +167,38 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
         final local = viewModel.localDevice.value;
 
         return Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppTheme.metrics.kSpace10,
-            vertical: AppTheme.metrics.kSpace4,
-          ),
-          margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace4),
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
+          margin: EdgeInsets.only(bottom: m.kSpace4),
           decoration: BoxDecoration(
             color: isDark ? DarkColors.background2 : LightColors.background2,
-            borderRadius: AppTheme.metrics.radius8,
+            borderRadius: m.radius8,
+            border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: AppTheme.metrics.kSpace8,
-                height: AppTheme.metrics.kSpace8,
+                width: m.kSpace8,
+                height: m.kSpace8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: isRunning ? Colors.green : Colors.grey,
+                  boxShadow: isRunning
+                      ? [
+                          BoxShadow(
+                            color: Colors.green.withValues(alpha: 0.4),
+                            blurRadius: scaleW(4),
+                          ),
+                        ]
+                      : null,
                 ),
               ),
-              SizedBox(width: AppTheme.metrics.kSpace4),
+              SizedBox(width: m.kSpace6),
               Text(
                 local != null ? local.ipAddress : '未连接',
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                style: TextStyle(
+                  fontSize: m.fontSize11,
+                  height: 1.4,
                   color: isDark ? DarkColors.white80 : LightColors.black80,
                 ),
               ),
@@ -158,10 +206,6 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
           ),
         );
       }),
-      // toolbar: _LanTransferToolbar(
-      //   viewModel: viewModel,
-      //   onOpenDeviceSheet: () => _showDeviceSheet(context),
-      // ),
     );
   }
 
@@ -263,7 +307,11 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             value: 'delete_all',
             child: Row(
               children: [
-                Icon(Icons.delete_sweep_outlined, size: AppTheme.metrics.iconSize16, color: Theme.of(context).colorScheme.error),
+                Icon(
+                  Icons.delete_sweep_outlined,
+                  size: AppTheme.metrics.iconSize16,
+                  color: Theme.of(context).colorScheme.error,
+                ),
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 Text('删除会话及文件', style: TextStyle(color: Theme.of(context).colorScheme.error)),
               ],
@@ -313,7 +361,11 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
               ),
               child: Text(
                 deviceName,
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: AppTheme.metrics.fontSize13,
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
@@ -347,7 +399,10 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             ),
             // 删除会话及文件
             ListTile(
-              leading: Icon(Icons.delete_sweep_outlined, color: Theme.of(context).colorScheme.error),
+              leading: Icon(
+                Icons.delete_sweep_outlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
               title: Text('删除会话及文件', style: TextStyle(color: Theme.of(context).colorScheme.error)),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -463,7 +518,9 @@ class _LanTransferToolbar extends StatelessWidget {
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Text(
                   local != null ? local.ipAddress : '未连接',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                  style: TextStyle(
+                    fontSize: AppTheme.metrics.fontSize11,
+                    height: 1.4,
                     color: isDark ? DarkColors.white80 : LightColors.black80,
                   ),
                 ),
@@ -506,7 +563,9 @@ class _LanTransferToolbar extends StatelessWidget {
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
-                    style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                    style: TextStyle(
+                      fontSize: AppTheme.metrics.fontSize11,
+                      height: 1.4,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
                   ),
@@ -539,7 +598,11 @@ class _LanTransferToolbar extends StatelessWidget {
               ),
               child: Text(
                 isRunning ? '停止' : '启动',
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: isRunning ? Colors.red : Colors.green),
+                style: TextStyle(
+                  fontSize: AppTheme.metrics.fontSize11,
+                  height: 1.4,
+                  color: isRunning ? Colors.red : Colors.green,
+                ),
               ),
             ),
           ),
@@ -599,7 +662,14 @@ class _DeviceSheetContent extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text('附近设备', style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5, fontWeight: FontWeight.w600)),
+                Text(
+                  '附近设备',
+                  style: TextStyle(
+                    fontSize: AppTheme.metrics.fontSize15,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 if (devices.isNotEmpty) ...[
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Container(
@@ -611,7 +681,10 @@ class _DeviceSheetContent extends StatelessWidget {
                       color: isDark ? DarkColors.white10 : LightColors.black10,
                       borderRadius: AppTheme.metrics.radius10,
                     ),
-                    child: Text('${devices.length}', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4)),
+                    child: Text(
+                      '${devices.length}',
+                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4),
+                    ),
                   ),
                 ],
                 const Spacer(),
@@ -652,7 +725,9 @@ class _DeviceSheetContent extends StatelessWidget {
                         SizedBox(width: AppTheme.metrics.kSpace4),
                         Text(
                           isScanning ? '搜索中' : '搜索',
-                          style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
+                          style: TextStyle(
+                            fontSize: AppTheme.metrics.fontSize11,
+                            height: 1.4,
                             color: isScanning
                                 ? Colors.orange
                                 : (isDark ? DarkColors.primary : LightColors.primary),
@@ -714,40 +789,89 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Get.isDarkMode;
+    final m = AppTheme.metrics;
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
 
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace32),
+      padding: EdgeInsets.symmetric(vertical: m.kSpace32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.wifi_off,
-            size: scaleW(40),
-            color: isDark ? DarkColors.white40 : LightColors.black40,
+          Container(
+            width: scaleW(80),
+            height: scaleW(80),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  primaryColor.withValues(alpha: 0.15),
+                  primaryColor.withValues(alpha: 0.05),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.6, 1.0],
+              ),
+            ),
+            child: Icon(
+              Icons.wifi_tethering,
+              size: scaleW(36),
+              color: primaryColor.withValues(alpha: 0.6),
+            ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
+          SizedBox(height: m.kSpace16),
           Text(
-            '点击「搜索」发现附近设备',
+            '发现附近设备',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
+            style: TextStyle(fontSize: m.fontSize15, height: 1.5, fontWeight: FontWeight.w600),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          SizedBox(height: m.kSpace4),
+          Text(
+            '搜索同一局域网下的设备，快速互传文件',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: m.fontSize13,
+              height: 1.5,
+              color: isDark ? DarkColors.white80 : LightColors.black80,
+            ),
+          ),
+          SizedBox(height: m.kSpace20),
           GestureDetector(
             onTap: onStartScan,
             child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.metrics.kSpace20,
-                vertical: AppTheme.metrics.kSpace10,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace12),
               decoration: BoxDecoration(
-                color: (isDark ? DarkColors.primary : LightColors.primary).withValues(alpha: 0.12),
-                borderRadius: AppTheme.metrics.radius10,
-              ),
-              child: Text(
-                '开始搜索',
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
-                  color: isDark ? DarkColors.primary : LightColors.primary,
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withValues(alpha: 0.2),
+                    primaryColor.withValues(alpha: 0.08),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                borderRadius: m.radius12,
+                border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.1),
+                    blurRadius: scaleW(16),
+                    offset: Offset(0, scaleW(4)),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.radar, size: m.iconSize18, color: primaryColor),
+                  SizedBox(width: m.kSpace8),
+                  Text(
+                    '开始搜索',
+                    style: TextStyle(
+                      fontSize: m.fontSize13,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                      color: primaryColor,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -782,72 +906,104 @@ class _PeerListSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Get.isDarkMode;
+    final m = AppTheme.metrics;
 
     return Obx(() {
       final peers = viewModel.transferHistoryPeers;
 
       if (peers.isEmpty) {
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.forum_outlined,
-                size: scaleW(52),
-                color: isDark ? DarkColors.white20 : LightColors.black20,
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace16),
-              Text(
-                '暂无会话',
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,
-                  color: isDark ? DarkColors.white40 : LightColors.black40,
-                ),
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace8),
-              Text(
-                '点击「附近设备」开始',
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
-                  color: isDark ? DarkColors.white20 : LightColors.black20,
-                ),
-              ),
-            ],
-          ),
-        );
+        return _buildEmptyState(isDark, m);
       }
 
-      return ListView.separated(
-        padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
+      return ListView.builder(
+        padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace8),
         itemCount: peers.length,
-        separatorBuilder: (_, _) => Divider(
-          height: 1,
-          indent: scaleW(72),
-          color: isDark ? DarkColors.white10 : LightColors.black10,
-        ),
         itemBuilder: (ctx, i) {
           final peer = peers[i];
-          return _PeerListItem(
-            deviceId: peer.deviceId,
-            deviceName: peer.deviceName,
-            lastItem: peer.lastItem,
-            isPinned: peer.isPinned,
-            isDark: isDark,
-            onTap: () => onNavigateToChat(peer.deviceId, peer.deviceName),
-            onContextMenu: ({Offset? tapPosition}) => onContextMenu(
-              ctx,
+          return Padding(
+            padding: EdgeInsets.only(bottom: m.kSpace8),
+            child: _PeerListItem(
               deviceId: peer.deviceId,
               deviceName: peer.deviceName,
+              lastItem: peer.lastItem,
               isPinned: peer.isPinned,
-              tapPosition: tapPosition,
+              isDark: isDark,
+              onTap: () => onNavigateToChat(peer.deviceId, peer.deviceName),
+              onContextMenu: ({Offset? tapPosition}) => onContextMenu(
+                ctx,
+                deviceId: peer.deviceId,
+                deviceName: peer.deviceName,
+                isPinned: peer.isPinned,
+                tapPosition: tapPosition,
+              ),
             ),
           );
         },
       );
     });
   }
+
+  Widget _buildEmptyState(bool isDark, ThemeMetrics m) {
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: scaleW(100),
+            height: scaleW(100),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  primaryColor.withValues(alpha: 0.12),
+                  primaryColor.withValues(alpha: 0.04),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.08),
+                  blurRadius: scaleW(30),
+                  spreadRadius: scaleW(10),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.forum_outlined,
+              size: scaleW(40),
+              color: primaryColor.withValues(alpha: 0.4),
+            ),
+          ),
+          SizedBox(height: m.kSpace20),
+          Text(
+            '暂无会话',
+            style: TextStyle(
+              fontSize: m.fontSize15,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+          SizedBox(height: m.kSpace6),
+          Text(
+            '点击「附近设备」开始互传',
+            style: TextStyle(
+              fontSize: m.fontSize13,
+              height: 1.5,
+              color: isDark ? DarkColors.white80 : LightColors.black80,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 单个对端设备行
-class _PeerListItem extends StatelessWidget {
+class _PeerListItem extends StatefulWidget {
   final String deviceId;
   final String deviceName;
   final dynamic lastItem; // TransferItem
@@ -867,97 +1023,158 @@ class _PeerListItem extends StatelessWidget {
   });
 
   @override
+  State<_PeerListItem> createState() => _PeerListItemState();
+}
+
+class _PeerListItemState extends State<_PeerListItem> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final m = AppTheme.metrics;
     final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
     final String preview = _buildPreview();
-    final String timeStr = _formatTime(lastItem.createdAt as String);
+    final String timeStr = _formatTime(widget.lastItem.createdAt as String);
+    final deviceIcon = _deviceIcon(widget.deviceName);
 
-    return Material(
-      color: Colors.transparent,
+    final List<Color> avatarColors = _avatarGradient(widget.deviceName);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onSecondaryTapUp: (details) => onContextMenu(tapPosition: details.globalPosition),
-        onLongPress: () => onContextMenu(),
-        child: InkWell(
-          onTap: onTap,
-          hoverColor: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(5),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace16,
-              vertical: AppTheme.metrics.kSpace12,
-            ),
-            child: Row(
-              children: [
-                // 头像
-                Container(
-                  width: scaleW(48),
-                  height: scaleW(48),
-                  decoration: BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+        onTap: widget.onTap,
+        onSecondaryTapUp: (details) => widget.onContextMenu(tapPosition: details.globalPosition),
+        onLongPress: () => widget.onContextMenu(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace14, vertical: m.kSpace12),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? (isDark ? DarkColors.background2 : LightColors.background2)
+                : Colors.transparent,
+            borderRadius: m.radius14,
+            border: _isHovered
+                ? Border.all(color: primaryColor.withValues(alpha: 0.08), width: 1)
+                : null,
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: primaryColor.withValues(alpha: 0.04),
+                      blurRadius: scaleW(12),
+                      offset: Offset(0, scaleW(2)),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: scaleW(48),
+                height: scaleW(48),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: avatarColors,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Icon(_deviceIcon(deviceName), size: scaleW(22), color: primaryColor),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: avatarColors.first.withValues(alpha: 0.25),
+                      blurRadius: scaleW(8),
+                      offset: Offset(0, scaleW(2)),
+                    ),
+                  ],
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace12),
-                // 文本区
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (isPinned) ...[
-                            Icon(
-                              Icons.push_pin,
-                              size: scaleW(12),
-                              color: isDark ? DarkColors.white40 : LightColors.black40,
-                            ),
-                            SizedBox(width: AppTheme.metrics.kSpace4),
-                          ],
-                          Expanded(
-                            child: Text(
-                              deviceName,
-                              style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, fontWeight: FontWeight.w600),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                child: Icon(
+                  deviceIcon,
+                  size: scaleW(22),
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              SizedBox(width: m.kSpace14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (widget.isPinned) ...[
+                          Icon(
+                            Icons.push_pin,
+                            size: scaleW(12),
+                            color: primaryColor.withValues(alpha: 0.6),
                           ),
-                          SizedBox(width: AppTheme.metrics.kSpace8),
-                          Text(
-                            timeStr,
-                            style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                              color: isDark ? DarkColors.white40 : LightColors.black40,
-                            ),
-                          ),
+                          SizedBox(width: m.kSpace4),
                         ],
-                      ),
-                      SizedBox(height: AppTheme.metrics.kSpace4),
-                      Text(
-                        preview,
-                        style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                          color: isDark ? DarkColors.white40 : LightColors.black40,
+                        Expanded(
+                          child: Text(
+                            widget.deviceName,
+                            style: TextStyle(
+                              fontSize: m.fontSize13,
+                              height: 1.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        SizedBox(width: m.kSpace8),
+                        Text(
+                          timeStr,
+                          style: TextStyle(
+                            fontSize: m.fontSize11,
+                            height: 1.4,
+                            color: isDark ? DarkColors.white40 : LightColors.black40,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: m.kSpace4),
+                    Text(
+                      preview,
+                      style: TextStyle(
+                        fontSize: m.fontSize11,
+                        height: 1.4,
+                        color: isDark ? DarkColors.white40 : LightColors.black40,
                       ),
-                    ],
-                  ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace8),
-                Icon(
+              ),
+              SizedBox(width: m.kSpace8),
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: _isHovered ? 1.0 : 0.3,
+                child: Icon(
                   Icons.chevron_right,
                   size: scaleW(18),
                   color: isDark ? DarkColors.white20 : LightColors.black20,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  List<Color> _avatarGradient(String name) {
+    final hash = name.hashCode.abs();
+    final hue = (hash % 360).toDouble();
+    return [
+      HSLColor.fromAHSL(1.0, hue, 0.5, 0.45).toColor(),
+      HSLColor.fromAHSL(1.0, (hue + 40) % 360, 0.6, 0.35).toColor(),
+    ];
+  }
+
   String _buildPreview() {
-    final item = lastItem;
+    final item = widget.lastItem;
     try {
       if (item.transferType == TransferType.text && item.textContent != null) {
         return item.textContent as String;

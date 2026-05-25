@@ -27,7 +27,7 @@ import 'package:slime_works/pages/http_bridge_test_page.dart';
 import 'package:slime_works/pages/settings/settings_page.dart';
 import 'package:slime_works/pages/lan_transfer/lan_transfer_screen.dart';
 import 'package:slime_works/pages/lan_transfer/lan_chat_screen.dart';
-import 'package:slime_works/pages/game_library/home/game_library_home_screen.dart';
+import 'package:slime_works/pages/game_library/home/game_hub_screen.dart';
 import 'package:slime_works/pages/game_library/library/game_library_screen.dart';
 import 'package:slime_works/pages/game_library/detail/game_detail_screen.dart';
 import 'package:slime_works/pages/game_library/categories/game_categories_screen.dart';

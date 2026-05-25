@@ -14,6 +14,7 @@ import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
+import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
@@ -100,6 +101,9 @@ Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
 
   // 配置 EasyLoading
   configLoading();
+
+  // 启动系统资源监控（持续采集，不依赖 Dashboard 页面是否打开）
+  getIt<SystemMetricsService>().start();
 
   desktopTest.end();
 }

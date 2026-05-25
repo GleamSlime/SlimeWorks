@@ -16,8 +16,6 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const CollectionLibraryRoute(),
     const GameHomeRoute(),
     const GameLibraryRoute(),
-    const GameCategoriesRoute(),
-    const GameStatsRoute(),
     const AboutRoute(),
     const SettingsRoute(),
   ];

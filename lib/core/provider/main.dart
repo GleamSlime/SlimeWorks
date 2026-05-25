@@ -14,6 +14,7 @@ import 'package:slime_works/core/services/picacg_service.dart';
 import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
+import 'package:slime_works/core/services/system_metrics_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -62,6 +63,9 @@ void getItInit() {
 
   // Sentry 设置服务
   getIt.registerLazySingleton<SentrySettingsService>(() => SentrySettingsService());
+
+  // 系统资源监控服务
+  getIt.registerLazySingleton<SystemMetricsService>(() => SystemMetricsService());
 
   isInitialized = true;
 }

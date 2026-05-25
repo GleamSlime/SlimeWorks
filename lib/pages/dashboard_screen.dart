@@ -6,14 +6,11 @@ import 'dart:math' as math;
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
 import 'package:slime_works/core/theme/app_colors.dart';
-
-/// 折线图历史点数量（每秒采样 1 次，保留 60 秒）
-const int _kHistoryLength = 60;
 
 /// 概览页面
 class DashboardScreen extends StatefulWidget {
@@ -24,21 +21,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
-  Timer? _resourceTimer;
-  rust_sys.SystemResourceSnapshot? _snapshot;
-  final NodeSettingsService _nodeSettingsService = getIt<NodeSettingsService>();
-  double _appRxKbps = 0;
-  double _appTxKbps = 0;
-  bool _isLocalServerRunning = false;
-  int _nodeRequestCount = 0;
-
-  /// 历史数据缓冲区（CPU%、内存MB、下行kbps、上行kbps、节点请求数/s）
-  final List<double> _cpuHistory = [];
-  final List<double> _memHistory = [];
-  final List<double> _rxHistory = [];
-  final List<double> _txHistory = [];
-  final List<double> _reqHistory = [];
-  int _lastNodeRequestCount = 0;
+  Timer? _uiRefreshTimer;
+  final SystemMetricsService _metricsService = getIt<SystemMetricsService>();
 
   late final AnimationController _entranceController;
   late final List<Animation<double>> _cardAnimations;
@@ -59,9 +43,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       );
     });
 
-    _refreshResourceSnapshot();
-    _resourceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _refreshResourceSnapshot();
+    // 定时从 Service 拉取最新数据以刷新 UI
+    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
     });
 
     Future.delayed(const Duration(milliseconds: 120), () {
@@ -71,39 +55,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   @override
   void dispose() {
-    _resourceTimer?.cancel();
+    _uiRefreshTimer?.cancel();
     _entranceController.dispose();
     super.dispose();
-  }
-
-  void _appendHistory(List<double> buf, double value) {
-    buf.add(value);
-    if (buf.length > _kHistoryLength) buf.removeAt(0);
-  }
-
-  void _refreshResourceSnapshot() {
-    try {
-      final next = rust_sys.getSystemResourceSnapshot();
-      _nodeSettingsService.syncTrafficDisplayNow();
-      if (!mounted) return;
-      final rxKbps = _nodeSettingsService.appRxKbps.value;
-      final txKbps = _nodeSettingsService.appTxKbps.value;
-      final reqCount = _nodeSettingsService.nodeRequestCount.value;
-      final reqDelta = (reqCount - _lastNodeRequestCount).clamp(0, 999999).toDouble();
-      setState(() {
-        _snapshot = next;
-        _appRxKbps = rxKbps;
-        _appTxKbps = txKbps;
-        _lastNodeRequestCount = reqCount;
-        _isLocalServerRunning = _nodeSettingsService.isLocalServerRunning;
-        _nodeRequestCount = reqCount;
-        _appendHistory(_cpuHistory, next.cpuUsagePercent);
-        _appendHistory(_memHistory, next.memoryUsedMb.toDouble());
-        _appendHistory(_rxHistory, rxKbps);
-        _appendHistory(_txHistory, txKbps);
-        _appendHistory(_reqHistory, reqDelta);
-      });
-    } catch (_) {}
   }
 
   String _formatMemory(rust_sys.SystemResourceSnapshot snapshot) {
@@ -241,28 +195,29 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Widget _buildMetricSection(BuildContext context, bool isDark) {
+    final snapshot = _metricsService.lastSnapshot;
     final metrics = [
       _MetricData(
         icon: Icons.memory_rounded,
         title: 'CPU',
-        value: _snapshot == null ? '--' : '${_snapshot!.cpuUsagePercent.toStringAsFixed(1)}%',
-        history: _cpuHistory,
+        value: snapshot == null ? '--' : '${snapshot.cpuUsagePercent.toStringAsFixed(1)}%',
+        history: List<double>.from(_metricsService.cpuHistory),
         chartColor: const Color(0xFF6FB8E8),
         gradientColors: const [Color(0xFF6FB8E8), Color(0xFFA8B8F6)],
       ),
       _MetricData(
         icon: Icons.storage_rounded,
         title: '内存',
-        value: _snapshot == null ? '--' : _formatMemory(_snapshot!),
-        history: _memHistory,
+        value: snapshot == null ? '--' : _formatMemory(snapshot),
+        history: List<double>.from(_metricsService.memHistory),
         chartColor: const Color(0xFFF5A569),
         gradientColors: const [Color(0xFFF5A569), Color(0xFFFFCB3A)],
       ),
       _MetricData(
         icon: Icons.download_rounded,
         title: '下行',
-        value: _snapshot == null ? '--' : _formatSpeed(_appRxKbps),
-        history: _rxHistory,
+        value: snapshot == null ? '--' : _formatSpeed(_metricsService.appRxKbps),
+        history: List<double>.from(_metricsService.rxHistory),
         chartColor: isDark ? DarkColors.success : LightColors.success,
         gradientColors: isDark
             ? const [Color(0xFF66BB6A), Color(0xFF82D7BB)]
@@ -271,20 +226,20 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       _MetricData(
         icon: Icons.upload_rounded,
         title: '上行',
-        value: _snapshot == null ? '--' : _formatSpeed(_appTxKbps),
-        history: _txHistory,
+        value: snapshot == null ? '--' : _formatSpeed(_metricsService.appTxKbps),
+        history: List<double>.from(_metricsService.txHistory),
         chartColor: const Color(0xFFBBA8F6),
         gradientColors: const [Color(0xFFBBA8F6), Color(0xFFA89FEE)],
       ),
     ];
 
-    if (_isLocalServerRunning) {
+    if (_metricsService.isLocalServerRunning) {
       metrics.add(
         _MetricData(
           icon: Icons.hub_rounded,
           title: '节点请求',
-          value: _nodeRequestCount.toString(),
-          history: _reqHistory,
+          value: _metricsService.nodeRequestCount.toString(),
+          history: List<double>.from(_metricsService.reqHistory),
           chartColor: const Color(0xFF9AC8DD),
           gradientColors: const [Color(0xFF9AC8DD), Color(0xFF6FB8E8)],
         ),
