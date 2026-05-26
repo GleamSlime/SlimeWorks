@@ -196,6 +196,42 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   Widget _buildMetricSection(BuildContext context, bool isDark) {
     final snapshot = _metricsService.lastSnapshot;
+
+    String fmtPercent(List<double> h) {
+      if (h.isEmpty) return '--';
+      return '${h.reduce(math.max).toStringAsFixed(1)}%';
+    }
+
+    String fmtPercentVal(List<double> h) {
+      if (h.isEmpty) return '--';
+      return '${h.reduce(math.min).toStringAsFixed(1)}%';
+    }
+
+    String fmtPercentAvg(List<double> h) {
+      if (h.isEmpty) return '--';
+      return '${(h.reduce((a, b) => a + b) / h.length).toStringAsFixed(1)}%';
+    }
+
+    String fmtSpeedVal(double kbps) {
+      if (kbps >= 1024) return '${(kbps / 1024).toStringAsFixed(2)} MB/s';
+      return '${kbps.toStringAsFixed(0)} KB/s';
+    }
+
+    String fmtSpeedPeak(List<double> h) {
+      if (h.isEmpty) return '--';
+      return fmtSpeedVal(h.reduce(math.max));
+    }
+
+    String fmtSpeedValley(List<double> h) {
+      if (h.isEmpty) return '--';
+      return fmtSpeedVal(h.reduce(math.min));
+    }
+
+    String fmtSpeedAvg(List<double> h) {
+      if (h.isEmpty) return '--';
+      return fmtSpeedVal(h.reduce((a, b) => a + b) / h.length);
+    }
+
     final metrics = [
       _MetricData(
         icon: Icons.memory_rounded,
@@ -204,6 +240,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         history: List<double>.from(_metricsService.cpuHistory),
         chartColor: const Color(0xFF6FB8E8),
         gradientColors: const [Color(0xFF6FB8E8), Color(0xFFA8B8F6)],
+        peak: fmtPercent(_metricsService.cpuHistory),
+        valley: fmtPercentVal(_metricsService.cpuHistory),
+        average: fmtPercentAvg(_metricsService.cpuHistory),
       ),
       _MetricData(
         icon: Icons.storage_rounded,
@@ -222,6 +261,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         gradientColors: isDark
             ? const [Color(0xFF66BB6A), Color(0xFF82D7BB)]
             : const [Color(0xFF4CAF50), Color(0xFF82D7BB)],
+        peak: fmtSpeedPeak(_metricsService.rxHistory),
+        valley: fmtSpeedValley(_metricsService.rxHistory),
+        average: fmtSpeedAvg(_metricsService.rxHistory),
       ),
       _MetricData(
         icon: Icons.upload_rounded,
@@ -230,6 +272,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         history: List<double>.from(_metricsService.txHistory),
         chartColor: const Color(0xFFBBA8F6),
         gradientColors: const [Color(0xFFBBA8F6), Color(0xFFA89FEE)],
+        peak: fmtSpeedPeak(_metricsService.txHistory),
+        valley: fmtSpeedValley(_metricsService.txHistory),
+        average: fmtSpeedAvg(_metricsService.txHistory),
       ),
     ];
 
@@ -340,6 +385,9 @@ class _MetricData {
   final List<double> history;
   final Color chartColor;
   final List<Color> gradientColors;
+  final String? peak;
+  final String? valley;
+  final String? average;
 
   const _MetricData({
     required this.icon,
@@ -348,6 +396,9 @@ class _MetricData {
     required this.history,
     required this.chartColor,
     required this.gradientColors,
+    this.peak,
+    this.valley,
+    this.average,
   });
 }
 
@@ -465,6 +516,41 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
                           ],
                         ),
                       ),
+                      if (widget.data.peak != null ||
+                          widget.data.valley != null ||
+                          widget.data.average != null)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (widget.data.peak != null)
+                              Text(
+                                '↑ ${widget.data.peak}',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).hintColor.withValues(alpha: 0.6),
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  fontSize: scaleS(9),
+                                ),
+                              ),
+                            if (widget.data.valley != null)
+                              Text(
+                                '↓ ${widget.data.valley}',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).hintColor.withValues(alpha: 0.6),
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  fontSize: scaleS(9),
+                                ),
+                              ),
+                            if (widget.data.average != null)
+                              Text(
+                                '≈ ${widget.data.average}',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).hintColor.withValues(alpha: 0.6),
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  fontSize: scaleS(9),
+                                ),
+                              ),
+                          ],
+                        ),
                     ],
                   ),
                   SizedBox(height: m.kSpace10),
