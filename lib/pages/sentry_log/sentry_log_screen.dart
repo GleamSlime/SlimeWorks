@@ -13,10 +13,13 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/pages/sentry_log/components/app_log_terminal.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_filter_bar.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_list.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_stats_panel.dart';
+import 'package:slime_works/view_models/sentry_log/app_log_viewmodel.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
+
 const Loggers _logger = Loggers(name: 'Sentry日志');
 
 /// 日志中心页面
@@ -29,9 +32,12 @@ class SentryLogScreen extends StatefulWidget {
 
 class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderStateMixin {
   late SentryLogViewModel _viewModel;
+  late AppLogViewModel _appLogViewModel;
   late TabController _tabController;
   SentrySettingsService? _sentrySettings;
   NodeSettingsService? _nodeService;
+
+  bool _showAppLogs = false;
 
   // 节点状态监听
   StreamSubscription? _nodeListSub;
@@ -46,6 +52,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
   void initState() {
     super.initState();
     _viewModel = Get.put(SentryLogViewModel());
+    _appLogViewModel = Get.put(AppLogViewModel());
     _tabController = TabController(length: 2, vsync: this);
     _sentrySettings = GetIt.instance.get<SentrySettingsService>();
     _nodeService = GetIt.instance.get<NodeSettingsService>();
@@ -83,6 +90,9 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
     try {
       Get.delete<SentryLogViewModel>(force: true);
     } catch (_) {}
+    try {
+      Get.delete<AppLogViewModel>(force: true);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -94,24 +104,30 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
 
     return ScreenChrome(
       data: ScreenChromeData(
-        title: '日志中心',
+        title: _showAppLogs ? '应用日志' : '日志中心',
         actions: [
-          _buildNodeSwitcher(context, theme, m, isDark),
-          SizedBox(width: m.kSpace8),
-          _buildActionButton(
-            context: context,
-            icon: Icons.refresh_rounded,
-            tooltip: '刷新',
-            onPressed: () => _viewModel.reloadData(),
-            isDark: isDark,
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.download_outlined,
-            tooltip: '导出',
-            onPressed: () => _exportLogs(context),
-            isDark: isDark,
-          ),
+          if (!_showAppLogs) ...[
+            _buildNodeSwitcher(context, theme, m, isDark),
+            SizedBox(width: m.kSpace8),
+          ],
+          _buildAppLogToggle(context, theme, m, isDark),
+          SizedBox(width: m.kSpace4),
+          if (!_showAppLogs) ...[
+            _buildActionButton(
+              context: context,
+              icon: Icons.refresh_rounded,
+              tooltip: '刷新',
+              onPressed: () => _viewModel.reloadData(),
+              isDark: isDark,
+            ),
+            _buildActionButton(
+              context: context,
+              icon: Icons.download_outlined,
+              tooltip: '导出',
+              onPressed: () => _exportLogs(context),
+              isDark: isDark,
+            ),
+          ],
         ],
       ),
       child: Container(
@@ -123,25 +139,27 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
               opacity: _entranceAnimation.value.clamp(0.0, 1.0),
               child: Transform.translate(
                 offset: Offset(0, 16 * (1 - _entranceAnimation.value)),
-                child: Column(
-                  children: [
-                    SentryLogFilterBar(
-                      viewModel: _viewModel,
-                      onFilterChanged: () => _viewModel.applyFilter(),
-                    ),
-                    _buildTabBar(context, theme, m, isDark),
-                    SizedBox(height: m.kSpace12),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
+                child: _showAppLogs
+                    ? AppLogTerminal(viewModel: _appLogViewModel)
+                    : Column(
                         children: [
-                          SentryLogList(viewModel: _viewModel),
-                          SentryLogStatsPanel(viewModel: _viewModel),
+                          SentryLogFilterBar(
+                            viewModel: _viewModel,
+                            onFilterChanged: () => _viewModel.applyFilter(),
+                          ),
+                          _buildTabBar(context, theme, m, isDark),
+                          SizedBox(height: m.kSpace12),
+                          Expanded(
+                            child: TabBarView(
+                              controller: _tabController,
+                              children: [
+                                SentryLogList(viewModel: _viewModel),
+                                SentryLogStatsPanel(viewModel: _viewModel),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             );
           },
@@ -228,6 +246,108 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
       ),
     );
   }
+
+  Widget _buildAppLogToggle(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final activeColor = const Color(0xFF22C55E);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _appLogToggleHovered = true),
+      onExit: (_) => setState(() => _appLogToggleHovered = false),
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _showAppLogs = !_showAppLogs);
+          if (_showAppLogs) {
+            _appLogViewModel.loadLogs();
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace6),
+          decoration: BoxDecoration(
+            gradient: _showAppLogs
+                ? LinearGradient(
+                    colors: [activeColor.withAlpha(30), primaryColor.withAlpha(15)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: _showAppLogs
+                ? null
+                : (isDark
+                      ? DarkColors.background2.withAlpha(180)
+                      : LightColors.background2.withAlpha(200)),
+            borderRadius: m.radius8,
+            border: Border.all(
+              color: _showAppLogs
+                  ? activeColor.withAlpha(60)
+                  : (_appLogToggleHovered
+                        ? primaryColor.withAlpha(40)
+                        : (isDark ? DarkColors.white10 : LightColors.black10)),
+              width: _showAppLogs ? 1 : 0.5,
+            ),
+            boxShadow: _showAppLogs
+                ? [
+                    BoxShadow(
+                      color: activeColor.withAlpha(20),
+                      blurRadius: scaleW(12),
+                      offset: Offset(0, scaleW(2)),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: primaryColor.withAlpha(6),
+                      blurRadius: scaleW(8),
+                      offset: Offset(0, scaleW(2)),
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: Icon(
+                  _showAppLogs ? Icons.terminal_rounded : Icons.smart_toy_outlined,
+                  key: ValueKey(_showAppLogs),
+                  size: m.iconSize16,
+                  color: _showAppLogs
+                      ? activeColor
+                      : (isDark ? DarkColors.white80 : LightColors.black80),
+                ),
+              ),
+              SizedBox(width: m.kSpace6),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 250),
+                style: theme.textTheme.bodySmall!.copyWith(
+                  color: _showAppLogs
+                      ? activeColor
+                      : (isDark ? DarkColors.white80 : LightColors.black80),
+                  fontWeight: _showAppLogs ? FontWeight.w600 : FontWeight.w400,
+                ),
+                child: const Text('应用日志'),
+              ),
+              if (_showAppLogs) ...[
+                SizedBox(width: m.kSpace4),
+                Container(
+                  width: m.kSpace6,
+                  height: m.kSpace6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: activeColor,
+                    boxShadow: [BoxShadow(color: activeColor.withAlpha(50), blurRadius: scaleW(4))],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _appLogToggleHovered = false;
 
   /// 构建节点切换器
   Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {

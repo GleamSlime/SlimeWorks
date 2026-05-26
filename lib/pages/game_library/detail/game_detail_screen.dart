@@ -719,40 +719,52 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 ],
               ),
               SizedBox(height: AppTheme.metrics.kSpace8),
-              HtmlWidget(
-                html,
-                buildAsync: true,
-                baseUrl: Uri.parse('https://zh.moegirl.org.cn'),
-                textStyle: Theme.of(context).textTheme.bodySmall,
-                onTapUrl: (url) async {
-                  try {
-                    await Process.run('open', [url]);
-                  } catch (_) {}
-                  return true;
-                },
-                customStylesBuilder: (element) {
-                  switch (element.localName) {
-                    case 'img':
-                      // 强制块级渲染，避免内联 WidgetSpan 路径下
-                      // CircularProgressIndicator 调用 computeDryBaseline 崩溃
-                      return {'display': 'block', 'max-width': '100%', 'margin': '4px 0'};
-                    case 'p':
-                    case 'li':
-                      return {'margin': '0', 'padding': '0'};
-                    case 'ul':
-                    case 'ol':
-                      return {'margin': '2px 0', 'padding-left': '16px'};
-                    case 'h1':
-                    case 'h2':
-                    case 'h3':
-                    case 'h4':
-                    case 'h5':
-                    case 'h6':
-                      return {'margin': '4px 0 2px 0'};
-                    default:
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+                child: SingleChildScrollView(
+                  child: HtmlWidget(
+                    html,
+                    buildAsync: true,
+                    baseUrl: Uri.parse('https://zh.moegirl.org.cn'),
+                    textStyle: Theme.of(context).textTheme.bodySmall,
+                    onTapUrl: (url) async {
+                      try {
+                        await Process.run('open', [url]);
+                      } catch (_) {}
+                      return true;
+                    },
+                    customWidgetBuilder: (element) {
+                      if (element.localName == 'img') {
+                        final src = element.attributes['src'] ?? '';
+                        if (src.isEmpty || src.startsWith('data:')) {
+                          return const SizedBox.shrink();
+                        }
+                      }
                       return null;
-                  }
-                },
+                    },
+                    customStylesBuilder: (element) {
+                      switch (element.localName) {
+                        case 'img':
+                          return {'display': 'block', 'max-width': '100%', 'margin': '4px 0'};
+                        case 'p':
+                        case 'li':
+                          return {'margin': '0', 'padding': '0'};
+                        case 'ul':
+                        case 'ol':
+                          return {'margin': '2px 0', 'padding-left': '16px'};
+                        case 'h1':
+                        case 'h2':
+                        case 'h3':
+                        case 'h4':
+                        case 'h5':
+                        case 'h6':
+                          return {'margin': '4px 0 2px 0'};
+                        default:
+                          return null;
+                      }
+                    },
+                  ),
+                ),
               ),
             ],
           ),

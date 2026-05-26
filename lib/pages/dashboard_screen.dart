@@ -389,7 +389,6 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         width: widget.width,
-        padding: EdgeInsets.all(m.kSpace14),
         decoration: BoxDecoration(
           color: widget.isDark
               ? DarkColors.background2.withValues(alpha: _hovered ? 0.95 : 0.75)
@@ -415,67 +414,70 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
           ],
         ),
         child: ClipRRect(
-          borderRadius: m.radius16,
+          borderRadius: m.radius8,
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: m.iconSize28,
-                      height: m.iconSize28,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: widget.data.gradientColors,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+            child: Padding(
+              padding: EdgeInsets.all(m.kSpace14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: m.iconSize28,
+                        height: m.iconSize28,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: widget.data.gradientColors,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: m.radius8,
                         ),
-                        borderRadius: m.radius8,
+                        child: Center(
+                          child: Icon(widget.data.icon, size: m.iconSize16, color: Colors.white),
+                        ),
                       ),
-                      child: Center(
-                        child: Icon(widget.data.icon, size: m.iconSize16, color: Colors.white),
-                      ),
-                    ),
-                    SizedBox(width: m.kSpace10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.data.title,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).hintColor,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.5,
+                      SizedBox(width: m.kSpace10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.data.title,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).hintColor,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.5,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: m.kSpace2),
-                          Text(
-                            widget.data.value,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: const [FontFeature.tabularFigures()],
+                            SizedBox(height: m.kSpace2),
+                            Text(
+                              widget.data.value,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: m.kSpace10),
-                SizedBox(
-                  height: scaleW(40).clamp(32.0, 52.0),
-                  child: _SparklineChart(
-                    data: List<double>.from(widget.data.history),
-                    color: widget.data.chartColor,
-                    gradientColors: widget.data.gradientColors,
+                    ],
                   ),
-                ),
-              ],
+                  SizedBox(height: m.kSpace10),
+                  SizedBox(
+                    height: scaleW(40).clamp(32.0, 52.0),
+                    child: _SparklineChart(
+                      data: List<double>.from(widget.data.history),
+                      color: widget.data.chartColor,
+                      gradientColors: widget.data.gradientColors,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

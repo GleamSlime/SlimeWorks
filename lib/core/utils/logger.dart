@@ -16,6 +16,7 @@ String deviceCode = '';
 
 class Loggers {
   static final List<String> _logs = [];
+  static List<String> get allLogs => List.unmodifiable(_logs);
   static String? _deviceId;
   static final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   static const String _lokiUrl = 'http://logs.gleamslime.com:9090/back/push';

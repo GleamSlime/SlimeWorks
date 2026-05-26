@@ -232,7 +232,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
             end: Offset.zero,
           ).animate(_entranceAnimation),
           child: Container(
-            margin: EdgeInsets.all(AppTheme.metrics.kSpace12),
+            margin: EdgeInsets.all(AppTheme.metrics.kSpace6),
             child: AnimatedContainer(
               duration: widget.animationDuration,
               curve: Curves.easeInOutCubic,
