@@ -496,6 +496,12 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
               children: [
                 TextField(
                   controller: domainNameCtrl,
+                  onTap: () {
+                    domainNameCtrl.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: domainNameCtrl.text.length,
+                    );
+                  },
                   decoration: const InputDecoration(
                     labelText: '主域名',
                     hintText: 'example.com',
@@ -508,6 +514,12 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                     Expanded(
                       child: TextField(
                         controller: rrCtrl,
+                        onTap: () {
+                          rrCtrl.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: rrCtrl.text.length,
+                          );
+                        },
                         decoration: const InputDecoration(
                           labelText: '子域名(RR)',
                           hintText: '@ 或 www',

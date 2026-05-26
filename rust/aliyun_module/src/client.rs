@@ -298,11 +298,11 @@ pub async fn get_public_ip() -> Result<String> {
         .build()?;
 
     let urls = [
-        "https://api.ipify.org",
         "https://icanhazip.com",
+        "https://api.ipify.org",
         "https://4.ident.me",
-        "https://api.ipsimple.org/ipv4",
         "https://checkip.amazonaws.com",
+        "https://api.ipsimple.org/ipv4",
         "https://ifconfig.me/ip",
     ];
 
@@ -329,5 +329,32 @@ pub async fn get_public_ip() -> Result<String> {
         }
     }
 
-    Err(anyhow!("所有公网IP获取方式均失败，请检查网络连接"))
+    sw_info!("[aliyun] 所有公共API均失败，尝试UDP获取本机出口IP");
+    match get_local_outbound_ip() {
+        Ok(ip) => {
+            sw_info!("[aliyun] 本机出口IP获取成功: {}", ip);
+            Ok(ip)
+        }
+        Err(e) => {
+            sw_error!("[aliyun] 本机出口IP获取也失败: {}", e);
+            Err(anyhow!("所有公网IP获取方式均失败，请检查网络连接"))
+        }
+    }
+}
+
+fn get_local_outbound_ip() -> Result<String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    socket.connect("8.8.8.8:53")?;
+    let local_addr = socket.local_addr()?;
+    match local_addr {
+        std::net::SocketAddr::V4(v4) => {
+            let ip = v4.ip().to_string();
+            if ip.starts_with("10.") || ip.starts_with("172.") || ip.starts_with("192.168.") {
+                sw_warn!("[aliyun] 本机出口IP是内网地址: {}", ip);
+            }
+            Ok(ip)
+        }
+        std::net::SocketAddr::V6(v6) => Ok(v6.ip().to_string()),
+    }
 }

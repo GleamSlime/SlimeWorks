@@ -286,36 +286,48 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                       ),
                     ],
                   ),
-                  SizedBox(height: m.kSpace8),
-                  Slider(
-                    value: service.intervalSecs.value.toDouble(),
-                    min: 60,
-                    max: 3600,
-                    divisions: 11,
-                    label: _formatInterval(service.intervalSecs.value),
-                    onChanged: (v) async {
-                      await service.setIntervalSecs(v.toInt());
-                      await service.updateConfig();
-                    },
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '1分钟',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: m.fontSize10,
-                          color: theme.colorScheme.onSurface.withAlpha(80),
+                  SizedBox(height: m.kSpace12),
+                  Wrap(
+                    spacing: m.kSpace8,
+                    runSpacing: m.kSpace8,
+                    children: _presetIntervals.map((secs) {
+                      final isSelected = service.intervalSecs.value == secs;
+                      return InkWell(
+                        onTap: () async {
+                          await service.setIntervalSecs(secs);
+                          await service.updateConfig();
+                        },
+                        borderRadius: m.radius8,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: m.kSpace12,
+                            vertical: m.kSpace6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? LightColors.cyan.withAlpha(20)
+                                : theme.colorScheme.surfaceContainerHighest.withAlpha(60),
+                            borderRadius: m.radius8,
+                            border: Border.all(
+                              color: isSelected
+                                  ? LightColors.cyan.withAlpha(80)
+                                  : theme.colorScheme.outlineVariant.withAlpha(40),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            _formatInterval(secs),
+                            style: TextStyle(
+                              fontSize: m.fontSize12,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected
+                                  ? LightColors.cyan
+                                  : theme.colorScheme.onSurface.withAlpha(120),
+                            ),
+                          ),
                         ),
-                      ),
-                      Text(
-                        '1小时',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: m.fontSize10,
-                          color: theme.colorScheme.onSurface.withAlpha(80),
-                        ),
-                      ),
-                    ],
+                      );
+                    }).toList(),
                   ),
                 ],
               ),
@@ -325,6 +337,8 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
       ),
     );
   }
+
+  static const _presetIntervals = [10, 20, 30, 50, 60, 120, 300, 600, 1800, 3600];
 
   String _formatInterval(int secs) {
     if (secs < 60) return '$secs秒';
