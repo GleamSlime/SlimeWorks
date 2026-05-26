@@ -595,7 +595,10 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                     item.route.sidebarIcon!,
                                     width: AppTheme.metrics.fontSize18,
                                     colorFilter: isSelected
-                                        ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
+                                        ? ColorFilter.mode(
+                                            theme.colorScheme.primary,
+                                            BlendMode.srcIn,
+                                          )
                                         : ColorFilter.mode(
                                             theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
                                             BlendMode.srcIn,
@@ -610,7 +613,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                       curve: Curves.easeInOutCubic,
                                       padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
                                       decoration: BoxDecoration(
-                                        color: isSelected
+                                        color: isSelected && isExpanded
                                             ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
                                             : Colors.transparent,
                                         borderRadius: AppTheme.metrics.radius8,
@@ -619,9 +622,13 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                         item.route.sidebarIcon!,
                                         width: AppTheme.metrics.fontSize22,
                                         colorFilter: isSelected
-                                            ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
+                                            ? ColorFilter.mode(
+                                                theme.colorScheme.primary,
+                                                BlendMode.srcIn,
+                                              )
                                             : ColorFilter.mode(
-                                                theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
+                                                theme.iconTheme.color?.withAlpha(179) ??
+                                                    Colors.black,
                                                 BlendMode.srcIn,
                                               ),
                                       ),
@@ -640,7 +647,6 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                               duration: const Duration(milliseconds: 200),
                               opacity: isExpanded ? 1.0 : 0.0,
                               child: Row(
-                                mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   SizedBox(width: AppTheme.metrics.kSpace8),
@@ -854,25 +860,26 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
           child: Row(
             spacing: m.kSpace8,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOutCubic,
-                width: scaleW(3),
-                height: widget.isSelected ? m.kSpace20 : 0,
-                decoration: BoxDecoration(
-                  color: widget.isSelected ? widget.primaryColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(scaleW(2)),
-                  boxShadow: widget.isSelected
-                      ? [
-                          BoxShadow(
-                            color: widget.primaryColor.withAlpha(60),
-                            blurRadius: scaleW(6),
-                            offset: Offset(scaleW(2), 0),
-                          ),
-                        ]
-                      : null,
+              if (widget.isExpanded)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  width: scaleW(3),
+                  height: widget.isSelected ? m.kSpace20 : 0,
+                  decoration: BoxDecoration(
+                    color: widget.isSelected ? widget.primaryColor : Colors.transparent,
+                    borderRadius: BorderRadius.circular(scaleW(2)),
+                    boxShadow: widget.isSelected
+                        ? [
+                            BoxShadow(
+                              color: widget.primaryColor.withAlpha(60),
+                              blurRadius: scaleW(6),
+                              offset: Offset(scaleW(2), 0),
+                            ),
+                          ]
+                        : null,
+                  ),
                 ),
-              ),
               Expanded(child: widget.child),
             ],
           ),

@@ -111,10 +111,12 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
           ),
         ],
       ),
-      child: Row(
+      child: Wrap(
+        spacing: m.kSpace6,
+        runSpacing: m.kSpace6,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Icon(Icons.terminal_rounded, size: m.iconSize18, color: primaryColor),
-          SizedBox(width: m.kSpace8),
           Container(
             padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace2),
             decoration: BoxDecoration(color: primaryColor.withAlpha(15), borderRadius: m.radius4),
@@ -128,8 +130,8 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               ),
             ),
           ),
-          SizedBox(width: m.kSpace12),
-          Expanded(
+          SizedBox(
+            width: 160,
             child: Container(
               height: m.kSpace24,
               decoration: BoxDecoration(
@@ -164,13 +166,11 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               ),
             ),
           ),
-          SizedBox(width: m.kSpace8),
           _buildLevelChip('ALL', '', vm, m, isDark),
           _buildLevelChip('ERR', 'ERROR', vm, m, isDark),
           _buildLevelChip('WRN', 'WARN', vm, m, isDark),
           _buildLevelChip('INF', 'INFO', vm, m, isDark),
           _buildLevelChip('DBG', 'DEBUG', vm, m, isDark),
-          SizedBox(width: m.kSpace8),
           GestureDetector(
             onTap: vm.isWatching.value ? vm.stopWatching : vm.startWatching,
             child: AnimatedContainer(
@@ -225,7 +225,6 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               ),
             ),
           ),
-          SizedBox(width: m.kSpace6),
           _ActionButton(
             icon: Icons.refresh_rounded,
             tooltip: '刷新',

@@ -39,16 +39,19 @@ class SentryLogFilterBar extends StatelessWidget {
                 width: 0.5,
               ),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: m.kSpace8,
+              runSpacing: m.kSpace8,
+              alignment: WrapAlignment.start,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _buildProjectFilter(context, theme, m, isDark),
-                SizedBox(width: m.kSpace8),
                 _buildLevelChips(context, theme, m, isDark),
-                SizedBox(width: m.kSpace8),
                 _buildEnvironmentField(context, theme, m, isDark),
-                SizedBox(width: m.kSpace8),
-                Expanded(child: _buildSearchField(context, theme, m, isDark)),
-                SizedBox(width: m.kSpace8),
+                SizedBox(
+                  width: 160,
+                  child: _buildSearchField(context, theme, m, isDark),
+                ),
                 _buildFilterButton(context, theme, m, isDark),
               ],
             ),
