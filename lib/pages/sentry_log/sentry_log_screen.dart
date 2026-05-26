@@ -131,7 +131,8 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
         ],
       ),
       child: Container(
-        color: isDark ? DarkColors.background3 : LightColors.background3,
+        // color: Colors.red,
+        color: Colors.transparent,
         child: AnimatedBuilder(
           animation: _entranceAnimation,
           builder: (context, _) {

@@ -7,7 +7,6 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
-
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/gen/assets.gen.dart';
@@ -61,6 +60,7 @@ part 'routes/capture_routers.dart';
 part 'routes/lan_transfer_routes.dart';
 part 'routes/picacg_routes.dart';
 part 'routes/game_library_routes.dart';
+
 const Loggers _logger = Loggers(name: '路由');
 
 /// 路由路径常量
@@ -239,7 +239,8 @@ class AppRoutes {
     final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
     final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
     return ColoredBox(
-      color: Theme.of(context).scaffoldBackgroundColor,
+      // color: Theme.of(context).scaffoldBackgroundColor,
+      color: Colors.transparent,
       child: FadeTransition(
         opacity: curved,
         child: ScaleTransition(scale: scale, child: child),
