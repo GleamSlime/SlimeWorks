@@ -291,18 +291,31 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       );
     }
 
-    return Wrap(
-      spacing: AppTheme.metrics.kSpace12,
-      runSpacing: AppTheme.metrics.kSpace12,
-      children: [
-        for (int i = 0; i < metrics.length; i++) _buildMetricCard(context, metrics[i], i, isDark),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = AppTheme.metrics.kSpace12;
+        final cardWidth = ((constraints.maxWidth - spacing) / 2).clamp(100.0, 300.0);
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (int i = 0; i < metrics.length; i++)
+              _buildMetricCard(context, metrics[i], i, isDark, cardWidth),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildMetricCard(BuildContext context, _MetricData data, int animIndex, bool isDark) {
+  Widget _buildMetricCard(
+    BuildContext context,
+    _MetricData data,
+    int animIndex,
+    bool isDark,
+    double cardWidth,
+  ) {
     final anim = _cardAnimations[(animIndex + 1).clamp(0, _cardAnimations.length - 1)];
-    final cardWidth = ((MediaQuery.of(context).size.width - scaleW(44)) / 2).clamp(100.0, 240.0);
 
     return AnimatedBuilder(
       animation: anim,
