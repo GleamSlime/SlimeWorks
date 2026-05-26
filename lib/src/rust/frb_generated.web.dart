@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/aliyun_ddns.dart';
 import 'api/capture.dart';
 import 'api/extract.dart';
 import 'api/ffmpeg.dart';

@@ -1,3 +1,4 @@
+pub mod aliyun_ddns; // 阿里云DDNS模块
 pub mod capture;
 pub mod extract;
 pub mod ffmpeg;

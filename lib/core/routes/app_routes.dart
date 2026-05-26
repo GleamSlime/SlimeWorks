@@ -44,6 +44,9 @@ import 'package:slime_works/pages/picacg/picacg_downloads_screen.dart';
 import 'package:slime_works/pages/about/about_page.dart';
 import 'package:slime_works/pages/tools/tools_screen.dart';
 import 'package:slime_works/pages/sentry_log/sentry_log_screen.dart';
+import 'package:slime_works/pages/aliyun_ddns/aliyun_ddns_screen.dart';
+import 'package:slime_works/core/services/aliyun_ddns_service.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 
 part 'app_routes.g.dart';
 
@@ -90,6 +93,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<AboutRoute>(path: '/about'),
     TypedGoRoute<ToolsRoute>(path: '/tools'),
     TypedGoRoute<SentryLogRoute>(path: '/sentry-log'),
+    TypedGoRoute<AliyunDdnsRoute>(path: '/aliyun'),
   ],
 )
 class AppShellRouteData extends ShellRouteData {
@@ -131,6 +135,7 @@ class AppRoutes {
       const AboutRoute(),
       const ToolsRoute(),
       const SentryLogRoute(),
+      const AliyunDdnsRoute(),
 
       const NovelReaderRoute(),
       const PicAcgComicDetailRoute(comicId: ''),
@@ -273,6 +278,10 @@ abstract class AppRouteData extends GoRouteData {
   int? get sidebarOrder => null;
 
   int? get sidebarBadgeCount => null;
+
+  Widget? sidebarBadgeWidget(BuildContext context) => null;
+
+  Widget? sidebarStatusWidget(BuildContext context) => null;
 
   String? get sidebarGroupId => null;
 

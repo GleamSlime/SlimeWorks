@@ -33,6 +33,7 @@ enum Permission {
   accessPicAcg,
   accessTools,
   accessSentryLog,
+  accessAliyunDdns,
 }
 
 class RoleManager {
@@ -56,6 +57,7 @@ class RoleManager {
       Permission.accessPicAcg,
       Permission.accessTools,
       Permission.accessSentryLog,
+      Permission.accessAliyunDdns,
     ],
     UserRole.editor: [
       Permission.viewDashboard,

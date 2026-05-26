@@ -1,6 +1,6 @@
 part of '../app_routes.dart';
 
-/// 占位路由：Datasource、Clearwater、Aliyun、CloudWord、Distributed、RequestHost
+/// 占位路由：Datasource、Clearwater、CloudWord、Distributed、RequestHost
 @TypedGoRoute<DatasourceRoute>(path: '/datasource')
 class DatasourceRoute extends GoRouteData with $DatasourceRoute {
   const DatasourceRoute();
@@ -24,19 +24,6 @@ class ClearwaterRoute extends GoRouteData with $ClearwaterRoute {
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return AppRoutes.buildPage(context, state, AppRoutes.buildPlaceholder('清水账'));
-  }
-}
-
-@TypedGoRoute<AliyunRoute>(path: '/aliyun')
-class AliyunRoute extends GoRouteData with $AliyunRoute {
-  const AliyunRoute();
-
-  static const Permission routePermission = Permission.viewDashboard;
-  Permission get permission => AliyunRoute.routePermission;
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) {
-    return AppRoutes.buildPage(context, state, AppRoutes.buildPlaceholder('阿里云'));
   }
 }
 

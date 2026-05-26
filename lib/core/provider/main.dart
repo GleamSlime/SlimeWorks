@@ -15,6 +15,7 @@ import 'package:slime_works/core/services/picacg_download_service.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
+import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -66,6 +67,9 @@ void getItInit() {
 
   // 系统资源监控服务
   getIt.registerLazySingleton<SystemMetricsService>(() => SystemMetricsService());
+
+  // 阿里云DDNS服务
+  getIt.registerLazySingleton<AliyunDdnsService>(() => AliyunDdnsService());
 
   isInitialized = true;
 }

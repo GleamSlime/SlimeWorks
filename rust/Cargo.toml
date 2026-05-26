@@ -70,6 +70,9 @@ extract_module = { path = "extract_module" }
 # Sentry日志收集模块（独立 crate）
 sentry_log = { path = "sentry_log" }
 
+# 阿里云DDNS模块（独立 crate）
+aliyun_module = { path = "aliyun_module" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]
@@ -91,6 +94,7 @@ members = [
   "game_library",
   "extract_module",
   "sentry_log",
+  "aliyun_module",
   # "ffmpeg_lib",
 ]
 

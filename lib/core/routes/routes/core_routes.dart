@@ -30,7 +30,16 @@ class AboutRoute extends AppRouteData with $AboutRoute {
   String get title => '关于（${AppInfoService.versionWithBuild}）';
 
   @override
-  String get sidebarLabel => '关于 ${AppInfoService.versionWithBuild}';
+  String get sidebarLabel => '关于';
+
+  @override
+  Widget? sidebarStatusWidget(BuildContext context) => Text(
+    AppInfoService.versionWithBuild,
+    style: TextStyle(
+      fontSize: AppTheme.metrics.fontSize10,
+      color: Theme.of(context).colorScheme.tertiary,
+    ),
+  );
 
   @override
   String get sidebarIcon => Assets.image.svg.menuAbout;

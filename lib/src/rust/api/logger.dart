@@ -6,33 +6,22 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `write_log`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `LOG_DIR`, `LOG_FILE`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
-
-/// 初始化日志系统
 Future<String> initLogger({required String installDir}) =>
     RustLib.instance.api.crateApiLoggerInitLogger(installDir: installDir);
 
-/// 记录信息日志
 Future<void> logInfo({required String message}) =>
     RustLib.instance.api.crateApiLoggerLogInfo(message: message);
 
-/// 记录警告日志
 Future<void> logWarn({required String message}) =>
     RustLib.instance.api.crateApiLoggerLogWarn(message: message);
 
-/// 记录错误日志
 Future<void> logError({required String message}) =>
     RustLib.instance.api.crateApiLoggerLogError(message: message);
 
-/// 记录调试日志
 Future<void> logDebug({required String message}) =>
     RustLib.instance.api.crateApiLoggerLogDebug(message: message);
 
-/// 获取日志目录路径
 Future<String?> getLogDir() => RustLib.instance.api.crateApiLoggerGetLogDir();
 
-/// 清理旧日志（保留最近 N 天）
 Future<BigInt> cleanupOldLogs({required int daysToKeep}) =>
     RustLib.instance.api.crateApiLoggerCleanupOldLogs(daysToKeep: daysToKeep);

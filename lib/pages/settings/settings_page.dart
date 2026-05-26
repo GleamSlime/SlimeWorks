@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/pages/settings/components/aliyun_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
@@ -154,7 +155,7 @@ class _ToolsSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 1,
+      length: 2,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(
@@ -165,10 +166,13 @@ class _ToolsSettingsWrapper extends StatelessWidget {
                 TabBar(
                   tabAlignment: TabAlignment.start,
                   isScrollable: true,
-                  tabs: [Tab(text: '解压设置')],
+                  tabs: [
+                    Tab(text: '解压设置'),
+                    Tab(text: '阿里云'),
+                  ],
                   dividerHeight: 0,
                 ),
-                Expanded(child: TabBarView(children: [ExtractSettingsTab()])),
+                Expanded(child: TabBarView(children: [ExtractSettingsTab(), AliyunSettingsTab()])),
               ],
             ),
           );

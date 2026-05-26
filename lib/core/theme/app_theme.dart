@@ -6,8 +6,8 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'app_colors.dart';
-const Loggers _logger = Loggers(name: '主题');
 
+const Loggers _logger = Loggers(name: '主题');
 
 ThemeMetrics appMetrics = AppTheme.metrics;
 
@@ -124,6 +124,7 @@ class AppTheme {
       colorScheme: const ColorScheme.light(
         primary: LightColors.primary,
         secondary: LightColors.purple,
+        tertiary: LightColors.overlayLight,
         surface: LightColors.background1,
         error: LightColors.red,
         onPrimary: LightColors.white100,

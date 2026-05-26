@@ -85,6 +85,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "aliyun_module"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "chrono",
+ "flutter_rust_bridge",
+ "hex",
+ "hmac 0.12.1",
+ "lazy_static",
+ "percent-encoding",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "slime_logger",
+ "tokio",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "allo-isolate"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2915,6 +2937,7 @@ dependencies = [
 name = "rust_lib_slime_works"
 version = "0.1.0"
 dependencies = [
+ "aliyun_module",
  "anyhow",
  "base64 0.22.1",
  "chrono",

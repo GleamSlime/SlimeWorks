@@ -65,6 +65,67 @@ class SentryLogRoute extends AppRouteData with $SentryLogRoute {
   }
 }
 
+@TypedGoRoute<AliyunDdnsRoute>(path: '/aliyun')
+class AliyunDdnsRoute extends AppRouteData with $AliyunDdnsRoute {
+  const AliyunDdnsRoute();
+
+  @override
+  String get title => '阿里云';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuAli;
+
+  @override
+  String get sidebarGroupId => 'tools';
+
+  @override
+  Widget? sidebarStatusWidget(BuildContext context) {
+    try {
+      final service = Get.find<AliyunDdnsService>();
+      return Obx(() {
+        final enabled = service.enabled.value;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final activeColor = isDark ? const Color(0xFF4CAF50) : LightColors.success;
+        final color = enabled ? activeColor : Theme.of(context).hintColor.withAlpha(120);
+        return Tooltip(
+          message: enabled ? 'DDNS 运行中' : 'DDNS 已停止',
+          child: Container(
+            width: AppTheme.metrics.kSpace8,
+            height: AppTheme.metrics.kSpace8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: color.withAlpha(80),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        );
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static const Permission routePermission = Permission.accessAliyunDdns;
+  @override
+  Permission get permission => AliyunDdnsRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const AliyunDdnsScreen());
+  }
+}
+
 class ToolsRoute extends AppRouteData with $ToolsRoute {
   const ToolsRoute();
 
