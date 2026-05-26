@@ -580,31 +580,60 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                           : MainAxisAlignment.center,
                       children: [
                         if (item.route.sidebarIcon != null)
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeInOutCubic,
-                            padding: EdgeInsets.all(
-                              isExpanded ? AppTheme.metrics.kSpace4 : AppTheme.metrics.kSpace6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
-                                  : Colors.transparent,
-                              borderRadius: AppTheme.metrics.radius8,
-                            ),
-                            child: SvgPicture.asset(
-                              item.route.sidebarIcon!,
-                              width: isExpanded
-                                  ? AppTheme.metrics.fontSize18
-                                  : AppTheme.metrics.fontSize22,
-                              colorFilter: isSelected
-                                  ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
-                                  : ColorFilter.mode(
-                                      theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
-                                      BlendMode.srcIn,
+                          isExpanded
+                              ? AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeInOutCubic,
+                                  padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
+                                        : Colors.transparent,
+                                    borderRadius: AppTheme.metrics.radius8,
+                                  ),
+                                  child: SvgPicture.asset(
+                                    item.route.sidebarIcon!,
+                                    width: AppTheme.metrics.fontSize18,
+                                    colorFilter: isSelected
+                                        ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
+                                        : ColorFilter.mode(
+                                            theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
+                                            BlendMode.srcIn,
+                                          ),
+                                  ),
+                                )
+                              : Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeInOutCubic,
+                                      padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
+                                            : Colors.transparent,
+                                        borderRadius: AppTheme.metrics.radius8,
+                                      ),
+                                      child: SvgPicture.asset(
+                                        item.route.sidebarIcon!,
+                                        width: AppTheme.metrics.fontSize22,
+                                        colorFilter: isSelected
+                                            ? ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn)
+                                            : ColorFilter.mode(
+                                                theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
+                                                BlendMode.srcIn,
+                                              ),
+                                      ),
                                     ),
-                            ),
-                          ),
+                                    if (item.route.sidebarBadgeWidget(context) != null)
+                                      Positioned(
+                                        right: AppTheme.metrics.kSpace2,
+                                        top: AppTheme.metrics.kSpace2,
+                                        child: item.route.sidebarBadgeWidget(context)!,
+                                      ),
+                                  ],
+                                ),
                         if (isExpanded && showExtends)
                           Expanded(
                             child: AnimatedOpacity(
@@ -657,6 +686,16 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                         ),
                                         maxLines: 1,
                                       ),
+                                    ),
+                                  if (item.route.sidebarBadgeWidget(context) != null)
+                                    Padding(
+                                      padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
+                                      child: item.route.sidebarBadgeWidget(context)!,
+                                    ),
+                                  if (item.route.sidebarStatusWidget(context) != null)
+                                    Padding(
+                                      padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
+                                      child: item.route.sidebarStatusWidget(context)!,
                                     ),
                                 ],
                               ),
@@ -789,7 +828,7 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeInOutCubic,
           height: m.kSpace44,
-          padding: EdgeInsets.symmetric(horizontal: widget.isExpanded ? m.kSpace8 : m.kSpace4),
+          padding: EdgeInsets.symmetric(horizontal: widget.isExpanded ? m.kSpace4 : m.kSpace4),
           decoration: BoxDecoration(
             color: widget.isSelected
                 ? widget.primaryColor.withAlpha(widget.isDark ? 22 : 16)
@@ -813,6 +852,7 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
             ],
           ),
           child: Row(
+            spacing: m.kSpace8,
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
