@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
+import 'package:slime_works/components/node/node_switcher_button.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
@@ -354,65 +355,11 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
   Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
     if (_sentrySettings == null || _nodeService == null) return const SizedBox.shrink();
 
-    final currentNodeId = _viewModel.currentNodeId.value;
-    final remoteNodes = _nodeService!.enabledRemoteNodes;
-
-    final items = <DropdownMenuItem<String>>[
-      DropdownMenuItem<String>(
-        value: '',
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.computer, size: m.iconSize16, color: theme.hintColor),
-            SizedBox(width: m.kSpace4),
-            const Text('本机'),
-          ],
-        ),
-      ),
-      ...remoteNodes.map((node) {
-        final ok = _nodeService!.nodeConnectivity[node.id] == true;
-        return DropdownMenuItem<String>(
-          value: node.id,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.dns_outlined, size: m.iconSize16, color: ok ? Colors.green : Colors.red),
-              SizedBox(width: m.kSpace4),
-              Text(node.name, overflow: TextOverflow.ellipsis),
-            ],
-          ),
-        );
-      }),
-    ];
-
-    return Container(
-      height: m.kSpace32,
-      decoration: BoxDecoration(
-        color: isDark
-            ? DarkColors.background2.withAlpha(180)
-            : LightColors.background2.withAlpha(200),
-        borderRadius: m.radius8,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? DarkColors.primary : LightColors.primary).withAlpha(8),
-            blurRadius: scaleW(8),
-            offset: Offset(0, scaleW(2)),
-          ),
-        ],
-      ),
-      child: DropdownButton<String>(
-        value: currentNodeId.isEmpty ? '' : currentNodeId,
-        icon: Icon(Icons.swap_horiz, size: m.iconSize16, color: theme.hintColor),
-        style: theme.textTheme.bodySmall,
-        underline: const SizedBox.shrink(),
-        padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
-        items: items,
-        onChanged: (value) async {
-          if (value != null && value != currentNodeId) {
-            await _viewModel.switchNode(value);
-          }
-        },
+    return Obx(
+      () => NodeSwitcherButton(
+        nodeService: _nodeService!,
+        currentNodeId: _viewModel.currentNodeId.value,
+        onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
       ),
     );
   }

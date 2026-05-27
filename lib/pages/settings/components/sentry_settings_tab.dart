@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/components/node/node_inline_selector.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
@@ -207,7 +208,18 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                       ],
                     ),
                     SizedBox(height: m.kSpace8),
-                    _buildNodeSelector(service, nodeService, theme, m),
+                    Obx(
+                      () => NodeInlineSelector(
+                        nodeService: nodeService,
+                        selectedNodeId: service.selectedNodeId.value,
+                        moduleName: 'Sentry日志',
+                        availabilityChecker: (baseUrl) => service.checkNodeSentryAvailable(baseUrl),
+                        onNodeSelected: (nodeId) async {
+                          await service.setSelectedNodeId(nodeId);
+                          _showSnack(nodeId.isEmpty ? '已切换到本机日志' : '已切换到节点');
+                        },
+                      ),
+                    ),
                     SizedBox(height: m.kSpace12),
                     _buildDsnInfo(service, theme, m),
                   ],
@@ -387,146 +399,6 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNodeSelector(
-    SentrySettingsService service,
-    NodeSettingsService nodeService,
-    ThemeData theme,
-    ThemeMetrics m,
-  ) {
-    final localNodeEnabled = nodeService.localNodeEnabled.value;
-    final remoteNodes = nodeService.enabledRemoteNodes;
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace4),
-      decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? Colors.white.withAlpha(8)
-            : Colors.black.withAlpha(4),
-        borderRadius: m.radius8,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildNodeOption(
-            context: context,
-            nodeId: '',
-            label: '本机',
-            subtitle: localNodeEnabled ? '本机节点服务运行中' : '本机节点未启用',
-            icon: Icons.computer,
-            isSelected: service.selectedNodeId.value.isEmpty,
-            isAvailable: true,
-            onTap: () async {
-              await service.setSelectedNodeId('');
-              _showSnack('已切换到本机日志');
-            },
-            theme: theme,
-            m: m,
-          ),
-          if (remoteNodes.isNotEmpty)
-            ...remoteNodes.map((node) {
-              final ok = nodeService.nodeConnectivity[node.id] == true;
-              return _buildNodeOption(
-                context: context,
-                nodeId: node.id,
-                label: node.name,
-                subtitle: '${node.apiBaseUrl}${ok ? '' : ' (不可达)'}',
-                icon: Icons.dns_outlined,
-                isSelected: service.selectedNodeId.value == node.id,
-                isAvailable: ok,
-                onTap: () async {
-                  if (!ok) {
-                    _showSnack('节点不可达，请检查节点设置');
-                    return;
-                  }
-                  final available = await service.checkNodeSentryAvailable(node.apiBaseUrl);
-                  if (!available) {
-                    if (!mounted) return;
-                    _showSnack('该节点不支持 Sentry 日志功能');
-                    return;
-                  }
-                  await service.setSelectedNodeId(node.id);
-                  _showSnack('已切换到节点: ${node.name}');
-                },
-                theme: theme,
-                m: m,
-              );
-            }),
-          if (!localNodeEnabled && remoteNodes.isEmpty)
-            Padding(
-              padding: EdgeInsets.all(m.kSpace12),
-              child: Text(
-                '暂无可用节点，请在节点设置中添加或启用节点',
-                style: TextStyle(fontSize: m.fontSize12, color: theme.hintColor),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNodeOption({
-    required BuildContext context,
-    required String nodeId,
-    required String label,
-    required String subtitle,
-    required IconData icon,
-    required bool isSelected,
-    required bool isAvailable,
-    required VoidCallback onTap,
-    required ThemeData theme,
-    required ThemeMetrics m,
-  }) {
-    return InkWell(
-      borderRadius: m.radius8,
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace10),
-        decoration: BoxDecoration(
-          border: isSelected ? Border.all(color: theme.colorScheme.primary, width: 1.5) : null,
-          borderRadius: m.radius8,
-          color: isSelected ? theme.colorScheme.primary.withAlpha(20) : Colors.transparent,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: m.iconSize20,
-              color: isSelected
-                  ? theme.colorScheme.primary
-                  : (isAvailable ? theme.hintColor : theme.disabledColor),
-            ),
-            SizedBox(width: m.kSpace12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: m.fontSize13,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isAvailable ? theme.colorScheme.onSurface : theme.disabledColor,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: m.fontSize12,
-                      color: isAvailable ? theme.hintColor : theme.disabledColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle, size: m.iconSize20, color: theme.colorScheme.primary),
-          ],
         ),
       ),
     );

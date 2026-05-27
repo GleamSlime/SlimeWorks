@@ -131,6 +131,7 @@ class AppTheme {
         onSecondary: LightColors.white100,
         onSurface: LightColors.black100,
         onError: LightColors.white100,
+        outlineVariant: LightColors.black1,
       ),
 
       // 应用栏主题

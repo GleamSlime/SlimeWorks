@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -72,15 +73,38 @@ class _MediaItemTileState extends State<MediaItemTile> {
   static const Duration _kAnimDur = Duration(milliseconds: 200);
   static const Curve _kAnimCurve = Curves.easeOut;
 
+  Worker? _privacyWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
+    if (prefs != null) {
+      _privacyWorker = ever(prefs.privacyMode, (_) {
+        if (mounted) setState(() {});
+      });
+    }
+    // 视频 tile：立即后台加载帧，提供默认封面（不等待 hover）
+    if (_isVideo && widget.onRequestScrubFrames != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadScrubFrames());
+    }
+    // 音频 tile：立即后台提取嵌入封面
+    if (_isAudio && widget.onRequestAudioCover != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAudioCover());
+    }
+  }
+
+  @override
+  void dispose() {
+    _privacyWorker?.dispose();
+    super.dispose();
+  }
+
   bool get _isVideo => widget.item.kind == media_api.MediaKind.video;
   bool get _isAudio => widget.item.kind == media_api.MediaKind.audio;
 
-  /// 视频：优先显示 scrub 帧；悬停时按比例选帧，非悬停时取第 2 帧（≈10s）作为默认封面。
-  /// 音频：显示已提取的嵌入专辑封面，无封面时返回 null（显示音符图标）。
-  /// 非视频/音频：直接返回 widget.source。
   String? get _displaySource {
     if (_isVideo) {
-      // 远程视频没有 scrub 帧回调，直接使用预先构建好的封面 URL（mode=cover）
       if (widget.onRequestScrubFrames == null) return widget.source;
       final frames = _scrubFrames;
       if (frames != null && frames.isNotEmpty) {
@@ -88,13 +112,11 @@ class _MediaItemTileState extends State<MediaItemTile> {
           final idx = (_hoverRatio * (frames.length - 1)).round().clamp(0, frames.length - 1);
           return frames[idx];
         }
-        // 默认封面：第 2 帧（约 10s 位置），若只有 1 帧则用第 1 帧
         return frames[frames.length > 1 ? 1 : 0];
       }
-      return null; // 帧未就绪时显示占位图标，不尝试解码视频文件
+      return null;
     }
     if (_isAudio) {
-      // 远程音频：直接用预构建 URL；本地音频：用异步提取的封面路径
       if (widget.onRequestAudioCover == null) return widget.source;
       return _audioCoverPath;
     }
@@ -132,19 +154,6 @@ class _MediaItemTileState extends State<MediaItemTile> {
       }
     } catch (_) {
       if (mounted) setState(() => _loadingAudioCover = false);
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // 视频 tile：立即后台加载帧，提供默认封面（不等待 hover）
-    if (_isVideo && widget.onRequestScrubFrames != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadScrubFrames());
-    }
-    // 音频 tile：立即后台提取嵌入封面
-    if (_isAudio && widget.onRequestAudioCover != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAudioCover());
     }
   }
 
@@ -190,8 +199,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final src = _displaySource;
-    // src 始终是 jpg 帧路径或 null（视频不再传入 .mp4 路径），或图片文件路径
     final showCoverAnyway = src != null && src.isNotEmpty;
+    final privacyOn = getIt<MediaPrefsService>().privacyMode.value;
+    final blurSigma = getIt<MediaPrefsService>().privacyBlurSigma.value;
 
     final hasMenuActions =
         widget.onOpenFolder != null ||
@@ -252,7 +262,49 @@ class _MediaItemTileState extends State<MediaItemTile> {
                       ),
                     ),
                     child: showCoverAnyway
-                        ? (src.startsWith('http')
+                        ? (privacyOn
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.zero,
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      src.startsWith('http')
+                                          ? Image.network(src, fit: BoxFit.cover)
+                                          : Image.file(
+                                              File(src),
+                                              fit: BoxFit.cover,
+                                              cacheWidth: () {
+                                                final w = getIt<MediaPrefsService>()
+                                                    .localPreviewWidth
+                                                    .value;
+                                                return w > 0 ? w : null;
+                                              }(),
+                                            ),
+                                      BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                          sigmaX: blurSigma,
+                                          sigmaY: blurSigma,
+                                        ),
+                                        child: Container(color: Colors.transparent),
+                                      ),
+                                      Center(
+                                        child: Container(
+                                          padding: EdgeInsets.all(appMetrics.kSpace6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withAlpha(120),
+                                            borderRadius: AppTheme.metrics.radius999,
+                                          ),
+                                          child: Icon(
+                                            Icons.lock_outline,
+                                            size: appMetrics.iconSize16,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : src.startsWith('http')
                               ? Image.network(
                                   src,
                                   fit: BoxFit.cover,

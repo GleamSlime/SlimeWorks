@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/pages/collection/library/components/remote_novel_reader_dialog.dart';
@@ -785,33 +787,38 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   }
 
   Widget _buildCoverImage() {
+    final privacyOn = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().privacyMode.value
+        : false;
+    final blurSigma = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().privacyBlurSigma.value
+        : 15.0;
     try {
       final coverPath = widget.metadata.coverPath;
+      Widget coverWidget;
       if (coverPath != null && coverPath.startsWith('data:image/')) {
         final commaIndex = coverPath.indexOf(',');
         if (commaIndex > 0 && commaIndex < coverPath.length - 1) {
           final encoded = coverPath.substring(commaIndex + 1);
           final bytes = base64Decode(encoded);
-          return Positioned.fill(
-            child: ClipRect(
-              child: AnimatedScale(
-                scale: _hovering ? 1.08 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                child: Hero(
-                  tag: 'book_cover_${widget.metadata.id}',
-                  child: Image.memory(bytes, fit: BoxFit.cover),
-                ),
+          coverWidget = ClipRect(
+            child: AnimatedScale(
+              scale: _hovering ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: Hero(
+                tag: 'book_cover_${widget.metadata.id}',
+                child: Image.memory(bytes, fit: BoxFit.cover),
               ),
             ),
           );
+        } else {
+          coverWidget = _buildDefaultCover();
         }
-      }
-
-      final file = File(widget.metadata.coverPath!);
-      if (file.existsSync()) {
-        return Positioned.fill(
-          child: ClipRect(
+      } else if (widget.metadata.coverPath != null) {
+        final file = File(widget.metadata.coverPath!);
+        if (file.existsSync()) {
+          coverWidget = ClipRect(
             child: AnimatedScale(
               scale: _hovering ? 1.08 : 1.0,
               duration: const Duration(milliseconds: 200),
@@ -825,11 +832,47 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                 ),
               ),
             ),
+          );
+        } else {
+          coverWidget = _buildDefaultCover();
+        }
+      } else {
+        coverWidget = _buildDefaultCover();
+      }
+
+      if (privacyOn && widget.metadata.coverPath != null) {
+        return Positioned.fill(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              coverWidget,
+              ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              Center(
+                child: Container(
+                  padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(120),
+                    borderRadius: AppTheme.metrics.radius999,
+                  ),
+                  child: Icon(
+                    Icons.lock_outline,
+                    size: AppTheme.metrics.iconSize16,
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       }
+      return Positioned.fill(child: coverWidget);
     } catch (_) {}
-    return _buildDefaultCover();
+    return Positioned.fill(child: _buildDefaultCover());
   }
 
   Widget _buildDefaultCover() {

@@ -1,12 +1,11 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/utils/logger.dart';
-const Loggers _logger = Loggers(name: '媒体偏好');
 
+const Loggers _logger = Loggers(name: '媒体偏好');
 
 /// 视频预览质量等级 → ffmpeg 参数映射。
 class ThumbQualityLevel {
@@ -40,6 +39,8 @@ class MediaPrefsService {
   static const _keyRemoteImageWidth = 'media_remote_image_width';
   static const _keyLocalPreviewWidth = 'media_local_preview_width';
   static const _keyCacheLimitBytes = 'media_cache_limit_bytes';
+  static const _keyPrivacyMode = 'media_privacy_mode';
+  static const _keyPrivacyBlurSigma = 'media_privacy_blur_sigma';
 
   /// 质量等级 1-5 (默认 3)。
   final quality = 3.obs;
@@ -59,6 +60,12 @@ class MediaPrefsService {
 
   /// 缓存大小上限（字节），0 表示不限制，默认 1 GB。
   final cacheLimitBytes = (1 * 1024 * 1024 * 1024).obs;
+
+  /// 隐私模式（默认关闭）。开启后所有封面图高斯模糊。
+  final privacyMode = false.obs;
+
+  /// 隐私模糊强度（sigma值），默认 15.0，范围 5.0-40.0。
+  final privacyBlurSigma = 15.0.obs;
 
   /// 缓存大小上限预设列表。
   static const cacheLimitPresets = [
@@ -122,6 +129,8 @@ class MediaPrefsService {
     remoteImageWidth.value = prefs.getInt(_keyRemoteImageWidth) ?? 0;
     localPreviewWidth.value = prefs.getInt(_keyLocalPreviewWidth) ?? 480;
     cacheLimitBytes.value = prefs.getInt(_keyCacheLimitBytes) ?? (1 * 1024 * 1024 * 1024);
+    privacyMode.value = prefs.getBool(_keyPrivacyMode) ?? false;
+    privacyBlurSigma.value = (prefs.getDouble(_keyPrivacyBlurSigma) ?? 15.0).clamp(5.0, 40.0);
   }
 
   Future<void> setQuality(int v) async {
@@ -162,6 +171,18 @@ class MediaPrefsService {
     cacheLimitBytes.value = v < 0 ? 0 : v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyCacheLimitBytes, cacheLimitBytes.value);
+  }
+
+  Future<void> setPrivacyMode(bool v) async {
+    privacyMode.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyPrivacyMode, v);
+  }
+
+  Future<void> setPrivacyBlurSigma(double v) async {
+    privacyBlurSigma.value = v.clamp(5.0, 40.0);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyPrivacyBlurSigma, privacyBlurSigma.value);
   }
 
   /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。

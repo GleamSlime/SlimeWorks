@@ -4,13 +4,15 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:developer' as developer;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
-
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_append.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_card.dart';
 import 'package:slime_works/pages/collection/library/components/library_folder_card.dart';
@@ -1030,7 +1032,27 @@ class _CollectionLibraryScreenState
 
       Widget cover;
       if (meta.coverPath != null && File(meta.coverPath!).existsSync()) {
-        cover = Image.file(File(meta.coverPath!), fit: BoxFit.cover);
+        final privacyOn = getIt.isRegistered<MediaPrefsService>()
+            ? getIt<MediaPrefsService>().privacyMode.value
+            : false;
+        final blurSigma = getIt.isRegistered<MediaPrefsService>()
+            ? getIt<MediaPrefsService>().privacyBlurSigma.value
+            : 15.0;
+        final rawCover = Image.file(File(meta.coverPath!), fit: BoxFit.cover);
+        cover = privacyOn
+            ? ClipRRect(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    rawCover,
+                    BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ],
+                ),
+              )
+            : rawCover;
       } else {
         cover = Container(
           color: Theme.of(context).colorScheme.outline,

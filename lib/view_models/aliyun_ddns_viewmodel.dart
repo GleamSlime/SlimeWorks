@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 
 class AliyunDdnsViewModel extends GetxController {
   final AliyunDdnsService _service = GetIt.instance.get<AliyunDdnsService>();
@@ -23,6 +24,10 @@ class AliyunDdnsViewModel extends GetxController {
   final RxBool isChecking = false.obs;
   final RxBool isConfigLoaded = false.obs;
 
+  final RxString currentNodeId = ''.obs;
+
+  bool get isLocal => currentNodeId.value.isEmpty;
+
   StreamSubscription? _enabledSub;
   StreamSubscription? _currentIpSub;
   StreamSubscription? _lastUpdateSub;
@@ -33,6 +38,7 @@ class AliyunDdnsViewModel extends GetxController {
   StreamSubscription? _watchDomainsSub;
   StreamSubscription? _intervalSecsSub;
   StreamSubscription? _domainStatusesSub;
+  StreamSubscription? _selectedNodeIdSub;
 
   @override
   void onInit() {
@@ -40,6 +46,7 @@ class AliyunDdnsViewModel extends GetxController {
     _service.ensureInitialized().then((_) {
       _bindService();
       _loadFromService();
+      currentNodeId.value = _service.selectedNodeId.value;
     });
   }
 
@@ -54,6 +61,7 @@ class AliyunDdnsViewModel extends GetxController {
     _watchDomainsSub = _service.watchDomains.listen((v) => watchDomains.value = v);
     _intervalSecsSub = _service.intervalSecs.listen((v) => intervalSecs.value = v);
     _domainStatusesSub = _service.domainStatuses.listen((v) => domainStatuses.value = v);
+    _selectedNodeIdSub = _service.selectedNodeId.listen((v) => currentNodeId.value = v);
   }
 
   void _loadFromService() {
@@ -69,7 +77,24 @@ class AliyunDdnsViewModel extends GetxController {
     isConfigLoaded.value = true;
   }
 
+  Future<void> switchNode(String nodeId) async {
+    currentNodeId.value = nodeId;
+    await _service.setSelectedNodeId(nodeId);
+    currentIp.value = '';
+    lastUpdate.value = '';
+    lastResult.value = '';
+    domainStatuses.clear();
+    watchDomains.clear();
+    logs.clear();
+    await refreshAll();
+  }
+
+  Future<void> refreshAll() async {
+    await Future.wait([refreshStatus(), refreshLogs(), refreshWatchDomains()]);
+  }
+
   Future<void> toggleEnabled(bool value) async {
+    if (!isLocal) return;
     await _service.setEnabled(value);
     if (value) {
       await _service.initRustModule();
@@ -80,24 +105,29 @@ class AliyunDdnsViewModel extends GetxController {
   }
 
   Future<void> saveAccessKeyId(String value) async {
+    if (!isLocal) return;
     await _service.setAccessKeyId(value);
     await _service.updateConfig();
   }
 
   Future<void> saveAccessKeySecret(String value) async {
+    if (!isLocal) return;
     await _service.setAccessKeySecret(value);
     await _service.updateConfig();
   }
 
   Future<void> addWatchDomain(WatchDomain domain) async {
+    if (!isLocal) return;
     await _service.addWatchDomain(domain);
   }
 
   Future<void> removeWatchDomain(int index) async {
+    if (!isLocal) return;
     await _service.removeWatchDomain(index);
   }
 
   Future<void> saveIntervalSecs(int value) async {
+    if (!isLocal) return;
     await _service.setIntervalSecs(value);
     await _service.updateConfig();
   }
@@ -105,22 +135,61 @@ class AliyunDdnsViewModel extends GetxController {
   Future<void> checkNow() async {
     isChecking.value = true;
     try {
-      await _service.checkAndUpdate();
+      if (isLocal) {
+        await _service.checkAndUpdate();
+      } else {
+        final result = await _service.remoteCheckAndUpdate();
+        lastResult.value = result;
+        await refreshStatus();
+        await refreshLogs();
+      }
     } finally {
       isChecking.value = false;
     }
   }
 
   Future<void> refreshStatus() async {
-    await _service.refreshStatus();
+    try {
+      if (isLocal) {
+        await _service.refreshStatus();
+      } else {
+        final status = await _service.fetchRemoteStatus();
+        currentIp.value = status['current_ip'] as String? ?? '';
+        lastUpdate.value = status['last_update'] as String? ?? '';
+        lastResult.value = status['last_result'] as String? ?? '';
+        final ds = status['domain_statuses'] as List<dynamic>? ?? [];
+        domainStatuses.value = ds.map((e) => e as Map<String, dynamic>).toList();
+        isEnabled.value = status['enabled'] as bool? ?? false;
+      }
+    } catch (_) {}
   }
 
   Future<void> refreshLogs() async {
-    await _service.refreshLogs();
+    try {
+      if (isLocal) {
+        await _service.refreshLogs();
+      } else {
+        final remoteLogs = await _service.fetchRemoteLogs();
+        logs.value = remoteLogs;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> refreshWatchDomains() async {
+    try {
+      if (isLocal) return;
+      final remoteDomains = await _service.fetchRemoteWatchDomains();
+      watchDomains.value = remoteDomains;
+    } catch (_) {}
   }
 
   Future<void> clearLogs() async {
+    if (!isLocal) return;
     await _service.clearLogs();
+  }
+
+  Future<bool> checkNodeAliyunAvailable(String baseUrl) async {
+    return _service.checkNodeAliyunAvailable(baseUrl);
   }
 
   @override
@@ -135,6 +204,7 @@ class AliyunDdnsViewModel extends GetxController {
     _watchDomainsSub?.cancel();
     _intervalSecsSub?.cancel();
     _domainStatusesSub?.cancel();
+    _selectedNodeIdSub?.cancel();
     super.onClose();
   }
 }

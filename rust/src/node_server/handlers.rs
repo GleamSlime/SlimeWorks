@@ -499,6 +499,37 @@ pub async fn dispatch_action(
             Ok(json!({"ok": true}))
         }
 
+        // ── 阿里云 DDNS 操作 ─────────────────────────────────────────────────
+        "aliyun_get_status" => {
+            let status = aliyun_module::api::aliyun_ddns_get_status()
+                .map_err(|e| format!("获取阿里云状态失败: {}", e))?;
+            let parsed: Value = serde_json::from_str(&status)
+                .map_err(|e| format!("解析阿里云状态失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "aliyun_get_logs" => {
+            let logs = aliyun_module::api::aliyun_ddns_get_logs()
+                .map_err(|e| format!("获取阿里云日志失败: {}", e))?;
+            let parsed: Value = serde_json::from_str(&logs)
+                .map_err(|e| format!("解析阿里云日志失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "aliyun_get_watch_domains" => {
+            let config = aliyun_module::api::aliyun_ddns_get_config()
+                .map_err(|e| format!("获取阿里云配置失败: {}", e))?;
+            let parsed: Value = serde_json::from_str(&config)
+                .map_err(|e| format!("解析阿里云配置失败: {}", e))?;
+            Ok(parsed.get("watch_domains").cloned().unwrap_or(json!([])))
+        }
+
+        "aliyun_check_and_update" => {
+            let result = aliyun_module::api::aliyun_ddns_check_and_update().await
+                .map_err(|e| format!("阿里云检查更新失败: {}", e))?;
+            Ok(json!({"result": result}))
+        }
+
         // ── 未知动作 ─────────────────────────────────────────────────────────
         _ => Err(format!("不支持的动作: {}", action)),
     }

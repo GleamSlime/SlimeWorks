@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -52,6 +53,25 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
   static const Duration _kAnimDur = Duration(milliseconds: 200);
   static const Curve _kAnimCurve = Curves.easeOut;
 
+  Worker? _privacyWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
+    if (prefs != null) {
+      _privacyWorker = ever(prefs.privacyMode, (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _privacyWorker?.dispose();
+    super.dispose();
+  }
+
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
     final overlayState = Overlay.of(context);
     final overlayBox = overlayState.context.findRenderObject()! as RenderBox;
@@ -98,6 +118,12 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
     final theme = Theme.of(context);
     final resolvedCover = widget.coverSource;
     final hasCover = resolvedCover != null && resolvedCover.isNotEmpty;
+    final privacyOn = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().privacyMode.value
+        : false;
+    final blurSigma = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().privacyBlurSigma.value
+        : 15.0;
     return AnimatedScale(
       scale: _hovering ? 1.03 : 1.0,
       duration: _kAnimDur,
@@ -151,21 +177,53 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                     final w = prefs?.localPreviewWidth.value ?? 480;
                                     return w > 0 ? w : null;
                                   }();
+                            final image = resolvedCover.startsWith('http')
+                                ? Image.network(
+                                    resolvedCover,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => const _FolderPlaceholder(),
+                                  )
+                                : Image.file(
+                                    File(resolvedCover),
+                                    fit: BoxFit.cover,
+                                    cacheWidth: cacheW,
+                                    errorBuilder: (_, _, _) => const _FolderPlaceholder(),
+                                  );
+                            if (privacyOn) {
+                              return ClipRect(
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    image,
+                                    BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                        sigmaX: blurSigma,
+                                        sigmaY: blurSigma,
+                                      ),
+                                      child: Container(color: Colors.transparent),
+                                    ),
+                                    Center(
+                                      child: Container(
+                                        padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withAlpha(120),
+                                          borderRadius: AppTheme.metrics.radius999,
+                                        ),
+                                        child: Icon(
+                                          Icons.lock_outline,
+                                          size: AppTheme.metrics.iconSize16,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
                             return Stack(
                               fit: StackFit.expand,
                               children: [
-                                resolvedCover.startsWith('http')
-                                    ? Image.network(
-                                        resolvedCover,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => const _FolderPlaceholder(),
-                                      )
-                                    : Image.file(
-                                        File(resolvedCover),
-                                        fit: BoxFit.cover,
-                                        cacheWidth: cacheW,
-                                        errorBuilder: (_, _, _) => const _FolderPlaceholder(),
-                                      ),
+                                image,
                                 if (kDebugMode)
                                   Positioned(
                                     right: AppTheme.metrics.kSpace4,

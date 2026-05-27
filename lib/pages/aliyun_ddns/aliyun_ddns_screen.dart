@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:get_it/get_it.dart';
+import 'package:slime_works/components/node/node_switcher_button.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -19,11 +23,17 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
   late AliyunDdnsViewModel _viewModel;
   late AnimationController _entranceController;
   late Animation<double> _entranceAnimation;
+  NodeSettingsService? _nodeService;
+
+  StreamSubscription? _nodeListSub;
+  StreamSubscription? _nodeConnectivitySub;
+  StreamSubscription? _currentNodeSub;
 
   @override
   void initState() {
     super.initState();
     _viewModel = Get.put(AliyunDdnsViewModel());
+    _nodeService = GetIt.instance.get<NodeSettingsService>();
 
     _entranceController = AnimationController(
       vsync: this,
@@ -31,15 +41,27 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
     );
     _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic);
 
+    _nodeListSub = _nodeService!.remoteNodes.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _nodeConnectivitySub = _nodeService!.nodeConnectivity.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _currentNodeSub = _viewModel.currentNodeId.listen((_) {
+      if (mounted) setState(() {});
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _viewModel.refreshStatus();
-      _viewModel.refreshLogs();
+      _viewModel.refreshAll();
       _entranceController.forward();
     });
   }
 
   @override
   void dispose() {
+    _nodeListSub?.cancel();
+    _nodeConnectivitySub?.cancel();
+    _currentNodeSub?.cancel();
     _entranceController.dispose();
     try {
       Get.delete<AliyunDdnsViewModel>(force: true);
@@ -56,6 +78,8 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
       data: ScreenChromeData(
         title: '阿里云',
         actions: [
+          _buildNodeSwitcher(context, theme, m),
+          SizedBox(width: m.kSpace8),
           _buildCheckButton(context, theme, m),
           SizedBox(width: m.kSpace8),
         ],
@@ -126,7 +150,11 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                   ),
                   SizedBox(height: m.kSpace2),
                   Text(
-                    _viewModel.isEnabled.value ? '已启用 - 定时检测IP变化并自动更新' : '已关闭 - 前往设置配置AccessKey后开启',
+                    _viewModel.isLocal
+                        ? (_viewModel.isEnabled.value
+                              ? '已启用 - 定时检测IP变化并自动更新'
+                              : '已关闭 - 前往设置配置AccessKey后开启')
+                        : '远程节点 - 查看远程节点的阿里云DDNS状态',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(120),
                     ),
@@ -136,7 +164,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
             ),
             Switch(
               value: _viewModel.isEnabled.value,
-              onChanged: (v) => _viewModel.toggleEnabled(v),
+              onChanged: _viewModel.isLocal ? (v) => _viewModel.toggleEnabled(v) : null,
             ),
           ],
         ),
@@ -196,7 +224,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                   ),
                   SizedBox(width: m.kSpace10),
                   Text(
-                    '本机公网IP',
+                    _viewModel.isLocal ? '本机公网IP' : '节点公网IP',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(120),
                     ),
@@ -327,7 +355,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                   ),
                 ),
                 const Spacer(),
-                _buildAddDomainButton(context, theme, m),
+                if (_viewModel.isLocal) _buildAddDomainButton(context, theme, m),
               ],
             ),
             SizedBox(height: m.kSpace12),
@@ -457,16 +485,17 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
               ),
             ),
             SizedBox(width: m.kSpace8),
-            IconButton(
-              onPressed: () => _showRemoveDomainDialog(context, theme, m, index, domain),
-              icon: Icon(
-                Icons.close_rounded,
-                size: m.iconSize16,
-                color: theme.colorScheme.onSurface.withAlpha(40),
+            if (_viewModel.isLocal)
+              IconButton(
+                onPressed: () => _showRemoveDomainDialog(context, theme, m, index, domain),
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: m.iconSize16,
+                  color: theme.colorScheme.onSurface.withAlpha(40),
+                ),
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(minWidth: m.kSpace24, minHeight: m.kSpace24),
               ),
-              padding: EdgeInsets.zero,
-              constraints: BoxConstraints(minWidth: m.kSpace24, minHeight: m.kSpace24),
-            ),
           ],
         ),
       ),
@@ -640,7 +669,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                   ),
                 ),
                 const Spacer(),
-                if (_viewModel.logs.isNotEmpty)
+                if (_viewModel.isLocal && _viewModel.logs.isNotEmpty)
                   TextButton.icon(
                     onPressed: () => _viewModel.clearLogs(),
                     icon: Icon(Icons.delete_outline_rounded, size: m.iconSize14),
@@ -763,6 +792,19 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
               )
             : Icon(Icons.sync_rounded, size: m.iconSize20),
         tooltip: '立即检查',
+      ),
+    );
+  }
+
+  Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m) {
+    if (_nodeService == null) return const SizedBox.shrink();
+
+    return Obx(
+      () => NodeSwitcherButton(
+        nodeService: _nodeService!,
+        currentNodeId: _viewModel.currentNodeId.value,
+        availabilityChecker: (baseUrl) => _viewModel.checkNodeAliyunAvailable(baseUrl),
+        onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
       ),
     );
   }

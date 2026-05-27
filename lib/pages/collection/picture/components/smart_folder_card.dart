@@ -113,6 +113,12 @@ class SmartFolderCard extends StatelessWidget {
               ),
               child: (() {
                 final src = coverSource;
+                final privacyOn = getIt.isRegistered<MediaPrefsService>()
+                    ? getIt<MediaPrefsService>().privacyMode.value
+                    : false;
+                final blurSigma = getIt.isRegistered<MediaPrefsService>()
+                    ? getIt<MediaPrefsService>().privacyBlurSigma.value
+                    : 15.0;
                 if (src != null && src.isNotEmpty) {
                   final cacheW = src.startsWith('http')
                       ? null
@@ -123,21 +129,50 @@ class SmartFolderCard extends StatelessWidget {
                           final w = prefs?.localPreviewWidth.value ?? 480;
                           return w > 0 ? w : null;
                         }();
+                  final image = src.startsWith('http')
+                      ? Image.network(
+                          src,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const _SmartPlaceholder(),
+                        )
+                      : Image.file(
+                          File(src),
+                          fit: BoxFit.cover,
+                          cacheWidth: cacheW,
+                          errorBuilder: (_, _, _) => const _SmartPlaceholder(),
+                        );
+                  if (privacyOn) {
+                    return ClipRect(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          image,
+                          BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                            child: Container(color: Colors.transparent),
+                          ),
+                          Center(
+                            child: Container(
+                              padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withAlpha(120),
+                                borderRadius: AppTheme.metrics.radius999,
+                              ),
+                              child: Icon(
+                                Icons.lock_outline,
+                                size: AppTheme.metrics.iconSize16,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
                   return Stack(
                     fit: StackFit.expand,
                     children: [
-                      src.startsWith('http')
-                          ? Image.network(
-                              src,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => const _SmartPlaceholder(),
-                            )
-                          : Image.file(
-                              File(src),
-                              fit: BoxFit.cover,
-                              cacheWidth: cacheW,
-                              errorBuilder: (_, _, _) => const _SmartPlaceholder(),
-                            ),
+                      image,
                       if (kDebugMode)
                         Positioned(
                           right: AppTheme.metrics.kSpace4,

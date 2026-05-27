@@ -10,11 +10,16 @@ class LightColors {
   static const Color black40 = Color(0x66000000);
   static const Color black20 = Color(0x33000000);
   static const Color black10 = Color(0x1A000000);
+  static const Color black5 = Color(0x33000000);
+  static const Color black1 = Color(0x1A000000);
 
   // 白色系列
   static const Color white100 = Color(0xFFFFFFFF);
   static const Color white80 = Color(0xCCFFFFFF);
   static const Color white40 = Color(0x66FFFFFF);
+  static const Color white20 = Color(0x33FFFFFF);
+  static const Color white15 = Color(0x26FFFFFF);
+  static const Color white10 = Color(0x1AFFFFFF);
 
   // 主色调
   static const Color primary = Color(0xFFA89FEE);
@@ -56,6 +61,8 @@ class DarkColors {
   static const Color white20 = Color(0x33FFFFFF);
   static const Color white15 = Color(0x26FFFFFF);
   static const Color white10 = Color(0x1AFFFFFF);
+  static const Color white5 = Color(0x33FFFFFF);
+  static const Color white1 = Color(0x1AFFFFFF);
 
   // 黑色系列 (暗色主题)
   static const Color black100 = Color(0xFF000000);
@@ -64,6 +71,8 @@ class DarkColors {
   static const Color black20 = Color(0x33000000);
   static const Color black10 = Color(0x1A000000);
   static const Color black4 = Color(0x0A000000);
+  static const Color black5 = Color(0x33000000);
+  static const Color black1 = Color(0x1A000000);
 
   // 主色调
   static const Color primary = Color(0xFFA89FEE);

@@ -94,6 +94,95 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
     return ListView(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       children: [
+        // ── 隐私模式 ────────────────────────────────────────────────────────
+        _SectionHeader(title: '隐私', theme: theme),
+        SizedBox(height: AppTheme.metrics.kSpace12),
+        _SettingsCard(
+          theme: theme,
+          child: Obx(() {
+            final on = _prefs.privacyMode.value;
+            final sigma = _prefs.privacyBlurSigma.value;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('隐私模式', style: theme.textTheme.titleSmall),
+                          SizedBox(height: AppTheme.metrics.kSpace4),
+                          Text(
+                            '开启后所有封面图将显示高斯模糊效果，防止敏感内容被旁人窥视。',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withAlpha(150),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(value: on, onChanged: (v) => _prefs.setPrivacyMode(v)),
+                  ],
+                ),
+                if (on) ...[
+                  SizedBox(height: AppTheme.metrics.kSpace12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('模糊强度', style: theme.textTheme.titleSmall),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppTheme.metrics.kSpace10,
+                          vertical: AppTheme.metrics.kSpace3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          borderRadius: AppTheme.metrics.radius999,
+                        ),
+                        child: Text(
+                          sigma.toStringAsFixed(0),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace4),
+                  Text(
+                    '值越大模糊越强，越小则越能看出轮廓。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(150),
+                    ),
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace8),
+                  Row(
+                    children: [
+                      Text('轻', style: theme.textTheme.labelSmall),
+                      Expanded(
+                        child: Slider(
+                          value: sigma,
+                          min: 5,
+                          max: 40,
+                          divisions: 7,
+                          label: sigma.toStringAsFixed(0),
+                          onChanged: (v) => _prefs.setPrivacyBlurSigma(v),
+                        ),
+                      ),
+                      Text('强', style: theme.textTheme.labelSmall),
+                    ],
+                  ),
+                ],
+              ],
+            );
+          }),
+        ),
+
+        SizedBox(height: AppTheme.metrics.kSpace24),
+
         // ── 视频清晰度 ──────────────────────────────────────────────────────
         _SectionHeader(title: '视频预览', theme: theme),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -109,7 +198,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('视频清晰度', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace10,
+                        vertical: AppTheme.metrics.kSpace3,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
                         borderRadius: AppTheme.metrics.radius999,
@@ -172,7 +264,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('远程封面清晰度', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace10,
+                        vertical: AppTheme.metrics.kSpace3,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
                         borderRadius: AppTheme.metrics.radius999,
@@ -232,7 +327,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('远程图片清晰度', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace10,
+                        vertical: AppTheme.metrics.kSpace3,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
                         borderRadius: AppTheme.metrics.radius999,
@@ -292,7 +390,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('本地预览图质量', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace10,
+                        vertical: AppTheme.metrics.kSpace3,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
                         borderRadius: AppTheme.metrics.radius999,
@@ -350,7 +451,10 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   children: [
                     Text('预览封面解析并发量', style: theme.textTheme.titleSmall),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace3),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace10,
+                        vertical: AppTheme.metrics.kSpace3,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
                         borderRadius: AppTheme.metrics.radius999,
@@ -428,7 +532,11 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                         onTap: _openCachePath,
                         child: Row(
                           children: [
-                            Icon(Icons.folder_outlined, size: AppTheme.metrics.iconSize13, color: theme.colorScheme.primary),
+                            Icon(
+                              Icons.folder_outlined,
+                              size: AppTheme.metrics.iconSize13,
+                              color: theme.colorScheme.primary,
+                            ),
                             SizedBox(width: AppTheme.metrics.kSpace4),
                             Expanded(
                               child: Text(

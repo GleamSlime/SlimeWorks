@@ -232,6 +232,26 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       return fmtSpeedVal(h.reduce((a, b) => a + b) / h.length);
     }
 
+    String fmtMemVal(double mb) {
+      if (mb >= 1024) return '${(mb / 1024).toStringAsFixed(2)} GB';
+      return '${mb.toStringAsFixed(0)} MB';
+    }
+
+    String fmtMemPeak(List<double> h) {
+      if (h.isEmpty) return '--';
+      return fmtMemVal(h.reduce(math.max));
+    }
+
+    String fmtMemValley(List<double> h) {
+      if (h.isEmpty) return '--';
+      return fmtMemVal(h.reduce(math.min));
+    }
+
+    String fmtMemAvg(List<double> h) {
+      if (h.isEmpty) return '--';
+      return fmtMemVal(h.reduce((a, b) => a + b) / h.length);
+    }
+
     final metrics = [
       _MetricData(
         icon: Icons.memory_rounded,
@@ -251,6 +271,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         history: List<double>.from(_metricsService.memHistory),
         chartColor: const Color(0xFFF5A569),
         gradientColors: const [Color(0xFFF5A569), Color(0xFFFFCB3A)],
+        peak: fmtMemPeak(_metricsService.memHistory),
+        valley: fmtMemValley(_metricsService.memHistory),
+        average: fmtMemAvg(_metricsService.memHistory),
       ),
       _MetricData(
         icon: Icons.download_rounded,

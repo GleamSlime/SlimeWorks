@@ -507,6 +507,45 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             }
         }
 
+        // ── 阿里云 DDNS 路由 ──────────────────────────────────────────────────
+        ("GET", "/aliyun/status") => {
+            match aliyun_module::api::aliyun_ddns_get_status() {
+                Ok(status) => (
+                    200,
+                    serde_json::json!({"success": true, "data": serde_json::from_str::<serde_json::Value>(&status).unwrap_or(serde_json::json!({}))}).to_string(),
+                ),
+                Err(e) => (500, serde_json::json!({"success": false, "error": e}).to_string()),
+            }
+        }
+
+        ("GET", "/aliyun/logs") => {
+            match aliyun_module::api::aliyun_ddns_get_logs() {
+                Ok(logs) => (
+                    200,
+                    serde_json::json!({"success": true, "data": serde_json::from_str::<serde_json::Value>(&logs).unwrap_or(serde_json::json!([]))}).to_string(),
+                ),
+                Err(e) => (500, serde_json::json!({"success": false, "error": e}).to_string()),
+            }
+        }
+
+        ("GET", "/aliyun/watch_domains") => {
+            match aliyun_module::api::aliyun_ddns_get_config() {
+                Ok(config) => {
+                    let config_val: serde_json::Value = serde_json::from_str(&config).unwrap_or(serde_json::json!({}));
+                    let domains = config_val.get("watch_domains").cloned().unwrap_or(serde_json::json!([]));
+                    (200, serde_json::json!({"success": true, "data": domains}).to_string())
+                },
+                Err(e) => (500, serde_json::json!({"success": false, "error": e}).to_string()),
+            }
+        }
+
+        ("POST", "/aliyun/check_and_update") => {
+            match shared_runtime().block_on(aliyun_module::api::aliyun_ddns_check_and_update()) {
+                Ok(result) => (200, serde_json::json!({"success": true, "data": {"result": result}}).to_string()),
+                Err(e) => (500, serde_json::json!({"success": false, "error": e}).to_string()),
+            }
+        }
+
         // OPTIONS 预检请求（CORS）
         ("OPTIONS", _) => {
             // 直接返回并提前退出

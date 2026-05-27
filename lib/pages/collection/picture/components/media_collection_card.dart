@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -98,8 +99,22 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   static const Duration _kAnimDur = Duration(milliseconds: 200);
   static const Curve _kAnimCurve = Curves.easeOut;
 
+  Worker? _privacyWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
+    if (prefs != null) {
+      _privacyWorker = ever(prefs.privacyMode, (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _privacyWorker?.dispose();
     _hoverTimer?.cancel();
     super.dispose();
   }
@@ -150,30 +165,71 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       final w = prefs?.localPreviewWidth.value ?? 480;
       return w > 0 ? w : null;
     }();
-    return Stack(
+    final privacyOn = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().privacyMode.value
+        : false;
+    final blurSigma = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().privacyBlurSigma.value
+        : 15.0;
+    final image = src.startsWith('http')
+        ? Image.network(
+            src,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (_, _, _) =>
+                const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+          )
+        : Image.file(
+            File(src),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            cacheWidth: cacheW,
+            errorBuilder: (_, _, _) =>
+                const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+          );
+    Widget cover = Stack(
       fit: StackFit.expand,
       children: [
-        src.startsWith('http')
-            ? Image.network(
-                src,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                errorBuilder: (_, _, _) =>
-                    const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
-              )
-            : Image.file(
-                File(src),
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                cacheWidth: cacheW,
-                errorBuilder: (_, _, _) =>
-                    const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
-              ),
-        if (kDebugMode) Positioned(right: AppTheme.metrics.kSpace4, bottom: AppTheme.metrics.kSpace4, child: DebugImageSizeBadge(src: src)),
+        image,
+        if (kDebugMode)
+          Positioned(
+            right: AppTheme.metrics.kSpace4,
+            bottom: AppTheme.metrics.kSpace4,
+            child: DebugImageSizeBadge(src: src),
+          ),
       ],
     );
+    if (privacyOn) {
+      cover = ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            image,
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: Container(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(120),
+                  borderRadius: AppTheme.metrics.radius999,
+                ),
+                child: Icon(
+                  Icons.lock_outline,
+                  size: AppTheme.metrics.iconSize20,
+                  color: Colors.white70,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return cover;
   }
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
@@ -601,7 +657,13 @@ class _CollectionPlaceholder extends StatelessWidget {
           ],
         ),
       ),
-      child: Center(child: Icon(icon, size: AppTheme.metrics.iconSize48, color: theme.colorScheme.primary.withAlpha(150))),
+      child: Center(
+        child: Icon(
+          icon,
+          size: AppTheme.metrics.iconSize48,
+          color: theme.colorScheme.primary.withAlpha(150),
+        ),
+      ),
     );
   }
 }

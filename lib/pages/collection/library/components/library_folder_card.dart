@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
@@ -255,77 +258,101 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                   ),
                 ),
                 child: () {
-                  // 尝试获取文件夹封面(前6个书籍封面)
-                  if (!widget.isBookHover) {
-                    final coverPaths = widget.viewModel.getFolderCovers(widget.folder.id);
-                    if (coverPaths.isNotEmpty) {
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // 3x2 宫格使用两行三列的等比分布，确保铺满父容器
-                          Column(
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: List.generate(3, (col) {
-                                    final idx = col;
-                                    if (idx < coverPaths.length) {
-                                      final coverFile = File(coverPaths[idx]);
-                                      if (coverFile.existsSync()) {
-                                        return Expanded(
-                                          child: Image.file(coverFile, fit: BoxFit.cover),
-                                        );
-                                      }
+                  final coverPaths = widget.viewModel.getFolderCovers(widget.folder.id);
+                  final privacyOn = getIt.isRegistered<MediaPrefsService>()
+                      ? getIt<MediaPrefsService>().privacyMode.value
+                      : false;
+                  final blurSigma = getIt.isRegistered<MediaPrefsService>()
+                      ? getIt<MediaPrefsService>().privacyBlurSigma.value
+                      : 15.0;
+                  if (!widget.isBookHover && coverPaths.isNotEmpty) {
+                    final grid = Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Column(
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: List.generate(3, (col) {
+                                  final idx = col;
+                                  if (idx < coverPaths.length) {
+                                    final coverFile = File(coverPaths[idx]);
+                                    if (coverFile.existsSync()) {
+                                      return Expanded(
+                                        child: Image.file(coverFile, fit: BoxFit.cover),
+                                      );
                                     }
-                                    return Expanded(
-                                      child: Container(
-                                        color: Color.alphaBlend(
-                                          Colors.white.withAlpha(200),
-                                          accent,
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              ),
-                              Expanded(
-                                child: Row(
-                                  children: List.generate(3, (col) {
-                                    final idx = 3 + col;
-                                    if (idx < coverPaths.length) {
-                                      final coverFile = File(coverPaths[idx]);
-                                      if (coverFile.existsSync()) {
-                                        return Expanded(
-                                          child: Image.file(coverFile, fit: BoxFit.cover),
-                                        );
-                                      }
-                                    }
-                                    return Expanded(
-                                      child: Container(
-                                        color: Color.alphaBlend(
-                                          Colors.white.withAlpha(200),
-                                          accent,
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              ),
-                            ],
-                          ),
-                          // 半透明遮罩，让图标和文字更清晰
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.black.withAlpha(100), Colors.black.withAlpha(180)],
+                                  }
+                                  return Expanded(
+                                    child: Container(
+                                      color: Color.alphaBlend(Colors.white.withAlpha(200), accent),
+                                    ),
+                                  );
+                                }),
                               ),
                             ),
+                            Expanded(
+                              child: Row(
+                                children: List.generate(3, (col) {
+                                  final idx = 3 + col;
+                                  if (idx < coverPaths.length) {
+                                    final coverFile = File(coverPaths[idx]);
+                                    if (coverFile.existsSync()) {
+                                      return Expanded(
+                                        child: Image.file(coverFile, fit: BoxFit.cover),
+                                      );
+                                    }
+                                  }
+                                  return Expanded(
+                                    child: Container(
+                                      color: Color.alphaBlend(Colors.white.withAlpha(200), accent),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.black.withAlpha(100), Colors.black.withAlpha(180)],
+                            ),
                           ),
-                        ],
+                        ),
+                      ],
+                    );
+                    if (privacyOn) {
+                      return ClipRect(
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            grid,
+                            BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                              child: Container(color: Colors.transparent),
+                            ),
+                            Center(
+                              child: Container(
+                                padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withAlpha(120),
+                                  borderRadius: AppTheme.metrics.radius999,
+                                ),
+                                child: Icon(
+                                  Icons.lock_outline,
+                                  size: AppTheme.metrics.iconSize16,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       );
                     }
+                    return grid;
                   }
                   return null;
                 }(),
@@ -410,7 +437,10 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
               ),
 
               // Hover 右上角操作按钮（非选择模式）
-              if (_hovering && !widget.isSelecting && !widget.isBookHover && !_isRemoteVirtualFolder)
+              if (_hovering &&
+                  !widget.isSelecting &&
+                  !widget.isBookHover &&
+                  !_isRemoteVirtualFolder)
                 Positioned(
                   top: appMetrics.kSpace4,
                   right: appMetrics.kSpace4,

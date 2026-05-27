@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/src/rust/api/aliyun_ddns.dart' as rust_api;
@@ -33,6 +36,7 @@ class AliyunDdnsService extends GetxService {
   static const String _keyWatchDomains = 'aliyun_watch_domains';
   static const String _keyIntervalSecs = 'aliyun_interval_secs';
   static const String _keyEnabled = 'aliyun_ddns_enabled';
+  static const String _keySelectedNodeId = 'aliyun_selected_node_id';
 
   final RxString accessKeyId = ''.obs;
   final RxString accessKeySecret = ''.obs;
@@ -47,12 +51,29 @@ class AliyunDdnsService extends GetxService {
 
   final RxList<Map<String, dynamic>> logs = <Map<String, dynamic>>[].obs;
 
+  final RxString selectedNodeId = ''.obs;
+
   SharedPreferences? _prefs;
   Timer? _checkTimer;
   bool _isInitialized = false;
   Completer<void>? _initCompleter;
 
+  final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 6),
+      receiveTimeout: const Duration(seconds: 12),
+    ),
+  );
+
   bool get isInitialized => _isInitialized;
+  bool get isLocal => selectedNodeId.value.isEmpty;
+
+  String? get currentNodeBaseUrl {
+    if (isLocal) return null;
+    final nodeService = GetIt.instance.get<NodeSettingsService>();
+    final node = nodeService.getNodeById(selectedNodeId.value);
+    return node?.apiBaseUrl;
+  }
 
   Future<void> ensureInitialized() async {
     if (_isInitialized) return;
@@ -76,6 +97,7 @@ class AliyunDdnsService extends GetxService {
     accessKeySecret.value = _prefs?.getString(_keyAccessKeySecret) ?? '';
     intervalSecs.value = _prefs?.getInt(_keyIntervalSecs) ?? 300;
     enabled.value = _prefs?.getBool(_keyEnabled) ?? false;
+    selectedNodeId.value = _prefs?.getString(_keySelectedNodeId) ?? '';
 
     final domainsJson = _prefs?.getString(_keyWatchDomains) ?? '[]';
     try {
@@ -91,6 +113,7 @@ class AliyunDdnsService extends GetxService {
     await _prefs?.setString(_keyAccessKeySecret, accessKeySecret.value);
     await _prefs?.setInt(_keyIntervalSecs, intervalSecs.value);
     await _prefs?.setBool(_keyEnabled, enabled.value);
+    await _prefs?.setString(_keySelectedNodeId, selectedNodeId.value);
     final domainsJson = jsonEncode(watchDomains.map((e) => e.toMap()).toList());
     await _prefs?.setString(_keyWatchDomains, domainsJson);
   }
@@ -124,6 +147,11 @@ class AliyunDdnsService extends GetxService {
     } else {
       stopCheckTimer();
     }
+  }
+
+  Future<void> setSelectedNodeId(String nodeId) async {
+    selectedNodeId.value = nodeId;
+    await _prefs?.setString(_keySelectedNodeId, nodeId);
   }
 
   Future<void> addWatchDomain(WatchDomain domain) async {
@@ -237,6 +265,77 @@ class AliyunDdnsService extends GetxService {
 
   void _restartTimer() {
     if (enabled.value) startCheckTimer();
+  }
+
+  // ── 远程节点 API ──────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> fetchRemoteStatus() async {
+    final baseUrl = currentNodeBaseUrl;
+    if (baseUrl == null) throw StateError('未选择远程节点');
+
+    final response = await _dio.get<Map<String, dynamic>>('$baseUrl/aliyun/status');
+    final body = response.data ?? <String, dynamic>{};
+    if (body['success'] == true && body['data'] is Map) {
+      return Map<String, dynamic>.from(body['data'] as Map);
+    }
+    throw Exception(body['error']?.toString() ?? '获取远程状态失败');
+  }
+
+  Future<List<Map<String, dynamic>>> fetchRemoteLogs() async {
+    final baseUrl = currentNodeBaseUrl;
+    if (baseUrl == null) throw StateError('未选择远程节点');
+
+    final response = await _dio.get<Map<String, dynamic>>('$baseUrl/aliyun/logs');
+    final body = response.data ?? <String, dynamic>{};
+    if (body['success'] == true && body['data'] is List) {
+      return (body['data'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    throw Exception(body['error']?.toString() ?? '获取远程日志失败');
+  }
+
+  Future<List<WatchDomain>> fetchRemoteWatchDomains() async {
+    final baseUrl = currentNodeBaseUrl;
+    if (baseUrl == null) throw StateError('未选择远程节点');
+
+    final response = await _dio.get<Map<String, dynamic>>('$baseUrl/aliyun/watch_domains');
+    final body = response.data ?? <String, dynamic>{};
+    if (body['success'] == true && body['data'] is List) {
+      return (body['data'] as List)
+          .whereType<Map>()
+          .map((e) => WatchDomain.fromMap(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+    throw Exception(body['error']?.toString() ?? '获取远程监控域名失败');
+  }
+
+  Future<String> remoteCheckAndUpdate() async {
+    final baseUrl = currentNodeBaseUrl;
+    if (baseUrl == null) throw StateError('未选择远程节点');
+
+    final response = await _dio.post<Map<String, dynamic>>('$baseUrl/aliyun/check_and_update');
+    final body = response.data ?? <String, dynamic>{};
+    if (body['success'] == true && body['data'] is Map) {
+      return (body['data'] as Map)['result']?.toString() ?? '检查完成';
+    }
+    throw Exception(body['error']?.toString() ?? '远程检查更新失败');
+  }
+
+  Future<bool> checkNodeAliyunAvailable(String baseUrl) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '$baseUrl/aliyun/status',
+        options: Options(
+          sendTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
+        ),
+      );
+      return response.statusCode == 200 && response.data?['success'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
