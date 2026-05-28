@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -63,7 +64,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   // 鼠标滚轮/触摸板累积
   double _scrollAccum = 0.0;
   static const double _kScrollThreshold = 60.0;
-  static const double _kDragCommitFraction = 0.3; // 拖动超过屏幕 30% 即提交
+  static const double _kDragCommitFraction = 0.3;
+  int _lastJumpTimeMs = 0;
+  static const int _kJumpCooldownMs = 400;
 
   // ── 沉浸模式 ──────────────────────────────────────────────────────────────
   bool _uiVisible = true;
@@ -71,6 +74,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
 
   // ── 图片缩放状态（缩放时禁用外层翻页手势）────────────────────────────────
   bool _imageIsZoomed = false;
+  bool _currentIsVideo = false;
   static const Duration _kImmersiveDelay = Duration(seconds: 10);
 
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
@@ -108,6 +112,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     }
     _currentIndex = widget.initialIndex.clamp(0, widget.items.length - 1);
     _currentItemId = widget.items[_currentIndex].id;
+    _currentIsVideo =
+        widget.items[_currentIndex].kind == media_api.MediaKind.video ||
+        widget.items[_currentIndex].kind == media_api.MediaKind.audio;
     _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
     _snapCtrl.addListener(_onSnapTick);
     _snapCtrl.addStatusListener(_onSnapStatus);
@@ -156,30 +163,23 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
 
   void _onSnapStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
+      debugPrint('[MVP] _onSnapStatus(completed) _dragOffset=$_dragOffset (before reset)');
       // 动画完成：旋转复用已渲染的邻页，避免重建闪烁
       final pending = _pendingIndex;
-      // 翻页后重置缩放状态（新页面默认未缩放）
       _imageIsZoomed = false;
+      debugPrint(
+        '[MVP] _onSnapStatus(completed) pending=$pending, _currentIndex=$_currentIndex, snapFrom=$_snapFrom, snapTo=$_snapTo',
+      );
       setState(() {
         if (pending != null) {
-          if (pending == _currentIndex + 1) {
-            // 前进：next → curr，curr → prev，next 置 null 懒建
-            _prevPageWidget = _currPageWidget;
-            _currPageWidget = _nextPageWidget;
-            _nextPageWidget = null;
-          } else if (pending == _currentIndex - 1) {
-            // 后退：prev → curr，curr → next，prev 置 null 懒建
-            _nextPageWidget = _currPageWidget;
-            _currPageWidget = _prevPageWidget;
-            _prevPageWidget = null;
-          } else {
-            // 非相邻跳转：全部清空重建
-            _prevPageWidget = null;
-            _currPageWidget = null;
-            _nextPageWidget = null;
-          }
+          _prevPageWidget = null;
+          _currPageWidget = null;
+          _nextPageWidget = null;
           _currentIndex = pending;
           _currentItemId = widget.items.isNotEmpty ? widget.items[_currentIndex].id : null;
+          final kind = widget.items[_currentIndex].kind;
+          _currentIsVideo = kind == media_api.MediaKind.video || kind == media_api.MediaKind.audio;
+          debugPrint('[MVP] after reset: _currentIndex=$_currentIndex, isVideo=$_currentIsVideo');
         }
         _dragOffset = 0.0;
         _isDragging = false;
@@ -214,6 +214,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   // ── 拖动手势 ─────────────────────────────────────────────────────────────
 
   void _onDragStart({required bool horizontal}) {
+    debugPrint(
+      '[MVP] _onDragStart horizontal=$horizontal, _snapAnimating=${_snapCtrl.isAnimating}, _currentIndex=$_currentIndex',
+    );
     if (_snapCtrl.isAnimating) _snapCtrl.stop();
     _isDraggingH = horizontal;
     _isDragging = true;
@@ -240,6 +243,10 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       next = _currentIndex + 1;
     }
 
+    debugPrint(
+      '[MVP] _onDragEnd velocity=$velocity, dragOffset=$_dragOffset, frac=$frac, next=$next, screenExtent=$screenExtent',
+    );
+
     _snapFrom = _dragOffset;
     if (next != null) {
       // 提交：动画到屏幕边缘
@@ -261,15 +268,19 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
 
   void _handlePointerScroll(PointerScrollEvent event) {
     if (_isDragging) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastJumpTimeMs < _kJumpCooldownMs) return;
     _resetImmersiveTimer();
     final dy = event.scrollDelta.dy;
     if (dy.abs() >= 100) {
       _scrollAccum = 0;
+      _lastJumpTimeMs = now;
       _jumpInstant(dy > 0 ? 1 : -1);
       return;
     }
     _scrollAccum += dy;
     if (_scrollAccum.abs() >= _kScrollThreshold) {
+      _lastJumpTimeMs = now;
       _jumpInstant(_scrollAccum > 0 ? 1 : -1);
       _scrollAccum = 0;
     }
@@ -278,9 +289,11 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   // ── 子页面垂直滑动回调（图片缩放后用 onSwipeDelta 代替 drag）────────────
 
   void _handleSwipeDelta(double dy) {
-    // 图片缩放模式下不跟手，只累积阈值翻页
     _scrollAccum -= dy;
     if (_scrollAccum.abs() >= _kScrollThreshold) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastJumpTimeMs < _kJumpCooldownMs) return;
+      _lastJumpTimeMs = now;
       _jumpInstant(_scrollAccum > 0 ? 1 : -1);
       _scrollAccum = 0;
     }
@@ -306,8 +319,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
         source: source,
         title: item.title,
         coverSource: coverSource,
-        onSwipeDelta: _handleSwipeDelta,
-        onSwipeEnd: () => _scrollAccum = 0,
+        onDragStart: () => _onDragStart(horizontal: false),
+        onDragUpdate: (dy) => _onDragUpdate(dy),
+        onDragEnd: (velocity, screenExtent) => _onDragEnd(velocity, screenExtent),
         isAudio: item.kind == media_api.MediaKind.audio,
       );
     }
@@ -410,6 +424,10 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       _nextPageWidget = null;
     }
 
+    debugPrint(
+      '[MVP] build() index=$_currentIndex, isDragging=$_isDragging, dragOffset=$_dragOffset, currType=${_currPageWidget?.runtimeType}, prevType=${_prevPageWidget?.runtimeType}, nextType=${_nextPageWidget?.runtimeType}',
+    );
+
     // 判断当前拖动轴和方向，决定邻页应放在哪里
     final offset = _isDragging ? _dragOffset : 0.0;
     final screenExtent = _isDraggingH ? size.width : size.height;
@@ -481,13 +499,13 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                       ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dx, size.width)
                       : null,
                   // 移动端：垂直拖动（图片缩放时禁用）
-                  onVerticalDragStart: (isMobile && !_imageIsZoomed)
+                  onVerticalDragStart: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (_) => _onDragStart(horizontal: false)
                       : null,
-                  onVerticalDragUpdate: (isMobile && !_imageIsZoomed)
+                  onVerticalDragUpdate: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (d) => _onDragUpdate(d.delta.dy)
                       : null,
-                  onVerticalDragEnd: (isMobile && !_imageIsZoomed)
+                  onVerticalDragEnd: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dy, size.height)
                       : null,
                   // 单击空白区域切换 UI 可见性
@@ -659,7 +677,10 @@ class _GlassChipState extends State<_GlassChip> {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace4),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.metrics.kSpace10,
+            vertical: AppTheme.metrics.kSpace4,
+          ),
           color: Colors.black.withValues(alpha: 0.42),
           // 固定宽度避免数字变化时容器宽度跳动
           child: Row(
@@ -974,6 +995,7 @@ class _ImageViewerState extends State<_ImageViewer> {
 
   void _onScaleEnd(ScaleEndDetails d) {
     if (_scale < 1.0) _reset();
+    if (!Platform.isAndroid && !Platform.isIOS) return;
     widget.onSwipeEnd();
   }
 
@@ -1025,14 +1047,21 @@ class _ImageViewerState extends State<_ImageViewer> {
                             SizedBox(height: AppTheme.metrics.kSpace12),
                             Text(
                               label,
-                              style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize11),
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: AppTheme.metrics.fontSize11,
+                              ),
                             ),
                           ],
                         ),
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize64, color: Colors.white38),
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: AppTheme.metrics.iconSize64,
+                        color: Colors.white38,
+                      ),
                     ),
                   );
                 } else {
@@ -1052,7 +1081,11 @@ class _ImageViewerState extends State<_ImageViewer> {
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize64, color: Colors.white38),
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: AppTheme.metrics.iconSize64,
+                        color: Colors.white38,
+                      ),
                     ),
                   );
                 }
@@ -1105,16 +1138,18 @@ class _ImageViewerState extends State<_ImageViewer> {
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
     required this.source,
-    required this.onSwipeDelta,
-    required this.onSwipeEnd,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
     this.isAudio = false,
     this.title,
     this.coverSource,
   });
 
   final String? source;
-  final void Function(double dy) onSwipeDelta;
-  final VoidCallback onSwipeEnd;
+  final VoidCallback onDragStart;
+  final void Function(double dy) onDragUpdate;
+  final void Function(double velocity, double screenExtent) onDragEnd;
 
   /// 是否为纯音频（无视频轨道），显示音乐占位背景
   final bool isAudio;
@@ -1133,6 +1168,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
   Player? _player;
   VideoController? _videoController;
   BoxFit _videoFit = BoxFit.contain;
+  bool _swiping = false;
 
   /// 原生 Media Session / Now Playing 通道（iOS + Android）
   static const _mediaChannel = MethodChannel('slime_works/media_session');
@@ -1146,11 +1182,12 @@ class _VideoPreviewState extends State<_VideoPreview> {
   void _initPlayer() {
     final source = widget.source;
     if (source == null || source.isEmpty) return;
-    _player = Player();
+    debugPrint('[MVP] _VideoPreview._initPlayer source=$source');
+    _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));
     _videoController = VideoController(_player!);
     final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
-    _player!.setPlaylistMode(PlaylistMode.loop);
+    _player!.setPlaylistMode(PlaylistMode.single);
     _updateNowPlaying();
   }
 
@@ -1159,7 +1196,14 @@ class _VideoPreviewState extends State<_VideoPreview> {
     super.didUpdateWidget(oldWidget);
     final oldEmpty = oldWidget.source == null || oldWidget.source!.isEmpty;
     final newEmpty = widget.source == null || widget.source!.isEmpty;
-    if (oldEmpty && !newEmpty) {
+    final sourceChanged = !oldEmpty && !newEmpty && oldWidget.source != widget.source;
+    debugPrint(
+      '[MVP] _VideoPreview.didUpdateWidget oldSource=${oldWidget.source}, newSource=${widget.source}, oldEmpty=$oldEmpty, newEmpty=$newEmpty, sourceChanged=$sourceChanged',
+    );
+    if ((oldEmpty && !newEmpty) || sourceChanged) {
+      _player?.dispose();
+      _player = null;
+      _videoController = null;
       _initPlayer();
       setState(() {});
     }
@@ -1245,7 +1289,11 @@ class _VideoPreviewState extends State<_VideoPreview> {
       if (isMobile)
         IconButton(
           tooltip: '画中画',
-          icon: Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: AppTheme.metrics.iconSize22),
+          icon: Icon(
+            Icons.picture_in_picture_alt_rounded,
+            color: Colors.white,
+            size: AppTheme.metrics.iconSize22,
+          ),
           onPressed: () => _enterPip(context),
         ),
       const media_controls.MaterialFullscreenButton(),
@@ -1259,10 +1307,18 @@ class _VideoPreviewState extends State<_VideoPreview> {
         topButtonBar: const [],
         topButtonBarMargin: EdgeInsets.zero,
         // 进度条位于按钮栏正上方
-        seekBarMargin: EdgeInsets.only(bottom: bottomInset + 16 + buttonBarH, left: AppTheme.metrics.kSpace8, right: AppTheme.metrics.kSpace8),
+        seekBarMargin: EdgeInsets.only(
+          bottom: bottomInset + 16 + buttonBarH,
+          left: AppTheme.metrics.kSpace8,
+          right: AppTheme.metrics.kSpace8,
+        ),
         // 底部控制栏：上移 + 安全区保护
         bottomButtonBar: bottomBar,
-        bottomButtonBarMargin: EdgeInsets.only(bottom: bottomInset + 16, left: AppTheme.metrics.kSpace8, right: AppTheme.metrics.kSpace8),
+        bottomButtonBarMargin: EdgeInsets.only(
+          bottom: bottomInset + 16,
+          left: AppTheme.metrics.kSpace8,
+          right: AppTheme.metrics.kSpace8,
+        ),
       ),
       fullscreen: const media_controls.MaterialVideoControlsThemeData(),
       child: Video(controller: controller, fit: _videoFit),
@@ -1305,56 +1361,171 @@ class _VideoPreviewState extends State<_VideoPreview> {
                             ),
                     )
                   else
-                    Icon(Icons.music_note_rounded, color: Colors.white38, size: AppTheme.metrics.iconSize96),
+                    Icon(
+                      Icons.music_note_rounded,
+                      color: Colors.white38,
+                      size: AppTheme.metrics.iconSize96,
+                    ),
                   SizedBox(height: AppTheme.metrics.kSpace16),
                   if (widget.title != null && widget.title!.isNotEmpty)
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace32),
                       child: Text(
                         widget.title!,
-                        style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize15),
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: AppTheme.metrics.fontSize15,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                       ),
                     )
                   else
-                    Text('音频播放中', style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize15)),
+                    Text(
+                      '音频播放中',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: AppTheme.metrics.fontSize15,
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
-        videoWidget,
-        // 顶部滑动透传区（48px）
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: AppTheme.metrics.kSpace48,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onVerticalDragUpdate: (details) => widget.onSwipeDelta(details.delta.dy),
-            onVerticalDragEnd: (_) => widget.onSwipeEnd(),
+        IgnorePointer(ignoring: _swiping, child: videoWidget),
+        if (isMobile)
+          Positioned.fill(
+            child: _VideoSwipeListener(
+              onDragStart: () {
+                setState(() => _swiping = true);
+                widget.onDragStart();
+              },
+              onDragUpdate: widget.onDragUpdate,
+              onDragEnd: (velocity, screenExtent) {
+                widget.onDragEnd(velocity, screenExtent);
+                setState(() => _swiping = false);
+              },
+              onDragCancel: () {
+                setState(() => _swiping = false);
+              },
+              screenExtent: () {
+                final box = context.findRenderObject() as RenderBox;
+                return box.size.height;
+              },
+            ),
           ),
-        ),
-        // 中间区域（避开底部控制栏）
-        Positioned(
-          top: AppTheme.metrics.kSpace48,
-          left: 0,
-          right: 0,
-          bottom: controlsHeight,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onVerticalDragUpdate: (details) => widget.onSwipeDelta(details.delta.dy),
-            onVerticalDragEnd: (_) => widget.onSwipeEnd(),
-          ),
-        ),
       ],
     );
   }
 }
 
-// ── 视频播放速度按钮 ────────────────────────────────────────────────────────
+class _VideoSwipeListener extends StatefulWidget {
+  const _VideoSwipeListener({
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+    required this.onDragCancel,
+    required this.screenExtent,
+  });
+
+  final VoidCallback onDragStart;
+  final void Function(double dy) onDragUpdate;
+  final void Function(double velocity, double screenExtent) onDragEnd;
+  final VoidCallback onDragCancel;
+  final double Function() screenExtent;
+
+  @override
+  State<_VideoSwipeListener> createState() => _VideoSwipeListenerState();
+}
+
+class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
+  int? _activePointerId;
+  double _lastY = 0.0;
+  double _accumulatedDelta = 0.0;
+  DateTime? _lastMoveTime;
+  double _lastVelocity = 0.0;
+  static const double _kThreshold = 12.0;
+  bool _dragStarted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerCancel,
+    );
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (_activePointerId != null) return;
+    _activePointerId = event.pointer;
+    _lastY = event.position.dy;
+    _accumulatedDelta = 0.0;
+    _lastMoveTime = null;
+    _lastVelocity = 0.0;
+    _dragStarted = false;
+    debugPrint('[MVP] _VideoSwipeListener.onPointerDown pointer=${event.pointer}');
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _activePointerId) return;
+    final dy = event.position.dy - _lastY;
+    _lastY = event.position.dy;
+
+    final now = DateTime.now();
+    if (_lastMoveTime != null) {
+      final dt = now.difference(_lastMoveTime!).inMicroseconds;
+      if (dt > 0) {
+        _lastVelocity = dy / (dt / 1e6);
+      }
+    }
+    _lastMoveTime = now;
+
+    if (!_dragStarted) {
+      _accumulatedDelta += dy;
+      if (_accumulatedDelta.abs() > _kThreshold) {
+        _dragStarted = true;
+        debugPrint('[MVP] _VideoSwipeListener drag started accumulatedDelta=$_accumulatedDelta');
+        widget.onDragStart();
+        widget.onDragUpdate(_accumulatedDelta);
+        _accumulatedDelta = 0.0;
+      }
+    } else {
+      widget.onDragUpdate(dy);
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    if (event.pointer != _activePointerId) return;
+    debugPrint(
+      '[MVP] _VideoSwipeListener.onPointerUp dragStarted=$_dragStarted, velocity=${_lastVelocity * 1000}',
+    );
+    if (_dragStarted) {
+      widget.onDragEnd(_lastVelocity * 1000.0, widget.screenExtent());
+    }
+    _reset();
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _activePointerId) return;
+    debugPrint('[MVP] _VideoSwipeListener.onPointerCancel dragStarted=$_dragStarted');
+    if (_dragStarted) {
+      widget.onDragCancel();
+    }
+    _reset();
+  }
+
+  void _reset() {
+    _activePointerId = null;
+    _accumulatedDelta = 0.0;
+    _lastVelocity = 0.0;
+    _dragStarted = false;
+    _lastMoveTime = null;
+  }
+}
 
 class _VideoSpeedButton extends StatelessWidget {
   const _VideoSpeedButton({required this.player});
@@ -1386,8 +1557,14 @@ class _VideoSpeedButton extends StatelessWidget {
               .toList(),
           onSelected: player.setRate,
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace12),
-            child: Text(label, style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize13)),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace8,
+              vertical: AppTheme.metrics.kSpace12,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize13),
+            ),
           ),
         );
       },
@@ -1448,7 +1625,10 @@ class _VideoVolumeButton extends StatelessWidget {
       context: context,
       backgroundColor: Colors.black87,
       builder: (_) => Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24, vertical: AppTheme.metrics.kSpace16),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace24,
+          vertical: AppTheme.metrics.kSpace16,
+        ),
         child: Row(
           children: [
             const Icon(Icons.volume_down_rounded, color: Colors.white70),
