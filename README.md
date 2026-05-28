@@ -170,6 +170,9 @@ python3 publish_ios.py --build-only
 
 # 自定义 IPA 路径上传
 python3 publish_ios.py --ipa-only --ipa-path build/ios/ipa/MyApp.ipa
+
+# 打包 IPA 并使用 XCode 编译
+python3 ./scripts/publish_ios.py --use-xcodebuild 
 ```
 
 > 注意：iOS 构建需要 Mac 环境、有效开发者证书，且证书须信任当前机器。  
