@@ -163,13 +163,8 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
 
   void _onSnapStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
-      debugPrint('[MVP] _onSnapStatus(completed) _dragOffset=$_dragOffset (before reset)');
-      // 动画完成：旋转复用已渲染的邻页，避免重建闪烁
       final pending = _pendingIndex;
       _imageIsZoomed = false;
-      debugPrint(
-        '[MVP] _onSnapStatus(completed) pending=$pending, _currentIndex=$_currentIndex, snapFrom=$_snapFrom, snapTo=$_snapTo',
-      );
       setState(() {
         if (pending != null) {
           _prevPageWidget = null;
@@ -179,7 +174,6 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
           _currentItemId = widget.items.isNotEmpty ? widget.items[_currentIndex].id : null;
           final kind = widget.items[_currentIndex].kind;
           _currentIsVideo = kind == media_api.MediaKind.video || kind == media_api.MediaKind.audio;
-          debugPrint('[MVP] after reset: _currentIndex=$_currentIndex, isVideo=$_currentIsVideo');
         }
         _dragOffset = 0.0;
         _isDragging = false;
@@ -414,12 +408,26 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     // 懒填充：只建还没构建的槽，已有的直接复用
     _currPageWidget ??= _buildPageContent(context, _currentIndex);
     if (_currentIndex > 0) {
-      _prevPageWidget ??= _buildPageContent(context, _currentIndex - 1);
+      if (_prevPageWidget == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _prevPageWidget = _buildPageContent(context, _currentIndex - 1);
+          });
+        });
+      }
     } else {
       _prevPageWidget = null;
     }
     if (_currentIndex < widget.items.length - 1) {
-      _nextPageWidget ??= _buildPageContent(context, _currentIndex + 1);
+      if (_nextPageWidget == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _nextPageWidget = _buildPageContent(context, _currentIndex + 1);
+          });
+        });
+      }
     } else {
       _nextPageWidget = null;
     }
@@ -1169,6 +1177,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
   VideoController? _videoController;
   BoxFit _videoFit = BoxFit.contain;
   bool _swiping = false;
+  bool _playerReady = false;
+  StreamSubscription? _readySub;
 
   /// 原生 Media Session / Now Playing 通道（iOS + Android）
   static const _mediaChannel = MethodChannel('slime_works/media_session');
@@ -1183,11 +1193,24 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final source = widget.source;
     if (source == null || source.isEmpty) return;
     debugPrint('[MVP] _VideoPreview._initPlayer source=$source');
+    _playerReady = false;
+    _readySub?.cancel();
     _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));
     _videoController = VideoController(_player!);
     final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.single);
+    _readySub = _player!.stream.videoParams.listen((params) {
+      if ((params.dw ?? 0) > 0 && !_playerReady) {
+        _readySub?.cancel();
+        _readySub = null;
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (!mounted) return;
+          _playerReady = true;
+          setState(() {});
+        });
+      }
+    });
     _updateNowPlaying();
   }
 
@@ -1211,6 +1234,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
 
   @override
   void dispose() {
+    _readySub?.cancel();
     _player?.dispose();
     super.dispose();
   }
@@ -1265,8 +1289,31 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final player = _player;
     final controller = _videoController;
     if (player == null || controller == null) {
-      return const Center(
-        child: Text('无法加载视频', style: TextStyle(color: Colors.white)),
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.error_outline_rounded,
+                color: LightColors.primary.withValues(alpha: 0.7),
+                size: 28,
+              ),
+            ),
+            SizedBox(height: AppTheme.metrics.kSpace12),
+            Text(
+              '无法加载视频',
+              style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize13),
+            ),
+          ],
+        ),
       );
     }
     final isMobile = Platform.isAndroid || Platform.isIOS;
@@ -1287,45 +1334,44 @@ class _VideoPreviewState extends State<_VideoPreview> {
       _VideoVolumeButton(player: player),
       // 窗口播放（画中画）
       if (isMobile)
-        IconButton(
+        _GlassControlIcon(
+          icon: Icons.picture_in_picture_alt_rounded,
           tooltip: '画中画',
-          icon: Icon(
-            Icons.picture_in_picture_alt_rounded,
-            color: Colors.white,
-            size: AppTheme.metrics.iconSize22,
-          ),
-          onPressed: () => _enterPip(context),
+          onTap: () => _enterPip(context),
         ),
       const media_controls.MaterialFullscreenButton(),
     ];
 
-    // 按钮栏高度来自 media_kit_video 默认值（56），进度条紧贴其上方
-    const double buttonBarH = 56.0;
+    const double buttonBarH = 52.0;
     final videoWidget = media_controls.MaterialVideoControlsTheme(
       normal: media_controls.MaterialVideoControlsThemeData(
-        // 顶部工具栏清空，按钮全部移到底部
         topButtonBar: const [],
         topButtonBarMargin: EdgeInsets.zero,
-        // 进度条位于按钮栏正上方
         seekBarMargin: EdgeInsets.only(
-          bottom: bottomInset + 16 + buttonBarH,
-          left: AppTheme.metrics.kSpace8,
-          right: AppTheme.metrics.kSpace8,
+          bottom: bottomInset + 12 + buttonBarH,
+          left: AppTheme.metrics.kSpace12,
+          right: AppTheme.metrics.kSpace12,
         ),
-        // 底部控制栏：上移 + 安全区保护
+        seekBarHeight: 3.2,
+        seekBarThumbSize: 14.0,
+        seekBarColor: Colors.white.withValues(alpha: 0.15),
+        seekBarPositionColor: LightColors.primary,
+        seekBarBufferColor: Colors.white.withValues(alpha: 0.25),
+        seekBarThumbColor: Colors.white,
         bottomButtonBar: bottomBar,
         bottomButtonBarMargin: EdgeInsets.only(
-          bottom: bottomInset + 16,
+          bottom: bottomInset + 12,
           left: AppTheme.metrics.kSpace8,
           right: AppTheme.metrics.kSpace8,
         ),
+        buttonBarHeight: buttonBarH,
+        buttonBarButtonColor: Colors.white.withValues(alpha: 0.85),
+        backdropColor: Colors.black.withValues(alpha: 0.45),
+        bufferingIndicatorBuilder: (_) => const _GlassPulseLoader(),
       ),
       fullscreen: const media_controls.MaterialVideoControlsThemeData(),
       child: Video(controller: controller, fit: _videoFit),
     );
-
-    // 控制栏高度估算 = 进度条(48) + 按钮行(48) + 底部安全区 + 上移量
-    final controlsHeight = 96.0 + bottomInset + 16;
 
     return Stack(
       children: [
@@ -1334,62 +1380,109 @@ class _VideoPreviewState extends State<_VideoPreview> {
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF1a1a2e), Color(0xFF16213e)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF12101E), Color(0xFF1A1632), Color(0xFF0D0B15)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Stack(
                 children: [
-                  // 封面图（若有）
-                  if (widget.coverSource != null && widget.coverSource!.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: AppTheme.metrics.radius12,
-                      child: widget.coverSource!.startsWith('http')
-                          ? Image.network(
-                              widget.coverSource!,
-                              width: 180,
-                              height: 180,
-                              fit: BoxFit.cover,
-                            )
-                          : Image.file(
-                              File(widget.coverSource!),
-                              width: 180,
-                              height: 180,
-                              fit: BoxFit.cover,
-                            ),
-                    )
-                  else
-                    Icon(
-                      Icons.music_note_rounded,
-                      color: Colors.white38,
-                      size: AppTheme.metrics.iconSize96,
-                    ),
-                  SizedBox(height: AppTheme.metrics.kSpace16),
-                  if (widget.title != null && widget.title!.isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace32),
-                      child: Text(
-                        widget.title!,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: AppTheme.metrics.fontSize15,
+                  Positioned.fill(
+                    child: Opacity(opacity: 0.04, child: CustomPaint(painter: _AudioWavePainter())),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (widget.coverSource != null && widget.coverSource!.isNotEmpty)
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: AppTheme.metrics.radius16,
+                            boxShadow: [
+                              BoxShadow(
+                                color: LightColors.primary.withValues(alpha: 0.2),
+                                blurRadius: 40,
+                                offset: const Offset(0, 20),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: AppTheme.metrics.radius16,
+                            child: widget.coverSource!.startsWith('http')
+                                ? Image.network(
+                                    widget.coverSource!,
+                                    width: 200,
+                                    height: 200,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.file(
+                                    File(widget.coverSource!),
+                                    width: 200,
+                                    height: 200,
+                                    fit: BoxFit.cover,
+                                  ),
+                          ),
+                        )
+                      else
+                        Container(
+                          width: 200,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            borderRadius: AppTheme.metrics.radius16,
+                            color: Colors.white.withValues(alpha: 0.05),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.music_note_rounded,
+                            color: LightColors.primary.withValues(alpha: 0.4),
+                            size: AppTheme.metrics.iconSize64,
+                          ),
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  else
-                    Text(
-                      '音频播放中',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: AppTheme.metrics.fontSize15,
-                      ),
-                    ),
+                      SizedBox(height: AppTheme.metrics.kSpace24),
+                      if (widget.title != null && widget.title!.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace40),
+                          child: Text(
+                            widget.title!,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: AppTheme.metrics.fontSize15,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.3,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        Text(
+                          '音频播放中',
+                          style: TextStyle(
+                            color: Colors.white38,
+                            fontSize: AppTheme.metrics.fontSize13,
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
+              ),
+            ),
+          ),
+        if (!widget.isAudio)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _playerReady ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 300),
+                child: widget.coverSource != null && widget.coverSource!.isNotEmpty
+                    ? (widget.coverSource!.startsWith('http')
+                          ? Image.network(widget.coverSource!, fit: _videoFit)
+                          : Image.file(File(widget.coverSource!), fit: _videoFit))
+                    : Container(
+                        color: Colors.black,
+                        child: const Center(child: _GlassPulseLoader()),
+                      ),
               ),
             ),
           ),
@@ -1653,4 +1746,103 @@ class _VideoVolumeButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GlassControlIcon extends StatelessWidget {
+  const _GlassControlIcon({required this.icon, required this.onTap, this.tooltip});
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      icon: Icon(
+        icon,
+        color: Colors.white.withValues(alpha: 0.85),
+        size: AppTheme.metrics.iconSize20,
+      ),
+      onPressed: onTap,
+      splashRadius: 18,
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+    );
+  }
+}
+
+class _GlassPulseLoader extends StatefulWidget {
+  const _GlassPulseLoader();
+  @override
+  State<_GlassPulseLoader> createState() => _GlassPulseLoaderState();
+}
+
+class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final scale = 0.8 + 0.4 * (0.5 + 0.5 * _ctrl.value);
+        final opacity = 0.4 + 0.4 * _ctrl.value;
+        return Center(
+          child: Container(
+            width: 56 * scale,
+            height: 56 * scale,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: LightColors.primary.withValues(alpha: opacity * 0.15),
+              border: Border.all(
+                color: LightColors.primary.withValues(alpha: opacity * 0.5),
+                width: 2,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.play_arrow_rounded,
+              color: Colors.white.withValues(alpha: opacity),
+              size: 24,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AudioWavePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    const barCount = 40;
+    final barW = size.width / barCount;
+    for (var i = 0; i < barCount; i++) {
+      final x = i * barW + barW / 2;
+      final h = (20 + 40 * ((i * 7 + 3) % 13) / 13).toDouble();
+      canvas.drawLine(
+        Offset(x, size.height / 2 - h / 2),
+        Offset(x, size.height / 2 + h / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
