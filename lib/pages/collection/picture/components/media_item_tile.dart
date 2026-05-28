@@ -8,6 +8,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 class MediaItemTile extends StatefulWidget {
@@ -25,6 +26,7 @@ class MediaItemTile extends StatefulWidget {
     this.onSaveToGallery,
     this.fixedHeight,
     this.showOverlay = true,
+    this.isLost = false,
   });
 
   final media_api.MediaItem item;
@@ -57,6 +59,8 @@ class MediaItemTile extends StatefulWidget {
 
   /// 是否显示叠加层（类型标签 + 标题栏）。
   final bool showOverlay;
+
+  final bool isLost;
 
   @override
   State<MediaItemTile> createState() => _MediaItemTileState();
@@ -199,7 +203,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final src = _displaySource;
-    final showCoverAnyway = src != null && src.isNotEmpty;
+    final showCoverAnyway = src != null && src.isNotEmpty && !widget.isLost;
     final privacyOn = getIt<MediaPrefsService>().privacyMode.value;
     final blurSigma = getIt<MediaPrefsService>().privacyBlurSigma.value;
 
@@ -335,6 +339,38 @@ class _MediaItemTileState extends State<MediaItemTile> {
                           ),
                   ),
                 ),
+                if (widget.isLost)
+                  Positioned.fill(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                theme.colorScheme.surfaceContainerHighest,
+                                theme.colorScheme.surfaceContainerLow,
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              size: scaleW(44),
+                              color: theme.colorScheme.primary.withAlpha(180),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: appMetrics.kSpace8,
+                          top: appMetrics.kSpace8,
+                          child: const LostBadge(),
+                        ),
+                      ],
+                    ),
+                  ),
                 // 悬停时视频进度条指示器
                 if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
                   Positioned(

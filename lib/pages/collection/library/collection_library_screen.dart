@@ -20,6 +20,8 @@ import 'package:slime_works/pages/collection/library/components/library_item.dar
 import 'package:slime_works/pages/collection/library/components/library_folder_breadcrumb.dart';
 import 'package:slime_works/pages/collection/library/components/library_selection_bar.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
+import 'package:slime_works/src/rust/api/novel_reader.dart';
 
 class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
   const CollectionLibraryScreen({super.key});
@@ -40,6 +42,19 @@ class _CollectionLibraryScreenState
 
   /// 判断是否桌面端（桌面用 Draggable，移动用 LongPressDraggable）
   bool get _isDesktop => !Platform.isAndroid && !Platform.isIOS;
+
+  bool _isBookLost(NovelMetadata meta) {
+    if (meta.coverPath == null || meta.coverPath!.isEmpty) return false;
+    final results = media_api.checkPathsExist(paths: [meta.coverPath!]);
+    return !results.first;
+  }
+
+  bool _isFolderLost(NovelFolder folder) {
+    final covers = viewModel.getFolderCovers(folder.id);
+    if (covers.isEmpty) return false;
+    final results = media_api.checkPathsExist(paths: covers);
+    return results.every((exists) => !exists);
+  }
 
   /// 滚动控制器，用于保存和恢复滚动位置
   late final ScrollController _scrollController;
@@ -1002,6 +1017,7 @@ class _CollectionLibraryScreenState
         isSelected: isSelected,
         isSelecting: isSelecting,
         isBookHover: isBookHover,
+        isLost: _isFolderLost(item.folder),
         onTap: () {
           if (isSelecting) {
             viewModel.toggleSelection(item.id);
@@ -1018,6 +1034,7 @@ class _CollectionLibraryScreenState
         viewModel: viewModel,
         isSelected: isSelected,
         isSelecting: isSelecting,
+        isLost: _isBookLost(item.metadata),
       );
     }
     return const SizedBox.shrink();

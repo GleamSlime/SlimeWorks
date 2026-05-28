@@ -92,6 +92,11 @@ String? ensureCoverThumbnail({required String filePath, required int width}) =>
 List<CollectionStats> getAllCollectionStats() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionStats();
 
+/// Batch-check whether each file path exists on the local filesystem.
+/// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.
+List<bool> checkPathsExist({required List<String> paths}) =>
+    RustLib.instance.api.crateApiMediaCollectionCheckPathsExist(paths: paths);
+
 /// Aggregated per-collection stats returned in a single batch FFI call.
 class CollectionStats {
   final String collectionId;

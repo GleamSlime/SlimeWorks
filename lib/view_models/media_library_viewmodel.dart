@@ -24,6 +24,7 @@ import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 part 'media_library_vm_remote.dart';
 part 'media_library_vm_smart_folders.dart';
 part 'media_library_vm_collections.dart';
+part 'media_library_vm_cover_check.dart';
 
 enum MediaItemSortOrder {
   nameAsc,
@@ -165,6 +166,11 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// filePath → 音频封面缩略图路径的异步缓存。
   final _audioCoverCache = <String, Future<String?>>{};
+
+  final _lostCollections = <String, bool>{};
+  final _lostFolders = <String, bool>{};
+  final _lostSmartFolders = <String, bool>{};
+  final _checkTimestamps = <String, int>{};
 
   final remoteCollectionNodeId = <String, String>{}.obs;
   final remoteCollectionNodeName = <String, String>{}.obs;
@@ -847,7 +853,9 @@ class MediaLibraryViewModel extends BaseViewModel {
         }
         _asyncCoverVersion.value++;
       } catch (e) {
-        _logger.error('[VideoThumb] hover 封面生成失败: collectionId=$collectionId slotIdx=$slotIdx err=$e');
+        _logger.error(
+          '[VideoThumb] hover 封面生成失败: collectionId=$collectionId slotIdx=$slotIdx err=$e',
+        );
       }
     });
   }
@@ -1061,7 +1069,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       final rawCollections = media_api.getAllMediaCollections();
       _logger.info('[媒体库] loadCollections: 加载到 ${rawCollections.length} 个集合');
       collections.assignAll(rawCollections);
-      _hoverSourcesCache.clear(); // 集合更新时清空封面缓存
+      _hoverSourcesCache.clear();
+      clearCoverCheckCache();
       // 集合大小异步计算，避免阻塞 assignAll 后的 UI 渲染
       _computeCollectionSizesAsync(rawCollections);
       if (currentCollectionId.value != null && currentCollection == null) {

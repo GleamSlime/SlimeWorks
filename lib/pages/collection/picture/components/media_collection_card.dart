@@ -10,6 +10,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 class MediaCollectionCard extends StatefulWidget {
@@ -36,6 +37,7 @@ class MediaCollectionCard extends StatefulWidget {
     this.hoverCoverSources,
     this.onHoverEnter,
     this.onRequestVideoFrame,
+    this.isLost = false,
   });
 
   final media_api.MediaCollection collection;
@@ -70,6 +72,8 @@ class MediaCollectionCard extends StatefulWidget {
   /// 悬停时按水平比例 [fraction]∊[0,1] 实时请求视频帧路径。
   /// 返回 null 表示帧未就绪。
   final String? Function(double fraction)? onRequestVideoFrame;
+
+  final bool isLost;
 
   @override
   State<MediaCollectionCard> createState() => _MediaCollectionCardState();
@@ -156,6 +160,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   }
 
   Widget _buildCoverImage(String? src, ThemeData theme) {
+    if (widget.isLost && src != null && src.isNotEmpty) {
+      return const _CollectionPlaceholder(icon: Icons.broken_image_outlined);
+    }
     if (src == null || src.isEmpty) {
       return const _CollectionPlaceholder(icon: Icons.collections_outlined);
     }
@@ -402,7 +409,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                       ),
                     ),
 
-                    // ── 数量/大小 badge
+                    // ── 丢失 tag + 数量/大小 badge
                     Positioned(
                       left: appMetrics.kSpace8,
                       top: appMetrics.kSpace8,
@@ -414,28 +421,35 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                           scale: _hovering ? 1.0 : 0.88,
                           duration: _kAnimDur,
                           curve: _kAnimCurve,
-                          child: ClipRRect(
-                            borderRadius: appMetrics.radius12,
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: appMetrics.kSpace8,
-                                  vertical: appMetrics.kSpace4,
-                                ),
-                                color: _hovering
-                                    ? Colors.black.withAlpha(130)
-                                    : Colors.black.withAlpha(90),
-                                child: Text(
-                                  '${widget.collection.itemCount} 项 · ${_formatBytes(widget.totalSize)}',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: appMetrics.fontSize9,
-                                    fontWeight: FontWeight.w600,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.isLost) const LostBadge(),
+                              if (widget.isLost) SizedBox(width: appMetrics.kSpace4),
+                              ClipRRect(
+                                borderRadius: appMetrics.radius12,
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: appMetrics.kSpace8,
+                                      vertical: appMetrics.kSpace4,
+                                    ),
+                                    color: _hovering
+                                        ? Colors.black.withAlpha(130)
+                                        : Colors.black.withAlpha(90),
+                                    child: Text(
+                                      '${widget.collection.itemCount} 项 · ${_formatBytes(widget.totalSize)}',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: appMetrics.fontSize9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),

@@ -8,6 +8,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/format.dart';
+import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/pages/collection/library/components/remote_novel_reader_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -18,6 +19,7 @@ class LibraryBookCard extends StatefulWidget {
   final NovelLibraryViewModel viewModel;
   final bool isSelected;
   final bool isSelecting;
+  final bool isLost;
 
   const LibraryBookCard({
     super.key,
@@ -25,6 +27,7 @@ class LibraryBookCard extends StatefulWidget {
     required this.viewModel,
     this.isSelected = false,
     this.isSelecting = false,
+    this.isLost = false,
   });
 
   @override
@@ -787,6 +790,21 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   }
 
   Widget _buildCoverImage() {
+    if (widget.isLost && widget.metadata.coverPath != null) {
+      return Positioned.fill(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildDefaultCover(),
+            Positioned(
+              left: AppTheme.metrics.kSpace8,
+              top: AppTheme.metrics.kSpace8,
+              child: LostBadge(),
+            ),
+          ],
+        ),
+      );
+    }
     final privacyOn = getIt.isRegistered<MediaPrefsService>()
         ? getIt<MediaPrefsService>().privacyMode.value
         : false;

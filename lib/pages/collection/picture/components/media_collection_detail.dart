@@ -205,6 +205,7 @@ class MediaCollectionDetailView extends StatelessWidget {
                   item: item,
                   source: source,
                   showOverlay: viewModel.showMediaOverlay.value,
+                  isLost: viewModel.checkItemLost(item),
                   onSaveToGallery: (PlatformUtil.isMobile && item.kind == media_api.MediaKind.image)
                       ? () => MasonryMediaGridState.saveToGallery(context, fullSource)
                       : null,

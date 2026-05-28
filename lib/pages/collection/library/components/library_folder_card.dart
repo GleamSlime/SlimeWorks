@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 
@@ -20,6 +21,7 @@ class LibraryFolderCard extends StatefulWidget {
 
   /// 当前有书籍被拖拽悬停在此文件夹上
   final bool isBookHover;
+  final bool isLost;
 
   const LibraryFolderCard({
     super.key,
@@ -31,6 +33,7 @@ class LibraryFolderCard extends StatefulWidget {
     required this.onLongPress,
     required this.onTap,
     this.isBookHover = false,
+    this.isLost = false,
   });
 
   @override
@@ -324,6 +327,19 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                         ),
                       ],
                     );
+                    if (widget.isLost) {
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          grid,
+                          Positioned(
+                            left: AppTheme.metrics.kSpace8,
+                            top: AppTheme.metrics.kSpace8,
+                            child: LostBadge(),
+                          ),
+                        ],
+                      );
+                    }
                     if (privacyOn) {
                       return ClipRect(
                         child: Stack(

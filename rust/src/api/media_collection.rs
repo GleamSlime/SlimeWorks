@@ -207,3 +207,10 @@ pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
         })
         .collect())
 }
+
+/// Batch-check whether each file path exists on the local filesystem.
+/// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.
+#[frb(sync)]
+pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
+    media_collection::check_paths_exist(paths)
+}

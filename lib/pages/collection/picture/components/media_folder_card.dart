@@ -9,6 +9,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 class MediaFolderCard extends StatefulWidget {
@@ -27,6 +28,7 @@ class MediaFolderCard extends StatefulWidget {
     this.onTransfer,
     this.onPullToLocal,
     this.onDeleteNodeFiles,
+    this.isLost = false,
   });
 
   final media_api.MediaFolder folder;
@@ -42,6 +44,7 @@ class MediaFolderCard extends StatefulWidget {
   final VoidCallback? onTransfer;
   final VoidCallback? onPullToLocal;
   final VoidCallback? onDeleteNodeFiles;
+  final bool isLost;
 
   @override
   State<MediaFolderCard> createState() => _MediaFolderCardState();
@@ -166,7 +169,19 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                         ],
                       ),
                     ),
-                    child: hasCover
+                    child: hasCover && widget.isLost
+                        ? Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              const _FolderPlaceholder(),
+                              Positioned(
+                                left: AppTheme.metrics.kSpace8,
+                                top: AppTheme.metrics.kSpace8,
+                                child: LostBadge(),
+                              ),
+                            ],
+                          )
+                        : hasCover
                         ? (() {
                             final cacheW = resolvedCover.startsWith('http')
                                 ? null

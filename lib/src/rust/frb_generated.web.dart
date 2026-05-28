@@ -266,6 +266,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<AvailableModuleInfo> dco_decode_list_available_module_info(dynamic raw);
 
   @protected
+  List<bool> dco_decode_list_bool(dynamic raw);
+
+  @protected
   List<CollectionStats> dco_decode_list_collection_stats(dynamic raw);
 
   @protected
@@ -621,6 +624,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<AvailableModuleInfo> sse_decode_list_available_module_info(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<bool> sse_decode_list_bool(SseDeserializer deserializer);
 
   @protected
   List<CollectionStats> sse_decode_list_collection_stats(
@@ -1051,6 +1057,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<AvailableModuleInfo> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_bool(List<bool> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_collection_stats(

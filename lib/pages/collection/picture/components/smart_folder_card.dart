@@ -8,6 +8,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 
 class SmartFolderCard extends StatelessWidget {
@@ -24,6 +25,7 @@ class SmartFolderCard extends StatelessWidget {
     this.coverSource,
     this.onTransfer,
     this.nodeName,
+    this.isLost = false,
   });
 
   final SmartFolder smartFolder;
@@ -39,6 +41,8 @@ class SmartFolderCard extends StatelessWidget {
 
   /// 非空表示这是远程节点的智能文件夹，显示节点名 badge。
   final String? nodeName;
+
+  final bool isLost;
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
     // 将全局坐标转为 Overlay 的本地坐标，正确处理侧边栏等布局偏移
@@ -119,6 +123,19 @@ class SmartFolderCard extends StatelessWidget {
                 final blurSigma = getIt.isRegistered<MediaPrefsService>()
                     ? getIt<MediaPrefsService>().privacyBlurSigma.value
                     : 15.0;
+                if (src != null && src.isNotEmpty && isLost) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const _SmartPlaceholder(),
+                      Positioned(
+                        left: AppTheme.metrics.kSpace8,
+                        top: AppTheme.metrics.kSpace8,
+                        child: LostBadge(),
+                      ),
+                    ],
+                  );
+                }
                 if (src != null && src.isNotEmpty) {
                   final cacheW = src.startsWith('http')
                       ? null

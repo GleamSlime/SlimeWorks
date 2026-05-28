@@ -172,6 +172,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       isSelected: vm.selectedIds.contains(folder.id),
       isRemote: vm.isRemoteFolder(folder.id),
       nodeName: vm.getRemoteFolderNodeName(folder.id),
+      isLost: vm.checkFolderLost(folder),
       onTap: () {
         if (vm.isSelecting.value) {
           vm.toggleSelection(folder.id);
@@ -213,6 +214,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       matchCount: vm.mergedCollections.where((c) => vm.collectionMatchesSmartFolder(sf, c)).length,
       isSelected: vm.selectedIds.contains(sf.id),
       nodeName: nodeName,
+      isLost: vm.checkSmartFolderLost(sf),
       onTap: () {
         if (vm.isSelecting.value) {
           vm.toggleSelection(sf.id);
@@ -247,6 +249,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       nodeName: vm.getRemoteNodeName(collection.id),
       totalSize: vm.getCollectionTotalSize(collection.id),
       isFavorited: vm.isFavorite(collection.id),
+      isLost: vm.checkCollectionLost(collection),
       hoverCoverSources: vm.isRemoteCollection(collection.id)
           ? null
           : vm.buildCollectionHoverSources(collection),

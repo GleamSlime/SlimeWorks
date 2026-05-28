@@ -32,6 +32,21 @@ class ThumbQualityLevel {
   final int frameCountFallback;
 }
 
+enum FileCheckDepth {
+  coverOnly,
+  deep;
+
+  String get label => switch (this) {
+    coverOnly => '仅检测封面',
+    deep => '深度检测',
+  };
+
+  String get description => switch (this) {
+    coverOnly => '仅检测渲染的封面文件是否存在，不进行树根式深度检测',
+    deep => '封面丢失时递归检测所有子资源文件，自动标记丢失的集合和文件夹',
+  };
+}
+
 class MediaPrefsService {
   static const _keyQuality = 'media_thumb_quality';
   static const _keyConcurrency = 'media_thumb_concurrency';
@@ -66,6 +81,10 @@ class MediaPrefsService {
 
   /// 隐私模糊强度（sigma值），默认 15.0，范围 5.0-40.0。
   final privacyBlurSigma = 15.0.obs;
+
+  static const _keyFileCheckDepth = 'media_file_check_depth';
+
+  final fileCheckDepth = FileCheckDepth.coverOnly.obs;
 
   /// 缓存大小上限预设列表。
   static const cacheLimitPresets = [
@@ -131,6 +150,11 @@ class MediaPrefsService {
     cacheLimitBytes.value = prefs.getInt(_keyCacheLimitBytes) ?? (1 * 1024 * 1024 * 1024);
     privacyMode.value = prefs.getBool(_keyPrivacyMode) ?? false;
     privacyBlurSigma.value = (prefs.getDouble(_keyPrivacyBlurSigma) ?? 15.0).clamp(5.0, 40.0);
+    final depthStr = prefs.getString(_keyFileCheckDepth) ?? 'coverOnly';
+    fileCheckDepth.value = FileCheckDepth.values.firstWhere(
+      (e) => e.name == depthStr,
+      orElse: () => FileCheckDepth.coverOnly,
+    );
   }
 
   Future<void> setQuality(int v) async {
@@ -183,6 +207,12 @@ class MediaPrefsService {
     privacyBlurSigma.value = v.clamp(5.0, 40.0);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyPrivacyBlurSigma, privacyBlurSigma.value);
+  }
+
+  Future<void> setFileCheckDepth(FileCheckDepth v) async {
+    fileCheckDepth.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyFileCheckDepth, v.name);
   }
 
   /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。

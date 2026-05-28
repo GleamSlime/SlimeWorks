@@ -183,6 +183,48 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         SizedBox(height: AppTheme.metrics.kSpace24),
 
+        // ── 文件检测 ────────────────────────────────────────────────────────
+        _SectionHeader(title: '文件检测', theme: theme),
+        SizedBox(height: AppTheme.metrics.kSpace12),
+        _SettingsCard(
+          theme: theme,
+          child: Obx(() {
+            final depth = _prefs.fileCheckDepth.value;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('检测深度', style: theme.textTheme.titleSmall),
+                SizedBox(height: AppTheme.metrics.kSpace4),
+                Text(
+                  '封面文件异常时触发检测。深度检测会递归检查所有子资源文件是否存在，文件过多可能产生卡顿。',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(150),
+                  ),
+                ),
+                SizedBox(height: AppTheme.metrics.kSpace12),
+                ...FileCheckDepth.values.map(
+                  (d) => RadioListTile<FileCheckDepth>(
+                    value: d,
+                    groupValue: depth,
+                    title: Text(d.label),
+                    subtitle: Text(
+                      d.description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(150),
+                      ),
+                    ),
+                    onChanged: (v) {
+                      if (v != null) _prefs.setFileCheckDepth(v);
+                    },
+                  ),
+                ),
+              ],
+            );
+          }),
+        ),
+
+        SizedBox(height: AppTheme.metrics.kSpace24),
+
         // ── 视频清晰度 ──────────────────────────────────────────────────────
         _SectionHeader(title: '视频预览', theme: theme),
         SizedBox(height: AppTheme.metrics.kSpace12),

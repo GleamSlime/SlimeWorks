@@ -1071,6 +1071,13 @@ pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
     Ok(map.into_values().collect())
 }
 
+pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
+    paths
+        .iter()
+        .map(|p| std::path::Path::new(p).exists())
+        .collect()
+}
+
 pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, String> {
     upsert_collection_from_folder(Path::new(&folder_path), true)
 }
