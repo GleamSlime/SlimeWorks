@@ -63,6 +63,7 @@ rust/**/gen/schemas
 
 *.g.dart
 *_keyword.json
+!rust/novel_reader/tag_keyword.json
 
 # FVM Version Cache
 .fvm/
