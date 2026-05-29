@@ -65,11 +65,13 @@ jobs:
           channel: master
 
       - name: Flutter 依赖
-        run: flutter pub get
+        run: |
+          flutter pub get
+          flutter precache --macos
 
       - name: 修复 CocoaPods 环境
         run: |
-          brew uninstall cocoapods || true
+          brew uninstall cocoapods 2>/dev/null || true
           gem install cocoapods -n /usr/local/bin --no-document
           pod --version
 
