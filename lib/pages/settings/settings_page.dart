@@ -8,7 +8,7 @@ import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
-import 'package:slime_works/pages/settings/components/picacg_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/manga_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/sentry_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
@@ -124,7 +124,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
                   isScrollable: true,
                   tabs: [
                     Tab(text: '资源库'),
-                    Tab(text: 'PicACG'),
+                    Tab(text: 'Manga'),
                     Tab(text: '游戏设置'),
                     Tab(text: 'Sentry'),
                   ],
@@ -134,7 +134,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
                   child: TabBarView(
                     children: [
                       _ResourcesSettingsTab(),
-                      PicAcgSettingsTab(),
+                      MangaSettingsTab(),
                       GameSettingsTab(),
                       SentrySettingsTab(),
                     ],

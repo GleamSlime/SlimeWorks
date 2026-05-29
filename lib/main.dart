@@ -10,8 +10,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:slime_works/core/services/picacg_service.dart';
-import 'package:slime_works/core/services/picacg_download_service.dart';
+import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
@@ -72,10 +72,10 @@ Future<void> main() async {
   // 初始化 media_kit（视频播放）
   MediaKit.ensureInitialized();
 
-  // 恢复 PicACG 登录态与网络配置
-  await getIt<PicAcgService>().init();
-  // 恢复 PicACG 下载元数据
-  await getIt<PicAcgDownloadService>().init();
+  // 恢复 Manga 登录态与网络配置
+  await getIt<MangaService>().init();
+  // 恢复 Manga 下载元数据
+  await getIt<MangaDownloadService>().init();
 
   // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满），
   // 设为 80MB 缓解远程媒体库浏览时内存持续增长问题。

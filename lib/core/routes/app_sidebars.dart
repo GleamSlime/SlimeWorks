@@ -12,7 +12,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const SentryLogRoute(),
     const AliyunDdnsRoute(),
     const LanTransferRoute(),
-    const PicAcgHomeRoute(),
+    const MangaHomeRoute(),
     const CollectionPictureRoute(),
     const CollectionLibraryRoute(),
     const GameHomeRoute(),
@@ -42,7 +42,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
       sort: 30,
       permission: Permission.accessGameLibrary,
     ),
-    'picacg': _GroupConfig(id: 'picacg', sort: 40, permission: Permission.accessPicAcg),
+    'manga': _GroupConfig(id: 'manga', sort: 40, permission: Permission.accessManga),
     'tools': _GroupConfig(id: 'tools', title: '工具', sort: 45, permission: Permission.accessTools),
     'bottom': _GroupConfig(id: 'bottom', sort: 90, permission: Permission.accessSettings),
   };

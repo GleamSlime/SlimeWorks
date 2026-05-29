@@ -2043,6 +2043,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
 
 [[package]]
+name = "manga_module"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "flutter_rust_bridge",
+ "hex",
+ "hmac 0.12.1",
+ "http-body-util",
+ "hyper 1.9.0",
+ "hyper-rustls",
+ "hyper-util",
+ "lazy_static",
+ "parking_lot",
+ "percent-encoding",
+ "reqwest",
+ "rustls 0.23.40",
+ "serde",
+ "serde_json",
+ "sha2",
+ "slime_logger",
+ "tokio",
+ "tower-service",
+ "uuid",
+]
+
+[[package]]
 name = "markup5ever"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2517,35 +2546,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "picacg_module"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "flutter_rust_bridge",
- "hex",
- "hmac 0.12.1",
- "http-body-util",
- "hyper 1.9.0",
- "hyper-rustls",
- "hyper-util",
- "lazy_static",
- "parking_lot",
- "percent-encoding",
- "reqwest",
- "rustls 0.23.40",
- "serde",
- "serde_json",
- "sha2",
- "slime_logger",
- "tokio",
- "tower-service",
- "uuid",
-]
-
-[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2951,11 +2951,11 @@ dependencies = [
  "lan_transfer",
  "lazy_static",
  "libloading",
+ "manga_module",
  "md5",
  "media_collection",
  "module_manager",
  "novel_reader",
- "picacg_module",
  "regex",
  "reqwest",
  "sentry_log",

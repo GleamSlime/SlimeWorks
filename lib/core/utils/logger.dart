@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Loggers log = Loggers();
 Loggers logger = const Loggers();
@@ -19,7 +20,7 @@ class Loggers {
   static List<String> get allLogs => List.unmodifiable(_logs);
   static String? _deviceId;
   static final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
-  static const String _lokiUrl = 'http://logs.gleamslime.com:9090/back/push';
+  static String? get _lokiUrl => dotenv.env['LOKI_URL'];
 
   final String? name;
 
@@ -92,6 +93,12 @@ class Loggers {
     required String name,
     String? traceId,
   }) async {
+    // 检查 Loki URL 是否配置
+    final lokiUrl = _lokiUrl;
+    if (lokiUrl == null || lokiUrl.isEmpty) {
+      return;
+    }
+
     // 如果在退避期内，跳过上报
     if (!_shouldAttemptReport()) {
       return;
@@ -105,7 +112,7 @@ class Loggers {
         "streams": [
           {
             "stream": {
-              "job": "paopao-market-app",
+              "job": "slime-works",
               "level": level.toLowerCase(),
               "deviceId": deviceId,
               "name": name,
@@ -128,12 +135,12 @@ class Loggers {
         receiveTimeout: const Duration(seconds: 8),
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'PaoPao-Market-App/1.0',
+          'User-Agent': 'Slime-Works/1.0',
           'Connection': 'close', // 避免连接复用问题
         },
       );
 
-      await dio.post(_lokiUrl, data: body);
+      await dio.post(lokiUrl, data: body);
 
       // 上报成功，重置网络状态
       // _networkAvailable = true;
@@ -291,7 +298,7 @@ class Loggers {
   static Future<String> saveLogsToFile(bool? encrypt) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File(
-      "${directory.path}/泡泡摩奇APP日志${DateUtil.formatDate(DateTime.now(), format: 'HH:mm:ss:SSS')}.log",
+      '${directory.path}/史莱姆工坊日志${DateUtil.formatDate(DateTime.now(), format: 'HH:mm:ss:SSS')}.log',
     );
 
     String originText = _logs.join("\n");

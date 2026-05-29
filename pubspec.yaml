@@ -55,8 +55,8 @@ dependencies:
   dio: ^5.9.0 # HTTP客户端
   http: ^1.2.0 # HTTP客户端
   cupertino_http: ^2.4.0 # iOS Debug 下使用 URLSession 绕过 socket 栈问题
-  crypto: ^3.0.7 # PicACG Dart 调试回退签名
-  uuid: ^4.5.3 # PicACG Dart 调试回退 nonce
+  crypto: ^3.0.7 # Manga Dart 调试回退签名
+  uuid: ^4.5.3 # Manga Dart 调试回退 nonce
   connectivity_plus: ^6.0.5 # 网络状态监听
 
   # 桌面端自动更新

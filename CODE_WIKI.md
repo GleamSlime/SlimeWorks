@@ -27,7 +27,7 @@
   - [7.1 媒体集合（Media Collection）](#71-媒体集合media-collection)
   - [7.2 小说阅读器（Novel Reader）](#72-小说阅读器novel-reader)
   - [7.3 游戏库（Game Library）](#73-游戏库game-library)
-  - [7.4 PicACG 漫画平台](#74-picacg-漫画平台)
+  - [7.4 Manga 漫画平台](#74-manga-漫画平台)
   - [7.5 局域网传输（LAN Transfer）](#75-局域网传输lan-transfer)
   - [7.6 解压工具（Extract）](#76-解压工具extract)
   - [7.7 Sentry 日志收集](#77-sentry-日志收集)
@@ -55,7 +55,7 @@
 | 媒体集合管理 | 本地图片/视频/音频的目录扫描、缩略图生成、文件夹分组 |
 | 小说阅读器 | 支持 TXT/EPUB 格式，章节解析、全文搜索、阅读进度、AI 翻译 |
 | 游戏库 | 视觉小说/游戏管理，时长追踪，元数据抓取（萌娘百科/2DFan） |
-| PicACG 漫画 | 漫画浏览/搜索/下载/离线阅读，7 种分流模式 |
+| Manga 漫画 | 漫画浏览/搜索/下载/离线阅读，7 种分流模式 |
 | 局域网传输 | mDNS 设备发现，文件/文本传输，信任设备管理 |
 | 解压工具 | 多格式解压（7z/zip/tar.gz/bz2/xz/lzma/zstd），密码库管理 |
 | 抓包代理 | HTTP/HTTPS MITM 代理，CA 证书管理 |
@@ -140,7 +140,7 @@
 │  └──┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬───┘ │
 │     ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼     │
 │  ┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐  │
-│  │media ││novel ││game  ││picacg││lan   ││extract││sentry│  │
+│  │media ││novel ││game  ││manga││lan   ││extract││sentry│  │
 │  │coll. ││reader││lib.  ││module││trans.││module ││log   │  │
 │  └──┬───┘└──┬───┘└──────┘└──────┘└──────┘└──┬───┘└──────┘  │
 │     ▼       ▼                               ▼              │
@@ -198,7 +198,7 @@ slime_works/
 │   │   │       ├── game_library_routes.dart
 │   │   │       ├── lan_transfer_routes.dart
 │   │   │       ├── novel_routes.dart
-│   │   │       ├── picacg_routes.dart
+│   │   │       ├── manga_routes.dart
 │   │   │       ├── placeholder_routes.dart
 │   │   │       ├── test_routes.dart
 │   │   │       └── tools_routes.dart
@@ -210,8 +210,8 @@ slime_works/
 │   │   │   ├── game_process_tracker.dart  # 游戏进程追踪
 │   │   │   ├── lan_transfer_service.dart  # 局域网传输服务
 │   │   │   ├── media_prefs_service.dart   # 媒体偏好设置
-│   │   │   ├── picacg_service.dart        # PicACG 业务服务
-│   │   │   ├── picacg_download_service.dart # PicACG 下载管理
+│   │   │   ├── manga_service.dart        # Manga 业务服务
+│   │   │   ├── manga_download_service.dart # Manga 下载管理
 │   │   │   ├── sentry_settings_service.dart # Sentry 设置服务
 │   │   │   ├── system_tray_service.dart   # 系统托盘服务
 │   │   │   ├── time_consumption_test.dart # 启动耗时测试
@@ -272,7 +272,7 @@ slime_works/
 │   │   ├── lan_transfer/         # 局域网传输
 │   │   ├── novel_library/        # 小说库
 │   │   ├── novel_reader/         # 小说阅读器
-│   │   ├── picacg/               # PicACG 漫画
+│   │   ├── manga/               # Manga 漫画
 │   │   ├── sentry_log/           # Sentry 日志
 │   │   ├── settings/             # 设置页面
 │   │   ├── tools/                # 工具页面
@@ -300,7 +300,7 @@ slime_works/
 │   │       ├── module_loader.dart
 │   │       ├── module_manager.dart
 │   │       ├── novel_reader.dart
-│   │       ├── picacg.dart
+│   │       ├── manga.dart
 │   │       ├── sentry_log.dart
 │   │       ├── simple.dart
 │   │       ├── system_metrics.dart
@@ -321,7 +321,7 @@ slime_works/
 │   ├── media_collection/         # 媒体集合模块
 │   ├── module_manager/           # 模块管理系统
 │   ├── novel_reader/             # 小说阅读器模块
-│   ├── picacg_module/            # PicACG 漫画模块
+│   ├── manga_module/            # Manga 漫画模块
 │   ├── sentry_log/               # Sentry 日志模块 (redb)
 │   ├── ws_module/                # WebSocket 模块
 │   └── examples/                 # Rust 示例
@@ -366,8 +366,8 @@ main()
  ├── SystemTrayService.init()           # 系统托盘 (桌面端)
  ├── RustLib.init()                     # FRB 初始化（必须在所有 Rust 调用前）
  ├── MediaKit.ensureInitialized()       # 视频播放引擎
- ├── PicAcgService.init()               # 恢复漫画登录态
- ├── PicAcgDownloadService.init()       # 恢复下载元数据
+ ├── MangaService.init()               # 恢复漫画登录态
+ ├── MangaDownloadService.init()       # 恢复下载元数据
  ├── PaintingBinding.imageCache.maximumSizeBytes = 80MB  # 限制图片缓存
  ├── NodeSettingsService.init()         # 节点服务初始化
  ├── SentrySettingsService.init()       # Sentry 配置
@@ -448,7 +448,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 | `routes/core_routes.dart` | 核心路由（Dashboard、Settings、About） |
 | `routes/collection_routes.dart` | 收藏夹路由 |
 | `routes/game_library_routes.dart` | 游戏库路由 |
-| `routes/picacg_routes.dart` | PicACG 路由 |
+| `routes/manga_routes.dart` | Manga 路由 |
 | `routes/novel_routes.dart` | 小说路由 |
 | `routes/lan_transfer_routes.dart` | 局域网传输路由 |
 | `routes/capture_routers.dart` | 抓包路由 |
@@ -473,18 +473,18 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 | `/game/categories` | `GameCategoriesRoute` | game-library |
 | `/game/stats` | `GameStatsRoute` | game-library |
 | `/game/settings` | `GameSettingsRoute` | game-library |
-| `/picacg` | `PicAcgHomeRoute` | picacg |
-| `/picacg/downloads` | `PicAcgDownloadsRoute` | picacg |
+| `/manga` | `MangaHomeRoute` | manga |
+| `/manga/downloads` | `MangaDownloadsRoute` | manga |
 | `/lan-transfer` | `LanTransferRoute` | tools |
 | `/settings` | `SettingsRoute` | bottom |
 | `/about` | `AboutRoute` | bottom |
 | `/tools` | `ToolsRoute` | tools |
 | `/sentry-log` | `SentryLogRoute` | tools |
 | `/novel/reader` | `NovelReaderRoute` | — (非侧边栏) |
-| `/picacg/comic-detail` | `PicAcgComicDetailRoute` | — (非侧边栏) |
-| `/picacg/search` | `PicAcgSearchRoute` | — (非侧边栏) |
-| `/picacg/reader` | `PicAcgReaderRoute` | — (非侧边栏) |
-| `/picacg/history` | `PicAcgHistoryRoute` | — (非侧边栏) |
+| `/manga/comic-detail` | `MangaComicDetailRoute` | — (非侧边栏) |
+| `/manga/search` | `MangaSearchRoute` | — (非侧边栏) |
+| `/manga/reader` | `MangaReaderRoute` | — (非侧边栏) |
+| `/manga/history` | `MangaHistoryRoute` | — (非侧边栏) |
 | `/game/detail` | `GameDetailRoute` | — (非侧边栏) |
 | `/game/category-detail` | `GameCategoryDetailRoute` | — (非侧边栏) |
 | `/lan-chat` | `LanChatRoute` | — (非侧边栏) |
@@ -505,7 +505,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 | core | — | 10 | viewDashboard |
 | collection | 收藏夹 | 20 | accessCollection |
 | game-library | 游戏 | 30 | accessGameLibrary |
-| picacg | — | 40 | accessPicAcg |
+| manga | — | 40 | accessManga |
 | tools | 工具 | 45 | accessTools |
 | bottom | — | 90 | accessSettings |
 
@@ -525,8 +525,8 @@ void getItInit() {
   getIt.registerLazySingleton<LanTransferService>(() => LanTransferService());
   getIt.registerLazySingleton<NodeSettingsService>(() => NodeSettingsService());
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
-  getIt.registerLazySingleton<PicAcgService>(() => PicAcgService());
-  getIt.registerLazySingleton<PicAcgDownloadService>(() => PicAcgDownloadService());
+  getIt.registerLazySingleton<MangaService>(() => MangaService());
+  getIt.registerLazySingleton<MangaDownloadService>(() => MangaDownloadService());
   getIt.registerLazySingleton<GameLibraryMetadataApi>(() => GameLibraryMetadataApi());
   getIt.registerLazySingleton<GameLibraryService>(() => GameLibraryService(metadataApi: getIt<GameLibraryMetadataApi>()));
   getIt.registerLazySingleton<GameProcessTracker>(() => GameProcessTracker(service: getIt<GameLibraryService>()));
@@ -597,7 +597,7 @@ void getItInit() {
 |------|----------|
 | `creator` | 全部权限（16个） |
 | `admin` | 除 accessCollection 外的全部权限 |
-| `editor` | 仪表盘 + 内容编辑 + 小说/游戏/PicACG |
+| `editor` | 仪表盘 + 内容编辑 + 小说/游戏/Manga |
 | `guest` | 仅仪表盘 |
 | `developer` | 全部权限 |
 
@@ -619,7 +619,7 @@ void getItInit() {
 | `accessWebSocketTest` | WebSocket测试 |
 | `accessCollection` | 收藏夹 |
 | `accessDemo` | 演示 |
-| `accessPicAcg` | PicACG |
+| `accessManga` | Manga |
 | `accessTools` | 工具 |
 | `accessSentryLog` | Sentry日志 |
 
@@ -702,7 +702,7 @@ GetX 生命周期绑定 Widget，用于在使用 GoRouter 时保持 GetX 的依�
 | `module_loader` | module_manager | 模块加载 |
 | `module_manager` | module_manager | 模块管理 |
 | `novel_reader` | novel_reader | 小说阅读器 |
-| `picacg` | picacg_module | PicACG 漫画 |
+| `manga` | manga_module | Manga 漫画 |
 | `sentry_log` | sentry_log | Sentry 日志 |
 | `simple` | — | 简单工具 |
 | `system_metrics` | — | 系统指标 |
@@ -838,7 +838,7 @@ dart_output: lib/src/rust
 - `api.rs` — 公共 API
 - `discovery.rs` — mDNS 设备发现
 
-#### picacg_module — PicACG 漫画平台
+#### manga_module — Manga 漫画平台
 
 | 项目 | 说明 |
 |------|------|
@@ -849,7 +849,7 @@ dart_output: lib/src/rust
 | 依赖 | 无 |
 | crate-type | staticlib + rlib |
 
-分流模式（`picacgSetChannel`）：
+分流模式（`mangaSetChannel`）：
 | mode | 说明 |
 |------|------|
 | 0 | 标准直连 |
@@ -859,7 +859,7 @@ dart_output: lib/src/rust
 | 5 | JP反代 (https://bika-api.jpacg.cc) |
 | 6 | US反代 (https://bika2-api.jpacg.cc) |
 
-核心 API：`picacgInit` / `picacgLogin` / `picacgSetProxy` / `picacgSetToken` / `picacgSetChannel` / `picacgSetImageServer` / `picacgTestChannel` / `picacgGetCollections` / `picacgGetRandomComics` / `picacgGetCategories` / `picacgSearchComics` / `picacgGetComicDetail` / `picacgGetComicEps` / `picacgGetEpsPages` / `picacgGetFavourites` / `picacgToggleFavourite` / `picacgToggleLike` / `picacgGetComments` / `picacgSendComment` / `picacgBuildImageUrl` / `picacgFetchImage` / `picacgInitHistory` / `picacgLoadHistory` / `picacgSaveHistoryRaw` / `picacgClearHistory`
+核心 API：`mangaInit` / `mangaLogin` / `mangaSetProxy` / `mangaSetToken` / `mangaSetChannel` / `mangaSetImageServer` / `mangaTestChannel` / `mangaGetCollections` / `mangaGetRandomComics` / `mangaGetCategories` / `mangaSearchComics` / `mangaGetComicDetail` / `mangaGetComicEps` / `mangaGetEpsPages` / `mangaGetFavourites` / `mangaToggleFavourite` / `mangaToggleLike` / `mangaGetComments` / `mangaSendComment` / `mangaBuildImageUrl` / `mangaFetchImage` / `mangaInitHistory` / `mangaLoadHistory` / `mangaSaveHistoryRaw` / `mangaClearHistory`
 
 #### sentry_log — Sentry 日志收集
 
@@ -947,10 +947,10 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 | `GET /node/media` | 媒体文件服务（图片缩放、Range 请求流式分发） |
 | `POST /node/upload` | 文件上传 |
 | `GET /health` | 健康检查 |
-| `GET /picacg/ping` | PicACG 中转连通性检测 |
-| `POST /picacg/api` | PicACG API 中转 |
-| `GET /picacg/img` | PicACG 图片中转 |
-| `GET /picacg/token` | PicACG Token 中转 |
+| `GET /manga/ping` | Manga 中转连通性检测 |
+| `POST /manga/api` | Manga API 中转 |
+| `GET /manga/img` | Manga 图片中转 |
+| `GET /manga/token` | Manga Token 中转 |
 | `POST /api/{id}/store` | Sentry 兼容端点 |
 | `POST /api/{id}/envelope` | Sentry Envelope 端点 |
 | `GET /sentry/logs` | Sentry 日志查询 |
@@ -1057,26 +1057,26 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - `gameLibraryGetStatsJson` — 统计数据（按时间范围）
 - `gameLibraryGetHomePageDataJson` — 首页数据
 
-### 7.4 PicACG 漫画平台
+### 7.4 Manga 漫画平台
 
-**Flutter 页面**: `pages/picacg/` (home / comic_detail / search / reader / downloads / favourites / history)
+**Flutter 页面**: `pages/manga/` (home / comic_detail / search / reader / downloads / favourites / history)
 
 **数据流**:
 ```
-用户操作 → Picacg*ViewModel → PicAcgService / PicAcgDownloadService → Rust FFI → picacg_module
+用户操作 → Manga*ViewModel → MangaService / MangaDownloadService → Rust FFI → manga_module
 ```
 
 **ViewModel 矩阵**:
 
 | ViewModel | 职责 |
 |-----------|------|
-| `PicacgHomeViewModel` | 首页推荐/分类/排行榜 |
-| `PicacgComicDetailViewModel` | 漫画详情/章节 |
-| `PicacgSearchViewModel` | 搜索 |
-| `PicacgReaderViewModel` | 阅读器 |
-| `PicacgDownloadsViewModel` | 下载管理 |
-| `PicacgFavouritesViewModel` | 收藏管理 |
-| `PicacgHistoryViewModel` | 浏览历史 |
+| `MangaHomeViewModel` | 首页推荐/分类/排行榜 |
+| `MangaComicDetailViewModel` | 漫画详情/章节 |
+| `MangaSearchViewModel` | 搜索 |
+| `MangaReaderViewModel` | 阅读器 |
+| `MangaDownloadsViewModel` | 下载管理 |
+| `MangaFavouritesViewModel` | 收藏管理 |
+| `MangaHistoryViewModel` | 浏览历史 |
 
 **分流模式** (7 种): 直连 / 分流2 / 分流3 / CDN / JP反代 / US反代 / PC中转
 
@@ -1085,10 +1085,10 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **页面组件**:
 | 组件 | 说明 |
 |------|------|
-| `PicacgComicCard` | 漫画卡片 |
-| `PicacgImageView` | 图片查看 |
-| `PicacgLoginDialog` | 登录对话框 |
-| `PicacgBlockWordsDialog` | 屏蔽词对话框 |
+| `MangaComicCard` | 漫画卡片 |
+| `MangaImageView` | 图片查看 |
+| `MangaLoginDialog` | 登录对话框 |
+| `MangaBlockWordsDialog` | 屏蔽词对话框 |
 
 ### 7.5 局域网传输（LAN Transfer）
 
@@ -1203,8 +1203,8 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 | `LanTransferService` | GetIt | 局域网设备发现与文件传输 |
 | `NodeSettingsService` | GetIt | 节点服务器管理、远程节点 CRUD、熔断机制、流量统计 |
 | `MediaPrefsService` | GetIt | 媒体偏好设置（缩略图质量、并发量、缓存管理） |
-| `PicAcgService` | GetIt | PicACG 完整业务（认证、浏览、搜索、下载、收藏） |
-| `PicAcgDownloadService` | GetIt | PicACG 下载管理（队列、进度、离线路径） |
+| `MangaService` | GetIt | Manga 完整业务（认证、浏览、搜索、下载、收藏） |
+| `MangaDownloadService` | GetIt | Manga 下载管理（队列、进度、离线路径） |
 | `GameLibraryMetadataApi` | GetIt | 游戏元数据搜索（萌娘百科/2DFan 聚合） |
 | `GameLibraryService` | GetIt | 游戏库数据管理（依赖 MetadataApi） |
 | `GameProcessTracker` | GetIt | 游戏进程追踪（依赖 GameLibraryService） |
@@ -1222,7 +1222,7 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 GameProcessTracker ──→ GameLibraryService ──→ GameLibraryMetadataApi
 OllamaSettingsService ──→ OllamaService
 NodeSettingsService ──→ Rust FFI (node_server)
-PicAcgDownloadService ──→ PicAcgService ──→ Rust FFI (picacg_module)
+MangaDownloadService ──→ MangaService ──→ Rust FFI (manga_module)
 ExtractService ──→ Rust FFI (extract_module)
 LanTransferService ──→ Rust FFI (lan_transfer)
 ```
@@ -1281,13 +1281,13 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | `GameLibraryCategoriesViewModel` | 游戏分类 | 分类管理 |
 | `GameLibraryStatsViewModel` | 游戏统计 | 统计数据 |
 | `GameLibrarySettingsViewModel` | 游戏设置 | 设置管理 |
-| `PicacgHomeViewModel` | PicACG 首页 | 推荐/分类/排行榜 |
-| `PicacgComicDetailViewModel` | PicACG 详情 | 漫画详情/章节 |
-| `PicacgSearchViewModel` | PicACG 搜索 | 搜索 |
-| `PicacgReaderViewModel` | PicACG 阅读器 | 阅读器 |
-| `PicacgDownloadsViewModel` | PicACG 下载 | 下载管理 |
-| `PicacgFavouritesViewModel` | PicACG 收藏 | 收藏管理 |
-| `PicacgHistoryViewModel` | PicACG 历史 | 浏览历史 |
+| `MangaHomeViewModel` | Manga 首页 | 推荐/分类/排行榜 |
+| `MangaComicDetailViewModel` | Manga 详情 | 漫画详情/章节 |
+| `MangaSearchViewModel` | Manga 搜索 | 搜索 |
+| `MangaReaderViewModel` | Manga 阅读器 | 阅读器 |
+| `MangaDownloadsViewModel` | Manga 下载 | 下载管理 |
+| `MangaFavouritesViewModel` | Manga 收藏 | 收藏管理 |
+| `MangaHistoryViewModel` | Manga 历史 | 浏览历史 |
 | `LanTransferViewModel` | 局域网传输 | 设备发现、传输管理 |
 | `CaptureScreenViewModel` | 抓包录屏 | 代理控制、流量展示 |
 | `SentryLogViewModel` | Sentry 日志 | 日志查询、过滤、统计 |
@@ -1345,7 +1345,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | `MediaSettingsTab` | 媒体设置 |
 | `NodeSettingsTab` | 节点设置 |
 | `OllamaSettingsTab` | Ollama AI 设置 |
-| `PicacgSettingsTab` | PicACG 设置 |
+| `MangaSettingsTab` | Manga 设置 |
 | `SentrySettingsTab` | Sentry 设置 |
 | `ThemeSettingsTab` | 主题设置 |
 
@@ -1364,7 +1364,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
     ┌──────────┬───────────┬───┴───┬──────────┬──────────┬──────────┐
     ▼          ▼           ▼       ▼          ▼          ▼          ▼
 ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-│db_     │ │media_  │ │novel_  │ │game_   │ │extract_│ │sentry_ │ │picacg_ │
+│db_     │ │media_  │ │novel_  │ │game_   │ │extract_│ │sentry_ │ │manga_ │
 │module  │ │collect.│ │reader  │ │library │ │module  │ │log     │ │module  │
 └────────┘ └───┬────┘ └──┬─────┘ └────────┘ └───┬────┘ └────────┘ └────────┘
                │         │                      │
@@ -1383,7 +1383,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 
 | 层级 | 模块 | 说明 |
 |------|------|------|
-| 基础层 | db_module, http_bridge, lan_transfer, module_manager, ws_module, picacg_module, sentry_log, game_library, capture_proxy | 无内部依赖 |
+| 基础层 | db_module, http_bridge, lan_transfer, module_manager, ws_module, manga_module, sentry_log, game_library, capture_proxy | 无内部依赖 |
 | 业务层 | media_collection → db_module; novel_reader → db_module + http_bridge; extract_module → db_module | 依赖基础层 |
 | 聚合层 | rust_lib_slime_works | 依赖所有子模块 |
 
@@ -1398,7 +1398,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | extract_module | db_module, sevenz-rust2, zip, tar, flate2, bzip2, liblzma |
 | http_bridge | hyper |
 | lan_transfer | (内部实现 mDNS + TCP) |
-| picacg_module | reqwest, hyper-rustls, hmac, sha2 |
+| manga_module | reqwest, hyper-rustls, hmac, sha2 |
 | sentry_log | redb |
 | ws_module | (条件编译) |
 | module_manager | libloading |
@@ -1666,19 +1666,19 @@ info!("操作完成: {}", detail);
 | `gameLibraryFetchMoegirl(gameName)` | `Future<String>` | 萌娘百科元数据 |
 | `gameLibraryGetStatsJson(startTsSec, endTsSec)` | `Future<String>` | 统计数据 |
 
-### picacg.dart
+### manga.dart
 
 | 函数 | 返回类型 | 说明 |
 |------|----------|------|
-| `picacgInit()` | `void` | 初始化客户端 |
-| `picacgLogin(email, password)` | `Future<String>` | 登录 |
-| `picacgSetChannel(mode, custom)` | `void` | 设置分流模式 |
-| `picacgTestChannel(mode, custom)` | `Future<BigInt>` | 测试分流延迟(ms) |
-| `picacgGetCollections()` | `Future<String>` | 首页推荐 |
-| `picacgSearchComics(keyword, categories, page, sort)` | `Future<String>` | 搜索漫画 |
-| `picacgGetComicDetail(comicId)` | `Future<String>` | 漫画详情 |
-| `picacgGetEpsPages(comicId, epsOrder, page)` | `Future<String>` | 章节图片 |
-| `picacgFetchImage(fileServer, path)` | `Future<Uint8List>` | 获取图片 |
+| `mangaInit()` | `void` | 初始化客户端 |
+| `mangaLogin(email, password)` | `Future<String>` | 登录 |
+| `mangaSetChannel(mode, custom)` | `void` | 设置分流模式 |
+| `mangaTestChannel(mode, custom)` | `Future<BigInt>` | 测试分流延迟(ms) |
+| `mangaGetCollections()` | `Future<String>` | 首页推荐 |
+| `mangaSearchComics(keyword, categories, page, sort)` | `Future<String>` | 搜索漫画 |
+| `mangaGetComicDetail(comicId)` | `Future<String>` | 漫画详情 |
+| `mangaGetEpsPages(comicId, epsOrder, page)` | `Future<String>` | 章节图片 |
+| `mangaFetchImage(fileServer, path)` | `Future<Uint8List>` | 获取图片 |
 
 ### lan_transfer.dart
 
