@@ -72,7 +72,7 @@ class AliyunDdnsService extends GetxService {
     if (isLocal) return null;
     final nodeService = GetIt.instance.get<NodeSettingsService>();
     final node = nodeService.getNodeById(selectedNodeId.value);
-    return node?.apiBaseUrl;
+    return node?.effectiveApiBaseUrl;
   }
 
   Future<void> ensureInitialized() async {
@@ -328,6 +328,7 @@ class AliyunDdnsService extends GetxService {
       final response = await _dio.get<Map<String, dynamic>>(
         '$baseUrl/aliyun/status',
         options: Options(
+          connectTimeout: const Duration(milliseconds: 200),
           sendTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 3),
         ),

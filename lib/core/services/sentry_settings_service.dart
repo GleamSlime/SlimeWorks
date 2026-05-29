@@ -196,6 +196,7 @@ class SentrySettingsService extends GetxService {
       final response = await _dio.get<Map<String, dynamic>>(
         '$baseUrl/sentry/stats',
         options: Options(
+          connectTimeout: const Duration(milliseconds: 200),
           sendTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 3),
         ),

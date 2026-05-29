@@ -1,0 +1,261 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".gitignore"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.41.0-0.0.pre"
+  RUST_VERSION: "1.92.0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 提取版本号
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+          BUILD_NUMBER=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}+${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "📋 版本: $VERSION, 构建号: $BUILD_NUMBER"
+
+  build-macos:
+    needs: detect-version
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: Flutter 依赖
+        run: |
+          flutter pub get
+          flutter precache --macos
+
+      - name: 修复 CocoaPods 环境
+        run: |
+          brew uninstall cocoapods 2>/dev/null || true
+          gem install cocoapods -n /usr/local/bin --no-document
+          pod --version
+
+      - name: 安装 CocoaPods 依赖
+        working-directory: macos
+        run: pod install --repo-update
+
+      - name: 安装 create-dmg
+        run: brew install create-dmg
+
+      - name: 安装 fastforge
+        run: dart pub global activate fastforge
+
+      - name: 打包 macOS DMG
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fastforge package --platform macos --target dmg
+
+      - name: Ad-hoc 代码签名
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          if [ -n "$DMG_PATH" ]; then
+            codesign --force --deep --sign - "$DMG_PATH"
+          fi
+
+      - name: 上传 macOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/**/*.dmg
+          retention-days: 7
+
+  build-windows:
+    needs: detect-version
+    runs-on: windows-2022
+    steps:
+      - name: 配置 Git 支持 Unicode
+        run: |
+          git config --global core.quotepath false
+          git config --global core.longpaths true
+          git config --global core.autocrlf input
+
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: Flutter 依赖
+        run: flutter pub get
+
+      - name: 安装 Inno Setup
+        run: choco install innosetup -y
+
+      - name: 安装 fastforge
+        run: dart pub global activate fastforge
+
+      - name: 打包 Windows EXE
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
+        run: |
+          $env:Path += ";$env:LOCALAPPDATA\Pub\Cache\bin"
+          fastforge package --platform windows --target exe
+
+      - name: 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/**/*.exe
+          retention-days: 7
+
+  release:
+    needs: [detect-version, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载所有产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: 列出产物
+        run: find dist/ -type f | head -20
+
+      - name: 获取 DMG 文件信息
+        id: dmg-info
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          FILE_SIZE=0
+          if [ -n "$DMG_PATH" ]; then
+            FILE_SIZE=$(stat -c%s "$DMG_PATH" 2>/dev/null || echo "0")
+          fi
+          echo "file_size=$FILE_SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: 创建或更新 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.detect-version.outputs.tag }}
+          name: "SlimeWorks v${{ needs.detect-version.outputs.version }}"
+          body: |
+            ## SlimeWorks v${{ needs.detect-version.outputs.version }}
+
+            Build: ${{ needs.detect-version.outputs.build_number }}
+
+            ### Downloads
+            - **macOS**: Download `.dmg`, drag to Applications
+            - **Windows**: Download `.exe` installer
+
+            ---
+            *Built by GitHub Actions*
+          files: |
+            dist/**/*.dmg
+            dist/**/*.exe
+          draft: false
+          prerelease: false
+
+      - name: 更新 appcast.xml
+        run: |
+          VERSION="${{ needs.detect-version.outputs.version }}"
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          FILE_SIZE="${{ steps.dmg-info.outputs.file_size }}"
+          TAG="${{ needs.detect-version.outputs.tag }}"
+          REPO="GleamSlime/slime_works"
+          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+
+          DMG_FILENAME=$(find dist/ -name "*.dmg" -type f -exec basename {} \; | head -1)
+
+          cat > docs/appcast.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
+            <channel>
+              <title>SlimeWorks</title>
+              <language>zh-CN</language>
+              <link>https://github.com/${REPO}</link>
+              <item>
+                <title>${VERSION}</title>
+                <description>
+                  <![CDATA[Auto build v${VERSION}+${BUILD_NUMBER}]]>
+                </description>
+                <pubDate>${DATE}</pubDate>
+                <enclosure
+                  url="https://github.com/${REPO}/releases/download/${TAG}/${DMG_FILENAME}"
+                  sparkle:version="${BUILD_NUMBER}"
+                  sparkle:shortVersionString="${VERSION}"
+                  sparkle:edSignature=""
+                  length="${FILE_SIZE}"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+      - name: 部署 appcast.xml 到 GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          keep_files: true

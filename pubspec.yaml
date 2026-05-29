@@ -59,6 +59,9 @@ dependencies:
   uuid: ^4.5.3 # PicACG Dart 调试回退 nonce
   connectivity_plus: ^6.0.5 # 网络状态监听
 
+  # 桌面端自动更新
+  auto_updater: ^0.2.0 # Sparkle/WinSparkle 原生自动更新（macOS/Windows）
+
   # 本地存储
   flutter_secure_storage: ^10.0.0 # 安全存储敏感数据
   shared_preferences: ^2.3.4 # 简单键值对存储

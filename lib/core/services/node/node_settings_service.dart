@@ -44,9 +44,17 @@ class NodeSettingsService extends GetxService {
   // 服务器实例已迁移到 Rust 管理，不再需要 Dart 端的 HttpServer
   final Dio _dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 6),
+      connectTimeout: const Duration(seconds: 3),
       receiveTimeout: const Duration(seconds: 12),
       sendTimeout: const Duration(seconds: 12),
+    ),
+  );
+
+  final Dio _probeDio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(milliseconds: 200),
+      receiveTimeout: const Duration(milliseconds: 200),
+      sendTimeout: const Duration(milliseconds: 200),
     ),
   );
 
@@ -106,12 +114,25 @@ class NodeSettingsService extends GetxService {
     return remoteNodes.firstWhereOrNull((n) => n.id == nodeId);
   }
 
-  Future<void> addRemoteNode({required String name, required String apiBaseUrl}) async {
+  String getNodeEffectiveBaseUrl(String nodeId) {
+    final node = getNodeById(nodeId);
+    return node?.effectiveApiBaseUrl ?? '';
+  }
+
+  Future<void> addRemoteNode({
+    required String name,
+    required String apiBaseUrl,
+    String? lanApiBaseUrl,
+  }) async {
     final normalized = _normalizeBaseUrl(apiBaseUrl);
+    final normalizedLan = lanApiBaseUrl != null && lanApiBaseUrl.trim().isNotEmpty
+        ? _normalizeBaseUrl(lanApiBaseUrl)
+        : null;
     final endpoint = NodeEndpoint(
       id: _createNodeId(),
       name: name.trim().isEmpty ? '未命名节点' : name.trim(),
       apiBaseUrl: normalized,
+      lanApiBaseUrl: normalizedLan,
       enabled: true,
       supportsMove: true,
       supportsCoverUpdate: true,
@@ -127,7 +148,14 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
-    remoteNodes[index] = endpoint.copyWith(apiBaseUrl: _normalizeBaseUrl(endpoint.apiBaseUrl));
+    final normalizedLan =
+        endpoint.lanApiBaseUrl != null && endpoint.lanApiBaseUrl!.trim().isNotEmpty
+        ? _normalizeBaseUrl(endpoint.lanApiBaseUrl!)
+        : null;
+    remoteNodes[index] = endpoint.copyWith(
+      apiBaseUrl: _normalizeBaseUrl(endpoint.apiBaseUrl),
+      lanApiBaseUrl: normalizedLan,
+    );
     remoteNodes.refresh();
     await _save();
     await checkNodeConnectivity(endpoint.id);
@@ -154,14 +182,13 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> refreshNodeConnectivity() async {
-    for (final node in remoteNodes) {
-      if (!node.enabled) {
-        nodeConnectivity[node.id] = false;
-        nodeConnectivityError[node.id] = '节点已禁用';
-        continue;
-      }
-      await checkNodeConnectivity(node.id);
+    final enabledNodes = remoteNodes.where((n) => n.enabled).toList();
+    final disabledNodes = remoteNodes.where((n) => !n.enabled).toList();
+    for (final node in disabledNodes) {
+      nodeConnectivity[node.id] = false;
+      nodeConnectivityError[node.id] = '节点已禁用';
     }
+    await Future.wait(enabledNodes.map((node) => checkNodeConnectivity(node.id)));
   }
 
   Future<void> checkNodeConnectivity(String nodeId) async {
@@ -174,15 +201,42 @@ class NodeSettingsService extends GetxService {
       nodeConnectivityError[nodeId] = '节点已禁用';
       return;
     }
-    // 手动检测时先清除熔断状态，允许重新连接
     _circuitBreakedNodes.remove(nodeId);
 
-    try {
-      await _callNode(node: node, action: 'list_novels', params: const <String, dynamic>{});
-    } catch (e) {
-      nodeConnectivity[nodeId] = false;
-      nodeConnectivityError[nodeId] = e.toString();
+    final lanOk = await _probeNodeUrl(node.lanApiBaseUrl);
+    if (lanOk) {
+      nodeConnectivity[nodeId] = true;
+      nodeConnectivityError[nodeId] = '';
+      return;
     }
+
+    final wanOk = await _probeNodeUrl(node.apiBaseUrl);
+    if (wanOk) {
+      nodeConnectivity[nodeId] = true;
+      nodeConnectivityError[nodeId] = '';
+      return;
+    }
+
+    nodeConnectivity[nodeId] = false;
+    nodeConnectivityError[nodeId] = '节点不可达';
+    _circuitBreakedNodes.add(nodeId);
+  }
+
+  Future<bool> _probeNodeUrl(String? baseUrl) async {
+    if (baseUrl == null || baseUrl.isEmpty) return false;
+    final urls = _candidateNodeCallUrls(baseUrl);
+    for (final url in urls) {
+      try {
+        await _probeDio.post<dynamic>(
+          url,
+          data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+        );
+        return true;
+      } catch (_) {
+        continue;
+      }
+    }
+    return false;
   }
 
   Future<void> updateLocalSettings({
@@ -509,7 +563,7 @@ class NodeSettingsService extends GetxService {
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
     }
-    final normalized = _normalizeBaseUrl(node.apiBaseUrl);
+    final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
     final params = <String, String>{'path': filePath};
     if (thumbnailWidth != null && thumbnailWidth > 0) {
       params['width'] = thumbnailWidth.toString();
@@ -524,7 +578,7 @@ class NodeSettingsService extends GetxService {
   String buildNodeUploadUrl(String nodeId) {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
-    final normalized = _normalizeBaseUrl(node.apiBaseUrl);
+    final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
     return '$normalized/node/upload';
   }
 
@@ -818,7 +872,7 @@ class NodeSettingsService extends GetxService {
     required Map<String, dynamic> requestPayload,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final candidateUrls = _candidateNodeCallUrls(node.apiBaseUrl);
+    final candidateUrls = _candidateNodeCallUrls(node.effectiveApiBaseUrl);
     final txBytes = _estimatePayloadBytes(requestPayload);
     Object? lastError;
     StackTrace? lastStackTrace;
@@ -881,17 +935,17 @@ class NodeSettingsService extends GetxService {
   /// 快速探测节点是否可达（bypass 熔断检查，用于验证重试）。
   /// 返回 true 表示节点有响应（无论业务是否成功）。
   Future<bool> _quickProbeNode(NodeEndpoint node) async {
-    final url = _candidateNodeCallUrls(node.apiBaseUrl).firstOrNull;
+    final candidateUrls = <String>[];
+    if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty) {
+      candidateUrls.addAll(_candidateNodeCallUrls(node.lanApiBaseUrl!));
+    }
+    candidateUrls.addAll(_candidateNodeCallUrls(node.apiBaseUrl));
+    final url = candidateUrls.firstOrNull;
     if (url == null) return false;
     try {
-      await _dio.post<dynamic>(
+      await _probeDio.post<dynamic>(
         url,
         data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
-        options: Options(
-          connectTimeout: const Duration(seconds: 4),
-          receiveTimeout: const Duration(seconds: 4),
-          sendTimeout: const Duration(seconds: 4),
-        ),
       );
       return true;
     } on DioException catch (e) {

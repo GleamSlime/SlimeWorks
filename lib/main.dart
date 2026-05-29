@@ -27,6 +27,8 @@ import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:auto_updater/auto_updater.dart';
+
 const Loggers _logger = Loggers(name: '主程序');
 
 Future<void> main() async {
@@ -55,6 +57,13 @@ Future<void> main() async {
       await service.init();
       return service;
     });
+  }
+
+  // 初始化桌面端自动更新（Sparkle / WinSparkle）
+  if (Platform.isMacOS || Platform.isWindows) {
+    await autoUpdater.setFeedURL('https://gleamslime.github.io/slime_works/appcast.xml');
+    await autoUpdater.checkForUpdates();
+    await autoUpdater.setScheduledCheckInterval(3600);
   }
 
   // 必须在任何 Rust FFI 调用前初始化
