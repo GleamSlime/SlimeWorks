@@ -32,5 +32,8 @@ hostname = "0.4"
 # 本地网卡地址
 if-addrs = "0.13"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
 [lib]
 crate-type = ["staticlib", "rlib"]

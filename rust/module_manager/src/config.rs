@@ -55,6 +55,7 @@ pub async fn fetch_modules_config(url: &str) -> Result<ModulesConfig, String> {
 /// 获取模块的目标目录
 /// - dynamic_library -> install_dir/dll/
 /// - executable -> install_dir/bin/{module_name}/
+#[allow(deprecated)]
 pub fn get_module_directory(
     install_dir: &PathBuf,
     module_name: &str,
@@ -67,6 +68,7 @@ pub fn get_module_directory(
 }
 
 /// 构建完整的文件名（包含扩展名）
+#[allow(deprecated)]
 pub fn build_filename(version_info: &VersionInfo, module_type: &ModuleType) -> String {
     let add_lib_prefix = matches!(
         module_type,

@@ -425,7 +425,7 @@ impl PicAcgClient {
             return Ok(elapsed);
         }
 
-        let client = self.build_client_with_channel(Some(&mode))?;;
+        let client = self.build_client_with_channel(Some(&mode))?;
 
         // 与原项目一致：使用 categories 端点，authorization 为空字符串
         let path = "categories";

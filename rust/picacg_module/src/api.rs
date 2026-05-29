@@ -1,4 +1,4 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
+use slime_logger::{sw_info, sw_warn};
 /// PicACG FFI API
 ///
 /// 通过 flutter_rust_bridge 暴露给 Dart 层

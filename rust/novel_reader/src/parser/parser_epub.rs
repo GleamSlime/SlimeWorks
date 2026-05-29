@@ -264,7 +264,7 @@ impl EpubParser {
         );
 
         // 替换HTML中的图片路径
-        let mut replaced_count = 0;
+        let _replaced_count = 0;
         let result = img_regex.replace_all(html, |caps: &regex::Captures| {
             let full_tag = &caps[0]; // 完整的 <img> 标签
             let original_src = &caps[1]; // src 属性原始值

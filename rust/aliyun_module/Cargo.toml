@@ -26,5 +26,8 @@ base64 = "0.22"
 lazy_static = "1.5"
 uuid = { version = "1", features = ["v4"] }
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
 [lib]
 crate-type = ["staticlib", "rlib"]

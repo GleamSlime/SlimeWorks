@@ -1,4 +1,3 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use crate::types::{
     DeviceInfo, EventType, HeartbeatPayload, MessageType, TransferEvent, TransferMessage,
 };
@@ -8,6 +7,7 @@ use chrono::Utc;
 use if_addrs::get_if_addrs;
 use lazy_static::lazy_static;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use slime_logger::{sw_debug, sw_error, sw_info};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
@@ -67,6 +67,7 @@ pub struct DiscoveryService {
     mdns: Arc<ServiceDaemon>,
     discovered_devices: Arc<RwLock<HashMap<String, DeviceInfo>>>,
     event_sender: Sender<TransferEvent>,
+    #[allow(dead_code)]
     event_receiver: Receiver<TransferEvent>,
     service_port: u16,
     last_fallback_scan: Arc<RwLock<Option<Instant>>>,
@@ -136,7 +137,10 @@ impl DiscoveryService {
         let local_ips = collect_local_ips()?;
         sw_info!(
             "mDNS broadcast register: service_name={}, host_name={}, port={}, ips={:?}",
-            service_name, host_name, self.service_port, local_ips
+            service_name,
+            host_name,
+            self.service_port,
+            local_ips
         );
 
         let properties: Option<std::collections::HashMap<String, String>> = Some(
@@ -364,7 +368,10 @@ impl DiscoveryService {
             total_found += found;
             sw_info!(
                 "Fallback scan done: subnet={}, local_ip={}, found={} (port={})",
-                prefix, local_ip, found, self.service_port
+                prefix,
+                local_ip,
+                found,
+                self.service_port
             );
         }
 
@@ -389,12 +396,16 @@ impl DiscoveryService {
         if is_new {
             sw_info!(
                 "Fallback discovered device: {} ({}) ip={} port={}",
-                device.device_name, device.device_id, device.ip_address, device.port
+                device.device_name,
+                device.device_id,
+                device.ip_address,
+                device.port
             );
         }
     }
 
     /// 接收事件
+    #[allow(dead_code)]
     pub fn get_event_receiver(&self) -> Receiver<TransferEvent> {
         self.event_receiver.clone()
     }
@@ -435,6 +446,7 @@ fn collect_local_ips() -> Result<Vec<IpAddr>> {
     Ok(ipv4)
 }
 
+#[allow(dead_code)]
 fn collect_primary_ipv4() -> Result<Ipv4Addr> {
     for iface in get_if_addrs().map_err(|e| anyhow!("Failed to query interfaces: {}", e))? {
         if let IpAddr::V4(v4) = iface.ip() {

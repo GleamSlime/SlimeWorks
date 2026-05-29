@@ -28,5 +28,8 @@ reqwest = { version = "0.12", features = [
 scraper = "0.22"
 percent-encoding = "2"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
 [lib]
 crate-type = ["staticlib", "rlib"]

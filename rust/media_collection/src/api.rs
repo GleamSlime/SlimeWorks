@@ -1,5 +1,5 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use chrono::Utc;
+use slime_logger::{sw_debug, sw_info, sw_warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -126,7 +126,9 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     let t0 = std::time::Instant::now();
     sw_info!(
         "[thumb] generate | src={} | orig={}B | w={}",
-        file_path, orig_size, width
+        file_path,
+        orig_size,
+        width
     );
 
     // ⑤ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
@@ -462,6 +464,7 @@ fn path_key(path: &str) -> String {
 /// Try to extract a single thumbnail frame from `video_path` using the system
 /// ffmpeg binary.  The frame is cached at `thumbnails/{id}.jpg` and the path
 /// returned on success.
+#[allow(dead_code)]
 fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<String> {
     let dir = thumbnail_cache_dir();
     let out = dir.join(format!("{}.jpg", thumb_id));
@@ -762,7 +765,8 @@ fn upsert_collection_from_folder(
 ) -> Result<MediaCollection, String> {
     sw_debug!(
         "[media_scan] upsert_collection_from_folder: {:?} (recursive={})",
-        folder, recursive
+        folder,
+        recursive
     );
     if !folder.exists() || !folder.is_dir() {
         let err = format!("Path is not a directory: {:?}", folder);
@@ -818,7 +822,8 @@ fn upsert_collection_from_folder(
             if let Err(error) = persist_item(item) {
                 sw_debug!(
                     "[media_scan] persist_item failed for {:?}: {}",
-                    item.file_path, error
+                    item.file_path,
+                    error
                 );
             }
         }
@@ -861,7 +866,9 @@ fn upsert_collection_from_folder(
     persist_collection(&updated_collection)?;
     sw_debug!(
         "[media_scan] collection persisted: id={} title={:?} item_count={}",
-        updated_collection.id, updated_collection.title, updated_collection.item_count
+        updated_collection.id,
+        updated_collection.title,
+        updated_collection.item_count
     );
     Ok(updated_collection)
 }
@@ -1081,7 +1088,10 @@ pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
 pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, String> {
     let normalized = normalize_folder_path(Path::new(&folder_path))?;
     if is_collection_path_imported(&normalized) {
-        sw_debug!("[media_scan] import_media_folder: folder already imported: {:?}", folder_path);
+        sw_debug!(
+            "[media_scan] import_media_folder: folder already imported: {:?}",
+            folder_path
+        );
         return Err(format!("该文件夹已导入: {}", folder_path));
     }
     upsert_collection_from_folder(Path::new(&folder_path), true)
@@ -1113,12 +1123,19 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
         let normalized = match normalize_folder_path(directory) {
             Ok(p) => p,
             Err(e) => {
-                sw_debug!("[media_scan] skip directory (normalization failed): {:?}: {}", directory, e);
+                sw_debug!(
+                    "[media_scan] skip directory (normalization failed): {:?}: {}",
+                    directory,
+                    e
+                );
                 continue;
             }
         };
         if is_collection_path_imported(&normalized) {
-            sw_debug!("[media_scan] scan_media_folders: skipping already imported: {:?}", directory);
+            sw_debug!(
+                "[media_scan] scan_media_folders: skipping already imported: {:?}",
+                directory
+            );
             skipped += 1;
             continue;
         }
@@ -1126,7 +1143,8 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
             Ok(collection) => {
                 sw_debug!(
                     "scan_media_folders: imported '{}' from {:?}",
-                    collection.title, directory
+                    collection.title,
+                    directory
                 );
                 collections.push(collection);
             }
