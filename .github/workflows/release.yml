@@ -67,6 +67,12 @@ jobs:
       - name: Flutter 依赖
         run: flutter pub get
 
+      - name: 修复 CocoaPods 环境
+        run: |
+          brew uninstall cocoapods || true
+          gem install cocoapods -n /usr/local/bin --no-document
+          pod --version
+
       - name: 安装 CocoaPods 依赖
         working-directory: macos
         run: pod install --repo-update
@@ -78,6 +84,9 @@ jobs:
         run: dart pub global activate fastforge
 
       - name: 打包 macOS DMG
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
           fastforge package --platform macos --target dmg
@@ -142,6 +151,9 @@ jobs:
         run: dart pub global activate fastforge
 
       - name: 打包 Windows EXE
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
         run: |
           $env:Path += ";$env:LOCALAPPDATA\Pub\Cache\bin"
           fastforge package --platform windows --target exe
