@@ -55,7 +55,7 @@ class NodeInlineSelector extends StatelessWidget {
                 context: context,
                 nodeId: node.id,
                 label: node.name,
-                subtitle: '${node.apiBaseUrl}${ok ? '' : ' (不可达)'}',
+                subtitle: '${node.effectiveApiBaseUrl}${ok ? '' : ' (不可达)'}',
                 icon: Icons.dns_outlined,
                 isSelected: selectedNodeId == node.id,
                 isAvailable: ok,
@@ -102,7 +102,7 @@ class NodeInlineSelector extends StatelessWidget {
         if (nodeId.isNotEmpty && availabilityChecker != null) {
           final node = nodeService.getNodeById(nodeId);
           if (node == null) return;
-          final available = await availabilityChecker!(node.apiBaseUrl);
+          final available = await availabilityChecker!(node.effectiveApiBaseUrl);
           if (!available) {
             if (!context.mounted) return;
             ScaffoldMessenger.of(context)

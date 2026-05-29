@@ -5,6 +5,7 @@ import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 
 class NodeSettingsTab extends StatefulWidget {
   const NodeSettingsTab({super.key});
@@ -84,13 +85,15 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
   Future<void> _showNodeEditor({NodeEndpoint? initial}) async {
     final nameCtrl = TextEditingController(text: initial?.name ?? '');
     final apiCtrl = TextEditingController(text: initial?.apiBaseUrl ?? 'http://127.0.0.1:17888');
+    final lanApiCtrl = TextEditingController(text: initial?.lanApiBaseUrl ?? '');
+    final m = AppTheme.metrics;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(initial == null ? '添加节点' : '编辑节点'),
         content: SizedBox(
-          width: 420,
+          width: scaleW(420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -98,12 +101,20 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                 controller: nameCtrl,
                 decoration: const InputDecoration(labelText: '节点名'),
               ),
-              SizedBox(height: AppTheme.metrics.kSpace12),
+              SizedBox(height: m.kSpace12),
               TextField(
                 controller: apiCtrl,
                 decoration: const InputDecoration(
-                  labelText: '请求节点API',
-                  hintText: 'http://127.0.0.1:17888',
+                  labelText: '外网API',
+                  hintText: 'http://公网IP:17888',
+                ),
+              ),
+              SizedBox(height: m.kSpace12),
+              TextField(
+                controller: lanApiCtrl,
+                decoration: const InputDecoration(
+                  labelText: '内网API（可选，优先使用）',
+                  hintText: 'http://192.168.x.x:17888',
                 ),
               ),
             ],
@@ -122,17 +133,27 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
 
     final name = nameCtrl.text.trim();
     final api = apiCtrl.text.trim();
+    final lanApi = lanApiCtrl.text.trim();
     if (api.isEmpty) {
-      _showSnack('API 不能为空');
+      _showSnack('外网API 不能为空');
       return;
     }
 
     try {
       if (initial == null) {
-        await _service!.addRemoteNode(name: name, apiBaseUrl: api);
+        await _service!.addRemoteNode(
+          name: name,
+          apiBaseUrl: api,
+          lanApiBaseUrl: lanApi.isEmpty ? null : lanApi,
+        );
       } else {
         await _service!.updateRemoteNode(
-          initial.copyWith(name: name.isEmpty ? initial.name : name, apiBaseUrl: api),
+          initial.copyWith(
+            name: name.isEmpty ? initial.name : name,
+            apiBaseUrl: api,
+            lanApiBaseUrl: lanApi.isEmpty ? null : lanApi,
+            clearLanApiBaseUrl: lanApi.isEmpty,
+          ),
         );
       }
       await _service!.refreshNodeConnectivity();
@@ -421,9 +442,16 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                                   ),
                                 ],
                               ),
-                              subtitle: Text(
-                                node.apiBaseUrl,
-                                style: TextStyle(fontSize: m.fontSize11),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(node.apiBaseUrl, style: TextStyle(fontSize: m.fontSize11)),
+                                  if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
+                                    Text(
+                                      '内网: ${node.lanApiBaseUrl}',
+                                      style: TextStyle(fontSize: m.fontSize10, color: Colors.teal),
+                                    ),
+                                ],
                               ),
                               isThreeLine: true,
                               leading: Switch(

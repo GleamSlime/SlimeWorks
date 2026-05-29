@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -257,28 +258,16 @@ class NodeSwitcherButton extends StatelessWidget {
                           onTap: () async {
                             if (!ok) {
                               Navigator.of(sheetCtx).pop();
-                              ScaffoldMessenger.of(context)
-                                ..hideCurrentSnackBar()
-                                ..showSnackBar(
-                                  SnackBar(
-                                    content: const Text('节点不可达，请检查节点设置'),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
+                              _showSnack('节点不可达，请检查节点设置');
                               return;
                             }
                             if (availabilityChecker != null) {
-                              final available = await availabilityChecker!(node.apiBaseUrl);
+                              final available = await availabilityChecker!(
+                                node.effectiveApiBaseUrl,
+                              );
                               if (!available) {
                                 Navigator.of(sheetCtx).pop();
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    SnackBar(
-                                      content: const Text('该节点不支持此功能'),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
+                                _showSnack('该节点不支持此功能');
                                 return;
                               }
                             }
@@ -297,6 +286,19 @@ class NodeSwitcherButton extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _showSnack(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+      final overlay = Overlay.of(context);
+      late OverlayEntry entry;
+      entry = OverlayEntry(
+        builder: (_) => _OverlaySnackBar(message: message, onDismissed: () => entry.remove()),
+      );
+      overlay.insert(entry);
+    });
   }
 }
 
@@ -412,6 +414,97 @@ class _NodePanelItem extends StatelessWidget {
                 Icon(Icons.check_circle_rounded, size: m.iconSize18, color: accent),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OverlaySnackBar extends StatefulWidget {
+  final String message;
+  final VoidCallback onDismissed;
+
+  const _OverlaySnackBar({required this.message, required this.onDismissed});
+
+  @override
+  State<_OverlaySnackBar> createState() => _OverlaySnackBarState();
+}
+
+class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _controller.forward();
+    Future.delayed(const Duration(seconds: 3), _dismiss);
+  }
+
+  void _dismiss() {
+    if (!mounted) return;
+    _controller.reverse().then((_) {
+      if (mounted) widget.onDismissed();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    final theme = Theme.of(navigatorKey.currentContext ?? context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Positioned(
+      bottom: MediaQuery.of(context).padding.bottom + scaleW(16),
+      left: m.kSpace16,
+      right: m.kSpace16,
+      child: SlideTransition(
+        position: _slide,
+        child: FadeTransition(
+          opacity: _opacity,
+          child: Material(
+            elevation: 6,
+            borderRadius: m.radius12,
+            color: isDark ? DarkColors.background2 : LightColors.background2,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace12),
+              decoration: BoxDecoration(
+                borderRadius: m.radius12,
+                border: Border.all(
+                  color: isDark ? DarkColors.white10 : LightColors.black10,
+                  width: 0.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: m.iconSize18,
+                    color: theme.colorScheme.primary,
+                  ),
+                  SizedBox(width: m.kSpace10),
+                  Expanded(
+                    child: Text(
+                      widget.message,
+                      style: TextStyle(fontSize: m.fontSize13, color: theme.colorScheme.onSurface),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
