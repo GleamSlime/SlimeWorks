@@ -1,0 +1,225 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".gitignore"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.41.0-0.0.pre"
+  RUST_VERSION: "1.92.0"
+
+jobs:
+  detect-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 提取版本号
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+          BUILD_NUMBER=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}+${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "📋 版本: $VERSION, 构建号: $BUILD_NUMBER"
+
+  build-macos:
+    needs: detect-version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: 安装依赖
+        run: |
+          flutter pub get
+          cd macos && pod install && cd ..
+
+      - name: 安装 create-dmg
+        run: brew install create-dmg
+
+      - name: 安装 fastforge
+        run: dart pub global activate fastforge
+
+      - name: 打包 macOS DMG
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fastforge package --platform macos --target dmg
+
+      - name: Ad-hoc 代码签名
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          if [ -n "$DMG_PATH" ]; then
+            codesign --force --deep --sign - "$DMG_PATH"
+          fi
+
+      - name: Sparkle 签名 DMG
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          if [ -n "$DMG_PATH" ]; then
+            dart run auto_updater:sign "$DMG_PATH" || true
+          fi
+
+      - name: 上传 macOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/**/*.dmg
+          retention-days: 7
+
+  build-windows:
+    needs: detect-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: 安装依赖
+        run: flutter pub get
+
+      - name: 安装 Inno Setup
+        run: |
+          choco install innosetup -y
+          choco install openssl -y
+
+      - name: 安装 fastforge
+        run: dart pub global activate fastforge
+
+      - name: 打包 Windows EXE
+        run: |
+          $env:Path += ";$env:LOCALAPPDATA\Pub\Cache\bin"
+          fastforge package --platform windows --target exe
+
+      - name: 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/**/*.exe
+          retention-days: 7
+
+  release:
+    needs: [detect-version, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载所有产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: 列出产物
+        run: find dist/ -type f | head -20
+
+      - name: 生成 Sparkle 签名（获取 edSignature）
+        id: sparkle-sign
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          FILE_SIZE=0
+          if [ -n "$DMG_PATH" ]; then
+            FILE_SIZE=$(stat -c%s "$DMG_PATH" 2>/dev/null || echo "0")
+          fi
+          echo "file_size=$FILE_SIZE" >> "$GITHUB_OUTPUT"
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: 创建或更新 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.detect-version.outputs.tag }}
+          name: "史莱姆工坊 ${{ needs.detect-version.outputs.version }}"
+          body: |
+            ## 史莱姆工坊 v${{ needs.detect-version.outputs.version }}
+
+            📅 构建号: ${{ needs.detect-version.outputs.build_number }}
+
+            ### 下载
+            - **macOS**: 下载 `.dmg` 文件，拖入 Applications 安装
+            - **Windows**: 下载 `.exe` 安装程序
+
+            ---
+            *此版本由 GitHub Actions 自动构建*
+          files: |
+            dist/**/*.dmg
+            dist/**/*.exe
+          draft: false
+          prerelease: false
+
+      - name: 更新 appcast.xml
+        run: |
+          VERSION="${{ needs.detect-version.outputs.version }}"
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          FILE_SIZE="${{ steps.sparkle-sign.outputs.file_size }}"
+          TAG="${{ needs.detect-version.outputs.tag }}"
+          REPO="GleamSlime/slime_works"
+          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+
+          DMG_FILENAME=$(find dist/ -name "*.dmg" -type f -exec basename {} \; | head -1)
+          EXE_FILENAME=$(find dist/ -name "*.exe" -type f -exec basename {} \; | head -1)
+
+          cat > docs/appcast.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
+            <channel>
+              <title>史莱姆工坊</title>
+              <language>zh-CN</language>
+              <link>https://github.com/${REPO}</link>
+              <item>
+                <title>${VERSION}</title>
+                <description>
+                  <![CDATA[自动构建版本 ${VERSION}+${BUILD_NUMBER}]]>
+                </description>
+                <pubDate>${DATE}</pubDate>
+                <enclosure
+                  url="https://github.com/${REPO}/releases/download/${TAG}/${DMG_FILENAME}"
+                  sparkle:version="${BUILD_NUMBER}"
+                  sparkle:shortVersionString="${VERSION}"
+                  sparkle:edSignature="替换为实际签名值"
+                  length="${FILE_SIZE}"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+      - name: 部署 appcast.xml 到 GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          keep_files: true
