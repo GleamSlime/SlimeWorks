@@ -1079,6 +1079,11 @@ pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
 }
 
 pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, String> {
+    let normalized = normalize_folder_path(Path::new(&folder_path))?;
+    if is_collection_path_imported(&normalized) {
+        sw_debug!("[media_scan] import_media_folder: folder already imported: {:?}", folder_path);
+        return Err(format!("该文件夹已导入: {}", folder_path));
+    }
     upsert_collection_from_folder(Path::new(&folder_path), true)
 }
 
@@ -1103,7 +1108,20 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
         sw_debug!("[media_scan]   dir[{}] = {:?}", i, dir);
     }
     let mut collections = Vec::new();
+    let mut skipped = 0;
     for directory in &directories {
+        let normalized = match normalize_folder_path(directory) {
+            Ok(p) => p,
+            Err(e) => {
+                sw_debug!("[media_scan] skip directory (normalization failed): {:?}: {}", directory, e);
+                continue;
+            }
+        };
+        if is_collection_path_imported(&normalized) {
+            sw_debug!("[media_scan] scan_media_folders: skipping already imported: {:?}", directory);
+            skipped += 1;
+            continue;
+        }
         match upsert_collection_from_folder(directory, false) {
             Ok(collection) => {
                 sw_debug!(
@@ -1116,12 +1134,21 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
         }
     }
     sw_debug!(
-        "scan_media_folders: result {}/{} collections imported",
+        "scan_media_folders: result {}/{} collections imported, {} skipped (already imported)",
         collections.len(),
-        directories.len()
+        directories.len(),
+        skipped
     );
     collections.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
     Ok(collections)
+}
+
+fn is_collection_path_imported(normalized_path: &str) -> bool {
+    if let Ok(collections) = get_collections().lock() {
+        collections.iter().any(|c| c.folder_path == normalized_path)
+    } else {
+        false
+    }
 }
 
 pub fn rename_media_collection(collection_id: String, title: String) -> Result<bool, String> {
