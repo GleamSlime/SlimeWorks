@@ -68,3 +68,6 @@ rust/**/gen/schemas
 *.exe
 
 extendProject/
+
+# 发版产物
+dist/

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
+  <channel>
+    <title>史莱姆工坊</title>
+    <language>zh-CN</language>
+    <link>https://github.com/GleamSlime/slime_works</link>
+    <!--
+      发版时更新下方 item：
+      - title: 版本号
+      - description: 更新说明
+      - pubDate: 发布日期
+      - enclosure url: GitHub Release 下载链接
+      - sparkle:version: build_number（如 26）
+      - sparkle:shortVersionString: 版本号（如 1.0.1）
+      - sparkle:edSignature: 使用 dart run auto_updater:sign 生成
+      - length: 安装包字节数（使用 stat -f%z 或 ls -l 获取）
+    -->
+    <item>
+      <title>1.0.0</title>
+      <description>
+        <![CDATA[首个正式版本发布]]>
+      </description>
+      <pubDate>Thu, 29 May 2026 00:00:00 +0800</pubDate>
+      <enclosure
+        url="https://github.com/GleamSlime/slime_works/releases/download/v1.0.0/史莱姆工坊-1.0.0-macos.dmg"
+        sparkle:version="25"
+        sparkle:shortVersionString="1.0.0"
+        sparkle:edSignature="替换为签名值"
+        length="0"
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
