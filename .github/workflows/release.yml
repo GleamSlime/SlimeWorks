@@ -71,8 +71,10 @@ jobs:
 
       - name: 创建 .env 文件
         run: |
-          echo "PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}" >> .env
-          echo "PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}" >> .env
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
 
       - name: 生成代码（build_runner）
         run: flutter pub run build_runner build --delete-conflicting-outputs
@@ -155,9 +157,12 @@ jobs:
         run: flutter pub get
 
       - name: 创建 .env 文件
+        shell: bash
         run: |
-          Add-Content -Path .env -Value "PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}"
-          Add-Content -Path .env -Value "PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}"
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
 
       - name: 生成代码（build_runner）
         run: flutter pub run build_runner build --delete-conflicting-outputs
