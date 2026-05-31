@@ -69,6 +69,11 @@ jobs:
           flutter pub get
           flutter precache --macos
 
+      - name: 创建 .env 文件
+        run: |
+          echo "PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}" >> .env
+          echo "PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}" >> .env
+
       - name: 生成代码（build_runner）
         run: flutter pub run build_runner build --delete-conflicting-outputs
 
@@ -148,6 +153,11 @@ jobs:
 
       - name: Flutter 依赖
         run: flutter pub get
+
+      - name: 创建 .env 文件
+        run: |
+          Add-Content -Path .env -Value "PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}"
+          Add-Content -Path .env -Value "PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}"
 
       - name: 生成代码（build_runner）
         run: flutter pub run build_runner build --delete-conflicting-outputs
