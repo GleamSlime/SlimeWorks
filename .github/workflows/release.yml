@@ -89,8 +89,8 @@ jobs:
         working-directory: macos
         run: pod install --repo-update
 
-      - name: 安装 create-dmg
-        run: brew install create-dmg
+      - name: 安装 appdmg
+        run: npm install -g appdmg
 
       - name: 安装 fastforge
         run: dart pub global activate fastforge
