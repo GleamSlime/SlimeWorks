@@ -69,6 +69,9 @@ jobs:
           flutter pub get
           flutter precache --macos
 
+      - name: 生成代码（build_runner）
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
       - name: 修复 CocoaPods 环境
         run: |
           brew uninstall cocoapods 2>/dev/null || true
@@ -145,6 +148,9 @@ jobs:
 
       - name: Flutter 依赖
         run: flutter pub get
+
+      - name: 生成代码（build_runner）
+        run: flutter pub run build_runner build --delete-conflicting-outputs
 
       - name: 安装 Inno Setup
         run: choco install innosetup -y
