@@ -18,6 +18,7 @@ import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
+import 'package:slime_works/core/services/app_update_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -27,7 +28,6 @@ import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:auto_updater/auto_updater.dart';
 
 const Loggers _logger = Loggers(name: '主程序');
 
@@ -40,8 +40,8 @@ Future<void> main() async {
   // 初始化应用信息（版本号等）
   await AppInfoService.init();
 
-  // 加载环境变量
-  await dotenv.load(fileName: '.env');
+  // 加载环境变量（.env 为可选文件，CI 环境可能不存在）
+  await dotenv.load(fileName: '.env', isOptional: true);
 
   getItInit();
 
@@ -59,11 +59,10 @@ Future<void> main() async {
     });
   }
 
-  // 初始化桌面端自动更新（Sparkle / WinSparkle）
+  // 初始化桌面端自动更新
+  // 先检测更新服务器连通性，不通则跳过（避免 Sparkle 弹出原生错误弹窗）
   if (Platform.isMacOS || Platform.isWindows) {
-    await autoUpdater.setFeedURL('https://gleamslime.github.io/slime_works/appcast.xml');
-    await autoUpdater.checkForUpdates();
-    await autoUpdater.setScheduledCheckInterval(3600);
+    await getIt<AppUpdateService>().checkForUpdates();
   }
 
   // 必须在任何 Rust FFI 调用前初始化
@@ -183,7 +182,10 @@ class MyApp extends StatelessWidget {
             builder: (context, child) {
               if (child == null) return const SizedBox.shrink();
               if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-                return EasyLoading.init()(context, DesktopScaffold(child: child));
+                return EasyLoading.init()(
+                  context,
+                  DesktopScaffold(child: child),
+                );
               }
               return EasyLoading.init()(context, child);
             },

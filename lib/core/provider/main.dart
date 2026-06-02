@@ -16,6 +16,7 @@ import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
+import 'package:slime_works/core/services/app_update_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -26,7 +27,9 @@ void getItInit() {
     return;
   }
 
-  getIt.registerLazySingleton<DesktopScreenProvider>(() => DesktopScreenProviderImpl());
+  getIt.registerLazySingleton<DesktopScreenProvider>(
+    () => DesktopScreenProviderImpl(),
+  );
 
   // Ollama 服务
   getIt.registerLazySingleton<OllamaService>(() => OllamaService());
@@ -47,10 +50,14 @@ void getItInit() {
   getIt.registerLazySingleton<PicAcgService>(() => PicAcgService());
 
   // PicACG 下载服务
-  getIt.registerLazySingleton<PicAcgDownloadService>(() => PicAcgDownloadService());
+  getIt.registerLazySingleton<PicAcgDownloadService>(
+    () => PicAcgDownloadService(),
+  );
 
   // 游戏库服务
-  getIt.registerLazySingleton<GameLibraryMetadataApi>(() => GameLibraryMetadataApi());
+  getIt.registerLazySingleton<GameLibraryMetadataApi>(
+    () => GameLibraryMetadataApi(),
+  );
   getIt.registerLazySingleton<GameLibraryService>(
     () => GameLibraryService(metadataApi: getIt<GameLibraryMetadataApi>()),
   );
@@ -63,13 +70,20 @@ void getItInit() {
   getIt.registerLazySingleton<ExtractService>(() => ExtractService());
 
   // Sentry 设置服务
-  getIt.registerLazySingleton<SentrySettingsService>(() => SentrySettingsService());
+  getIt.registerLazySingleton<SentrySettingsService>(
+    () => SentrySettingsService(),
+  );
 
   // 系统资源监控服务
-  getIt.registerLazySingleton<SystemMetricsService>(() => SystemMetricsService());
+  getIt.registerLazySingleton<SystemMetricsService>(
+    () => SystemMetricsService(),
+  );
 
   // 阿里云DDNS服务
   getIt.registerLazySingleton<AliyunDdnsService>(() => AliyunDdnsService());
+
+  // 应用更新服务
+  getIt.registerLazySingleton<AppUpdateService>(() => AppUpdateService());
 
   isInitialized = true;
 }
