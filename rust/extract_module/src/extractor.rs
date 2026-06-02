@@ -1,4 +1,4 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
+use slime_logger::{sw_info, sw_error};
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::Path;

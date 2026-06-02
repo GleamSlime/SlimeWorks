@@ -2,7 +2,6 @@
 use super::config::*;
 use super::types::*;
 use flutter_rust_bridge::frb;
-use md5::Digest;
 use std::fs;
 use std::path::PathBuf;
 
@@ -95,6 +94,7 @@ impl ModuleManager {
     /// - version: 指定版本（None 表示最新版）
     /// - lock_version: 是否锁定版本
     /// - auto_load: 是否自动加载（仅对 dynamic_library 有效）
+    #[allow(deprecated)]
     pub async fn install_module(
         &self,
         module_name: &str,

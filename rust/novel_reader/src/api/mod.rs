@@ -1,4 +1,4 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
+use slime_logger::sw_info;
 mod api_metadata;
 mod api_search;
 
@@ -445,7 +445,6 @@ pub fn clear_all_novels() -> Result<(), String> {
 /// 获取书籍内容（带缓存）
 pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     use std::fs;
-    use std::sync::Once;
     use std::time::Instant;
     let start_time = Instant::now();
     sw_info!("[Novel] Starting to load novel: {}", file_path);

@@ -5,7 +5,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::{Context, Timestamp, Uuid};
+use uuid::{ContextV1, Timestamp, Uuid};
 
 /// API 密钥（从编译时环境变量读取，如未设置则使用默认值）
 pub const API_KEY: &str = match option_env!("MANGA_API_KEY") {
@@ -40,7 +40,7 @@ const SIGN_KEY: &str = match option_env!("MANGA_SIGN_KEY") {
     None => "~d}$Q7$eIni=V)9\\RK/P.RM4;9[7|@/CA}b~OW!3?EV`:<>M7pddUBL5n|0/*Cn",
 };
 
-static UUID_V1_CONTEXT: OnceLock<Context> = OnceLock::new();
+static UUID_V1_CONTEXT: OnceLock<ContextV1> = OnceLock::new();
 static UUID_V1_NODE_ID: OnceLock<[u8; 6]> = OnceLock::new();
 
 /// 生成请求签名所需的 nonce（旧项目使用 uuid1，去掉连字符）
@@ -48,7 +48,7 @@ pub fn generate_nonce() -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    let context = UUID_V1_CONTEXT.get_or_init(|| Context::new(42));
+    let context = UUID_V1_CONTEXT.get_or_init(|| ContextV1::new(42));
     let node_id = UUID_V1_NODE_ID.get_or_init(|| {
         let random = Uuid::new_v4();
         let bytes = random.as_bytes();
@@ -202,7 +202,9 @@ mod tests {
     #[test]
     fn build_headers_post_has_content_type() {
         let headers = build_headers("auth/sign-in", "POST", None);
-        let has_ct = headers.iter().any(|(k, v)| k == "Content-Type" && v.contains("application/json"));
+        let has_ct = headers
+            .iter()
+            .any(|(k, v)| k == "Content-Type" && v.contains("application/json"));
         assert!(has_ct);
     }
 

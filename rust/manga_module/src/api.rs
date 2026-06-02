@@ -1,4 +1,3 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 /// Manga FFI API
 ///
 /// 通过 flutter_rust_bridge 暴露给 Dart 层
@@ -7,6 +6,7 @@ use anyhow::{anyhow, Result};
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
 use serde_json::json;
+use slime_logger::{sw_info, sw_warn};
 
 lazy_static! {
     static ref CLIENT: MangaClient = MangaClient::new();
@@ -72,7 +72,10 @@ pub fn manga_set_channel(mode: i32, custom: String) {
     };
     sw_info!(
         "[Manga] 分流模式已切换: mode={} custom={:?} effective_custom={:?} -> {:?}",
-        mode, custom, cdn_ip, channel
+        mode,
+        custom,
+        cdn_ip,
+        channel
     );
     CLIENT.set_channel(channel);
 }
@@ -119,7 +122,9 @@ pub async fn manga_test_channel(mode: i32, custom: String) -> Result<u64> {
     };
     sw_info!(
         "[Manga测速] 节点测试参数 mode={} custom={:?} effective_custom={:?}",
-        mode, custom, cdn_ip
+        mode,
+        custom,
+        cdn_ip
     );
     CLIENT
         .test_connectivity(channel)
@@ -421,10 +426,7 @@ pub async fn manga_relay_api(
 }
 
 /// 中转图片下载（供 PC 节点服务器用）
-pub async fn manga_relay_image(
-    file_server: String,
-    path: String,
-) -> anyhow::Result<Vec<u8>> {
+pub async fn manga_relay_image(file_server: String, path: String) -> anyhow::Result<Vec<u8>> {
     CLIENT
         .fetch_image_bytes(&file_server, &path)
         .await

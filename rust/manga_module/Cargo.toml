@@ -48,5 +48,8 @@ rustls = { version = "0.23", default-features = false, features = [
     "tls12",
 ] }
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
 [lib]
 crate-type = ["staticlib", "rlib"]

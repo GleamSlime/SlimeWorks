@@ -30,5 +30,8 @@ anyhow = "1.0"
 thiserror = "1.0"
 slime_logger = { path = "../slime_logger" }
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
 [lib]
 crate-type = ["staticlib", "rlib"]

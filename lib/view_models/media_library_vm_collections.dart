@@ -280,7 +280,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       if (imported.isEmpty) {
         await loadCollections();
         scanStatusText.value = '';
-        showSnack('提示', '未发现媒体集合，请确认目录内含有图片或视频文件（支持 jpg/png/heic/mp4 等格式）');
+        showSnack('提示', '未发现新的媒体集合（文件夹可能已导入或无有效媒体文件）');
         return;
       }
       final emptyCollections = imported.where((c) => c.itemCount == BigInt.zero).toList();
@@ -389,7 +389,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       showSnack('成功', '媒体集合导入完成');
     } catch (error) {
       scanStatusText.value = '';
-      showSnack('错误', '导入目录失败: $error');
+      final errorMsg = error.toString();
+      if (errorMsg.contains('已导入') || errorMsg.contains('already imported')) {
+        showSnack('提示', '该文件夹已导入，无需重复操作');
+      } else {
+        showSnack('错误', '导入目录失败: $error');
+      }
     } finally {
       isScanning.value = false;
       scanStatusText.value = '';
@@ -461,11 +466,17 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         }
       } catch (e) {
         fail++;
-        _logger.error('[拖拽] 扫描目录失败: $dir => $e');
+        final errorMsg = e.toString();
+        if (errorMsg.contains('已导入') || errorMsg.contains('already imported')) {
+          _logger.info('[拖拽] 目录已导入，跳过: $dir');
+        } else {
+          _logger.error('[拖拽] 扫描目录失败: $dir => $e');
+        }
       }
     }
 
     // 文件父目录：importMediaFolder（单集合，只包含该目录直接文件）
+    int skippedDuplicate = 0;
     for (final dir in fileParentDirs) {
       scanStatusText.value = '导入: ${dir.split(Platform.pathSeparator).last}';
       try {
@@ -483,8 +494,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         }
         success++;
       } catch (e) {
-        fail++;
-        _logger.error('[拖拽] 导入失败: $dir => $e');
+        final errorMsg = e.toString();
+        if (errorMsg.contains('已导入') || errorMsg.contains('already imported')) {
+          _logger.info('[拖拽] 目录已导入，跳过: $dir');
+          skippedDuplicate++;
+        } else {
+          fail++;
+          _logger.error('[拖拽] 导入失败: $dir => $e');
+        }
       }
     }
 
@@ -492,10 +509,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     scanStatusText.value = '';
     isScanning.value = false;
 
+    final skippedMsg = skippedDuplicate > 0 ? '（$skippedDuplicate 个已导入跳过）' : '';
     if (success > 0 && fail == 0) {
-      showSnack('成功', '成功导入 $success 个集合');
+      showSnack('成功', '成功导入 $success 个集合$skippedMsg');
     } else if (success > 0) {
-      showSnack('部分完成', '成功 $success 个，失败 $fail 个');
+      showSnack('部分完成', '成功 $success 个，失败 $fail 个$skippedMsg');
+    } else if (skippedDuplicate > 0) {
+      showSnack('提示', '$skippedDuplicate 个文件夹已导入，无需重复操作');
     } else {
       showSnack('失败', '导入失败，请检查文件夹是否含有支持的媒体文件');
     }

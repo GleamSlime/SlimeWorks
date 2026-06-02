@@ -69,6 +69,16 @@ jobs:
           flutter pub get
           flutter precache --macos
 
+      - name: 创建 .env 文件
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
+
+      - name: 生成代码（build_runner）
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
       - name: 修复 CocoaPods 环境
         run: |
           brew uninstall cocoapods 2>/dev/null || true
@@ -79,8 +89,8 @@ jobs:
         working-directory: macos
         run: pod install --repo-update
 
-      - name: 安装 create-dmg
-        run: brew install create-dmg
+      - name: 安装 appdmg
+        run: npm install -g appdmg
 
       - name: 安装 fastforge
         run: dart pub global activate fastforge
@@ -145,6 +155,17 @@ jobs:
 
       - name: Flutter 依赖
         run: flutter pub get
+
+      - name: 创建 .env 文件
+        shell: bash
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
+
+      - name: 生成代码（build_runner）
+        run: flutter pub run build_runner build --delete-conflicting-outputs
 
       - name: 安装 Inno Setup
         run: choco install innosetup -y

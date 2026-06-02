@@ -1,9 +1,9 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
 use crate::discovery::DiscoveryService;
 use crate::types::*;
 use anyhow::{anyhow, Result};
 use async_channel::{Receiver, Sender};
 use chrono::Utc;
+use slime_logger::{sw_error, sw_info, sw_warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -76,6 +76,7 @@ pub struct TransferService {
     /// 接收文件保存目录（由 Dart 注入 path_provider 的 documents 路径）
     save_dir: Arc<RwLock<String>>,
     event_sender: Sender<TransferEvent>,
+    #[allow(dead_code)]
     event_receiver: Receiver<TransferEvent>,
     listener: Option<TcpListener>,
     listen_task: Option<JoinHandle<()>>,
@@ -510,6 +511,7 @@ impl TransferService {
     }
 
     /// 获取事件接收器
+    #[allow(dead_code)]
     pub fn get_event_receiver(&self) -> Receiver<TransferEvent> {
         self.event_receiver.clone()
     }
@@ -588,13 +590,17 @@ fn force_kill_port_process(port: u16) -> bool {
             Ok(status) => {
                 sw_warn!(
                     "Failed to kill process {} on tcp:{} (status={})",
-                    pid, port, status
+                    pid,
+                    port,
+                    status
                 );
             }
             Err(e) => {
                 sw_warn!(
                     "Failed to execute kill for pid {} on tcp:{}: {}",
-                    pid, port, e
+                    pid,
+                    port,
+                    e
                 );
             }
         }
@@ -643,13 +649,17 @@ fn force_kill_port_process(port: u16) -> bool {
             Ok(status) => {
                 sw_warn!(
                     "Failed to kill process {} on tcp:{} (status={})",
-                    pid, port, status
+                    pid,
+                    port,
+                    status
                 );
             }
             Err(e) => {
                 sw_warn!(
                     "Failed to execute taskkill for pid {} on tcp:{}: {}",
-                    pid, port, e
+                    pid,
+                    port,
+                    e
                 );
             }
         }
@@ -884,7 +894,8 @@ async fn handle_connection(
             let accepted = if is_trusted {
                 sw_info!(
                     "信任设备自动接受: {} from {}",
-                    tid, request.sender_device_name
+                    tid,
+                    request.sender_device_name
                 );
                 let _ = event_sender
                     .send(TransferEvent {
