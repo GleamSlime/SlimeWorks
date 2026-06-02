@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use super::module_downloader::ModuleDownloader;
-use slime_logger::{sw_debug, sw_error, sw_info, sw_warn};
+use slime_logger::{sw_debug, sw_error, sw_info};
 
 lazy_static::lazy_static! {
     static ref MODULE_MANAGER: Mutex<LegacyModuleManager> = Mutex::new(LegacyModuleManager::new());
@@ -93,8 +93,8 @@ impl LegacyModuleManager {
 
             sw_info!("[module_loader] module_init returned non-null pointer");
             let module_info = &*module_info_ptr;
-            let name_str = unsafe { CStr::from_ptr(module_info.name) }.to_string_lossy();
-            let version_str = unsafe { CStr::from_ptr(module_info.version) }.to_string_lossy();
+            let name_str = CStr::from_ptr(module_info.name).to_string_lossy();
+            let version_str = CStr::from_ptr(module_info.version).to_string_lossy();
 
             let success_msg = format!(
                 "Loaded module: {} v{} (API: {})",
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_module_manager() {
-        let mut manager = LegacyModuleManager::new();
+        let manager = LegacyModuleManager::new();
         assert_eq!(manager.loaded_modules.len(), 0);
     }
 }

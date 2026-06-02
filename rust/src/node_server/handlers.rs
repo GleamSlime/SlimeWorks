@@ -537,7 +537,7 @@ pub async fn dispatch_action(
 }
 
 /// 处理文件上传请求（待完善 multipart 解析）
-pub async fn handle_upload(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn handle_upload(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
     let response = NodeResponse::error("上传功能暂未实现（Rust 端）".to_string());
     Ok(Response::builder()
         .header("Content-Type", "application/json")

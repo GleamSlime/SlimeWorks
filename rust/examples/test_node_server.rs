@@ -4,7 +4,7 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server};
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tokio::sync::oneshot;
 
 struct Handle {

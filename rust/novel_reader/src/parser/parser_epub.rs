@@ -430,6 +430,7 @@ impl EpubParser {
     // ─── HTML 处理 ─────────────────────────────────────────────────────
 
     /// 简单的 HTML 标签移除（保留 img, style 标签及常用格式化标签）
+    #[allow(dead_code)]
     pub(crate) fn strip_html_tags(html: &str) -> String {
         use regex::Regex;
 
@@ -467,6 +468,7 @@ impl EpubParser {
     // ─── 标题提取 ──────────────────────────────────────────────────────
 
     /// 从原始 HTML 中提取 h1/h2/h3 标签文本作为标题
+    #[allow(dead_code)]
     fn extract_title_from_html(html: &str) -> Option<String> {
         use regex::Regex;
         let re = Regex::new(r"(?si)<h[1-3][^>]*>\s*([^<]{2,60})\s*</h[1-3]>").ok()?;
@@ -480,6 +482,7 @@ impl EpubParser {
     }
 
     /// 以去除 HTML 后的首段非空文本作为标题兜底
+    #[allow(dead_code)]
     fn extract_first_paragraph_as_title(text: &str) -> Option<String> {
         for line in text.lines() {
             let trimmed = line.trim();
@@ -493,6 +496,7 @@ impl EpubParser {
     }
 
     /// 从内容中提取标题（支持多种格式）
+    #[allow(dead_code)]
     fn extract_title_from_content(content: &str) -> Option<String> {
         use regex::Regex;
 

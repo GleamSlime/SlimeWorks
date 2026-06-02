@@ -106,7 +106,7 @@ Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
         : Platform.isWindows
         ? '${Platform.environment['APPDATA']}/slime_works'
         : '.';
-    await sentryLogInit(dbPath: '$appDir/sentry_log.db');
+    sentryLogInit(dbPath: '$appDir/sentry_log.db');
   } catch (e) {
     _logger.error('[主程序] 初始化Sentry日志存储失败: $e');
   }

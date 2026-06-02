@@ -1,4 +1,4 @@
-use slime_logger::{sw_info, sw_warn, sw_error, sw_debug};
+use slime_logger::{sw_info, sw_warn, sw_debug};
 /// Manga HTTP 客户端
 ///
 /// 基于 reqwest 封装，支持代理配置、分流（Channel Routing）和 Token 管理。
@@ -57,6 +57,7 @@ pub const API_SNI_HOST_ALT: &str = "wikawika.xyz";
 pub const BASE_URL: &str = "https://picaapi.picacomic.com";
 
 /// 默认图片 CDN 地址
+#[allow(dead_code)]
 pub const IMAGE_BASE_URL: &str = "https://storage1.picacomic.com/static/";
 pub const IMAGE_PROXY_BASE_JP: &str = "https://bika-img.jpacg.cc";
 pub const IMAGE_PROXY_BASE_US: &str = "https://bika21-img.jpacg.cc";
@@ -746,6 +747,7 @@ impl MangaClient {
     }
 
     /// 获取当前生效的 API 根 URL
+    #[allow(dead_code)]
     fn effective_base_url(&self) -> String {
         match &self.state.read().channel {
             ChannelMode::ReverseProxy(base) => base.trim_end_matches('/').to_string(),
