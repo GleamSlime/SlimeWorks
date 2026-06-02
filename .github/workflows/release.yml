@@ -70,13 +70,6 @@ jobs:
           flutter pub run build_runner build --delete-conflicting-outputs
           flutter precache --macos
 
-      - name: 创建 .env 文件
-        run: |
-          cat > .env << 'ENVEOF'
-          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
-          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
-          ENVEOF
-
       - name: 修复 CocoaPods 环境
         run: |
           brew uninstall cocoapods 2>/dev/null || true
@@ -156,13 +149,6 @@ jobs:
           flutter pub get
           flutter pub run build_runner build --delete-conflicting-outputs
 
-      - name: 创建 .env 文件
-        run: |
-          cat > .env << 'ENVEOF'
-          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
-          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
-          ENVEOF
-
       - name: 安装 Inno Setup
         run: choco install innosetup -y
 
@@ -189,6 +175,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
 
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
