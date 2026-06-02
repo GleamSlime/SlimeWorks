@@ -167,8 +167,92 @@ jobs:
           path: dist/**/*.exe
           retention-days: 7
 
+  build-android:
+    needs: detect-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-android-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-android-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: 安装 Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Flutter 依赖
+        run: flutter pub get
+
+      - name: 打包 Android APK
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
+        run: flutter build apk --release
+
+      - name: 上传 Android 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
+
+  publish-pgyer:
+    needs: [detect-version, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载 APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: apk/
+
+      - name: 上传到蒲公英
+        env:
+          PGYER_API_KEY: ${{ secrets.PGYER_API_KEY }}
+        run: |
+          APK_PATH=$(find apk/ -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ 未找到 APK 文件"
+            exit 1
+          fi
+          echo "📦 上传到蒲公英: $APK_PATH"
+          RESPONSE=$(curl -s -F "file=@${APK_PATH}" \
+            -F "_api_key=${PGYER_API_KEY}" \
+            -F "buildInstallType=2" \
+            https://www.pgyer.com/apiv2/app/upload)
+          echo "📋 蒲公英响应: $RESPONSE"
+          CODE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null || echo "-1")
+          if [ "$CODE" = "0" ]; then
+            echo "✅ 蒲公英上传成功"
+          else
+            echo "⚠️ 蒲公英上传可能失败，请检查响应"
+          fi
+
   release:
-    needs: [detect-version, build-macos, build-windows]
+    needs: [detect-version, build-macos, build-windows, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -207,12 +291,14 @@ jobs:
             ### Downloads
             - **macOS**: Download `.dmg`, drag to Applications
             - **Windows**: Download `.exe` installer
+            - **Android**: Download `.apk` (also available on PGYER)
 
             ---
             *Built by GitHub Actions*
           files: |
             dist/**/*.dmg
             dist/**/*.exe
+            dist/**/*.apk
           draft: false
           prerelease: false
 
