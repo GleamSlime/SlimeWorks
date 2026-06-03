@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `from_inner`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 List<MediaCollection> getAllMediaCollections() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaCollections();
@@ -96,6 +96,133 @@ List<CollectionStats> getAllCollectionStats() =>
 /// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.
 List<bool> checkPathsExist({required List<String> paths}) =>
     RustLib.instance.api.crateApiMediaCollectionCheckPathsExist(paths: paths);
+
+/// Lightweight per-collection counts (no file paths), for polling file-count changes.
+List<CollectionCount> getAllCollectionCounts() =>
+    RustLib.instance.api.crateApiMediaCollectionGetAllCollectionCounts();
+
+/// Extract evenly-spaced scrub frames from a video file.
+Future<List<String>> extractVideoScrubFrames({
+  required String videoPath,
+  required int frameCount,
+}) => RustLib.instance.api.crateApiMediaCollectionExtractVideoScrubFrames(
+  videoPath: videoPath,
+  frameCount: frameCount,
+);
+
+/// 删除单个媒体文件的物理文件，然后重新导入集合目录以同步数据库。
+bool deleteMediaItemFile({required String itemFilePath}) => RustLib.instance.api
+    .crateApiMediaCollectionDeleteMediaItemFile(itemFilePath: itemFilePath);
+
+/// 删除集合内所有媒体文件的物理文件，返回已删除的文件数量。
+int deleteCollectionLocalFiles({required String collectionId}) =>
+    RustLib.instance.api.crateApiMediaCollectionDeleteCollectionLocalFiles(
+      collectionId: collectionId,
+    );
+
+/// 将集合物理转移到目标目录。
+Future<int> transferCollections({
+  required List<String> collectionIds,
+  required String targetDir,
+}) => RustLib.instance.api.crateApiMediaCollectionTransferCollections(
+  collectionIds: collectionIds,
+  targetDir: targetDir,
+);
+
+/// 打开文件所在目录（跨平台）。
+Future<void> openInFileManager({required String filePath}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionOpenInFileManager(filePath: filePath);
+
+/// 获取所有集合排序记录。
+List<(String, List<String>)> getAllCollectionOrders() =>
+    RustLib.instance.api.crateApiMediaCollectionGetAllCollectionOrders();
+
+/// 保存集合排序。
+void saveCollectionOrder({
+  required String orderKey,
+  required List<String> ids,
+}) => RustLib.instance.api.crateApiMediaCollectionSaveCollectionOrder(
+  orderKey: orderKey,
+  ids: ids,
+);
+
+/// 获取收藏集合 ID 列表。
+List<String> getFavoriteCollectionIds() =>
+    RustLib.instance.api.crateApiMediaCollectionGetFavoriteCollectionIds();
+
+/// 保存收藏集合 ID 列表。
+void saveFavoriteCollectionIds({required List<String> ids}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionSaveFavoriteCollectionIds(ids: ids);
+
+List<SmartFolderInfo> getAllSmartFolders() =>
+    RustLib.instance.api.crateApiMediaCollectionGetAllSmartFolders();
+
+SmartFolderInfo createSmartFolder({
+  required String name,
+  required String regexPattern,
+  required List<String> keywords,
+  required String regexTarget,
+  required String fileTypeFilter,
+  required List<String> targetFolderIds,
+}) => RustLib.instance.api.crateApiMediaCollectionCreateSmartFolder(
+  name: name,
+  regexPattern: regexPattern,
+  keywords: keywords,
+  regexTarget: regexTarget,
+  fileTypeFilter: fileTypeFilter,
+  targetFolderIds: targetFolderIds,
+);
+
+SmartFolderInfo updateSmartFolder({
+  required String id,
+  required String name,
+  required String regexPattern,
+  required List<String> keywords,
+  required String regexTarget,
+  required String fileTypeFilter,
+  required List<String> targetFolderIds,
+}) => RustLib.instance.api.crateApiMediaCollectionUpdateSmartFolder(
+  id: id,
+  name: name,
+  regexPattern: regexPattern,
+  keywords: keywords,
+  regexTarget: regexTarget,
+  fileTypeFilter: fileTypeFilter,
+  targetFolderIds: targetFolderIds,
+);
+
+bool deleteSmartFolder({required String id}) =>
+    RustLib.instance.api.crateApiMediaCollectionDeleteSmartFolder(id: id);
+
+/// FFI version of [media_collection::CollectionCount].
+class CollectionCount {
+  final String collectionId;
+  final int itemCount;
+  final BigInt totalSize;
+
+  const CollectionCount({
+    required this.collectionId,
+    required this.itemCount,
+    required this.totalSize,
+  });
+
+  @override
+  int get hashCode =>
+      collectionId.hashCode ^ itemCount.hashCode ^ totalSize.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CollectionCount &&
+          runtimeType == other.runtimeType &&
+          collectionId == other.collectionId &&
+          itemCount == other.itemCount &&
+          totalSize == other.totalSize;
+}
 
 /// Aggregated per-collection stats returned in a single batch FFI call.
 class CollectionStats {
@@ -265,3 +392,53 @@ class MediaItem {
 }
 
 enum MediaKind { image, video, audio }
+
+/// 文件类型过滤
+enum SmartFolderFileType { all, images, videos }
+
+/// 智能文件夹
+class SmartFolderInfo {
+  final String id;
+  final String name;
+  final String regexPattern;
+  final List<String> keywords;
+  final SmartFolderRegexTarget regexTarget;
+  final SmartFolderFileType fileTypeFilter;
+  final List<String> targetFolderIds;
+
+  const SmartFolderInfo({
+    required this.id,
+    required this.name,
+    required this.regexPattern,
+    required this.keywords,
+    required this.regexTarget,
+    required this.fileTypeFilter,
+    required this.targetFolderIds,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      regexPattern.hashCode ^
+      keywords.hashCode ^
+      regexTarget.hashCode ^
+      fileTypeFilter.hashCode ^
+      targetFolderIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SmartFolderInfo &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          regexPattern == other.regexPattern &&
+          keywords == other.keywords &&
+          regexTarget == other.regexTarget &&
+          fileTypeFilter == other.fileTypeFilter &&
+          targetFolderIds == other.targetFolderIds;
+}
+
+/// 正则匹配目标
+enum SmartFolderRegexTarget { collectionName, fileName }

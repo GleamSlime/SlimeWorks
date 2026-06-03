@@ -1,16 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/services/initialize/ffmpeg.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/services/video_thumb_queue.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
@@ -73,10 +69,6 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// 远程节点智能文件夹 ID 前缀，格式：smart-folder:remote:[nodeId]:[原始sfId]
   static const String _remoteSmartFolderPrefix = 'smart-folder:remote:';
-  static const String _smartFoldersPrefsKey = 'media_library_smart_folders'; // kept for migration
-  static const String _smartFolderFileName = 'smart_folders_data.json';
-  static const String _collectionOrderPrefsKeyPrefix = 'media_col_order_';
-  static const String _favoritesPrefsKey = 'media_library_favorites';
 
   final NodeSettingsService nodeSettingsService = getIt<NodeSettingsService>();
   final MediaPrefsService mediaPrefs = getIt<MediaPrefsService>();
@@ -384,25 +376,42 @@ class MediaLibraryViewModel extends BaseViewModel {
     final regexOnly = isRemoteCollection(c.id) || isRemoteSmartFolder(sf.id);
     if (regexOnly) {
       // 远程场景：跳过文件夹范围检查，仅对标题和路径做正则匹配
-      if (sf.regexPattern.isEmpty) return true;
+      // 使用 effectivePattern（合并 keywords + regexPattern）而非单独的 regexPattern
+      final pattern = sf.effectivePattern;
+      if (pattern.isEmpty) return true;
       try {
-        final re = RegExp(sf.regexPattern, caseSensitive: false, unicode: true);
+        final re = RegExp(pattern, caseSensitive: false, unicode: true);
         return re.hasMatch(c.title) || re.hasMatch(c.folderPath);
       } catch (_) {
         return true;
       }
     }
     // 本地集合 + 本地智能文件夹：完整匹配（包含文件夹范围 + 文件名模式）
-    if (!sf.matchesCollection(c)) return false;
+    final matchResult = sf.matchesCollection(c);
+    if (!matchResult) {
+      _logger.info(
+        '[collectionMatchesSmartFolder] 本地集合"${c.title}"不匹配sf"${sf.name}": folderId=${c.folderId}, targetFolderIds=${sf.targetFolderIds}, regexTarget=${sf.regexTarget}',
+      );
+    }
+    if (!matchResult) return false;
     if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
-      final paths = _collectionItemPaths[c.id] ?? const [];
-      return sf.matchesFileNames(paths);
+      final paths = _getCollectionItemPaths(c.id);
+      final fileMatch = sf.matchesFileNames(paths);
+      if (!fileMatch) {
+        _logger.info(
+          '[collectionMatchesSmartFolder] 文件名模式不匹配: collection="${c.title}", pathsCount=${paths.length}',
+        );
+      }
+      return fileMatch;
     }
     return true;
   }
 
   List<media_api.MediaCollection> get currentCollections {
     final folderId = currentFolderId.value;
+    _logger.info(
+      '[currentCollections] folderId=$folderId, isSmartFolder=${folderId != null && isSmartFolder(folderId)}, smartFolderCount=${smartFolders.length}, localCollections=${collections.length}, remoteCollections=${remoteCollections.length}',
+    );
     // Read version to register as reactive dependency so Obx rebuilds on reorder
     collectionOrderVersion.value;
     // Read sort order to register reactive dependency
@@ -413,10 +422,18 @@ class MediaLibraryViewModel extends BaseViewModel {
     // Smart folder: 按智能文件夹规则过滤集合（远程集合忽略文件夹范围）
     if (folderId != null && isSmartFolder(folderId)) {
       final sf = getSmartFolder(folderId);
-      if (sf == null) return [];
+      if (sf == null) {
+        _logger.error(
+          '[currentCollections] 智能文件夹不存在: folderId=$folderId, mergedSmartFolderIds=${mergedSmartFolders.map((s) => s.id).toList()}',
+        );
+        return [];
+      }
       var filtered = mergedCollections
           .where((c) => collectionMatchesSmartFolder(sf, c))
           .toList(growable: true);
+      _logger.info(
+        '[currentCollections] 智能文件夹=${sf.name}, folderId=$folderId, merged=${mergedCollections.length}, matched=${filtered.length}, regexTarget=${sf.regexTarget}, targetFolderIds=${sf.targetFolderIds}, regexPattern=${sf.regexPattern}, keywords=${sf.keywords}',
+      );
       if (favOnly) filtered = filtered.where((c) => favIds.contains(c.id)).toList();
       return _applySortOrder(filtered, folderId);
     }
@@ -534,40 +551,26 @@ class MediaLibraryViewModel extends BaseViewModel {
     return items;
   }
 
-  /// \u5728\u8d44\u6e90\u7ba1\u7406\u5668\u4e2d\u663e\u793a\u8be5\u6587\u4ef6\u6240\u5728\u6587\u4ef6\u5939\u3002
+  /// 在资源管理器中显示该文件所在文件夹（通过 Rust FFI 跨平台调用）。
   Future<void> openItemInFolder(media_api.MediaItem item) async {
     try {
-      if (Platform.isWindows) {
-        await Process.run('explorer.exe', ['/select,', item.filePath]);
-      } else if (Platform.isMacOS) {
-        await Process.run('open', ['-R', item.filePath]);
-      } else {
-        await Process.run('xdg-open', [File(item.filePath).parent.path]);
-      }
+      await media_api.openInFileManager(filePath: item.filePath);
     } catch (e) {
-      showSnack('\u9519\u8bef', '\u6253\u5f00\u6587\u4ef6\u5939\u5931\u8d25: $e');
+      showSnack('错误', '打开文件夹失败: $e');
     }
   }
 
-  /// \u5220\u9664\u7269\u7406\u6587\u4ef6\u5e76\u91cd\u65b0\u626b\u63cf\u5f53\u524d\u96c6\u5408\u6e05\u9664 DB \u4e2d\u7684\u65e7\u8bb0\u5f55\u3002
+  /// 删除物理文件并通过 Rust 重新导入集合目录以同步数据库。
   Future<void> deleteItemFile(media_api.MediaItem item) async {
-    final collection = currentCollection;
     try {
-      final f = File(item.filePath);
-      if (await f.exists()) await f.delete();
+      media_api.deleteMediaItemFile(itemFilePath: item.filePath);
     } catch (e) {
-      showSnack('\u9519\u8bef', '\u5220\u9664\u6587\u4ef6\u5931\u8d25: $e');
+      showSnack('错误', '删除文件失败: $e');
       return;
     }
-    // \u91cd\u65b0\u5bfc\u5165\u96c6\u5408\u6587\u4ef6\u5939\u4ee5\u4e0e DB \u540c\u6b65
-    if (collection != null && !isRemoteCollection(collection.id)) {
-      try {
-        await media_api.importMediaFolder(folderPath: collection.folderPath);
-        await loadCollections();
-      } catch (_) {}
-    }
+    await loadCollections();
     await loadCurrentCollectionItems();
-    showSnack('\u6210\u529f', '\u6587\u4ef6\u5df2\u5220\u9664');
+    showSnack('成功', '文件已删除');
   }
 
   /// 删除远程节点上的媒体文件（保留集合记录，仅删除节点本地磁盘上的物理文件）。
@@ -967,6 +970,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   Future<void> _refreshAllInternal() async {
     // Phase 1: 立即加载本地数据，使 UI 快速可用
+    await _loadSmartFolders();
     await loadFolders();
     await loadCollections();
     await loadCurrentCollectionItems();
@@ -986,57 +990,32 @@ class MediaLibraryViewModel extends BaseViewModel {
         });
   }
 
-  /// 后台轮询：检查本地集合文件夹是否有新增/删除的文件，有则静默增量更新。
+  /// 后台轮询：通过 Rust FFI 检查本地集合文件数量变化，有则静默增量更新。
   Future<void> _pollCollectionFolders() async {
     // 只处理本地集合，跳过远程
     final localCols = collections.toList(growable: false);
     _logger.info('_pollCollectionFolders: 开始轮询 ${localCols.length} 个本地集合');
     bool anyChanged = false;
-    for (final col in localCols) {
-      try {
-        final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount;
-        final dir = Directory(col.folderPath);
-        if (!dir.existsSync()) {
-          _logger.info('_pollCollectionFolders: 目录不存在，跳过: ${col.folderPath}');
-          continue;
-        }
-        final exts = {
-          'jpg',
-          'jpeg',
-          'png',
-          'gif',
-          'webp',
-          'bmp',
-          'heic',
-          'heif',
-          'avif',
-          'mp4',
-          'mov',
-          'avi',
-          'mkv',
-          'webm',
-          'flv',
-          'm4v',
-          'wmv',
-          'ts',
-        };
-        int count = 0;
-        await for (final e in dir.list(recursive: true, followLinks: false)) {
-          if (e is File) {
-            final ext = e.path.split('.').last.toLowerCase();
-            if (exts.contains(ext)) count++;
+    try {
+      // 轻量级 FFI：只获取集合 item count，不含文件路径列表
+      final countsList = media_api.getAllCollectionCounts();
+      for (final col in localCols) {
+        try {
+          final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount.toInt();
+          final countEntry = countsList.where((c) => c.collectionId == col.id).firstOrNull;
+          final count = countEntry?.itemCount ?? 0;
+          _collectionItemCountSnapshot[col.id] = count;
+          if (count != prev) {
+            _logger.info('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count，触发增量扫描');
+            await media_api.importMediaFolder(folderPath: col.folderPath);
+            anyChanged = true;
           }
+        } catch (e) {
+          _logger.info('_pollCollectionFolders: 集合 ${col.id} 检查异常: $e');
         }
-        _collectionItemCountSnapshot[col.id] = count;
-        _logger.info('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count');
-        if (count != prev) {
-          _logger.info('_pollCollectionFolders: 检测到变化，触发增量扫描: ${col.title}');
-          await media_api.importMediaFolder(folderPath: col.folderPath);
-          anyChanged = true;
-        }
-      } catch (e) {
-        _logger.info('_pollCollectionFolders: 集合 ${col.id} 检查异常: $e');
       }
+    } catch (e) {
+      _logger.error('_pollCollectionFolders: 批量统计失败: $e');
     }
     if (anyChanged) {
       _logger.info('_pollCollectionFolders: 有变化，刷新集合列表');
@@ -1085,24 +1064,28 @@ class MediaLibraryViewModel extends BaseViewModel {
   void _computeCollectionSizesAsync(List<media_api.MediaCollection> cols) {
     Future.microtask(() {
       try {
-        // 批量一次 FFI 获取所有本地集合大小与文件路径
-        final statsList = media_api.getAllCollectionStats();
-        for (final s in statsList) {
-          _collectionSizes[s.collectionId] = s.totalSize;
-          _collectionItemPaths[s.collectionId] = s.filePaths;
+        // 轻量级 FFI：只获取集合 size，不含文件路径列表（避免大量序列化传输）
+        final countsList = media_api.getAllCollectionCounts();
+        for (final c in countsList) {
+          _collectionSizes[c.collectionId] = c.totalSize;
         }
+        // _collectionItemPaths 改为按需加载（见 _getCollectionItemPaths）
       } catch (e) {
-        _logger.error('[媒体库] _computeCollectionSizesAsync 批量统计失败，降级逐条查询: $e');
-        // 降级：逐条查询（兜底）
-        for (final col in cols) {
-          if (!_collectionSizes.containsKey(col.id) || !_collectionItemPaths.containsKey(col.id)) {
-            try {
-              final items = media_api.getMediaCollectionItems(collectionId: col.id);
-              _collectionSizes[col.id] = items.fold(BigInt.zero, (s, i) => s + i.fileSize);
-              _collectionItemPaths[col.id] = items.map((i) => i.filePath).toList();
-            } catch (_) {}
-          }
-        }
+        _logger.error('[媒体库] _computeCollectionSizesAsync 批量统计失败: $e');
+      }
+    });
+  }
+
+  /// 按需加载集合的文件路径列表（从 Rust FFI 获取）。
+  List<String> _getCollectionItemPaths(String collectionId) {
+    return _collectionItemPaths.putIfAbsent(collectionId, () {
+      try {
+        return media_api
+            .getMediaCollectionItems(collectionId: collectionId)
+            .map((i) => i.filePath)
+            .toList();
+      } catch (_) {
+        return const [];
       }
     });
   }
@@ -1110,7 +1093,7 @@ class MediaLibraryViewModel extends BaseViewModel {
   BigInt getCollectionTotalSize(String id) => _collectionSizes[id] ?? BigInt.zero;
 
   /// 返回指定集合内所有媒体文件路径（可能为空列表，异步缓存未就绪时）。
-  List<String> collectionItemPaths(String id) => _collectionItemPaths[id] ?? const [];
+  List<String> collectionItemPaths(String id) => _getCollectionItemPaths(id);
 
   bool isFavorite(String id) => favoriteCollectionIds.contains(id);
 
@@ -1125,12 +1108,8 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   Future<void> _loadFavorites() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString(_favoritesPrefsKey);
-      if (json != null && json.isNotEmpty) {
-        final list = (jsonDecode(json) as List<dynamic>).cast<String>();
-        favoriteCollectionIds.assignAll(list.toSet());
-      }
+      final ids = media_api.getFavoriteCollectionIds();
+      favoriteCollectionIds.assignAll(ids.toSet());
     } catch (e) {
       _logger.error('加载收藏列表失败: $e');
     }
@@ -1138,8 +1117,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   Future<void> _saveFavorites() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_favoritesPrefsKey, jsonEncode(favoriteCollectionIds.toList()));
+      media_api.saveFavoriteCollectionIds(ids: favoriteCollectionIds.toList());
     } catch (e) {
       _logger.error('保存收藏列表失败: $e');
     }
@@ -1338,166 +1316,27 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   Future<String?> _doGetAudioCover(String filePath) async {
-    final ffmpegExe = await RustFFmpeg.resolvePath();
-    if (ffmpegExe == null) return null;
+    // 通过 Rust FFI 调用 ensure_cover_thumbnail（已支持音频封面提取）
     try {
-      final appDir = await getApplicationSupportDirectory();
-      final sep = Platform.pathSeparator;
-      final dir = Directory('${appDir.path}${sep}SlimeWorks${sep}library${sep}media${sep}covers');
-      await dir.create(recursive: true);
-      // 稳定 key：路径哈希 + 固定宽度
-      final key = filePath.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
-      final outPath = '${dir.path}${sep}audio_${key}_w300.jpg';
-      final outFile = File(outPath);
-      if (outFile.existsSync() && outFile.lengthSync() > 0) return outPath;
-      // 调用 ffmpeg 提取嵌入封面（最常见格式：mp3/flac/m4a 的 0:v:0 流）
-      await Process.run(ffmpegExe, [
-        '-i',
-        filePath,
-        '-map',
-        '0:v:0',
-        '-vf',
-        'scale=300:-1',
-        '-frames:v',
-        '1',
-        '-q:v',
-        '3',
-        '-y',
-        outPath,
-      ]);
-      return (outFile.existsSync() && outFile.lengthSync() > 0) ? outPath : null;
+      return media_api.ensureCoverThumbnail(filePath: filePath, width: 300);
     } catch (_) {
       return null;
     }
   }
 
   Future<List<String>> _doGetScrubFrames(String videoPath) async {
-    _logger.info('[VideoThumb] _doGetScrubFrames: 解析 ffmpeg 路径...');
-    final ffmpegExe = await RustFFmpeg.resolvePath();
-    if (ffmpegExe == null) {
-      _logger.info('[VideoThumb] _doGetScrubFrames: ffmpeg 不可用，返回空');
-      return const <String>[];
-    }
-    _logger.info('[VideoThumb] _doGetScrubFrames: ffmpegExe=$ffmpegExe, 提取帧中...');
-    return _doExtractScrubFrames(videoPath, ffmpegExe);
-  }
-
-  Future<List<String>> _doExtractScrubFrames(String videoPath, String ffmpegExe) async {
-    final key = videoPath.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
-    late Directory frameDir;
+    // 通过 Rust FFI 调用 extract_video_scrub_frames
     try {
-      final appDir = await getApplicationSupportDirectory();
-      final sep = Platform.pathSeparator;
-      frameDir = Directory(
-        '${appDir.path}${sep}library${sep}media${sep}thumbnails${sep}scrub$sep$key',
+      final frameCount = mediaPrefs.currentLevel.frameCount;
+      final result = media_api.extractVideoScrubFrames(
+        videoPath: videoPath,
+        frameCount: frameCount,
       );
-      await frameDir.create(recursive: true);
-      _logger.info('[VideoThumb] 帧目录: ${frameDir.path}');
+      return result;
     } catch (e) {
-      _logger.error('[VideoThumb] 帧目录创建失败: $e');
+      _logger.error('[VideoThumb] scrub 帧提取失败: $e');
       return const <String>[];
     }
-
-    // ── 用 ffprobe 探测真实时长 ─────────────────────────────────────────
-    double? probedDuration;
-    try {
-      final ffprobeExe = await RustFFmpeg.resolveProbe();
-      if (ffprobeExe != null) {
-        _logger.info('[VideoThumb] ffprobe: $ffprobeExe');
-        final probe = await Process.run(ffprobeExe, [
-          '-v',
-          'error',
-          '-show_entries',
-          'format=duration',
-          '-of',
-          'default=noprint_wrappers=1:nokey=1',
-          videoPath,
-        ]);
-        final parsed = double.tryParse((probe.stdout as String).trim());
-        if (parsed != null && parsed > 0) {
-          probedDuration = parsed;
-          _logger.info('[VideoThumb] ffprobe 时长: ${probedDuration}s');
-        } else {
-          _logger.info(
-            '[VideoThumb] ffprobe 返回无效时长 stdout="${probe.stdout}" stderr="${(probe.stderr as String).substring(0, (probe.stderr as String).length.clamp(0, 120))}"',
-          );
-        }
-      } else {
-        _logger.info('[VideoThumb] ffprobe 不可用，跳过时长探测');
-      }
-    } catch (e) {
-      _logger.error('[VideoThumb] ffprobe 异常: $e');
-    }
-
-    // 若 ffprobe 失败则只取前几秒以防 seek 越界（短视频 EINVAL）
-    final qualityLevel = mediaPrefs.currentLevel;
-    final int frameCount;
-    final double duration;
-    if (probedDuration != null) {
-      frameCount = qualityLevel.frameCount;
-      duration = probedDuration;
-    } else {
-      frameCount = qualityLevel.frameCountFallback;
-      duration = 4.0; // 保守值：只在前 4 秒内提取
-      _logger.info('[VideoThumb] ffprobe 失败，降级为 $frameCount 帧 / ${duration}s');
-    }
-
-    final sep = Platform.pathSeparator;
-    final paths = <String>[];
-    int consecutiveFails = 0;
-    for (int i = 0; i < frameCount; i++) {
-      final outFile = File('${frameDir.path}${sep}frame_${i.toString().padLeft(2, '0')}.jpg');
-      // 已存在且非空则直接复用
-      if (outFile.existsSync() && outFile.lengthSync() > 0) {
-        paths.add(outFile.path);
-        consecutiveFails = 0;
-        continue;
-      }
-      // 分布于 [0, duration*0.9]，避免最后一帧恰好越界
-      final double t = frameCount == 1 ? 0.0 : (duration * 0.9 * i / (frameCount - 1));
-      final int secs = t.toInt();
-      final String seek =
-          '${(secs ~/ 3600).toString().padLeft(2, '0')}'
-          ':${((secs % 3600) ~/ 60).toString().padLeft(2, '0')}'
-          ':${(secs % 60).toString().padLeft(2, '0')}';
-      try {
-        // -ss 放在 -i 之前：输入快速定位（避免慢解码导致的 EINVAL）
-        final result = await Process.run(ffmpegExe, [
-          '-ss',
-          seek,
-          '-i',
-          videoPath,
-          '-vframes',
-          '1',
-          '-vf',
-          'scale=${qualityLevel.scaleWidth}:-2',
-          '-q:v',
-          '${qualityLevel.qv}',
-          '-y',
-          outFile.path,
-        ]);
-        if (result.exitCode == 0 && outFile.existsSync() && outFile.lengthSync() > 0) {
-          paths.add(outFile.path);
-          consecutiveFails = 0;
-        } else {
-          // 删除可能残留的空文件
-          try {
-            if (outFile.existsSync()) outFile.deleteSync();
-          } catch (_) {}
-          _logger.error('[VideoThumb] ffmpeg 帧$i 失败: exitCode=${result.exitCode} seek=$seek');
-          consecutiveFails++;
-          if (consecutiveFails >= 3) {
-            _logger.info('[VideoThumb] 连续 3 帧失败，提前终止');
-            break;
-          }
-        }
-      } catch (e) {
-        _logger.error('[VideoThumb] ffmpeg 帧$i 异常: $e');
-        consecutiveFails++;
-      }
-    }
-    _logger.info('[VideoThumb] 提取完成: ${paths.length}/$frameCount 帧成功');
-    return paths;
   }
 
   List<NodeEndpoint> get enabledRemoteNodes => nodeSettingsService.enabledRemoteNodes;

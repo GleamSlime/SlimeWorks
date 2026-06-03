@@ -214,3 +214,208 @@ pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
 pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
     media_collection::check_paths_exist(paths)
 }
+
+/// Lightweight per-collection counts (no file paths), for polling file-count changes.
+#[frb(sync)]
+pub fn get_all_collection_counts() -> anyhow::Result<Vec<CollectionCount>> {
+    media_collection::get_all_collection_counts()
+        .map(|counts| {
+            counts
+                .into_iter()
+                .map(CollectionCount::from_inner)
+                .collect()
+        })
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// FFI version of [media_collection::CollectionCount].
+pub struct CollectionCount {
+    pub collection_id: String,
+    pub item_count: u32,
+    pub total_size: u64,
+}
+
+impl CollectionCount {
+    fn from_inner(c: media_collection::CollectionCount) -> Self {
+        Self {
+            collection_id: c.collection_id,
+            item_count: c.item_count,
+            total_size: c.total_size,
+        }
+    }
+}
+
+/// Extract evenly-spaced scrub frames from a video file.
+pub fn extract_video_scrub_frames(
+    video_path: String,
+    frame_count: u32,
+) -> anyhow::Result<Vec<String>> {
+    media_collection::extract_video_scrub_frames(video_path, frame_count)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 文件操作 FFI 绑定 ────────────────────────────────────────────────────────
+
+/// 删除单个媒体文件的物理文件，然后重新导入集合目录以同步数据库。
+#[frb(sync)]
+pub fn delete_media_item_file(item_file_path: String) -> anyhow::Result<bool> {
+    media_collection::delete_media_item_file(item_file_path).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 删除集合内所有媒体文件的物理文件，返回已删除的文件数量。
+#[frb(sync)]
+pub fn delete_collection_local_files(collection_id: String) -> anyhow::Result<u32> {
+    media_collection::delete_collection_local_files(collection_id)
+        .map(|c| c as u32)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 将集合物理转移到目标目录。
+pub fn transfer_collections(
+    collection_ids: Vec<String>,
+    target_dir: String,
+) -> anyhow::Result<u32> {
+    media_collection::transfer_collections(collection_ids, target_dir)
+        .map(|c| c as u32)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 打开文件所在目录（跨平台）。
+pub fn open_in_file_manager(file_path: String) -> anyhow::Result<()> {
+    media_collection::open_in_file_manager(file_path).map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 集合排序 FFI 绑定 ────────────────────────────────────────────────────────
+
+/// 获取所有集合排序记录。
+#[frb(sync)]
+pub fn get_all_collection_orders() -> anyhow::Result<Vec<(String, Vec<String>)>> {
+    media_collection::get_all_collection_orders().map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 保存集合排序。
+#[frb(sync)]
+pub fn save_collection_order(order_key: String, ids: Vec<String>) -> anyhow::Result<()> {
+    media_collection::save_collection_order(order_key, ids).map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 收藏集合 FFI 绑定 ────────────────────────────────────────────────────────
+
+/// 获取收藏集合 ID 列表。
+#[frb(sync)]
+pub fn get_favorite_collection_ids() -> anyhow::Result<Vec<String>> {
+    media_collection::get_favorite_collection_ids().map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 保存收藏集合 ID 列表。
+#[frb(sync)]
+pub fn save_favorite_collection_ids(ids: Vec<String>) -> anyhow::Result<()> {
+    media_collection::save_favorite_collection_ids(ids).map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 智能文件夹 FFI 绑定 ──────────────────────────────────────────────────────
+
+/// 正则匹配目标
+#[derive(Debug, Clone)]
+pub enum SmartFolderRegexTarget {
+    CollectionName,
+    FileName,
+}
+
+/// 文件类型过滤
+#[derive(Debug, Clone)]
+pub enum SmartFolderFileType {
+    All,
+    Images,
+    Videos,
+}
+
+/// 智能文件夹
+#[derive(Debug, Clone)]
+pub struct SmartFolderInfo {
+    pub id: String,
+    pub name: String,
+    pub regex_pattern: String,
+    pub keywords: Vec<String>,
+    pub regex_target: SmartFolderRegexTarget,
+    pub file_type_filter: SmartFolderFileType,
+    pub target_folder_ids: Vec<String>,
+}
+
+fn convert_smart_folder(sf: media_collection::types::SmartFolder) -> SmartFolderInfo {
+    SmartFolderInfo {
+        id: sf.id,
+        name: sf.name,
+        regex_pattern: sf.regex_pattern,
+        keywords: sf.keywords,
+        regex_target: match sf.regex_target {
+            media_collection::types::SmartFolderRegexTarget::CollectionName => {
+                SmartFolderRegexTarget::CollectionName
+            }
+            media_collection::types::SmartFolderRegexTarget::FileName => {
+                SmartFolderRegexTarget::FileName
+            }
+        },
+        file_type_filter: match sf.file_type_filter {
+            media_collection::types::SmartFolderFileType::All => SmartFolderFileType::All,
+            media_collection::types::SmartFolderFileType::Images => SmartFolderFileType::Images,
+            media_collection::types::SmartFolderFileType::Videos => SmartFolderFileType::Videos,
+        },
+        target_folder_ids: sf.target_folder_ids,
+    }
+}
+
+#[frb(sync)]
+pub fn get_all_smart_folders() -> anyhow::Result<Vec<SmartFolderInfo>> {
+    let sfs = media_collection::get_all_smart_folders().map_err(|e| anyhow::anyhow!(e))?;
+    Ok(sfs.into_iter().map(convert_smart_folder).collect())
+}
+
+#[frb(sync)]
+pub fn create_smart_folder(
+    name: String,
+    regex_pattern: String,
+    keywords: Vec<String>,
+    regex_target: String,
+    file_type_filter: String,
+    target_folder_ids: Vec<String>,
+) -> anyhow::Result<SmartFolderInfo> {
+    let sf = media_collection::create_smart_folder(
+        name,
+        regex_pattern,
+        keywords,
+        regex_target,
+        file_type_filter,
+        target_folder_ids,
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(convert_smart_folder(sf))
+}
+
+#[frb(sync)]
+pub fn update_smart_folder(
+    id: String,
+    name: String,
+    regex_pattern: String,
+    keywords: Vec<String>,
+    regex_target: String,
+    file_type_filter: String,
+    target_folder_ids: Vec<String>,
+) -> anyhow::Result<SmartFolderInfo> {
+    let sf = media_collection::update_smart_folder(
+        id,
+        name,
+        regex_pattern,
+        keywords,
+        regex_target,
+        file_type_filter,
+        target_folder_ids,
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(convert_smart_folder(sf))
+}
+
+#[frb(sync)]
+pub fn delete_smart_folder(id: String) -> anyhow::Result<bool> {
+    media_collection::delete_smart_folder(id).map_err(|e| anyhow::anyhow!(e))
+}

@@ -122,13 +122,11 @@ Future<String> mangaGetComicRecommendations({required String comicId}) =>
     );
 
 /// 章节列表
-Future<String> mangaGetComicEps({
-  required String comicId,
-  required int page,
-}) => RustLib.instance.api.crateApiMangaMangaGetComicEps(
-  comicId: comicId,
-  page: page,
-);
+Future<String> mangaGetComicEps({required String comicId, required int page}) =>
+    RustLib.instance.api.crateApiMangaMangaGetComicEps(
+      comicId: comicId,
+      page: page,
+    );
 
 /// 章节图片
 Future<String> mangaGetEpsPages({
@@ -157,13 +155,11 @@ Future<String> mangaToggleLike({required String comicId}) =>
     RustLib.instance.api.crateApiMangaMangaToggleLike(comicId: comicId);
 
 /// 评论列表
-Future<String> mangaGetComments({
-  required String comicId,
-  required int page,
-}) => RustLib.instance.api.crateApiMangaMangaGetComments(
-  comicId: comicId,
-  page: page,
-);
+Future<String> mangaGetComments({required String comicId, required int page}) =>
+    RustLib.instance.api.crateApiMangaMangaGetComments(
+      comicId: comicId,
+      page: page,
+    );
 
 /// 子评论列表
 Future<String> mangaGetCommentChildren({
@@ -188,13 +184,11 @@ Future<String> mangaLikeComment({required String commentId}) =>
     RustLib.instance.api.crateApiMangaMangaLikeComment(commentId: commentId);
 
 /// 构建完整图片 URL
-String mangaBuildImageUrl({
-  required String fileServer,
-  required String path,
-}) => RustLib.instance.api.crateApiMangaMangaBuildImageUrl(
-  fileServer: fileServer,
-  path: path,
-);
+String mangaBuildImageUrl({required String fileServer, required String path}) =>
+    RustLib.instance.api.crateApiMangaMangaBuildImageUrl(
+      fileServer: fileServer,
+      path: path,
+    );
 
 Future<Uint8List> mangaFetchImage({
   required String fileServer,

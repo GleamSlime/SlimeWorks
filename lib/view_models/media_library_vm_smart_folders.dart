@@ -7,24 +7,12 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
 
   Future<void> _loadCollectionOrders() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      int loaded = 0;
-      for (final key in prefs.getKeys()) {
-        if (!key.startsWith(MediaLibraryViewModel._collectionOrderPrefsKeyPrefix)) continue;
-        final orderKey = key.substring(MediaLibraryViewModel._collectionOrderPrefsKeyPrefix.length);
-        final json = prefs.getString(key);
-        if (json != null) {
-          try {
-            final ids = (jsonDecode(json) as List).cast<String>();
-            _collectionOrders[orderKey] = ids;
-            _logger.info('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
-            loaded++;
-          } catch (e) {
-            _logger.error('_loadCollectionOrders: 解析失败 key=$key err=$e');
-          }
-        }
+      final orders = media_api.getAllCollectionOrders();
+      for (final (orderKey, ids) in orders) {
+        _collectionOrders[orderKey] = ids;
+        _logger.info('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
       }
-      _logger.info('_loadCollectionOrders: 共加载 $loaded 条排序记录');
+      _logger.info('_loadCollectionOrders: 共加载 ${orders.length} 条排序记录');
     } catch (e) {
       _logger.error('加载集合排序失败: $e');
     }
@@ -32,16 +20,8 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
 
   Future<void> _saveCollectionOrder(String orderKey, List<String> ids) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = '${MediaLibraryViewModel._collectionOrderPrefsKeyPrefix}$orderKey';
-      if (ids.isEmpty) {
-        await prefs.remove(key);
-        _logger.info('_saveCollectionOrder: removed key=$key (empty)');
-      } else {
-        final encoded = jsonEncode(ids);
-        final success = await prefs.setString(key, encoded);
-        _logger.info('_saveCollectionOrder: key=$key count=${ids.length} success=$success');
-      }
+      media_api.saveCollectionOrder(orderKey: orderKey, ids: ids);
+      _logger.info('_saveCollectionOrder: orderKey=$orderKey count=${ids.length}');
     } catch (e) {
       _logger.error('保存集合排序失败: key=$orderKey err=$e');
     }
@@ -93,77 +73,47 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
 
   // ── 智能文件夹 CRUD ───────────────────────────────────────────────────────
 
-  Future<File> _getSmartFoldersFile() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/${MediaLibraryViewModel._smartFolderFileName}');
-  }
-
+  /// 通过 FFI 从 Rust redb 加载智能文件夹（替代直接读写 JSON 文件）
   Future<void> _loadSmartFolders() async {
     try {
-      final file = await _getSmartFoldersFile();
-      _logger.info('[智能文件夹] 文件路径=${file.path}');
-      final dirExists = await file.parent.exists();
-      _logger.info('[智能文件夹] 父目录存在=$dirExists');
-      final fileExists = await file.exists();
-      _logger.info('[智能文件夹] 文件存在=$fileExists');
-      if (fileExists) {
-        final json = await file.readAsString();
-        _logger.info('[智能文件夹] 读取 ${json.length} 字节');
-        if (json.isNotEmpty) {
-          final loaded = SmartFolder.listFromJson(json);
-          smartFolders.assignAll(loaded);
-          _logger.info('[智能文件夹] ✅ 加载成功，${loaded.length} 个智能文件夹');
-        } else {
-          _logger.info('[智能文件夹] 文件内容为空');
-        }
-      } else {
-        // 迁移：从 SharedPreferences 读取旧数据
-        _logger.info('[智能文件夹] 文件不存在，尝试从 SharedPreferences 迁移');
-        final prefs = await SharedPreferences.getInstance();
-        final oldJson = prefs.getString(MediaLibraryViewModel._smartFoldersPrefsKey);
-        if (oldJson != null && oldJson.isNotEmpty) {
-          _logger.info('[智能文件夹] SharedPreferences 迁移 ${oldJson.length} 字节');
-          final List<SmartFolder> loaded = SmartFolder.listFromJson(oldJson);
-          smartFolders.assignAll(loaded);
-          await _saveSmartFolders();
-          await prefs.remove(MediaLibraryViewModel._smartFoldersPrefsKey);
-          _logger.info('[智能文件夹] 迁移完成，${loaded.length} 个智能文件夹');
-        } else {
-          _logger.info('[智能文件夹] 无历史数据，首次使用');
-        }
-      }
+      final result = media_api.getAllSmartFolders();
+      final loaded = result
+          .map(
+            (sf) => SmartFolder(
+              id: sf.id,
+              name: sf.name,
+              regexPattern: sf.regexPattern,
+              keywords: sf.keywords,
+              regexTarget: _convertRegexTarget(sf.regexTarget),
+              fileTypeFilter: _convertFileType(sf.fileTypeFilter),
+              targetFolderIds: sf.targetFolderIds,
+            ),
+          )
+          .toList();
+      smartFolders.assignAll(loaded);
+      _logger.info('[智能文件夹] ✅ 从 redb 加载成功，${loaded.length} 个智能文件夹');
     } catch (err, stack) {
       _logger.info('[智能文件夹] ❌ 加载失败 err=$err');
       _logger.info('[智能文件夹] stack=$stack');
     }
   }
 
-  /// 立即将智能文件夹列表持久化到磁盘，供调试时主动调用。
+  /// 立即从 Rust redb 重新加载智能文件夹，供调试时主动调用。
   Future<void> debugForceReloadSmartFolders() => _loadSmartFolders();
 
-  Future<void> _saveSmartFolders() async {
-    try {
-      final file = await _getSmartFoldersFile();
-      _logger.info('[智能文件夹] 目标路径=${file.path}');
-      // 确保父目录存在（Windows 上 AppData 子目录可能尚未创建）
-      await file.parent.create(recursive: true);
-      final json = SmartFolder.listToJson(smartFolders);
-      await file.writeAsString(json, flush: true);
-      // 回读验证写入成功
-      final written = await file.readAsString();
-      if (written == json) {
-        _logger.info(
-          '[MediaLibrary] _saveSmartFolders: ✅ 写入验证通过，${smartFolders.length} 个智能文件夹，${json.length} 字节',
-        );
-      } else {
-        _logger.info(
-          '[MediaLibrary] _saveSmartFolders: ❌ 内容不符！期望 ${json.length} 字节，实际 ${written.length} 字节',
-        );
-      }
-    } catch (err, stack) {
-      _logger.info('[智能文件夹] ❌ 保存失败 err=$err');
-      _logger.info('[智能文件夹] stack=$stack');
-    }
+  SmartFolderRegexTarget _convertRegexTarget(media_api.SmartFolderRegexTarget target) {
+    return switch (target) {
+      media_api.SmartFolderRegexTarget.fileName => SmartFolderRegexTarget.fileName,
+      _ => SmartFolderRegexTarget.collectionName,
+    };
+  }
+
+  SmartFolderFileType _convertFileType(media_api.SmartFolderFileType filter) {
+    return switch (filter) {
+      media_api.SmartFolderFileType.images => SmartFolderFileType.images,
+      media_api.SmartFolderFileType.videos => SmartFolderFileType.videos,
+      _ => SmartFolderFileType.all,
+    };
   }
 
   Future<void> createSmartFolder(
@@ -200,29 +150,65 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       return;
     }
 
-    final id =
-        '${MediaLibraryViewModel._smartFolderPrefix}${DateTime.now().millisecondsSinceEpoch}';
-    final sf = SmartFolder(
-      id: id,
-      name: normalized,
-      regexPattern: pattern.trim(),
-      keywords: keywords,
-      regexTarget: regexTarget,
-      fileTypeFilter: fileTypeFilter,
-      targetFolderIds: targetFolderIds,
-    );
-    smartFolders.add(sf);
-    await _saveSmartFolders();
+    // 本机创建：通过 FFI 调用 Rust
+    try {
+      final sf = media_api.createSmartFolder(
+        name: normalized,
+        regexPattern: pattern.trim(),
+        keywords: keywords,
+        regexTarget: regexTarget.name,
+        fileTypeFilter: fileTypeFilter.name,
+        targetFolderIds: targetFolderIds,
+      );
+      smartFolders.add(
+        SmartFolder(
+          id: sf.id,
+          name: sf.name,
+          regexPattern: sf.regexPattern,
+          keywords: sf.keywords,
+          regexTarget: _convertRegexTarget(sf.regexTarget),
+          fileTypeFilter: _convertFileType(sf.fileTypeFilter),
+          targetFolderIds: sf.targetFolderIds,
+        ),
+      );
+    } catch (e) {
+      _logger.error('[智能文件夹] 创建失败: $e');
+      showSnack('错误', '创建智能文件夹失败: $e');
+    }
   }
 
   Future<void> renameSmartFolder(String id, String newName) async {
     final normalized = newName.trim();
     if (normalized.isEmpty) return;
-    final index = smartFolders.indexWhere((sf) => sf.id == id);
-    if (index == -1) return;
-    smartFolders[index] = smartFolders[index].copyWith(name: normalized);
-    smartFolders.refresh();
-    await _saveSmartFolders();
+    final existing = smartFolders.firstWhereOrNull((sf) => sf.id == id);
+    if (existing == null) return;
+
+    try {
+      final sf = media_api.updateSmartFolder(
+        id: id,
+        name: normalized,
+        regexPattern: existing.regexPattern,
+        keywords: existing.keywords,
+        regexTarget: existing.regexTarget.name,
+        fileTypeFilter: existing.fileTypeFilter.name,
+        targetFolderIds: existing.targetFolderIds,
+      );
+      final index = smartFolders.indexWhere((sf) => sf.id == id);
+      if (index != -1) {
+        smartFolders[index] = SmartFolder(
+          id: sf.id,
+          name: sf.name,
+          regexPattern: sf.regexPattern,
+          keywords: sf.keywords,
+          regexTarget: _convertRegexTarget(sf.regexTarget),
+          fileTypeFilter: _convertFileType(sf.fileTypeFilter),
+          targetFolderIds: sf.targetFolderIds,
+        );
+        smartFolders.refresh();
+      }
+    } catch (e) {
+      _logger.error('[智能文件夹] 重命名失败: $e');
+    }
   }
 
   Future<void> editSmartFolder(
@@ -234,35 +220,55 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     SmartFolderRegexTarget regexTarget = SmartFolderRegexTarget.collectionName,
     SmartFolderFileType fileTypeFilter = SmartFolderFileType.all,
   }) async {
-    final index = smartFolders.indexWhere((sf) => sf.id == id);
-    if (index == -1) return;
-    final updated = SmartFolder(
-      id: id,
-      name: name.trim().isEmpty ? smartFolders[index].name : name.trim(),
-      regexPattern: pattern.trim(),
-      keywords: keywords,
-      regexTarget: regexTarget,
-      fileTypeFilter: fileTypeFilter,
-      targetFolderIds: targetFolderIds,
-    );
-    smartFolders[index] = updated;
-    smartFolders.refresh();
-    await _saveSmartFolders();
+    try {
+      final sf = media_api.updateSmartFolder(
+        id: id,
+        name: name.trim().isEmpty
+            ? smartFolders.firstWhereOrNull((s) => s.id == id)?.name ?? name
+            : name.trim(),
+        regexPattern: pattern.trim(),
+        keywords: keywords,
+        regexTarget: regexTarget.name,
+        fileTypeFilter: fileTypeFilter.name,
+        targetFolderIds: targetFolderIds,
+      );
+      final index = smartFolders.indexWhere((sf) => sf.id == id);
+      if (index != -1) {
+        smartFolders[index] = SmartFolder(
+          id: sf.id,
+          name: sf.name,
+          regexPattern: sf.regexPattern,
+          keywords: sf.keywords,
+          regexTarget: _convertRegexTarget(sf.regexTarget),
+          fileTypeFilter: _convertFileType(sf.fileTypeFilter),
+          targetFolderIds: sf.targetFolderIds,
+        );
+        smartFolders.refresh();
+      }
+    } catch (e) {
+      _logger.error('[智能文件夹] 编辑失败: $e');
+    }
   }
 
   Future<void> deleteSmartFolder(String id) async {
-    smartFolders.removeWhere((sf) => sf.id == id);
-    await _saveSmartFolders();
-    if (currentFolderId.value == id) {
-      exitToRoot();
+    try {
+      media_api.deleteSmartFolder(id: id);
+      smartFolders.removeWhere((sf) => sf.id == id);
+      if (currentFolderId.value == id) {
+        exitToRoot();
+      }
+    } catch (e) {
+      _logger.error('[智能文件夹] 删除失败: $e');
     }
   }
 
   /// 解析 'smart-folder:remote:nodeId:rawId' 返回 (nodeId, rawId)。
+  /// nodeId 是 UUID（不含冒号），rawId 可能包含冒号（如 'smart-folder:xxx'）。
   (String nodeId, String rawId)? _parseRemoteSmartFolderId(String id) {
     const prefix = 'smart-folder:remote:';
     if (!id.startsWith(prefix)) return null;
     final suffix = id.substring(prefix.length);
+    // nodeId 是 UUID 格式，不含冒号，取到第一个冒号之前
     final sep = suffix.indexOf(':');
     if (sep <= 0) return null;
     return (suffix.substring(0, sep), suffix.substring(sep + 1));

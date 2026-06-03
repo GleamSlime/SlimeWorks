@@ -11,11 +11,11 @@ import 'api/game_library.dart';
 import 'api/http_bridge.dart';
 import 'api/lan_transfer.dart';
 import 'api/logger.dart';
+import 'api/manga.dart';
 import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
-import 'api/manga.dart';
 import 'api/sentry_log.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
@@ -231,6 +231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats dco_decode_capture_stats(dynamic raw);
 
   @protected
+  CollectionCount dco_decode_collection_count(dynamic raw);
+
+  @protected
   CollectionStats dco_decode_collection_stats(dynamic raw);
 
   @protected
@@ -265,6 +268,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<bool> dco_decode_list_bool(dynamic raw);
+
+  @protected
+  List<CollectionCount> dco_decode_list_collection_count(dynamic raw);
 
   @protected
   List<CollectionStats> dco_decode_list_collection_stats(dynamic raw);
@@ -303,6 +309,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(String, List<String>)> dco_decode_list_record_string_list_string(
+    dynamic raw,
+  );
+
+  @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
@@ -313,6 +324,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SearchMatch> dco_decode_list_search_match(dynamic raw);
+
+  @protected
+  List<SmartFolderInfo> dco_decode_list_smart_folder_info(dynamic raw);
 
   @protected
   MediaCollection dco_decode_media_collection(dynamic raw);
@@ -375,6 +389,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
+  (String, List<String>) dco_decode_record_string_list_string(dynamic raw);
+
+  @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
@@ -385,6 +402,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchMatch dco_decode_search_match(dynamic raw);
+
+  @protected
+  SmartFolderFileType dco_decode_smart_folder_file_type(dynamic raw);
+
+  @protected
+  SmartFolderInfo dco_decode_smart_folder_info(dynamic raw);
+
+  @protected
+  SmartFolderRegexTarget dco_decode_smart_folder_regex_target(dynamic raw);
 
   @protected
   SystemResourceSnapshot dco_decode_system_resource_snapshot(dynamic raw);
@@ -587,6 +613,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats sse_decode_capture_stats(SseDeserializer deserializer);
 
   @protected
+  CollectionCount sse_decode_collection_count(SseDeserializer deserializer);
+
+  @protected
   CollectionStats sse_decode_collection_stats(SseDeserializer deserializer);
 
   @protected
@@ -625,6 +654,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<bool> sse_decode_list_bool(SseDeserializer deserializer);
+
+  @protected
+  List<CollectionCount> sse_decode_list_collection_count(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<CollectionStats> sse_decode_list_collection_stats(
@@ -677,6 +711,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(String, List<String>)> sse_decode_list_record_string_list_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(String, String)> sse_decode_list_record_string_string(
     SseDeserializer deserializer,
   );
@@ -693,6 +732,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SearchMatch> sse_decode_list_search_match(SseDeserializer deserializer);
+
+  @protected
+  List<SmartFolderInfo> sse_decode_list_smart_folder_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   MediaCollection sse_decode_media_collection(SseDeserializer deserializer);
@@ -759,6 +803,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
+  (String, List<String>) sse_decode_record_string_list_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (String, String) sse_decode_record_string_string(
     SseDeserializer deserializer,
   );
@@ -773,6 +822,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchMatch sse_decode_search_match(SseDeserializer deserializer);
+
+  @protected
+  SmartFolderFileType sse_decode_smart_folder_file_type(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  SmartFolderInfo sse_decode_smart_folder_info(SseDeserializer deserializer);
+
+  @protected
+  SmartFolderRegexTarget sse_decode_smart_folder_regex_target(
+    SseDeserializer deserializer,
+  );
 
   @protected
   SystemResourceSnapshot sse_decode_system_resource_snapshot(
@@ -1009,6 +1071,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_capture_stats(CaptureStats self, SseSerializer serializer);
 
   @protected
+  void sse_encode_collection_count(
+    CollectionCount self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_collection_stats(
     CollectionStats self,
     SseSerializer serializer,
@@ -1058,6 +1126,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_bool(List<bool> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_collection_count(
+    List<CollectionCount> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_collection_stats(
@@ -1129,6 +1203,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_string_list_string(
+    List<(String, List<String>)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_string_string(
     List<(String, String)> self,
     SseSerializer serializer,
@@ -1149,6 +1229,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_search_match(
     List<SearchMatch> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_smart_folder_info(
+    List<SmartFolderInfo> self,
     SseSerializer serializer,
   );
 
@@ -1226,6 +1312,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_string_list_string(
+    (String, List<String>) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_string_string(
     (String, String) self,
     SseSerializer serializer,
@@ -1245,6 +1337,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_search_match(SearchMatch self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_smart_folder_file_type(
+    SmartFolderFileType self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_smart_folder_info(
+    SmartFolderInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_smart_folder_regex_target(
+    SmartFolderRegexTarget self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_system_resource_snapshot(

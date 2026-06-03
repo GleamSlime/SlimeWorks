@@ -260,18 +260,14 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
         return <String, dynamic>{'ok': true};
       case 'delete_collection_local_files':
         final deleteCollectionId = (params['collection_id'] ?? '').toString();
-        final deleteItems = media_api.getMediaCollectionItems(collectionId: deleteCollectionId);
-        int deletedCount = 0;
-        for (final item in deleteItems) {
-          try {
-            final f = File(item.filePath);
-            if (await f.exists()) {
-              await f.delete();
-              deletedCount++;
-            }
-          } catch (_) {}
+        try {
+          final deletedCount = media_api.deleteCollectionLocalFiles(
+            collectionId: deleteCollectionId,
+          );
+          return <String, dynamic>{'deleted': deletedCount};
+        } catch (_) {
+          return <String, dynamic>{'deleted': 0};
         }
-        return <String, dynamic>{'deleted': deletedCount};
       case 'delete_media_item_local_file':
         final deleteItemId = (params['item_id'] ?? '').toString();
         final deleteCollId = (params['collection_id'] ?? '').toString();
@@ -279,17 +275,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
         final targetItem = itemsForDelete.where((i) => i.id == deleteItemId).firstOrNull;
         if (targetItem != null) {
           try {
-            final f = File(targetItem.filePath);
-            if (await f.exists()) await f.delete();
-          } catch (_) {}
-          // 重新导入集合目录以同步 DB
-          try {
-            await media_api.importMediaFolder(
-              folderPath: targetItem.filePath
-                  .split('/')
-                  .take(targetItem.filePath.split('/').length - 1)
-                  .join('/'),
-            );
+            media_api.deleteMediaItemFile(itemFilePath: targetItem.filePath);
           } catch (_) {}
           _emitLibraryMutation();
         }

@@ -6,7 +6,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 use crate::scanner::MediaFolderScanner;
-use crate::types::{MediaCollection, MediaFolder, MediaItem, MediaKind};
+use crate::types::{
+    MediaCollection, MediaFolder, MediaItem, MediaKind, SmartFolder, SmartFolderFileType,
+    SmartFolderRegexTarget,
+};
 
 // ── Cover thumbnail cache ─────────────────────────────────────────────────────
 static THUMB_CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
@@ -1078,6 +1081,34 @@ pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
     Ok(map.into_values().collect())
 }
 
+/// 轻量级集合统计（不含文件路径列表），用于轮询检测文件数量变化。
+#[derive(Debug, Clone)]
+pub struct CollectionCount {
+    pub collection_id: String,
+    pub item_count: u32,
+    pub total_size: u64,
+}
+
+pub fn get_all_collection_counts() -> Result<Vec<CollectionCount>, String> {
+    let mut guard = items_mutex().lock().map_err(|e| e.to_string())?;
+    ensure_items_loaded(&mut guard);
+    let items = guard.as_ref().unwrap();
+    let mut map: HashMap<String, (u32, u64)> = HashMap::new();
+    for item in items.iter() {
+        let entry = map.entry(item.collection_id.clone()).or_insert((0, 0));
+        entry.0 += 1;
+        entry.1 += item.file_size;
+    }
+    Ok(map
+        .into_iter()
+        .map(|(id, (count, size))| CollectionCount {
+            collection_id: id,
+            item_count: count,
+            total_size: size,
+        })
+        .collect())
+}
+
 pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
     paths
         .iter()
@@ -1219,6 +1250,418 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
     }
 
     delete_collection_from_db(&collection_id);
+    Ok(true)
+}
+
+/// 删除单个媒体文件的物理文件，然后重新导入集合目录以同步数据库。
+/// 返回 (删除成功, 重新导入后的集合ID)。
+pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
+    let path = std::path::Path::new(&item_file_path);
+    let deleted = if path.exists() {
+        std::fs::remove_file(path).map_err(|e| format!("删除文件失败: {}", e))?;
+        true
+    } else {
+        false
+    };
+    // 重新导入父目录以同步数据库
+    if let Some(parent) = path.parent() {
+        let _ = import_media_folder(parent.to_string_lossy().into_owned());
+    }
+    Ok(deleted)
+}
+
+/// 删除集合内所有媒体文件的物理文件，返回已删除的文件数量。
+pub fn delete_collection_local_files(collection_id: String) -> Result<usize, String> {
+    let items = get_media_collection_items(collection_id.clone())?;
+    let mut deleted_count = 0;
+    for item in &items {
+        let path = std::path::Path::new(&item.file_path);
+        if path.exists() {
+            match std::fs::remove_file(path) {
+                Ok(_) => deleted_count += 1,
+                Err(e) => sw_warn!(
+                    "[delete_collection_local_files] 删除失败: {} err={}",
+                    item.file_path,
+                    e
+                ),
+            }
+        }
+    }
+    Ok(deleted_count)
+}
+
+/// 将集合物理转移到目标目录，包括文件移动和数据库更新。
+/// 返回成功转移的集合数量。
+pub fn transfer_collections(
+    collection_ids: Vec<String>,
+    target_dir: String,
+) -> Result<usize, String> {
+    let target = std::path::Path::new(&target_dir);
+    if !target.exists() {
+        std::fs::create_dir_all(target).map_err(|e| format!("创建目标目录失败: {}", e))?;
+    }
+    let mut success_count = 0;
+    let collections = get_collections().lock().map_err(|e| e.to_string())?.clone();
+    for col_id in &collection_ids {
+        let collection = match collections.iter().find(|c| &c.id == col_id) {
+            Some(c) => c.clone(),
+            None => continue,
+        };
+        let dest_dir = target.join(&collection.title);
+        if let Err(e) = std::fs::create_dir_all(&dest_dir) {
+            sw_warn!(
+                "[transfer] 创建目标子目录失败: {} err={}",
+                dest_dir.display(),
+                e
+            );
+            continue;
+        }
+        let items = match get_media_collection_items(collection.id.clone()) {
+            Ok(items) => items,
+            Err(e) => {
+                sw_warn!("[transfer] 获取集合项失败: {} err={}", collection.id, e);
+                continue;
+            }
+        };
+        for item in &items {
+            let src = std::path::Path::new(&item.file_path);
+            if !src.exists() {
+                continue;
+            }
+            let file_name = match src.file_name() {
+                Some(n) => n.to_owned(),
+                None => continue,
+            };
+            let dest = dest_dir.join(&file_name);
+            // 优先 rename（同分区快速），失败则 copy+delete
+            if let Err(_) = std::fs::rename(src, &dest) {
+                if let Err(e) = std::fs::copy(src, &dest).and_then(|_| std::fs::remove_file(src)) {
+                    sw_warn!("[transfer] copy+delete 失败: {} err={}", item.file_path, e);
+                    continue;
+                }
+            }
+        }
+        // 重新导入目标目录以在数据库中创建新记录
+        match import_media_folder(dest_dir.to_string_lossy().into_owned()) {
+            Ok(new_collection) => {
+                // 将新集合移动到原集合所属的文件夹
+                if collection.folder_id.is_some() {
+                    let _ = move_media_collection_to_folder(
+                        new_collection.id.clone(),
+                        collection.folder_id.clone(),
+                    );
+                }
+                // 删除旧集合记录
+                let _ = delete_media_collection(collection.id.clone());
+                // 尝试删除空的原目录
+                let old_dir = std::path::Path::new(&collection.folder_path);
+                if old_dir.exists() {
+                    if let Ok(mut entries) = std::fs::read_dir(old_dir) {
+                        if entries.next().is_none() {
+                            let _ = std::fs::remove_dir(old_dir);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                sw_warn!("[transfer] 重新导入失败: {} err={}", dest_dir.display(), e);
+            }
+        }
+        success_count += 1;
+    }
+    Ok(success_count)
+}
+
+/// 打开文件所在目录（跨平台）
+pub fn open_in_file_manager(file_path: String) -> Result<(), String> {
+    let path = std::path::Path::new(&file_path);
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("打开失败: {}", e))?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()
+            .map_err(|e| format!("打开失败: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path.parent().unwrap_or(path))
+            .spawn()
+            .map_err(|e| format!("打开失败: {}", e))?;
+    }
+    Ok(())
+}
+
+// ── 集合排序持久化 ────────────────────────────────────────────────────────────
+
+fn collection_order_table_name() -> String {
+    "media_collection_orders".to_string()
+}
+
+/// 获取指定 orderKey 的集合排序 ID 列表。
+pub fn get_collection_order(order_key: String) -> Result<Vec<String>, String> {
+    ensure_db_initialized();
+    let _ = db_module::db_register_table(collection_order_table_name());
+    match db_module::db_get(collection_order_table_name(), order_key.clone()) {
+        Ok(Some(json)) => {
+            let ids: Vec<String> = serde_json::from_str(&json).unwrap_or_default();
+            Ok(ids)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+/// 保存指定 orderKey 的集合排序 ID 列表。
+pub fn save_collection_order(order_key: String, ids: Vec<String>) -> Result<(), String> {
+    ensure_db_initialized();
+    let _ = db_module::db_register_table(collection_order_table_name());
+    if ids.is_empty() {
+        let _ = db_module::db_delete(collection_order_table_name(), order_key);
+    } else {
+        let json = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
+        db_module::db_set(collection_order_table_name(), order_key, json)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 获取所有集合排序记录（用于批量加载）。
+pub fn get_all_collection_orders() -> Result<Vec<(String, Vec<String>)>, String> {
+    ensure_db_initialized();
+    let _ = db_module::db_register_table(collection_order_table_name());
+    match db_module::db_list_all(collection_order_table_name()) {
+        Ok(records) => {
+            let result: Vec<(String, Vec<String>)> = records
+                .into_iter()
+                .filter_map(|rec| {
+                    let ids: Vec<String> = serde_json::from_str(&rec.value).ok()?;
+                    Some((rec.key, ids))
+                })
+                .collect();
+            Ok(result)
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+// ── 收藏集合持久化 ────────────────────────────────────────────────────────────
+
+fn favorites_table_name() -> String {
+    "media_library_favorites".to_string()
+}
+
+/// 获取收藏集合 ID 列表。
+pub fn get_favorite_collection_ids() -> Result<Vec<String>, String> {
+    ensure_db_initialized();
+    let _ = db_module::db_register_table(favorites_table_name());
+    match db_module::db_get(favorites_table_name(), "favorites".to_string()) {
+        Ok(Some(json)) => {
+            let ids: Vec<String> = serde_json::from_str(&json).unwrap_or_default();
+            Ok(ids)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+/// 保存收藏集合 ID 列表。
+pub fn save_favorite_collection_ids(ids: Vec<String>) -> Result<(), String> {
+    ensure_db_initialized();
+    let _ = db_module::db_register_table(favorites_table_name());
+    if ids.is_empty() {
+        let _ = db_module::db_delete(favorites_table_name(), "favorites".to_string());
+    } else {
+        let json = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
+        db_module::db_set(favorites_table_name(), "favorites".to_string(), json)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// ── 智能文件夹 CRUD ──────────────────────────────────────────────────────────
+
+static SMART_FOLDERS: OnceLock<Arc<Mutex<Vec<SmartFolder>>>> = OnceLock::new();
+
+fn smart_folder_table_name() -> String {
+    "smart_folders".to_string()
+}
+
+fn get_smart_folders() -> &'static Arc<Mutex<Vec<SmartFolder>>> {
+    SMART_FOLDERS.get_or_init(|| {
+        ensure_db_initialized();
+        let folders = Arc::new(Mutex::new(Vec::new()));
+        let _ = db_module::db_register_table(smart_folder_table_name());
+        if let Ok(records) = db_module::db_list_all(smart_folder_table_name()) {
+            if let Ok(mut guard) = folders.lock() {
+                for record in records {
+                    if let Ok(sf) = serde_json::from_str::<SmartFolder>(&record.value) {
+                        guard.push(sf);
+                    }
+                }
+            }
+        }
+        folders
+    })
+}
+
+fn persist_smart_folder(sf: &SmartFolder) -> Result<(), String> {
+    let json = serde_json::to_string(sf).map_err(|error| error.to_string())?;
+    db_module::db_set(smart_folder_table_name(), sf.id.clone(), json)
+        .map_err(|error| error.to_string())
+}
+
+fn delete_smart_folder_from_db(id: &str) {
+    let _ = db_module::db_delete(smart_folder_table_name(), id.to_string());
+}
+
+/// 迁移旧 JSON 文件数据到 redb（仅执行一次）
+fn migrate_smart_folders_from_json() {
+    let path = get_app_data_path("smart_folders_data.json");
+    if !std::path::Path::new(&path).exists() {
+        return;
+    }
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if content.trim().is_empty() {
+        return;
+    }
+    let legacy_list: Vec<serde_json::Value> = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    // 只在 redb 表为空时迁移
+    {
+        let sfs = get_smart_folders();
+        if let Ok(guard) = sfs.lock() {
+            if !guard.is_empty() {
+                return;
+            }
+        }
+    }
+    let mut count = 0;
+    if let Ok(mut guard) = get_smart_folders().lock() {
+        for item in &legacy_list {
+            if let Ok(mut sf) = serde_json::from_value::<SmartFolder>(item.clone()) {
+                // 修正旧格式 ID：sf_ 前缀改为 smart-folder: 前缀
+                if sf.id.starts_with("sf_") {
+                    sf.id = format!("smart-folder:{}", &sf.id[3..]);
+                }
+                if persist_smart_folder(&sf).is_ok() {
+                    guard.push(sf);
+                    count += 1;
+                }
+            }
+        }
+    }
+    if count > 0 {
+        sw_info!("[smart_folder] 从 JSON 迁移 {} 条记录到 redb", count);
+        // 迁移成功后删除旧文件
+        let _ = std::fs::rename(&path, format!("{}.migrated", path));
+    }
+}
+
+/// 获取 App 数据路径（与 node_server/handlers.rs 中的 get_app_data_path 一致）
+fn get_app_data_path(filename: &str) -> String {
+    let dir = std::path::Path::new(&app_data_base()).join("SlimeWorks");
+    dir.join(filename).to_string_lossy().into_owned()
+}
+
+pub fn get_all_smart_folders() -> Result<Vec<SmartFolder>, String> {
+    // 首次访问时尝试从 JSON 迁移
+    migrate_smart_folders_from_json();
+    let sfs = get_smart_folders()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(sfs.clone())
+}
+
+pub fn create_smart_folder(
+    name: String,
+    regex_pattern: String,
+    keywords: Vec<String>,
+    regex_target: String,
+    file_type_filter: String,
+    target_folder_ids: Vec<String>,
+) -> Result<SmartFolder, String> {
+    let normalized_name = name.trim();
+    if normalized_name.is_empty() {
+        return Err("智能文件夹名称不能为空".to_string());
+    }
+
+    let sf = SmartFolder {
+        id: format!("smart-folder:{}", uuid::Uuid::new_v4()),
+        name: normalized_name.to_string(),
+        regex_pattern: regex_pattern.trim().to_string(),
+        keywords,
+        regex_target: SmartFolderRegexTarget::from_str_name(&regex_target),
+        file_type_filter: SmartFolderFileType::from_str_name(&file_type_filter),
+        target_folder_ids,
+    };
+
+    let mut sfs = get_smart_folders()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    persist_smart_folder(&sf)?;
+    sfs.push(sf.clone());
+    Ok(sf)
+}
+
+pub fn update_smart_folder(
+    id: String,
+    name: String,
+    regex_pattern: String,
+    keywords: Vec<String>,
+    regex_target: String,
+    file_type_filter: String,
+    target_folder_ids: Vec<String>,
+) -> Result<SmartFolder, String> {
+    let normalized_name = name.trim();
+    if normalized_name.is_empty() {
+        return Err("智能文件夹名称不能为空".to_string());
+    }
+
+    let mut sfs = get_smart_folders()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    let idx = sfs
+        .iter()
+        .position(|sf| sf.id == id)
+        .ok_or_else(|| format!("智能文件夹不存在: {}", id))?;
+
+    let updated = SmartFolder {
+        id: id.clone(),
+        name: normalized_name.to_string(),
+        regex_pattern: regex_pattern.trim().to_string(),
+        keywords,
+        regex_target: SmartFolderRegexTarget::from_str_name(&regex_target),
+        file_type_filter: SmartFolderFileType::from_str_name(&file_type_filter),
+        target_folder_ids,
+    };
+
+    persist_smart_folder(&updated)?;
+    sfs[idx] = updated.clone();
+    Ok(updated)
+}
+
+pub fn delete_smart_folder(id: String) -> Result<bool, String> {
+    let mut sfs = get_smart_folders()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    let previous_len = sfs.len();
+    sfs.retain(|sf| sf.id != id);
+    if sfs.len() == previous_len {
+        return Ok(false);
+    }
+    delete_smart_folder_from_db(&id);
     Ok(true)
 }
 

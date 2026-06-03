@@ -23,6 +23,7 @@ import 'package:slime_works/pages/collection/picture/components/media_selection_
 import 'package:slime_works/pages/collection/picture/components/picture_library_toolbar.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+
 const Loggers _logger = Loggers(name: '图片浏览');
 
 class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
@@ -955,7 +956,12 @@ class _CollectionPictureScreenState
     final selectedFolderIds = <String>{};
     var regexTarget = SmartFolderRegexTarget.collectionName;
     var fileTypeFilter = SmartFolderFileType.all;
+    // 如果当前正在浏览远程节点的文件夹，默认创建到该节点
+    final currentFolderIdValue = viewModel.currentFolderId.value;
     String? targetNodeId;
+    if (currentFolderIdValue != null && viewModel.isRemoteFolder(currentFolderIdValue)) {
+      targetNodeId = viewModel.getRemoteFolderNodeId(currentFolderIdValue);
+    }
     final enabledNodes = viewModel.enabledRemoteNodes;
     final keywords = <String>[];
     await showDialog<void>(
@@ -981,7 +987,10 @@ class _CollectionPictureScreenState
                         initialValue: targetNodeId,
                         decoration: const InputDecoration(labelText: '创建位置'),
                         items: [
-                          const DropdownMenuItem<String?>(value: null, child: Text('本机')),
+                          DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text(Platform.isAndroid || Platform.isIOS ? '本机（无本地库）' : '本机'),
+                          ),
                           ...enabledNodes.map(
                             (node) =>
                                 DropdownMenuItem<String?>(value: node.id, child: Text(node.name)),
@@ -995,7 +1004,10 @@ class _CollectionPictureScreenState
                       const Text('目标文件夹（可多选，空选则匹配全部集合）'),
                       SizedBox(height: appMetrics.kSpace4),
                       if (snapshotFolders.isEmpty)
-                        Text('（暂无文件夹）', style: TextStyle(color: Theme.of(context).colorScheme.outline))
+                        Text(
+                          '（暂无文件夹）',
+                          style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                        )
                       else
                         Wrap(
                           spacing: appMetrics.kSpace8,
@@ -1139,7 +1151,10 @@ class _CollectionPictureScreenState
                     const Text('目标文件夹（可多选，空选则匹配全部集合）'),
                     SizedBox(height: appMetrics.kSpace4),
                     if (snapshotFolders.isEmpty)
-                      Text('（暂无文件夹）', style: TextStyle(color: Theme.of(context).colorScheme.outline))
+                      Text(
+                        '（暂无文件夹）',
+                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                      )
                     else
                       Wrap(
                         spacing: appMetrics.kSpace8,
@@ -1689,7 +1704,10 @@ class _KeywordInputListState extends State<_KeywordInputList> {
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: '输入关键词',
-                  contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace8),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: AppTheme.metrics.kSpace12,
+                    vertical: AppTheme.metrics.kSpace8,
+                  ),
                 ),
                 onSubmitted: (_) => _addKeyword(),
               ),
@@ -1699,7 +1717,10 @@ class _KeywordInputListState extends State<_KeywordInputList> {
               icon: Icon(Icons.add_circle_outline, size: AppTheme.metrics.iconSize20),
               onPressed: _addKeyword,
               padding: EdgeInsets.zero,
-              constraints: BoxConstraints(minWidth: AppTheme.metrics.kSpace32, minHeight: AppTheme.metrics.kSpace32),
+              constraints: BoxConstraints(
+                minWidth: AppTheme.metrics.kSpace32,
+                minHeight: AppTheme.metrics.kSpace32,
+              ),
             ),
           ],
         ),

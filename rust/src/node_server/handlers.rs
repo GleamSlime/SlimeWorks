@@ -448,54 +448,127 @@ pub async fn dispatch_action(
             Ok(json!({"ok": true}))
         }
 
-        // ── 智能文件夹（存储本地 JSON，保持与 Dart 端兼容） ─────────────────
+        // ── 智能文件夹（通过 media_collection redb 存储） ────────────────────
         "list_smart_folders" => {
-            let smart_folders = load_smart_folders();
-            Ok(json!(smart_folders))
+            let smart_folders = media_api::get_all_smart_folders()
+                .map_err(|e| format!("获取智能文件夹失败: {}", e))?;
+            let result: Vec<Value> = smart_folders
+                .iter()
+                .map(|sf| {
+                    json!({
+                        "id": sf.id,
+                        "name": sf.name,
+                        "regexPattern": sf.regex_pattern,
+                        "keywords": sf.keywords,
+                        "targetFolderIds": sf.target_folder_ids,
+                        "regexTarget": sf.regex_target.as_str(),
+                        "fileTypeFilter": sf.file_type_filter.as_str(),
+                    })
+                })
+                .collect();
+            Ok(json!(result))
         }
 
         "create_smart_folder" => {
-            let mut folders = load_smart_folders();
-            let new_folder = json!({
-                "id": format!("sf_{}", chrono::Utc::now().timestamp_millis()),
-                "name": params["name"].as_str().unwrap_or(""),
-                "regexPattern": params["regex_pattern"].as_str().unwrap_or(""),
-                "targetFolderIds": params["target_folder_ids"].as_array().cloned().unwrap_or_default(),
-                "regexTarget": params["regex_target"].as_str().unwrap_or("collectionName"),
-                "fileTypeFilter": params["file_type_filter"].as_str().unwrap_or("all"),
-            });
-            folders.push(new_folder);
-            save_smart_folders(&folders);
-            Ok(json!(folders))
+            let name = params["name"].as_str().unwrap_or("").to_string();
+            let regex_pattern = params["regex_pattern"].as_str().unwrap_or("").to_string();
+            let keywords: Vec<String> = params["keywords"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let regex_target = params["regex_target"]
+                .as_str()
+                .unwrap_or("collectionName")
+                .to_string();
+            let file_type_filter = params["file_type_filter"]
+                .as_str()
+                .unwrap_or("all")
+                .to_string();
+            let target_folder_ids: Vec<String> = params["target_folder_ids"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let sf = media_api::create_smart_folder(
+                name,
+                regex_pattern,
+                keywords,
+                regex_target,
+                file_type_filter,
+                target_folder_ids,
+            )
+            .map_err(|e| format!("创建智能文件夹失败: {}", e))?;
+            Ok(json!({
+                "id": sf.id,
+                "name": sf.name,
+                "regexPattern": sf.regex_pattern,
+                "keywords": sf.keywords,
+                "targetFolderIds": sf.target_folder_ids,
+                "regexTarget": sf.regex_target.as_str(),
+                "fileTypeFilter": sf.file_type_filter.as_str(),
+            }))
         }
 
         "update_smart_folder" => {
-            let mut folders = load_smart_folders();
-            let target_id = params["id"].as_str().unwrap_or("");
-            if let Some(idx) = folders
-                .iter()
-                .position(|f| f["id"].as_str() == Some(target_id))
-            {
-                folders[idx] = json!({
-                    "id": target_id,
-                    "name": params["name"].as_str().unwrap_or(""),
-                    "regexPattern": params["regex_pattern"].as_str().unwrap_or(""),
-                    "targetFolderIds": params["target_folder_ids"].as_array().cloned().unwrap_or_default(),
-                    "regexTarget": params["regex_target"].as_str().unwrap_or("collectionName"),
-                    "fileTypeFilter": params["file_type_filter"].as_str().unwrap_or("all"),
-                });
-                save_smart_folders(&folders);
-                Ok(json!(folders))
-            } else {
-                Err(format!("智能文件夹不存在: {}", target_id))
-            }
+            let id = params["id"].as_str().unwrap_or("").to_string();
+            let name = params["name"].as_str().unwrap_or("").to_string();
+            let regex_pattern = params["regex_pattern"].as_str().unwrap_or("").to_string();
+            let keywords: Vec<String> = params["keywords"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let regex_target = params["regex_target"]
+                .as_str()
+                .unwrap_or("collectionName")
+                .to_string();
+            let file_type_filter = params["file_type_filter"]
+                .as_str()
+                .unwrap_or("all")
+                .to_string();
+            let target_folder_ids: Vec<String> = params["target_folder_ids"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let sf = media_api::update_smart_folder(
+                id,
+                name,
+                regex_pattern,
+                keywords,
+                regex_target,
+                file_type_filter,
+                target_folder_ids,
+            )
+            .map_err(|e| format!("更新智能文件夹失败: {}", e))?;
+            Ok(json!({
+                "id": sf.id,
+                "name": sf.name,
+                "regexPattern": sf.regex_pattern,
+                "keywords": sf.keywords,
+                "targetFolderIds": sf.target_folder_ids,
+                "regexTarget": sf.regex_target.as_str(),
+                "fileTypeFilter": sf.file_type_filter.as_str(),
+            }))
         }
 
         "delete_smart_folder" => {
-            let mut folders = load_smart_folders();
-            let target_id = params["id"].as_str().unwrap_or("");
-            folders.retain(|f| f["id"].as_str() != Some(target_id));
-            save_smart_folders(&folders);
+            let target_id = params["id"].as_str().unwrap_or("").to_string();
+            media_api::delete_smart_folder(target_id)
+                .map_err(|e| format!("删除智能文件夹失败: {}", e))?;
             Ok(json!({"ok": true}))
         }
 
@@ -556,29 +629,6 @@ pub fn load_chapter_count_map() -> std::collections::HashMap<String, i32> {
         }
     }
     std::collections::HashMap::new()
-}
-
-/// 读取智能文件夹列表
-fn load_smart_folders() -> Vec<Value> {
-    let path = get_app_data_path("smart_folders_data.json");
-    if let Ok(content) = fs::read_to_string(&path) {
-        if let Ok(folders) = serde_json::from_str(&content) {
-            return folders;
-        }
-    }
-    vec![]
-}
-
-/// 保存智能文件夹列表
-fn save_smart_folders(folders: &[Value]) {
-    let path = get_app_data_path("smart_folders_data.json");
-    if let Some(parent) = Path::new(&path).parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let _ = fs::write(
-        &path,
-        serde_json::to_string_pretty(folders).unwrap_or_default(),
-    );
 }
 
 /// 获取应用数据路径
