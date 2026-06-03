@@ -27,7 +27,7 @@
   - [7.1 媒体集合（Media Collection）](#71-媒体集合media-collection)
   - [7.2 小说阅读器（Novel Reader）](#72-小说阅读器novel-reader)
   - [7.3 游戏库（Game Library）](#73-游戏库game-library)
-  - [7.4 PicACG 漫画平台](#74-picacg-漫画平台)
+  - [7.4 Manga 漫画平台](#74-manga-漫画平台)
   - [7.5 局域网传输（LAN Transfer）](#75-局域网传输lan-transfer)
   - [7.6 解压工具（Extract）](#76-解压工具extract)
   - [7.7 Sentry 日志收集](#77-sentry-日志收集)
@@ -51,11 +51,11 @@
 ### 核心特性
 
 | 特性 | 说明 |
-|------|------|
+| ------ | ------ |
 | 媒体集合管理 | 本地图片/视频/音频的目录扫描、缩略图生成、文件夹分组 |
 | 小说阅读器 | 支持 TXT/EPUB 格式，章节解析、全文搜索、阅读进度、AI 翻译 |
 | 游戏库 | 视觉小说/游戏管理，时长追踪，元数据抓取（萌娘百科/2DFan） |
-| PicACG 漫画 | 漫画浏览/搜索/下载/离线阅读，7 种分流模式 |
+| Manga 漫画 | 漫画浏览/搜索/下载/离线阅读，7 种分流模式 |
 | 局域网传输 | mDNS 设备发现，文件/文本传输，信任设备管理 |
 | 解压工具 | 多格式解压（7z/zip/tar.gz/bz2/xz/lzma/zstd），密码库管理 |
 | 抓包代理 | HTTP/HTTPS MITM 代理，CA 证书管理 |
@@ -72,7 +72,7 @@
 ### 前端（Flutter/Dart）
 
 | 类别 | 技术 | 版本 |
-|------|------|------|
+| ------ | ------ | ------ |
 | 框架 | Flutter | 3.41.0-0.0.pre |
 | 语言 | Dart | 3.11.0 |
 | 状态管理 | GetX | ^4.7.3 |
@@ -95,7 +95,7 @@
 ### 后端（Rust）
 
 | 类别 | 技术 | 版本 |
-|------|------|------|
+| ------ | ------ | ------ |
 | 语言 | Rust | 1.92.0 |
 | FFI 桥接 | flutter_rust_bridge | =2.11.1 |
 | 数据库 | redb (KV) / rusqlite (SQLite) | 2.1 / 0.31 |
@@ -118,7 +118,7 @@
 
 ## 3. 项目整体架构
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Flutter 前端层                           │
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐  │
@@ -140,7 +140,7 @@
 │  └──┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬───┘ │
 │     ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼     │
 │  ┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐  │
-│  │media ││novel ││game  ││picacg││lan   ││extract││sentry│  │
+│  │media ││novel ││game  ││manga││lan   ││extract││sentry│  │
 │  │coll. ││reader││lib.  ││module││trans.││module ││log   │  │
 │  └──┬───┘└──┬───┘└──────┘└──────┘└──────┘└──┬───┘└──────┘  │
 │     ▼       ▼                               ▼              │
@@ -158,7 +158,8 @@
 │  │   PC 中转 / 媒体服务 / Sentry 端点    │                   │
 │  └──────────────────────────────────────┘                   │
 └──────────────────────────────────────────────────────────────┘
-```
+
+```text
 
 ### 架构设计原则
 
@@ -173,7 +174,7 @@
 
 ## 4. 目录结构
 
-```
+```text
 slime_works/
 ├── lib/                          # Flutter 主代码
 │   ├── main.dart                 # 应用入口
@@ -198,7 +199,7 @@ slime_works/
 │   │   │       ├── game_library_routes.dart
 │   │   │       ├── lan_transfer_routes.dart
 │   │   │       ├── novel_routes.dart
-│   │   │       ├── picacg_routes.dart
+│   │   │       ├── manga_routes.dart
 │   │   │       ├── placeholder_routes.dart
 │   │   │       ├── test_routes.dart
 │   │   │       └── tools_routes.dart
@@ -210,8 +211,8 @@ slime_works/
 │   │   │   ├── game_process_tracker.dart  # 游戏进程追踪
 │   │   │   ├── lan_transfer_service.dart  # 局域网传输服务
 │   │   │   ├── media_prefs_service.dart   # 媒体偏好设置
-│   │   │   ├── picacg_service.dart        # PicACG 业务服务
-│   │   │   ├── picacg_download_service.dart # PicACG 下载管理
+│   │   │   ├── manga_service.dart        # Manga 业务服务
+│   │   │   ├── manga_download_service.dart # Manga 下载管理
 │   │   │   ├── sentry_settings_service.dart # Sentry 设置服务
 │   │   │   ├── system_tray_service.dart   # 系统托盘服务
 │   │   │   ├── time_consumption_test.dart # 启动耗时测试
@@ -272,7 +273,7 @@ slime_works/
 │   │   ├── lan_transfer/         # 局域网传输
 │   │   ├── novel_library/        # 小说库
 │   │   ├── novel_reader/         # 小说阅读器
-│   │   ├── picacg/               # PicACG 漫画
+│   │   ├── manga/               # Manga 漫画
 │   │   ├── sentry_log/           # Sentry 日志
 │   │   ├── settings/             # 设置页面
 │   │   ├── tools/                # 工具页面
@@ -300,7 +301,7 @@ slime_works/
 │   │       ├── module_loader.dart
 │   │       ├── module_manager.dart
 │   │       ├── novel_reader.dart
-│   │       ├── picacg.dart
+│   │       ├── manga.dart
 │   │       ├── sentry_log.dart
 │   │       ├── simple.dart
 │   │       ├── system_metrics.dart
@@ -321,7 +322,7 @@ slime_works/
 │   ├── media_collection/         # 媒体集合模块
 │   ├── module_manager/           # 模块管理系统
 │   ├── novel_reader/             # 小说阅读器模块
-│   ├── picacg_module/            # PicACG 漫画模块
+│   ├── manga_module/            # Manga 漫画模块
 │   ├── sentry_log/               # Sentry 日志模块 (redb)
 │   ├── ws_module/                # WebSocket 模块
 │   └── examples/                 # Rust 示例
@@ -344,7 +345,8 @@ slime_works/
 ├── .fvmrc                        # FVM 版本配置
 ├── pubspec.yaml                  # Flutter 项目配置
 └── flutter_rust_bridge.yaml      # FRB 配置
-```
+
+```text
 
 ---
 
@@ -356,7 +358,7 @@ slime_works/
 
 应用启动流程：
 
-```
+```text
 main()
  ├── WidgetsFlutterBinding.ensureInitialized()
  ├── AppInfoService.init()              # 初始化应用信息
@@ -366,8 +368,8 @@ main()
  ├── SystemTrayService.init()           # 系统托盘 (桌面端)
  ├── RustLib.init()                     # FRB 初始化（必须在所有 Rust 调用前）
  ├── MediaKit.ensureInitialized()       # 视频播放引擎
- ├── PicAcgService.init()               # 恢复漫画登录态
- ├── PicAcgDownloadService.init()       # 恢复下载元数据
+ ├── MangaService.init()               # 恢复漫画登录态
+ ├── MangaDownloadService.init()       # 恢复下载元数据
  ├── PaintingBinding.imageCache.maximumSizeBytes = 80MB  # 限制图片缓存
  ├── NodeSettingsService.init()         # 节点服务初始化
  ├── SentrySettingsService.init()       # Sentry 配置
@@ -377,7 +379,8 @@ main()
       ├── initializeLogger()            # 日志初始化
       ├── sentryLogInit()               # Sentry 数据库初始化
       └── configLoading()               # EasyLoading 配置
-```
+
+```text
 
 **MyApp** 类使用 `Obx` 响应式监听主题变化（`themeModeObs`、`accentColorObs`、`fontScaleObs`、`metricsVersion`），通过 `ScreenUtilInit` 适配不同屏幕尺寸（桌面 1920×1080 / 移动 375×815），使用 `MaterialApp.router` + `GoRouter` 管理路由。
 
@@ -386,7 +389,7 @@ main()
 项目采用 **双轨制** 状态管理：
 
 | 管理方式 | 适用场景 | 生命周期 |
-|----------|----------|----------|
+| ---------- | ---------- | ---------- |
 | **GetX** | UI/页面状态、响应式数据绑定 | 随页面销毁或永久存在 |
 | **GetIt** | 业务 Service、Rust FFI 桥接层、全局单例 | 应用级单例 |
 
@@ -407,9 +410,11 @@ abstract class BaseViewModel extends GetxController {
   void setError(String? error);     // 设置错误信息
   void clearError();                // 清除错误
 }
-```
+
+```text
 
 使用方式：
+
 - **随页面销毁**：在 `createViewModel()` 中直接返回实例
 - **长期存在**：使用 `Get.put(viewModel, permanent: true)`
 
@@ -429,7 +434,8 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
   bool get enableNetworkMonitoring; // 是否启用网络监听自动重连
   bool get showErrorPageOnInitFailed; // 是否在初始化失败时显示错误页面
 }
-```
+
+```text
 
 **生命周期**: `initState` → `createViewModel` → `_initializePage` → `onPageInit` → `buildContent`
 
@@ -444,11 +450,11 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 使用 **TypedGoRoute** 实现类型安全路由，路由定义模块化拆分：
 
 | Part 文件 | 路由模块 |
-|-----------|----------|
+| ----------- | ---------- |
 | `routes/core_routes.dart` | 核心路由（Dashboard、Settings、About） |
 | `routes/collection_routes.dart` | 收藏夹路由 |
 | `routes/game_library_routes.dart` | 游戏库路由 |
-| `routes/picacg_routes.dart` | PicACG 路由 |
+| `routes/manga_routes.dart` | Manga 路由 |
 | `routes/novel_routes.dart` | 小说路由 |
 | `routes/lan_transfer_routes.dart` | 局域网传输路由 |
 | `routes/capture_routers.dart` | 抓包路由 |
@@ -463,7 +469,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 **完整路由表**:
 
 | 路径 | 路由类 | 侧边栏分组 |
-|------|--------|------------|
+| ------ | -------- | ------------ |
 | `/dashboard` | `DashboardRoute` | core |
 | `/capture` | `CaptureRoute` | core |
 | `/collection/library` | `CollectionLibraryRoute` | collection |
@@ -473,18 +479,18 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 | `/game/categories` | `GameCategoriesRoute` | game-library |
 | `/game/stats` | `GameStatsRoute` | game-library |
 | `/game/settings` | `GameSettingsRoute` | game-library |
-| `/picacg` | `PicAcgHomeRoute` | picacg |
-| `/picacg/downloads` | `PicAcgDownloadsRoute` | picacg |
+| `/manga` | `MangaHomeRoute` | manga |
+| `/manga/downloads` | `MangaDownloadsRoute` | manga |
 | `/lan-transfer` | `LanTransferRoute` | tools |
 | `/settings` | `SettingsRoute` | bottom |
 | `/about` | `AboutRoute` | bottom |
 | `/tools` | `ToolsRoute` | tools |
 | `/sentry-log` | `SentryLogRoute` | tools |
 | `/novel/reader` | `NovelReaderRoute` | — (非侧边栏) |
-| `/picacg/comic-detail` | `PicAcgComicDetailRoute` | — (非侧边栏) |
-| `/picacg/search` | `PicAcgSearchRoute` | — (非侧边栏) |
-| `/picacg/reader` | `PicAcgReaderRoute` | — (非侧边栏) |
-| `/picacg/history` | `PicAcgHistoryRoute` | — (非侧边栏) |
+| `/manga/comic-detail` | `MangaComicDetailRoute` | — (非侧边栏) |
+| `/manga/search` | `MangaSearchRoute` | — (非侧边栏) |
+| `/manga/reader` | `MangaReaderRoute` | — (非侧边栏) |
+| `/manga/history` | `MangaHistoryRoute` | — (非侧边栏) |
 | `/game/detail` | `GameDetailRoute` | — (非侧边栏) |
 | `/game/category-detail` | `GameCategoryDetailRoute` | — (非侧边栏) |
 | `/lan-chat` | `LanChatRoute` | — (非侧边栏) |
@@ -492,6 +498,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 **路由守卫**: 在 `redirect` 回调中通过 `RoleManager` 检查权限，无权限时重定向到 `/dashboard`。
 
 **页面过渡动画**:
+
 - `buildPage()` — 缩放 + 淡入（220ms / 180ms）
 - `buildFadePage()` — 纯淡入（320ms / 260ms）
 - iOS 使用 `CupertinoPage` 原生过渡
@@ -501,11 +508,11 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 **侧边栏生成**: [app_sidebars.dart](file:///Users/shilaimu/research/Software/slime_works/lib/core/routes/app_sidebars.dart) 中 `buildSidebarGroupsFromRoutes()` 从路由元数据自动生成分组侧边栏，分组配置：
 
 | 分组ID | 标题 | 排序 | 权限 |
-|--------|------|------|------|
+| -------- | ------ | ------ | ------ |
 | core | — | 10 | viewDashboard |
 | collection | 收藏夹 | 20 | accessCollection |
 | game-library | 游戏 | 30 | accessGameLibrary |
-| picacg | — | 40 | accessPicAcg |
+| manga | — | 40 | accessManga |
 | tools | 工具 | 45 | accessTools |
 | bottom | — | 90 | accessSettings |
 
@@ -525,15 +532,16 @@ void getItInit() {
   getIt.registerLazySingleton<LanTransferService>(() => LanTransferService());
   getIt.registerLazySingleton<NodeSettingsService>(() => NodeSettingsService());
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
-  getIt.registerLazySingleton<PicAcgService>(() => PicAcgService());
-  getIt.registerLazySingleton<PicAcgDownloadService>(() => PicAcgDownloadService());
+  getIt.registerLazySingleton<MangaService>(() => MangaService());
+  getIt.registerLazySingleton<MangaDownloadService>(() => MangaDownloadService());
   getIt.registerLazySingleton<GameLibraryMetadataApi>(() => GameLibraryMetadataApi());
   getIt.registerLazySingleton<GameLibraryService>(() => GameLibraryService(metadataApi: getIt<GameLibraryMetadataApi>()));
   getIt.registerLazySingleton<GameProcessTracker>(() => GameProcessTracker(service: getIt<GameLibraryService>()));
   getIt.registerLazySingleton<ExtractService>(() => ExtractService());
   getIt.registerLazySingleton<SentrySettingsService>(() => SentrySettingsService());
 }
-```
+
+```text
 
 ### 5.5 主题系统
 
@@ -544,7 +552,7 @@ void getItInit() {
 静态工具类，核心功能：
 
 | 功能 | 说明 |
-|------|------|
+| ------ | ------ |
 | `buildCustomLight(accent, fontScale)` | 构建亮色主题 |
 | `buildCustomDark(accent, fontScale)` | 构建暗色主题 |
 | `loadSavedTheme()` | 从 SharedPreferences 加载主题配置 |
@@ -553,6 +561,7 @@ void getItInit() {
 | `resetMetrics()` | 重新计算所有 UI 尺寸 |
 
 **响应式状态**:
+
 - `themeModeObs` — 主题模式 (system/light/dark)
 - `accentColorObs` — 强调色 (默认 `#A89FEE`)
 - `fontScaleObs` — 字体缩放 (0.5~2.0)
@@ -563,7 +572,7 @@ void getItInit() {
 集中管理所有 UI 尺寸度量，基于 ScreenUtil 响应式缩放：
 
 | 类别 | 属性示例 |
-|------|----------|
+| ------ | ---------- |
 | 圆角 | `radius2` ~ `radius999` (2~999px) |
 | 字体 | `fontSize9` ~ `fontSize72` |
 | 间距 | `kSpace1` ~ `kSpace80` |
@@ -576,7 +585,7 @@ void getItInit() {
 **LightColors** / **DarkColors** 完整颜色定义：
 
 | 类别 | 亮色 | 暗色 |
-|------|------|------|
+| ------ | ------ | ------ |
 | 主色 | `#A89FEE` (淡紫) | `#A89FEE` |
 | 背景1 | `#FFFFFF` | `#1E1F1C` |
 | 背景2 | `#F5F5F5` | `#383838` |
@@ -594,17 +603,17 @@ void getItInit() {
 **角色枚举** (`UserRole`):
 
 | 角色 | 权限范围 |
-|------|----------|
+| ------ | ---------- |
 | `creator` | 全部权限（16个） |
 | `admin` | 除 accessCollection 外的全部权限 |
-| `editor` | 仪表盘 + 内容编辑 + 小说/游戏/PicACG |
+| `editor` | 仪表盘 + 内容编辑 + 小说/游戏/Manga |
 | `guest` | 仅仪表盘 |
 | `developer` | 全部权限 |
 
 **权限枚举** (`Permission`):
 
 | 权限 | 说明 |
-|------|------|
+| ------ | ------ |
 | `viewDashboard` | 仪表盘 |
 | `manageUsers` | 用户管理 |
 | `editContent` | 内容编辑 |
@@ -619,7 +628,7 @@ void getItInit() {
 | `accessWebSocketTest` | WebSocket测试 |
 | `accessCollection` | 收藏夹 |
 | `accessDemo` | 演示 |
-| `accessPicAcg` | PicACG |
+| `accessManga` | Manga |
 | `accessTools` | 工具 |
 | `accessSentryLog` | Sentry日志 |
 
@@ -634,7 +643,7 @@ void getItInit() {
 响应式尺寸换算工具：
 
 | 函数 | 说明 |
-|------|------|
+| ------ | ------ |
 | `scaleW(w)` | 响应式宽度换算（基于 ScreenUtil + 自适应系数） |
 | `scaleH(h)` | 响应式高度换算 |
 | `scaleS(fontSize)` | 响应式字体换算（字体缩放系数与宽度不同） |
@@ -643,6 +652,7 @@ void getItInit() {
 | `isFold` | 屏幕高宽比 < 1.2 |
 
 **自适应缩放系数** (`_adaptiveScaleFactor`):
+
 - 移动端: 0.94~1.0（根据屏幕宽度微调）
 - 桌面端: 1.08~1.14（根据屏幕宽度微调）
 
@@ -653,6 +663,7 @@ void getItInit() {
 **文件**: [logger.dart](file:///Users/shilaimu/research/Software/slime_works/lib/core/utils/logger.dart)
 
 日志工具类 `Loggers`，支持：
+
 - `info(message)` / `error(message, error, stackTrace)` / `d(message)` / `i(message)` / `e(message)`
 - Loki 远程日志上报（5分钟退避机制）
 - 日志保存到文件（Base64 编码可选）
@@ -689,7 +700,7 @@ GetX 生命周期绑定 Widget，用于在使用 GoRouter 时保持 GetX 的依�
 主库通过 `flutter_rust_bridge` 将所有子模块 API 暴露给 Dart 层。`api/mod.rs` 转发 17 个子模块的 API：
 
 | API 模块 | 对应子 crate | 功能 |
-|----------|-------------|------|
+| ---------- | ------------- | ------ |
 | `capture` | capture_proxy | 抓包代理 |
 | `extract` | extract_module | 解压工具 |
 | `ffmpeg` | — | FFmpeg 封装 |
@@ -702,25 +713,27 @@ GetX 生命周期绑定 Widget，用于在使用 GoRouter 时保持 GetX 的依�
 | `module_loader` | module_manager | 模块加载 |
 | `module_manager` | module_manager | 模块管理 |
 | `novel_reader` | novel_reader | 小说阅读器 |
-| `picacg` | picacg_module | PicACG 漫画 |
+| `manga` | manga_module | Manga 漫画 |
 | `sentry_log` | sentry_log | Sentry 日志 |
 | `simple` | — | 简单工具 |
 | `system_metrics` | — | 系统指标 |
 | `websocket` | ws_module | WebSocket |
 
 FRB 配置 (`flutter_rust_bridge.yaml`):
+
 ```yaml
 rust_input: crate::api
 rust_root: rust/
 dart_output: lib/src/rust
-```
+
+```text
 
 ### 6.2 子模块详解
 
 #### db_module — 通用数据库模块
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 存储 | redb 嵌入式 KV 数据库 |
 | 加密 | 可选 AES-GCM |
 | 依赖 | 无（基础模块） |
@@ -729,6 +742,7 @@ dart_output: lib/src/rust
 核心 API：`db_init` / `db_register_table` / `db_set` / `db_get` / `db_delete` / `db_list_keys` / `db_list_all` / `db_batch_set` / `db_count` / `db_clear_table`
 
 源文件结构：
+
 - `lib.rs` — 模块导出
 - `api.rs` — 公共 API
 - `storage.rs` — 存储引擎实现
@@ -737,7 +751,7 @@ dart_output: lib/src/rust
 #### media_collection — 媒体集合管理
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 功能 | 图片/视频/音频集合管理、缩略图生成、目录扫描 |
 | 缩略图引擎 | ffmpeg + image crate 双引擎（ffmpeg 优先，image 回退） |
 | 缓存 | 内存缓存 + 空闲自动释放 |
@@ -745,6 +759,7 @@ dart_output: lib/src/rust
 | crate-type | staticlib + rlib |
 
 核心 Dart 类型（FRB 生成）：
+
 - `MediaCollection` — 媒体集合（id, title, folderPath, folderId, coverPath, itemCount, createdAt, updatedAt）
 - `MediaItem` — 媒体项（id, collectionId, title, filePath, kind, fileSize, modifiedAt, width, height, durationMs, order）
 - `MediaFolder` — 文件夹（id, name, createdAt, order, parentId）
@@ -756,7 +771,7 @@ dart_output: lib/src/rust
 #### novel_reader — 小说阅读器
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 格式 | TXT / EPUB |
 | 功能 | 书籍 CRUD、文件夹管理、全文搜索、阅读进度、关键词自动打标签 |
 | EPUB | 按需加载章节，封面提取与压缩 |
@@ -766,6 +781,7 @@ dart_output: lib/src/rust
 | crate-type | staticlib + rlib |
 
 核心 Dart 类型：
+
 - `NovelMetadata` — 书籍元数据（id, title, author, filePath, format, fileSize, progress, isFavorite, tags, notes, coverPath, folderId, customOrder）
 - `NovelContent` — 书籍内容（novelId, chapters）
 - `NovelChapter` — 章节（id, title, index, content）
@@ -782,7 +798,7 @@ dart_output: lib/src/rust
 #### game_library — 游戏库管理
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 数据库 | rusqlite (SQLite, bundled) |
 | 功能 | 游戏 CRUD、分类、时长追踪、统计、目录扫描、启动游戏 |
 | 元数据 | 萌娘百科 / 2DFan 网页抓取 (reqwest + scraper) |
@@ -795,7 +811,7 @@ dart_output: lib/src/rust
 #### extract_module — 解压工具
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 格式 | 7z (sevenz-rust2) / zip / tar / gz (flate2) / bz2 / xz (liblzma) |
 | 功能 | 批量解压、进度追踪、取消操作、密码管理 |
 | 依赖 | db_module |
@@ -806,7 +822,7 @@ dart_output: lib/src/rust
 #### http_bridge — HTTP 桥接
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 功能 | 为移动端提供 HTTP 接口，转发到 FRB 函数 |
 | 机制 | 处理器注册（module + function → handler） |
 | 服务器 | hyper HTTP 服务器 |
@@ -816,6 +832,7 @@ dart_output: lib/src/rust
 核心 API：`initHttpBridge` / `getRegisteredHandlers` / `callHandler` / `startNodeServer` / `stopNodeServer` / `isNodeServerRunning`
 
 源文件结构：
+
 - `lib.rs` — 模块导出 + 全局状态管理
 - `server.rs` — HTTP 服务器实现
 - `client.rs` — HTTP 客户端
@@ -824,7 +841,7 @@ dart_output: lib/src/rust
 #### lan_transfer — 局域网传输
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 发现 | mDNS |
 | 传输 | TCP |
 | 功能 | 文件/文本传输、信任设备管理、传输历史 |
@@ -834,14 +851,15 @@ dart_output: lib/src/rust
 核心 API：`lanTransferInit` / `lanTransferStart` / `lanTransferStop` / `lanTransferGetLocalDevice` / `lanTransferGetDevices` / `lanTransferSendText` / `lanTransferSendFile` / `lanTransferAccept` / `lanTransferReject` / `lanTransferCancel` / `lanTransferGetTransfers` / `lanTransferAddTrusted` / `lanTransferRemoveTrusted` / `lanTransferIsTrusted` / `lanTransferGetTrustedDevices`
 
 源文件结构：
+
 - `lib.rs` — 模块导出
 - `api.rs` — 公共 API
 - `discovery.rs` — mDNS 设备发现
 
-#### picacg_module — PicACG 漫画平台
+#### manga_module — Manga 漫画平台
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 功能 | API 客户端、认证、浏览/搜索、收藏/点赞/评论、多分流模式 |
 | TLS | hyper-rustls + rustls |
 | 签名 | HMAC-SHA256 |
@@ -849,22 +867,23 @@ dart_output: lib/src/rust
 | 依赖 | 无 |
 | crate-type | staticlib + rlib |
 
-分流模式（`picacgSetChannel`）：
+分流模式（`mangaSetChannel`）：
+
 | mode | 说明 |
-|------|------|
+| ------ | ------ |
 | 0 | 标准直连 |
 | 2 | 分流2 (IP: 104.21.91.145) |
 | 3 | 分流3 (IP: 188.114.98.153) |
 | 4 | CDN分流 (自定义IP，默认 104.18.227.172) |
-| 5 | JP反代 (https://bika-api.jpacg.cc) |
-| 6 | US反代 (https://bika2-api.jpacg.cc) |
+| 5 | JP反代 (<https://bika-api.jpacg.cc>) |
+| 6 | US反代 (<https://bika2-api.jpacg.cc>) |
 
-核心 API：`picacgInit` / `picacgLogin` / `picacgSetProxy` / `picacgSetToken` / `picacgSetChannel` / `picacgSetImageServer` / `picacgTestChannel` / `picacgGetCollections` / `picacgGetRandomComics` / `picacgGetCategories` / `picacgSearchComics` / `picacgGetComicDetail` / `picacgGetComicEps` / `picacgGetEpsPages` / `picacgGetFavourites` / `picacgToggleFavourite` / `picacgToggleLike` / `picacgGetComments` / `picacgSendComment` / `picacgBuildImageUrl` / `picacgFetchImage` / `picacgInitHistory` / `picacgLoadHistory` / `picacgSaveHistoryRaw` / `picacgClearHistory`
+核心 API：`mangaInit` / `mangaLogin` / `mangaSetProxy` / `mangaSetToken` / `mangaSetChannel` / `mangaSetImageServer` / `mangaTestChannel` / `mangaGetCollections` / `mangaGetRandomComics` / `mangaGetCategories` / `mangaSearchComics` / `mangaGetComicDetail` / `mangaGetComicEps` / `mangaGetEpsPages` / `mangaGetFavourites` / `mangaToggleFavourite` / `mangaToggleLike` / `mangaGetComments` / `mangaSendComment` / `mangaBuildImageUrl` / `mangaFetchImage` / `mangaInitHistory` / `mangaLoadHistory` / `mangaSaveHistoryRaw` / `mangaClearHistory`
 
 #### sentry_log — Sentry 日志收集
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 存储 | redb |
 | 功能 | 兼容 Sentry SDK 协议、事件存储/查询/统计/导出 |
 | 依赖 | 无（自建数据库） |
@@ -875,13 +894,14 @@ dart_output: lib/src/rust
 #### ws_module — WebSocket
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 桌面端 | WebSocket 服务器 |
 | 移动端 | WebSocket 客户端 |
 | 条件编译 | `#[cfg(desktop)]` / `#[cfg(mobile)]` |
 | 依赖 | 无 |
 
 核心 Dart 类型：
+
 - `WsClient` / `WsServer` / `WsMessage` / `WsConnectionState` (均为 RustOpaque)
 
 核心 API：`wsClientNew` / `wsClientConnect` / `wsClientDisconnect` / `wsClientSendText` / `wsClientSendBinary` / `wsClientIsConnected` / `wsClientGetState` / `wsClientReceiveMessage` / `wsServerNew` / `wsServerStart` / `wsServerStop` / `wsServerBroadcast` / `wsServerGetClientCount`
@@ -889,12 +909,13 @@ dart_output: lib/src/rust
 #### module_manager — 模块管理
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 功能 | 版本管理、MD5 校验、自动更新、动态库加载/卸载/重载 |
 | 动态加载 | libloading |
 | 依赖 | 无 |
 
 核心 Dart 类型：
+
 - `ModuleManager` / `ModuleLoader` (RustOpaque)
 - `AvailableModuleInfo` — 可用模块（name, version, moduleType, description）
 - `InstalledModule` — 已安装模块（moduleName, version, isLocked, filePath, moduleType, fileSize, installedAt）
@@ -905,18 +926,20 @@ dart_output: lib/src/rust
 #### capture_proxy — 抓包代理
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 类型 | cdylib 动态库（运行时加载，不静态链接） |
 | 功能 | HTTP/HTTPS MITM 代理、CA 证书管理、流量捕获 |
 | 依赖 | 无 |
 | crate-type | cdylib（独立 Cargo.lock） |
 
 核心 Dart 类型：
+
 - `CaptureStats` — 捕获统计（total, videos, images, json, javascript）
 
 核心 API：`startCaptureProxy` / `stopCaptureProxy` / `isProxyRunning` / `getCapturedVideos` / `getCapturedImages` / `getCapturedJson` / `getCapturedJavascript` / `clearCapturedData` / `getCaptureStats` / `installCaCertificate` / `isCaCertificateInstalled` / `isRunningAsAdministrator` / `initializeLogger` / `getLoggerDirectory` / `cleanupLoggerOldFiles` / `writeLogInfo` / `writeLogError`
 
 源文件结构：
+
 - `lib.rs` — 模块导出
 - `capture.rs` — 捕获逻辑
 - `cert.rs` — CA 证书管理
@@ -932,8 +955,9 @@ dart_output: lib/src/rust
 PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 
 **文件结构**:
+
 | 文件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `mod.rs` | 入口，服务器生命周期管理 |
 | `router.rs` | 路由注册与分发 |
 | `media_handler.rs` | 媒体文件流式分发（图片缩放、Range 请求） |
@@ -942,15 +966,15 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **路由表**:
 
 | 路由 | 功能 |
-|------|------|
+| ------ | ------ |
 | `POST /node/call` | 动作分发（调用 media_collection / novel_reader 等 FFI 函数） |
 | `GET /node/media` | 媒体文件服务（图片缩放、Range 请求流式分发） |
 | `POST /node/upload` | 文件上传 |
 | `GET /health` | 健康检查 |
-| `GET /picacg/ping` | PicACG 中转连通性检测 |
-| `POST /picacg/api` | PicACG API 中转 |
-| `GET /picacg/img` | PicACG 图片中转 |
-| `GET /picacg/token` | PicACG Token 中转 |
+| `GET /manga/ping` | Manga 中转连通性检测 |
+| `POST /manga/api` | Manga API 中转 |
+| `GET /manga/img` | Manga 图片中转 |
+| `GET /manga/token` | Manga Token 中转 |
 | `POST /api/{id}/store` | Sentry 兼容端点 |
 | `POST /api/{id}/envelope` | Sentry Envelope 端点 |
 | `GET /sentry/logs` | Sentry 日志查询 |
@@ -966,13 +990,16 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **Flutter 页面**: `pages/collection/picture/` + `pages/collection/library/`
 
 **数据流**:
-```
+
+```text
 用户操作 → MediaLibraryViewModel → Rust FFI → media_collection crate → redb
-```
+
+```text
 
 **ViewModel**: `MediaLibraryViewModel` + `MediaLibraryVmCollections` + `MediaLibraryVmRemote` + `MediaLibraryVmSmartFolders`
 
 **关键功能**:
+
 - 目录扫描导入媒体文件
 - 缩略图生成（ffmpeg / image 双引擎，ffmpeg 优先支持 HEIC/AVIF）
 - 文件夹分组与层级管理（支持嵌套文件夹）
@@ -983,8 +1010,9 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - 瀑布流网格布局（`MasonryMediaGrid`）
 
 **页面组件**:
+
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `MasonryMediaGrid` | 瀑布流网格 |
 | `MediaBrowseGrid` | 浏览网格 |
 | `MediaCollectionCard` | 集合卡片 |
@@ -1000,11 +1028,14 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **Flutter 页面**: `pages/novel_library/` + `pages/novel_reader/`
 
 **数据流**:
-```
+
+```text
 用户操作 → NovelLibraryViewModel / NovelReaderViewModel → Rust FFI → novel_reader crate → redb
-```
+
+```text
 
 **关键功能**:
+
 - TXT/EPUB 文件扫描与导入（支持批量扫描 `scanNovelsFolderBatched`）
 - 章节自动解析（TXT 按正则分割，EPUB 按 spine 解析）
 - 阅读进度持久化
@@ -1016,8 +1047,9 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - 书籍排序、收藏、标签、备注
 
 **阅读器组件**:
+
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `ChapterList` | 章节列表 |
 | `ReaderContent` | 阅读内容 |
 | `ReaderHighlightUtils` | 高亮工具 |
@@ -1030,14 +1062,16 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **Flutter 页面**: `pages/game_library/` (home / library / detail / categories / stats / settings)
 
 **数据流**:
-```
+
+```text
 用户操作 → GameLibrary*ViewModel → GameLibraryService → Rust FFI → game_library crate → SQLite
-```
+
+```text
 
 **ViewModel 矩阵**:
 
 | ViewModel | 职责 |
-|-----------|------|
+| ----------- | ------ |
 | `GameLibraryHomeViewModel` | 首页数据加载、游戏启动 |
 | `GameLibraryLibraryViewModel` | 游戏列表 CRUD、搜索过滤、批量导入、元数据刷新 |
 | `GameLibraryDetailViewModel` | 游戏详情、元数据编辑 |
@@ -1050,6 +1084,7 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **GameLibraryMetadataApi**: 聚合萌娘百科 / 2DFan 两个数据源，网页抓取
 
 **核心 Rust API**:
+
 - `gameLibraryLaunchGame` — 启动游戏（返回 PID）
 - `gameLibraryScanDirectoryJson` — 目录扫描
 - `gameLibraryFetchMoegirl` — 萌娘百科元数据
@@ -1057,49 +1092,55 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - `gameLibraryGetStatsJson` — 统计数据（按时间范围）
 - `gameLibraryGetHomePageDataJson` — 首页数据
 
-### 7.4 PicACG 漫画平台
+### 7.4 Manga 漫画平台
 
-**Flutter 页面**: `pages/picacg/` (home / comic_detail / search / reader / downloads / favourites / history)
+**Flutter 页面**: `pages/manga/` (home / comic_detail / search / reader / downloads / favourites / history)
 
 **数据流**:
-```
-用户操作 → Picacg*ViewModel → PicAcgService / PicAcgDownloadService → Rust FFI → picacg_module
-```
+
+```text
+用户操作 → Manga*ViewModel → MangaService / MangaDownloadService → Rust FFI → manga_module
+
+```text
 
 **ViewModel 矩阵**:
 
 | ViewModel | 职责 |
-|-----------|------|
-| `PicacgHomeViewModel` | 首页推荐/分类/排行榜 |
-| `PicacgComicDetailViewModel` | 漫画详情/章节 |
-| `PicacgSearchViewModel` | 搜索 |
-| `PicacgReaderViewModel` | 阅读器 |
-| `PicacgDownloadsViewModel` | 下载管理 |
-| `PicacgFavouritesViewModel` | 收藏管理 |
-| `PicacgHistoryViewModel` | 浏览历史 |
+| ----------- | ------ |
+| `MangaHomeViewModel` | 首页推荐/分类/排行榜 |
+| `MangaComicDetailViewModel` | 漫画详情/章节 |
+| `MangaSearchViewModel` | 搜索 |
+| `MangaReaderViewModel` | 阅读器 |
+| `MangaDownloadsViewModel` | 下载管理 |
+| `MangaFavouritesViewModel` | 收藏管理 |
+| `MangaHistoryViewModel` | 浏览历史 |
 
 **分流模式** (7 种): 直连 / 分流2 / 分流3 / CDN / JP反代 / US反代 / PC中转
 
 **下载服务**: 队列管理、进度追踪、离线阅读路径查询
 
 **页面组件**:
+
 | 组件 | 说明 |
-|------|------|
-| `PicacgComicCard` | 漫画卡片 |
-| `PicacgImageView` | 图片查看 |
-| `PicacgLoginDialog` | 登录对话框 |
-| `PicacgBlockWordsDialog` | 屏蔽词对话框 |
+| ------ | ------ |
+| `MangaComicCard` | 漫画卡片 |
+| `MangaImageView` | 图片查看 |
+| `MangaLoginDialog` | 登录对话框 |
+| `MangaBlockWordsDialog` | 屏蔽词对话框 |
 
 ### 7.5 局域网传输（LAN Transfer）
 
 **Flutter 页面**: `pages/lan_transfer/` (lan_transfer_screen / lan_chat_screen)
 
 **数据流**:
-```
+
+```text
 用户操作 → LanTransferViewModel → LanTransferService → Rust FFI → lan_transfer crate
-```
+
+```text
 
 **关键功能**:
+
 - mDNS 设备发现
 - 文件/文本传输
 - 信任设备管理（预加载信任列表避免竞态）
@@ -1107,8 +1148,9 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - 聊天功能
 
 **页面组件**:
+
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `DeviceList` | 设备列表 |
 | `PendingRequests` | 待处理请求 |
 | `ScanningAnimation` | 扫描动画 |
@@ -1121,11 +1163,14 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **Flutter 页面**: `pages/tools/`
 
 **数据流**:
-```
+
+```text
 用户操作 → ExtractService → Rust FFI → extract_module crate → db_module (密码库)
-```
+
+```text
 
 **关键功能**:
+
 - 多格式解压（7z/zip/tar.gz/bz2/xz/lzma/zstd）
 - 批量解压与进度追踪
 - 密码库管理（持久化到 redb）
@@ -1133,8 +1178,9 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - 200ms 进度轮询
 
 **页面组件**:
+
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `ExtractCard` | 解压卡片 |
 | `ExtractParamsDialog` | 参数对话框 |
 | `ExtractProgressDialog` | 进度对话框 |
@@ -1146,20 +1192,24 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 **Flutter 页面**: `pages/sentry_log/`
 
 **数据流**:
-```
+
+```text
 Sentry SDK → Node Server / 本地 → sentry_log crate → redb
 用户操作 → SentryLogViewModel → SentrySettingsService → Rust FFI / 远程 API
-```
+
+```text
 
 **关键功能**:
+
 - 兼容 Sentry SDK 协议（store/envelope 端点）
 - 事件查询/统计/导出
 - 项目管理
 - 本地/远程节点切换
 
 **页面组件**:
+
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `SentryLogEventDetail` | 事件详情 |
 | `SentryLogFilterBar` | 过滤栏 |
 | `SentryLogList` | 日志列表 |
@@ -1170,12 +1220,15 @@ Sentry SDK → Node Server / 本地 → sentry_log crate → redb
 **Flutter 页面**: `pages/backup/capture_screen/`
 
 **数据流**:
-```
+
+```text
 HTTP 流量 → capture_proxy (MITM) → CapturedItem
 用户操作 → CaptureScreenViewModel → Rust FFI → capture_proxy (动态加载)
-```
+
+```text
 
 **关键功能**:
+
 - HTTP/HTTPS 代理服务器
 - MITM 拦截与流量捕获
 - CA 证书动态生成与管理
@@ -1183,8 +1236,9 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 - 捕获统计（视频/图片/JSON/JS 分类计数）
 
 **页面组件**:
+
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `AvailableVideoCard` | 可用视频卡片 |
 | `ControlPanel` | 控制面板 |
 | `RecordingTaskCard` | 录制任务卡片 |
@@ -1196,15 +1250,15 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 ## 8. 服务层详解
 
 | 服务类 | 注册方式 | 职责 |
-|--------|----------|------|
+| -------- | ---------- | ------ |
 | `DesktopScreenProvider` / `DesktopScreenProviderImpl` | GetIt | 屏幕尺寸与布局信息提供、ScreenChrome 栈管理、移动端沉浸模式 |
 | `OllamaService` | GetIt | Ollama AI 模型调用（多服务器轮询、流式生成、翻译） |
 | `OllamaSettingsService` | GetIt | Ollama 配置持久化（依赖 OllamaService） |
 | `LanTransferService` | GetIt | 局域网设备发现与文件传输 |
 | `NodeSettingsService` | GetIt | 节点服务器管理、远程节点 CRUD、熔断机制、流量统计 |
 | `MediaPrefsService` | GetIt | 媒体偏好设置（缩略图质量、并发量、缓存管理） |
-| `PicAcgService` | GetIt | PicACG 完整业务（认证、浏览、搜索、下载、收藏） |
-| `PicAcgDownloadService` | GetIt | PicACG 下载管理（队列、进度、离线路径） |
+| `MangaService` | GetIt | Manga 完整业务（认证、浏览、搜索、下载、收藏） |
+| `MangaDownloadService` | GetIt | Manga 下载管理（队列、进度、离线路径） |
 | `GameLibraryMetadataApi` | GetIt | 游戏元数据搜索（萌娘百科/2DFan 聚合） |
 | `GameLibraryService` | GetIt | 游戏库数据管理（依赖 MetadataApi） |
 | `GameProcessTracker` | GetIt | 游戏进程追踪（依赖 GameLibraryService） |
@@ -1218,14 +1272,15 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 
 ### 服务依赖关系
 
-```
+```text
 GameProcessTracker ──→ GameLibraryService ──→ GameLibraryMetadataApi
 OllamaSettingsService ──→ OllamaService
 NodeSettingsService ──→ Rust FFI (node_server)
-PicAcgDownloadService ──→ PicAcgService ──→ Rust FFI (picacg_module)
+MangaDownloadService ──→ MangaService ──→ Rust FFI (manga_module)
 ExtractService ──→ Rust FFI (extract_module)
 LanTransferService ──→ Rust FFI (lan_transfer)
-```
+
+```text
 
 ### DesktopScreenProvider 详解
 
@@ -1233,6 +1288,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 **实现类**: `DesktopScreenProviderImpl` (screen_provider_impl.dart)
 
 核心功能：
+
 - 窗口尺寸管理（`width`, `height`, `size`）
 - 桌面/移动端模式判断（`isDesktop`, `isMobile`，基于窗口宽度 600px 阈值）
 - ScreenChrome 栈管理（支持多页面叠加 Chrome 配置）
@@ -1247,7 +1303,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 页面级顶部/底部栏的统一配置：
 
 | 属性 | 类型 | 说明 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `title` | `String?` | 标题文本 |
 | `titleWidget` | `Widget?` | 自定义标题 Widget |
 | `leading` | `Widget?` | 前导 Widget |
@@ -1266,7 +1322,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 ## 9. ViewModel 层详解
 
 | ViewModel | 对应页面 | 核心职责 |
-|-----------|----------|----------|
+| ----------- | ---------- | ---------- |
 | `MediaLibraryViewModel` | 收藏夹-图片 | 媒体库浏览、搜索、筛选 |
 | `MediaLibraryVmCollections` | 收藏夹-图片 | 集合管理 |
 | `MediaLibraryVmRemote` | 收藏夹-图片 | 远程节点媒体访问 |
@@ -1281,13 +1337,13 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | `GameLibraryCategoriesViewModel` | 游戏分类 | 分类管理 |
 | `GameLibraryStatsViewModel` | 游戏统计 | 统计数据 |
 | `GameLibrarySettingsViewModel` | 游戏设置 | 设置管理 |
-| `PicacgHomeViewModel` | PicACG 首页 | 推荐/分类/排行榜 |
-| `PicacgComicDetailViewModel` | PicACG 详情 | 漫画详情/章节 |
-| `PicacgSearchViewModel` | PicACG 搜索 | 搜索 |
-| `PicacgReaderViewModel` | PicACG 阅读器 | 阅读器 |
-| `PicacgDownloadsViewModel` | PicACG 下载 | 下载管理 |
-| `PicacgFavouritesViewModel` | PicACG 收藏 | 收藏管理 |
-| `PicacgHistoryViewModel` | PicACG 历史 | 浏览历史 |
+| `MangaHomeViewModel` | Manga 首页 | 推荐/分类/排行榜 |
+| `MangaComicDetailViewModel` | Manga 详情 | 漫画详情/章节 |
+| `MangaSearchViewModel` | Manga 搜索 | 搜索 |
+| `MangaReaderViewModel` | Manga 阅读器 | 阅读器 |
+| `MangaDownloadsViewModel` | Manga 下载 | 下载管理 |
+| `MangaFavouritesViewModel` | Manga 收藏 | 收藏管理 |
+| `MangaHistoryViewModel` | Manga 历史 | 浏览历史 |
 | `LanTransferViewModel` | 局域网传输 | 设备发现、传输管理 |
 | `CaptureScreenViewModel` | 抓包录屏 | 代理控制、流量展示 |
 | `SentryLogViewModel` | Sentry 日志 | 日志查询、过滤、统计 |
@@ -1300,7 +1356,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 ### 窗口组件 (`components/window/`)
 
 | 组件 | 职责 |
-|------|------|
+| ------ | ------ |
 | `DesktopScaffold` | 桌面端主框架，集成窗口管理器初始化 |
 | `DesktopLayout` | 桌面布局（侧边栏 + 内容区），ShellRoute 使用 |
 | `DesktopHead` | 桌面端标题栏（macOS 红绿灯 / Windows 最小化最大化关闭） |
@@ -1311,7 +1367,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 ### 按钮组件 (`components/buttons/`)
 
 | 组件 | 职责 |
-|------|------|
+| ------ | ------ |
 | `AnimatedButton` | 动画按钮，点击反馈与过渡动画 |
 | `SvgButton` | SVG 图标按钮 |
 | `CuePressable` | 基于 cue 包的可按压组件 |
@@ -1319,33 +1375,33 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 ### 对话框组件 (`components/dialogs/`)
 
 | 组件 | 职责 |
-|------|------|
+| ------ | ------ |
 | `ConfirmDialog` | 确认对话框 |
 | `NodeDirectoryPicker` | 节点目录选择器 |
 
 ### 下拉菜单组件 (`components/dropdown/`)
 
 | 组件 | 职责 |
-|------|------|
+| ------ | ------ |
 | `GooeyDropdown` | 自定义 Gooey 视觉效果下拉菜单 |
 | `GooeyDropdownShader` | Gooey 着色器（使用 `shaders/gooey.frag`） |
 
 ### 动画组件 (`components/animations/`)
 
 | 组件 | 职责 |
-|------|------|
+| ------ | ------ |
 | `StateTransitionAnimation` | 状态过渡动画 |
 
 ### 设置页面标签 (`pages/settings/components/`)
 
 | 组件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `ExtractSettingsTab` | 解压设置 |
 | `GameSettingsTab` | 游戏库设置 |
 | `MediaSettingsTab` | 媒体设置 |
 | `NodeSettingsTab` | 节点设置 |
 | `OllamaSettingsTab` | Ollama AI 设置 |
-| `PicacgSettingsTab` | PicACG 设置 |
+| `MangaSettingsTab` | Manga 设置 |
 | `SentrySettingsTab` | Sentry 设置 |
 | `ThemeSettingsTab` | 主题设置 |
 
@@ -1355,7 +1411,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 
 ### Rust 模块依赖
 
-```
+```text
                     ┌──────────────────────┐
                     │  rust_lib_slime_works │ (主库)
                     │  + node_server        │
@@ -1364,7 +1420,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
     ┌──────────┬───────────┬───┴───┬──────────┬──────────┬──────────┐
     ▼          ▼           ▼       ▼          ▼          ▼          ▼
 ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-│db_     │ │media_  │ │novel_  │ │game_   │ │extract_│ │sentry_ │ │picacg_ │
+│db_     │ │media_  │ │novel_  │ │game_   │ │extract_│ │sentry_ │ │manga_ │
 │module  │ │collect.│ │reader  │ │library │ │module  │ │log     │ │module  │
 └────────┘ └───┬────┘ └──┬─────┘ └────────┘ └───┬────┘ └────────┘ └────────┘
                │         │                      │
@@ -1377,20 +1433,21 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 ┌──────────┐ ┌──────────────┐ ┌──────────────┐
 │ws_module │ │module_manager│ │capture_proxy │ ← cdylib 动态加载
 └──────────┘ └──────────────┘ └──────────────┘
-```
+
+```text
 
 **依赖层次**:
 
 | 层级 | 模块 | 说明 |
-|------|------|------|
-| 基础层 | db_module, http_bridge, lan_transfer, module_manager, ws_module, picacg_module, sentry_log, game_library, capture_proxy | 无内部依赖 |
+| ------ | ------ | ------ |
+| 基础层 | db_module, http_bridge, lan_transfer, module_manager, ws_module, manga_module, sentry_log, game_library, capture_proxy | 无内部依赖 |
 | 业务层 | media_collection → db_module; novel_reader → db_module + http_bridge; extract_module → db_module | 依赖基础层 |
 | 聚合层 | rust_lib_slime_works | 依赖所有子模块 |
 
 **各模块关键外部依赖**:
 
 | 模块 | 关键外部依赖 |
-|------|-------------|
+| ------ | ------------- |
 | db_module | redb |
 | media_collection | db_module, walkdir, image |
 | novel_reader | db_module, http_bridge, epub, zip, image, rayon, encoding_rs, chardetng |
@@ -1398,7 +1455,7 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | extract_module | db_module, sevenz-rust2, zip, tar, flate2, bzip2, liblzma |
 | http_bridge | hyper |
 | lan_transfer | (内部实现 mDNS + TCP) |
-| picacg_module | reqwest, hyper-rustls, hmac, sha2 |
+| manga_module | reqwest, hyper-rustls, hmac, sha2 |
 | sentry_log | redb |
 | ws_module | (条件编译) |
 | module_manager | libloading |
@@ -1406,14 +1463,15 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 
 ### Flutter 层依赖
 
-```
+```text
 Pages → ViewModels → Services → Rust FFI
   │         │           │
   │         └── GetX (UI状态)
   │                     └── GetIt (全局单例)
   └── Components
   └── Core (路由/主题/权限/工具)
-```
+
+```text
 
 ---
 
@@ -1422,7 +1480,7 @@ Pages → ViewModels → Services → Rust FFI
 ### 环境要求
 
 | 工具 | 版本 |
-|------|------|
+| ------ | ------ |
 | Rust | 1.92.0+ |
 | Flutter | 3.41.0-0.0.pre |
 | Dart | 3.11.0 |
@@ -1431,48 +1489,64 @@ Pages → ViewModels → Services → Rust FFI
 ### 开发运行
 
 ```bash
+
 # 1. 生成 FRB 绑定代码
+
 flutter_rust_bridge_codegen generate
 
 # 2. 生成 FlutterGen 资源引用
+
 flutter pub run build_runner build
 
 # 3. 运行应用（macOS）
+
 flutter run -d macos
 
 # 4. Rust 开发热重载（监听 rs 变更自动重启）
+
 cd rust && cargo watch -s "cargo build && flutter run -d macos"
-```
+
+```text
 
 ### 构建发布
 
 ```bash
+
 # macOS
+
 flutter build macos --release
 
 # iOS
+
 flutter build ipa
 cargo build --target aarch64-apple-ios-sim
 
 # Android
+
 cargo build --target aarch64-linux-android
 flutter build apk
-```
+
+```text
 
 ### 代码生成
 
 ```bash
+
 # FlutterGen（资源引用）
+
 flutter pub run build_runner build
 flutter pub run build_runner watch
 flutter pub run build_runner clean && flutter pub run build_runner build --delete-conflicting-outputs
 
 # JSON 序列化
+
 flutter packages pub run build_runner build --delete-conflicting-outputs
 
 # FRB 绑定
+
 flutter_rust_bridge_codegen generate
-```
+
+```text
 
 ---
 
@@ -1486,7 +1560,8 @@ flutter test test/smart_folder_test.dart        # 智能文件夹 (21 用例)
 flutter test test/dashboard_test.dart           # 仪表盘 (13 用例)
 flutter test integration_test/simple_test.dart  # 集成测试
 flutter test --coverage                         # 覆盖率
-```
+
+```text
 
 ### Rust 单元测试
 
@@ -1494,13 +1569,15 @@ flutter test --coverage                         # 覆盖率
 cd rust && cargo test --workspace               # 全部
 cd rust/media_collection && cargo test          # 媒体集合 (28 用例)
 cd rust/lan_transfer && cargo test              # 局域网传输 (6 用例)
-```
+
+```text
 
 ### CI 一键执行
 
 ```bash
 flutter test && cd rust && cargo test --workspace
-```
+
+```text
 
 ---
 
@@ -1510,7 +1587,8 @@ flutter test && cd rust && cargo test --workspace
 
 ```bash
 python3 scripts/auto.py -desc="1. 新增xxx功能\n2. 修复xxx问题"
-```
+
+```text
 
 ### iOS → 蒲公英
 
@@ -1519,14 +1597,18 @@ python3 scripts/publish_ios.py -desc="1. 新功能\n2. Bug 修复"
 python3 scripts/publish_ios.py --ipa-only -desc="热修复"
 python3 scripts/publish_ios.py --use-xcodebuild --team-id XXXXXXXXXX -desc="正式版"
 python3 scripts/publish_ios.py --build-only     # 仅构建不上传
-```
+
+```text
 
 ### Windows → NSIS 安装包
 
 ```bash
+
 # 见 installer/ 目录
+
 # installer.nsi + build.bat
-```
+
+```text
 
 ---
 
@@ -1541,17 +1623,19 @@ python3 scripts/publish_ios.py --build-only     # 仅构建不上传
 ### 响应式设计规范
 
 | 条件 | 模式 |
-|------|------|
-| `Platform.isMacOS \|\| Platform.isWindows` | 桌面端（侧边栏 + 顶部工具栏） |
-| `Platform.isAndroid \|\| Platform.isIOS` | 移动端（底部导航 + 顶部 Chrome） |
+| ------ | ------ |
+| `Platform.isMacOS \ | \ | Platform.isWindows` | 桌面端（侧边栏 + 顶部工具栏） |
+| `Platform.isAndroid \ | \ | Platform.isIOS` | 移动端（底部导航 + 顶部 Chrome） |
 | 桌面端但窗口宽度 ≤ 600 | 强制切换为移动端模式 |
 
 判断方式：
+
 ```dart
 import 'package:slime_works/core/utils/size_utils.dart';
 bool mobile = SizeUtils.isMobile;   // Platform.isAndroid || Platform.isIOS
 bool desktop = SizeUtils.isDesktop; // Platform.isMacOS  || Platform.isWindows
-```
+
+```text
 
 修改 Flutter 时必须考虑响应式，确保桌面端和移动端两种模式均正常显示。
 
@@ -1569,7 +1653,8 @@ Text('示例', style: TextStyle(fontSize: AppTheme.metrics.fontSize14))
 // 错误
 SizedBox(height: 16)           // 禁止直接数字
 Text('示例', style: TextStyle(fontSize: 14.w))  // 禁止 int.w
-```
+
+```text
 
 ### 日志规范
 
@@ -1581,13 +1666,15 @@ Text('示例', style: TextStyle(fontSize: 14.w))  // 禁止 int.w
 final _logger = Loggers(name: 'ModuleName');
 _logger.info('操作完成');
 _logger.error('失败', error: e, stackTrace: st);
-```
+
+```text
 
 ```rust
 // Rust 日志
 use log::{info, warn, error};
 info!("操作完成: {}", detail);
-```
+
+```text
 
 ### 注释规范
 
@@ -1612,7 +1699,7 @@ info!("操作完成: {}", detail);
 ### capture.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `startCaptureProxy(port, installDir)` | `String` | 启动代理服务器 |
 | `stopCaptureProxy(installDir)` | `String` | 停止代理服务器 |
 | `isProxyRunning(installDir)` | `bool` | 获取捕获状态 |
@@ -1629,7 +1716,7 @@ info!("操作完成: {}", detail);
 ### media_collection.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `getAllMediaCollections()` | `List<MediaCollection>` | 获取所有集合 |
 | `getAllMediaFolders()` | `List<MediaFolder>` | 获取所有文件夹 |
 | `getChildMediaFolders(parentId)` | `List<MediaFolder>` | 获取子文件夹 |
@@ -1642,7 +1729,7 @@ info!("操作完成: {}", detail);
 ### novel_reader.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `scanNovelsFolder(folderPath)` | `List<NovelMetadata>` | 扫描文件夹 |
 | `getAllNovels()` | `List<NovelMetadata>` | 获取所有书籍 |
 | `addNovel(filePaths)` | `List<NovelMetadata>` | 添加书籍 |
@@ -1656,7 +1743,7 @@ info!("操作完成: {}", detail);
 ### game_library.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `gameLibraryInit(dbPath)` | `void` | 初始化数据库 |
 | `gameLibraryGetGamesJson()` | `Future<String>` | 获取所有游戏 |
 | `gameLibraryAddGameJson(gameJson)` | `Future<String>` | 添加游戏 |
@@ -1666,24 +1753,24 @@ info!("操作完成: {}", detail);
 | `gameLibraryFetchMoegirl(gameName)` | `Future<String>` | 萌娘百科元数据 |
 | `gameLibraryGetStatsJson(startTsSec, endTsSec)` | `Future<String>` | 统计数据 |
 
-### picacg.dart
+### manga.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
-| `picacgInit()` | `void` | 初始化客户端 |
-| `picacgLogin(email, password)` | `Future<String>` | 登录 |
-| `picacgSetChannel(mode, custom)` | `void` | 设置分流模式 |
-| `picacgTestChannel(mode, custom)` | `Future<BigInt>` | 测试分流延迟(ms) |
-| `picacgGetCollections()` | `Future<String>` | 首页推荐 |
-| `picacgSearchComics(keyword, categories, page, sort)` | `Future<String>` | 搜索漫画 |
-| `picacgGetComicDetail(comicId)` | `Future<String>` | 漫画详情 |
-| `picacgGetEpsPages(comicId, epsOrder, page)` | `Future<String>` | 章节图片 |
-| `picacgFetchImage(fileServer, path)` | `Future<Uint8List>` | 获取图片 |
+| ------ | ---------- | ------ |
+| `mangaInit()` | `void` | 初始化客户端 |
+| `mangaLogin(email, password)` | `Future<String>` | 登录 |
+| `mangaSetChannel(mode, custom)` | `void` | 设置分流模式 |
+| `mangaTestChannel(mode, custom)` | `Future<BigInt>` | 测试分流延迟(ms) |
+| `mangaGetCollections()` | `Future<String>` | 首页推荐 |
+| `mangaSearchComics(keyword, categories, page, sort)` | `Future<String>` | 搜索漫画 |
+| `mangaGetComicDetail(comicId)` | `Future<String>` | 漫画详情 |
+| `mangaGetEpsPages(comicId, epsOrder, page)` | `Future<String>` | 章节图片 |
+| `mangaFetchImage(fileServer, path)` | `Future<Uint8List>` | 获取图片 |
 
 ### lan_transfer.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `lanTransferInit()` | `void` | 初始化 |
 | `lanTransferStart(port, saveDir, preTrustedJson)` | `Future<void>` | 启动传输管理器 |
 | `lanTransferGetDevices()` | `Future<List<String>>` | 获取设备列表 |
@@ -1695,7 +1782,7 @@ info!("操作完成: {}", detail);
 ### sentry_log.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `sentryLogInit(dbPath)` | `String` | 初始化日志存储 |
 | `sentryLogQuery(...)` | `Future<String>` | 查询日志事件 |
 | `sentryLogGetEvent(eventId)` | `Future<String>` | 获取单个事件 |
@@ -1706,7 +1793,7 @@ info!("操作完成: {}", detail);
 ### module_manager.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `createModuleManager(installDir)` | `ModuleManager` | 创建模块管理器 |
 | `moduleGetAvailable(manager)` | `Future<List<AvailableModuleInfo>>` | 获取可用模块 |
 | `moduleInstall(manager, moduleName, version, lockVersion, autoLoad)` | `Future<String>` | 安装模块 |
@@ -1717,7 +1804,7 @@ info!("操作完成: {}", detail);
 ### http_bridge.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `initHttpBridge()` | `bool` | 初始化HTTP Bridge |
 | `getRegisteredHandlers()` | `List<(String, String)>` | 获取已注册处理器 |
 | `callHandler(module, function, params)` | `String` | 调用处理器 |
@@ -1728,7 +1815,7 @@ info!("操作完成: {}", detail);
 ### websocket.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `wsClientNew(url)` | `WsClient` | 创建客户端 |
 | `wsClientConnect(client)` | `Future<void>` | 连接 |
 | `wsClientSendText(client, message)` | `Future<void>` | 发送文本 |
@@ -1739,7 +1826,7 @@ info!("操作完成: {}", detail);
 ### system_metrics.dart
 
 | 函数 | 返回类型 | 说明 |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | `getSystemResourceSnapshot()` | `SystemResourceSnapshot` | 获取系统资源快照 |
 
 `SystemResourceSnapshot` 字段：`cpuUsagePercent`, `memoryUsedMb`, `memoryTotalMb`, `rxKbps`, `txKbps`
@@ -1755,7 +1842,7 @@ info!("操作完成: {}", detail);
 `README.AI.md` 中列出的部分 Flutter 规则为通用模板，与项目实际实现存在差异，开发时以实际项目为准：
 
 | README.AI.md 规则 | 实际项目实现 | 说明 |
-|-------------------|-------------|------|
+| ------------------- | ------------- | ------ |
 | 使用 ConsumerWidget + Riverpod | 使用 GetX（GetxController + Obx） | 项目统一使用 GetX 做状态管理 |
 | 或 BlocBuilder + flutter_bloc | 未使用 | 项目不使用 Bloc |
 | 使用 Either\<Failure, Success\> 模式 | 使用 Result 类型 / try-catch | Rust FFI 层返回 Result，Dart 侧用 try-catch 处理 |

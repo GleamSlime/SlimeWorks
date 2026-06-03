@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use super::module_downloader::ModuleDownloader;
-use slime_logger::{sw_debug, sw_error, sw_info, sw_warn};
+use slime_logger::{sw_debug, sw_error, sw_info};
 
 lazy_static::lazy_static! {
     static ref MODULE_MANAGER: Mutex<LegacyModuleManager> = Mutex::new(LegacyModuleManager::new());
@@ -93,8 +93,8 @@ impl LegacyModuleManager {
 
             sw_info!("[module_loader] module_init returned non-null pointer");
             let module_info = &*module_info_ptr;
-            let name_str = unsafe { CStr::from_ptr(module_info.name) }.to_string_lossy();
-            let version_str = unsafe { CStr::from_ptr(module_info.version) }.to_string_lossy();
+            let name_str = CStr::from_ptr(module_info.name).to_string_lossy();
+            let version_str = CStr::from_ptr(module_info.version).to_string_lossy();
 
             let success_msg = format!(
                 "Loaded module: {} v{} (API: {})",
@@ -203,7 +203,7 @@ impl CaptureProxyModule {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         let (lib_ext, platform_path, lib_prefix) =
             ("dylib", "build/macos/Build/Products/Release", "lib");
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         let (lib_ext, platform_path, lib_prefix) = ("so", "build/linux/x64/release/bundle", "lib");
 
         // macOS/Linux 通常有 lib 前缀，但也要检查无前缀的版本
@@ -605,10 +605,10 @@ pub async fn download_capture_proxy_module(
     let (ext, prefix) = ("dll", "");
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     let (ext, prefix) = ("dylib", "lib");
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     let (ext, prefix) = ("so", "lib");
 
-    // 修改 executable_name 为动态库名称（macOS/Linux 有 lib 前缀）
+    // 修改 executable_name 为动态库名称（macOS/Linux/Android 有 lib 前缀）
     let lib_name = format!("{}capture_proxy.{}", prefix, ext);
     let mut lib_config = module_config.clone();
     lib_config.executable_name = lib_name;
@@ -632,7 +632,7 @@ pub fn is_capture_proxy_downloaded(install_dir: String) -> bool {
     let (ext, prefix) = ("dll", "");
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     let (ext, prefix) = ("dylib", "lib");
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     let (ext, prefix) = ("so", "lib");
 
     let lib_name = format!("{}capture_proxy.{}", prefix, ext);
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_module_manager() {
-        let mut manager = LegacyModuleManager::new();
+        let manager = LegacyModuleManager::new();
         assert_eq!(manager.loaded_modules.len(), 0);
     }
 }

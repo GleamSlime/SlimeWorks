@@ -1,4 +1,6 @@
 output: dist/
+variables:
+  PGYER_API_KEY: ${PGYER_API_KEY}
 releases:
   - name: release
     jobs:
@@ -14,3 +16,10 @@ releases:
           target: exe
           build_args:
             release: true
+      - name: release-android
+        package:
+          platform: android
+          target: apk
+          build_args:
+            release: true
+        publish_to: pgyer

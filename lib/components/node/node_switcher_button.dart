@@ -265,6 +265,7 @@ class NodeSwitcherButton extends StatelessWidget {
                               final available = await availabilityChecker!(
                                 node.effectiveApiBaseUrl,
                               );
+                              if (!sheetCtx.mounted) return;
                               if (!available) {
                                 Navigator.of(sheetCtx).pop();
                                 _showSnack('该节点不支持此功能');

@@ -28,7 +28,7 @@
 | 书库 | [docs/novel_library.md](novel_library.md) | `lib/pages/collection/library/` · `rust/novel_reader/` |
 | 游戏库（LunaBox迁移） | [docs/game_library.md](game_library.md) | `lib/pages/game_library/` · `lib/core/services/game_library_service.dart` · `lib/core/services/game_process_tracker.dart` |
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
-| PicACG 漫画 | [docs/picacg.md](picacg.md) | `lib/pages/picacg/` · `rust/picacg_module/` |
+| Manga 漫画 | [docs/manga.md](manga.md) | `lib/pages/manga/` · `rust/manga_module/` |
 
 ---
 

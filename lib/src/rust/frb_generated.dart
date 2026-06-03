@@ -15,7 +15,7 @@ import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/novel_reader.dart';
-import 'api/picacg.dart';
+import 'api/manga.dart';
 import 'api/sentry_log.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
@@ -651,122 +651,122 @@ abstract class RustLibApi extends BaseApi {
     String? folderId,
   });
 
-  String crateApiPicacgPicacgBuildImageUrl({
+  String crateApiMangaMangaBuildImageUrl({
     required String fileServer,
     required String path,
   });
 
-  void crateApiPicacgPicacgClearHistory();
+  void crateApiMangaMangaClearHistory();
 
-  Future<Uint8List> crateApiPicacgPicacgFetchImage({
+  Future<Uint8List> crateApiMangaMangaFetchImage({
     required String fileServer,
     required String path,
   });
 
-  Future<String> crateApiPicacgPicacgGetCategories();
+  Future<String> crateApiMangaMangaGetCategories();
 
-  Future<String> crateApiPicacgPicacgGetCollections();
+  Future<String> crateApiMangaMangaGetCollections();
 
-  Future<String> crateApiPicacgPicacgGetComicDetail({required String comicId});
+  Future<String> crateApiMangaMangaGetComicDetail({required String comicId});
 
-  Future<String> crateApiPicacgPicacgGetComicEps({
+  Future<String> crateApiMangaMangaGetComicEps({
     required String comicId,
     required int page,
   });
 
-  Future<String> crateApiPicacgPicacgGetComicRecommendations({
+  Future<String> crateApiMangaMangaGetComicRecommendations({
     required String comicId,
   });
 
-  Future<String> crateApiPicacgPicacgGetComicsByCategory({
+  Future<String> crateApiMangaMangaGetComicsByCategory({
     required String category,
     required int page,
     required String sort,
   });
 
-  Future<String> crateApiPicacgPicacgGetCommentChildren({
+  Future<String> crateApiMangaMangaGetCommentChildren({
     required String commentId,
     required int page,
   });
 
-  Future<String> crateApiPicacgPicacgGetComments({
+  Future<String> crateApiMangaMangaGetComments({
     required String comicId,
     required int page,
   });
 
-  Future<String> crateApiPicacgPicacgGetEpsPages({
+  Future<String> crateApiMangaMangaGetEpsPages({
     required String comicId,
     required int epsOrder,
     required int page,
   });
 
-  Future<String> crateApiPicacgPicacgGetFavourites({
+  Future<String> crateApiMangaMangaGetFavourites({
     required int page,
     required String sort,
   });
 
-  String crateApiPicacgPicacgGetImageServer();
+  String crateApiMangaMangaGetImageServer();
 
-  Future<String> crateApiPicacgPicacgGetKeywords();
+  Future<String> crateApiMangaMangaGetKeywords();
 
-  Future<String> crateApiPicacgPicacgGetRandomComics();
+  Future<String> crateApiMangaMangaGetRandomComics();
 
-  Future<String> crateApiPicacgPicacgGetRankings({required String timeType});
+  Future<String> crateApiMangaMangaGetRankings({required String timeType});
 
-  String crateApiPicacgPicacgGetToken();
+  String crateApiMangaMangaGetToken();
 
-  Future<String> crateApiPicacgPicacgGetUserProfile();
+  Future<String> crateApiMangaMangaGetUserProfile();
 
-  void crateApiPicacgPicacgInit();
+  void crateApiMangaMangaInit();
 
-  void crateApiPicacgPicacgInitHistory({required String dbPath});
+  void crateApiMangaMangaInitHistory({required String dbPath});
 
-  Future<String> crateApiPicacgPicacgLikeComment({required String commentId});
+  Future<String> crateApiMangaMangaLikeComment({required String commentId});
 
-  String crateApiPicacgPicacgLoadHistory();
+  String crateApiMangaMangaLoadHistory();
 
-  Future<String> crateApiPicacgPicacgLogin({
+  Future<String> crateApiMangaMangaLogin({
     required String email,
     required String password,
   });
 
-  void crateApiPicacgPicacgLogout();
+  void crateApiMangaMangaLogout();
 
-  Future<String> crateApiPicacgPicacgPunchIn();
+  Future<String> crateApiMangaMangaPunchIn();
 
-  void crateApiPicacgPicacgSaveHistoryRaw({required String json});
+  void crateApiMangaMangaSaveHistoryRaw({required String json});
 
-  Future<String> crateApiPicacgPicacgSearchComics({
+  Future<String> crateApiMangaMangaSearchComics({
     required String keyword,
     required List<String> categories,
     required int page,
     required String sort,
   });
 
-  Future<String> crateApiPicacgPicacgSendComment({
+  Future<String> crateApiMangaMangaSendComment({
     required String comicId,
     required String content,
   });
 
-  void crateApiPicacgPicacgSetChannel({
+  void crateApiMangaMangaSetChannel({
     required int mode,
     required String custom,
   });
 
-  void crateApiPicacgPicacgSetImageServer({required String server});
+  void crateApiMangaMangaSetImageServer({required String server});
 
-  void crateApiPicacgPicacgSetProxy({required String proxyUrl});
+  void crateApiMangaMangaSetProxy({required String proxyUrl});
 
-  void crateApiPicacgPicacgSetToken({required String token});
+  void crateApiMangaMangaSetToken({required String token});
 
-  Future<BigInt> crateApiPicacgPicacgTestChannel({
+  Future<BigInt> crateApiMangaMangaTestChannel({
     required int mode,
     required String custom,
   });
 
-  Future<String> crateApiPicacgPicacgToggleFavourite({required String comicId});
+  Future<String> crateApiMangaMangaToggleFavourite({required String comicId});
 
-  Future<String> crateApiPicacgPicacgToggleLike({required String comicId});
+  Future<String> crateApiMangaMangaToggleLike({required String comicId});
 
   void crateApiNovelReaderRemoveNovel({required String novelId});
 
@@ -5922,7 +5922,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiPicacgPicacgBuildImageUrl({
+  String crateApiMangaMangaBuildImageUrl({
     required String fileServer,
     required String path,
   }) {
@@ -5942,21 +5942,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgBuildImageUrlConstMeta,
+        constMeta: kCrateApiMangaMangaBuildImageUrlConstMeta,
         argValues: [fileServer, path],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgBuildImageUrlConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaBuildImageUrlConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_build_image_url",
+        debugName: "manga_build_image_url",
         argNames: ["fileServer", "path"],
       );
 
   @override
-  void crateApiPicacgPicacgClearHistory() {
+  void crateApiMangaMangaClearHistory() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -5971,18 +5971,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgClearHistoryConstMeta,
+        constMeta: kCrateApiMangaMangaClearHistoryConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgClearHistoryConstMeta =>
-      const TaskConstMeta(debugName: "picacg_clear_history", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaClearHistoryConstMeta =>
+      const TaskConstMeta(debugName: "manga_clear_history", argNames: []);
 
   @override
-  Future<Uint8List> crateApiPicacgPicacgFetchImage({
+  Future<Uint8List> crateApiMangaMangaFetchImage({
     required String fileServer,
     required String path,
   }) {
@@ -6003,21 +6003,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgFetchImageConstMeta,
+        constMeta: kCrateApiMangaMangaFetchImageConstMeta,
         argValues: [fileServer, path],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgFetchImageConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaFetchImageConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_fetch_image",
+        debugName: "manga_fetch_image",
         argNames: ["fileServer", "path"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetCategories() {
+  Future<String> crateApiMangaMangaGetCategories() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6033,18 +6033,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetCategoriesConstMeta,
+        constMeta: kCrateApiMangaMangaGetCategoriesConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetCategoriesConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_categories", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetCategoriesConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_categories", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgGetCollections() {
+  Future<String> crateApiMangaMangaGetCollections() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6060,18 +6060,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetCollectionsConstMeta,
+        constMeta: kCrateApiMangaMangaGetCollectionsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetCollectionsConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_collections", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetCollectionsConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_collections", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgGetComicDetail({required String comicId}) {
+  Future<String> crateApiMangaMangaGetComicDetail({required String comicId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6088,21 +6088,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetComicDetailConstMeta,
+        constMeta: kCrateApiMangaMangaGetComicDetailConstMeta,
         argValues: [comicId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetComicDetailConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetComicDetailConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_comic_detail",
+        debugName: "manga_get_comic_detail",
         argNames: ["comicId"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetComicEps({
+  Future<String> crateApiMangaMangaGetComicEps({
     required String comicId,
     required int page,
   }) {
@@ -6123,21 +6123,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetComicEpsConstMeta,
+        constMeta: kCrateApiMangaMangaGetComicEpsConstMeta,
         argValues: [comicId, page],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetComicEpsConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetComicEpsConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_comic_eps",
+        debugName: "manga_get_comic_eps",
         argNames: ["comicId", "page"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetComicRecommendations({
+  Future<String> crateApiMangaMangaGetComicRecommendations({
     required String comicId,
   }) {
     return handler.executeNormal(
@@ -6156,21 +6156,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetComicRecommendationsConstMeta,
+        constMeta: kCrateApiMangaMangaGetComicRecommendationsConstMeta,
         argValues: [comicId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetComicRecommendationsConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetComicRecommendationsConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_comic_recommendations",
+        debugName: "manga_get_comic_recommendations",
         argNames: ["comicId"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetComicsByCategory({
+  Future<String> crateApiMangaMangaGetComicsByCategory({
     required String category,
     required int page,
     required String sort,
@@ -6193,21 +6193,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetComicsByCategoryConstMeta,
+        constMeta: kCrateApiMangaMangaGetComicsByCategoryConstMeta,
         argValues: [category, page, sort],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetComicsByCategoryConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetComicsByCategoryConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_comics_by_category",
+        debugName: "manga_get_comics_by_category",
         argNames: ["category", "page", "sort"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetCommentChildren({
+  Future<String> crateApiMangaMangaGetCommentChildren({
     required String commentId,
     required int page,
   }) {
@@ -6228,21 +6228,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetCommentChildrenConstMeta,
+        constMeta: kCrateApiMangaMangaGetCommentChildrenConstMeta,
         argValues: [commentId, page],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetCommentChildrenConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetCommentChildrenConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_comment_children",
+        debugName: "manga_get_comment_children",
         argNames: ["commentId", "page"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetComments({
+  Future<String> crateApiMangaMangaGetComments({
     required String comicId,
     required int page,
   }) {
@@ -6263,21 +6263,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetCommentsConstMeta,
+        constMeta: kCrateApiMangaMangaGetCommentsConstMeta,
         argValues: [comicId, page],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetCommentsConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetCommentsConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_comments",
+        debugName: "manga_get_comments",
         argNames: ["comicId", "page"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetEpsPages({
+  Future<String> crateApiMangaMangaGetEpsPages({
     required String comicId,
     required int epsOrder,
     required int page,
@@ -6300,21 +6300,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetEpsPagesConstMeta,
+        constMeta: kCrateApiMangaMangaGetEpsPagesConstMeta,
         argValues: [comicId, epsOrder, page],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetEpsPagesConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetEpsPagesConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_eps_pages",
+        debugName: "manga_get_eps_pages",
         argNames: ["comicId", "epsOrder", "page"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgGetFavourites({
+  Future<String> crateApiMangaMangaGetFavourites({
     required int page,
     required String sort,
   }) {
@@ -6335,21 +6335,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetFavouritesConstMeta,
+        constMeta: kCrateApiMangaMangaGetFavouritesConstMeta,
         argValues: [page, sort],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetFavouritesConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetFavouritesConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_favourites",
+        debugName: "manga_get_favourites",
         argNames: ["page", "sort"],
       );
 
   @override
-  String crateApiPicacgPicacgGetImageServer() {
+  String crateApiMangaMangaGetImageServer() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6364,18 +6364,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgGetImageServerConstMeta,
+        constMeta: kCrateApiMangaMangaGetImageServerConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetImageServerConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_image_server", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetImageServerConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_image_server", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgGetKeywords() {
+  Future<String> crateApiMangaMangaGetKeywords() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6391,18 +6391,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetKeywordsConstMeta,
+        constMeta: kCrateApiMangaMangaGetKeywordsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetKeywordsConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_keywords", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetKeywordsConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_keywords", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgGetRandomComics() {
+  Future<String> crateApiMangaMangaGetRandomComics() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6418,18 +6418,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetRandomComicsConstMeta,
+        constMeta: kCrateApiMangaMangaGetRandomComicsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetRandomComicsConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_random_comics", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetRandomComicsConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_random_comics", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgGetRankings({required String timeType}) {
+  Future<String> crateApiMangaMangaGetRankings({required String timeType}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6446,21 +6446,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetRankingsConstMeta,
+        constMeta: kCrateApiMangaMangaGetRankingsConstMeta,
         argValues: [timeType],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetRankingsConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaGetRankingsConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_get_rankings",
+        debugName: "manga_get_rankings",
         argNames: ["timeType"],
       );
 
   @override
-  String crateApiPicacgPicacgGetToken() {
+  String crateApiMangaMangaGetToken() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6475,18 +6475,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgGetTokenConstMeta,
+        constMeta: kCrateApiMangaMangaGetTokenConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetTokenConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_token", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetTokenConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_token", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgGetUserProfile() {
+  Future<String> crateApiMangaMangaGetUserProfile() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6502,18 +6502,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgGetUserProfileConstMeta,
+        constMeta: kCrateApiMangaMangaGetUserProfileConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgGetUserProfileConstMeta =>
-      const TaskConstMeta(debugName: "picacg_get_user_profile", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaGetUserProfileConstMeta =>
+      const TaskConstMeta(debugName: "manga_get_user_profile", argNames: []);
 
   @override
-  void crateApiPicacgPicacgInit() {
+  void crateApiMangaMangaInit() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6528,18 +6528,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgInitConstMeta,
+        constMeta: kCrateApiMangaMangaInitConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgInitConstMeta =>
-      const TaskConstMeta(debugName: "picacg_init", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaInitConstMeta =>
+      const TaskConstMeta(debugName: "manga_init", argNames: []);
 
   @override
-  void crateApiPicacgPicacgInitHistory({required String dbPath}) {
+  void crateApiMangaMangaInitHistory({required String dbPath}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6555,21 +6555,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgInitHistoryConstMeta,
+        constMeta: kCrateApiMangaMangaInitHistoryConstMeta,
         argValues: [dbPath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgInitHistoryConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaInitHistoryConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_init_history",
+        debugName: "manga_init_history",
         argNames: ["dbPath"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgLikeComment({required String commentId}) {
+  Future<String> crateApiMangaMangaLikeComment({required String commentId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6586,21 +6586,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgLikeCommentConstMeta,
+        constMeta: kCrateApiMangaMangaLikeCommentConstMeta,
         argValues: [commentId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgLikeCommentConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaLikeCommentConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_like_comment",
+        debugName: "manga_like_comment",
         argNames: ["commentId"],
       );
 
   @override
-  String crateApiPicacgPicacgLoadHistory() {
+  String crateApiMangaMangaLoadHistory() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6615,18 +6615,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgLoadHistoryConstMeta,
+        constMeta: kCrateApiMangaMangaLoadHistoryConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgLoadHistoryConstMeta =>
-      const TaskConstMeta(debugName: "picacg_load_history", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaLoadHistoryConstMeta =>
+      const TaskConstMeta(debugName: "manga_load_history", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgLogin({
+  Future<String> crateApiMangaMangaLogin({
     required String email,
     required String password,
   }) {
@@ -6647,20 +6647,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgLoginConstMeta,
+        constMeta: kCrateApiMangaMangaLoginConstMeta,
         argValues: [email, password],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgLoginConstMeta => const TaskConstMeta(
-    debugName: "picacg_login",
+  TaskConstMeta get kCrateApiMangaMangaLoginConstMeta => const TaskConstMeta(
+    debugName: "manga_login",
     argNames: ["email", "password"],
   );
 
   @override
-  void crateApiPicacgPicacgLogout() {
+  void crateApiMangaMangaLogout() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6675,18 +6675,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgLogoutConstMeta,
+        constMeta: kCrateApiMangaMangaLogoutConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgLogoutConstMeta =>
-      const TaskConstMeta(debugName: "picacg_logout", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaLogoutConstMeta =>
+      const TaskConstMeta(debugName: "manga_logout", argNames: []);
 
   @override
-  Future<String> crateApiPicacgPicacgPunchIn() {
+  Future<String> crateApiMangaMangaPunchIn() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -6702,18 +6702,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgPunchInConstMeta,
+        constMeta: kCrateApiMangaMangaPunchInConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgPunchInConstMeta =>
-      const TaskConstMeta(debugName: "picacg_punch_in", argNames: []);
+  TaskConstMeta get kCrateApiMangaMangaPunchInConstMeta =>
+      const TaskConstMeta(debugName: "manga_punch_in", argNames: []);
 
   @override
-  void crateApiPicacgPicacgSaveHistoryRaw({required String json}) {
+  void crateApiMangaMangaSaveHistoryRaw({required String json}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6729,21 +6729,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgSaveHistoryRawConstMeta,
+        constMeta: kCrateApiMangaMangaSaveHistoryRawConstMeta,
         argValues: [json],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSaveHistoryRawConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaSaveHistoryRawConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_save_history_raw",
+        debugName: "manga_save_history_raw",
         argNames: ["json"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgSearchComics({
+  Future<String> crateApiMangaMangaSearchComics({
     required String keyword,
     required List<String> categories,
     required int page,
@@ -6768,21 +6768,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgSearchComicsConstMeta,
+        constMeta: kCrateApiMangaMangaSearchComicsConstMeta,
         argValues: [keyword, categories, page, sort],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSearchComicsConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaSearchComicsConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_search_comics",
+        debugName: "manga_search_comics",
         argNames: ["keyword", "categories", "page", "sort"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgSendComment({
+  Future<String> crateApiMangaMangaSendComment({
     required String comicId,
     required String content,
   }) {
@@ -6803,21 +6803,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgSendCommentConstMeta,
+        constMeta: kCrateApiMangaMangaSendCommentConstMeta,
         argValues: [comicId, content],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSendCommentConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaSendCommentConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_send_comment",
+        debugName: "manga_send_comment",
         argNames: ["comicId", "content"],
       );
 
   @override
-  void crateApiPicacgPicacgSetChannel({
+  void crateApiMangaMangaSetChannel({
     required int mode,
     required String custom,
   }) {
@@ -6837,21 +6837,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgSetChannelConstMeta,
+        constMeta: kCrateApiMangaMangaSetChannelConstMeta,
         argValues: [mode, custom],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSetChannelConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaSetChannelConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_set_channel",
+        debugName: "manga_set_channel",
         argNames: ["mode", "custom"],
       );
 
   @override
-  void crateApiPicacgPicacgSetImageServer({required String server}) {
+  void crateApiMangaMangaSetImageServer({required String server}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6867,21 +6867,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgSetImageServerConstMeta,
+        constMeta: kCrateApiMangaMangaSetImageServerConstMeta,
         argValues: [server],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSetImageServerConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaSetImageServerConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_set_image_server",
+        debugName: "manga_set_image_server",
         argNames: ["server"],
       );
 
   @override
-  void crateApiPicacgPicacgSetProxy({required String proxyUrl}) {
+  void crateApiMangaMangaSetProxy({required String proxyUrl}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6897,21 +6897,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgSetProxyConstMeta,
+        constMeta: kCrateApiMangaMangaSetProxyConstMeta,
         argValues: [proxyUrl],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSetProxyConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaSetProxyConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_set_proxy",
+        debugName: "manga_set_proxy",
         argNames: ["proxyUrl"],
       );
 
   @override
-  void crateApiPicacgPicacgSetToken({required String token}) {
+  void crateApiMangaMangaSetToken({required String token}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -6927,18 +6927,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPicacgPicacgSetTokenConstMeta,
+        constMeta: kCrateApiMangaMangaSetTokenConstMeta,
         argValues: [token],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgSetTokenConstMeta =>
-      const TaskConstMeta(debugName: "picacg_set_token", argNames: ["token"]);
+  TaskConstMeta get kCrateApiMangaMangaSetTokenConstMeta =>
+      const TaskConstMeta(debugName: "manga_set_token", argNames: ["token"]);
 
   @override
-  Future<BigInt> crateApiPicacgPicacgTestChannel({
+  Future<BigInt> crateApiMangaMangaTestChannel({
     required int mode,
     required String custom,
   }) {
@@ -6959,21 +6959,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_u_64,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgTestChannelConstMeta,
+        constMeta: kCrateApiMangaMangaTestChannelConstMeta,
         argValues: [mode, custom],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgTestChannelConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaTestChannelConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_test_channel",
+        debugName: "manga_test_channel",
         argNames: ["mode", "custom"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgToggleFavourite({
+  Future<String> crateApiMangaMangaToggleFavourite({
     required String comicId,
   }) {
     return handler.executeNormal(
@@ -6992,21 +6992,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgToggleFavouriteConstMeta,
+        constMeta: kCrateApiMangaMangaToggleFavouriteConstMeta,
         argValues: [comicId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgToggleFavouriteConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaToggleFavouriteConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_toggle_favourite",
+        debugName: "manga_toggle_favourite",
         argNames: ["comicId"],
       );
 
   @override
-  Future<String> crateApiPicacgPicacgToggleLike({required String comicId}) {
+  Future<String> crateApiMangaMangaToggleLike({required String comicId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -7023,16 +7023,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiPicacgPicacgToggleLikeConstMeta,
+        constMeta: kCrateApiMangaMangaToggleLikeConstMeta,
         argValues: [comicId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPicacgPicacgToggleLikeConstMeta =>
+  TaskConstMeta get kCrateApiMangaMangaToggleLikeConstMeta =>
       const TaskConstMeta(
-        debugName: "picacg_toggle_like",
+        debugName: "manga_toggle_like",
         argNames: ["comicId"],
       );
 

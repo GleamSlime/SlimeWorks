@@ -1,0 +1,234 @@
+// Manga 登录对话框组件
+
+import 'package:flutter/material.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+
+/// 显示登录对话框
+///
+/// 返回 true 表示登录成功
+Future<bool> showMangaLoginDialog(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const _MangaLoginDialog(),
+  );
+  return result ?? false;
+}
+
+class _MangaLoginDialog extends StatefulWidget {
+  const _MangaLoginDialog();
+
+  @override
+  State<_MangaLoginDialog> createState() => _MangaLoginDialogState();
+}
+
+class _MangaLoginDialogState extends State<_MangaLoginDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _proxyController = TextEditingController();
+
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+
+    /// 加载已保存的代理与登录凭据
+    _loadSavedInputs();
+  }
+
+  Future<void> _loadSavedInputs() async {
+    final service = getIt<MangaService>();
+    final proxy = await service.getSavedProxy();
+    final credentials = await service.getSavedLoginCredentials();
+    if (mounted) {
+      _proxyController.text = proxy;
+      _emailController.text = credentials['email'] ?? '';
+      _passwordController.text = credentials['password'] ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _proxyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onLogin() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final service = getIt<MangaService>();
+      // 先更新代理配置
+      final proxy = _proxyController.text.trim();
+      await service.setProxy(proxy);
+
+      // 执行登录
+      await service.login(_emailController.text.trim(), _passwordController.text);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final metrics = appMetrics;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(metrics.kSpace16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380, maxHeight: 540),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(metrics.kSpace20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: metrics.kSpace40,
+                      height: metrics.kSpace40,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                        borderRadius: metrics.radius10,
+                      ),
+                      child: Icon(
+                        Icons.auto_stories,
+                        size: AppTheme.metrics.iconSize22,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    SizedBox(width: metrics.kSpace12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Manga 登录', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                          SizedBox(height: metrics.kSpace2),
+                          Text(
+                            '登录后即可浏览和收藏漫画',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(false),
+                      tooltip: '取消',
+                    ),
+                  ],
+                ),
+                SizedBox(height: metrics.kSpace20),
+
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: '邮箱 / 账号',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  validator: (v) => (v == null || v.trim().isEmpty) ? '请输入账号' : null,
+                ),
+                SizedBox(height: metrics.kSpace10),
+
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: InputDecoration(
+                    labelText: '密码',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.next,
+                  validator: (v) => (v == null || v.isEmpty) ? '请输入密码' : null,
+                ),
+                SizedBox(height: metrics.kSpace10),
+
+                TextFormField(
+                  controller: _proxyController,
+                  decoration: const InputDecoration(
+                    labelText: '代理地址（可选）',
+                    hintText: '如: http://127.0.0.1:7890',
+                    prefixIcon: Icon(Icons.router_outlined),
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _onLogin(),
+                ),
+                SizedBox(height: metrics.kSpace16),
+
+                if (_errorMessage != null) ...[
+                  Container(
+                    padding: EdgeInsets.all(AppTheme.metrics.kSpace10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.error.withValues(alpha: 0.08),
+                      borderRadius: AppTheme.metrics.radius8,
+                      border: Border.all(
+                        color: theme.colorScheme.error.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, size: AppTheme.metrics.iconSize16, color: theme.colorScheme.error),
+                        SizedBox(width: AppTheme.metrics.kSpace8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: metrics.kSpace12),
+                ],
+
+                FilledButton(
+                  onPressed: _isLoading ? null : _onLogin,
+                  style: FilledButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: metrics.kSpace14),
+                    shape: RoundedRectangleBorder(borderRadius: metrics.radius10),
+                  ),
+                  child: _isLoading
+                      ? SizedBox(
+                          height: AppTheme.metrics.kSpace20,
+                          width: AppTheme.metrics.kSpace20,
+                          child: const CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('登录'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

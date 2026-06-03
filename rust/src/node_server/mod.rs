@@ -252,23 +252,23 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             }
         }
 
-        // ── PicACG 中转路由 ────────────────────────────────────────────────────
-        // 移动端在选择 "PC中转" 分流模式后，所有 PicACG 请求都会发到这里。
-        // PC 使用其自身的分流配置（channel + token）代为请求 PicACG 并返回数据。
-        ("GET", "/picacg/ping") => (
+        // ── Manga 中转路由 ────────────────────────────────────────────────────
+        // 移动端在选择 "PC中转" 分流模式后，所有 Manga 请求都会发到这里。
+        // PC 使用其自身的分流配置（channel + token）代为请求 Manga 并返回数据。
+        ("GET", "/manga/ping") => (
             200,
             serde_json::json!({"success": true, "data": "pong"}).to_string(),
         ),
 
-        ("GET", "/picacg/token") => {
-            let token = picacg_module::api::picacg_relay_get_token();
+        ("GET", "/manga/token") => {
+            let token = manga_module::api::manga_relay_get_token();
             (
                 200,
                 serde_json::json!({"success": true, "data": token}).to_string(),
             )
         }
 
-        ("POST", "/picacg/api") => {
+        ("POST", "/manga/api") => {
             #[derive(serde::Deserialize)]
             struct RelayReq {
                 path: String,
@@ -278,7 +278,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             let req_str = String::from_utf8_lossy(&body).to_string();
             match serde_json::from_str::<RelayReq>(&req_str) {
                 Ok(relay_req) => {
-                    let result = shared_runtime().block_on(picacg_module::api::picacg_relay_api(
+                    let result = shared_runtime().block_on(manga_module::api::manga_relay_api(
                         relay_req.path,
                         relay_req.method,
                         relay_req.body,
@@ -303,7 +303,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             }
         }
 
-        ("GET", "/picacg/img") => {
+        ("GET", "/manga/img") => {
             // 二进制图片响应：直接写流并返回，不走统一的 JSON 响应路径
             let query = path.splitn(2, '?').nth(1).unwrap_or("");
             let params: Vec<(String, String)> = url::form_urlencoded::parse(query.as_bytes())
@@ -320,7 +320,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                 .map(|(_, v)| v.clone())
                 .unwrap_or_default();
 
-            let result = shared_runtime().block_on(picacg_module::api::picacg_relay_image(
+            let result = shared_runtime().block_on(manga_module::api::manga_relay_image(
                 file_server,
                 img_path,
             ));

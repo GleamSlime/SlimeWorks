@@ -1655,6 +1655,7 @@ fn find_paired_close(
 }
 
 /// 删除所有自闭合的 `<TAG ...>` 标签（不区分大小写，无结束标签）。
+#[allow(dead_code)]
 fn strip_void_tag(html: &str, tag: &str) -> String {
     let open_lower = format!("<{}", tag);
     let open_upper = open_lower.to_uppercase();

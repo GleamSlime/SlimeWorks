@@ -12,6 +12,7 @@ lazy_static = "1.5.0"
 slime_logger = { path = "slime_logger" }
 # capture_proxy 使用动态加载，不再静态链接
 reqwest = { version = "0.12", features = ["blocking"] }
+openssl = { version = "0.10", features = ["vendored"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 libloading = "0.8" # 动态库加载
@@ -61,8 +62,8 @@ http_bridge = { path = "http_bridge" }
 # 局域网传输模块（独立 crate）
 lan_transfer = { path = "lan_transfer" }
 
-# PicACG 漫画平台模块（独立 crate）
-picacg_module = { path = "picacg_module" }
+# Manga 漫画平台模块（独立 crate）
+manga_module = { path = "manga_module" }
 
 # 解压工具模块（独立 crate）
 extract_module = { path = "extract_module" }

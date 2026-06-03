@@ -556,14 +556,13 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                     autoLoad: true,
                   );
                   await _refreshModules();
-                  if (mounted) {
-                    _showSnack(
-                      '模块 ${module.moduleName} 重新安装成功',
-                      backgroundColor: (Theme.of(context).brightness == Brightness.dark)
-                          ? DarkColors.success
-                          : LightColors.success,
-                    );
-                  }
+                  if (!context.mounted) return;
+                  _showSnack(
+                    '模块 ${module.moduleName} 重新安装成功',
+                    backgroundColor: (Theme.of(context).brightness == Brightness.dark)
+                        ? DarkColors.success
+                        : LightColors.success,
+                  );
                 } catch (e) {
                   setState(() {
                     _error = '重新安装失败: $e';

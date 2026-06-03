@@ -287,7 +287,13 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('阅读设置', style: TextStyle(fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.w600)),
+                    Text(
+                      '阅读设置',
+                      style: TextStyle(
+                        fontSize: AppTheme.metrics.fontSize15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     SizedBox(height: AppTheme.metrics.kSpace12),
                     Row(
                       children: [

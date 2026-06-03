@@ -520,12 +520,12 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     (_MetaItem s) => SizedBox(
                       width: itemW,
                       child: Card(
-                        color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: AppTheme.metrics.radius12,
                           side: BorderSide(
-                            color: Theme.of(context).colorScheme.outline.withOpacity(0.12),
+                            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
                           ),
                         ),
                         child: Padding(
@@ -591,11 +591,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         else
           ...viewModel.sessions.map(
             (PlaySession session) => Card(
-              color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: AppTheme.metrics.radius12,
-                side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+                side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
               ),
               child: ListTile(
                 leading: const Icon(Icons.history),
@@ -619,11 +619,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       final String error = viewModel.moegirlError.value;
       if (loading) {
         return Card(
-          color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: AppTheme.metrics.radius12,
-            side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
           ),
           child: Padding(
             padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -643,11 +643,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       }
       if (error.isNotEmpty) {
         return Card(
-          color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: AppTheme.metrics.radius12,
-            side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
           ),
           child: ListTile(
             leading: const Icon(Icons.warning_amber_outlined),
@@ -663,11 +663,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       }
       if (html.isEmpty) return const SizedBox.shrink();
       return Card(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: AppTheme.metrics.radius12,
-          side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+          side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
         ),
         clipBehavior: Clip.antiAlias,
         child: Padding(
@@ -790,7 +790,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   labelText: '游戏名',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -802,7 +802,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   labelText: '开发商',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -819,7 +819,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   labelText: '评分 (0-10)',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -832,7 +832,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   hintText: 'YYYY-MM-DD',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -846,7 +846,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.folder_outlined),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -856,7 +856,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             labelText: '状态',
             border: const OutlineInputBorder(),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
           ),
           items: GameStatus.values
               .map((GameStatus e) => DropdownMenuItem<GameStatus>(value: e, child: Text(e.label)))
@@ -878,7 +878,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             labelText: '简介',
             border: const OutlineInputBorder(),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),
@@ -972,11 +972,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
 
           // 启动配置卡
           Card(
-            color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: AppTheme.metrics.radius12,
-              side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+              side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
             ),
             child: Padding(
               padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1101,88 +1101,88 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   // ── 可执行文件列表（展开时显示）──
                   if (_exeListExpanded && exePaths.isNotEmpty) ...<Widget>[
                     SizedBox(height: AppTheme.metrics.kSpace12),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Theme.of(context).dividerColor),
-                        borderRadius: AppTheme.metrics.radius8,
-                      ),
-                      child: Column(
-                        children: exePaths.asMap().entries.map((MapEntry<int, String> entry) {
-                          final String p = entry.value;
-                          final bool isDefault = g.path.trim() == p;
-                          final bool isLast = entry.key == exePaths.length - 1;
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: AppTheme.metrics.kSpace8,
-                                  vertical: 0,
-                                ),
-                                // 单选按钮：选中即设为默认
-                                leading: Radio<String>(
-                                  value: p,
-                                  groupValue: g.path.trim().isNotEmpty
-                                      ? g.path.trim()
-                                      : (exePaths.isNotEmpty ? exePaths.first : ''),
-                                  onChanged: (_) async {
-                                    await viewModel.setDefaultExe(p);
-                                  },
-                                ),
-                                title: Text(
-                                  _exeName(p),
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: isDefault ? FontWeight.w600 : FontWeight.normal,
+                    RadioGroup<String>(
+                      groupValue: g.path.trim().isNotEmpty
+                          ? g.path.trim()
+                          : (exePaths.isNotEmpty ? exePaths.first : ''),
+                      onChanged: (String? val) async {
+                        if (val != null) await viewModel.setDefaultExe(val);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Theme.of(context).dividerColor),
+                          borderRadius: AppTheme.metrics.radius8,
+                        ),
+                        child: Column(
+                          children: exePaths.asMap().entries.map((MapEntry<int, String> entry) {
+                            final String p = entry.value;
+                            final bool isDefault = g.path.trim() == p;
+                            final bool isLast = entry.key == exePaths.length - 1;
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                ListTile(
+                                  dense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: AppTheme.metrics.kSpace8,
+                                    vertical: 0,
                                   ),
-                                ),
-                                subtitle: Text(
-                                  p,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                // X 按钮：移除该 exe
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: <Widget>[
-                                    if (!running)
-                                      IconButton(
-                                        tooltip: '直接启动此文件',
-                                        icon: Icon(
-                                          Icons.play_circle_outline,
-                                          size: AppTheme.metrics.iconSize20,
-                                        ),
-                                        onPressed: () => _launchWithExe(g, p),
-                                      ),
-                                    IconButton(
-                                      tooltip: '移除此启动项',
-                                      icon: Icon(
-                                        Icons.close,
-                                        size: AppTheme.metrics.iconSize18,
-                                        color: Theme.of(context).colorScheme.error,
-                                      ),
-                                      onPressed: exePaths.length > 1
-                                          ? () async {
-                                              await viewModel.removeExePath(p);
-                                            }
-                                          : null,
+                                  // 单选按钮：选中即设为默认
+                                  leading: Radio<String>(value: p),
+                                  title: Text(
+                                    _exeName(p),
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: isDefault ? FontWeight.w600 : FontWeight.normal,
                                     ),
-                                  ],
+                                  ),
+                                  subtitle: Text(
+                                    p,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  // X 按钮：移除该 exe
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      if (!running)
+                                        IconButton(
+                                          tooltip: '直接启动此文件',
+                                          icon: Icon(
+                                            Icons.play_circle_outline,
+                                            size: AppTheme.metrics.iconSize20,
+                                          ),
+                                          onPressed: () => _launchWithExe(g, p),
+                                        ),
+                                      IconButton(
+                                        tooltip: '移除此启动项',
+                                        icon: Icon(
+                                          Icons.close,
+                                          size: AppTheme.metrics.iconSize18,
+                                          color: Theme.of(context).colorScheme.error,
+                                        ),
+                                        onPressed: exePaths.length > 1
+                                            ? () async {
+                                                await viewModel.removeExePath(p);
+                                              }
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              if (!isLast)
-                                Divider(
-                                  height: 1,
-                                  indent: 8,
-                                  endIndent: 8,
-                                  color: Theme.of(context).dividerColor,
-                                ),
-                            ],
-                          );
-                        }).toList(),
+                                if (!isLast)
+                                  Divider(
+                                    height: 1,
+                                    indent: 8,
+                                    endIndent: 8,
+                                    color: Theme.of(context).dividerColor,
+                                  ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ),
                   ],
@@ -1243,11 +1243,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           // 万物皆可萌
           SizedBox(height: AppTheme.metrics.kSpace16),
           Card(
-            color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: AppTheme.metrics.radius12,
-              side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+              side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
             ),
             child: Padding(
               padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1284,11 +1284,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
 
   Widget _buildTwodfanCard(GameItem g) {
     return Card(
-      color: Theme.of(context).colorScheme.surface.withOpacity(0.72),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: AppTheme.metrics.radius12,
-        side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.12)),
+        side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
       ),
       child: Padding(
         padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1629,7 +1629,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.book_outlined),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1640,7 +1640,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.alt_route_outlined),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1653,7 +1653,7 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             alignLabelWithHint: true,
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),

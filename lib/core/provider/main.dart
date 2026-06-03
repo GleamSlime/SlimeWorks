@@ -10,8 +10,8 @@ import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
-import 'package:slime_works/core/services/picacg_service.dart';
-import 'package:slime_works/core/services/picacg_download_service.dart';
+import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
@@ -46,13 +46,11 @@ void getItInit() {
   // 媒体偏好设置服务
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
 
-  // PicACG 漫画平台服务
-  getIt.registerLazySingleton<PicAcgService>(() => PicAcgService());
+  // Manga 漫画平台服务
+  getIt.registerLazySingleton<MangaService>(() => MangaService());
 
-  // PicACG 下载服务
-  getIt.registerLazySingleton<PicAcgDownloadService>(
-    () => PicAcgDownloadService(),
-  );
+  // Manga 下载服务
+  getIt.registerLazySingleton<MangaDownloadService>(() => MangaDownloadService());
 
   // 游戏库服务
   getIt.registerLazySingleton<GameLibraryMetadataApi>(

@@ -35,12 +35,12 @@ import 'package:slime_works/pages/game_library/categories/game_categories_screen
 import 'package:slime_works/pages/game_library/categories/game_category_detail_screen.dart';
 import 'package:slime_works/pages/game_library/stats/game_stats_screen.dart';
 import 'package:slime_works/pages/game_library/settings/game_settings_screen.dart';
-import 'package:slime_works/pages/picacg/picacg_home_screen.dart';
-import 'package:slime_works/pages/picacg/picacg_comic_detail_screen.dart';
-import 'package:slime_works/pages/picacg/picacg_history_screen.dart';
-import 'package:slime_works/pages/picacg/search/picacg_search_screen.dart';
-import 'package:slime_works/pages/picacg/reader/picacg_reader_screen.dart';
-import 'package:slime_works/pages/picacg/picacg_downloads_screen.dart';
+import 'package:slime_works/pages/manga/manga_home_screen.dart';
+import 'package:slime_works/pages/manga/manga_comic_detail_screen.dart';
+import 'package:slime_works/pages/manga/manga_history_screen.dart';
+import 'package:slime_works/pages/manga/search/manga_search_screen.dart';
+import 'package:slime_works/pages/manga/reader/manga_reader_screen.dart';
+import 'package:slime_works/pages/manga/manga_downloads_screen.dart';
 import 'package:slime_works/pages/about/about_page.dart';
 import 'package:slime_works/pages/tools/tools_screen.dart';
 import 'package:slime_works/pages/sentry_log/sentry_log_screen.dart';
@@ -61,7 +61,7 @@ part 'routes/collection_routes.dart';
 part 'routes/demo_routes.dart';
 part 'routes/capture_routers.dart';
 part 'routes/lan_transfer_routes.dart';
-part 'routes/picacg_routes.dart';
+part 'routes/manga_routes.dart';
 part 'routes/game_library_routes.dart';
 
 const Loggers _logger = Loggers(name: '路由');
@@ -86,8 +86,8 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<GameCategoriesRoute>(path: '/game/categories'),
     TypedGoRoute<GameStatsRoute>(path: '/game/stats'),
     TypedGoRoute<GameSettingsRoute>(path: '/game/settings'),
-    TypedGoRoute<PicAcgHomeRoute>(path: '/picacg'),
-    TypedGoRoute<PicAcgDownloadsRoute>(path: '/picacg/downloads'),
+    TypedGoRoute<MangaHomeRoute>(path: '/manga'),
+    TypedGoRoute<MangaDownloadsRoute>(path: '/manga/downloads'),
     TypedGoRoute<LanTransferRoute>(path: '/lan-transfer'),
     TypedGoRoute<SettingsRoute>(path: '/settings'),
     TypedGoRoute<AboutRoute>(path: '/about'),
@@ -128,8 +128,8 @@ class AppRoutes {
       const GameCategoriesRoute(),
       const GameStatsRoute(),
       const GameSettingsRoute(),
-      const PicAcgHomeRoute(),
-      const PicAcgDownloadsRoute(),
+      const MangaHomeRoute(),
+      const MangaDownloadsRoute(),
       const LanTransferRoute(),
       const SettingsRoute(),
       const AboutRoute(),
@@ -138,10 +138,10 @@ class AppRoutes {
       const AliyunDdnsRoute(),
 
       const NovelReaderRoute(),
-      const PicAcgComicDetailRoute(comicId: ''),
-      const PicAcgSearchRoute(),
-      const PicAcgReaderRoute(comicId: '', epsOrder: 0),
-      const PicAcgHistoryRoute(),
+      const MangaComicDetailRoute(comicId: ''),
+      const MangaSearchRoute(),
+      const MangaReaderRoute(comicId: '', epsOrder: 0),
+      const MangaHistoryRoute(),
       const GameDetailRoute(gameId: ''),
       const GameCategoryDetailRoute(categoryId: ''),
       const LanChatRoute(peerId: '', peerName: ''),

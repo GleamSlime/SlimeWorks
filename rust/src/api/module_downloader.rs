@@ -64,7 +64,7 @@ impl ModuleDownloader {
 
     /// 获取可执行文件路径
     pub fn get_executable_path(&self, module_name: &str, executable_name: &str) -> PathBuf {
-        let mut path = self.get_module_path(module_name).join(executable_name);
+        let path = self.get_module_path(module_name).join(executable_name);
 
         #[cfg(target_os = "windows")]
         {

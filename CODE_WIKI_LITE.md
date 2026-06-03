@@ -52,7 +52,7 @@ rust/
 ├── media_collection/         # 媒体集合 → 依赖 db_module
 ├── novel_reader/             # 小说阅读器 → 依赖 db_module + http_bridge
 ├── game_library/             # 游戏库（自建 SQLite，无内部依赖）
-├── picacg_module/            # PicACG 漫画 API（无内部依赖）
+├── manga_module/            # Manga 漫画 API（无内部依赖）
 ├── lan_transfer/             # 局域网传输 mDNS+TCP（无内部依赖）
 ├── extract_module/           # 解压工具 → 依赖 db_module
 ├── sentry_log/               # Sentry 日志（自建 redb，无内部依赖）
@@ -68,7 +68,7 @@ rust/
 
 ```
 基础层（无内部依赖）: db_module, http_bridge, lan_transfer, ws_module,
-                      picacg_module, sentry_log, game_library, module_manager, capture_proxy
+                      manga_module, sentry_log, game_library, module_manager, capture_proxy
 
 业务层:  media_collection → db_module
          novel_reader → db_module + http_bridge
@@ -83,8 +83,8 @@ rust/
 
 | 服务 | 职责 | 依赖 |
 |------|------|------|
-| `PicAcgService` | 漫画认证/浏览/搜索/收藏/7种分流 | Rust FFI |
-| `PicAcgDownloadService` | 下载队列/进度/离线路径 | PicAcgService |
+| `MangaService` | 漫画认证/浏览/搜索/收藏/7种分流 | Rust FFI |
+| `MangaDownloadService` | 下载队列/进度/离线路径 | MangaService |
 | `GameLibraryService` | 游戏 CRUD/分类/统计 | MetadataApi → Rust FFI |
 | `GameProcessTracker` | 进程追踪/时长记录 | GameLibraryService |
 | `GameLibraryMetadataApi` | Steam/VNDB/Bangumi 元数据聚合 | HTTP |
@@ -107,7 +107,7 @@ rust/
 | 媒体 | MediaLibraryViewModel + VmCollections + VmRemote + VmSmartFolders | 浏览/集合/远程/智能文件夹 |
 | 小说 | NovelLibraryViewModel(+Actions+Novel) / NovelReaderViewModel | 列表/操作/数据/阅读 |
 | 游戏 | Home / Library / Detail / Categories / Stats / Settings | 首页/CRUD/详情/分类/统计/设置 |
-| PicACG | Home / ComicDetail / Search / Reader / Downloads / Favourites / History | 完整漫画业务 |
+| Manga | Home / ComicDetail / Search / Reader / Downloads / Favourites / History | 完整漫画业务 |
 | 传输 | LanTransferViewModel | 设备发现/传输管理 |
 | 抓包 | CaptureScreenViewModel | 代理控制/流量展示 |
 | 日志 | SentryLogViewModel | 日志查询/过滤 |
@@ -121,8 +121,8 @@ rust/
 | `POST /node/call` | action 分发（media_collection/novel_reader 等） |
 | `GET /node/media` | 媒体文件流（缩放/Range） |
 | `POST /node/upload` | 文件上传 |
-| `POST /picacg/api` | PicACG API 中转 |
-| `GET /picacg/img` | PicACG 图片中转 |
+| `POST /manga/api` | Manga API 中转 |
+| `GET /manga/img` | Manga 图片中转 |
 | `POST /api/{id}/store\|envelope` | Sentry 兼容端点 |
 
 ---

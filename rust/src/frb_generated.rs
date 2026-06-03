@@ -5906,14 +5906,14 @@ fn wire__crate__api__novel_reader__move_novel_to_folder_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_build_image_url_impl(
+fn wire__crate__api__manga__manga_build_image_url_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_build_image_url",
+            debug_name: "manga_build_image_url",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -5931,7 +5931,7 @@ fn wire__crate__api__picacg__picacg_build_image_url_impl(
             let api_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::picacg::picacg_build_image_url(
+                let output_ok = Result::<_, ()>::Ok(crate::api::manga::manga_build_image_url(
                     api_file_server,
                     api_path,
                 ))?;
@@ -5940,14 +5940,14 @@ fn wire__crate__api__picacg__picacg_build_image_url_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_clear_history_impl(
+fn wire__crate__api__manga__manga_clear_history_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_clear_history",
+            debug_name: "manga_clear_history",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -5964,14 +5964,14 @@ fn wire__crate__api__picacg__picacg_clear_history_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_clear_history();
+                    crate::api::manga::manga_clear_history();
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_fetch_image_impl(
+fn wire__crate__api__manga__manga_fetch_image_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -5979,7 +5979,7 @@ fn wire__crate__api__picacg__picacg_fetch_image_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_fetch_image",
+            debug_name: "manga_fetch_image",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6000,7 +6000,7 @@ fn wire__crate__api__picacg__picacg_fetch_image_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_fetch_image(api_file_server, api_path)
+                            crate::api::manga::manga_fetch_image(api_file_server, api_path)
                                 .await?;
                         Ok(output_ok)
                     })()
@@ -6010,7 +6010,7 @@ fn wire__crate__api__picacg__picacg_fetch_image_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_categories_impl(
+fn wire__crate__api__manga__manga_get_categories_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6018,7 +6018,7 @@ fn wire__crate__api__picacg__picacg_get_categories_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_categories",
+            debug_name: "manga_get_categories",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6036,7 +6036,7 @@ fn wire__crate__api__picacg__picacg_get_categories_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_categories().await?;
+                        let output_ok = crate::api::manga::manga_get_categories().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6045,7 +6045,7 @@ fn wire__crate__api__picacg__picacg_get_categories_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_collections_impl(
+fn wire__crate__api__manga__manga_get_collections_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6053,7 +6053,7 @@ fn wire__crate__api__picacg__picacg_get_collections_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_collections",
+            debug_name: "manga_get_collections",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6071,7 +6071,7 @@ fn wire__crate__api__picacg__picacg_get_collections_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_collections().await?;
+                        let output_ok = crate::api::manga::manga_get_collections().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6080,7 +6080,7 @@ fn wire__crate__api__picacg__picacg_get_collections_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_comic_detail_impl(
+fn wire__crate__api__manga__manga_get_comic_detail_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6088,7 +6088,7 @@ fn wire__crate__api__picacg__picacg_get_comic_detail_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_comic_detail",
+            debug_name: "manga_get_comic_detail",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6108,7 +6108,7 @@ fn wire__crate__api__picacg__picacg_get_comic_detail_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_get_comic_detail(api_comic_id).await?;
+                            crate::api::manga::manga_get_comic_detail(api_comic_id).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6117,7 +6117,7 @@ fn wire__crate__api__picacg__picacg_get_comic_detail_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_comic_eps_impl(
+fn wire__crate__api__manga__manga_get_comic_eps_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6125,7 +6125,7 @@ fn wire__crate__api__picacg__picacg_get_comic_eps_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_comic_eps",
+            debug_name: "manga_get_comic_eps",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6146,7 +6146,7 @@ fn wire__crate__api__picacg__picacg_get_comic_eps_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_get_comic_eps(api_comic_id, api_page)
+                            crate::api::manga::manga_get_comic_eps(api_comic_id, api_page)
                                 .await?;
                         Ok(output_ok)
                     })()
@@ -6156,7 +6156,7 @@ fn wire__crate__api__picacg__picacg_get_comic_eps_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
+fn wire__crate__api__manga__manga_get_comic_recommendations_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6164,7 +6164,7 @@ fn wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_comic_recommendations",
+            debug_name: "manga_get_comic_recommendations",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6184,7 +6184,7 @@ fn wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_get_comic_recommendations(api_comic_id)
+                            crate::api::manga::manga_get_comic_recommendations(api_comic_id)
                                 .await?;
                         Ok(output_ok)
                     })()
@@ -6194,7 +6194,7 @@ fn wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_comics_by_category_impl(
+fn wire__crate__api__manga__manga_get_comics_by_category_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6202,7 +6202,7 @@ fn wire__crate__api__picacg__picacg_get_comics_by_category_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_comics_by_category",
+            debug_name: "manga_get_comics_by_category",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6223,7 +6223,7 @@ fn wire__crate__api__picacg__picacg_get_comics_by_category_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_comics_by_category(
+                        let output_ok = crate::api::manga::manga_get_comics_by_category(
                             api_category,
                             api_page,
                             api_sort,
@@ -6237,7 +6237,7 @@ fn wire__crate__api__picacg__picacg_get_comics_by_category_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_comment_children_impl(
+fn wire__crate__api__manga__manga_get_comment_children_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6245,7 +6245,7 @@ fn wire__crate__api__picacg__picacg_get_comment_children_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_comment_children",
+            debug_name: "manga_get_comment_children",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6265,7 +6265,7 @@ fn wire__crate__api__picacg__picacg_get_comment_children_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_comment_children(
+                        let output_ok = crate::api::manga::manga_get_comment_children(
                             api_comment_id,
                             api_page,
                         )
@@ -6278,7 +6278,7 @@ fn wire__crate__api__picacg__picacg_get_comment_children_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_comments_impl(
+fn wire__crate__api__manga__manga_get_comments_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6286,7 +6286,7 @@ fn wire__crate__api__picacg__picacg_get_comments_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_comments",
+            debug_name: "manga_get_comments",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6307,7 +6307,7 @@ fn wire__crate__api__picacg__picacg_get_comments_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_get_comments(api_comic_id, api_page).await?;
+                            crate::api::manga::manga_get_comments(api_comic_id, api_page).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6316,7 +6316,7 @@ fn wire__crate__api__picacg__picacg_get_comments_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_eps_pages_impl(
+fn wire__crate__api__manga__manga_get_eps_pages_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6324,7 +6324,7 @@ fn wire__crate__api__picacg__picacg_get_eps_pages_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_eps_pages",
+            debug_name: "manga_get_eps_pages",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6345,7 +6345,7 @@ fn wire__crate__api__picacg__picacg_get_eps_pages_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_eps_pages(
+                        let output_ok = crate::api::manga::manga_get_eps_pages(
                             api_comic_id,
                             api_eps_order,
                             api_page,
@@ -6359,7 +6359,7 @@ fn wire__crate__api__picacg__picacg_get_eps_pages_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_favourites_impl(
+fn wire__crate__api__manga__manga_get_favourites_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6367,7 +6367,7 @@ fn wire__crate__api__picacg__picacg_get_favourites_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_favourites",
+            debug_name: "manga_get_favourites",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6388,7 +6388,7 @@ fn wire__crate__api__picacg__picacg_get_favourites_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_get_favourites(api_page, api_sort).await?;
+                            crate::api::manga::manga_get_favourites(api_page, api_sort).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6397,14 +6397,14 @@ fn wire__crate__api__picacg__picacg_get_favourites_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_image_server_impl(
+fn wire__crate__api__manga__manga_get_image_server_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_image_server",
+            debug_name: "manga_get_image_server",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6420,13 +6420,13 @@ fn wire__crate__api__picacg__picacg_get_image_server_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::picacg::picacg_get_image_server())?;
+                let output_ok = Result::<_, ()>::Ok(crate::api::manga::manga_get_image_server())?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_keywords_impl(
+fn wire__crate__api__manga__manga_get_keywords_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6434,7 +6434,7 @@ fn wire__crate__api__picacg__picacg_get_keywords_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_keywords",
+            debug_name: "manga_get_keywords",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6452,7 +6452,7 @@ fn wire__crate__api__picacg__picacg_get_keywords_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_keywords().await?;
+                        let output_ok = crate::api::manga::manga_get_keywords().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6461,7 +6461,7 @@ fn wire__crate__api__picacg__picacg_get_keywords_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_random_comics_impl(
+fn wire__crate__api__manga__manga_get_random_comics_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6469,7 +6469,7 @@ fn wire__crate__api__picacg__picacg_get_random_comics_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_random_comics",
+            debug_name: "manga_get_random_comics",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6487,7 +6487,7 @@ fn wire__crate__api__picacg__picacg_get_random_comics_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_random_comics().await?;
+                        let output_ok = crate::api::manga::manga_get_random_comics().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6496,7 +6496,7 @@ fn wire__crate__api__picacg__picacg_get_random_comics_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_rankings_impl(
+fn wire__crate__api__manga__manga_get_rankings_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6504,7 +6504,7 @@ fn wire__crate__api__picacg__picacg_get_rankings_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_rankings",
+            debug_name: "manga_get_rankings",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6524,7 +6524,7 @@ fn wire__crate__api__picacg__picacg_get_rankings_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_get_rankings(api_time_type).await?;
+                            crate::api::manga::manga_get_rankings(api_time_type).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6533,14 +6533,14 @@ fn wire__crate__api__picacg__picacg_get_rankings_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_token_impl(
+fn wire__crate__api__manga__manga_get_token_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_token",
+            debug_name: "manga_get_token",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6556,13 +6556,13 @@ fn wire__crate__api__picacg__picacg_get_token_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::picacg::picacg_get_token())?;
+                let output_ok = Result::<_, ()>::Ok(crate::api::manga::manga_get_token())?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_get_user_profile_impl(
+fn wire__crate__api__manga__manga_get_user_profile_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6570,7 +6570,7 @@ fn wire__crate__api__picacg__picacg_get_user_profile_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_get_user_profile",
+            debug_name: "manga_get_user_profile",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6588,7 +6588,7 @@ fn wire__crate__api__picacg__picacg_get_user_profile_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_get_user_profile().await?;
+                        let output_ok = crate::api::manga::manga_get_user_profile().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6597,14 +6597,14 @@ fn wire__crate__api__picacg__picacg_get_user_profile_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_init_impl(
+fn wire__crate__api__manga__manga_init_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_init",
+            debug_name: "manga_init",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6621,21 +6621,21 @@ fn wire__crate__api__picacg__picacg_init_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_init();
+                    crate::api::manga::manga_init();
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_init_history_impl(
+fn wire__crate__api__manga__manga_init_history_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_init_history",
+            debug_name: "manga_init_history",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6653,14 +6653,14 @@ fn wire__crate__api__picacg__picacg_init_history_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_init_history(api_db_path);
+                    crate::api::manga::manga_init_history(api_db_path);
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_like_comment_impl(
+fn wire__crate__api__manga__manga_like_comment_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6668,7 +6668,7 @@ fn wire__crate__api__picacg__picacg_like_comment_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_like_comment",
+            debug_name: "manga_like_comment",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6688,7 +6688,7 @@ fn wire__crate__api__picacg__picacg_like_comment_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_like_comment(api_comment_id).await?;
+                            crate::api::manga::manga_like_comment(api_comment_id).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6697,14 +6697,14 @@ fn wire__crate__api__picacg__picacg_like_comment_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_load_history_impl(
+fn wire__crate__api__manga__manga_load_history_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_load_history",
+            debug_name: "manga_load_history",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6720,13 +6720,13 @@ fn wire__crate__api__picacg__picacg_load_history_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::picacg::picacg_load_history())?;
+                let output_ok = Result::<_, ()>::Ok(crate::api::manga::manga_load_history())?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_login_impl(
+fn wire__crate__api__manga__manga_login_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6734,7 +6734,7 @@ fn wire__crate__api__picacg__picacg_login_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_login",
+            debug_name: "manga_login",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6755,7 +6755,7 @@ fn wire__crate__api__picacg__picacg_login_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_login(api_email, api_password).await?;
+                            crate::api::manga::manga_login(api_email, api_password).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6764,14 +6764,14 @@ fn wire__crate__api__picacg__picacg_login_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_logout_impl(
+fn wire__crate__api__manga__manga_logout_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_logout",
+            debug_name: "manga_logout",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6788,14 +6788,14 @@ fn wire__crate__api__picacg__picacg_logout_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_logout();
+                    crate::api::manga::manga_logout();
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_punch_in_impl(
+fn wire__crate__api__manga__manga_punch_in_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6803,7 +6803,7 @@ fn wire__crate__api__picacg__picacg_punch_in_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_punch_in",
+            debug_name: "manga_punch_in",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6821,7 +6821,7 @@ fn wire__crate__api__picacg__picacg_punch_in_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_punch_in().await?;
+                        let output_ok = crate::api::manga::manga_punch_in().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6830,14 +6830,14 @@ fn wire__crate__api__picacg__picacg_punch_in_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_save_history_raw_impl(
+fn wire__crate__api__manga__manga_save_history_raw_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_save_history_raw",
+            debug_name: "manga_save_history_raw",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6855,14 +6855,14 @@ fn wire__crate__api__picacg__picacg_save_history_raw_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_save_history_raw(api_json);
+                    crate::api::manga::manga_save_history_raw(api_json);
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_search_comics_impl(
+fn wire__crate__api__manga__manga_search_comics_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6870,7 +6870,7 @@ fn wire__crate__api__picacg__picacg_search_comics_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_search_comics",
+            debug_name: "manga_search_comics",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6892,7 +6892,7 @@ fn wire__crate__api__picacg__picacg_search_comics_impl(
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::picacg::picacg_search_comics(
+                        let output_ok = crate::api::manga::manga_search_comics(
                             api_keyword,
                             api_categories,
                             api_page,
@@ -6907,7 +6907,7 @@ fn wire__crate__api__picacg__picacg_search_comics_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_send_comment_impl(
+fn wire__crate__api__manga__manga_send_comment_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6915,7 +6915,7 @@ fn wire__crate__api__picacg__picacg_send_comment_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_send_comment",
+            debug_name: "manga_send_comment",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -6936,7 +6936,7 @@ fn wire__crate__api__picacg__picacg_send_comment_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_send_comment(api_comic_id, api_content)
+                            crate::api::manga::manga_send_comment(api_comic_id, api_content)
                                 .await?;
                         Ok(output_ok)
                     })()
@@ -6946,14 +6946,14 @@ fn wire__crate__api__picacg__picacg_send_comment_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_set_channel_impl(
+fn wire__crate__api__manga__manga_set_channel_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_set_channel",
+            debug_name: "manga_set_channel",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6972,21 +6972,21 @@ fn wire__crate__api__picacg__picacg_set_channel_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_set_channel(api_mode, api_custom);
+                    crate::api::manga::manga_set_channel(api_mode, api_custom);
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_set_image_server_impl(
+fn wire__crate__api__manga__manga_set_image_server_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_set_image_server",
+            debug_name: "manga_set_image_server",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -7004,21 +7004,21 @@ fn wire__crate__api__picacg__picacg_set_image_server_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_set_image_server(api_server);
+                    crate::api::manga::manga_set_image_server(api_server);
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_set_proxy_impl(
+fn wire__crate__api__manga__manga_set_proxy_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_set_proxy",
+            debug_name: "manga_set_proxy",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -7036,21 +7036,21 @@ fn wire__crate__api__picacg__picacg_set_proxy_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_set_proxy(api_proxy_url);
+                    crate::api::manga::manga_set_proxy(api_proxy_url);
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_set_token_impl(
+fn wire__crate__api__manga__manga_set_token_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_set_token",
+            debug_name: "manga_set_token",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -7068,14 +7068,14 @@ fn wire__crate__api__picacg__picacg_set_token_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::picacg::picacg_set_token(api_token);
+                    crate::api::manga::manga_set_token(api_token);
                 })?;
                 Ok(output_ok)
             })())
         },
     )
 }
-fn wire__crate__api__picacg__picacg_test_channel_impl(
+fn wire__crate__api__manga__manga_test_channel_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -7083,7 +7083,7 @@ fn wire__crate__api__picacg__picacg_test_channel_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_test_channel",
+            debug_name: "manga_test_channel",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -7104,7 +7104,7 @@ fn wire__crate__api__picacg__picacg_test_channel_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_test_channel(api_mode, api_custom).await?;
+                            crate::api::manga::manga_test_channel(api_mode, api_custom).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -7113,7 +7113,7 @@ fn wire__crate__api__picacg__picacg_test_channel_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_toggle_favourite_impl(
+fn wire__crate__api__manga__manga_toggle_favourite_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -7121,7 +7121,7 @@ fn wire__crate__api__picacg__picacg_toggle_favourite_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_toggle_favourite",
+            debug_name: "manga_toggle_favourite",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -7141,7 +7141,7 @@ fn wire__crate__api__picacg__picacg_toggle_favourite_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_toggle_favourite(api_comic_id).await?;
+                            crate::api::manga::manga_toggle_favourite(api_comic_id).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -7150,7 +7150,7 @@ fn wire__crate__api__picacg__picacg_toggle_favourite_impl(
         },
     )
 }
-fn wire__crate__api__picacg__picacg_toggle_like_impl(
+fn wire__crate__api__manga__manga_toggle_like_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -7158,7 +7158,7 @@ fn wire__crate__api__picacg__picacg_toggle_like_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "picacg_toggle_like",
+            debug_name: "manga_toggle_like",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -7178,7 +7178,7 @@ fn wire__crate__api__picacg__picacg_toggle_like_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
                         let output_ok =
-                            crate::api::picacg::picacg_toggle_like(api_comic_id).await?;
+                            crate::api::manga::manga_toggle_like(api_comic_id).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -10827,88 +10827,88 @@ fn pde_ffi_dispatcher_primary_impl(
         157 => {
             wire__crate__api__module_manager__module_unload_impl(port, ptr, rust_vec_len, data_len)
         }
-        162 => wire__crate__api__picacg__picacg_fetch_image_impl(port, ptr, rust_vec_len, data_len),
+        162 => wire__crate__api__manga__manga_fetch_image_impl(port, ptr, rust_vec_len, data_len),
         163 => {
-            wire__crate__api__picacg__picacg_get_categories_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_categories_impl(port, ptr, rust_vec_len, data_len)
         }
         164 => {
-            wire__crate__api__picacg__picacg_get_collections_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_collections_impl(port, ptr, rust_vec_len, data_len)
         }
-        165 => wire__crate__api__picacg__picacg_get_comic_detail_impl(
+        165 => wire__crate__api__manga__manga_get_comic_detail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         166 => {
-            wire__crate__api__picacg__picacg_get_comic_eps_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_comic_eps_impl(port, ptr, rust_vec_len, data_len)
         }
-        167 => wire__crate__api__picacg__picacg_get_comic_recommendations_impl(
+        167 => wire__crate__api__manga__manga_get_comic_recommendations_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__picacg__picacg_get_comics_by_category_impl(
+        168 => wire__crate__api__manga__manga_get_comics_by_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__picacg__picacg_get_comment_children_impl(
+        169 => wire__crate__api__manga__manga_get_comment_children_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         170 => {
-            wire__crate__api__picacg__picacg_get_comments_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_comments_impl(port, ptr, rust_vec_len, data_len)
         }
         171 => {
-            wire__crate__api__picacg__picacg_get_eps_pages_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_eps_pages_impl(port, ptr, rust_vec_len, data_len)
         }
         172 => {
-            wire__crate__api__picacg__picacg_get_favourites_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_favourites_impl(port, ptr, rust_vec_len, data_len)
         }
         174 => {
-            wire__crate__api__picacg__picacg_get_keywords_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_keywords_impl(port, ptr, rust_vec_len, data_len)
         }
-        175 => wire__crate__api__picacg__picacg_get_random_comics_impl(
+        175 => wire__crate__api__manga__manga_get_random_comics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         176 => {
-            wire__crate__api__picacg__picacg_get_rankings_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_get_rankings_impl(port, ptr, rust_vec_len, data_len)
         }
-        178 => wire__crate__api__picacg__picacg_get_user_profile_impl(
+        178 => wire__crate__api__manga__manga_get_user_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         181 => {
-            wire__crate__api__picacg__picacg_like_comment_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_like_comment_impl(port, ptr, rust_vec_len, data_len)
         }
-        183 => wire__crate__api__picacg__picacg_login_impl(port, ptr, rust_vec_len, data_len),
-        185 => wire__crate__api__picacg__picacg_punch_in_impl(port, ptr, rust_vec_len, data_len),
+        183 => wire__crate__api__manga__manga_login_impl(port, ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__manga__manga_punch_in_impl(port, ptr, rust_vec_len, data_len),
         187 => {
-            wire__crate__api__picacg__picacg_search_comics_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_search_comics_impl(port, ptr, rust_vec_len, data_len)
         }
         188 => {
-            wire__crate__api__picacg__picacg_send_comment_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_send_comment_impl(port, ptr, rust_vec_len, data_len)
         }
         193 => {
-            wire__crate__api__picacg__picacg_test_channel_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__manga__manga_test_channel_impl(port, ptr, rust_vec_len, data_len)
         }
-        194 => wire__crate__api__picacg__picacg_toggle_favourite_impl(
+        194 => wire__crate__api__manga__manga_toggle_favourite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        195 => wire__crate__api__picacg__picacg_toggle_like_impl(port, ptr, rust_vec_len, data_len),
+        195 => wire__crate__api__manga__manga_toggle_like_impl(port, ptr, rust_vec_len, data_len),
         202 => wire__crate__api__media_collection__scan_media_folders_impl(
             port,
             ptr,
@@ -11232,19 +11232,19 @@ fn pde_ffi_dispatcher_sync_impl(
         159 => {
             wire__crate__api__novel_reader__move_novel_to_folder_impl(ptr, rust_vec_len, data_len)
         }
-        160 => wire__crate__api__picacg__picacg_build_image_url_impl(ptr, rust_vec_len, data_len),
-        161 => wire__crate__api__picacg__picacg_clear_history_impl(ptr, rust_vec_len, data_len),
-        173 => wire__crate__api__picacg__picacg_get_image_server_impl(ptr, rust_vec_len, data_len),
-        177 => wire__crate__api__picacg__picacg_get_token_impl(ptr, rust_vec_len, data_len),
-        179 => wire__crate__api__picacg__picacg_init_impl(ptr, rust_vec_len, data_len),
-        180 => wire__crate__api__picacg__picacg_init_history_impl(ptr, rust_vec_len, data_len),
-        182 => wire__crate__api__picacg__picacg_load_history_impl(ptr, rust_vec_len, data_len),
-        184 => wire__crate__api__picacg__picacg_logout_impl(ptr, rust_vec_len, data_len),
-        186 => wire__crate__api__picacg__picacg_save_history_raw_impl(ptr, rust_vec_len, data_len),
-        189 => wire__crate__api__picacg__picacg_set_channel_impl(ptr, rust_vec_len, data_len),
-        190 => wire__crate__api__picacg__picacg_set_image_server_impl(ptr, rust_vec_len, data_len),
-        191 => wire__crate__api__picacg__picacg_set_proxy_impl(ptr, rust_vec_len, data_len),
-        192 => wire__crate__api__picacg__picacg_set_token_impl(ptr, rust_vec_len, data_len),
+        160 => wire__crate__api__manga__manga_build_image_url_impl(ptr, rust_vec_len, data_len),
+        161 => wire__crate__api__manga__manga_clear_history_impl(ptr, rust_vec_len, data_len),
+        173 => wire__crate__api__manga__manga_get_image_server_impl(ptr, rust_vec_len, data_len),
+        177 => wire__crate__api__manga__manga_get_token_impl(ptr, rust_vec_len, data_len),
+        179 => wire__crate__api__manga__manga_init_impl(ptr, rust_vec_len, data_len),
+        180 => wire__crate__api__manga__manga_init_history_impl(ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__manga__manga_load_history_impl(ptr, rust_vec_len, data_len),
+        184 => wire__crate__api__manga__manga_logout_impl(ptr, rust_vec_len, data_len),
+        186 => wire__crate__api__manga__manga_save_history_raw_impl(ptr, rust_vec_len, data_len),
+        189 => wire__crate__api__manga__manga_set_channel_impl(ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__manga__manga_set_image_server_impl(ptr, rust_vec_len, data_len),
+        191 => wire__crate__api__manga__manga_set_proxy_impl(ptr, rust_vec_len, data_len),
+        192 => wire__crate__api__manga__manga_set_token_impl(ptr, rust_vec_len, data_len),
         196 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
         197 => {
             wire__crate__api__novel_reader__remove_novel_with_file_impl(ptr, rust_vec_len, data_len)

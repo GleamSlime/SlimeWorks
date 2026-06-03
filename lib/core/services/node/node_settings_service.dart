@@ -1212,7 +1212,7 @@ class NodeSettingsService extends GetxService {
         receiveTimeout: const Duration(seconds: 45),
       );
     }
-    if (action.startsWith('picacg_')) {
+    if (action.startsWith('manga_')) {
       return Options(
         sendTimeout: const Duration(seconds: 20),
         receiveTimeout: const Duration(seconds: 30),

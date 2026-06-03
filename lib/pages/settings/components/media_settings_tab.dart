@@ -202,20 +202,26 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace12),
-                ...FileCheckDepth.values.map(
-                  (d) => RadioListTile<FileCheckDepth>(
-                    value: d,
-                    groupValue: depth,
-                    title: Text(d.label),
-                    subtitle: Text(
-                      d.description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(150),
-                      ),
-                    ),
-                    onChanged: (v) {
-                      if (v != null) _prefs.setFileCheckDepth(v);
-                    },
+                RadioGroup<FileCheckDepth>(
+                  groupValue: depth,
+                  onChanged: (v) {
+                    if (v != null) _prefs.setFileCheckDepth(v);
+                  },
+                  child: Column(
+                    children: FileCheckDepth.values
+                        .map(
+                          (d) => RadioListTile<FileCheckDepth>(
+                            value: d,
+                            title: Text(d.label),
+                            subtitle: Text(
+                              d.description,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withAlpha(150),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
               ],

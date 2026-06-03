@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
-import 'package:slime_works/core/services/node/node_settings_service.dart';
 
 class AliyunDdnsViewModel extends GetxController {
   final AliyunDdnsService _service = GetIt.instance.get<AliyunDdnsService>();
