@@ -157,6 +157,7 @@ jobs:
           flutter pub run build_runner build --delete-conflicting-outputs
 
       - name: 创建 .env 文件（占位）
+        shell: bash
         run: |
           cat > .env << 'ENVEOF'
           PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
