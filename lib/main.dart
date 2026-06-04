@@ -19,12 +19,14 @@ import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
+import 'package:slime_works/core/services/initialize/ffmpeg.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
+import 'package:slime_works/src/rust/api/media_collection.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 import 'package:media_kit/media_kit.dart';
@@ -68,6 +70,9 @@ Future<void> main() async {
   // 必须在任何 Rust FFI 调用前初始化
   await RustLib.init();
 
+  // 注册 ffmpeg/ffprobe 路径到 media_collection 模块，确保视频封面生成可用
+  _registerFfmpegPaths();
+
   // 初始化 media_kit（视频播放）
   MediaKit.ensureInitialized();
 
@@ -97,6 +102,13 @@ Future<void> main() async {
 
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   initializeLogger();
+
+  // 异步下载/初始化 ffmpeg（若内置模块不存在），完成后自动注册路径到 media_collection
+  if (Platform.isWindows || Platform.isMacOS) {
+    RustFFmpeg.initialize().then((_) {
+      _registerFfmpegPaths(); // 下载完成后重新注册路径
+    });
+  }
 
   // 初始化Sentry日志存储
   try {
@@ -134,6 +146,43 @@ void configLoading() {
     ..maskColor = Colors.blue.withAlpha(255 ~/ 2)
     ..userInteractions = false
     ..dismissOnTap = false;
+}
+
+/// 注册 ffmpeg/ffprobe 路径到 Rust 端 media_collection 模块。
+/// 优先使用内置模块路径，若不存在则回退到系统 PATH。
+void _registerFfmpegPaths() {
+  if (!Platform.isWindows && !Platform.isMacOS) return;
+
+  final appDir = Platform.environment[Platform.isWindows ? 'APPDATA' : 'HOME'];
+  if (appDir == null) return;
+
+  final sep = Platform.pathSeparator;
+  final ext = Platform.isWindows ? '.exe' : '';
+  final ffmpegPath = '$appDir${sep}modules${sep}ffmpeg${sep}ffmpeg$ext';
+  final ffprobePath = '$appDir${sep}modules${sep}ffmpeg${sep}ffprobe$ext';
+
+  // 仅当文件存在时才注册路径，否则回退到系统 PATH
+  String? registeredFfmpeg;
+  String? registeredFfprobe;
+
+  if (File(ffmpegPath).existsSync()) {
+    registeredFfmpeg = ffmpegPath;
+    _logger.info('[FFmpeg] 注册内置 ffmpeg: $ffmpegPath');
+  } else {
+    _logger.info('[FFmpeg] 内置 ffmpeg 不存在，将使用系统 PATH');
+  }
+
+  if (File(ffprobePath).existsSync()) {
+    registeredFfprobe = ffprobePath;
+    _logger.info('[FFmpeg] 注册内置 ffprobe: $ffprobePath');
+  } else {
+    _logger.info('[FFmpeg] 内置 ffprobe 不存在，将使用系统 PATH');
+  }
+
+  registerFfmpegPaths(
+    ffmpegPath: registeredFfmpeg,
+    ffprobePath: registeredFfprobe,
+  );
 }
 
 class MyApp extends StatelessWidget {

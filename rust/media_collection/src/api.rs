@@ -3,7 +3,7 @@ use slime_logger::{sw_debug, sw_info, sw_warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, RwLock};
 
 use crate::scanner::MediaFolderScanner;
 use crate::types::{
@@ -11,26 +11,187 @@ use crate::types::{
     SmartFolderRegexTarget,
 };
 
+// ── FFmpeg/FFprobe 可执行文件路径（由外部初始化时注入）───────────────────────
+static FFMPEG_PATH: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+static FFPROBE_PATH: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+/// 注册 ffmpeg 可执行文件的绝对路径。
+/// 必须在调用任何缩略图生成函数之前调用（通常在应用启动时由 api/ffmpeg.rs 注入）。
+/// 可多次调用以更新路径（如 ffmpeg 下载完成后重新注册）。
+pub fn register_ffmpeg_path(path: String) {
+    if let Ok(mut guard) = FFMPEG_PATH.write() {
+        *guard = Some(path);
+    }
+}
+
+/// 注册 ffprobe 可执行文件的绝对路径。
+pub fn register_ffprobe_path(path: String) {
+    if let Ok(mut guard) = FFPROBE_PATH.write() {
+        *guard = Some(path);
+    }
+}
+
+/// 获取已注册的 ffmpeg 路径，若未注册则回退到系统 PATH 中的 "ffmpeg"。
+pub fn ffmpeg_cmd() -> String {
+    FFMPEG_PATH
+        .read()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or_else(|| "ffmpeg".to_string())
+}
+
+/// 获取已注册的 ffprobe 路径，若未注册则回退到系统 PATH 中的 "ffprobe"。
+pub fn ffprobe_cmd() -> String {
+    FFPROBE_PATH
+        .read()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or_else(|| "ffprobe".to_string())
+}
+
 // ── Cover thumbnail cache ─────────────────────────────────────────────────────
 static THUMB_CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 
-/// 限制并发缩略图生成数量（每次生成可能启动 ffmpeg 子进程，防止 FD/CPU 爆炸）
-const MAX_CONCURRENT_THUMBS: usize = 4;
+/// 全局 ffmpeg 子进程并发上限（由 Flutter 端通过 register_ffmpeg_concurrency 设置）。
+/// 默认 2，所有启动 ffmpeg/ffprobe 的函数（ensure_cover_thumbnail / extract_video_scrub_frames 等）
+/// 共享此信号量，确保同一时刻 ffmpeg 进程数不超过此值。
+static FFMPEG_CONCURRENCY: std::sync::RwLock<usize> = std::sync::RwLock::new(2);
+
+/// 并发信号量：计数器 + 条件变量。OnceLock 保证只初始化一次，
+/// 内部 Mutex/Condvar 本身线程安全，无需外层 RwLock。
 static THUMB_PERMITS: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
+
+/// 注册 ffmpeg 子进程并发上限。由 Flutter 端 mediaPrefs.concurrency 调用。
+pub fn register_ffmpeg_concurrency(limit: usize) {
+    let effective = limit.max(1);
+    sw_info!(
+        "[thumb-permit] 并发上限更新: {} → {}",
+        max_concurrent_ffmpeg(),
+        effective
+    );
+    if let Ok(mut guard) = FFMPEG_CONCURRENCY.write() {
+        *guard = effective;
+    }
+    // 唤醒可能正在等待的线程，让它们用新的上限重新检查
+    if let Some((_, cvar)) = THUMB_PERMITS.get() {
+        cvar.notify_all();
+    }
+}
+
+fn max_concurrent_ffmpeg() -> usize {
+    FFMPEG_CONCURRENCY.read().map(|g| *g).unwrap_or(2)
+}
 
 fn acquire_thumb_permit() {
     let (lock, cvar) = THUMB_PERMITS.get_or_init(|| (Mutex::new(0), Condvar::new()));
     let mut count = cvar
-        .wait_while(lock.lock().unwrap(), |c| *c >= MAX_CONCURRENT_THUMBS)
+        .wait_while(lock.lock().unwrap(), |c| *c >= max_concurrent_ffmpeg())
         .unwrap();
     *count += 1;
+    sw_info!(
+        "[thumb-permit] acquired | current={}/{}",
+        *count,
+        max_concurrent_ffmpeg()
+    );
 }
 
 fn release_thumb_permit() {
-    let (lock, cvar) = THUMB_PERMITS.get_or_init(|| (Mutex::new(0), Condvar::new()));
-    let mut count = lock.lock().unwrap();
-    *count -= 1;
-    cvar.notify_one();
+    if let Some((lock, cvar)) = THUMB_PERMITS.get() {
+        let mut count = lock.lock().unwrap();
+        *count -= 1;
+        sw_info!(
+            "[thumb-permit] released | current={}/{}",
+            *count,
+            max_concurrent_ffmpeg()
+        );
+        cvar.notify_all();
+    }
+}
+
+/// 全局 ffmpeg/ffprobe 子进程 PID 集合，用于应用退出时清理残留进程。
+static FFMPEG_PIDS: RwLock<Vec<u32>> = RwLock::new(Vec::new());
+
+/// 记录一个子进程 PID（在 ffmpeg/ffprobe 启动后调用）。
+fn track_ffmpeg_pid(pid: u32) {
+    if let Ok(mut guard) = FFMPEG_PIDS.write() {
+        guard.push(pid);
+    }
+}
+
+/// 从跟踪列表中移除一个 PID（在子进程结束后调用）。
+fn untrack_ffmpeg_pid(pid: u32) {
+    if let Ok(mut guard) = FFMPEG_PIDS.write() {
+        guard.retain(|&p| p != pid);
+    }
+}
+
+/// 清理所有残留的 ffmpeg/ffprobe 子进程。应用退出时调用。
+pub fn kill_all_ffmpeg_processes() {
+    let pids: Vec<u32> = FFMPEG_PIDS.read().map(|g| g.clone()).unwrap_or_default();
+    if pids.is_empty() {
+        return;
+    }
+    sw_info!(
+        "[ffmpeg-cleanup] 清理 {} 个残留 ffmpeg/ffprobe 进程",
+        pids.len()
+    );
+    for pid in pids {
+        #[cfg(windows)]
+        {
+            // Windows: 使用 taskkill 强制终止进程树
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+        #[cfg(not(windows))]
+        {
+            // Unix: 发送 SIGKILL
+            unsafe {
+                libc::kill(pid as i32, libc::SIGKILL);
+            }
+        }
+        sw_info!("[ffmpeg-cleanup] 已终止 PID={}", pid);
+    }
+    if let Ok(mut guard) = FFMPEG_PIDS.write() {
+        guard.clear();
+    }
+}
+
+/// 启动 ffmpeg/ffprobe 子进程并跟踪 PID，等待其完成后返回退出状态。
+/// 使用 spawn + wait 代替 .status()，以便在启动后立即获取 PID 用于清理跟踪。
+pub fn run_tracked_command(
+    cmd: &mut std::process::Command,
+) -> std::io::Result<std::process::ExitStatus> {
+    let mut child = cmd.spawn()?;
+    let pid = child.id();
+    if pid > 0 {
+        track_ffmpeg_pid(pid);
+    }
+    let result = child.wait();
+    // 进程结束后从跟踪列表移除（无论成功/失败）
+    if pid > 0 {
+        untrack_ffmpeg_pid(pid);
+    }
+    result
+}
+
+/// 启动 ffmpeg/ffprobe 子进程并跟踪 PID，等待其完成后返回输出。
+/// 与 run_tracked_command 类似，但使用 wait_with_output() 捕获 stdout。
+pub fn run_tracked_command_output(
+    cmd: &mut std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    let mut child = cmd.spawn()?;
+    let pid = child.id();
+    if pid > 0 {
+        track_ffmpeg_pid(pid);
+    }
+    let result = child.wait_with_output();
+    if pid > 0 {
+        untrack_ffmpeg_pid(pid);
+    }
+    result
 }
 
 /// RAII 守卫，确保信号量在任意返回路径上均自动释放
@@ -183,26 +344,28 @@ fn try_ffmpeg_audio_cover(
 ) -> bool {
     // Extract embedded album art from audio file using ffmpeg.
     // The artwork is stored as a video stream (stream 0:v:0) in most formats.
-    let ok = std::process::Command::new("ffmpeg")
-        .args([
-            "-i",
-            src,
-            "-map",
-            "0:v:0",
-            "-vf",
-            &format!("scale={}:-1", width),
-            "-q:v",
-            "3",
-            "-frames:v",
-            "1",
-            "-y",
-            &dst.to_string_lossy(),
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    sw_info!("[ffmpeg-start] audio-cover | src={}", src);
+    let ok = run_tracked_command(
+        std::process::Command::new(ffmpeg_cmd())
+            .args([
+                "-i",
+                src,
+                "-map",
+                "0:v:0",
+                "-vf",
+                &format!("scale={}:-1", width),
+                "-q:v",
+                "3",
+                "-frames:v",
+                "1",
+                "-y",
+                &dst.to_string_lossy(),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null()),
+    )
+    .map(|s| s.success())
+    .unwrap_or(false);
     let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
@@ -235,26 +398,28 @@ fn try_ffmpeg_video_frame(
 ) -> bool {
     // Try seeking to 3s first; if the output is empty/missing, fall back to t=0
     for seek_secs in &["00:00:03", "00:00:00"] {
-        let ok = std::process::Command::new("ffmpeg")
-            .args([
-                "-ss",
-                seek_secs,
-                "-i",
-                src,
-                "-vf",
-                &format!("scale={}:-1", width),
-                "-q:v",
-                "3",
-                "-frames:v",
-                "1",
-                "-y",
-                &dst.to_string_lossy(),
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        sw_info!("[ffmpeg-start] video-frame ss={} | src={}", seek_secs, src);
+        let ok = run_tracked_command(
+            std::process::Command::new(ffmpeg_cmd())
+                .args([
+                    "-ss",
+                    seek_secs,
+                    "-i",
+                    src,
+                    "-vf",
+                    &format!("scale={}:-1", width),
+                    "-q:v",
+                    "3",
+                    "-frames:v",
+                    "1",
+                    "-y",
+                    &dst.to_string_lossy(),
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null()),
+        )
+        .map(|s| s.success())
+        .unwrap_or(false);
         let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
         if success {
             let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
@@ -284,24 +449,26 @@ fn try_ffmpeg_resize(
     t0: std::time::Instant,
     orig_size: u64,
 ) -> bool {
-    let ok = std::process::Command::new("ffmpeg")
-        .args([
-            "-i",
-            src,
-            "-vf",
-            &format!("scale={}:-1", width),
-            "-q:v",
-            "3",
-            "-frames:v",
-            "1",
-            "-y",
-            &dst.to_string_lossy(),
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    sw_info!("[ffmpeg-start] image-resize | src={}", src);
+    let ok = run_tracked_command(
+        std::process::Command::new(ffmpeg_cmd())
+            .args([
+                "-i",
+                src,
+                "-vf",
+                &format!("scale={}:-1", width),
+                "-q:v",
+                "3",
+                "-frames:v",
+                "1",
+                "-y",
+                &dst.to_string_lossy(),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null()),
+    )
+    .map(|s| s.success())
+    .unwrap_or(false);
     let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
@@ -477,15 +644,16 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
     let out_str = out.to_string_lossy().into_owned();
     // Try progressively earlier seek positions in case the video is short.
     for seek in &["00:00:10", "00:00:03", "00:00:00"] {
-        let ok = std::process::Command::new("ffmpeg")
-            .args([
-                "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str,
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        let ok = run_tracked_command(
+            std::process::Command::new(ffmpeg_cmd())
+                .args([
+                    "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str,
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null()),
+        )
+        .map(|s| s.success())
+        .unwrap_or(false);
         if ok && out.exists() {
             return Some(out_str);
         }
@@ -495,20 +663,22 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
 
 /// Use ffprobe to get the video duration in seconds.
 fn video_duration_secs(video_path: &str) -> Option<f64> {
-    let out = std::process::Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            video_path,
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
+    sw_info!("[ffprobe-start] duration | src={}", video_path);
+    let out = run_tracked_command_output(
+        std::process::Command::new(ffprobe_cmd())
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                video_path,
+            ])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null()),
+    )
+    .ok()?;
     String::from_utf8_lossy(&out.stdout)
         .trim()
         .parse::<f64>()
@@ -518,6 +688,7 @@ fn video_duration_secs(video_path: &str) -> Option<f64> {
 /// Extract `frame_count` evenly-spaced frames from a video using system ffmpeg.
 /// Frames are cached in `thumbnails/scrub/<path_key>/frame_NN.jpg`.
 /// Returns the list of frame file paths that were successfully created.
+/// 受全局 ffmpeg 并发信号量控制，确保不会超过用户设置的并发上限。
 pub fn extract_video_scrub_frames(
     video_path: String,
     frame_count: u32,
@@ -540,6 +711,10 @@ pub fn extract_video_scrub_frames(
     }
     let _ = std::fs::create_dir_all(&frame_dir);
 
+    // 获取全局 ffmpeg 并发信号量（整个函数执行期间持有，内部串行启动 ffmpeg）
+    acquire_thumb_permit();
+    let _permit = ThumbPermit; // RAII 自动释放
+
     let duration = video_duration_secs(&video_path).unwrap_or(60.0).max(1.0);
     let mut paths = Vec::new();
     for i in 0..n {
@@ -553,26 +728,34 @@ pub fn extract_video_scrub_frames(
         );
         let out = frame_dir.join(format!("frame_{:02}.jpg", i));
         let out_str = out.to_string_lossy().into_owned();
-        let ok = std::process::Command::new("ffmpeg")
-            .args([
-                "-i",
-                &video_path,
-                "-ss",
-                &seek,
-                "-vframes",
-                "1",
-                "-vf",
-                "scale=320:-1",
-                "-q:v",
-                "5",
-                "-y",
-                &out_str,
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        sw_info!(
+            "[ffmpeg-start] scrub-frame {}/{} ss={} | src={}",
+            i + 1,
+            n,
+            seek,
+            video_path
+        );
+        let ok = run_tracked_command(
+            std::process::Command::new(ffmpeg_cmd())
+                .args([
+                    "-i",
+                    &video_path,
+                    "-ss",
+                    &seek,
+                    "-vframes",
+                    "1",
+                    "-vf",
+                    "scale=320:-1",
+                    "-q:v",
+                    "5",
+                    "-y",
+                    &out_str,
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null()),
+        )
+        .map(|s| s.success())
+        .unwrap_or(false);
         if ok && out.exists() {
             paths.push(out_str);
         }

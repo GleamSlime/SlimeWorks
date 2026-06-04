@@ -56,6 +56,7 @@ class PictureLibraryToolbar extends StatelessWidget {
       final isScanning = viewModel.isScanning.value;
       final statusText = viewModel.scanStatusText.value;
       final inDetail = viewModel.isInDetail;
+      final thumbProgress = viewModel.thumbProgress.value;
       // columnCount 非 null 表示移动端，需要在 toolbar 中显示列数 + 排序
       final showMobileDetailControls = columnCount != null && inDetail;
       final showMobileBrowseSortControl = columnCount != null && !inDetail;
@@ -84,7 +85,9 @@ class PictureLibraryToolbar extends StatelessWidget {
                           SizedBox(
                             width: AppTheme.metrics.kSpace20,
                             height: AppTheme.metrics.kSpace20,
-                            child: const CircularProgressIndicator(strokeWidth: 2),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           ),
                           Text(
                             statusText.isNotEmpty ? statusText : ' ',
@@ -92,6 +95,34 @@ class PictureLibraryToolbar extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                // 缩略图生成进度
+                if (thumbProgress != null)
+                  Tooltip(
+                    message: '封面生成中 ${thumbProgress.$1}/${thumbProgress.$2}',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: AppTheme.metrics.kSpace4,
+                      children: [
+                        SizedBox(
+                          width: AppTheme.metrics.kSpace18,
+                          height: AppTheme.metrics.kSpace18,
+                          child: CircularProgressIndicator(
+                            value: thumbProgress.$2 > 0
+                                ? thumbProgress.$1 / thumbProgress.$2
+                                : 0,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        Text(
+                          '${thumbProgress.$2 > 0 ? (thumbProgress.$1 * 100 ~/ thumbProgress.$2) : 0}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).hintColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 // 浏览模式：图书馆操作按钮
@@ -141,13 +172,17 @@ class PictureLibraryToolbar extends StatelessWidget {
                         ),
                       ),
                       Tooltip(
-                        message: viewModel.showFavoritesOnly.value ? '显示全部' : '只显示收藏',
+                        message: viewModel.showFavoritesOnly.value
+                            ? '显示全部'
+                            : '只显示收藏',
                         child: DesktopHeadToolsButton(
                           icon: Icon(
                             viewModel.showFavoritesOnly.value
                                 ? Icons.favorite_rounded
                                 : Icons.favorite_border_rounded,
-                            color: viewModel.showFavoritesOnly.value ? Colors.redAccent : null,
+                            color: viewModel.showFavoritesOnly.value
+                                ? Colors.redAccent
+                                : null,
                           ),
                           size: AppTheme.metrics.kSpace40,
                           onTap: () => viewModel.showFavoritesOnly.value =
@@ -196,7 +231,9 @@ class PictureLibraryToolbar extends StatelessWidget {
                   ),
                 if (inDetail)
                   Tooltip(
-                    message: viewModel.showMediaOverlay.value ? '隐藏叠加信息' : '显示叠加信息',
+                    message: viewModel.showMediaOverlay.value
+                        ? '隐藏叠加信息'
+                        : '显示叠加信息',
                     child: DesktopHeadToolsButton(
                       icon: Icon(
                         viewModel.showMediaOverlay.value
@@ -207,8 +244,8 @@ class PictureLibraryToolbar extends StatelessWidget {
                             : null,
                       ),
                       size: AppTheme.metrics.kSpace40,
-                      onTap: () =>
-                          viewModel.showMediaOverlay.value = !viewModel.showMediaOverlay.value,
+                      onTap: () => viewModel.showMediaOverlay.value =
+                          !viewModel.showMediaOverlay.value,
                     ),
                   ),
                 // 移动端详情模式：列数调节 + 资源排序 + 上传（桌面端此控件在 leading 区域）
@@ -220,7 +257,10 @@ class PictureLibraryToolbar extends StatelessWidget {
                         icon: const Icon(Icons.upload_rounded),
                         iconSize: scaleW(18),
                         padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                        constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                        constraints: BoxConstraints(
+                          minWidth: scaleW(28),
+                          minHeight: scaleW(28),
+                        ),
                         onPressed: onUpload,
                       ),
                     ),
@@ -233,16 +273,25 @@ class PictureLibraryToolbar extends StatelessWidget {
                     icon: const Icon(Icons.remove_rounded),
                     iconSize: scaleW(16),
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                    constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                    constraints: BoxConstraints(
+                      minWidth: scaleW(28),
+                      minHeight: scaleW(28),
+                    ),
                     tooltip: '减少列数',
                     onPressed: (columnCount! > 1) ? onColumnDecrement : null,
                   ),
-                  Text('$columnCount 列', style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '$columnCount 列',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   IconButton(
                     icon: const Icon(Icons.add_rounded),
                     iconSize: scaleW(16),
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                    constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
+                    constraints: BoxConstraints(
+                      minWidth: scaleW(28),
+                      minHeight: scaleW(28),
+                    ),
                     tooltip: '增加列数',
                     onPressed: (columnCount! < 10) ? onColumnIncrement : null,
                   ),
@@ -276,7 +325,9 @@ class PictureLibraryToolbar extends StatelessWidget {
                 // 桌面端/移动端详情模式：瀑布流布局切换
                 if (inDetail)
                   Tooltip(
-                    message: viewModel.useMasonryGrid.value ? '切换为网格布局' : '切换为瀑布流布局',
+                    message: viewModel.useMasonryGrid.value
+                        ? '切换为网格布局'
+                        : '切换为瀑布流布局',
                     child: DesktopHeadToolsButton(
                       icon: Icon(
                         viewModel.useMasonryGrid.value
@@ -287,7 +338,8 @@ class PictureLibraryToolbar extends StatelessWidget {
                             : null,
                       ),
                       size: AppTheme.metrics.kSpace40,
-                      onTap: () => viewModel.useMasonryGrid.value = !viewModel.useMasonryGrid.value,
+                      onTap: () => viewModel.useMasonryGrid.value =
+                          !viewModel.useMasonryGrid.value,
                     ),
                   ),
                 // 刷新/同步按钮（始终显示）

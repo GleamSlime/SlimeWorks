@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use slime_logger::sw_info;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
@@ -111,20 +112,22 @@ fn build_media_item(collection_id: &str, order: i32, path: &Path) -> Result<Medi
 
 /// Use ffprobe to get the media duration in milliseconds.
 fn read_duration_ms(path: &Path) -> Option<u64> {
-    let out = std::process::Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            &path.to_string_lossy(),
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
+    sw_info!("[ffprobe-start] scan-duration | src={}", path.display());
+    let out = crate::api::run_tracked_command_output(
+        std::process::Command::new(crate::api::ffprobe_cmd())
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                &path.to_string_lossy(),
+            ])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null()),
+    )
+    .ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
     let secs: f64 = s.trim().parse().ok()?;
     Some((secs * 1000.0) as u64)

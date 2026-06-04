@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:get/get.dart';
+import 'package:slime_works/src/rust/api/media_collection.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -92,6 +93,10 @@ class SystemTrayService extends GetxService with TrayListener {
   }
 
   Future<void> _exitApp() async {
+    // 清理残留的 ffmpeg/ffprobe 子进程
+    try {
+      killAllFfmpegProcesses();
+    } catch (_) {}
     await windowManager.destroy();
     exit(0);
   }
