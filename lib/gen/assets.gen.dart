@@ -102,6 +102,9 @@ class $AssetsImageSvgGen {
   /// File path: assets/image/svg/menu_media_library.svg
   String get menuMediaLibrary => 'assets/image/svg/menu_media_library.svg';
 
+  /// File path: assets/image/svg/menu_music_player.svg
+  String get menuMusicPlayer => 'assets/image/svg/menu_music_player.svg';
+
   /// File path: assets/image/svg/menu_plugins.svg
   String get menuPlugins => 'assets/image/svg/menu_plugins.svg';
 
@@ -169,6 +172,7 @@ class $AssetsImageSvgGen {
     menuGame,
     menuLog,
     menuMediaLibrary,
+    menuMusicPlayer,
     menuPlugins,
     menuSetting,
     menuTools,

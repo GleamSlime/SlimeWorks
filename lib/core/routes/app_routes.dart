@@ -45,6 +45,7 @@ import 'package:slime_works/pages/about/about_page.dart';
 import 'package:slime_works/pages/tools/tools_screen.dart';
 import 'package:slime_works/pages/sentry_log/sentry_log_screen.dart';
 import 'package:slime_works/pages/aliyun_ddns/aliyun_ddns_screen.dart';
+import 'package:slime_works/pages/music_player/music_player_screen.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 
@@ -63,6 +64,7 @@ part 'routes/capture_routers.dart';
 part 'routes/lan_transfer_routes.dart';
 part 'routes/manga_routes.dart';
 part 'routes/game_library_routes.dart';
+part 'routes/music_player_routes.dart';
 
 const Loggers _logger = Loggers(name: '路由');
 
@@ -88,6 +90,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<GameSettingsRoute>(path: '/game/settings'),
     TypedGoRoute<MangaHomeRoute>(path: '/manga'),
     TypedGoRoute<MangaDownloadsRoute>(path: '/manga/downloads'),
+    TypedGoRoute<MusicPlayerRoute>(path: '/music'),
     TypedGoRoute<LanTransferRoute>(path: '/lan-transfer'),
     TypedGoRoute<SettingsRoute>(path: '/settings'),
     TypedGoRoute<AboutRoute>(path: '/about'),
@@ -130,6 +133,7 @@ class AppRoutes {
       const GameSettingsRoute(),
       const MangaHomeRoute(),
       const MangaDownloadsRoute(),
+      const MusicPlayerRoute(),
       const LanTransferRoute(),
       const SettingsRoute(),
       const AboutRoute(),

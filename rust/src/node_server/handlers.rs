@@ -2,6 +2,7 @@ use super::types::*;
 use super::NodeServerConfig;
 use hyper::{Body, Request, Response};
 use media_collection::api as media_api;
+use music_player as music_api;
 use novel_reader::api as novel_api;
 use serde_json::{json, Value};
 use std::convert::Infallible;
@@ -602,6 +603,286 @@ pub async fn dispatch_action(
                 .await
                 .map_err(|e| format!("阿里云检查更新失败: {}", e))?;
             Ok(json!({"result": result}))
+        }
+
+        // ── 音乐播放器操作 ─────────────────────────────────────────────────────
+        "music_list_playlists" => {
+            let playlists =
+                music_api::get_all_playlists().map_err(|e| format!("获取播放列表失败: {}", e))?;
+            let result: Vec<Value> = playlists
+                .into_iter()
+                .map(|p| {
+                    json!({
+                        "id": p.id,
+                        "name": p.name,
+                        "cover_path": p.cover_path,
+                        "item_count": p.item_count.to_string(),
+                        "created_at": p.created_at.timestamp(),
+                        "updated_at": p.updated_at.timestamp(),
+                        "is_default": p.is_default,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_create_playlist" => {
+            let name = params["name"].as_str().unwrap_or("").to_string();
+            let playlist =
+                music_api::create_playlist(name).map_err(|e| format!("创建播放列表失败: {}", e))?;
+            Ok(json!({
+                "id": playlist.id,
+                "name": playlist.name,
+                "cover_path": playlist.cover_path,
+                "item_count": playlist.item_count.to_string(),
+                "created_at": playlist.created_at.timestamp(),
+                "updated_at": playlist.updated_at.timestamp(),
+                "is_default": playlist.is_default,
+            }))
+        }
+
+        "music_delete_playlist" => {
+            let playlist_id = params["playlist_id"].as_str().unwrap_or("").to_string();
+            music_api::delete_playlist(playlist_id)
+                .map_err(|e| format!("删除播放列表失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "music_rename_playlist" => {
+            let playlist_id = params["playlist_id"].as_str().unwrap_or("").to_string();
+            let name = params["name"].as_str().unwrap_or("").to_string();
+            music_api::rename_playlist(playlist_id, name)
+                .map_err(|e| format!("重命名播放列表失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "music_get_playlist_items" => {
+            let playlist_id = params["playlist_id"].as_str().unwrap_or("").to_string();
+            let items = music_api::get_playlist_items(playlist_id)
+                .map_err(|e| format!("获取音乐列表失败: {}", e))?;
+            let result: Vec<Value> = items
+                .into_iter()
+                .map(|i| {
+                    json!({
+                        "id": i.id,
+                        "playlist_id": i.playlist_id,
+                        "title": i.title,
+                        "artist": i.artist,
+                        "album": i.album,
+                        "file_path": i.file_path,
+                        "duration_ms": i.duration_ms.map(|d| d.to_string()),
+                        "track_number": i.track_number,
+                        "disc_number": i.disc_number,
+                        "year": i.year,
+                        "genre": i.genre,
+                        "cover_path": i.cover_path,
+                        "file_size": i.file_size.to_string(),
+                        "modified_at": i.modified_at.timestamp(),
+                        "order": i.order,
+                        "is_favorite": i.is_favorite,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_import_folder" => {
+            let playlist_id = params["playlist_id"].as_str().unwrap_or("").to_string();
+            let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
+            let items = music_api::import_music_folder(playlist_id, folder_path)
+                .map_err(|e| format!("导入音乐文件夹失败: {}", e))?;
+            let result: Vec<Value> = items
+                .into_iter()
+                .map(|i| {
+                    json!({
+                        "id": i.id,
+                        "playlist_id": i.playlist_id,
+                        "title": i.title,
+                        "artist": i.artist,
+                        "album": i.album,
+                        "file_path": i.file_path,
+                        "duration_ms": i.duration_ms.map(|d| d.to_string()),
+                        "cover_path": i.cover_path,
+                        "file_size": i.file_size.to_string(),
+                        "order": i.order,
+                        "is_favorite": i.is_favorite,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_import_paths" => {
+            let playlist_id = params["playlist_id"].as_str().unwrap_or("").to_string();
+            let paths: Vec<String> = params["paths"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let items = music_api::import_music_paths(playlist_id, paths)
+                .map_err(|e| format!("导入音乐文件失败: {}", e))?;
+            let result: Vec<Value> = items
+                .into_iter()
+                .map(|i| {
+                    json!({
+                        "id": i.id,
+                        "playlist_id": i.playlist_id,
+                        "title": i.title,
+                        "artist": i.artist,
+                        "album": i.album,
+                        "file_path": i.file_path,
+                        "duration_ms": i.duration_ms.map(|d| d.to_string()),
+                        "cover_path": i.cover_path,
+                        "file_size": i.file_size.to_string(),
+                        "order": i.order,
+                        "is_favorite": i.is_favorite,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_delete_item" => {
+            let item_id = params["item_id"].as_str().unwrap_or("").to_string();
+            music_api::delete_music_item(item_id)
+                .map_err(|e| format!("删除音乐条目失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "music_update_item" => {
+            let item_id = params["item_id"].as_str().unwrap_or("").to_string();
+            let title = params["title"].as_str().map(String::from);
+            let artist = params["artist"].as_str().map(String::from);
+            let album = params["album"].as_str().map(String::from);
+            let is_favorite = params["is_favorite"].as_bool();
+            music_api::update_music_item(item_id, title, artist, album, is_favorite)
+                .map_err(|e| format!("更新音乐信息失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "music_toggle_favorite" => {
+            let item_id = params["item_id"].as_str().unwrap_or("").to_string();
+            let is_favorite = music_api::toggle_favorite(item_id)
+                .map_err(|e| format!("切换收藏状态失败: {}", e))?;
+            Ok(json!({"is_favorite": is_favorite}))
+        }
+
+        "music_get_favorites" => {
+            let items =
+                music_api::get_favorite_items().map_err(|e| format!("获取收藏音乐失败: {}", e))?;
+            let result: Vec<Value> = items
+                .into_iter()
+                .map(|i| {
+                    json!({
+                        "id": i.id,
+                        "playlist_id": i.playlist_id,
+                        "title": i.title,
+                        "artist": i.artist,
+                        "album": i.album,
+                        "file_path": i.file_path,
+                        "duration_ms": i.duration_ms.map(|d| d.to_string()),
+                        "cover_path": i.cover_path,
+                        "file_size": i.file_size.to_string(),
+                        "is_favorite": i.is_favorite,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_get_recent_played" => {
+            let limit = params["limit"].as_u64().unwrap_or(50) as u32;
+            let records = music_api::get_recent_played(limit)
+                .map_err(|e| format!("获取最近播放失败: {}", e))?;
+            let result: Vec<Value> = records
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "music_id": r.music_id,
+                        "played_at": r.played_at.timestamp(),
+                        "play_count": r.play_count,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_record_play" => {
+            let music_id = params["music_id"].as_str().unwrap_or("").to_string();
+            let record =
+                music_api::record_play(music_id).map_err(|e| format!("记录播放失败: {}", e))?;
+            Ok(json!({
+                "id": record.id,
+                "music_id": record.music_id,
+                "played_at": record.played_at.timestamp(),
+                "play_count": record.play_count,
+            }))
+        }
+
+        "music_parse_cue" => {
+            let cue_path = params["cue_path"].as_str().unwrap_or("").to_string();
+            let sheet =
+                music_api::parse_cue(cue_path).map_err(|e| format!("解析 CUE 文件失败: {}", e))?;
+            Ok(json!({
+                "title": sheet.title,
+                "performer": sheet.performer,
+                "audio_file": sheet.audio_file,
+                "tracks": sheet.tracks.into_iter().map(|t| json!({
+                    "title": t.title,
+                    "performer": t.performer,
+                    "start_ms": t.start_ms,
+                    "end_ms": t.end_ms,
+                    "track_number": t.track_number,
+                })).collect::<Vec<_>>(),
+            }))
+        }
+
+        "music_get_eq_presets" => {
+            let presets =
+                music_api::get_eq_presets().map_err(|e| format!("获取均衡器预设失败: {}", e))?;
+            let result: Vec<Value> = presets
+                .into_iter()
+                .map(|p| {
+                    json!({
+                        "id": p.id,
+                        "name": p.name,
+                        "bands": p.bands,
+                        "is_builtin": p.is_builtin,
+                    })
+                })
+                .collect();
+            Ok(json!(result))
+        }
+
+        "music_save_eq_preset" => {
+            let name = params["name"].as_str().unwrap_or("").to_string();
+            let bands: Vec<f32> = params["bands"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_f64().map(|f| f as f32))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let preset = music_api::save_eq_preset(name, bands)
+                .map_err(|e| format!("保存均衡器预设失败: {}", e))?;
+            Ok(json!({
+                "id": preset.id,
+                "name": preset.name,
+                "bands": preset.bands,
+                "is_builtin": preset.is_builtin,
+            }))
+        }
+
+        "music_delete_eq_preset" => {
+            let preset_id = params["preset_id"].as_str().unwrap_or("").to_string();
+            music_api::delete_eq_preset(preset_id)
+                .map_err(|e| format!("删除均衡器预设失败: {}", e))?;
+            Ok(json!({"ok": true}))
         }
 
         // ── 未知动作 ─────────────────────────────────────────────────────────

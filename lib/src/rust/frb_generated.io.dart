@@ -15,6 +15,7 @@ import 'api/manga.dart';
 import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
+import 'api/music_player.dart';
 import 'api/novel_reader.dart';
 import 'api/sentry_log.dart';
 import 'api/simple.dart';
@@ -207,6 +208,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  bool dco_decode_box_autoadd_bool(dynamic raw);
+
+  @protected
   CaptureStats dco_decode_box_autoadd_capture_stats(dynamic raw);
 
   @protected
@@ -235,6 +239,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CollectionStats dco_decode_collection_stats(dynamic raw);
+
+  @protected
+  CueSheetInfo dco_decode_cue_sheet_info(dynamic raw);
+
+  @protected
+  CueTrackInfo dco_decode_cue_track_info(dynamic raw);
+
+  @protected
+  EqualizerPresetInfo dco_decode_equalizer_preset_info(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -276,6 +289,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CollectionStats> dco_decode_list_collection_stats(dynamic raw);
 
   @protected
+  List<CueTrackInfo> dco_decode_list_cue_track_info(dynamic raw);
+
+  @protected
+  List<EqualizerPresetInfo> dco_decode_list_equalizer_preset_info(dynamic raw);
+
+  @protected
   List<InstalledModule> dco_decode_list_installed_module(dynamic raw);
 
   @protected
@@ -291,6 +310,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<MediaItem> dco_decode_list_media_item(dynamic raw);
 
   @protected
+  List<MusicItem> dco_decode_list_music_item(dynamic raw);
+
+  @protected
   List<NovelChapter> dco_decode_list_novel_chapter(dynamic raw);
 
   @protected
@@ -301,6 +323,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<NovelSearchResult> dco_decode_list_novel_search_result(dynamic raw);
+
+  @protected
+  List<PlayRecordInfo> dco_decode_list_play_record_info(dynamic raw);
+
+  @protected
+  List<Playlist> dco_decode_list_playlist(dynamic raw);
+
+  @protected
+  List<double> dco_decode_list_prim_f_32_loose(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -344,6 +378,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ModuleType dco_decode_module_type(dynamic raw);
 
   @protected
+  MusicItem dco_decode_music_item(dynamic raw);
+
+  @protected
   NovelChapter dco_decode_novel_chapter(dynamic raw);
 
   @protected
@@ -371,6 +408,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+
+  @protected
   CaptureStats? dco_decode_opt_box_autoadd_capture_stats(dynamic raw);
 
   @protected
@@ -387,6 +427,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
+  PlayRecordInfo dco_decode_play_record_info(dynamic raw);
+
+  @protected
+  Playlist dco_decode_playlist(dynamic raw);
 
   @protected
   (String, List<String>) dco_decode_record_string_list_string(dynamic raw);
@@ -583,6 +629,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
   CaptureStats sse_decode_box_autoadd_capture_stats(
     SseDeserializer deserializer,
   );
@@ -617,6 +666,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CollectionStats sse_decode_collection_stats(SseDeserializer deserializer);
+
+  @protected
+  CueSheetInfo sse_decode_cue_sheet_info(SseDeserializer deserializer);
+
+  @protected
+  CueTrackInfo sse_decode_cue_track_info(SseDeserializer deserializer);
+
+  @protected
+  EqualizerPresetInfo sse_decode_equalizer_preset_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -666,6 +726,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<CueTrackInfo> sse_decode_list_cue_track_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<EqualizerPresetInfo> sse_decode_list_equalizer_preset_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<InstalledModule> sse_decode_list_installed_module(
     SseDeserializer deserializer,
   );
@@ -687,6 +757,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<MediaItem> sse_decode_list_media_item(SseDeserializer deserializer);
 
   @protected
+  List<MusicItem> sse_decode_list_music_item(SseDeserializer deserializer);
+
+  @protected
   List<NovelChapter> sse_decode_list_novel_chapter(
     SseDeserializer deserializer,
   );
@@ -703,6 +776,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NovelSearchResult> sse_decode_list_novel_search_result(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<PlayRecordInfo> sse_decode_list_play_record_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<Playlist> sse_decode_list_playlist(SseDeserializer deserializer);
+
+  @protected
+  List<double> sse_decode_list_prim_f_32_loose(SseDeserializer deserializer);
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -754,6 +841,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ModuleType sse_decode_module_type(SseDeserializer deserializer);
 
   @protected
+  MusicItem sse_decode_music_item(SseDeserializer deserializer);
+
+  @protected
   NovelChapter sse_decode_novel_chapter(SseDeserializer deserializer);
 
   @protected
@@ -783,6 +873,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
   CaptureStats? sse_decode_opt_box_autoadd_capture_stats(
     SseDeserializer deserializer,
   );
@@ -801,6 +894,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
+
+  @protected
+  PlayRecordInfo sse_decode_play_record_info(SseDeserializer deserializer);
+
+  @protected
+  Playlist sse_decode_playlist(SseDeserializer deserializer);
 
   @protected
   (String, List<String>) sse_decode_record_string_list_string(
@@ -1035,6 +1134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_capture_stats(
     CaptureStats self,
     SseSerializer serializer,
@@ -1079,6 +1181,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_collection_stats(
     CollectionStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_cue_sheet_info(CueSheetInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_cue_track_info(CueTrackInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_equalizer_preset_info(
+    EqualizerPresetInfo self,
     SseSerializer serializer,
   );
 
@@ -1140,6 +1254,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_cue_track_info(
+    List<CueTrackInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_equalizer_preset_info(
+    List<EqualizerPresetInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_installed_module(
     List<InstalledModule> self,
     SseSerializer serializer,
@@ -1170,6 +1296,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_music_item(
+    List<MusicItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_novel_chapter(
     List<NovelChapter> self,
     SseSerializer serializer,
@@ -1190,6 +1322,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_novel_search_result(
     List<NovelSearchResult> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_play_record_info(
+    List<PlayRecordInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_playlist(List<Playlist> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_f_32_loose(
+    List<double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
     SseSerializer serializer,
   );
 
@@ -1257,6 +1410,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_module_type(ModuleType self, SseSerializer serializer);
 
   @protected
+  void sse_encode_music_item(MusicItem self, SseSerializer serializer);
+
+  @protected
   void sse_encode_novel_chapter(NovelChapter self, SseSerializer serializer);
 
   @protected
@@ -1288,6 +1444,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_capture_stats(
     CaptureStats? self,
     SseSerializer serializer,
@@ -1310,6 +1469,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_play_record_info(
+    PlayRecordInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playlist(Playlist self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_list_string(

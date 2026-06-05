@@ -2206,6 +2206,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "music_player"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "db_module",
+ "regex",
+ "serde",
+ "serde_json",
+ "slime_logger",
+ "tempfile",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2965,6 +2981,7 @@ dependencies = [
  "md5",
  "media_collection",
  "module_manager",
+ "music_player",
  "novel_reader",
  "openssl",
  "regex",

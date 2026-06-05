@@ -13,6 +13,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const AliyunDdnsRoute(),
     const LanTransferRoute(),
     const MangaHomeRoute(),
+    const MusicPlayerRoute(),
     const CollectionPictureRoute(),
     const CollectionLibraryRoute(),
     const GameHomeRoute(),
@@ -43,6 +44,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
       permission: Permission.accessGameLibrary,
     ),
     'manga': _GroupConfig(id: 'manga', sort: 40, permission: Permission.accessManga),
+    'music': _GroupConfig(id: 'music', sort: 42, permission: Permission.accessCollection),
     'tools': _GroupConfig(id: 'tools', title: '工具', sort: 45, permission: Permission.accessTools),
     'bottom': _GroupConfig(id: 'bottom', sort: 90, permission: Permission.accessSettings),
   };

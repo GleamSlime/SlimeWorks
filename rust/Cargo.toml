@@ -74,6 +74,9 @@ sentry_log = { path = "sentry_log" }
 # 阿里云DDNS模块（独立 crate）
 aliyun_module = { path = "aliyun_module" }
 
+# 音乐播放器模块（独立 crate）
+music_player = { path = "music_player" }
+
 [features]
 default = []
 # ffmpeg = ["ffmpeg_lib"]
@@ -96,6 +99,7 @@ members = [
   "extract_module",
   "sentry_log",
   "aliyun_module",
+  "music_player",
   # "ffmpeg_lib",
 ]
 
