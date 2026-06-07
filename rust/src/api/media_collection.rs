@@ -7,6 +7,32 @@ pub enum MediaKind {
     Audio,
 }
 
+/// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
+/// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
+/// 若传入 None 则回退到系统 PATH 中的 "ffmpeg"/"ffprobe"。
+#[frb(sync)]
+pub fn register_ffmpeg_paths(ffmpeg_path: Option<String>, ffprobe_path: Option<String>) {
+    if let Some(p) = ffmpeg_path {
+        media_collection::register_ffmpeg_path(p);
+    }
+    if let Some(p) = ffprobe_path {
+        media_collection::register_ffprobe_path(p);
+    }
+}
+
+/// 设置 Rust 端 ffmpeg 子进程的全局并发上限。
+/// Flutter 端 mediaPrefs.concurrency 变更时调用，确保 ffmpeg 进程数不超过此值。
+#[frb(sync)]
+pub fn register_ffmpeg_concurrency(limit: u32) {
+    media_collection::register_ffmpeg_concurrency(limit as usize);
+}
+
+/// 清理所有残留的 ffmpeg/ffprobe 子进程。应用退出时调用。
+#[frb(sync)]
+pub fn kill_all_ffmpeg_processes() {
+    media_collection::kill_all_ffmpeg_processes();
+}
+
 #[derive(Debug, Clone)]
 pub struct MediaCollection {
     pub id: String,

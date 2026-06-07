@@ -9,6 +9,24 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `from_inner`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
+/// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
+/// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
+/// 若传入 None 则回退到系统 PATH 中的 "ffmpeg"/"ffprobe"。
+void registerFfmpegPaths({String? ffmpegPath, String? ffprobePath}) =>
+    RustLib.instance.api.crateApiMediaCollectionRegisterFfmpegPaths(
+      ffmpegPath: ffmpegPath,
+      ffprobePath: ffprobePath,
+    );
+
+/// 设置 Rust 端 ffmpeg 子进程的全局并发上限。
+/// Flutter 端 mediaPrefs.concurrency 变更时调用，确保 ffmpeg 进程数不超过此值。
+void registerFfmpegConcurrency({required int limit}) => RustLib.instance.api
+    .crateApiMediaCollectionRegisterFfmpegConcurrency(limit: limit);
+
+/// 清理所有残留的 ffmpeg/ffprobe 子进程。应用退出时调用。
+void killAllFfmpegProcesses() =>
+    RustLib.instance.api.crateApiMediaCollectionKillAllFfmpegProcesses();
+
 List<MediaCollection> getAllMediaCollections() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaCollections();
 

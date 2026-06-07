@@ -90,6 +90,10 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// 远程节点数据是否正在后台异步加载中。
   final isLoadingRemote = false.obs;
+
+  /// 缩略图生成进度：completed/total，null 表示无任务。
+  final thumbProgress = Rxn<(int, int)>();
+
   final currentFolderId = RxnString();
   final currentCollectionId = RxnString();
   final savedScrollOffset = 0.0.obs;
@@ -141,10 +145,11 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// collectionId → 缩略图路径（仅含成功生成的条目）。
   final _collectionVideoThumbnails = <String, String>{};
 
-  /// 用于集合封面生成的串行队列（并发=2，防止 CPU 爆满）。
+  /// 用于集合封面生成的串行队列。
+  /// 并发数与 Rust 端全局 ffmpeg 信号量一致，双重保障 ffmpeg 进程数不超限。
   final _coverQueue = VideoThumbQueue(concurrency: 2);
 
-  /// 用于 scrub 帧提取的串行队列（并发=2）。
+  /// 用于 scrub 帧提取的串行队列。
   final _scrubQueue = VideoThumbQueue(concurrency: 2);
 
   /// 当前文件夹对应的封面任务 key 列表（退出文件夹时取消）。
@@ -189,18 +194,26 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 上次扫描时各集合的 item 数量快照，用于判断是否有新增。
   final _collectionItemCountSnapshot = <String, int>{};
 
+  /// 将并发量同步到 Rust 端全局 ffmpeg 信号量，同时更新 Flutter 端队列并发限制。
+  void _syncConcurrency(int v) {
+    _coverQueue.concurrency = v;
+    _scrubQueue.concurrency = v;
+    try {
+      media_api.registerFfmpegConcurrency(limit: v);
+      _logger.info('[FFmpeg] 并发上限已同步到 Rust 端: $v');
+    } catch (e) {
+      _logger.error('[FFmpeg] 同步并发上限到 Rust 端失败: $e');
+    }
+  }
+
   @override
   Future<void> onInitAsync() async {
     _logger.info('[媒体库] onInitAsync: isInitialized=$isInitialized');
-    // 初始化媒体偏好设置，并将并发量同步到队列
+    // 初始化媒体偏好设置，并将并发量同步到 Rust 端和队列
     await mediaPrefs.init();
-    _coverQueue.concurrency = mediaPrefs.concurrency.value;
-    _scrubQueue.concurrency = mediaPrefs.concurrency.value;
-    // 监听并发量变化，动态更新队列并发限制
-    ever(mediaPrefs.concurrency, (v) {
-      _coverQueue.concurrency = v;
-      _scrubQueue.concurrency = v;
-    });
+    _syncConcurrency(mediaPrefs.concurrency.value);
+    // 监听并发量变化，动态更新 Rust 端信号量和队列并发限制
+    ever(mediaPrefs.concurrency, _syncConcurrency);
 
     // 缩略图生成完成后，防抖 1 分钟触发一次缓存大小检查
     void scheduleTrimCache() {
@@ -213,8 +226,25 @@ class MediaLibraryViewModel extends BaseViewModel {
     _coverQueue.onTaskComplete = scheduleTrimCache;
     _scrubQueue.onTaskComplete = scheduleTrimCache;
 
+    // 缩略图进度回调：合并两个队列的进度
+    void updateProgress(int completed, int total) {
+      final c = _coverQueue.completed + _scrubQueue.completed;
+      final t = _coverQueue.total + _scrubQueue.total;
+      if (t > 0 && c < t) {
+        thumbProgress.value = (c, t);
+        _logger.info('[ThumbProgress] $c/$t');
+      } else {
+        thumbProgress.value = null;
+      }
+    }
+
+    _coverQueue.onProgress = updateProgress;
+    _scrubQueue.onProgress = updateProgress;
+
     // 无论是否已初始化都重建 worker（onClose 后 worker 会被置 null）
-    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) async {
+    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (
+      _,
+    ) async {
       await refreshAll();
     });
     if (isInitialized) {
@@ -270,7 +300,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   List<media_api.MediaCollection> get mergedCollections {
-    final items = <media_api.MediaCollection>[...collections, ...remoteCollections];
+    final items = <media_api.MediaCollection>[
+      ...collections,
+      ...remoteCollections,
+    ];
     items.sort((left, right) {
       final cmp = right.updatedAt.compareTo(left.updatedAt);
       if (cmp != 0) {
@@ -298,7 +331,8 @@ class MediaLibraryViewModel extends BaseViewModel {
   bool isSmartFolder(String id) => id.startsWith(_smartFolderPrefix);
 
   /// 是否是远程节点的智能文件夹（ID 格式：smart-folder:remote:[nodeId]:[rawId]）。
-  bool isRemoteSmartFolder(String id) => id.startsWith(_remoteSmartFolderPrefix);
+  bool isRemoteSmartFolder(String id) =>
+      id.startsWith(_remoteSmartFolderPrefix);
 
   /// 从远程智能文件夹 ID 中提取 nodeId。
   String? remoteSmartFolderNodeId(String id) {
@@ -313,7 +347,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   List<SmartFolder> get mergedSmartFolders {
     // 读取 length 以向 GetX 注册响应式依赖，避免访问受保护的 .value
     _remoteSmartFolders.length;
-    return [...smartFolders, for (final list in _remoteSmartFolders.values) ...list];
+    return [
+      ...smartFolders,
+      for (final list in _remoteSmartFolders.values) ...list,
+    ];
   }
 
   SmartFolder? getSmartFolder(String id) =>
@@ -339,12 +376,15 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (collectionId == null) {
       return null;
     }
-    return mergedCollections.firstWhereOrNull((collection) => collection.id == collectionId);
+    return mergedCollections.firstWhereOrNull(
+      (collection) => collection.id == collectionId,
+    );
   }
 
   String get currentCollectionTitle => currentCollection?.title ?? '';
 
-  String get currentBrowseTitle => currentSmartFolder?.name ?? currentFolder?.name ?? '媒体库';
+  String get currentBrowseTitle =>
+      currentSmartFolder?.name ?? currentFolder?.name ?? '媒体库';
 
   List<media_api.MediaFolder> get currentFolderTrail {
     // Smart folders are always root-level virtual folders – no breadcrumb sub-trail needed
@@ -366,13 +406,18 @@ class MediaLibraryViewModel extends BaseViewModel {
     // Smart folders have no sub-folders
     if (currentSmartFolder != null) return [];
     final folderId = currentFolderId.value;
-    return mergedFolders.where((folder) => folder.parentId == folderId).toList(growable: false);
+    return mergedFolders
+        .where((folder) => folder.parentId == folderId)
+        .toList(growable: false);
   }
 
   /// 判断集合是否匹配智能文件夹。
   /// - 远程集合 或 远程智能文件夹：忽略文件夹范围过滤，仅对标题和路径做正则匹配。
   /// - 本地集合 + 本地智能文件夹：执行完整的 matchesCollection 逻辑。
-  bool collectionMatchesSmartFolder(SmartFolder sf, media_api.MediaCollection c) {
+  bool collectionMatchesSmartFolder(
+    SmartFolder sf,
+    media_api.MediaCollection c,
+  ) {
     final regexOnly = isRemoteCollection(c.id) || isRemoteSmartFolder(sf.id);
     if (regexOnly) {
       // 远程场景：跳过文件夹范围检查，仅对标题和路径做正则匹配
@@ -434,13 +479,15 @@ class MediaLibraryViewModel extends BaseViewModel {
       _logger.info(
         '[currentCollections] 智能文件夹=${sf.name}, folderId=$folderId, merged=${mergedCollections.length}, matched=${filtered.length}, regexTarget=${sf.regexTarget}, targetFolderIds=${sf.targetFolderIds}, regexPattern=${sf.regexPattern}, keywords=${sf.keywords}',
       );
-      if (favOnly) filtered = filtered.where((c) => favIds.contains(c.id)).toList();
+      if (favOnly)
+        filtered = filtered.where((c) => favIds.contains(c.id)).toList();
       return _applySortOrder(filtered, folderId);
     }
     var filtered = mergedCollections
         .where((collection) => collection.folderId == folderId)
         .toList(growable: true);
-    if (favOnly) filtered = filtered.where((c) => favIds.contains(c.id)).toList();
+    if (favOnly)
+      filtered = filtered.where((c) => favIds.contains(c.id)).toList();
     return _applySortOrder(filtered, folderId ?? 'root');
   }
 
@@ -482,9 +529,13 @@ class MediaLibraryViewModel extends BaseViewModel {
       final result = [...list];
       switch (sort) {
         case CollectionSortOrder.nameAsc:
-          result.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+          result.sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+          );
         case CollectionSortOrder.nameDesc:
-          result.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+          result.sort(
+            (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+          );
         case CollectionSortOrder.countDesc:
           result.sort((a, b) => b.itemCount.compareTo(a.itemCount));
         case CollectionSortOrder.countAsc:
@@ -511,7 +562,9 @@ class MediaLibraryViewModel extends BaseViewModel {
     // dateUpdated：按 updatedAt 降序排列，不应用拖拽顺序
     final result = [...list];
     result.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    _logger.info('_applySortOrder: dateUpdated orderKey=$orderKey sorted by updatedAt desc');
+    _logger.info(
+      '_applySortOrder: dateUpdated orderKey=$orderKey sorted by updatedAt desc',
+    );
     return result;
   }
 
@@ -536,9 +589,13 @@ class MediaLibraryViewModel extends BaseViewModel {
     final items = [...currentItems];
     switch (order) {
       case MediaItemSortOrder.nameAsc:
-        items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        items.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
       case MediaItemSortOrder.nameDesc:
-        items.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        items.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
       case MediaItemSortOrder.sizeDesc:
         items.sort((a, b) => b.fileSize.compareTo(a.fileSize));
       case MediaItemSortOrder.sizeAsc:
@@ -595,24 +652,35 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
   }
 
-  bool isRemoteCollection(String collectionId) => remoteCollectionNodeId.containsKey(collectionId);
+  bool isRemoteCollection(String collectionId) =>
+      remoteCollectionNodeId.containsKey(collectionId);
 
-  bool isRemoteFolder(String folderId) => remoteFolderNodeId.containsKey(folderId);
+  bool isRemoteFolder(String folderId) =>
+      remoteFolderNodeId.containsKey(folderId);
 
-  String? getRemoteNodeId(String collectionId) => remoteCollectionNodeId[collectionId];
+  String? getRemoteNodeId(String collectionId) =>
+      remoteCollectionNodeId[collectionId];
 
-  String? getRemoteNodeName(String collectionId) => remoteCollectionNodeName[collectionId];
+  String? getRemoteNodeName(String collectionId) =>
+      remoteCollectionNodeName[collectionId];
 
-  String? getRemoteRawCollectionId(String collectionId) => remoteCollectionRawId[collectionId];
+  String? getRemoteRawCollectionId(String collectionId) =>
+      remoteCollectionRawId[collectionId];
 
-  String? getRemoteFolderNodeId(String folderId) => remoteFolderNodeId[folderId];
+  String? getRemoteFolderNodeId(String folderId) =>
+      remoteFolderNodeId[folderId];
 
-  String? getRemoteFolderNodeName(String folderId) => remoteFolderNodeName[folderId];
+  String? getRemoteFolderNodeName(String folderId) =>
+      remoteFolderNodeName[folderId];
 
   String? getRemoteRawFolderId(String folderId) => remoteFolderRawId[folderId];
 
   /// [isCover] = true 时使用「远程封面清晰度」（列表缩略图），false 时用「远程图片清晰度」（预览全图）。
-  String? buildMediaSource(media_api.MediaItem item, {String? collectionId, bool isCover = false}) {
+  String? buildMediaSource(
+    media_api.MediaItem item, {
+    String? collectionId,
+    bool isCover = false,
+  }) {
     final targetCollectionId = collectionId ?? currentCollectionId.value;
     if (targetCollectionId == null) {
       return item.filePath;
@@ -723,7 +791,10 @@ class MediaLibraryViewModel extends BaseViewModel {
     return _kAudioExtensions.contains(ext);
   }
 
-  void _generateCollectionVideoThumbnailAsync(String collectionId, String videoPath) {
+  void _generateCollectionVideoThumbnailAsync(
+    String collectionId,
+    String videoPath,
+  ) {
     _logger.info('[VideoThumb] 入队封面: collectionId=$collectionId');
     _currentFolderCoverKeys.add(collectionId);
     _coverQueue.enqueue(collectionId, () async {
@@ -744,7 +815,10 @@ class MediaLibraryViewModel extends BaseViewModel {
     });
   }
 
-  void _generateCollectionAudioCoverAsync(String collectionId, String audioPath) {
+  void _generateCollectionAudioCoverAsync(
+    String collectionId,
+    String audioPath,
+  ) {
     _logger.info('[AudioCover] 入队集合封面: collectionId=$collectionId');
     _currentFolderCoverKeys.add(collectionId);
     _coverQueue.enqueue(collectionId, () async {
@@ -796,19 +870,25 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// collectionId → 集合内按均匀采样的视频路径列表（用于实时取帧）。
   final _hoverVideoPathsCache = <String, List<String>>{};
 
-  List<String?> buildCollectionHoverSources(media_api.MediaCollection collection) {
+  List<String?> buildCollectionHoverSources(
+    media_api.MediaCollection collection,
+  ) {
     if (isRemoteCollection(collection.id)) return const [];
     final cached = _hoverSourcesCache[collection.id];
     if (cached != null) return cached;
     try {
-      final items = media_api.getMediaCollectionItems(collectionId: collection.id);
+      final items = media_api.getMediaCollectionItems(
+        collectionId: collection.id,
+      );
       if (items.isEmpty) return _hoverSourcesCache[collection.id] = const [];
       final n = items.length;
       final count = n.clamp(1, _kHoverScrubFrames);
       final result = <String?>[];
       final videoPaths = <String>[];
       for (int i = 0; i < count; i++) {
-        final idx = ((i / (count - 1).clamp(1, count - 1)) * (n - 1)).round().clamp(0, n - 1);
+        final idx = ((i / (count - 1).clamp(1, count - 1)) * (n - 1))
+            .round()
+            .clamp(0, n - 1);
         final p = items[idx].filePath;
         if (_isVideoPath(p)) {
           // 视频：使用已有缩略图或 null 占位；后台触发生成
@@ -823,7 +903,8 @@ class MediaLibraryViewModel extends BaseViewModel {
           result.add(p);
         }
       }
-      if (videoPaths.isNotEmpty) _hoverVideoPathsCache[collection.id] = videoPaths;
+      if (videoPaths.isNotEmpty)
+        _hoverVideoPathsCache[collection.id] = videoPaths;
       _hoverSourcesCache[collection.id] = result;
       return result;
     } catch (_) {
@@ -845,10 +926,9 @@ class MediaLibraryViewModel extends BaseViewModel {
         if (frames.isEmpty) return;
         final frameIdx = totalSlots == 1
             ? 0
-            : ((slotIdx / (totalSlots - 1)) * (frames.length - 1)).round().clamp(
-                0,
-                frames.length - 1,
-              );
+            : ((slotIdx / (totalSlots - 1)) * (frames.length - 1))
+                  .round()
+                  .clamp(0, frames.length - 1);
         final thumb = frames[frameIdx];
         final sources = _hoverSourcesCache[collectionId];
         if (sources != null && slotIdx < sources.length) {
@@ -866,19 +946,28 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 实时取帧：根据鼠标在卡片上的水平比例 [fraction]∈[0,1]，
   /// 利用该集合内视频的 scrub 帧缓存按比例返回路径。
   /// 若缓存未就绪返回 null（调用方显示 coverSource 即可）。
-  String? getCollectionVideoFrameAtFraction(String collectionId, double fraction) {
+  String? getCollectionVideoFrameAtFraction(
+    String collectionId,
+    double fraction,
+  ) {
     final videoPaths = _hoverVideoPathsCache[collectionId];
     if (videoPaths == null || videoPaths.isEmpty) return null;
     final slotFraction = fraction.clamp(0.0, 1.0);
     final slotIdx = videoPaths.length == 1
         ? 0
-        : (slotFraction * (videoPaths.length - 1)).round().clamp(0, videoPaths.length - 1);
+        : (slotFraction * (videoPaths.length - 1)).round().clamp(
+            0,
+            videoPaths.length - 1,
+          );
     final videoPath = videoPaths[slotIdx];
     final frames = _videoFrameResults[videoPath];
     if (frames == null || frames.isEmpty) return null;
     final frameIdx = frames.length == 1
         ? 0
-        : (slotFraction * (frames.length - 1)).round().clamp(0, frames.length - 1);
+        : (slotFraction * (frames.length - 1)).round().clamp(
+            0,
+            frames.length - 1,
+          );
     return frames[frameIdx];
   }
 
@@ -930,10 +1019,14 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   int collectionCountInFolder(String folderId) {
-    return mergedCollections.where((collection) => collection.folderId == folderId).length;
+    return mergedCollections
+        .where((collection) => collection.folderId == folderId)
+        .length;
   }
 
-  List<media_api.MediaFolder> getAvailableFoldersForCollection(String collectionId) {
+  List<media_api.MediaFolder> getAvailableFoldersForCollection(
+    String collectionId,
+  ) {
     if (isRemoteCollection(collectionId)) {
       final nodeId = getRemoteNodeId(collectionId);
       if (nodeId == null) {
@@ -942,11 +1035,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       final items = remoteFolders
           .where((folder) => remoteFolderNodeId[folder.id] == nodeId)
           .toList(growable: false);
-      items.sort((left, right) => left.name.toLowerCase().compareTo(right.name.toLowerCase()));
+      items.sort(
+        (left, right) =>
+            left.name.toLowerCase().compareTo(right.name.toLowerCase()),
+      );
       return items;
     }
     final items = folders.toList(growable: false);
-    items.sort((left, right) => left.name.toLowerCase().compareTo(right.name.toLowerCase()));
+    items.sort(
+      (left, right) =>
+          left.name.toLowerCase().compareTo(right.name.toLowerCase()),
+    );
     return items;
   }
 
@@ -1001,12 +1100,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       final countsList = media_api.getAllCollectionCounts();
       for (final col in localCols) {
         try {
-          final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount.toInt();
-          final countEntry = countsList.where((c) => c.collectionId == col.id).firstOrNull;
+          final prev =
+              _collectionItemCountSnapshot[col.id] ?? col.itemCount.toInt();
+          final countEntry = countsList
+              .where((c) => c.collectionId == col.id)
+              .firstOrNull;
           final count = countEntry?.itemCount ?? 0;
           _collectionItemCountSnapshot[col.id] = count;
           if (count != prev) {
-            _logger.info('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count，触发增量扫描');
+            _logger.info(
+              '_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count，触发增量扫描',
+            );
             await media_api.importMediaFolder(folderPath: col.folderPath);
             anyChanged = true;
           }
@@ -1020,7 +1124,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (anyChanged) {
       _logger.info('_pollCollectionFolders: 有变化，刷新集合列表');
       await loadCollections();
-      if (currentCollectionId.value != null && !isRemoteCollection(currentCollectionId.value!)) {
+      if (currentCollectionId.value != null &&
+          !isRemoteCollection(currentCollectionId.value!)) {
         await loadCurrentCollectionItems();
       }
     }
@@ -1090,7 +1195,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     });
   }
 
-  BigInt getCollectionTotalSize(String id) => _collectionSizes[id] ?? BigInt.zero;
+  BigInt getCollectionTotalSize(String id) =>
+      _collectionSizes[id] ?? BigInt.zero;
 
   /// 返回指定集合内所有媒体文件路径（可能为空列表，异步缓存未就绪时）。
   List<String> collectionItemPaths(String id) => _getCollectionItemPaths(id);
@@ -1140,16 +1246,21 @@ class MediaLibraryViewModel extends BaseViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程媒体集合映射不存在');
         }
-        final payloads = await nodeSettingsService.fetchNodeMediaCollectionItems(
-          nodeId: nodeId,
-          collectionId: rawId,
-          onReceiveProgress: (count, total) {
-            if (total > 0) itemLoadProgress.value = count / total;
-          },
+        final payloads = await nodeSettingsService
+            .fetchNodeMediaCollectionItems(
+              nodeId: nodeId,
+              collectionId: rawId,
+              onReceiveProgress: (count, total) {
+                if (total > 0) itemLoadProgress.value = count / total;
+              },
+            );
+        currentItems.assignAll(
+          payloads.map((payload) => _buildRemoteItem(payload, collectionId)),
         );
-        currentItems.assignAll(payloads.map((payload) => _buildRemoteItem(payload, collectionId)));
       } else {
-        currentItems.assignAll(media_api.getMediaCollectionItems(collectionId: collectionId));
+        currentItems.assignAll(
+          media_api.getMediaCollectionItems(collectionId: collectionId),
+        );
       }
     } catch (error) {
       currentItems.clear();
@@ -1185,11 +1296,15 @@ class MediaLibraryViewModel extends BaseViewModel {
       );
     } else {
       savedScrollOffset.value = 0.0;
-      _logger.info('[Scroll] enterCollection: no previousOffset, set savedScrollOffset=0');
+      _logger.info(
+        '[Scroll] enterCollection: no previousOffset, set savedScrollOffset=0',
+      );
     }
 
     await loadCurrentCollectionItems();
-    _logger.info('[Scroll] enterCollection END: savedScrollOffset=${savedScrollOffset.value}');
+    _logger.info(
+      '[Scroll] enterCollection END: savedScrollOffset=${savedScrollOffset.value}',
+    );
   }
 
   void exitCollection() {
@@ -1312,7 +1427,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 异步获取音频文件的封面缩略图路径（提取嵌入的专辑封面）。
   /// 结果缓存在 [_audioCoverCache] 中，相同路径只执行一次。
   Future<String?> getAudioCoverSource(String filePath) {
-    return _audioCoverCache.putIfAbsent(filePath, () => _doGetAudioCover(filePath));
+    return _audioCoverCache.putIfAbsent(
+      filePath,
+      () => _doGetAudioCover(filePath),
+    );
   }
 
   Future<String?> _doGetAudioCover(String filePath) async {
@@ -1339,7 +1457,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
   }
 
-  List<NodeEndpoint> get enabledRemoteNodes => nodeSettingsService.enabledRemoteNodes;
+  List<NodeEndpoint> get enabledRemoteNodes =>
+      nodeSettingsService.enabledRemoteNodes;
 
   void showSnack(String title, String message) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1354,7 +1473,10 @@ class MediaLibraryViewModel extends BaseViewModel {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(content: Text('$title：$message'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('$title：$message'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
     });
   }
@@ -1377,7 +1499,9 @@ class MediaLibraryViewModel extends BaseViewModel {
       return ordered.first;
     }
 
-    final children = mergedFolders.where((folder) => folder.parentId == folderId);
+    final children = mergedFolders.where(
+      (folder) => folder.parentId == folderId,
+    );
     for (final child in children) {
       final collection = _findFirstCollectionForFolder(child.id, visited: seen);
       if (collection != null) {
@@ -1451,7 +1575,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (normalized.isEmpty) {
       return BigInt.zero;
     }
-    return BigInt.tryParse(normalized) ?? BigInt.from(num.tryParse(normalized)?.toInt() ?? 0);
+    return BigInt.tryParse(normalized) ??
+        BigInt.from(num.tryParse(normalized)?.toInt() ?? 0);
   }
 
   String? _stringOrNull(Object? value) {

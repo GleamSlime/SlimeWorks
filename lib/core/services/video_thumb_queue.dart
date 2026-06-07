@@ -3,8 +3,8 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:slime_works/core/utils/logger.dart';
-const Loggers _logger = Loggers(name: '缩略图队列');
 
+const Loggers _logger = Loggers(name: '缩略图队列');
 
 /// 单个缩略图任务。
 class _ThumbTask {
@@ -40,9 +40,23 @@ class VideoThumbQueue {
 
   int concurrency;
   int _running = 0;
+  int _totalEnqueued = 0;
+  int _completed = 0;
 
   /// 每次任务完成后调用（可用于防抖触发缓存清理等）。
   VoidCallback? onTaskComplete;
+
+  /// 进度变化回调（用于 UI 实时更新）。
+  void Function(int completed, int total)? onProgress;
+
+  /// 等待中的任务数 + 正在执行的任务数。
+  int get pending => _queue.length + _running;
+
+  /// 已完成任务数。
+  int get completed => _completed;
+
+  /// 总入队任务数（含已完成）。
+  int get total => _totalEnqueued;
 
   final _queue = ListQueue<_ThumbTask>();
 
@@ -59,7 +73,9 @@ class VideoThumbQueue {
     final task = _ThumbTask(key: key, work: work);
     _pending[key] = task;
     _queue.addLast(task);
+    _totalEnqueued++;
     _logger.info('[Queue] enqueue key=$key queueLen=${_queue.length}');
+    _notifyProgress();
     _tick();
     return task.done;
   }
@@ -71,14 +87,20 @@ class VideoThumbQueue {
       final existing = _pending[key]!;
       _queue.remove(existing);
       _queue.addFirst(existing);
-      _logger.info('[Queue] prioritize (移到队首) key=$key queueLen=${_queue.length}');
+      _logger.info(
+        '[Queue] prioritize (移到队首) key=$key queueLen=${_queue.length}',
+      );
       return existing.done;
     }
     // 若已在执行中（不在 _pending），直接等待
     final task = _ThumbTask(key: key, work: work);
     _pending[key] = task;
     _queue.addFirst(task);
-    _logger.info('[Queue] prioritize (新建到队首) key=$key queueLen=${_queue.length}');
+    _totalEnqueued++;
+    _logger.info(
+      '[Queue] prioritize (新建到队首) key=$key queueLen=${_queue.length}',
+    );
+    _notifyProgress();
     _tick();
     return task.done;
   }
@@ -108,7 +130,10 @@ class VideoThumbQueue {
     }
     _queue.clear();
     _pending.clear();
+    _totalEnqueued = 0;
+    _completed = 0;
     _logger.info('[Queue] cancelAll');
+    _notifyProgress();
   }
 
   /// 查询 key 是否已在队列或执行中。
@@ -132,10 +157,19 @@ class VideoThumbQueue {
           })
           .whenComplete(() {
             _running--;
-            _logger.info('[Queue] 执行完毕 key=${task.key} running=$_running');
+            _completed++;
+            _logger.info(
+              '[Queue] 执行完毕 key=${task.key} running=$_running completed=$_completed/$_totalEnqueued',
+            );
+            _notifyProgress();
             onTaskComplete?.call();
             _tick();
           });
     }
+  }
+
+  void _notifyProgress() {
+    // 使用 scheduleMicrotask 避免在 build 期间同步触发 Obx 重建
+    scheduleMicrotask(() => onProgress?.call(_completed, _totalEnqueued));
   }
 }

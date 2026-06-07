@@ -795,7 +795,7 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
         let _ = std::fs::remove_file(&cache_path);
     }
     // 生成缩略图
-    for seek in &["00:00:00.000", "00:00:03.000", "00:00:00.000"] {
+    for _seek in &["00:00:00.000", "00:00:03.000", "00:00:00.000"] {
         let ok = std::process::Command::new("ffmpeg")
             .args([
                 "-i",

@@ -265,6 +265,16 @@ pub async fn initialize_ffmpeg(
     let mut manager = FFmpegManager::new(config);
     manager.initialize().await?;
 
+    // 在 manager 被移入全局锁之前，提取路径注入到 media_collection 模块
+    let ffmpeg_path = manager.ffmpeg_path.clone();
+    let ffprobe_path = manager.ffprobe_path.clone();
+    if let Some(ref p) = ffmpeg_path {
+        media_collection::register_ffmpeg_path(p.clone());
+    }
+    if let Some(ref p) = ffprobe_path {
+        media_collection::register_ffprobe_path(p.clone());
+    }
+
     // 保存到全局变量
     let mut global_manager = FFMPEG_MANAGER
         .lock()
