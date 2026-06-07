@@ -29,6 +29,7 @@
 | 游戏库（LunaBox迁移） | [docs/game_library.md](game_library.md) | `lib/pages/game_library/` · `lib/core/services/game_library_service.dart` · `lib/core/services/game_process_tracker.dart` |
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
 | Manga 漫画 | [docs/manga.md](manga.md) | `lib/pages/manga/` · `rust/manga_module/` |
+| 音乐播放器 | [docs/music_player.md](music_player.md) | `lib/pages/music_player/` · `rust/music_player/` |
 
 ---
 
@@ -69,6 +70,7 @@
 | `rust/media_collection/` | 媒体库（扫描、FFI、缩略图生成） |
 | `rust/novel_reader/` | 书库（TXT/EPUB 解析、搜索、进度管理） |
 | `rust/game_library/` | 游戏库核心（SQLite、分类、游玩会话、统计） |
+| `rust/music_player/` | 音乐播放器（播放列表、扫描、CUE 解析、封面提取、均衡器） |
 | `rust/src/frb_generated.rs` | FRB 自动生成，**勿直接修改** |
 | `lib/src/rust/` | Dart FFI 自动生成，**勿直接修改** |
 

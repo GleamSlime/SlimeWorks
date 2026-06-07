@@ -9,13 +9,13 @@
       <description>
         <![CDATA[Auto build v1.0.0+25]]>
       </description>
-      <pubDate>Sun, 07 Jun 2026 04:03:44 +0000</pubDate>
+      <pubDate>Sun, 07 Jun 2026 04:41:43 +0000</pubDate>
       <enclosure
         url="https://github.com/GleamSlime/slime_works/releases/download/v1.0.0+25/slime_works-1.0.0+25-macos.dmg"
         sparkle:version="25"
         sparkle:shortVersionString="1.0.0"
         sparkle:edSignature=""
-        length="60788219"
+        length="60788237"
         type="application/octet-stream" />
     </item>
   </channel>
