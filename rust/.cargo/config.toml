@@ -3,3 +3,13 @@ rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=SystemConfiguration"]
 
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=SystemConfiguration"]
+
+# Windows 环境下 whisper-rs-sys 编译所需的配置
+[target.x86_64-pc-windows-msvc]
+rustflags = []
+
+[env]
+# whisper-rs-sys 编译需要 LLVM/Clang（bindgen 依赖）
+LIBCLANG_PATH = "C:\\Program Files\\LLVM\\bin"
+# 使用 Ninja 作为 CMake 生成器（比 VS 生成器更可靠）
+CMAKE_GENERATOR = "Ninja"

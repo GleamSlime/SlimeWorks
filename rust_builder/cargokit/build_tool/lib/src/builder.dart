@@ -167,8 +167,32 @@ class RustBuilder {
   }
 
   Future<Map<String, String>> _buildEnvironment() async {
+    // Windows 桌面端构建需要为 whisper-rs-sys 传递环境变量
+    final desktopEnv = <String, String>{};
+    if (target.android == null && Platform.isWindows) {
+      // LLVM/Clang（bindgen 依赖）
+      final libclangPath = Platform.environment['LIBCLANG_PATH'];
+      if (libclangPath != null && libclangPath.isNotEmpty) {
+        desktopEnv['LIBCLANG_PATH'] = libclangPath;
+      } else {
+        // 默认路径
+        final defaultPath = 'C:\\Program Files\\LLVM\\bin';
+        if (Directory(defaultPath).existsSync()) {
+          desktopEnv['LIBCLANG_PATH'] = defaultPath;
+        }
+      }
+      // CMake 生成器
+      final cmakeGenerator = Platform.environment['CMAKE_GENERATOR'];
+      if (cmakeGenerator != null && cmakeGenerator.isNotEmpty) {
+        desktopEnv['CMAKE_GENERATOR'] = cmakeGenerator;
+      } else {
+        // 默认使用 Ninja（比 VS 生成器更可靠）
+        desktopEnv['CMAKE_GENERATOR'] = 'Ninja';
+      }
+    }
+
     if (target.android == null) {
-      return {};
+      return desktopEnv;
     } else {
       final sdkPath = environment.androidSdkPath;
       final ndkVersion = environment.androidNdkVersion;

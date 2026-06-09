@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_cue_sheet`, `convert_eq_preset`, `convert_item`, `convert_playlist`, `convert_record`
+// These functions are ignored because they are not marked as `pub`: `convert_cue_sheet`, `convert_eq_preset`, `convert_folder`, `convert_item`, `convert_playlist`, `convert_record`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PlayMode`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化音乐播放器数据库
 void musicInitializeDb() =>
@@ -21,6 +21,17 @@ List<Playlist> getAllPlaylists() =>
 /// 创建播放列表
 Playlist createPlaylist({required String name}) =>
     RustLib.instance.api.crateApiMusicPlayerCreatePlaylist(name: name);
+
+/// 在指定目录下创建播放列表
+Playlist createPlaylistInFolder({required String name, String? folderId}) =>
+    RustLib.instance.api.crateApiMusicPlayerCreatePlaylistInFolder(
+      name: name,
+      folderId: folderId,
+    );
+
+/// 获取指定目录下的播放列表
+List<Playlist> getPlaylistsByFolder({String? folderId}) => RustLib.instance.api
+    .crateApiMusicPlayerGetPlaylistsByFolder(folderId: folderId);
 
 /// 确保默认播放列表存在
 Playlist ensureDefaultPlaylist() =>
@@ -158,6 +169,57 @@ Future<BigInt> batchExtractCovers({required String playlistId}) => RustLib
     .api
     .crateApiMusicPlayerBatchExtractCovers(playlistId: playlistId);
 
+/// 修复已有音乐条目的缺失元数据（时长、标签等）
+Future<BigInt> repairMissingMetadata({required String playlistId}) => RustLib
+    .instance
+    .api
+    .crateApiMusicPlayerRepairMissingMetadata(playlistId: playlistId);
+
+/// 获取所有目录
+List<FolderInfo> getAllFolders() =>
+    RustLib.instance.api.crateApiMusicPlayerGetAllFolders();
+
+/// 获取指定父目录下的子目录
+List<FolderInfo> getSubFolders({String? parentId}) =>
+    RustLib.instance.api.crateApiMusicPlayerGetSubFolders(parentId: parentId);
+
+/// 创建目录（最多三级）
+FolderInfo createFolder({required String name, String? parentId}) => RustLib
+    .instance
+    .api
+    .crateApiMusicPlayerCreateFolder(name: name, parentId: parentId);
+
+/// 重命名目录
+bool renameFolder({required String folderId, required String name}) => RustLib
+    .instance
+    .api
+    .crateApiMusicPlayerRenameFolder(folderId: folderId, name: name);
+
+/// 删除目录（级联删除子目录和关联的播放列表）
+bool deleteFolder({required String folderId}) =>
+    RustLib.instance.api.crateApiMusicPlayerDeleteFolder(folderId: folderId);
+
+/// 更新目录信息（封面、标签、作者等）
+bool updateFolder({
+  required String folderId,
+  String? name,
+  String? coverPath,
+  String? tags,
+  String? author,
+}) => RustLib.instance.api.crateApiMusicPlayerUpdateFolder(
+  folderId: folderId,
+  name: name,
+  coverPath: coverPath,
+  tags: tags,
+  author: author,
+);
+
+/// 递增目录播放次数
+bool incrementFolderPlayCount({required String folderId}) => RustLib
+    .instance
+    .api
+    .crateApiMusicPlayerIncrementFolderPlayCount(folderId: folderId);
+
 class CueSheetInfo {
   final String? title;
   final String? performer;
@@ -250,6 +312,74 @@ class EqualizerPresetInfo {
           name == other.name &&
           bands == other.bands &&
           isBuiltin == other.isBuiltin;
+}
+
+/// 目录节点（最多三级）
+class FolderInfo {
+  final String id;
+  final String name;
+
+  /// 父目录 ID，根级为 None
+  final String? parentId;
+
+  /// 目录层级：1=根级，2=二级，3=三级
+  final int level;
+
+  /// 目录封面路径
+  final String? coverPath;
+
+  /// 标签（逗号分隔）
+  final String? tags;
+
+  /// 作者/演唱者
+  final String? author;
+
+  /// 目录下所有音乐的累计播放次数
+  final int playCount;
+  final PlatformInt64 createdAt;
+  final PlatformInt64 updatedAt;
+
+  const FolderInfo({
+    required this.id,
+    required this.name,
+    this.parentId,
+    required this.level,
+    this.coverPath,
+    this.tags,
+    this.author,
+    required this.playCount,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      parentId.hashCode ^
+      level.hashCode ^
+      coverPath.hashCode ^
+      tags.hashCode ^
+      author.hashCode ^
+      playCount.hashCode ^
+      createdAt.hashCode ^
+      updatedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FolderInfo &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          parentId == other.parentId &&
+          level == other.level &&
+          coverPath == other.coverPath &&
+          tags == other.tags &&
+          author == other.author &&
+          playCount == other.playCount &&
+          createdAt == other.createdAt &&
+          updatedAt == other.updatedAt;
 }
 
 class MusicItem {
@@ -368,6 +498,9 @@ class Playlist {
   final PlatformInt64 updatedAt;
   final bool isDefault;
 
+  /// 所属目录 ID，null 表示根级
+  final String? folderId;
+
   const Playlist({
     required this.id,
     required this.name,
@@ -376,6 +509,7 @@ class Playlist {
     required this.createdAt,
     required this.updatedAt,
     required this.isDefault,
+    this.folderId,
   });
 
   @override
@@ -386,7 +520,8 @@ class Playlist {
       itemCount.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
-      isDefault.hashCode;
+      isDefault.hashCode ^
+      folderId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -399,5 +534,6 @@ class Playlist {
           itemCount == other.itemCount &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
-          isDefault == other.isDefault;
+          isDefault == other.isDefault &&
+          folderId == other.folderId;
 }

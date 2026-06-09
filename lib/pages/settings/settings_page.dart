@@ -6,6 +6,7 @@ import 'package:slime_works/pages/settings/components/aliyun_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/music_player_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/manga_settings_tab.dart';
@@ -20,7 +21,8 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderStateMixin {
+class _SettingsPageState extends State<SettingsPage>
+    with SingleTickerProviderStateMixin {
   late final List<_SettingsTab> _tabs;
   late final TabController _controller;
 
@@ -95,7 +97,11 @@ class _NodeSettingsWrapper extends StatelessWidget {
                   ],
                   dividerHeight: 0,
                 ),
-                Expanded(child: TabBarView(children: [NodeSettingsTab(), OllamaSettingsTab()])),
+                Expanded(
+                  child: TabBarView(
+                    children: [NodeSettingsTab(), OllamaSettingsTab()],
+                  ),
+                ),
               ],
             ),
           );
@@ -111,7 +117,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(
@@ -126,6 +132,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
                     Tab(text: '资源库'),
                     Tab(text: 'Manga'),
                     Tab(text: '游戏设置'),
+                    Tab(text: '播放器设置'),
                     Tab(text: 'Sentry'),
                   ],
                   dividerHeight: 0,
@@ -136,6 +143,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
                       _ResourcesSettingsTab(),
                       MangaSettingsTab(),
                       GameSettingsTab(),
+                      MusicPlayerSettingsTab(),
                       SentrySettingsTab(),
                     ],
                   ),
@@ -172,7 +180,11 @@ class _ToolsSettingsWrapper extends StatelessWidget {
                   ],
                   dividerHeight: 0,
                 ),
-                Expanded(child: TabBarView(children: [ExtractSettingsTab(), AliyunSettingsTab()])),
+                Expanded(
+                  child: TabBarView(
+                    children: [ExtractSettingsTab(), AliyunSettingsTab()],
+                  ),
+                ),
               ],
             ),
           );

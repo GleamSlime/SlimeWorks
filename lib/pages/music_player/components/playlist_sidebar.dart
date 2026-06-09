@@ -17,12 +17,14 @@ class PlaylistSidebar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: Border(right: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+        border: Border(
+          right: BorderSide(color: Theme.of(context).dividerColor, width: 0.5),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 标题
+          // 标题 + 操作按钮
           Padding(
             padding: EdgeInsets.fromLTRB(
               AppTheme.metrics.kSpace16,
@@ -39,6 +41,13 @@ class PlaylistSidebar extends StatelessWidget {
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
+                // 新建子目录
+                IconButton(
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                  onPressed: () => _showCreateFolderDialog(context),
+                  tooltip: '新建子目录',
+                ),
+                // 新建播放列表
                 IconButton(
                   icon: const Icon(Icons.add_rounded, size: 18),
                   onPressed: () => _showCreatePlaylistDialog(context),
@@ -47,31 +56,66 @@ class PlaylistSidebar extends StatelessWidget {
               ],
             ),
           ),
+          // 面包屑导航
+          Obx(() => _buildBreadcrumb(context)),
           const Divider(height: 1),
-          // 播放列表
+          // 目录 + 播放列表
           Expanded(
             child: Obx(() {
-              final playlists = viewModel.playlists;
-              if (playlists.isEmpty) {
+              final subFolders = viewModel.currentSubFolders;
+              final folderPlaylists = viewModel.currentFolderPlaylists;
+              if (subFolders.isEmpty && folderPlaylists.isEmpty) {
                 return Center(
-                  child: Text(
-                    '暂无播放列表',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '暂无内容',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).hintColor,
+                        ),
+                      ),
+                      SizedBox(height: AppTheme.metrics.kSpace8),
+                      TextButton.icon(
+                        icon: const Icon(
+                          Icons.create_new_folder_outlined,
+                          size: 16,
+                        ),
+                        label: const Text('新建子目录'),
+                        onPressed: () => _showCreateFolderDialog(context),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: const Text('新建播放列表'),
+                        onPressed: () => _showCreatePlaylistDialog(context),
+                      ),
+                    ],
                   ),
                 );
               }
               return ListView.builder(
-                itemCount: playlists.length,
+                itemCount: subFolders.length + folderPlaylists.length,
                 itemBuilder: (context, index) {
-                  final playlist = playlists[index];
-                  final isSelected = viewModel.currentPlaylistId.value == playlist.id;
+                  // 先显示子目录，再显示播放列表
+                  if (index < subFolders.length) {
+                    final folder = subFolders[index];
+                    return _FolderTile(
+                      folder: folder,
+                      onTap: () => viewModel.navigateToFolder(folder.id),
+                      onRename: (name) =>
+                          viewModel.renameFolder(folder.id, name),
+                      onDelete: () => viewModel.deleteFolder(folder.id),
+                    );
+                  }
+                  final playlist = folderPlaylists[index - subFolders.length];
+                  final isSelected =
+                      viewModel.currentPlaylistId.value == playlist.id;
                   return _PlaylistTile(
                     playlist: playlist,
                     isSelected: isSelected,
                     onTap: () => viewModel.selectPlaylist(playlist.id),
-                    onRename: (name) => viewModel.renamePlaylist(playlist.id, name),
+                    onRename: (name) =>
+                        viewModel.renamePlaylist(playlist.id, name),
                     onDelete: () => viewModel.deletePlaylist(playlist.id),
                   );
                 },
@@ -111,6 +155,46 @@ class PlaylistSidebar extends StatelessWidget {
     );
   }
 
+  /// 面包屑导航
+  Widget _buildBreadcrumb(BuildContext context) {
+    final breadcrumbs = viewModel.breadcrumbFolders;
+    if (breadcrumbs.isEmpty && viewModel.currentFolderId.value == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8),
+      child: Wrap(
+        alignment: WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          // 根级
+          _BreadcrumbChip(
+            label: '全部',
+            onTap: () => viewModel.navigateToFolder(null),
+            isActive: viewModel.currentFolderId.value == null,
+          ),
+          for (int i = 0; i < breadcrumbs.length; i++) ...[
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace2,
+              ),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+            _BreadcrumbChip(
+              label: breadcrumbs[i].name,
+              onTap: () => viewModel.navigateToFolder(breadcrumbs[i].id),
+              isActive: i == breadcrumbs.length - 1,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _showCreatePlaylistDialog(BuildContext context) {
     final nameController = TextEditingController(text: '新播放列表');
     showDialog(
@@ -122,11 +206,42 @@ class PlaylistSidebar extends StatelessWidget {
           decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();
               if (name.isNotEmpty) viewModel.createPlaylist(name);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateFolderDialog(BuildContext context) {
+    final nameController = TextEditingController(text: '新目录');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建子目录'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '目录名称', isDense: true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) viewModel.createSubFolder(name);
               Navigator.of(ctx).pop();
             },
             child: const Text('创建'),
@@ -141,6 +256,117 @@ class PlaylistSidebar extends StatelessWidget {
   }
 }
 
+/// 面包屑导航项
+class _BreadcrumbChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool isActive;
+
+  const _BreadcrumbChip({
+    required this.label,
+    required this.onTap,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace4,
+          vertical: 2,
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: isActive
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).hintColor,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 目录条目
+class _FolderTile extends StatelessWidget {
+  final music_api.FolderInfo folder;
+  final VoidCallback onTap;
+  final Function(String) onRename;
+  final VoidCallback onDelete;
+
+  const _FolderTile({
+    required this.folder,
+    required this.onTap,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        Icons.folder_rounded,
+        size: 18,
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+      ),
+      title: Text(folder.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert_rounded, size: 16),
+        onSelected: (action) {
+          switch (action) {
+            case 'rename':
+              _showRenameDialog(context);
+              break;
+            case 'delete':
+              onDelete();
+              break;
+          }
+        },
+        itemBuilder: (ctx) => [
+          const PopupMenuItem(value: 'rename', child: Text('重命名')),
+          const PopupMenuItem(value: 'delete', child: Text('删除')),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+
+  void _showRenameDialog(BuildContext context) {
+    final nameController = TextEditingController(text: folder.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名目录'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '目录名称', isDense: true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) onRename(name);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 播放列表条目
 class _PlaylistTile extends StatelessWidget {
   final music_api.Playlist playlist;
   final bool isSelected;
@@ -161,9 +387,13 @@ class _PlaylistTile extends StatelessWidget {
     return ListTile(
       dense: true,
       selected: isSelected,
-      selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+      selectedTileColor: Theme.of(
+        context,
+      ).colorScheme.primary.withValues(alpha: 0.1),
       leading: Icon(
-        playlist.isDefault ? Icons.queue_music_rounded : Icons.playlist_play_rounded,
+        playlist.isDefault
+            ? Icons.queue_music_rounded
+            : Icons.playlist_play_rounded,
         size: 18,
         color: isSelected ? Theme.of(context).colorScheme.primary : null,
       ),
@@ -176,7 +406,10 @@ class _PlaylistTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text('${playlist.itemCount} 首', style: Theme.of(context).textTheme.bodySmall),
+      subtitle: Text(
+        '${playlist.itemCount} 首',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       trailing: PopupMenuButton<String>(
         icon: const Icon(Icons.more_vert_rounded, size: 16),
         onSelected: (action) {
@@ -191,7 +424,8 @@ class _PlaylistTile extends StatelessWidget {
         },
         itemBuilder: (ctx) => [
           const PopupMenuItem(value: 'rename', child: Text('重命名')),
-          if (!playlist.isDefault) const PopupMenuItem(value: 'delete', child: Text('删除')),
+          if (!playlist.isDefault)
+            const PopupMenuItem(value: 'delete', child: Text('删除')),
         ],
       ),
       onTap: onTap,
@@ -209,7 +443,10 @@ class _PlaylistTile extends StatelessWidget {
           decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();

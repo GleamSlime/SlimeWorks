@@ -1,4 +1,7 @@
 use anyhow::Result;
+use lofty::file::{AudioFile, TaggedFileExt};
+use lofty::probe::Probe;
+use lofty::tag::Accessor;
 use regex::Regex;
 use slime_logger::{sw_debug, sw_info, sw_warn};
 use std::path::Path;
@@ -11,6 +14,55 @@ const AUDIO_EXTENSIONS: &[&str] = &[
     "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "ape", "aiff", "alac", "wv", "tta",
     "dsd", "dsf", "dff",
 ];
+
+/// 从音频文件中提取时长（毫秒）和标签信息
+pub fn extract_audio_metadata(file_path: &Path) -> AudioMetadata {
+    let mut meta = AudioMetadata::default();
+
+    let probe = match Probe::open(file_path) {
+        Ok(p) => p,
+        Err(_) => return meta,
+    };
+
+    let tagged_file = match probe.read() {
+        Ok(f) => f,
+        Err(_) => return meta,
+    };
+
+    // 提取时长
+    let duration = tagged_file.properties().duration();
+    meta.duration_ms = Some(duration.as_millis() as u64);
+
+    // 提取标签信息
+    if let Some(tag) = tagged_file.primary_tag() {
+        meta.title = tag.title().map(|s| s.to_string());
+        meta.artist = tag
+            .artist()
+            .map(|s: std::borrow::Cow<'_, str>| s.to_string());
+        meta.album = tag
+            .album()
+            .map(|s: std::borrow::Cow<'_, str>| s.to_string());
+        meta.genre = tag
+            .genre()
+            .map(|s: std::borrow::Cow<'_, str>| s.to_string());
+        meta.track_number = tag.track();
+        meta.year = tag.year();
+    }
+
+    meta
+}
+
+/// 音频元数据
+#[derive(Debug, Default)]
+pub struct AudioMetadata {
+    pub duration_ms: Option<u64>,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub genre: Option<String>,
+    pub track_number: Option<u32>,
+    pub year: Option<u32>,
+}
 
 /// 判断是否为音频文件
 pub fn is_audio_file(path: &Path) -> bool {
@@ -92,18 +144,21 @@ pub fn scan_audio_files(dir_path: &str, playlist_id: &str) -> Result<Vec<MusicIt
         // 尝试提取封面（同目录下的 cover.jpg / folder.jpg 等）
         let cover_path = find_cover_for_audio(file_path);
 
+        // 提取音频元数据（时长、标签等）
+        let audio_meta = extract_audio_metadata(file_path);
+
         let item = MusicItem {
             id: uuid::Uuid::new_v4().to_string(),
             playlist_id: playlist_id.to_string(),
-            title,
-            artist: None,
-            album: None,
+            title: audio_meta.title.unwrap_or(title),
+            artist: audio_meta.artist,
+            album: audio_meta.album,
             file_path: file_path_str,
-            duration_ms: None,
-            track_number: None,
+            duration_ms: audio_meta.duration_ms,
+            track_number: audio_meta.track_number,
             disc_number: None,
-            year: None,
-            genre: None,
+            year: audio_meta.year,
+            genre: audio_meta.genre,
             cover_path,
             file_size: metadata.len(),
             modified_at,

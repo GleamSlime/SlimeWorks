@@ -3,13 +3,14 @@ use slime_logger::{sw_info, sw_warn};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::scanner;
-use crate::types::{CueSheet, EqualizerPreset, MusicItem, PlayRecord, Playlist};
+use crate::types::{CueSheet, EqualizerPreset, Folder, MusicItem, PlayRecord, Playlist};
 
 // ── 内存缓存 ──────────────────────────────────────────────────────────────────
 static PLAYLISTS: OnceLock<Arc<Mutex<Vec<Playlist>>>> = OnceLock::new();
 static MUSIC_ITEMS: OnceLock<Mutex<Option<Vec<MusicItem>>>> = OnceLock::new();
 static PLAY_RECORDS: OnceLock<Arc<Mutex<Vec<PlayRecord>>>> = OnceLock::new();
 static EQ_PRESETS: OnceLock<Arc<Mutex<Vec<EqualizerPreset>>>> = OnceLock::new();
+static FOLDERS: OnceLock<Arc<Mutex<Vec<Folder>>>> = OnceLock::new();
 static DB_INIT_RESULT: OnceLock<Option<String>> = OnceLock::new();
 
 fn playlists_cache() -> &'static Arc<Mutex<Vec<Playlist>>> {
@@ -26,6 +27,10 @@ fn play_records_cache() -> &'static Arc<Mutex<Vec<PlayRecord>>> {
 
 fn eq_presets_cache() -> &'static Arc<Mutex<Vec<EqualizerPreset>>> {
     EQ_PRESETS.get_or_init(|| Arc::new(Mutex::new(Vec::new())))
+}
+
+fn folders_cache() -> &'static Arc<Mutex<Vec<Folder>>> {
+    FOLDERS.get_or_init(|| Arc::new(Mutex::new(Vec::new())))
 }
 
 // ── 数据库路径 ────────────────────────────────────────────────────────────────
@@ -66,6 +71,10 @@ fn eq_preset_table() -> String {
     "music_eq_presets".to_string()
 }
 
+fn folder_table() -> String {
+    "music_folders".to_string()
+}
+
 // ── 辅助：从 db_list_all 提取 JSON 值列表 ────────────────────────────────────
 fn db_list_values(table: String) -> Result<Vec<String>, String> {
     let records = db_module::db_list_all(table).map_err(|e| e.to_string())?;
@@ -91,6 +100,7 @@ pub fn initialize_db() -> Result<(), String> {
                     item_table(),
                     record_table(),
                     eq_preset_table(),
+                    folder_table(),
                 ] {
                     if let Err(e) = db_module::db_register_table(table.clone()) {
                         sw_warn!("[music_db] 注册表 {} 失败: {}", table, e);
@@ -120,6 +130,7 @@ fn ensure_db() {
         item_table(),
         record_table(),
         eq_preset_table(),
+        folder_table(),
     ] {
         let _ = db_module::db_register_table(table.clone());
     }
@@ -150,6 +161,14 @@ pub fn get_all_playlists() -> Result<Vec<Playlist>, String> {
 }
 
 pub fn create_playlist(name: String) -> Result<Playlist, String> {
+    create_playlist_in_folder(name, None)
+}
+
+/// 在指定目录下创建播放列表
+pub fn create_playlist_in_folder(
+    name: String,
+    folder_id: Option<String>,
+) -> Result<Playlist, String> {
     ensure_db();
     let _ = db_module::db_register_table(playlist_table());
 
@@ -161,6 +180,7 @@ pub fn create_playlist(name: String) -> Result<Playlist, String> {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         is_default: false,
+        folder_id,
     };
 
     let json = serde_json::to_string(&playlist).map_err(|e| e.to_string())?;
@@ -177,7 +197,7 @@ pub fn ensure_default_playlist() -> Result<Playlist, String> {
     if let Some(default) = playlists.into_iter().find(|p| p.is_default) {
         return Ok(default);
     }
-    let mut playlist = create_playlist("默认列表".to_string())?;
+    let mut playlist = create_playlist_in_folder("默认列表".to_string(), None)?;
     playlist.is_default = true;
     let json = serde_json::to_string(&playlist).map_err(|e| e.to_string())?;
     db_module::db_set(playlist_table(), playlist.id.clone(), json).map_err(|e| e.to_string())?;
@@ -337,6 +357,9 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
 
     let cover_path = scanner::find_cover_for_audio(path);
 
+    // 提取音频元数据（时长、标签等）
+    let audio_meta = scanner::extract_audio_metadata(path);
+
     // 获取当前最大 order
     let existing = get_playlist_items(playlist_id.clone()).unwrap_or_default();
     let max_order = existing.iter().map(|i| i.order).max().unwrap_or(-1);
@@ -344,15 +367,15 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
     let item = MusicItem {
         id: uuid::Uuid::new_v4().to_string(),
         playlist_id: playlist_id.clone(),
-        title,
-        artist: None,
-        album: None,
+        title: audio_meta.title.unwrap_or(title),
+        artist: audio_meta.artist,
+        album: audio_meta.album,
         file_path,
-        duration_ms: None,
-        track_number: None,
+        duration_ms: audio_meta.duration_ms,
+        track_number: audio_meta.track_number,
         disc_number: None,
-        year: None,
-        genre: None,
+        year: audio_meta.year,
+        genre: audio_meta.genre,
         cover_path,
         file_size: metadata.len(),
         modified_at: Utc::now(),
@@ -850,4 +873,261 @@ pub fn batch_extract_covers(playlist_id: String) -> Result<usize, String> {
     }
     sw_info!("[music_player] 批量提取封面完成，共提取 {} 个", count);
     Ok(count)
+}
+
+/// 修复已有音乐条目的缺失元数据（时长、标签等）
+pub fn repair_missing_metadata(playlist_id: String) -> Result<usize, String> {
+    ensure_db();
+    let items = get_playlist_items(playlist_id)?;
+    let mut count = 0usize;
+    for item in &items {
+        // 跳过已有时长且已有标签的条目
+        if item.duration_ms.is_some() && item.artist.is_some() && item.album.is_some() {
+            continue;
+        }
+        let path = std::path::Path::new(&item.file_path);
+        if !path.exists() {
+            continue;
+        }
+        let audio_meta = scanner::extract_audio_metadata(path);
+        let mut updated = item.clone();
+        if updated.duration_ms.is_none() {
+            updated.duration_ms = audio_meta.duration_ms;
+        }
+        if updated.title
+            == path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("未命名")
+        {
+            // 标题仍是文件名，尝试用标签替换
+            if let Some(t) = audio_meta.title {
+                updated.title = t;
+            }
+        }
+        if updated.artist.is_none() {
+            updated.artist = audio_meta.artist;
+        }
+        if updated.album.is_none() {
+            updated.album = audio_meta.album;
+        }
+        if updated.track_number.is_none() {
+            updated.track_number = audio_meta.track_number;
+        }
+        if updated.year.is_none() {
+            updated.year = audio_meta.year;
+        }
+        if updated.genre.is_none() {
+            updated.genre = audio_meta.genre;
+        }
+        let json = serde_json::to_string(&updated).map_err(|e| e.to_string())?;
+        db_module::db_set(item_table(), item.id.clone(), json).map_err(|e| e.to_string())?;
+        count += 1;
+    }
+    // 清空缓存
+    {
+        let mut guard = music_items_cache().lock().unwrap();
+        *guard = None;
+    }
+    sw_info!("[music_player] 修复元数据完成，共修复 {} 条", count);
+    Ok(count)
+}
+
+// ── 目录 CRUD ─────────────────────────────────────────────────────────────────
+
+/// 获取所有目录
+pub fn get_all_folders() -> Result<Vec<Folder>, String> {
+    ensure_db();
+    let cache = folders_cache();
+    {
+        let guard = cache.lock().unwrap();
+        if !guard.is_empty() {
+            return Ok(guard.clone());
+        }
+    }
+
+    let _ = db_module::db_register_table(folder_table());
+    let raw = db_list_values(folder_table())?;
+    let folders: Vec<Folder> = raw
+        .into_iter()
+        .filter_map(|v| serde_json::from_str::<Folder>(&v).ok())
+        .collect();
+
+    let mut guard = cache.lock().unwrap();
+    *guard = folders.clone();
+    Ok(folders)
+}
+
+/// 获取指定父目录下的子目录
+pub fn get_sub_folders(parent_id: Option<String>) -> Result<Vec<Folder>, String> {
+    let all = get_all_folders()?;
+    Ok(all
+        .into_iter()
+        .filter(|f| f.parent_id == parent_id)
+        .collect())
+}
+
+/// 获取指定目录下的播放列表
+pub fn get_playlists_by_folder(folder_id: Option<String>) -> Result<Vec<Playlist>, String> {
+    let all = get_all_playlists()?;
+    Ok(all
+        .into_iter()
+        .filter(|p| p.folder_id == folder_id)
+        .collect())
+}
+
+/// 创建目录（最多三级）
+pub fn create_folder(name: String, parent_id: Option<String>) -> Result<Folder, String> {
+    ensure_db();
+    let _ = db_module::db_register_table(folder_table());
+
+    // 计算层级
+    let level = if let Some(ref pid) = parent_id {
+        let all = get_all_folders()?;
+        let parent = all.iter().find(|f| &f.id == pid).ok_or("父目录不存在")?;
+        if parent.level >= 3 {
+            return Err("已达到最大目录深度（3级）".to_string());
+        }
+        parent.level + 1
+    } else {
+        1
+    };
+
+    let folder = Folder {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        parent_id,
+        level,
+        cover_path: None,
+        tags: None,
+        author: None,
+        play_count: 0,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+
+    let json = serde_json::to_string(&folder).map_err(|e| e.to_string())?;
+    db_module::db_set(folder_table(), folder.id.clone(), json).map_err(|e| e.to_string())?;
+
+    let mut guard = folders_cache().lock().unwrap();
+    guard.push(folder.clone());
+    Ok(folder)
+}
+
+/// 重命名目录
+pub fn rename_folder(folder_id: String, name: String) -> Result<bool, String> {
+    ensure_db();
+    let _ = db_module::db_register_table(folder_table());
+
+    let raw = db_module::db_get(folder_table(), folder_id.clone()).map_err(|e| e.to_string())?;
+    let value = raw.ok_or("目录不存在")?;
+    let mut folder: Folder = serde_json::from_str(&value).map_err(|e| e.to_string())?;
+    folder.name = name;
+    folder.updated_at = Utc::now();
+
+    let json = serde_json::to_string(&folder).map_err(|e| e.to_string())?;
+    db_module::db_set(folder_table(), folder_id.clone(), json).map_err(|e| e.to_string())?;
+
+    let mut guard = folders_cache().lock().unwrap();
+    if let Some(f) = guard.iter_mut().find(|f| f.id == folder_id) {
+        f.name = folder.name;
+        f.updated_at = folder.updated_at;
+    }
+    Ok(true)
+}
+
+/// 删除目录（级联删除子目录和关联的播放列表）
+pub fn delete_folder(folder_id: String) -> Result<bool, String> {
+    ensure_db();
+
+    // 递归收集所有子目录 ID
+    let all_folders = get_all_folders()?;
+    let mut to_delete = vec![folder_id.clone()];
+    let mut queue = vec![folder_id.clone()];
+    while let Some(current) = queue.pop() {
+        for child in all_folders
+            .iter()
+            .filter(|f| f.parent_id.as_deref() == Some(&current))
+        {
+            to_delete.push(child.id.clone());
+            queue.push(child.id.clone());
+        }
+    }
+
+    // 删除所有子目录关联的播放列表及其音乐条目
+    for fid in &to_delete {
+        let playlists = get_playlists_by_folder(Some(fid.clone()))?;
+        for pl in playlists {
+            let _ = delete_playlist(pl.id);
+        }
+        db_module::db_delete(folder_table(), fid.clone()).map_err(|e| e.to_string())?;
+    }
+
+    // 清空缓存
+    {
+        let mut guard = folders_cache().lock().unwrap();
+        guard.retain(|f| !to_delete.contains(&f.id));
+    }
+    Ok(true)
+}
+
+/// 更新目录信息（封面、标签、作者等）
+pub fn update_folder(
+    folder_id: String,
+    name: Option<String>,
+    cover_path: Option<String>,
+    tags: Option<String>,
+    author: Option<String>,
+) -> Result<bool, String> {
+    ensure_db();
+    let _ = db_module::db_register_table(folder_table());
+
+    let raw = db_module::db_get(folder_table(), folder_id.clone()).map_err(|e| e.to_string())?;
+    let value = raw.ok_or("目录不存在")?;
+    let mut folder: Folder = serde_json::from_str(&value).map_err(|e| e.to_string())?;
+
+    if let Some(n) = name {
+        folder.name = n;
+    }
+    if let Some(c) = cover_path {
+        folder.cover_path = Some(c);
+    }
+    if let Some(t) = tags {
+        folder.tags = Some(t);
+    }
+    if let Some(a) = author {
+        folder.author = Some(a);
+    }
+    folder.updated_at = Utc::now();
+
+    let json = serde_json::to_string(&folder).map_err(|e| e.to_string())?;
+    db_module::db_set(folder_table(), folder_id.clone(), json).map_err(|e| e.to_string())?;
+
+    // 清空缓存
+    {
+        let mut guard = folders_cache().lock().unwrap();
+        *guard = Vec::new();
+    }
+    Ok(true)
+}
+
+/// 递增目录播放次数
+pub fn increment_folder_play_count(folder_id: String) -> Result<bool, String> {
+    ensure_db();
+    let _ = db_module::db_register_table(folder_table());
+
+    let raw = db_module::db_get(folder_table(), folder_id.clone()).map_err(|e| e.to_string())?;
+    let value = raw.ok_or("目录不存在")?;
+    let mut folder: Folder = serde_json::from_str(&value).map_err(|e| e.to_string())?;
+    folder.play_count += 1;
+    folder.updated_at = Utc::now();
+
+    let json = serde_json::to_string(&folder).map_err(|e| e.to_string())?;
+    db_module::db_set(folder_table(), folder_id.clone(), json).map_err(|e| e.to_string())?;
+
+    let mut guard = folders_cache().lock().unwrap();
+    if let Some(f) = guard.iter_mut().find(|f| f.id == folder_id) {
+        f.play_count = folder.play_count;
+    }
+    Ok(true)
 }

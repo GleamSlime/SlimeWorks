@@ -24,6 +24,7 @@ import 'api/sentry_log.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';
 import 'api/websocket.dart';
+import 'api/whisper.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -261,6 +262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FFmpegConfig dco_decode_f_fmpeg_config(dynamic raw);
 
   @protected
+  FolderInfo dco_decode_folder_info(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -297,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<EqualizerPresetInfo> dco_decode_list_equalizer_preset_info(dynamic raw);
 
   @protected
+  List<FolderInfo> dco_decode_list_folder_info(dynamic raw);
+
+  @protected
   List<InstalledModule> dco_decode_list_installed_module(dynamic raw);
 
   @protected
@@ -310,6 +317,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<MediaItem> dco_decode_list_media_item(dynamic raw);
+
+  @protected
+  List<ModelStatusInfo> dco_decode_list_model_status_info(dynamic raw);
 
   @protected
   List<MusicItem> dco_decode_list_music_item(dynamic raw);
@@ -365,6 +375,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SmartFolderInfo> dco_decode_list_smart_folder_info(dynamic raw);
 
   @protected
+  List<TranscriptionSegmentInfo> dco_decode_list_transcription_segment_info(
+    dynamic raw,
+  );
+
+  @protected
   MediaCollection dco_decode_media_collection(dynamic raw);
 
   @protected
@@ -375,6 +390,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaKind dco_decode_media_kind(dynamic raw);
+
+  @protected
+  ModelStatusInfo dco_decode_model_status_info(dynamic raw);
 
   @protected
   ModuleType dco_decode_module_type(dynamic raw);
@@ -462,6 +480,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SystemResourceSnapshot dco_decode_system_resource_snapshot(dynamic raw);
+
+  @protected
+  TranscriptionResultInfo dco_decode_transcription_result_info(dynamic raw);
+
+  @protected
+  TranscriptionSegmentInfo dco_decode_transcription_segment_info(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -690,6 +714,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FFmpegConfig sse_decode_f_fmpeg_config(SseDeserializer deserializer);
 
   @protected
+  FolderInfo sse_decode_folder_info(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -738,6 +765,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<FolderInfo> sse_decode_list_folder_info(SseDeserializer deserializer);
+
+  @protected
   List<InstalledModule> sse_decode_list_installed_module(
     SseDeserializer deserializer,
   );
@@ -757,6 +787,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<MediaItem> sse_decode_list_media_item(SseDeserializer deserializer);
+
+  @protected
+  List<ModelStatusInfo> sse_decode_list_model_status_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<MusicItem> sse_decode_list_music_item(SseDeserializer deserializer);
@@ -828,6 +863,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TranscriptionSegmentInfo> sse_decode_list_transcription_segment_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MediaCollection sse_decode_media_collection(SseDeserializer deserializer);
 
   @protected
@@ -838,6 +878,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaKind sse_decode_media_kind(SseDeserializer deserializer);
+
+  @protected
+  ModelStatusInfo sse_decode_model_status_info(SseDeserializer deserializer);
 
   @protected
   ModuleType sse_decode_module_type(SseDeserializer deserializer);
@@ -939,6 +982,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SystemResourceSnapshot sse_decode_system_resource_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TranscriptionResultInfo sse_decode_transcription_result_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TranscriptionSegmentInfo sse_decode_transcription_segment_info(
     SseDeserializer deserializer,
   );
 
@@ -1208,6 +1261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_fmpeg_config(FFmpegConfig self, SseSerializer serializer);
 
   @protected
+  void sse_encode_folder_info(FolderInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -1268,6 +1324,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_folder_info(
+    List<FolderInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_installed_module(
     List<InstalledModule> self,
     SseSerializer serializer,
@@ -1294,6 +1356,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_media_item(
     List<MediaItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_model_status_info(
+    List<ModelStatusInfo> self,
     SseSerializer serializer,
   );
 
@@ -1394,6 +1462,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_transcription_segment_info(
+    List<TranscriptionSegmentInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_media_collection(
     MediaCollection self,
     SseSerializer serializer,
@@ -1407,6 +1481,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_media_kind(MediaKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_model_status_info(
+    ModelStatusInfo self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_module_type(ModuleType self, SseSerializer serializer);
@@ -1529,6 +1609,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_system_resource_snapshot(
     SystemResourceSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_transcription_result_info(
+    TranscriptionResultInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_transcription_segment_info(
+    TranscriptionSegmentInfo self,
     SseSerializer serializer,
   );
 

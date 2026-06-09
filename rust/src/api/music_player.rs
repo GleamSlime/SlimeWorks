@@ -19,6 +19,8 @@ pub struct Playlist {
     pub created_at: i64,
     pub updated_at: i64,
     pub is_default: bool,
+    /// 所属目录 ID，null 表示根级
+    pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +76,27 @@ pub struct EqualizerPresetInfo {
     pub is_builtin: bool,
 }
 
+/// 目录节点（最多三级）
+#[derive(Debug, Clone)]
+pub struct FolderInfo {
+    pub id: String,
+    pub name: String,
+    /// 父目录 ID，根级为 None
+    pub parent_id: Option<String>,
+    /// 目录层级：1=根级，2=二级，3=三级
+    pub level: u32,
+    /// 目录封面路径
+    pub cover_path: Option<String>,
+    /// 标签（逗号分隔）
+    pub tags: Option<String>,
+    /// 作者/演唱者
+    pub author: Option<String>,
+    /// 目录下所有音乐的累计播放次数
+    pub play_count: u32,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 // ── 类型转换 ──────────────────────────────────────────────────────────────────
 
 fn convert_playlist(p: music_player::Playlist) -> Playlist {
@@ -85,6 +108,7 @@ fn convert_playlist(p: music_player::Playlist) -> Playlist {
         created_at: p.created_at.timestamp(),
         updated_at: p.updated_at.timestamp(),
         is_default: p.is_default,
+        folder_id: p.folder_id,
     }
 }
 
@@ -124,6 +148,21 @@ fn convert_eq_preset(p: music_player::EqualizerPreset) -> EqualizerPresetInfo {
         name: p.name,
         bands: p.bands,
         is_builtin: p.is_builtin,
+    }
+}
+
+fn convert_folder(f: music_player::Folder) -> FolderInfo {
+    FolderInfo {
+        id: f.id,
+        name: f.name,
+        parent_id: f.parent_id,
+        level: f.level,
+        cover_path: f.cover_path,
+        tags: f.tags,
+        author: f.author,
+        play_count: f.play_count,
+        created_at: f.created_at.timestamp(),
+        updated_at: f.updated_at.timestamp(),
     }
 }
 
@@ -167,6 +206,25 @@ pub fn get_all_playlists() -> anyhow::Result<Vec<Playlist>> {
 pub fn create_playlist(name: String) -> anyhow::Result<Playlist> {
     music_player::create_playlist(name)
         .map(convert_playlist)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 在指定目录下创建播放列表
+#[frb(sync)]
+pub fn create_playlist_in_folder(
+    name: String,
+    folder_id: Option<String>,
+) -> anyhow::Result<Playlist> {
+    music_player::create_playlist_in_folder(name, folder_id)
+        .map(convert_playlist)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 获取指定目录下的播放列表
+#[frb(sync)]
+pub fn get_playlists_by_folder(folder_id: Option<String>) -> anyhow::Result<Vec<Playlist>> {
+    music_player::get_playlists_by_folder(folder_id)
+        .map(|ps| ps.into_iter().map(convert_playlist).collect())
         .map_err(|e| anyhow::anyhow!(e))
 }
 
@@ -334,4 +392,66 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
 /// 批量提取封面（后台调用，不阻塞导入流程）
 pub async fn batch_extract_covers(playlist_id: String) -> anyhow::Result<usize> {
     music_player::batch_extract_covers(playlist_id).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 修复已有音乐条目的缺失元数据（时长、标签等）
+pub async fn repair_missing_metadata(playlist_id: String) -> anyhow::Result<usize> {
+    music_player::repair_missing_metadata(playlist_id).map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 目录 API ───────────────────────────────────────────────────────────────────
+
+/// 获取所有目录
+#[frb(sync)]
+pub fn get_all_folders() -> anyhow::Result<Vec<FolderInfo>> {
+    music_player::get_all_folders()
+        .map(|fs| fs.into_iter().map(convert_folder).collect())
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 获取指定父目录下的子目录
+#[frb(sync)]
+pub fn get_sub_folders(parent_id: Option<String>) -> anyhow::Result<Vec<FolderInfo>> {
+    music_player::get_sub_folders(parent_id)
+        .map(|fs| fs.into_iter().map(convert_folder).collect())
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 创建目录（最多三级）
+#[frb(sync)]
+pub fn create_folder(name: String, parent_id: Option<String>) -> anyhow::Result<FolderInfo> {
+    music_player::create_folder(name, parent_id)
+        .map(convert_folder)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 重命名目录
+#[frb(sync)]
+pub fn rename_folder(folder_id: String, name: String) -> anyhow::Result<bool> {
+    music_player::rename_folder(folder_id, name).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 删除目录（级联删除子目录和关联的播放列表）
+#[frb(sync)]
+pub fn delete_folder(folder_id: String) -> anyhow::Result<bool> {
+    music_player::delete_folder(folder_id).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 更新目录信息（封面、标签、作者等）
+#[frb(sync)]
+pub fn update_folder(
+    folder_id: String,
+    name: Option<String>,
+    cover_path: Option<String>,
+    tags: Option<String>,
+    author: Option<String>,
+) -> anyhow::Result<bool> {
+    music_player::update_folder(folder_id, name, cover_path, tags, author)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 递增目录播放次数
+#[frb(sync)]
+pub fn increment_folder_play_count(folder_id: String) -> anyhow::Result<bool> {
+    music_player::increment_folder_play_count(folder_id).map_err(|e| anyhow::anyhow!(e))
 }

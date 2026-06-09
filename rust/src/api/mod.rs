@@ -18,6 +18,7 @@ pub mod sentry_log; // Sentry日志收集模块
 pub mod simple;
 pub mod system_metrics;
 pub mod websocket; // WebSocket 模块
+pub mod whisper; // Whisper 语音识别模块
 
 // 数据库模块
 pub use db_module::*;
