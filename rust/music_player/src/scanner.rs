@@ -177,7 +177,7 @@ pub fn scan_audio_files(dir_path: &str, playlist_id: &str) -> Result<Vec<MusicIt
 }
 
 /// 查找音频文件对应的 .cue 文件
-fn find_cue_for_audio(audio_path: &str) -> Option<String> {
+pub fn find_cue_for_audio(audio_path: &str) -> Option<String> {
     let audio = Path::new(audio_path);
     let dir = audio.parent()?;
     let stem = audio.file_stem()?.to_str()?;
@@ -343,8 +343,8 @@ mod tests {
         assert_eq!(sheet.tracks.len(), 3);
         assert_eq!(sheet.tracks[0].title, "第一首");
         assert_eq!(sheet.tracks[0].start_ms, 0);
-        assert_eq!(sheet.tracks[1].start_ms, 205400); // 3*60*1000 + 25*1000 + 40*1000/75
-        assert_eq!(sheet.tracks[0].end_ms, Some(205400));
+        assert_eq!(sheet.tracks[1].start_ms, 205533); // 3*60*1000 + 25*1000 + 40*1000/75 ≈ 205533
+        assert_eq!(sheet.tracks[0].end_ms, Some(205533));
         assert_eq!(sheet.tracks[2].end_ms, None);
     }
 
