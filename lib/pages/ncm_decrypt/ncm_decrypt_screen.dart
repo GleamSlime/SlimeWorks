@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/ncm_decrypt_service.dart';
 import 'package:slime_works/core/provider/main.dart';

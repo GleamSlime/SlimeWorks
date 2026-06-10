@@ -2349,8 +2349,6 @@ dependencies = [
  "aes 0.8.4",
  "anyhow",
  "base64 0.22.1",
- "cbc",
- "ctr",
  "serde",
  "serde_json",
  "slime_logger",
