@@ -80,7 +80,8 @@ music_player = { path = "music_player" }
 # NCM 解密模块（独立 crate）
 ncm_decrypt = { path = "ncm_decrypt" }
 
-# Whisper 语音识别模块（独立 crate）
+# Whisper 语音识别模块（仅桌面端，whisper-rs-sys 不支持 Android armv7）
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 whisper_module = { path = "whisper_module" }
 
 [features]
