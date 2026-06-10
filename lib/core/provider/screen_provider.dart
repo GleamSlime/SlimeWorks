@@ -62,6 +62,9 @@ abstract class DesktopScreenProvider {
   /// 全局背景图路径（详情页设置，空字符串表示无背景）
   RxString globalBackgroundPath = ''.obs;
 
+  /// 桌面端沉浸模式（隐藏侧边栏和顶部栏）
+  RxBool desktopImmersiveMode = false.obs;
+
   /// 设置窗口宽度
   void setWidth(double w);
 

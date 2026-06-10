@@ -13,6 +13,7 @@ import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/core/services/ncm_decrypt_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
@@ -66,6 +67,9 @@ void getItInit() {
 
   // 解压服务
   getIt.registerLazySingleton<ExtractService>(() => ExtractService());
+
+  // NCM 解密服务
+  getIt.registerLazySingleton<NcmDecryptService>(() => NcmDecryptService());
 
   // Sentry 设置服务
   getIt.registerLazySingleton<SentrySettingsService>(

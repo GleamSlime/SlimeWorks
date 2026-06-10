@@ -7,6 +7,8 @@ import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
@@ -81,6 +83,16 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   /// 导入状态文本
   final importingStatus = ''.obs;
+
+  // ── 沉浸式播放 ───────────────────────────────────────────────────────────
+  /// 是否进入沉浸式播放全屏
+  final isImmersiveMode = false.obs;
+
+  /// 是否显示歌词面板
+  final showLyricsPanel = false.obs;
+
+  /// 音量（0~100）
+  final volume = 100.obs;
 
   // ── 音频播放器（media_kit） ───────────────────────────────────────────────
   final Player _player = Player(
@@ -214,10 +226,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   /// 创建子目录
   Future<void> createSubFolder(String name) async {
     try {
-      final folder = music_api.createFolder(
-        name: name,
-        parentId: currentFolderId.value,
-      );
+      final folder = music_api.createFolder(name: name, parentId: currentFolderId.value);
       folders.add(folder);
     } catch (e) {
       _logger.info('[播放器] 创建目录失败: $e');
@@ -256,9 +265,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       if (allPlaylists.isEmpty) {
         music_api.ensureDefaultPlaylist();
       }
-      final list = music_api.getPlaylistsByFolder(
-        folderId: currentFolderId.value,
-      );
+      final list = music_api.getPlaylistsByFolder(folderId: currentFolderId.value);
       playlists.value = list;
       if (currentPlaylistId.value == null && playlists.isNotEmpty) {
         await selectPlaylist(playlists.first.id);
@@ -290,14 +297,10 @@ class MusicPlayerViewModel extends BaseViewModel {
     if (!hasMissing) return;
     Future(() async {
       try {
-        final count = await music_api.repairMissingMetadata(
-          playlistId: playlistId,
-        );
+        final count = await music_api.repairMissingMetadata(playlistId: playlistId);
         if (count > BigInt.zero) {
           _logger.info('[播放器] 修复了 ${count.toInt()} 条元数据');
-          currentItems.value = music_api.getPlaylistItems(
-            playlistId: playlistId,
-          );
+          currentItems.value = music_api.getPlaylistItems(playlistId: playlistId);
         }
       } catch (e) {
         _logger.info('[播放器] 修复元数据失败: $e');
@@ -307,15 +310,10 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   Future<void> createPlaylist(String name) async {
     try {
-      music_api.createPlaylistInFolder(
-        name: name,
-        folderId: currentFolderId.value,
-      );
+      music_api.createPlaylistInFolder(name: name, folderId: currentFolderId.value);
       await _loadPlaylists();
       // 选中新创建的列表
-      final newList = music_api.getPlaylistsByFolder(
-        folderId: currentFolderId.value,
-      );
+      final newList = music_api.getPlaylistsByFolder(folderId: currentFolderId.value);
       if (newList.isNotEmpty) {
         await selectPlaylist(newList.last.id);
       }
@@ -338,9 +336,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       music_api.deletePlaylist(playlistId: playlistId);
       await _loadPlaylists();
       if (currentPlaylistId.value == playlistId) {
-        currentPlaylistId.value = playlists.isNotEmpty
-            ? playlists.first.id
-            : null;
+        currentPlaylistId.value = playlists.isNotEmpty ? playlists.first.id : null;
         if (currentPlaylistId.value != null) {
           await selectPlaylist(currentPlaylistId.value!);
         } else {
@@ -360,10 +356,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     isImporting.value = true;
     importingStatus.value = '正在扫描音乐文件...';
     try {
-      await music_api.importMusicFolder(
-        playlistId: pid,
-        folderPath: folderPath,
-      );
+      await music_api.importMusicFolder(playlistId: pid, folderPath: folderPath);
       importingStatus.value = '导入完成，正在刷新列表...';
       await _loadPlaylistItems(pid);
       await _loadPlaylists();
@@ -409,9 +402,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   void _extractCoversInBackground(String playlistId) {
     Future(() async {
       try {
-        final count = await music_api.batchExtractCovers(
-          playlistId: playlistId,
-        );
+        final count = await music_api.batchExtractCovers(playlistId: playlistId);
         if (count > BigInt.zero) {
           importingStatus.value = '已提取 ${count.toInt()} 个封面';
           await _loadPlaylistItems(playlistId);
@@ -478,19 +469,10 @@ class MusicPlayerViewModel extends BaseViewModel {
       final dirName = Directory(folder).path.split(Platform.pathSeparator).last;
       try {
         // 在当前目录下创建子目录
-        final newFolder = music_api.createFolder(
-          name: dirName,
-          parentId: currentFolderId.value,
-        );
+        final newFolder = music_api.createFolder(name: dirName, parentId: currentFolderId.value);
         // 在子目录下创建播放列表并导入
-        final pl = music_api.createPlaylistInFolder(
-          name: dirName,
-          folderId: newFolder.id,
-        );
-        await music_api.importMusicFolder(
-          playlistId: pl.id,
-          folderPath: folder,
-        );
+        final pl = music_api.createPlaylistInFolder(name: dirName, folderId: newFolder.id);
+        await music_api.importMusicFolder(playlistId: pl.id, folderPath: folder);
       } catch (e) {
         _logger.info('[播放器] 拖拽导入文件夹失败: $e');
       }
@@ -621,9 +603,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
     int prev = currentIndex.value - 1;
     if (prev < 0) {
-      prev = playMode.value == PlayerPlayMode.loop
-          ? currentItems.length - 1
-          : 0;
+      prev = playMode.value == PlayerPlayMode.loop ? currentItems.length - 1 : 0;
     }
     playItem(prev);
   }
@@ -675,12 +655,22 @@ class MusicPlayerViewModel extends BaseViewModel {
     try {
       music_api.recordPlay(musicId: musicId);
     } catch (_) {}
+    // 递增当前文件夹的播放次数
+    final folderId = currentFolderId.value;
+    if (folderId != null) {
+      try {
+        music_api.incrementFolderPlayCount(folderId: folderId);
+        // 刷新文件夹数据以更新 playCount
+        await _loadFolders();
+      } catch (_) {}
+    }
   }
 
   // ── 均衡器 ───────────────────────────────────────────────────────────────
 
   Future<void> loadEqPresets() async {
     try {
+      music_api.musicInitializeDb();
       eqPresets.value = music_api.getEqPresets();
     } catch (e) {
       _logger.info('[播放器] 加载均衡器预设失败: $e');
@@ -735,5 +725,32 @@ class MusicPlayerViewModel extends BaseViewModel {
     final min = totalSec ~/ 60;
     final sec = totalSec % 60;
     return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
+  }
+
+  // ── 沉浸式播放 ───────────────────────────────────────────────────────────
+
+  /// 进入沉浸式播放
+  void enterImmersiveMode() {
+    isImmersiveMode.value = true;
+    getIt<DesktopScreenProvider>().desktopImmersiveMode.value = true;
+    // 关闭侧边栏
+    try {
+      Get.find<SidebarController>().closeSidebar();
+    } catch (_) {}
+  }
+
+  /// 退出沉浸式播放
+  void exitImmersiveMode() {
+    isImmersiveMode.value = false;
+    getIt<DesktopScreenProvider>().desktopImmersiveMode.value = false;
+  }
+
+  /// 切换歌词面板
+  void toggleLyricsPanel() => showLyricsPanel.value = !showLyricsPanel.value;
+
+  /// 设置音量
+  Future<void> setVolume(int v) async {
+    volume.value = v.clamp(0, 100);
+    await _player.setVolume(volume.value.toDouble());
   }
 }

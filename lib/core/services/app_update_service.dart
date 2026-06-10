@@ -47,8 +47,8 @@ class AppUpdateService {
 
       final info = await _fetchAppcast();
       if (info == null) {
-        _logger.info('[应用更新] 无法解析 appcast.xml，回退原生检查');
-        await _fallbackNativeCheck(silent: silent);
+        // appcast.xml 解析失败时静默跳过，不回退原生检查（避免 Sparkle 弹出错误弹窗）
+        _logger.info('[应用更新] 无法解析 appcast.xml，跳过检查');
         return;
       }
 
@@ -57,29 +57,17 @@ class AppUpdateService {
 
       if (remoteBuild <= currentBuild) {
         _logger.info('[应用更新] 已是最新版本');
-        // 即使是最新版也设置定时检查，保持后台自动更新能力
-        await autoUpdater.setScheduledCheckInterval(3600);
         return;
       }
 
       updateInfo.value = info;
 
-      if (silent) {
-        // 静默模式：有更新时弹出自定义弹窗，用户点击后走原生下载流程
-        final context = navigatorKey.currentContext;
-        if (context != null && context.mounted) {
-          _showUpdateDialog(context, info);
-        } else {
-          await autoUpdater.checkForUpdates();
-        }
-      } else {
-        final context = navigatorKey.currentContext;
-        if (context != null && context.mounted) {
-          _showUpdateDialog(context, info);
-        } else {
-          await autoUpdater.checkForUpdates();
-        }
+      // 有更新时弹出自定义弹窗，用户点击"立即更新"后走原生下载流程
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        _showUpdateDialog(context, info);
       }
+      // 无 context 时不回退原生检查，避免 Sparkle 弹出错误弹窗
     } catch (e) {
       _logger.error('[应用更新] 检查更新失败: $e');
     } finally {
@@ -98,15 +86,6 @@ class AppUpdateService {
       } catch (_) {
         return false;
       }
-    }
-  }
-
-  Future<void> _fallbackNativeCheck({bool silent = true}) async {
-    try {
-      await autoUpdater.checkForUpdates();
-      await autoUpdater.setScheduledCheckInterval(3600);
-    } catch (e) {
-      _logger.error('[应用更新] 原生检查失败: $e');
     }
   }
 
@@ -212,7 +191,9 @@ class AppUpdateService {
           FilledButton(
             onPressed: () {
               Navigator.of(ctx).pop();
+              // 用户主动触发更新时才调用原生检查，并启用定时检查
               autoUpdater.checkForUpdates();
+              autoUpdater.setScheduledCheckInterval(3600);
             },
             child: Text('立即更新', style: TextStyle(fontSize: m.fontSize13)),
           ),

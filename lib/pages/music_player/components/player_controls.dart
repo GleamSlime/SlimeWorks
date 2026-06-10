@@ -9,7 +9,10 @@ class PlayerControls extends StatelessWidget {
   final MusicPlayerViewModel viewModel;
   final bool compact;
 
-  const PlayerControls({super.key, required this.viewModel, this.compact = false});
+  /// 统一图标颜色（沉浸式页面传白色）
+  final Color? color;
+
+  const PlayerControls({super.key, required this.viewModel, this.compact = false, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +126,7 @@ class PlayerControls extends StatelessWidget {
   }
 
   Widget _buildCompact(BuildContext context) {
+    final iconColor = color ?? Theme.of(context).colorScheme.primary;
     return Obx(() {
       final playing = viewModel.isPlaying.value;
       return Row(
@@ -131,18 +135,20 @@ class PlayerControls extends StatelessWidget {
           IconButton(
             onPressed: viewModel.playPrevious,
             icon: const Icon(Icons.skip_previous_rounded, size: 20),
+            color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.togglePlayPause,
             icon: Icon(
-              playing ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded,
+              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
               size: 28,
-              color: Theme.of(context).colorScheme.primary,
             ),
+            color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.playNext,
             icon: const Icon(Icons.skip_next_rounded, size: 20),
+            color: iconColor,
           ),
         ],
       );

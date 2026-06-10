@@ -133,13 +133,13 @@ class PlaylistSidebar extends StatelessWidget {
                   dense: true,
                   leading: const Icon(Icons.favorite_rounded, size: 18),
                   title: const Text('收藏'),
-                  onTap: () => viewModel.loadFavorites(),
+                  onTap: () => _showFavorites(context),
                 ),
                 ListTile(
                   dense: true,
                   leading: const Icon(Icons.history_rounded, size: 18),
                   title: const Text('最近播放'),
-                  onTap: () => viewModel.loadRecentPlayed(),
+                  onTap: () => _showRecentPlayed(context),
                 ),
                 ListTile(
                   dense: true,
@@ -253,6 +253,226 @@ class PlaylistSidebar extends StatelessWidget {
 
   void _showEqPanel(BuildContext context) {
     showModalBottomSheet(context: context, builder: (ctx) => const EqPanel());
+  }
+
+  /// 显示收藏列表
+  void _showFavorites(BuildContext context) async {
+    await viewModel.loadFavorites();
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppTheme.metrics.kSpace16),
+            ),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace16),
+              Row(
+                children: [
+                  Text('收藏', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  Obx(() => Text(
+                    '${viewModel.favoriteItems.length} 首',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).hintColor,
+                    ),
+                  )),
+                ],
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace12),
+              Obx(() {
+                final items = viewModel.favoriteItems;
+                if (items.isEmpty) {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace32),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.favorite_border_rounded, size: 40, color: Theme.of(context).hintColor),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
+                          Text('暂无收藏', style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).hintColor,
+                          )),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  children: items.map((item) => _MusicListTile(
+                    item: item,
+                    onTap: () {
+                      // 将收藏列表设为当前播放列表并播放
+                      final index = viewModel.currentItems.indexOf(item);
+                      if (index >= 0) {
+                        viewModel.playItem(index);
+                      } else {
+                        // 如果不在当前列表中，直接播放该文件
+                        viewModel.currentItems.value = [item];
+                        viewModel.playItem(0);
+                      }
+                      Navigator.pop(ctx);
+                    },
+                    onFavoriteTap: () => viewModel.toggleFavorite(item.id),
+                  )).toList(),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 显示最近播放列表
+  void _showRecentPlayed(BuildContext context) async {
+    await viewModel.loadRecentPlayed();
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppTheme.metrics.kSpace16),
+            ),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace16),
+              Row(
+                children: [
+                  Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  Obx(() => Text(
+                    '${viewModel.recentRecords.length} 首',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).hintColor,
+                    ),
+                  )),
+                ],
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace12),
+              Obx(() {
+                final records = viewModel.recentRecords;
+                if (records.isEmpty) {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace32),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.history_rounded, size: 40, color: Theme.of(context).hintColor),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
+                          Text('暂无播放记录', style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).hintColor,
+                          )),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  children: records.map((record) {
+                    // 从当前列表中查找歌曲信息
+                    final musicItem = viewModel.currentItems.firstWhereOrNull(
+                      (i) => i.id == record.musicId,
+                    );
+                    final title = musicItem?.title ?? '未知歌曲';
+                    final artist = musicItem?.artist;
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(
+                        Icons.music_note_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                      ),
+                      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: artist != null
+                          ? Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall)
+                          : null,
+                      trailing: Text(
+                        _formatPlayTime(record.playedAt),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).hintColor,
+                        ),
+                      ),
+                      onTap: () {
+                        // 在当前列表中查找并播放
+                        final index = viewModel.currentItems.indexWhere((i) => i.id == record.musicId);
+                        if (index >= 0) {
+                          viewModel.playItem(index);
+                        }
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  }).toList(),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 格式化播放时间
+  String _formatPlayTime(int? timestamp) {
+    if (timestamp == null) return '';
+    try {
+      final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inMinutes < 1) return '刚刚';
+      if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
+      if (diff.inDays < 1) return '${diff.inHours}小时前';
+      if (diff.inDays < 7) return '${diff.inDays}天前';
+      return '${dt.month}/${dt.day}';
+    } catch (_) {
+      return '';
+    }
   }
 }
 
@@ -457,6 +677,46 @@ class _PlaylistTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 收藏列表中的音乐条目
+class _MusicListTile extends StatelessWidget {
+  final music_api.MusicItem item;
+  final VoidCallback onTap;
+  final VoidCallback onFavoriteTap;
+
+  const _MusicListTile({
+    required this.item,
+    required this.onTap,
+    required this.onFavoriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isFav = item.isFavorite;
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        Icons.music_note_rounded,
+        size: 18,
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+      ),
+      title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: item.artist != null
+          ? Text(item.artist!, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall)
+          : null,
+      trailing: IconButton(
+        icon: Icon(
+          isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          size: 18,
+          color: isFav ? Colors.redAccent : null,
+        ),
+        onPressed: onFavoriteTap,
+      ),
+      onTap: onTap,
     );
   }
 }

@@ -6,19 +6,61 @@ import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
 /// 均衡器面板
-class EqPanel extends StatelessWidget {
+class EqPanel extends StatefulWidget {
   const EqPanel({super.key});
+
+  @override
+  State<EqPanel> createState() => _EqPanelState();
+}
+
+class _EqPanelState extends State<EqPanel> {
+  /// 本地管理的频段增益值，不受 Obx 重建影响
+  late List<double> _bands;
+
+  /// 当前选中的预设 ID（本地缓存，用于检测切换）
+  String? _lastPresetId;
+
+  @override
+  void initState() {
+    super.initState();
+    _bands = List.filled(10, 0.0);
+    // 打开面板时加载均衡器预设
+    final viewModel = Get.find<MusicPlayerViewModel>();
+    viewModel.loadEqPresets();
+  }
+
+  /// 从预设同步 bands 到本地状态
+  void _syncBandsFromPreset(music_api.EqualizerPresetInfo? preset) {
+    for (int i = 0; i < 10; i++) {
+      _bands[i] = preset != null && i < preset.bands.length
+          ? preset.bands[i]
+          : 0.0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final viewModel = Get.find<MusicPlayerViewModel>();
+    const freqLabels = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
 
     return Obx(() {
       final presets = viewModel.eqPresets;
       final currentId = viewModel.currentEqPresetId.value;
 
-      // 10 段均衡器频率标签
-      const freqLabels = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
+      // 检测预设切换，从预设同步 bands
+      if (currentId != _lastPresetId) {
+        _lastPresetId = currentId;
+        music_api.EqualizerPresetInfo? currentPreset;
+        if (currentId != null) {
+          for (final p in presets) {
+            if (p.id == currentId) {
+              currentPreset = p;
+              break;
+            }
+          }
+        }
+        _syncBandsFromPreset(currentPreset);
+      }
 
       return Padding(
         padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
@@ -56,36 +98,24 @@ class EqPanel extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: List.generate(10, (i) {
-                  // 获取当前预设的增益值
-                  music_api.EqualizerPresetInfo? currentPreset;
-                  if (currentId != null) {
-                    for (final p in presets) {
-                      if (p.id == currentId) {
-                        currentPreset = p;
-                        break;
-                      }
-                    }
-                  }
-                  final value = currentPreset != null && i < currentPreset.bands.length
-                      ? currentPreset.bands[i]
-                      : 0.0;
-
                   return Column(
                     children: [
                       Text(
-                        '${value > 0 ? "+" : ""}${value.toStringAsFixed(1)}',
+                        '${_bands[i] > 0 ? "+" : ""}${_bands[i].toStringAsFixed(1)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       Expanded(
                         child: RotatedBox(
                           quarterTurns: 3,
                           child: Slider(
-                            value: value.clamp(-12.0, 12.0),
+                            value: _bands[i].clamp(-12.0, 12.0),
                             min: -12,
                             max: 12,
                             divisions: 24,
                             onChanged: (v) {
-                              // 实时调节（暂不保存到预设）
+                              setState(() {
+                                _bands[i] = v;
+                              });
                             },
                           ),
                         ),
@@ -131,7 +161,7 @@ class EqPanel extends StatelessWidget {
             onPressed: () {
               final name = nameController.text.trim();
               if (name.isNotEmpty) {
-                viewModel.saveEqPreset(name, List.filled(10, 0.0));
+                viewModel.saveEqPreset(name, List.from(_bands));
               }
               Navigator.of(ctx).pop();
             },

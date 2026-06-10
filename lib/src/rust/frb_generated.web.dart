@@ -19,6 +19,7 @@ import 'api/media_collection.dart';
 import 'api/module_loader.dart';
 import 'api/module_manager.dart';
 import 'api/music_player.dart';
+import 'api/ncm_decrypt.dart';
 import 'api/novel_reader.dart';
 import 'api/sentry_log.dart';
 import 'api/simple.dart';

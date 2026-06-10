@@ -53,19 +53,26 @@ class _DesktopShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        sidebar,
-        Expanded(
-          child: Column(
-            children: [
-              const DesktopTopBar(),
-              Expanded(child: child),
-            ],
+    return Obx(() {
+      final isImmersive = getIt<DesktopScreenProvider>().desktopImmersiveMode.value;
+      if (isImmersive) {
+        // 沉浸模式：不显示侧边栏和顶部栏
+        return child;
+      }
+      return Row(
+        children: [
+          sidebar,
+          Expanded(
+            child: Column(
+              children: [
+                const DesktopTopBar(),
+                Expanded(child: child),
+              ],
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 }
 
