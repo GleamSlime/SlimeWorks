@@ -294,6 +294,9 @@ abstract class AppRouteData extends GoRouteData {
 
   bool get showInSidebar => sidebarIcon != null;
 
+  /// 是否仅桌面端显示（移动端隐藏侧边栏入口）
+  bool get desktopOnly => false;
+
   Permission? get permission => AppRouteData.routePermission;
 
   static Permission routePermission = Permission.viewDashboard;

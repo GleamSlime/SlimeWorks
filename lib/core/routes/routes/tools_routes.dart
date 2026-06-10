@@ -55,6 +55,9 @@ class SentryLogRoute extends AppRouteData with $SentryLogRoute {
   @override
   String get sidebarGroupId => 'tools';
 
+  @override
+  bool get desktopOnly => true;
+
   static const Permission routePermission = Permission.accessSentryLog;
   @override
   Permission get permission => SentryLogRoute.routePermission;
@@ -80,6 +83,9 @@ class AliyunDdnsRoute extends AppRouteData with $AliyunDdnsRoute {
 
   @override
   String get sidebarGroupId => 'tools';
+
+  @override
+  bool get desktopOnly => true;
 
   @override
   Widget? sidebarStatusWidget(BuildContext context) {
@@ -141,6 +147,9 @@ class ToolsRoute extends AppRouteData with $ToolsRoute {
   @override
   String get sidebarGroupId => 'tools';
 
+  @override
+  bool get desktopOnly => true;
+
   static const Permission routePermission = Permission.accessTools;
 
   @override
@@ -164,6 +173,9 @@ class NcmDecryptRoute extends AppRouteData with $NcmDecryptRoute {
 
   @override
   String get sidebarGroupId => 'tools';
+
+  @override
+  bool get desktopOnly => true;
 
   static const Permission routePermission = Permission.accessTools;
   @override

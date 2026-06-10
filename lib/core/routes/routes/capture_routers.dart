@@ -15,6 +15,9 @@ class CaptureRoute extends AppRouteData with $CaptureRoute {
   @override
   String get sidebarGroupId => 'core';
 
+  @override
+  bool get desktopOnly => true;
+
   static const Permission routePermission = Permission.accessCapture;
 
   @override

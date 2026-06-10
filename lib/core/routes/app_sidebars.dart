@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/routes/role_manager.dart';
@@ -5,6 +7,8 @@ import 'package:slime_works/core/routes/app_routes.dart';
 
 /// 从路由元数据自动生成侧边栏分组
 List<SidebarGroup> buildSidebarGroupsFromRoutes() {
+  final isMobilePlatform = Platform.isAndroid || Platform.isIOS;
+
   final shellRoutes = <AppRouteData>[
     const DashboardRoute(),
     const CaptureRoute(),
@@ -25,6 +29,8 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
   final groupMap = <String, List<AppRouteData>>{};
   for (final route in shellRoutes) {
     if (!route.showInSidebar) continue;
+    // 移动端隐藏仅桌面端可用的模块
+    if (isMobilePlatform && route.desktopOnly) continue;
     final groupId = route.sidebarGroupId ?? 'default';
     groupMap.putIfAbsent(groupId, () => []).add(route);
   }

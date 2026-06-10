@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -16,6 +18,14 @@ class ToolsScreen extends StatefulWidget {
 class _ToolsScreenState extends State<ToolsScreen> {
   @override
   Widget build(BuildContext context) {
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    // 移动端隐藏不支持的工具卡片
+    final cards = <Widget>[
+      if (!isMobile) const ExtractCard(),
+      if (!isMobile) const NcmDecryptCard(),
+      if (!isMobile) const SentryLogCard(),
+    ];
+
     return ScreenChrome(
       data: ScreenChromeData(title: '工具'),
       child: SingleChildScrollView(
@@ -23,7 +33,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
         child: Wrap(
           spacing: AppTheme.metrics.kSpace16,
           runSpacing: AppTheme.metrics.kSpace16,
-          children: const [ExtractCard(), NcmDecryptCard(), SentryLogCard()],
+          children: cards,
         ),
       ),
     );

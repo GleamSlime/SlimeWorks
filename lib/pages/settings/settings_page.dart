@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -29,6 +31,7 @@ class _SettingsPageState extends State<SettingsPage>
   @override
   void initState() {
     super.initState();
+    final isMobile = Platform.isAndroid || Platform.isIOS;
     _tabs = [
       const _SettingsTab(label: '主体设置', content: ThemeSettingsTab()),
       const _SettingsTab(label: '节点设置', content: _NodeSettingsWrapper()),
@@ -40,7 +43,9 @@ class _SettingsPageState extends State<SettingsPage>
         label: '通知设置',
         content: SettingsTabPlaceholder(title: '通知设置'),
       ),
-      const _SettingsTab(label: '工具设置', content: _ToolsSettingsWrapper()),
+      // 移动端隐藏工具设置（解压、阿里云均不可用）
+      if (!isMobile)
+        const _SettingsTab(label: '工具设置', content: _ToolsSettingsWrapper()),
       const _SettingsTab(label: '其他设置', content: _OtherSettingsWrapper()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
@@ -116,36 +121,41 @@ class _OtherSettingsWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    // 移动端隐藏桌面端专属标签页（播放器设置=Whisper、Sentry）
+    final tabs = <Tab>[
+      const Tab(text: '资源库'),
+      const Tab(text: 'Manga'),
+      const Tab(text: '游戏设置'),
+      if (!isMobile) const Tab(text: '播放器设置'),
+      if (!isMobile) const Tab(text: 'Sentry'),
+    ];
+    final children = <Widget>[
+      const _ResourcesSettingsTab(),
+      const MangaSettingsTab(),
+      const GameSettingsTab(),
+      if (!isMobile) const MusicPlayerSettingsTab(),
+      if (!isMobile) const SentrySettingsTab(),
+    ];
+
     return DefaultTabController(
-      length: 5,
+      length: tabs.length,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(
             height: constraints.maxHeight,
-            child: const Column(
-              crossAxisAlignment: .start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TabBar(
                   tabAlignment: TabAlignment.start,
                   isScrollable: true,
-                  tabs: [
-                    Tab(text: '资源库'),
-                    Tab(text: 'Manga'),
-                    Tab(text: '游戏设置'),
-                    Tab(text: '播放器设置'),
-                    Tab(text: 'Sentry'),
-                  ],
+                  tabs: tabs,
                   dividerHeight: 0,
                 ),
                 Expanded(
                   child: TabBarView(
-                    children: [
-                      _ResourcesSettingsTab(),
-                      MangaSettingsTab(),
-                      GameSettingsTab(),
-                      MusicPlayerSettingsTab(),
-                      SentrySettingsTab(),
-                    ],
+                    children: children,
                   ),
                 ),
               ],
@@ -162,27 +172,40 @@ class _ToolsSettingsWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    // 移动端隐藏桌面端专属标签页（解压、阿里云 DDNS）
+    final tabs = <Tab>[
+      if (!isMobile) const Tab(text: '解压设置'),
+      if (!isMobile) const Tab(text: '阿里云'),
+    ];
+    final children = <Widget>[
+      if (!isMobile) const ExtractSettingsTab(),
+      if (!isMobile) const AliyunSettingsTab(),
+    ];
+
+    // 移动端无可用标签页时显示提示
+    if (tabs.isEmpty) {
+      return const Center(child: Text('当前平台无可用工具设置'));
+    }
+
     return DefaultTabController(
-      length: 2,
+      length: tabs.length,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(
             height: constraints.maxHeight,
-            child: const Column(
-              crossAxisAlignment: .start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TabBar(
                   tabAlignment: TabAlignment.start,
                   isScrollable: true,
-                  tabs: [
-                    Tab(text: '解压设置'),
-                    Tab(text: '阿里云'),
-                  ],
+                  tabs: tabs,
                   dividerHeight: 0,
                 ),
                 Expanded(
                   child: TabBarView(
-                    children: [ExtractSettingsTab(), AliyunSettingsTab()],
+                    children: children,
                   ),
                 ),
               ],
