@@ -77,6 +77,9 @@ aliyun_module = { path = "aliyun_module" }
 # 音乐播放器模块（独立 crate）
 music_player = { path = "music_player" }
 
+# NCM 解密模块（独立 crate）
+ncm_decrypt = { path = "ncm_decrypt" }
+
 # Whisper 语音识别模块（独立 crate）
 whisper_module = { path = "whisper_module" }
 
@@ -103,6 +106,7 @@ members = [
   "sentry_log",
   "aliyun_module",
   "music_player",
+  "ncm_decrypt",
   "whisper_module",
   # "ffmpeg_lib",
 ]

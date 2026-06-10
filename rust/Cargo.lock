@@ -2343,6 +2343,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ncm_decrypt"
+version = "0.1.0"
+dependencies = [
+ "aes 0.8.4",
+ "anyhow",
+ "base64 0.22.1",
+ "cbc",
+ "ctr",
+ "serde",
+ "serde_json",
+ "slime_logger",
+ "walkdir",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3101,6 +3116,7 @@ dependencies = [
  "media_collection",
  "module_manager",
  "music_player",
+ "ncm_decrypt",
  "novel_reader",
  "openssl",
  "regex",

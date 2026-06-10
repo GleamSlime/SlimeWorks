@@ -46,6 +46,7 @@ import 'package:slime_works/pages/tools/tools_screen.dart';
 import 'package:slime_works/pages/sentry_log/sentry_log_screen.dart';
 import 'package:slime_works/pages/aliyun_ddns/aliyun_ddns_screen.dart';
 import 'package:slime_works/pages/music_player/music_player_screen.dart';
+import 'package:slime_works/pages/ncm_decrypt/ncm_decrypt_screen.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 
@@ -97,6 +98,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<ToolsRoute>(path: '/tools'),
     TypedGoRoute<SentryLogRoute>(path: '/sentry-log'),
     TypedGoRoute<AliyunDdnsRoute>(path: '/aliyun'),
+    TypedGoRoute<NcmDecryptRoute>(path: '/ncm-decrypt'),
   ],
 )
 class AppShellRouteData extends ShellRouteData {
@@ -140,6 +142,7 @@ class AppRoutes {
       const ToolsRoute(),
       const SentryLogRoute(),
       const AliyunDdnsRoute(),
+      const NcmDecryptRoute(),
 
       const NovelReaderRoute(),
       const MangaComicDetailRoute(comicId: ''),

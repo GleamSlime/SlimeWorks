@@ -3,6 +3,7 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/tools/components/extract_card.dart';
+import 'package:slime_works/pages/tools/components/ncm_decrypt_card.dart';
 import 'package:slime_works/pages/tools/components/sentry_log_card.dart';
 
 class ToolsScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
         child: Wrap(
           spacing: AppTheme.metrics.kSpace16,
           runSpacing: AppTheme.metrics.kSpace16,
-          children: const [ExtractCard(), SentryLogCard()],
+          children: const [ExtractCard(), NcmDecryptCard(), SentryLogCard()],
         ),
       ),
     );

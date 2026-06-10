@@ -148,3 +148,29 @@ class ToolsRoute extends AppRouteData with $ToolsRoute {
     return AppRoutes.buildPage(context, state, const ToolsScreen());
   }
 }
+
+@TypedGoRoute<NcmDecryptRoute>(path: '/ncm-decrypt')
+class NcmDecryptRoute extends AppRouteData with $NcmDecryptRoute {
+  const NcmDecryptRoute();
+
+  @override
+  String get title => 'NCM解密';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuTools;
+
+  @override
+  String get sidebarGroupId => 'tools';
+
+  static const Permission routePermission = Permission.accessTools;
+  @override
+  Permission get permission => NcmDecryptRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const NcmDecryptScreen());
+  }
+}
