@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-whisper-rs = "0.16"
+whisper-rs = { version = "0.16", features = ["vulkan"] }
 symphonia = { version = "0.5", features = ["mp3", "flac", "aac", "ogg", "wav", "isomp4"] }
 slime_logger = { path = "../slime_logger" }
 db_module = { path = "../db_module" }

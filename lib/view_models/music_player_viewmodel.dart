@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
@@ -129,12 +130,19 @@ class MusicPlayerViewModel extends BaseViewModel {
   StreamSubscription? _completedSub;
   bool _playerReady = false;
 
+  // ── 播放进度持久化 ─────────────────────────────────────────────────────
+  static const _keyLastItemId = 'music_player_last_item_id';
+  static const _keyLastPosition = 'music_player_last_position_ms';
+  static const _keyLastPlaylistId = 'music_player_last_playlist_id';
+  Timer? _savePositionTimer;
+
   @override
   void onInit() {
     super.onInit();
     _initPlayer();
     _loadFolders();
     _loadPlaylists();
+    _restorePlaybackPosition();
   }
 
   void _initPlayer() {
@@ -162,6 +170,11 @@ class MusicPlayerViewModel extends BaseViewModel {
         _onPlaybackCompleted();
       }
     });
+
+    // 每 5 秒保存一次播放进度
+    _savePositionTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _savePlaybackPosition();
+    });
   }
 
   /// 播放完毕回调
@@ -188,8 +201,81 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
   }
 
+  // ── 播放进度持久化方法 ──────────────────────────────────────────────────
+
+  /// 保存当前播放进度到 SharedPreferences
+  void _savePlaybackPosition() {
+    if (currentIndex.value < 0 || currentItems.isEmpty) return;
+    final item = currentItems[currentIndex.value];
+    final positionMs = currentPositionMs.value;
+    final durationMs = this.durationMs.value;
+    // 如果播放进度超过 95%，视为已播完，下次从头开始
+    final savePos = (durationMs > 0 && positionMs > durationMs * 0.95) ? 0 : positionMs;
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString(_keyLastItemId, item.id);
+      prefs.setInt(_keyLastPosition, savePos);
+      prefs.setString(_keyLastPlaylistId, currentPlaylistId.value ?? '');
+    });
+  }
+
+  /// 从 SharedPreferences 恢复上次播放进度
+  Future<void> _restorePlaybackPosition() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastItemId = prefs.getString(_keyLastItemId);
+      final lastPosition = prefs.getInt(_keyLastPosition) ?? 0;
+      final lastPlaylistId = prefs.getString(_keyLastPlaylistId);
+
+      if (lastItemId == null || lastItemId.isEmpty) return;
+
+      // 等待播放列表加载完成
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // 如果有上次的播放列表，先切换到该列表
+      if (lastPlaylistId != null && lastPlaylistId.isNotEmpty) {
+        final playlist = playlists.firstWhereOrNull((p) => p.id == lastPlaylistId);
+        if (playlist != null) {
+          await _loadPlaylistItems(lastPlaylistId);
+        }
+      }
+
+      // 在当前列表中找到上次的歌曲
+      final idx = currentItems.indexWhere((item) => item.id == lastItemId);
+      if (idx >= 0) {
+        currentIndex.value = idx;
+        final item = currentItems[idx];
+        currentTitle.value = item.title;
+        currentArtist.value = item.artist;
+        currentAlbum.value = item.album;
+        currentCoverPath.value = item.coverPath;
+        durationMs.value = item.durationMs != null ? item.durationMs!.toInt() : 0;
+        _loadLyrics(item.filePath);
+        _loadWaveform(item.filePath);
+
+        // 打开音频但不自动播放
+        final uri = item.filePath.startsWith('http')
+            ? item.filePath
+            : Uri.file(item.filePath).toString();
+        await _player.open(Media(uri));
+        _playerReady = true;
+
+        // 恢复播放进度
+        if (lastPosition > 0) {
+          await _player.seek(Duration(milliseconds: lastPosition));
+        }
+        // 暂停，等待用户手动播放
+        await _player.pause();
+        _logger.info('[播放器] 恢复上次播放: ${item.title}, 进度: ${lastPosition}ms');
+      }
+    } catch (e) {
+      _logger.info('[播放器] 恢复播放进度失败: $e');
+    }
+  }
+
   @override
   void onClose() {
+    _savePlaybackPosition();
+    _savePositionTimer?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();
