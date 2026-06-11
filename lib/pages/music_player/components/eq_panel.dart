@@ -86,6 +86,8 @@ class _EqPanelState extends State<EqPanel> {
                       selected: isSelected,
                       onSelected: (_) {
                         viewModel.currentEqPresetId.value = preset.id;
+                        // 应用预设到播放器
+                        viewModel.applyEqBands(preset.bands.map((e) => e.toDouble()).toList());
                       },
                     );
                   },
@@ -116,6 +118,8 @@ class _EqPanelState extends State<EqPanel> {
                               setState(() {
                                 _bands[i] = v;
                               });
+                              // 实时应用均衡器
+                              viewModel.applyEqBands(List.from(_bands));
                             },
                           ),
                         ),

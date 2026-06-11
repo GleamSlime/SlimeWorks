@@ -714,6 +714,29 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
   }
 
+  /// 应用均衡器频段增益到播放器
+  /// 通过 mpv 的 af 属性设置 equalizer 滤镜
+  Future<void> applyEqBands(List<double> bands) async {
+    try {
+      // 构建 mpv equalizer 滤镜字符串
+      const frequencies = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+      final parts = <String>[];
+      for (int i = 0; i < 10 && i < bands.length; i++) {
+        if (bands[i] != 0.0) {
+          parts.add('equalizer=f=${frequencies[i]}:t=o:w=50:g=${bands[i].toStringAsFixed(1)}');
+        }
+      }
+      final afValue = parts.isEmpty ? '' : parts.join(',');
+      final nativePlayer = _player.platform;
+      if (nativePlayer is NativePlayer) {
+        await nativePlayer.setProperty('af', afValue);
+      }
+      _logger.info('[播放器] 应用均衡器: af=$afValue');
+    } catch (e) {
+      _logger.info('[播放器] 应用均衡器失败: $e');
+    }
+  }
+
   // ── 搜索 ─────────────────────────────────────────────────────────────────
 
   List<music_api.MusicItem> get filteredItems {
