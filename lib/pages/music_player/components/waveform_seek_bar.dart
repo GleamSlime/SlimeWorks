@@ -70,7 +70,9 @@ class WaveformSeekBar extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final totalBars = waveform.length;
-        final barWidth = (width - (totalBars - 1) * barGap) / totalBars;
+        // 根据采样点数量自适应间距：采样点多时间距缩小
+        final adaptiveGap = totalBars > 500 ? 0.5 : (totalBars > 200 ? 1.0 : barGap);
+        final barWidth = (width - (totalBars - 1) * adaptiveGap) / totalBars;
 
         return MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -88,9 +90,9 @@ class WaveformSeekBar extends StatelessWidget {
               progress: progress,
               activeColor: activeColor,
               inactiveColor: inactiveColor,
-              barWidth: barWidth.clamp(1.0, 8.0),
-              barGap: barGap,
-              barRadius: barRadius,
+              barWidth: barWidth.clamp(0.5, 8.0),
+              barGap: adaptiveGap,
+              barRadius: barRadius.clamp(0.0, barWidth / 2),
             ),
           ),
         ),
