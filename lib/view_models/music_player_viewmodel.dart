@@ -10,6 +10,9 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/ollama/ollama_models.dart';
+import 'package:slime_works/core/services/ollama/ollama_service.dart';
+import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
@@ -109,6 +112,12 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   /// 音量（0~100）
   final volume = 100.obs;
+
+  /// 是否正在翻译歌词
+  final isTranslatingLyrics = false.obs;
+
+  /// 翻译后的歌词（与 currentLyrics 一一对应，null 表示未翻译）
+  final translatedLyrics = <String?>[].obs;
 
   // ── 音频播放器（media_kit） ───────────────────────────────────────────────
   final Player _player = Player(
@@ -792,7 +801,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       try {
         final data = await music_api.extractWaveform(
           audioFilePath: audioFilePath,
-          samples: 200,
+          samples: 1000,
         );
         currentWaveform.value = data.toList();
         _logger.info('[播放器] 加载波形: ${data.length} 个采样点');
@@ -808,6 +817,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   void _loadLyrics(String audioFilePath) {
     currentLyrics.clear();
     currentLyricIndex.value = -1;
+    translatedLyrics.clear();
     try {
       // CUE 文件与音频文件同名但扩展名为 .cue
       final cuePath = audioFilePath.replaceFirst(RegExp(r'\.[^.]+$'), '.cue');
@@ -841,6 +851,70 @@ class MusicPlayerViewModel extends BaseViewModel {
   Future<void> setVolume(int v) async {
     volume.value = v.clamp(0, 100);
     await _player.setVolume(volume.value.toDouble());
+  }
+
+  // ── 歌词翻译 ─────────────────────────────────────────────────────────────
+
+  /// 翻译歌词（使用 Ollama 服务）
+  Future<void> translateLyrics() async {
+    if (currentLyrics.isEmpty || isTranslatingLyrics.value) return;
+
+    // 如果已有翻译，则清除（切换回原文）
+    if (translatedLyrics.isNotEmpty && translatedLyrics.any((t) => t != null)) {
+      translatedLyrics.clear();
+      return;
+    }
+
+    isTranslatingLyrics.value = true;
+    translatedLyrics.value = List.filled(currentLyrics.length, null);
+
+    try {
+      final ollamaService = getIt.get<OllamaService>();
+      final settingsService = getIt.get<OllamaSettingsService>();
+
+      // 确保服务器可用
+      final server = ollamaService.currentServer ?? await ollamaService.findAvailableServer();
+      if (server == null) {
+        _logger.info('[播放器] 翻译歌词失败: 没有可用的 Ollama 服务器');
+        isTranslatingLyrics.value = false;
+        return;
+      }
+
+      final model = settingsService.defaultModel.value;
+      if (model.isEmpty) {
+        _logger.info('[播放器] 翻译歌词失败: 未设置默认翻译模型');
+        isTranslatingLyrics.value = false;
+        return;
+      }
+
+      final languagePair = TranslationLanguagePair(
+        from: '日文',
+        to: '中文',
+        displayName: '日文 → 中文',
+      );
+
+      // 批量翻译歌词标题
+      final titles = currentLyrics.map((t) => t.title).toList();
+      final translated = await ollamaService.translateBatch(
+        model: model,
+        paragraphs: titles,
+        languagePair: languagePair,
+        onProgress: (current, total) {
+          _logger.info('[播放器] 翻译进度: $current/$total');
+        },
+      );
+
+      // 更新翻译结果
+      for (int i = 0; i < translated.length && i < currentLyrics.length; i++) {
+        translatedLyrics[i] = translated[i];
+      }
+      translatedLyrics.refresh();
+      _logger.info('[播放器] 歌词翻译完成');
+    } catch (e) {
+      _logger.info('[播放器] 翻译歌词失败: $e');
+    } finally {
+      isTranslatingLyrics.value = false;
+    }
   }
 
   // ── 语音识别 ─────────────────────────────────────────────────────────────

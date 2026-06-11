@@ -433,7 +433,7 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// 音量滑块
+/// 音量滑块（沉浸式播放器内使用）
 class _VolumeSlider extends StatelessWidget {
   final MusicPlayerViewModel viewModel;
   const _VolumeSlider({required this.viewModel});
@@ -456,6 +456,27 @@ class _VolumeSlider extends StatelessWidget {
               size: 24,
             ),
             color: Colors.white.withValues(alpha: 0.7),
+          ),
+          // 音量滑块
+          SizedBox(
+            width: 100,
+            height: 16,
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 2,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                activeTrackColor: Colors.white.withValues(alpha: 0.9),
+                inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                thumbColor: Colors.white,
+              ),
+              child: Slider(
+                value: vol.toDouble(),
+                min: 0,
+                max: 100,
+                onChanged: (v) => viewModel.setVolume(v.toInt()),
+              ),
+            ),
           ),
           Text(
             '音量',
@@ -642,6 +663,9 @@ class _LyricsPanelState extends State<_LyricsPanel> {
     return Obx(() {
       final lyrics = widget.viewModel.currentLyrics;
       final currentIndex = widget.viewModel.currentLyricIndex.value;
+      final translatedLyrics = widget.viewModel.translatedLyrics;
+      final isTranslating = widget.viewModel.isTranslatingLyrics.value;
+      final hasTranslation = translatedLyrics.isNotEmpty && translatedLyrics.any((t) => t != null);
 
       // 当高亮索引变化时自动滚动
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -659,37 +683,97 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         );
       }
 
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
-        child: ListView.builder(
-          controller: _scrollController,
-          padding: EdgeInsets.symmetric(
-            vertical: MediaQuery.of(context).size.height * 0.25,
-          ),
-          itemCount: lyrics.length,
-          itemExtent: 48,
-          itemBuilder: (context, index) {
-            final isCurrent = index == currentIndex;
-            final track = lyrics[index];
-            return GestureDetector(
-              onTap: () => widget.viewModel.seekTo(track.startMs.toInt()),
-              child: Center(
-                child: Text(
-                  track.title,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: isCurrent
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: 0.4),
-                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                    fontSize: isCurrent ? 18 : 15,
+      return Column(
+        children: [
+          // 翻译按钮
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace24,
+              vertical: AppTheme.metrics.kSpace4,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (isTranslating)
+                  Padding(
+                    padding: EdgeInsets.only(right: AppTheme.metrics.kSpace8),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                TextButton.icon(
+                  onPressed: isTranslating ? null : widget.viewModel.translateLyrics,
+                  icon: Icon(
+                    hasTranslation ? Icons.translate_rounded : Icons.translate_rounded,
+                    size: 16,
+                    color: hasTranslation
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.white.withValues(alpha: 0.7),
+                  ),
+                  label: Text(
+                    hasTranslation ? '显示原文' : '翻译为中文',
+                    style: TextStyle(
+                      color: hasTranslation
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.white.withValues(alpha: 0.7),
+                      fontSize: AppTheme.metrics.fontSize12,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppTheme.metrics.kSpace8,
+                      vertical: AppTheme.metrics.kSpace2,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
+              ],
+            ),
+          ),
+          // 歌词列表
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: EdgeInsets.symmetric(
+                  vertical: MediaQuery.of(context).size.height * 0.15,
+                ),
+                itemCount: lyrics.length,
+                itemExtent: 48,
+                itemBuilder: (context, index) {
+                  final isCurrent = index == currentIndex;
+                  final track = lyrics[index];
+                  final translated = index < translatedLyrics.length ? translatedLyrics[index] : null;
+                  final displayText = (hasTranslation && translated != null) ? translated : track.title;
+                  return GestureDetector(
+                    onTap: () => widget.viewModel.seekTo(track.startMs.toInt()),
+                    child: Center(
+                      child: Text(
+                        displayText,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: isCurrent
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.4),
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          fontSize: isCurrent ? 18 : 15,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
+            ),
+          ),
+        ],
       );
     });
   }

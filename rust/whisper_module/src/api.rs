@@ -191,6 +191,14 @@ pub fn delete_model(preset_name: String) -> Result<bool, String> {
 
 /// 初始化 whisper 配置表
 pub fn initialize_whisper_db() -> Result<(), String> {
+    // 确保数据库实例已初始化（与 music_player 共用同一数据库）
+    let db_path = {
+        let app_data = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+        let dir = std::path::Path::new(&app_data).join("SlimeWorks");
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join("music_player.db").to_string_lossy().into_owned()
+    };
+    let _ = db_module::db_init(db_path);
     db_module::db_register_table("whisper_config".to_string()).map_err(|e: String| e)?;
     Ok(())
 }
@@ -255,10 +263,7 @@ fn transcribe_with_whisper(
         .map_err(|e| format!("加载 Whisper 模型失败: {}", e))?;
 
     // 创建参数
-    let mut params = FullParams::new(SamplingStrategy::BeamSearch {
-        beam_size: 5,
-        patience: -1.0,
-    });
+    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
     // 设置语言
     if let Some(lang) = language {
@@ -271,6 +276,21 @@ fn transcribe_with_whisper(
     params.set_print_timestamps(false);
     params.set_single_segment(false);
     params.set_no_timestamps(false);
+
+    // 防重复参数
+    params.set_suppress_blank(true); // 抑制空白输出
+    params.set_no_speech_thold(0.6); // 跳过静音段
+
+    // 设置初始提示词，帮助模型理解上下文，减少重复
+    if let Some(ref lang) = language {
+        match &**lang {
+            "ja" => params.set_initial_prompt("以下是日语的语音内容。"),
+            "zh" => params.set_initial_prompt("以下是中文的语音内容。"),
+            "en" => params.set_initial_prompt("The following is English speech content."),
+            "ko" => params.set_initial_prompt("다음은 한국어 음성 콘텐츠입니다."),
+            _ => {}
+        }
+    }
 
     // 设置进度回调，将进度写入全局原子变量
     params.set_progress_callback_safe(move |progress: i32| {

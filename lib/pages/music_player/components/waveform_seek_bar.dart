@@ -72,7 +72,9 @@ class WaveformSeekBar extends StatelessWidget {
         final totalBars = waveform.length;
         final barWidth = (width - (totalBars - 1) * barGap) / totalBars;
 
-        return GestureDetector(
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
           onHorizontalDragUpdate: (details) {
             _handleSeek(details.localPosition.dx, width);
           },
@@ -91,6 +93,7 @@ class WaveformSeekBar extends StatelessWidget {
               barRadius: barRadius,
             ),
           ),
+        ),
         );
       },
     );

@@ -163,6 +163,8 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
 
   void _selectModel(String presetName) {
     try {
+      // 确保数据库表已注册
+      whisper_api.whisperInitialize();
       final result = whisper_api.whisperSetSelectedModel(presetName: presetName);
       if (result) {
         setState(() => _selectedModel = presetName);
