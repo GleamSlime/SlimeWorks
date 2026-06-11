@@ -5542,16 +5542,15 @@ fn wire__crate__api__capture__is_proxy_running_impl(
     )
 }
 fn wire__crate__api__capture__is_running_as_administrator_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "is_running_as_administrator",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -5564,13 +5563,11 @@ fn wire__crate__api__capture__is_running_as_administrator_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::capture::is_running_as_administrator())?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::capture::is_running_as_administrator())?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -12577,6 +12574,7 @@ impl SseDecode for crate::api::music_player::MusicItem {
         let mut var_modifiedAt = <i64>::sse_decode(deserializer);
         let mut var_order = <i32>::sse_decode(deserializer);
         let mut var_isFavorite = <bool>::sse_decode(deserializer);
+        let mut var_hasCue = <bool>::sse_decode(deserializer);
         return crate::api::music_player::MusicItem {
             id: var_id,
             playlist_id: var_playlistId,
@@ -12594,6 +12592,7 @@ impl SseDecode for crate::api::music_player::MusicItem {
             modified_at: var_modifiedAt,
             order: var_order,
             is_favorite: var_isFavorite,
+            has_cue: var_hasCue,
         };
     }
 }
@@ -13417,12 +13416,6 @@ fn pde_ffi_dispatcher_primary_impl(
         157 => {
             wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len)
         }
-        160 => wire__crate__api__capture__is_running_as_administrator_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         162 => wire__crate__api__lan_transfer__lan_transfer_accept_impl(
             port,
             ptr,
@@ -14030,6 +14023,9 @@ fn pde_ffi_dispatcher_sync_impl(
             wire__crate__api__http_bridge__is_node_server_running_impl(ptr, rust_vec_len, data_len)
         }
         159 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
+        160 => {
+            wire__crate__api__capture__is_running_as_administrator_impl(ptr, rust_vec_len, data_len)
+        }
         161 => wire__crate__api__media_collection__kill_all_ffmpeg_processes_impl(
             ptr,
             rust_vec_len,
@@ -14747,6 +14743,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::music_player::MusicItem {
             self.modified_at.into_into_dart().into_dart(),
             self.order.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
+            self.has_cue.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15912,6 +15909,7 @@ impl SseEncode for crate::api::music_player::MusicItem {
         <i64>::sse_encode(self.modified_at, serializer);
         <i32>::sse_encode(self.order, serializer);
         <bool>::sse_encode(self.is_favorite, serializer);
+        <bool>::sse_encode(self.has_cue, serializer);
     }
 }
 

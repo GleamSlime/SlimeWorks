@@ -68,6 +68,9 @@ pub struct MusicItem {
     pub modified_at: DateTime<Utc>,
     pub order: i32,
     pub is_favorite: bool,
+    /// 是否有对应的 .cue 文件
+    #[serde(default)]
+    pub has_cue: bool,
 }
 
 /// CUE 音轨信息（从 .cue 文件解析）

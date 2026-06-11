@@ -48,6 +48,19 @@ class MusicListItem extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // CUE 文件标识
+          if (item.hasCue)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: '有 CUE 歌词',
+                child: Icon(
+                  Icons.subtitles_rounded,
+                  size: 14,
+                  color: Theme.of(context).hintColor,
+                ),
+              ),
+            ),
           // 播放指示器
           if (isCurrent && isPlaying)
             SizedBox(

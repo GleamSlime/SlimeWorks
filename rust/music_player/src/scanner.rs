@@ -139,7 +139,8 @@ pub fn scan_audio_files(dir_path: &str, playlist_id: &str) -> Result<Vec<MusicIt
         let file_path_str = file_path.to_string_lossy().to_string();
 
         // 尝试从同级目录查找 .cue 文件
-        let _cue_path = find_cue_for_audio(&file_path_str);
+        let cue_path = find_cue_for_audio(&file_path_str);
+        let has_cue = cue_path.is_some();
 
         // 尝试提取封面（同目录下的 cover.jpg / folder.jpg 等）
         let cover_path = find_cover_for_audio(file_path);
@@ -164,6 +165,7 @@ pub fn scan_audio_files(dir_path: &str, playlist_id: &str) -> Result<Vec<MusicIt
             modified_at,
             order,
             is_favorite: false,
+            has_cue,
         };
         order += 1;
         items.push(item);

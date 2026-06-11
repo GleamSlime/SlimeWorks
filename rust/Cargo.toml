@@ -86,6 +86,11 @@ whisper_module = { path = "whisper_module" }
 
 [features]
 default = []
+# Whisper GPU 加速（需要安装对应 SDK）
+# Vulkan: 安装 Vulkan SDK 并设置 VULKAN_SDK 环境变量
+# CUDA: 安装 NVIDIA CUDA Toolkit
+whisper-vulkan = ["whisper_module/vulkan"]
+whisper-cuda = ["whisper_module/cuda"]
 # ffmpeg = ["ffmpeg_lib"]
 
 [profile.release]

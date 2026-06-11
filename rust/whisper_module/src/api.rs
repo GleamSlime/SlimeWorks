@@ -257,8 +257,9 @@ fn transcribe_with_whisper(
 ) -> Result<TranscriptionResult, String> {
     use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-    // 创建上下文
-    let ctx_params = WhisperContextParameters::default();
+    // 创建上下文（启用 GPU 加速）
+    let mut ctx_params = WhisperContextParameters::default();
+    ctx_params.use_gpu = true;
     let ctx = WhisperContext::new_with_params(model_path, ctx_params)
         .map_err(|e| format!("加载 Whisper 模型失败: {}", e))?;
 

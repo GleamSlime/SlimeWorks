@@ -410,6 +410,9 @@ class MusicItem {
   final int order;
   final bool isFavorite;
 
+  /// 是否有对应的 .cue 文件
+  final bool hasCue;
+
   const MusicItem({
     required this.id,
     required this.playlistId,
@@ -427,6 +430,7 @@ class MusicItem {
     required this.modifiedAt,
     required this.order,
     required this.isFavorite,
+    required this.hasCue,
   });
 
   @override
@@ -446,7 +450,8 @@ class MusicItem {
       fileSize.hashCode ^
       modifiedAt.hashCode ^
       order.hashCode ^
-      isFavorite.hashCode;
+      isFavorite.hashCode ^
+      hasCue.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -468,7 +473,8 @@ class MusicItem {
           fileSize == other.fileSize &&
           modifiedAt == other.modifiedAt &&
           order == other.order &&
-          isFavorite == other.isFavorite;
+          isFavorite == other.isFavorite &&
+          hasCue == other.hasCue;
 }
 
 class PlayRecordInfo {

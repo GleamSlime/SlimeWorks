@@ -66,9 +66,10 @@ extension MusicPlayerVmRemote on MusicPlayerViewModel {
             modifiedAt: (map['modified_at'] as num?)?.toInt() ?? 0,
             order: map['order'] as int? ?? 0,
             isFavorite: map['is_favorite'] as bool? ?? false,
+            hasCue: map['has_cue'] as bool? ?? false,
           );
         }).toList();
-        currentItems.addAll(remoteItems);
+        currentItems.addAll(remoteItems.cast<music_api.MusicItem>());
       }
     } catch (e) {
       _logger.info('[播放器] 从远程节点获取音乐列表失败: $e');

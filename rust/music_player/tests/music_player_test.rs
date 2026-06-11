@@ -73,6 +73,7 @@ fn test_music_item_serialization() {
         modified_at: chrono::Utc::now(),
         order: 0,
         is_favorite: false,
+        has_cue: false,
     };
 
     let json = serde_json::to_string(&item).expect("序列化失败");

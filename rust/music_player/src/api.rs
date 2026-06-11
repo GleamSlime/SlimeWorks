@@ -357,6 +357,9 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
 
     let cover_path = scanner::find_cover_for_audio(path);
 
+    // 检查是否有 CUE 文件
+    let has_cue = scanner::find_cue_for_audio(&file_path).is_some();
+
     // 提取音频元数据（时长、标签等）
     let audio_meta = scanner::extract_audio_metadata(path);
 
@@ -381,6 +384,7 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
         modified_at: Utc::now(),
         order: max_order + 1,
         is_favorite: false,
+        has_cue,
     };
 
     let _ = db_module::db_register_table(item_table());

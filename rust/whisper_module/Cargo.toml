@@ -3,8 +3,17 @@ name = "whisper_module"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# GPU 加速特性（需要安装对应的 SDK）
+# Vulkan: 需要安装 Vulkan SDK 并设置 VULKAN_SDK 环境变量（跨平台GPU，推荐）
+# CUDA: 需要 NVIDIA CUDA Toolkit（仅NVIDIA GPU）
+# 启用方式: cargo build --features vulkan 或 cargo build --features cuda
+default = []
+vulkan = ["whisper-rs/vulkan"]
+cuda = ["whisper-rs/cuda"]
+
 [dependencies]
-whisper-rs = { version = "0.16", features = ["vulkan"] }
+whisper-rs = "0.16"
 symphonia = { version = "0.5", features = ["mp3", "flac", "aac", "ogg", "wav", "isomp4"] }
 slime_logger = { path = "../slime_logger" }
 db_module = { path = "../db_module" }

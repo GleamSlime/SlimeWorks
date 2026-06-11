@@ -616,7 +616,7 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiCaptureIsProxyRunning({String? installDir});
 
-  Future<bool> crateApiCaptureIsRunningAsAdministrator();
+  bool crateApiCaptureIsRunningAsAdministrator();
 
   void crateApiMediaCollectionKillAllFfmpegProcesses();
 
@@ -5990,17 +5990,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<bool> crateApiCaptureIsRunningAsAdministrator() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
+  bool crateApiCaptureIsRunningAsAdministrator() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
+          return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 160,
-            port: port_,
-          );
+          )!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -11910,8 +11909,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MusicItem dco_decode_music_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
     return MusicItem(
       id: dco_decode_String(arr[0]),
       playlistId: dco_decode_String(arr[1]),
@@ -11929,6 +11928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       modifiedAt: dco_decode_i_64(arr[13]),
       order: dco_decode_i_32(arr[14]),
       isFavorite: dco_decode_bool(arr[15]),
+      hasCue: dco_decode_bool(arr[16]),
     );
   }
 
@@ -13381,6 +13381,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_modifiedAt = sse_decode_i_64(deserializer);
     var var_order = sse_decode_i_32(deserializer);
     var var_isFavorite = sse_decode_bool(deserializer);
+    var var_hasCue = sse_decode_bool(deserializer);
     return MusicItem(
       id: var_id,
       playlistId: var_playlistId,
@@ -13398,6 +13399,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       modifiedAt: var_modifiedAt,
       order: var_order,
       isFavorite: var_isFavorite,
+      hasCue: var_hasCue,
     );
   }
 
@@ -14845,6 +14847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.modifiedAt, serializer);
     sse_encode_i_32(self.order, serializer);
     sse_encode_bool(self.isFavorite, serializer);
+    sse_encode_bool(self.hasCue, serializer);
   }
 
   @protected

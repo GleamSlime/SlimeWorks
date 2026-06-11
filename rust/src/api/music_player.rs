@@ -41,6 +41,8 @@ pub struct MusicItem {
     pub modified_at: i64,
     pub order: i32,
     pub is_favorite: bool,
+    /// 是否有对应的 .cue 文件
+    pub has_cue: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +132,7 @@ fn convert_item(i: music_player::MusicItem) -> MusicItem {
         modified_at: i.modified_at.timestamp(),
         order: i.order,
         is_favorite: i.is_favorite,
+        has_cue: i.has_cue,
     }
 }
 
