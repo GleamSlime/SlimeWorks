@@ -12,6 +12,7 @@ class MusicListItem extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onFavoriteTap;
   final VoidCallback onDeleteTap;
+  final VoidCallback? onTranscribeTap;
 
   const MusicListItem({
     super.key,
@@ -21,6 +22,7 @@ class MusicListItem extends StatelessWidget {
     required this.onTap,
     required this.onFavoriteTap,
     required this.onDeleteTap,
+    this.onTranscribeTap,
   });
 
   @override
@@ -76,9 +78,15 @@ class MusicListItem extends StatelessWidget {
                 case 'delete':
                   onDeleteTap();
                   break;
+                case 'transcribe':
+                  onTranscribeTap?.call();
+                  break;
               }
             },
-            itemBuilder: (ctx) => [const PopupMenuItem(value: 'delete', child: Text('删除'))],
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(value: 'transcribe', child: Text('语音识别')),
+              const PopupMenuItem(value: 'delete', child: Text('删除')),
+            ],
           ),
         ],
       ),

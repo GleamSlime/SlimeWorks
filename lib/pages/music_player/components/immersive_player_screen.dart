@@ -9,6 +9,7 @@ import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 import 'package:slime_works/pages/music_player/components/vinyl_disc_animation.dart';
 import 'package:slime_works/pages/music_player/components/player_controls.dart';
+import 'package:slime_works/pages/music_player/components/waveform_seek_bar.dart';
 
 /// 沉浸式播放器页面（全屏唱片机）
 ///
@@ -84,32 +85,39 @@ class ImmersivePlayerScreen extends StatelessWidget {
     );
   }
 
-  /// 中间唱片机区域（白色背景）
+  /// 中间唱片机区域（白色背景）或歌词面板
   Widget _buildVinylArea(BuildContext context, String? coverPath, bool playing) {
-    return Center(
-      child: Container(
-        width: 320,
-        height: 320,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+    return Obx(() {
+      final showLyrics = viewModel.showLyricsPanel.value;
+      if (showLyrics && viewModel.currentLyrics.isNotEmpty) {
+        return _LyricsPanel(viewModel: viewModel);
+      }
+      // 默认显示唱片机
+      return Center(
+        child: Container(
+          width: 320,
+          height: 320,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Center(
+            child: VinylDiscAnimation(
+              coverPath: coverPath,
+              isPlaying: playing,
+              size: 260,
             ),
-          ],
-        ),
-        child: Center(
-          child: VinylDiscAnimation(
-            coverPath: coverPath,
-            isPlaying: playing,
-            size: 260,
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   /// 底部信息 + 控制区
@@ -158,26 +166,32 @@ class ImmersivePlayerScreen extends StatelessWidget {
     );
   }
 
-  /// 进度条
+  /// 进度条（普通模式或波形模式）
   Widget _buildProgressBar(BuildContext context) {
     return Obx(() {
       final position = viewModel.currentPositionMs.value;
       final duration = viewModel.durationMs.value;
+      final showWaveform = viewModel.showWaveformMode.value;
+      final waveform = viewModel.currentWaveform;
+      final isLoading = viewModel.isWaveformLoading.value;
 
-      return Row(
+      return Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 48,
-            child: Text(
-              viewModel.formatDuration(position),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            child: SliderTheme(
+          if (showWaveform && (waveform.isNotEmpty || isLoading))
+            // 波形进度模式
+            WaveformSeekBar(
+              waveform: waveform,
+              positionMs: position,
+              durationMs: duration,
+              onSeek: viewModel.seekTo,
+              activeColor: Colors.white.withValues(alpha: 0.9),
+              inactiveColor: Colors.white.withValues(alpha: 0.3),
+              isLoading: isLoading,
+            )
+          else
+            // 普通进度条
+            SliderTheme(
               data: SliderThemeData(
                 trackHeight: 3,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
@@ -193,16 +207,24 @@ class ImmersivePlayerScreen extends StatelessWidget {
                 onChanged: (v) => viewModel.seekTo(v.toInt()),
               ),
             ),
-          ),
-          SizedBox(
-            width: 48,
-            child: Text(
-              viewModel.formatDuration(duration),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.7),
+          SizedBox(height: 4),
+          // 时间显示
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                viewModel.formatDuration(position),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
+              Text(
+                viewModel.formatDuration(duration),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -242,6 +264,13 @@ class ImmersivePlayerScreen extends StatelessWidget {
           label: '歌词',
           active: viewModel.showLyricsPanel.value,
           onTap: viewModel.toggleLyricsPanel,
+        )),
+        // 波形进度
+        Obx(() => _ActionButton(
+          icon: Icons.graphic_eq_rounded,
+          label: '波形',
+          active: viewModel.showWaveformMode.value,
+          onTap: viewModel.toggleWaveformMode,
         )),
         // 均衡器
         _ActionButton(
@@ -572,6 +601,95 @@ class _EqSlidersState extends State<_EqSliders> {
             ),
           ),
         ],
+      );
+    });
+  }
+}
+
+/// 歌词面板（沉浸式播放器内使用）
+class _LyricsPanel extends StatefulWidget {
+  final MusicPlayerViewModel viewModel;
+  const _LyricsPanel({required this.viewModel});
+
+  @override
+  State<_LyricsPanel> createState() => _LyricsPanelState();
+}
+
+class _LyricsPanelState extends State<_LyricsPanel> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToIndex(int index) {
+    if (!_scrollController.hasClients) return;
+    // 每行大约高度 48，居中显示
+    const itemHeight = 48.0;
+    final targetOffset = (index * itemHeight) - (_scrollController.position.viewportDimension / 2) + (itemHeight / 2);
+    final clamped = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
+    _scrollController.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final lyrics = widget.viewModel.currentLyrics;
+      final currentIndex = widget.viewModel.currentLyricIndex.value;
+
+      // 当高亮索引变化时自动滚动
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (currentIndex >= 0) _scrollToIndex(currentIndex);
+      });
+
+      if (lyrics.isEmpty) {
+        return Center(
+          child: Text(
+            '暂无歌词',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
+          ),
+        );
+      }
+
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: EdgeInsets.symmetric(
+            vertical: MediaQuery.of(context).size.height * 0.25,
+          ),
+          itemCount: lyrics.length,
+          itemExtent: 48,
+          itemBuilder: (context, index) {
+            final isCurrent = index == currentIndex;
+            final track = lyrics[index];
+            return GestureDetector(
+              onTap: () => widget.viewModel.seekTo(track.startMs.toInt()),
+              child: Center(
+                child: Text(
+                  track.title,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: isCurrent
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.4),
+                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                    fontSize: isCurrent ? 18 : 15,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            );
+          },
+        ),
       );
     });
   }

@@ -18,6 +18,7 @@ import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
+import 'package:slime_works/core/services/transcription_task_queue.dart';
 
 final getIt = GetIt.instance;
 
@@ -86,6 +87,9 @@ void getItInit() {
 
   // 应用更新服务
   getIt.registerLazySingleton<AppUpdateService>(() => AppUpdateService());
+
+  // 语音识别任务队列
+  getIt.registerLazySingleton<TranscriptionTaskQueue>(() => TranscriptionTaskQueue());
 
   isInitialized = true;
 }

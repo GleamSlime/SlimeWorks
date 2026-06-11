@@ -1,8 +1,22 @@
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::audio::extract_pcm_16k_mono;
 use crate::model;
 use crate::types::{ModelStatus, TranscriptionResult, TranscriptionSegment, WhisperModelPreset};
+
+/// 全局转录进度（百分比 × 100，即 0~10000），用于跨线程/FI 读取
+static TRANSCRIPTION_PROGRESS: AtomicU32 = AtomicU32::new(0);
+
+/// 获取当前转录进度（0~100 的浮点数），无转录进行时返回 -1.0
+pub fn get_transcription_progress() -> f64 {
+    let val = TRANSCRIPTION_PROGRESS.load(Ordering::Relaxed);
+    if val == u32::MAX {
+        -1.0
+    } else {
+        val as f64 / 100.0
+    }
+}
 
 /// whisper 语言 ID 到字符串的映射
 /// 参考 whisper.cpp 的 whisper_lang_str() 函数
@@ -199,10 +213,13 @@ pub fn transcribe_and_generate_cue(
 
     let model_path = model::get_model_path(preset);
 
+    // 重置进度
+    TRANSCRIPTION_PROGRESS.store(0, Ordering::Relaxed);
+
     // 提取 PCM 数据
     let pcm_data = extract_pcm_16k_mono(&audio_file_path)?;
 
-    // 使用 whisper-rs 进行识别
+    // 使用 whisper-rs 进行识别（带进度回调）
     let result = transcribe_with_whisper(
         &model_path.to_string_lossy(),
         &pcm_data,
@@ -211,6 +228,9 @@ pub fn transcribe_and_generate_cue(
 
     // 生成 CUE 文件
     let cue_path = generate_cue_file(&audio_file_path, &result)?;
+
+    // 标记进度完成
+    TRANSCRIPTION_PROGRESS.store(10000, Ordering::Relaxed);
 
     slime_logger::sw_info!(
         "[whisper] 识别完成: {} 片段, CUE 文件: {:?}",
@@ -251,6 +271,13 @@ fn transcribe_with_whisper(
     params.set_print_timestamps(false);
     params.set_single_segment(false);
     params.set_no_timestamps(false);
+
+    // 设置进度回调，将进度写入全局原子变量
+    params.set_progress_callback_safe(move |progress: i32| {
+        // progress 是 0~100 的整数百分比
+        let stored = (progress * 100) as u32; // 转为 0~10000
+        TRANSCRIPTION_PROGRESS.store(stored, Ordering::Relaxed);
+    });
 
     // 创建状态并运行识别
     let mut state = ctx

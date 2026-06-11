@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/components/window/floating_task_progress.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 
 class DesktopScaffold extends StatefulWidget {
@@ -134,6 +135,8 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                 ),
                 widget.child,
                 const Positioned(left: 0, top: 0, child: ScreenTopBar()),
+                // 悬浮任务进度
+                const FloatingTaskProgress(),
               ],
             ),
     );

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 import 'package:slime_works/pages/music_player/components/eq_panel.dart';
@@ -546,14 +548,38 @@ class _FolderTile extends StatelessWidget {
             case 'delete':
               onDelete();
               break;
+            case 'transcribe':
+              _transcribeFolder(context);
+              break;
           }
         },
         itemBuilder: (ctx) => [
+          const PopupMenuItem(value: 'transcribe', child: Text('批量语音识别')),
           const PopupMenuItem(value: 'rename', child: Text('重命名')),
           const PopupMenuItem(value: 'delete', child: Text('删除')),
         ],
       ),
       onTap: onTap,
+    );
+  }
+
+  /// 批量识别文件夹下的所有音频
+  void _transcribeFolder(BuildContext context) {
+    final viewModel = Get.find<MusicPlayerViewModel>();
+    final queue = getIt<TranscriptionTaskQueue>();
+    // 获取该文件夹下所有播放列表的歌曲
+    final folderPlaylists = viewModel.playlists.where((p) => p.folderId == folder.id);
+    for (final playlist in folderPlaylists) {
+      final items = music_api.getPlaylistItems(playlistId: playlist.id);
+      for (final item in items) {
+        queue.enqueue(
+          audioFilePath: item.filePath,
+          displayName: item.title,
+        );
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已添加文件夹「${folder.name}」的音频到识别队列')),
     );
   }
 

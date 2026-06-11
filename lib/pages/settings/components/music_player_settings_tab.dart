@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -17,10 +20,22 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
   bool _loading = true;
   String? _downloadingModel;
 
+  /// 下载进度 0.0~1.0
+  double _downloadProgress = 0;
+
+  /// 下载进度轮询定时器
+  _DownloadProgressTracker? _progressTracker;
+
   @override
   void initState() {
     super.initState();
     _loadModels();
+  }
+
+  @override
+  void dispose() {
+    _progressTracker?.cancel();
+    super.dispose();
   }
 
   void _loadModels() {
@@ -49,26 +64,65 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     }
   }
 
-  Future<void> _downloadModel(String presetName) async {
-    setState(() => _downloadingModel = presetName);
+  Future<void> _downloadModel(String presetName, int approxSizeMb) async {
+    setState(() {
+      _downloadingModel = presetName;
+      _downloadProgress = 0;
+    });
+
+    // 先通过 HEAD 请求获取实际文件大小
+    int actualSizeBytes = approxSizeMb * 1024 * 1024;
+    try {
+      final url = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$presetName.bin';
+      // 使用 HttpClient 以支持自动跟随重定向
+      final httpClient = HttpClient();
+      try {
+        final request = await httpClient.headUrl(Uri.parse(url));
+        final response = await request.close();
+        // 优先使用 x-linked-size，其次 content-length
+        final xLinkedSize = response.headers.value('x-linked-size');
+        final contentLength = response.headers.value('content-length');
+        final sizeStr = xLinkedSize ?? contentLength;
+        if (sizeStr != null) {
+          actualSizeBytes = int.tryParse(sizeStr) ?? actualSizeBytes;
+        }
+      } finally {
+        httpClient.close();
+      }
+    } catch (_) {}
+
+    // 启动进度追踪（轮询文件大小）
+    _progressTracker = _DownloadProgressTracker(
+      presetName,
+      actualSizeBytes,
+      (progress) {
+        if (mounted) {
+          setState(() => _downloadProgress = progress);
+        }
+      },
+    );
+    _progressTracker!.start();
 
     try {
-      // whisperDownloadModel 是异步的（Rust 端阻塞下载）
       await whisper_api.whisperDownloadModel(presetName: presetName);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$presetName 模型下载完成')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$presetName 模型下载完成')),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('下载失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('下载失败: $e')),
+        );
       }
     } finally {
+      _progressTracker?.cancel();
       if (mounted) {
-        setState(() => _downloadingModel = null);
+        setState(() {
+          _downloadingModel = null;
+          _downloadProgress = 0;
+        });
         _loadModels();
       }
     }
@@ -99,9 +153,9 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
         _loadModels();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('删除失败: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('删除失败: $e')),
+          );
         }
       }
     }
@@ -109,13 +163,21 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
 
   void _selectModel(String presetName) {
     try {
-      whisper_api.whisperSetSelectedModel(presetName: presetName);
-      setState(() => _selectedModel = presetName);
+      final result = whisper_api.whisperSetSelectedModel(presetName: presetName);
+      if (result) {
+        setState(() => _selectedModel = presetName);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('切换模型失败，请重试')),
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('设置失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('切换失败: $e')),
+        );
       }
     }
   }
@@ -131,16 +193,12 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
       children: [
         Text(
           '语音识别设置',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         SizedBox(height: AppTheme.metrics.kSpace8),
         Text(
           '播放音频没有歌词时，自动使用 Whisper 模型识别语音并生成 CUE 歌词文件。',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
         ),
         SizedBox(height: AppTheme.metrics.kSpace16),
         ..._models.map((model) => _buildModelTile(context, model)),
@@ -154,38 +212,76 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
 
     return Card(
       margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace8),
-      child: ListTile(
-        selected: isSelected,
-        selectedTileColor: Theme.of(
-          context,
-        ).colorScheme.primary.withValues(alpha: 0.05),
-        leading: Icon(
-          isSelected
-              ? Icons.radio_button_checked_rounded
-              : Icons.radio_button_unchecked_rounded,
-          color: isSelected ? Theme.of(context).colorScheme.primary : null,
-        ),
-        title: Row(
-          children: [
-            Expanded(child: Text(model.displayName)),
-            if (model.exists)
-              Chip(
-                label: Text(
-                  _formatFileSize(model.fileSize),
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-                visualDensity: VisualDensity.compact,
+      child: Column(
+        children: [
+          ListTile(
+            selected: isSelected,
+            selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+            leading: Icon(
+              isSelected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: isSelected ? Theme.of(context).colorScheme.primary : null,
+            ),
+            title: Row(
+              children: [
+                Expanded(child: Text(model.displayName)),
+                if (model.exists)
+                  Chip(
+                    label: Text(
+                      _formatFileSize(model.fileSize),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
+            subtitle: model.exists
+                ? Text('已下载', style: TextStyle(color: Colors.green.shade600))
+                : Text(
+                    '未下载（约 ${model.approxSizeMb}MB）',
+                    style: TextStyle(color: Theme.of(context).hintColor),
+                  ),
+            trailing: _buildTrailing(context, model, isSelected, isDownloading),
+            onTap: model.exists ? () => _selectModel(model.presetName) : null,
+          ),
+          // 下载进度条
+          if (isDownloading && _downloadProgress > 0)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
+              child: Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace2),
+                    child: LinearProgressIndicator(
+                      value: _downloadProgress,
+                      minHeight: 4,
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${(_downloadProgress * 100).toStringAsFixed(1)}%',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).hintColor,
+                            ),
+                      ),
+                      Text(
+                        _formatFileSize((_downloadProgress * _progressTracker!.totalBytes).round()),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).hintColor,
+                            ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace8),
+                ],
               ),
-          ],
-        ),
-        subtitle: model.exists
-            ? Text('已下载', style: TextStyle(color: Colors.green.shade600))
-            : Text(
-                '未下载（约 ${model.approxSizeMb}MB）',
-                style: TextStyle(color: Theme.of(context).hintColor),
-              ),
-        trailing: _buildTrailing(context, model, isSelected, isDownloading),
-        onTap: model.exists ? () => _selectModel(model.presetName) : null,
+            ),
+        ],
       ),
     );
   }
@@ -228,7 +324,7 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
 
     return IconButton(
       icon: const Icon(Icons.download_rounded, size: 20),
-      onPressed: () => _downloadModel(model.presetName),
+      onPressed: () => _downloadModel(model.presetName, model.approxSizeMb),
       tooltip: '下载模型',
     );
   }
@@ -237,6 +333,48 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     if (bytes == null) return '';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)}KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+  }
+}
+
+/// 下载进度追踪器
+///
+/// 通过轮询文件大小估算下载进度
+class _DownloadProgressTracker {
+  final String presetName;
+  final int totalBytes;
+  final void Function(double progress) onProgress;
+  Timer? _timer;
+
+  _DownloadProgressTracker(this.presetName, this.totalBytes, this.onProgress);
+
+  /// 获取模型文件路径
+  String get _modelFilePath {
+    // macOS: ~/Library/Application Support/SlimeWorks/whisper_models/ggml-{preset}.bin
+    final appData = Platform.environment['APPDATA'] ??
+        '${Platform.environment['HOME']}/Library/Application Support';
+    return '$appData/SlimeWorks/whisper_models/ggml-$presetName.bin';
+  }
+
+  void start() {
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      _checkProgress();
+    });
+  }
+
+  void cancel() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  void _checkProgress() {
+    try {
+      final file = File(_modelFilePath);
+      if (file.existsSync()) {
+        final fileSize = file.lengthSync();
+        final progress = (fileSize / totalBytes).clamp(0.0, 0.99);
+        onProgress(progress);
+      }
+    } catch (_) {}
   }
 }
 

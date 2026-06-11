@@ -281,6 +281,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                 onTap: () => viewModel.playItem(viewModel.currentItems.indexOf(item)),
                 onFavoriteTap: () => viewModel.toggleFavorite(item.id),
                 onDeleteTap: () => viewModel.deleteMusicItem(item.id),
+                onTranscribeTap: () => viewModel.transcribeItem(item),
               );
             },
           ),
@@ -344,6 +345,19 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
               leading: const Icon(Icons.folder_rounded),
               title: const Text('移动到目录'),
               onTap: () => Navigator.pop(ctx),
+            ),
+            // 批量语音识别
+            ListTile(
+              leading: const Icon(Icons.record_voice_over_rounded),
+              title: const Text('批量语音识别'),
+              subtitle: Text(
+                '识别当前列表 ${viewModel.currentItems.length} 首歌曲',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                viewModel.transcribeAllItems();
+              },
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded),

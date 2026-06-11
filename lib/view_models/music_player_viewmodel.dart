@@ -10,6 +10,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
@@ -91,6 +92,21 @@ class MusicPlayerViewModel extends BaseViewModel {
   /// 是否显示歌词面板
   final showLyricsPanel = false.obs;
 
+  /// 是否显示波形进度模式
+  final showWaveformMode = false.obs;
+
+  /// 当前歌词轨道列表（从 CUE 文件加载）
+  final currentLyrics = <music_api.CueTrackInfo>[].obs;
+
+  /// 当前高亮歌词索引
+  final currentLyricIndex = (-1).obs;
+
+  /// 当前音频波形数据（0.0~1.0 振幅数组）
+  final currentWaveform = <double>[].obs;
+
+  /// 波形数据是否正在加载
+  final isWaveformLoading = false.obs;
+
   /// 音量（0~100）
   final volume = 100.obs;
 
@@ -116,6 +132,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     // 监听播放位置
     _positionSub = _player.stream.position.listen((pos) {
       currentPositionMs.value = pos.inMilliseconds;
+      _updateLyricIndex(pos.inMilliseconds);
     });
 
     // 监听时长变化
@@ -543,6 +560,8 @@ class MusicPlayerViewModel extends BaseViewModel {
     currentPositionMs.value = 0;
     durationMs.value = item.durationMs != null ? item.durationMs!.toInt() : 0;
     _recordPlay(item.id);
+    _loadLyrics(item.filePath);
+    _loadWaveform(item.filePath);
 
     try {
       // 设置音频源为本地文件
@@ -748,9 +767,102 @@ class MusicPlayerViewModel extends BaseViewModel {
   /// 切换歌词面板
   void toggleLyricsPanel() => showLyricsPanel.value = !showLyricsPanel.value;
 
+  /// 切换波形进度模式
+  void toggleWaveformMode() {
+    showWaveformMode.value = !showWaveformMode.value;
+    // 开启波形模式时，如果当前没有波形数据则加载
+    if (showWaveformMode.value && currentWaveform.isEmpty) {
+      _loadWaveformForCurrentItem();
+    }
+  }
+
+  /// 加载当前播放歌曲的波形数据
+  void _loadWaveformForCurrentItem() {
+    final item = currentItem;
+    if (item == null) return;
+    _loadWaveform(item.filePath);
+  }
+
+  /// 加载波形数据
+  void _loadWaveform(String audioFilePath) {
+    currentWaveform.clear();
+    if (!showWaveformMode.value) return;
+    isWaveformLoading.value = true;
+    Future(() async {
+      try {
+        final data = await music_api.extractWaveform(
+          audioFilePath: audioFilePath,
+          samples: 200,
+        );
+        currentWaveform.value = data.toList();
+        _logger.info('[播放器] 加载波形: ${data.length} 个采样点');
+      } catch (e) {
+        _logger.info('[播放器] 加载波形失败: $e');
+      } finally {
+        isWaveformLoading.value = false;
+      }
+    });
+  }
+
+  /// 加载歌词（CUE 文件）
+  void _loadLyrics(String audioFilePath) {
+    currentLyrics.clear();
+    currentLyricIndex.value = -1;
+    try {
+      // CUE 文件与音频文件同名但扩展名为 .cue
+      final cuePath = audioFilePath.replaceFirst(RegExp(r'\.[^.]+$'), '.cue');
+      final file = File(cuePath);
+      if (file.existsSync()) {
+        final cue = music_api.parseCueFile(cuePath: cuePath);
+        currentLyrics.value = cue.tracks;
+        _logger.info('[播放器] 加载歌词: $cuePath, ${cue.tracks.length} 行');
+      }
+    } catch (e) {
+      _logger.info('[播放器] 加载歌词失败: $e');
+    }
+  }
+
+  /// 更新当前歌词高亮索引
+  void _updateLyricIndex(int positionMs) {
+    final lyrics = currentLyrics;
+    if (lyrics.isEmpty) return;
+    for (int i = lyrics.length - 1; i >= 0; i--) {
+      if (positionMs >= lyrics[i].startMs.toInt()) {
+        if (currentLyricIndex.value != i) {
+          currentLyricIndex.value = i;
+        }
+        return;
+      }
+    }
+    currentLyricIndex.value = -1;
+  }
+
   /// 设置音量
   Future<void> setVolume(int v) async {
     volume.value = v.clamp(0, 100);
     await _player.setVolume(volume.value.toDouble());
+  }
+
+  // ── 语音识别 ─────────────────────────────────────────────────────────────
+
+  /// 识别单个音频文件
+  void transcribeItem(music_api.MusicItem item) {
+    final queue = getIt<TranscriptionTaskQueue>();
+    queue.enqueue(
+      audioFilePath: item.filePath,
+      displayName: item.title,
+    );
+  }
+
+  /// 批量识别当前列表所有音频
+  void transcribeAllItems() {
+    if (currentItems.isEmpty) return;
+    final queue = getIt<TranscriptionTaskQueue>();
+    for (final item in currentItems) {
+      queue.enqueue(
+        audioFilePath: item.filePath,
+        displayName: item.title,
+      );
+    }
   }
 }

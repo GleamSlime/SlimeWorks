@@ -455,3 +455,122 @@ pub fn update_folder(
 pub fn increment_folder_play_count(folder_id: String) -> anyhow::Result<bool> {
     music_player::increment_folder_play_count(folder_id).map_err(|e| anyhow::anyhow!(e))
 }
+
+/// 提取音频文件的波形数据（用于可视化）
+/// 返回降采样后的振幅数组（0.0~1.0），samples 指定返回的采样点数
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn extract_waveform(
+    audio_file_path: String,
+    samples: u32,
+) -> anyhow::Result<Vec<f64>> {
+    // 先尝试读取缓存
+    let cache_path = _waveform_cache_path(&audio_file_path);
+    if let Ok(cached) = _read_waveform_cache(&cache_path, samples) {
+        return Ok(cached);
+    }
+
+    // 解码音频获取 PCM 数据
+    let pcm = whisper_module::audio::extract_pcm_16k_mono(&audio_file_path)
+        .map_err(|e| anyhow::anyhow!(e))?;
+
+    // 降采样为指定数量的 bin
+    let result = _downsample_waveform(&pcm, samples as usize);
+
+    // 写入缓存
+    let _ = _write_waveform_cache(&cache_path, samples, &result);
+
+    Ok(result)
+}
+
+/// 提取音频文件的波形数据（移动端空实现）
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn extract_waveform(
+    _audio_file_path: String,
+    _samples: u32,
+) -> anyhow::Result<Vec<f64>> {
+    Ok(vec![])
+}
+
+/// 降采样 PCM 数据为波形数据
+fn _downsample_waveform(pcm: &[f32], num_bins: usize) -> Vec<f64> {
+    if pcm.is_empty() || num_bins == 0 {
+        return vec![0.0; num_bins];
+    }
+
+    let samples_per_bin = pcm.len() as f64 / num_bins as f64;
+    let mut result = Vec::with_capacity(num_bins);
+
+    for i in 0..num_bins {
+        let start = (i as f64 * samples_per_bin) as usize;
+        let end = ((i + 1) as f64 * samples_per_bin).min(pcm.len() as f64) as usize;
+
+        // 取该区间内的峰值绝对值
+        let mut peak = 0.0f32;
+        for j in start..end {
+            let abs_val = pcm[j].abs();
+            if abs_val > peak {
+                peak = abs_val;
+            }
+        }
+
+        result.push(peak as f64);
+    }
+
+    result
+}
+
+/// 获取波形缓存文件路径
+fn _waveform_cache_path(audio_file_path: &str) -> String {
+    let app_data = std::env::var("APPDATA")
+        .unwrap_or_else(|_| {
+            #[cfg(target_os = "macos")]
+            {
+                format!("{}/Library/Application Support",
+                    std::env::var("HOME").unwrap_or_else(|_| ".".to_string()))
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+                    format!("{}/.local/share",
+                        std::env::var("HOME").unwrap_or_else(|_| ".".to_string()))
+                })
+            }
+        });
+
+    // 用文件路径的 hash 作为缓存文件名
+    let hash = {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        audio_file_path.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    };
+
+    format!("{}/SlimeWorks/waveform_cache/{}.json", app_data, hash)
+}
+
+/// 读取波形缓存
+fn _read_waveform_cache(cache_path: &str, samples: u32) -> Result<Vec<f64>, ()> {
+    let content = std::fs::read_to_string(cache_path).map_err(|_| ())?;
+    let cached: serde_json::Value = serde_json::from_str(&content).map_err(|_| ())?;
+    let cached_samples = cached.get("samples").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    if cached_samples != samples {
+        return Err(());
+    }
+    let arr = cached.get("data").and_then(|v| v.as_array()).ok_or(())?;
+    Ok(arr.iter().filter_map(|v| v.as_f64()).collect())
+}
+
+/// 写入波形缓存
+fn _write_waveform_cache(cache_path: &str, samples: u32, data: &[f64]) -> std::io::Result<()> {
+    // 确保目录存在
+    if let Some(parent) = std::path::Path::new(cache_path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let json = serde_json::json!({
+        "samples": samples,
+        "data": data,
+    });
+
+    std::fs::write(cache_path, serde_json::to_string(&json)?)
+}

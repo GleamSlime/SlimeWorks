@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_cue_sheet`, `convert_eq_preset`, `convert_folder`, `convert_item`, `convert_playlist`, `convert_record`
+// These functions are ignored because they are not marked as `pub`: `_downsample_waveform`, `_read_waveform_cache`, `_waveform_cache_path`, `_write_waveform_cache`, `convert_cue_sheet`, `convert_eq_preset`, `convert_folder`, `convert_item`, `convert_playlist`, `convert_record`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PlayMode`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -219,6 +219,16 @@ bool incrementFolderPlayCount({required String folderId}) => RustLib
     .instance
     .api
     .crateApiMusicPlayerIncrementFolderPlayCount(folderId: folderId);
+
+/// 提取音频文件的波形数据（用于可视化）
+/// 返回降采样后的振幅数组（0.0~1.0），samples 指定返回的采样点数
+Future<Float64List> extractWaveform({
+  required String audioFilePath,
+  required int samples,
+}) => RustLib.instance.api.crateApiMusicPlayerExtractWaveform(
+  audioFilePath: audioFilePath,
+  samples: samples,
+);
 
 class CueSheetInfo {
   final String? title;

@@ -177,3 +177,17 @@ pub fn whisper_transcribe(
 ) -> anyhow::Result<TranscriptionResultInfo> {
     Err(anyhow::anyhow!("Whisper 语音识别不支持当前平台"))
 }
+
+/// 获取当前转录进度（0.0~100.0），无转录进行时返回 -1.0
+#[frb(sync)]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn whisper_get_transcription_progress() -> f64 {
+    whisper_module::api::get_transcription_progress()
+}
+
+/// 获取当前转录进度（移动端空实现）
+#[frb(sync)]
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn whisper_get_transcription_progress() -> f64 {
+    -1.0
+}

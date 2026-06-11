@@ -47,6 +47,10 @@ Future<TranscriptionResultInfo> whisperTranscribe({
   language: language,
 );
 
+/// 获取当前转录进度（0.0~100.0），无转录进行时返回 -1.0
+double whisperGetTranscriptionProgress() =>
+    RustLib.instance.api.crateApiWhisperWhisperGetTranscriptionProgress();
+
 /// 模型状态信息
 class ModelStatusInfo {
   final String presetName;
