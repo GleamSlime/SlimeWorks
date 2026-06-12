@@ -134,20 +134,17 @@ class PlayerControls extends StatelessWidget {
         children: [
           IconButton(
             onPressed: viewModel.playPrevious,
-            icon: const Icon(Icons.skip_previous_rounded, size: 20),
+            icon: const Icon(Icons.skip_previous_rounded, size: 38),
             color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.togglePlayPause,
-            icon: Icon(
-              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: 28,
-            ),
+            icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 48),
             color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.playNext,
-            icon: const Icon(Icons.skip_next_rounded, size: 20),
+            icon: const Icon(Icons.skip_next_rounded, size: 38),
             color: iconColor,
           ),
         ],

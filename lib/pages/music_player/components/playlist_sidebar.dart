@@ -19,9 +19,8 @@ class PlaylistSidebar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          right: BorderSide(color: Theme.of(context).dividerColor, width: 0.5),
-        ),
+        border: Border(right: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+        borderRadius: AppTheme.metrics.radius10,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,16 +72,13 @@ class PlaylistSidebar extends StatelessWidget {
                     children: [
                       Text(
                         '暂无内容',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).hintColor,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
                       ),
                       SizedBox(height: AppTheme.metrics.kSpace8),
                       TextButton.icon(
-                        icon: const Icon(
-                          Icons.create_new_folder_outlined,
-                          size: 16,
-                        ),
+                        icon: const Icon(Icons.create_new_folder_outlined, size: 16),
                         label: const Text('新建子目录'),
                         onPressed: () => _showCreateFolderDialog(context),
                       ),
@@ -104,20 +100,17 @@ class PlaylistSidebar extends StatelessWidget {
                     return _FolderTile(
                       folder: folder,
                       onTap: () => viewModel.navigateToFolder(folder.id),
-                      onRename: (name) =>
-                          viewModel.renameFolder(folder.id, name),
+                      onRename: (name) => viewModel.renameFolder(folder.id, name),
                       onDelete: () => viewModel.deleteFolder(folder.id),
                     );
                   }
                   final playlist = folderPlaylists[index - subFolders.length];
-                  final isSelected =
-                      viewModel.currentPlaylistId.value == playlist.id;
+                  final isSelected = viewModel.currentPlaylistId.value == playlist.id;
                   return _PlaylistTile(
                     playlist: playlist,
                     isSelected: isSelected,
                     onTap: () => viewModel.selectPlaylist(playlist.id),
-                    onRename: (name) =>
-                        viewModel.renamePlaylist(playlist.id, name),
+                    onRename: (name) => viewModel.renamePlaylist(playlist.id, name),
                     onDelete: () => viewModel.deletePlaylist(playlist.id),
                   );
                 },
@@ -177,9 +170,7 @@ class PlaylistSidebar extends StatelessWidget {
           ),
           for (int i = 0; i < breadcrumbs.length; i++) ...[
             Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.metrics.kSpace2,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
               child: Icon(
                 Icons.chevron_right_rounded,
                 size: 14,
@@ -208,10 +199,7 @@ class PlaylistSidebar extends StatelessWidget {
           decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();
@@ -236,10 +224,7 @@ class PlaylistSidebar extends StatelessWidget {
           decoration: const InputDecoration(hintText: '目录名称', isDense: true),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();
@@ -272,9 +257,7 @@ class PlaylistSidebar extends StatelessWidget {
         builder: (_, scrollController) => Container(
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppTheme.metrics.kSpace16),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
           ),
           child: ListView(
             controller: scrollController,
@@ -295,12 +278,14 @@ class PlaylistSidebar extends StatelessWidget {
                 children: [
                   Text('收藏', style: Theme.of(context).textTheme.titleMedium),
                   const Spacer(),
-                  Obx(() => Text(
-                    '${viewModel.favoriteItems.length} 首',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).hintColor,
+                  Obx(
+                    () => Text(
+                      '${viewModel.favoriteItems.length} 首',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
                     ),
-                  )),
+                  ),
                 ],
               ),
               SizedBox(height: AppTheme.metrics.kSpace12),
@@ -313,33 +298,44 @@ class PlaylistSidebar extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.favorite_border_rounded, size: 40, color: Theme.of(context).hintColor),
-                          SizedBox(height: AppTheme.metrics.kSpace8),
-                          Text('暂无收藏', style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          Icon(
+                            Icons.favorite_border_rounded,
+                            size: 40,
                             color: Theme.of(context).hintColor,
-                          )),
+                          ),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
+                          Text(
+                            '暂无收藏',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+                          ),
                         ],
                       ),
                     ),
                   );
                 }
                 return Column(
-                  children: items.map((item) => _MusicListTile(
-                    item: item,
-                    onTap: () {
-                      // 将收藏列表设为当前播放列表并播放
-                      final index = viewModel.currentItems.indexOf(item);
-                      if (index >= 0) {
-                        viewModel.playItem(index);
-                      } else {
-                        // 如果不在当前列表中，直接播放该文件
-                        viewModel.currentItems.value = [item];
-                        viewModel.playItem(0);
-                      }
-                      Navigator.pop(ctx);
-                    },
-                    onFavoriteTap: () => viewModel.toggleFavorite(item.id),
-                  )).toList(),
+                  children: items
+                      .map(
+                        (item) => _MusicListTile(
+                          item: item,
+                          onTap: () {
+                            // 将收藏列表设为当前播放列表并播放
+                            final index = viewModel.currentItems.indexOf(item);
+                            if (index >= 0) {
+                              viewModel.playItem(index);
+                            } else {
+                              // 如果不在当前列表中，直接播放该文件
+                              viewModel.currentItems.value = [item];
+                              viewModel.playItem(0);
+                            }
+                            Navigator.pop(ctx);
+                          },
+                          onFavoriteTap: () => viewModel.toggleFavorite(item.id),
+                        ),
+                      )
+                      .toList(),
                 );
               }),
             ],
@@ -364,9 +360,7 @@ class PlaylistSidebar extends StatelessWidget {
         builder: (_, scrollController) => Container(
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppTheme.metrics.kSpace16),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
           ),
           child: ListView(
             controller: scrollController,
@@ -387,12 +381,14 @@ class PlaylistSidebar extends StatelessWidget {
                 children: [
                   Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
                   const Spacer(),
-                  Obx(() => Text(
-                    '${viewModel.recentRecords.length} 首',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).hintColor,
+                  Obx(
+                    () => Text(
+                      '${viewModel.recentRecords.length} 首',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
                     ),
-                  )),
+                  ),
                 ],
               ),
               SizedBox(height: AppTheme.metrics.kSpace12),
@@ -407,9 +403,12 @@ class PlaylistSidebar extends StatelessWidget {
                         children: [
                           Icon(Icons.history_rounded, size: 40, color: Theme.of(context).hintColor),
                           SizedBox(height: AppTheme.metrics.kSpace8),
-                          Text('暂无播放记录', style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).hintColor,
-                          )),
+                          Text(
+                            '暂无播放记录',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+                          ),
                         ],
                       ),
                     ),
@@ -432,18 +431,24 @@ class PlaylistSidebar extends StatelessWidget {
                       ),
                       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: artist != null
-                          ? Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall)
+                          ? Text(
+                              artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            )
                           : null,
                       trailing: Text(
                         _formatPlayTime(record.playedAt),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).hintColor,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
                       ),
                       onTap: () {
                         // 在当前列表中查找并播放
-                        final index = viewModel.currentItems.indexWhere((i) => i.id == record.musicId);
+                        final index = viewModel.currentItems.indexWhere(
+                          (i) => i.id == record.musicId,
+                        );
                         if (index >= 0) {
                           viewModel.playItem(index);
                         }
@@ -484,11 +489,7 @@ class _BreadcrumbChip extends StatelessWidget {
   final VoidCallback onTap;
   final bool isActive;
 
-  const _BreadcrumbChip({
-    required this.label,
-    required this.onTap,
-    this.isActive = false,
-  });
+  const _BreadcrumbChip({required this.label, required this.onTap, this.isActive = false});
 
   @override
   Widget build(BuildContext context) {
@@ -496,16 +497,11 @@ class _BreadcrumbChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppTheme.metrics.kSpace4,
-          vertical: 2,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4, vertical: 2),
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: isActive
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).hintColor,
+            color: isActive ? Theme.of(context).colorScheme.primary : Theme.of(context).hintColor,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -572,15 +568,12 @@ class _FolderTile extends StatelessWidget {
     for (final playlist in folderPlaylists) {
       final items = music_api.getPlaylistItems(playlistId: playlist.id);
       for (final item in items) {
-        queue.enqueue(
-          audioFilePath: item.filePath,
-          displayName: item.title,
-        );
+        queue.enqueue(audioFilePath: item.filePath, displayName: item.title);
       }
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已添加文件夹「${folder.name}」的音频到识别队列')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已添加文件夹「${folder.name}」的音频到识别队列')));
   }
 
   void _showRenameDialog(BuildContext context) {
@@ -594,10 +587,7 @@ class _FolderTile extends StatelessWidget {
           decoration: const InputDecoration(hintText: '目录名称', isDense: true),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();
@@ -633,13 +623,9 @@ class _PlaylistTile extends StatelessWidget {
     return ListTile(
       dense: true,
       selected: isSelected,
-      selectedTileColor: Theme.of(
-        context,
-      ).colorScheme.primary.withValues(alpha: 0.1),
+      selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
       leading: Icon(
-        playlist.isDefault
-            ? Icons.queue_music_rounded
-            : Icons.playlist_play_rounded,
+        playlist.isDefault ? Icons.queue_music_rounded : Icons.playlist_play_rounded,
         size: 18,
         color: isSelected ? Theme.of(context).colorScheme.primary : null,
       ),
@@ -652,10 +638,7 @@ class _PlaylistTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text(
-        '${playlist.itemCount} 首',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      subtitle: Text('${playlist.itemCount} 首', style: Theme.of(context).textTheme.bodySmall),
       trailing: PopupMenuButton<String>(
         icon: const Icon(Icons.more_vert_rounded, size: 16),
         onSelected: (action) {
@@ -670,8 +653,7 @@ class _PlaylistTile extends StatelessWidget {
         },
         itemBuilder: (ctx) => [
           const PopupMenuItem(value: 'rename', child: Text('重命名')),
-          if (!playlist.isDefault)
-            const PopupMenuItem(value: 'delete', child: Text('删除')),
+          if (!playlist.isDefault) const PopupMenuItem(value: 'delete', child: Text('删除')),
         ],
       ),
       onTap: onTap,
@@ -689,10 +671,7 @@ class _PlaylistTile extends StatelessWidget {
           decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();
@@ -713,11 +692,7 @@ class _MusicListTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onFavoriteTap;
 
-  const _MusicListTile({
-    required this.item,
-    required this.onTap,
-    required this.onFavoriteTap,
-  });
+  const _MusicListTile({required this.item, required this.onTap, required this.onFavoriteTap});
 
   @override
   Widget build(BuildContext context) {
@@ -731,8 +706,12 @@ class _MusicListTile extends StatelessWidget {
       ),
       title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: item.artist != null
-          ? Text(item.artist!, maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall)
+          ? Text(
+              item.artist!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            )
           : null,
       trailing: IconButton(
         icon: Icon(

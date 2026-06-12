@@ -129,6 +129,8 @@ class MusicPlayerViewModel extends BaseViewModel {
   StreamSubscription? _playingSub;
   StreamSubscription? _completedSub;
   bool _playerReady = false;
+  bool _isDisposed = false;
+  bool _isSwitching = false;
 
   // ── 播放进度持久化 ─────────────────────────────────────────────────────
   static const _keyLastItemId = 'music_player_last_item_id';
@@ -256,15 +258,13 @@ class MusicPlayerViewModel extends BaseViewModel {
         final uri = item.filePath.startsWith('http')
             ? item.filePath
             : Uri.file(item.filePath).toString();
-        await _player.open(Media(uri));
+        await _player.open(Media(uri), play: false);
         _playerReady = true;
 
         // 恢复播放进度
         if (lastPosition > 0) {
           await _player.seek(Duration(milliseconds: lastPosition));
         }
-        // 暂停，等待用户手动播放
-        await _player.pause();
         _logger.info('[播放器] 恢复上次播放: ${item.title}, 进度: ${lastPosition}ms');
       }
     } catch (e) {
@@ -274,8 +274,11 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   @override
   void onClose() {
+    _isDisposed = true;
     _savePlaybackPosition();
     _savePositionTimer?.cancel();
+    // 先停止播放，防止 mpv 回调到已销毁的 isolate
+    _player.stop();
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();
@@ -475,6 +478,8 @@ class MusicPlayerViewModel extends BaseViewModel {
       importingStatus.value = '正在提取封面...';
       // 后台提取封面
       _extractCoversInBackground(pid);
+      // 后台预计算波形
+      _precomputeWaveformsInBackground(pid);
     } catch (e) {
       _logger.info('[播放器] 导入音乐文件夹失败: $e');
       importingStatus.value = '导入失败: $e';
@@ -499,6 +504,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       await _loadPlaylistItems(pid);
       await _loadPlaylists();
       _extractCoversInBackground(pid);
+      _precomputeWaveformsInBackground(pid);
     } catch (e) {
       _logger.info('[播放器] 导入音乐失败: $e');
       importingStatus.value = '导入失败: $e';
@@ -524,6 +530,30 @@ class MusicPlayerViewModel extends BaseViewModel {
       } finally {
         isImporting.value = false;
         importingStatus.value = '';
+      }
+    });
+  }
+
+  /// 后台预计算波形数据（缓存到磁盘，后续播放时直接读取）
+  void _precomputeWaveformsInBackground(String playlistId) {
+    Future(() async {
+      try {
+        final items = music_api.getPlaylistItems(playlistId: playlistId);
+        int computed = 0;
+        for (final item in items) {
+          try {
+            await music_api.extractWaveform(
+              audioFilePath: item.filePath,
+              samples: 200,
+            );
+            computed++;
+          } catch (_) {}
+        }
+        if (computed > 0) {
+          _logger.info('[播放器] 预计算波形: $computed 首');
+        }
+      } catch (e) {
+        _logger.info('[播放器] 预计算波形失败: $e');
       }
     });
   }
@@ -646,6 +676,11 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   Future<void> playItem(int index) async {
     if (index < 0 || index >= currentItems.length) return;
+    if (_isDisposed) return;
+    // 防止快速连续切歌导致 mpv 崩溃
+    if (_isSwitching) return;
+    _isSwitching = true;
+
     currentIndex.value = index;
     final item = currentItems[index];
     currentTitle.value = item.title;
@@ -659,6 +694,10 @@ class MusicPlayerViewModel extends BaseViewModel {
     _loadWaveform(item.filePath);
 
     try {
+      // 先停止当前播放，防止 mpv 事件回调冲突
+      if (_playerReady) {
+        await _player.stop();
+      }
       // 设置音频源为本地文件
       final uri = item.filePath.startsWith('http')
           ? item.filePath
@@ -669,10 +708,13 @@ class MusicPlayerViewModel extends BaseViewModel {
     } catch (e) {
       _logger.info('[播放器] 播放失败: $e');
       isPlaying.value = false;
+    } finally {
+      _isSwitching = false;
     }
   }
 
   Future<void> togglePlayPause() async {
+    if (_isDisposed) return;
     if (_player.state.playing) {
       await _player.pause();
     } else {
@@ -723,6 +765,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   }
 
   Future<void> seekTo(int positionMs) async {
+    if (_isDisposed) return;
     await _player.seek(Duration(milliseconds: positionMs));
   }
 

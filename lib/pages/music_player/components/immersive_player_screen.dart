@@ -433,61 +433,167 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// 音量滑块（沉浸式播放器内使用）
+/// 音量按钮（点击弹出浮层调节音量）
 class _VolumeSlider extends StatelessWidget {
   final MusicPlayerViewModel viewModel;
   const _VolumeSlider({required this.viewModel});
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final vol = viewModel.volume.value;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            onPressed: () => viewModel.setVolume(vol > 0 ? 0 : 100),
-            icon: Icon(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          onPressed: () => _showVolumePopup(context),
+          icon: Obx(() {
+            final vol = viewModel.volume.value;
+            return Icon(
               vol == 0
                   ? Icons.volume_off_rounded
                   : vol < 50
                       ? Icons.volume_down_rounded
                       : Icons.volume_up_rounded,
               size: 24,
-            ),
+            );
+          }),
+          color: Colors.white.withValues(alpha: 0.7),
+        ),
+        Text(
+          '音量',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.white.withValues(alpha: 0.7),
+            fontSize: AppTheme.metrics.fontSize10,
           ),
-          // 音量滑块
-          SizedBox(
-            width: 100,
-            height: 16,
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-                activeTrackColor: Colors.white.withValues(alpha: 0.9),
-                inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                thumbColor: Colors.white,
+        ),
+      ],
+    );
+  }
+
+  void _showVolumePopup(BuildContext context) {
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (ctx) => _VolumePopupOverlay(
+        viewModel: viewModel,
+        anchorOffset: offset,
+        anchorSize: size,
+        onClose: () => entry.remove(),
+      ),
+    );
+
+    overlay.insert(entry);
+  }
+}
+
+/// 音量浮层
+class _VolumePopupOverlay extends StatelessWidget {
+  final MusicPlayerViewModel viewModel;
+  final Offset anchorOffset;
+  final Size anchorSize;
+  final VoidCallback onClose;
+
+  const _VolumePopupOverlay({
+    required this.viewModel,
+    required this.anchorOffset,
+    required this.anchorSize,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final popupWidth = 200.0;
+    final popupHeight = 48.0;
+    // 浮层居中于音量按钮上方
+    final left = (anchorOffset.dx + anchorSize.width / 2 - popupWidth / 2)
+        .clamp(16.0, MediaQuery.of(context).size.width - popupWidth - 16.0);
+    final top = anchorOffset.dy - popupHeight - 12.0;
+
+    return Stack(
+      children: [
+        // 点击背景关闭
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: onClose,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        // 浮层
+        Positioned(
+          left: left,
+          top: top,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: popupWidth,
+              height: popupHeight,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  width: 1,
+                ),
               ),
-              child: Slider(
-                value: vol.toDouble(),
-                min: 0,
-                max: 100,
-                onChanged: (v) => viewModel.setVolume(v.toInt()),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    // 静音按钮
+                    Obx(() {
+                      final vol = viewModel.volume.value;
+                      return GestureDetector(
+                        onTap: () => viewModel.setVolume(vol > 0 ? 0 : 100),
+                        child: Icon(
+                          vol == 0
+                              ? Icons.volume_off_rounded
+                              : vol < 50
+                                  ? Icons.volume_down_rounded
+                                  : Icons.volume_up_rounded,
+                          size: 20,
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      );
+                    }),
+                    const SizedBox(width: 8),
+                    // 音量滑块
+                    Expanded(
+                      child: Obx(() {
+                        final vol = viewModel.volume.value;
+                        return SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: 3,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 12,
+                            ),
+                            activeTrackColor: Colors.white.withValues(alpha: 0.9),
+                            inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                            thumbColor: Colors.white,
+                          ),
+                          child: Slider(
+                            value: vol.toDouble(),
+                            min: 0,
+                            max: 100,
+                            onChanged: (v) => viewModel.setVolume(v.toInt()),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          Text(
-            '音量',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: AppTheme.metrics.fontSize10,
-            ),
-          ),
-        ],
-      );
-    });
+        ),
+      ],
+    );
   }
 }
 

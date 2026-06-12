@@ -69,18 +69,17 @@ class SidebarController extends GetxController {
     isExpanded.value = !isExpanded.value;
 
     if (isExpanded.value) {
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 280));
       showExtends.value = true;
     } else {
       showExtends.value = false;
     }
   }
 
-  /// 打开侧边栏（移动端使用）
   void openSidebar() async {
     if (!isExpanded.value) {
       isExpanded.value = true;
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 280));
       showExtends.value = true;
     }
   }
@@ -574,140 +573,150 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                           ),
                         ),
                       ),
-                    Row(
-                      mainAxisAlignment: isExpanded
-                          ? MainAxisAlignment.start
-                          : MainAxisAlignment.center,
-                      children: [
-                        if (item.route.sidebarIcon != null)
-                          isExpanded
-                              ? AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
-                                  curve: Curves.easeInOutCubic,
-                                  padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
-                                        : Colors.transparent,
-                                    borderRadius: AppTheme.metrics.radius8,
-                                  ),
-                                  child: SvgPicture.asset(
-                                    item.route.sidebarIcon!,
-                                    width: AppTheme.metrics.fontSize18,
-                                    colorFilter: isSelected
-                                        ? ColorFilter.mode(
-                                            theme.colorScheme.primary,
-                                            BlendMode.srcIn,
-                                          )
-                                        : ColorFilter.mode(
-                                            theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
-                                            BlendMode.srcIn,
-                                          ),
-                                  ),
-                                )
-                              : Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
-                                      curve: Curves.easeInOutCubic,
-                                      padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
-                                      decoration: BoxDecoration(
-                                        color: isSelected && isExpanded
-                                            ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
-                                            : Colors.transparent,
-                                        borderRadius: AppTheme.metrics.radius8,
-                                      ),
-                                      child: SvgPicture.asset(
-                                        item.route.sidebarIcon!,
-                                        width: AppTheme.metrics.fontSize22,
-                                        colorFilter: isSelected
-                                            ? ColorFilter.mode(
-                                                theme.colorScheme.primary,
-                                                BlendMode.srcIn,
-                                              )
-                                            : ColorFilter.mode(
-                                                theme.iconTheme.color?.withAlpha(179) ??
-                                                    Colors.black,
-                                                BlendMode.srcIn,
-                                              ),
-                                      ),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOutCubic,
+                      padding: EdgeInsets.only(left: isExpanded ? 0 : AppTheme.metrics.kSpace4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          if (item.route.sidebarIcon != null)
+                            isExpanded
+                                ? AnimatedContainer(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOutCubic,
+                                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
+                                          : Colors.transparent,
+                                      borderRadius: AppTheme.metrics.radius8,
                                     ),
-                                    if (item.route.sidebarBadgeWidget(context) != null)
-                                      Positioned(
-                                        right: AppTheme.metrics.kSpace2,
-                                        top: AppTheme.metrics.kSpace2,
-                                        child: item.route.sidebarBadgeWidget(context)!,
-                                      ),
-                                  ],
-                                ),
-                        if (isExpanded && showExtends)
-                          Expanded(
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 200),
-                              opacity: isExpanded ? 1.0 : 0.0,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  SizedBox(width: AppTheme.metrics.kSpace8),
-                                  Expanded(
-                                    child: Text(
-                                      item.route.sidebarLabel,
-                                      style: TextStyle(
-                                        fontSize: AppTheme.metrics.fontSize13,
-                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                        color: isSelected
-                                            ? theme.colorScheme.primary
-                                            : theme.textTheme.bodyMedium?.color,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      softWrap: false,
-                                      maxLines: 1,
+                                    child: SvgPicture.asset(
+                                      item.route.sidebarIcon!,
+                                      width: AppTheme.metrics.fontSize18,
+                                      colorFilter: isSelected
+                                          ? ColorFilter.mode(
+                                              theme.colorScheme.primary,
+                                              BlendMode.srcIn,
+                                            )
+                                          : ColorFilter.mode(
+                                              theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
+                                              BlendMode.srcIn,
+                                            ),
                                     ),
-                                  ),
-                                  if (item.route.sidebarBadgeCount != null)
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: AppTheme.metrics.kSpace6,
-                                        vertical: AppTheme.metrics.kSpace2,
-                                      ),
-                                      constraints: BoxConstraints(
-                                        minWidth: AppTheme.metrics.kSpace18,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? theme.colorScheme.primary.withAlpha(25)
-                                            : theme.hintColor.withAlpha(30),
-                                        borderRadius: AppTheme.metrics.radius8,
-                                      ),
-                                      child: Text(
-                                        item.route.sidebarBadgeCount.toString(),
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: AppTheme.metrics.fontSize9,
-                                          fontWeight: FontWeight.w600,
-                                          color: isSelected
-                                              ? theme.colorScheme.primary
-                                              : theme.hintColor,
+                                  )
+                                : Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 250),
+                                        curve: Curves.easeInOutCubic,
+                                        padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
+                                        decoration: BoxDecoration(
+                                          color: isSelected && isExpanded
+                                              ? theme.colorScheme.primary.withAlpha(
+                                                  isDark ? 25 : 20,
+                                                )
+                                              : Colors.transparent,
+                                          borderRadius: AppTheme.metrics.radius8,
                                         ),
-                                        maxLines: 1,
+                                        child: SvgPicture.asset(
+                                          item.route.sidebarIcon!,
+                                          width: AppTheme.metrics.fontSize22,
+                                          colorFilter: isSelected
+                                              ? ColorFilter.mode(
+                                                  theme.colorScheme.primary,
+                                                  BlendMode.srcIn,
+                                                )
+                                              : ColorFilter.mode(
+                                                  theme.iconTheme.color?.withAlpha(179) ??
+                                                      Colors.black,
+                                                  BlendMode.srcIn,
+                                                ),
+                                        ),
                                       ),
-                                    ),
-                                  if (item.route.sidebarBadgeWidget(context) != null)
-                                    Padding(
-                                      padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
-                                      child: item.route.sidebarBadgeWidget(context)!,
-                                    ),
-                                  if (item.route.sidebarStatusWidget(context) != null)
-                                    Padding(
-                                      padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
-                                      child: item.route.sidebarStatusWidget(context)!,
-                                    ),
-                                ],
+                                      if (item.route.sidebarBadgeWidget(context) != null)
+                                        Positioned(
+                                          right: AppTheme.metrics.kSpace2,
+                                          top: AppTheme.metrics.kSpace2,
+                                          child: item.route.sidebarBadgeWidget(context)!,
+                                        ),
+                                    ],
+                                  ),
+                          if (isExpanded && showExtends)
+                            Expanded(
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeInOutCubic,
+                                opacity: showExtends ? 1.0 : 0.0,
+                                child: ClipRect(
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(width: AppTheme.metrics.kSpace8),
+                                      Expanded(
+                                        child: Text(
+                                          item.route.sidebarLabel,
+                                          style: TextStyle(
+                                            fontSize: AppTheme.metrics.fontSize13,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                            color: isSelected
+                                                ? theme.colorScheme.primary
+                                                : theme.textTheme.bodyMedium?.color,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          softWrap: false,
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                      if (item.route.sidebarBadgeCount != null)
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: AppTheme.metrics.kSpace6,
+                                            vertical: AppTheme.metrics.kSpace2,
+                                          ),
+                                          constraints: BoxConstraints(
+                                            minWidth: AppTheme.metrics.kSpace18,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? theme.colorScheme.primary.withAlpha(25)
+                                                : theme.hintColor.withAlpha(30),
+                                            borderRadius: AppTheme.metrics.radius8,
+                                          ),
+                                          child: Text(
+                                            item.route.sidebarBadgeCount.toString(),
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: AppTheme.metrics.fontSize9,
+                                              fontWeight: FontWeight.w600,
+                                              color: isSelected
+                                                  ? theme.colorScheme.primary
+                                                  : theme.hintColor,
+                                            ),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                      if (item.route.sidebarBadgeWidget(context) != null)
+                                        Padding(
+                                          padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
+                                          child: item.route.sidebarBadgeWidget(context)!,
+                                        ),
+                                      if (item.route.sidebarStatusWidget(context) != null)
+                                        Padding(
+                                          padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
+                                          child: item.route.sidebarStatusWidget(context)!,
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

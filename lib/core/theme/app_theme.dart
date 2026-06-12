@@ -263,6 +263,7 @@ class AppTheme {
             height: 1.2,
             letterSpacing: 0.5,
           ),
+          side: BorderSide(color: LightColors.primary, width: 1),
         ),
       ),
 
@@ -277,6 +278,23 @@ class AppTheme {
             height: 1.2,
             letterSpacing: 0.5,
           ),
+          side: BorderSide(color: LightColors.primary, width: 1),
+        ),
+      ),
+
+      // 线框按钮主题
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace24, vertical: metrics.kSpace12),
+          shape: RoundedRectangleBorder(borderRadius: metrics.radius8),
+          textStyle: TextStyle(
+            fontSize: scaleS(13),
+            fontWeight: FontWeight.w500,
+            height: 1.2,
+            letterSpacing: 0.5,
+            color: LightColors.primary,
+          ),
+          side: BorderSide(color: LightColors.primary, width: 1),
         ),
       ),
 
@@ -403,6 +421,7 @@ class AppTheme {
             height: 1.2,
             letterSpacing: 0.5,
           ),
+          side: BorderSide(color: DarkColors.primary, width: 1),
         ),
       ),
 
@@ -417,6 +436,24 @@ class AppTheme {
             height: 1.2,
             letterSpacing: 0.5,
           ),
+          side: BorderSide(color: DarkColors.primary, width: 1),
+        ),
+      ),
+
+      // 线框按钮主题
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: DarkColors.primary,
+          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace24, vertical: metrics.kSpace12),
+          shape: RoundedRectangleBorder(borderRadius: metrics.radius8),
+          textStyle: TextStyle(
+            fontSize: scaleS(13),
+            fontWeight: FontWeight.w500,
+            height: 1.2,
+            letterSpacing: 0.5,
+            color: LightColors.primary,
+          ),
+          side: BorderSide(color: DarkColors.primary, width: 1),
         ),
       ),
 

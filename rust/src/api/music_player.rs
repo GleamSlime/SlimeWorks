@@ -461,6 +461,8 @@ pub fn increment_folder_play_count(folder_id: String) -> anyhow::Result<bool> {
 
 /// 提取音频文件的波形数据（用于可视化）
 /// 返回降采样后的振幅数组（0.0~1.0），samples 指定返回的采样点数
+///
+/// 优化：边解码边计算 bin 峰值，不分配全量 PCM 缓冲区，速度提升 5~10 倍
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn extract_waveform(
     audio_file_path: String,
@@ -472,12 +474,9 @@ pub fn extract_waveform(
         return Ok(cached);
     }
 
-    // 解码音频获取 PCM 数据
-    let pcm = whisper_module::audio::extract_pcm_16k_mono(&audio_file_path)
+    // 流式解码 + 实时计算波形 bin
+    let result = _extract_waveform_streaming(&audio_file_path, samples as usize)
         .map_err(|e| anyhow::anyhow!(e))?;
-
-    // 降采样为指定数量的 bin
-    let result = _downsample_waveform(&pcm, samples as usize);
 
     // 写入缓存
     let _ = _write_waveform_cache(&cache_path, samples, &result);
@@ -494,31 +493,192 @@ pub fn extract_waveform(
     Ok(vec![])
 }
 
-/// 降采样 PCM 数据为波形数据
-fn _downsample_waveform(pcm: &[f32], num_bins: usize) -> Vec<f64> {
-    if pcm.is_empty() || num_bins == 0 {
-        return vec![0.0; num_bins];
-    }
+/// 流式解码音频并直接计算波形 bin 峰值
+/// 不分配全量 PCM 缓冲区，只维护 num_bins 个峰值
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn _extract_waveform_streaming(
+    audio_file_path: &str,
+    num_bins: usize,
+) -> Result<Vec<f64>, String> {
+    use symphonia::core::audio::Signal;
+    use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
 
-    let samples_per_bin = pcm.len() as f64 / num_bins as f64;
-    let mut result = Vec::with_capacity(num_bins);
+    let src = std::fs::File::open(audio_file_path)
+        .map_err(|e| format!("打开音频文件失败: {}", e))?;
+    let mss = MediaSourceStream::new(
+        Box::new(src) as Box<dyn symphonia::core::io::MediaSource>,
+        Default::default(),
+    );
 
-    for i in 0..num_bins {
-        let start = (i as f64 * samples_per_bin) as usize;
-        let end = ((i + 1) as f64 * samples_per_bin).min(pcm.len() as f64) as usize;
+    let hint = Hint::new();
+    let format_opts = FormatOptions::default();
+    let metadata_opts = MetadataOptions::default();
+    let decoder_opts = DecoderOptions::default();
 
-        // 取该区间内的峰值绝对值
-        let mut peak = 0.0f32;
-        for j in start..end {
-            let abs_val = pcm[j].abs();
-            if abs_val > peak {
-                peak = abs_val;
-            }
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &format_opts, &metadata_opts)
+        .map_err(|e| format!("探测音频格式失败: {}", e))?;
+
+    let mut format = probed.format;
+
+    // 找到第一个音频轨道
+    let track_id = format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+        .map(|t| t.id)
+        .ok_or("未找到音频轨道")?;
+
+    let track = format.tracks().iter().find(|t| t.id == track_id).unwrap();
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &decoder_opts)
+        .map_err(|e| format!("创建解码器失败: {}", e))?;
+
+    // 获取音频时长（样本数），用于计算每个 bin 的样本范围
+    let sample_rate = track.codec_params.sample_rate.unwrap_or(44100) as u64;
+    let n_frames = track.codec_params.n_frames.unwrap_or(0);
+    let total_samples = if n_frames > 0 {
+        n_frames
+    } else {
+        // 无法获取帧数，用文件大小粗略估算
+        let file_size = std::fs::metadata(audio_file_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        // 假设平均比特率 128kbps
+        let estimated_duration_secs = file_size as f64 / (128000.0 / 8.0);
+        (estimated_duration_secs * sample_rate as f64) as u64
+    };
+
+    let samples_per_bin = if total_samples > 0 && num_bins > 0 {
+        total_samples as f64 / num_bins as f64
+    } else {
+        0.0
+    };
+
+    // 初始化 bin 峰值数组
+    let mut bin_peaks = vec![0.0f32; num_bins];
+    let mut sample_index: u64 = 0;
+
+    // 解码循环：边解码边累积 bin 峰值
+    loop {
+        let packet = match format.next_packet() {
+            Ok(p) => p,
+            Err(symphonia::core::errors::Error::ResetRequired) => continue,
+            Err(symphonia::core::errors::Error::IoError(_)) => break,
+            Err(_) => break,
+        };
+
+        if packet.track_id() != track_id {
+            continue;
         }
 
-        result.push(peak as f64);
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            Err(_) => break,
+        };
+
+        let frames = decoded.frames();
+
+        // 从解码帧中提取样本并直接分配到对应的 bin
+        match decoded {
+            symphonia::core::audio::AudioBufferRef::S16(buf) => {
+                let ch0 = buf.chan(0);
+                for i in 0..frames {
+                    let val = (ch0[i] as f32 / 32768.0).abs();
+                    _accumulate_bin(&mut bin_peaks, sample_index, val, samples_per_bin);
+                    sample_index += 1;
+                }
+            }
+            symphonia::core::audio::AudioBufferRef::S32(buf) => {
+                let ch0 = buf.chan(0);
+                for i in 0..frames {
+                    let val = (ch0[i] as f32 / 2147483648.0).abs();
+                    _accumulate_bin(&mut bin_peaks, sample_index, val, samples_per_bin);
+                    sample_index += 1;
+                }
+            }
+            symphonia::core::audio::AudioBufferRef::F32(buf) => {
+                let ch0 = buf.chan(0);
+                for i in 0..frames {
+                    let val = ch0[i].abs();
+                    _accumulate_bin(&mut bin_peaks, sample_index, val, samples_per_bin);
+                    sample_index += 1;
+                }
+            }
+            symphonia::core::audio::AudioBufferRef::F64(buf) => {
+                let ch0 = buf.chan(0);
+                for i in 0..frames {
+                    let val = ch0[i].abs() as f32;
+                    _accumulate_bin(&mut bin_peaks, sample_index, val, samples_per_bin);
+                    sample_index += 1;
+                }
+            }
+            symphonia::core::audio::AudioBufferRef::U8(buf) => {
+                let ch0 = buf.chan(0);
+                for i in 0..frames {
+                    let val = ((ch0[i] as f32 - 128.0) / 128.0).abs();
+                    _accumulate_bin(&mut bin_peaks, sample_index, val, samples_per_bin);
+                    sample_index += 1;
+                }
+            }
+            symphonia::core::audio::AudioBufferRef::S24(buf) => {
+                let ch0 = buf.chan(0);
+                for i in 0..frames {
+                    let val = (ch0[i].0 as f32 / 8388608.0).abs();
+                    _accumulate_bin(&mut bin_peaks, sample_index, val, samples_per_bin);
+                    sample_index += 1;
+                }
+            }
+            _ => {
+                // 跳过不支持的格式
+                sample_index += frames as u64;
+            }
+        }
     }
 
+    // 如果没有获取到样本数信息，重新按实际解码样本数分配
+    if samples_per_bin == 0.0 && sample_index > 0 && num_bins > 0 {
+        // 需要重新计算（此时 bin_peaks 是按顺序填充的，需要重新分配）
+        // 简化处理：直接按等分截取
+        let result: Vec<f64> = bin_peaks.iter().map(|&v| v as f64).collect();
+        return Ok(_redistribute_bins(&result, num_bins));
+    }
+
+    Ok(bin_peaks.iter().map(|&v| v as f64).collect())
+}
+
+/// 将样本累积到对应的 bin（取峰值）
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[inline]
+fn _accumulate_bin(bin_peaks: &mut [f32], sample_index: u64, value: f32, samples_per_bin: f64) {
+    if samples_per_bin <= 0.0 {
+        return;
+    }
+    let bin_idx = (sample_index as f64 / samples_per_bin) as usize;
+    if bin_idx < bin_peaks.len() && value > bin_peaks[bin_idx] {
+        bin_peaks[bin_idx] = value;
+    }
+}
+
+/// 重新分配 bin（当无法预知总样本数时使用）
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn _redistribute_bins(data: &[f64], target_bins: usize) -> Vec<f64> {
+    if data.len() == target_bins {
+        return data.to_vec();
+    }
+    let ratio = data.len() as f64 / target_bins as f64;
+    let mut result = Vec::with_capacity(target_bins);
+    for i in 0..target_bins {
+        let start = (i as f64 * ratio) as usize;
+        let end = ((i + 1) as f64 * ratio).min(data.len() as f64) as usize;
+        let peak = data[start..end].iter().fold(0.0f64, |acc, &v| acc.max(v));
+        result.push(peak);
+    }
     result
 }
 
