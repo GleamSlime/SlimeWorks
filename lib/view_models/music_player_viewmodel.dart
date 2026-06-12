@@ -77,6 +77,76 @@ class MusicPlayerViewModel extends BaseViewModel {
   final eqPresets = <music_api.EqualizerPresetInfo>[].obs;
   final currentEqPresetId = Rxn<String>();
 
+  // ── 路径映射 ───────────────────────────────────────────────────────────────
+  /// 拖拽导入的文件夹路径映射（树形结构）
+  final pathMappings = <music_api.PathMappingNodeInfo>[].obs;
+
+  static const _keyPathMappingDirs = 'music_player_path_mapping_dirs';
+
+  /// 加载持久化的路径映射
+  Future<void> _loadPathMappings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final entries = prefs.getStringList(_keyPathMappingDirs) ?? [];
+      final validEntries = <String>[];
+      for (final entry in entries) {
+        final parts = entry.split('||');
+        final dir = parts[0];
+        final folderId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
+        if (Directory(dir).existsSync()) {
+          final mapping = music_api.scanPathMapping(dirPath: dir);
+          final mappingWithFolder = music_api.PathMappingNodeInfo(
+            name: mapping.name,
+            path: mapping.path,
+            nodeType: mapping.nodeType,
+            fileSize: mapping.fileSize,
+            children: mapping.children,
+            hasAudio: mapping.hasAudio,
+            folderId: folderId,
+          );
+          pathMappings.add(mappingWithFolder);
+          validEntries.add(entry);
+        }
+      }
+      // 清理不存在的路径
+      if (validEntries.length != entries.length) {
+        await prefs.setStringList(_keyPathMappingDirs, validEntries);
+      }
+    } catch (e) {
+      _logger.info('[播放器] 加载路径映射失败: $e');
+    }
+  }
+
+  /// 保存路径映射目录列表
+  Future<void> _savePathMappingDirs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final entries = pathMappings.map((m) => '${m.path}||${m.folderId ?? ''}').toList();
+      await prefs.setStringList(_keyPathMappingDirs, entries);
+    } catch (e) {
+      _logger.info('[播放器] 保存路径映射失败: $e');
+    }
+  }
+
+  /// 移除路径映射
+  Future<void> removePathMapping(String path) async {
+    pathMappings.removeWhere((m) => m.path == path);
+    await _savePathMappingDirs();
+  }
+
+  /// 刷新路径映射（重新扫描）
+  Future<void> refreshPathMapping(String path) async {
+    try {
+      final index = pathMappings.indexWhere((m) => m.path == path);
+      if (index >= 0 && Directory(path).existsSync()) {
+        final mapping = music_api.scanPathMapping(dirPath: path);
+        pathMappings[index] = mapping;
+      }
+    } catch (e) {
+      _logger.info('[播放器] 刷新路径映射失败: $e');
+    }
+  }
+
   // ── 搜索 ─────────────────────────────────────────────────────────────────
   final searchQuery = ''.obs;
 
@@ -121,6 +191,8 @@ class MusicPlayerViewModel extends BaseViewModel {
   final translatedLyrics = <String?>[].obs;
 
   // ── 音频播放器（media_kit） ───────────────────────────────────────────────
+  // 注意：_player 必须是 final，热重载时不能替换或 dispose，
+  // 否则 mpv 的 C 线程回调会触发 DLRT_GetFfiCallbackMetadata 崩溃。
   final Player _player = Player(
     configuration: const PlayerConfiguration(bufferSize: 64 * 1024 * 1024),
   );
@@ -144,6 +216,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     _initPlayer();
     _loadFolders();
     _loadPlaylists();
+    _loadPathMappings();
     _restorePlaybackPosition();
   }
 
@@ -277,14 +350,48 @@ class MusicPlayerViewModel extends BaseViewModel {
     _isDisposed = true;
     _savePlaybackPosition();
     _savePositionTimer?.cancel();
-    // 先停止播放，防止 mpv 回调到已销毁的 isolate
-    _player.stop();
+    // 先取消所有订阅
     _positionSub?.cancel();
+    _positionSub = null;
     _durationSub?.cancel();
+    _durationSub = null;
     _playingSub?.cancel();
+    _playingSub = null;
     _completedSub?.cancel();
+    _completedSub = null;
+    // 再 dispose Player
     _player.dispose();
     super.onClose();
+  }
+
+  /// 热重载前调用：只取消订阅并重新订阅，不 dispose Player。
+  /// dispose Player 会触发 mpv shutdown，其 C 线程回调在 isolate 回收后
+  /// 导致 DLRT_GetFfiCallbackMetadata 崩溃，因此必须让 Player 跨热重载存活。
+  void disposeForHotReload() {
+    _savePlaybackPosition();
+    _savePositionTimer?.cancel();
+
+    // 取消旧订阅
+    _positionSub?.cancel();
+    _positionSub = null;
+    _durationSub?.cancel();
+    _durationSub = null;
+    _playingSub?.cancel();
+    _playingSub = null;
+    _completedSub?.cancel();
+    _completedSub = null;
+
+    // 不 dispose Player，不替换 Player，只重新订阅
+    _isDisposed = false;
+    _isSwitching = false;
+    _playerReady = _player.state.playing ||
+        _player.state.duration.inMilliseconds > 0;
+    _initPlayer();
+
+    // 从 Player 同步当前状态，避免热重载后 UI 状态不同步
+    isPlaying.value = _player.state.playing;
+    currentPositionMs.value = _player.state.position.inMilliseconds;
+    durationMs.value = _player.state.duration.inMilliseconds;
   }
 
   // ── 目录操作 ─────────────────────────────────────────────────────────────
@@ -592,10 +699,9 @@ class MusicPlayerViewModel extends BaseViewModel {
   }
 
   /// 拖拽导入
-  /// 文件夹→自动以文件夹名创建子目录并在其中新建播放列表
+  /// 文件夹→扫描路径映射（显示完整文件/文件夹结构），如果含音频则自动新建播放列表
   /// 多个音频文件→导入到当前目录的当前播放列表
   Future<void> importDroppedPaths(List<String> paths) async {
-    final pid = currentPlaylistId.value;
     final folders = <String>[];
     final files = <String>[];
     for (final p in paths) {
@@ -606,21 +712,39 @@ class MusicPlayerViewModel extends BaseViewModel {
         files.add(p);
       }
     }
-    // 文件夹：每个文件夹创建子目录 + 播放列表
+    // 文件夹：扫描路径映射，含音频则自动新建播放列表
     for (final folder in folders) {
       final dirName = Directory(folder).path.split(Platform.pathSeparator).last;
       try {
-        // 在当前目录下创建子目录
-        final newFolder = music_api.createFolder(name: dirName, parentId: currentFolderId.value);
-        // 在子目录下创建播放列表并导入
-        final pl = music_api.createPlaylistInFolder(name: dirName, folderId: newFolder.id);
-        await music_api.importMusicFolder(playlistId: pl.id, folderPath: folder);
+        // 扫描路径映射（显示完整文件/文件夹结构）
+        final mapping = music_api.scanPathMapping(dirPath: folder);
+        // 关联到当前文件夹
+        final mappingWithFolder = music_api.PathMappingNodeInfo(
+          name: mapping.name,
+          path: mapping.path,
+          nodeType: mapping.nodeType,
+          fileSize: mapping.fileSize,
+          children: mapping.children,
+          hasAudio: mapping.hasAudio,
+          folderId: currentFolderId.value,
+        );
+        pathMappings.add(mappingWithFolder);
+
+        // 如果文件夹包含音频文件，自动创建子目录 + 播放列表并导入
+        if (mapping.hasAudio) {
+          final newFolder = music_api.createFolder(name: dirName, parentId: currentFolderId.value);
+          final pl = music_api.createPlaylistInFolder(name: dirName, folderId: newFolder.id);
+          await music_api.importMusicFolder(playlistId: pl.id, folderPath: folder);
+          _extractCoversInBackground(pl.id);
+          _precomputeWaveformsInBackground(pl.id);
+        }
       } catch (e) {
         _logger.info('[播放器] 拖拽导入文件夹失败: $e');
       }
     }
     // 多个音频文件：导入到当前播放列表
     if (files.isNotEmpty) {
+      final pid = currentPlaylistId.value;
       if (pid != null) {
         await importMusicPaths(files);
       } else {
@@ -635,6 +759,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     // 刷新
     await _loadFolders();
     await _loadPlaylists();
+    await _savePathMappingDirs();
   }
 
   // ── 音乐操作 ─────────────────────────────────────────────────────────────
@@ -694,17 +819,13 @@ class MusicPlayerViewModel extends BaseViewModel {
     _loadWaveform(item.filePath);
 
     try {
-      // 先停止当前播放，防止 mpv 事件回调冲突
-      if (_playerReady) {
-        await _player.stop();
-      }
-      // 设置音频源为本地文件
+      // 直接 open 新文件，mpv 会自动替换当前播放
+      // 不先 stop，避免 stop 触发的事件回调与 open 竞争
       final uri = item.filePath.startsWith('http')
           ? item.filePath
           : Uri.file(item.filePath).toString();
       await _player.open(Media(uri));
       _playerReady = true;
-      await _player.play();
     } catch (e) {
       _logger.info('[播放器] 播放失败: $e');
       isPlaying.value = false;

@@ -7,7 +7,7 @@ use slime_logger::{sw_debug, sw_info, sw_warn};
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::types::{CueSheet, CueTrack, MusicItem};
+use crate::types::{CueSheet, CueTrack, MusicItem, PathMappingNode, PathMappingNodeType};
 
 /// 支持的音频文件扩展名
 const AUDIO_EXTENSIONS: &[&str] = &[
@@ -315,6 +315,119 @@ pub fn parse_cue_content(content: &str) -> Result<CueSheet> {
         audio_file: audio_file.unwrap_or_default(),
         tracks,
     })
+}
+
+/// 支持的图片文件扩展名
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "tiff", "tif", "ico",
+];
+
+/// 判断是否为图片文件
+pub fn is_image_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| IMAGE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+/// 根据文件路径判断节点类型
+fn classify_file(path: &Path) -> PathMappingNodeType {
+    if is_audio_file(path) {
+        PathMappingNodeType::AudioFile
+    } else if is_cue_file(path) {
+        PathMappingNodeType::CueFile
+    } else if is_image_file(path) {
+        PathMappingNodeType::ImageFile
+    } else {
+        PathMappingNodeType::OtherFile
+    }
+}
+
+/// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
+pub fn scan_path_mapping(dir_path: &str) -> Result<PathMappingNode> {
+    let path = Path::new(dir_path);
+    if !path.exists() || !path.is_dir() {
+        return Err(anyhow::anyhow!("目录不存在或不是有效目录: {}", dir_path));
+    }
+    Ok(scan_path_mapping_recursive(path))
+}
+
+/// 递归扫描路径映射
+fn scan_path_mapping_recursive(dir_path: &Path) -> PathMappingNode {
+    let name = dir_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("未知目录")
+        .to_string();
+    let path_str = dir_path.to_string_lossy().to_string();
+
+    let mut children = Vec::new();
+
+    if let Ok(entries) = std::fs::read_dir(dir_path) {
+        let mut entries: Vec<std::fs::DirEntry> = entries.flatten().collect();
+        // 排序：文件夹在前，文件在后；同类按名称排序
+        entries.sort_by(|a, b| {
+            let a_is_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let b_is_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.file_name().cmp(&b.file_name()),
+            }
+        });
+
+        for entry in entries {
+            let entry_path = entry.path();
+            // 跳过隐藏文件/目录
+            if entry
+                .file_name()
+                .to_str()
+                .map_or(false, |n| n.starts_with('.'))
+            {
+                continue;
+            }
+
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                children.push(scan_path_mapping_recursive(&entry_path));
+            } else {
+                let file_name = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("未知文件")
+                    .to_string();
+                let file_path_str = entry_path.to_string_lossy().to_string();
+                let file_size = std::fs::metadata(&entry_path).ok().map(|m| m.len());
+                let node_type = classify_file(&entry_path);
+                let has_audio = matches!(node_type, PathMappingNodeType::AudioFile);
+
+                children.push(PathMappingNode {
+                    name: file_name,
+                    path: file_path_str,
+                    node_type,
+                    file_size,
+                    children: Vec::new(),
+                    has_audio,
+                });
+            }
+        }
+    }
+
+    // 递归检查是否包含音频文件
+    let has_audio = path_mapping_has_audio(&children);
+
+    PathMappingNode {
+        name,
+        path: path_str,
+        node_type: PathMappingNodeType::Directory,
+        file_size: None,
+        children,
+        has_audio,
+    }
+}
+
+/// 递归检查子树中是否包含音频文件
+fn path_mapping_has_audio(children: &[PathMappingNode]) -> bool {
+    children.iter().any(|c| c.has_audio)
 }
 
 #[cfg(test)]

@@ -236,11 +236,11 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                     color: statusColor,
                   ),
                 ),
-                title: Text(server.url, style: TextStyle(fontSize: m.fontSize12)),
+                title: Text(server.url, style: TextStyle(fontSize: m.fontSize13, fontWeight: FontWeight.w600)),
                 subtitle: server.lastChecked != null
                     ? Text(
                         '最后检查: ${_formatDateTime(server.lastChecked!)}',
-                        style: TextStyle(fontSize: m.fontSize10),
+                        style: TextStyle(fontSize: m.fontSize12),
                       )
                     : null,
                 trailing: Row(

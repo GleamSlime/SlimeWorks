@@ -79,7 +79,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(m.kSpace12),
+      padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
         borderRadius: m.radius12,
@@ -103,7 +103,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     return Obx(
       () => Scaffold(
         body: SingleChildScrollView(
-          padding: EdgeInsets.all(m.kSpace16),
+          padding: EdgeInsets.all(m.kSpace24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

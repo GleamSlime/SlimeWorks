@@ -131,3 +131,35 @@ pub struct Folder {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+/// 路径映射节点类型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PathMappingNodeType {
+    /// 文件夹
+    Directory,
+    /// 音频文件
+    AudioFile,
+    /// 图片文件
+    ImageFile,
+    /// CUE 文件
+    CueFile,
+    /// 其他文件
+    OtherFile,
+}
+
+/// 路径映射节点（树形结构，映射磁盘路径）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PathMappingNode {
+    /// 节点名称
+    pub name: String,
+    /// 完整路径
+    pub path: String,
+    /// 节点类型
+    pub node_type: PathMappingNodeType,
+    /// 文件大小（字节），仅文件有效
+    pub file_size: Option<u64>,
+    /// 子节点
+    pub children: Vec<PathMappingNode>,
+    /// 是否包含音频文件（文件夹属性，递归检查）
+    pub has_audio: bool,
+}

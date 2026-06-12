@@ -432,7 +432,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                                         Text(
                                           statusLabel,
                                           style: TextStyle(
-                                            fontSize: m.fontSize10,
+                                            fontSize: m.fontSize12,
                                             fontWeight: FontWeight.w600,
                                             color: dotColor,
                                           ),
@@ -445,11 +445,11 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(node.apiBaseUrl, style: TextStyle(fontSize: m.fontSize11)),
+                                  Text(node.apiBaseUrl, style: TextStyle(fontSize: m.fontSize12)),
                                   if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
                                     Text(
                                       '内网: ${node.lanApiBaseUrl}',
-                                      style: TextStyle(fontSize: m.fontSize10, color: Colors.teal),
+                                      style: TextStyle(fontSize: m.fontSize12, color: Colors.teal),
                                     ),
                                 ],
                               ),

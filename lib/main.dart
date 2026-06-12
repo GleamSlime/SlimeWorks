@@ -7,6 +7,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:media_kit/media_kit.dart';
+// ignore: implementation_imports
+import 'package:media_kit/src/player/native/utils/native_reference_holder.dart';
+import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
@@ -29,7 +33,6 @@ import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
-import 'package:media_kit/media_kit.dart';
 
 const Loggers _logger = Loggers(name: '主程序');
 
@@ -185,10 +188,57 @@ void _registerFfmpegPaths() {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   DesktopScreenProvider get desktopScreen => getIt<DesktopScreenProvider>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // 热重载时防止 media_kit 的 NativeReferenceHolder 崩溃：
+    // 热重载会重置 NativeReferenceHolder.initialized 为 false，
+    // 导致 nativeEnsureInitialized 重新调用，读取 buffer 中的旧 mpv 句柄
+    // 并发送 quit 命令 → mp_shutdown_clients → 回调已删除的 NativeCallable → 崩溃。
+    // 解决方案：抢先调用 ensureInitialized 注册空回调，替代默认的 quit 回调。
+    try {
+      _preventNativeReferenceHolderCrash();
+      if (Get.isRegistered<MusicPlayerViewModel>()) {
+        Get.find<MusicPlayerViewModel>().disposeForHotReload();
+      }
+    } catch (_) {}
+  }
+
+  /// 抢先注册空回调到 NativeReferenceHolder，防止热重载后
+  /// nativeEnsureInitialized 对存活的 mpv 实例发送 quit 命令
+  void _preventNativeReferenceHolderCrash() {
+    if (!Platform.isMacOS && !Platform.isLinux && !Platform.isWindows) return;
+    try {
+      // 抢先调用 ensureInitialized，注册空回调替代默认的 quit 回调。
+      // 如果 initialized 已被热重载重置为 false，此调用会：
+      //   1. 设置 initialized = true（阻止后续重复调用）
+      //   2. 用空回调启动 _ensureInitialized（读到旧句柄也不发 quit）
+      // 如果 initialized 仍为 true，此调用直接返回，无副作用。
+      NativeReferenceHolder.ensureInitialized((_) {});
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {

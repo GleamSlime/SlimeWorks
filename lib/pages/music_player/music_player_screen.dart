@@ -4,8 +4,11 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/components/window/desktop_head.dart';
+import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
@@ -13,6 +16,7 @@ import 'package:slime_works/view_models/music_player_viewmodel.dart';
 import 'package:slime_works/pages/music_player/components/music_list_item.dart';
 import 'package:slime_works/pages/music_player/components/playlist_sidebar.dart';
 import 'package:slime_works/pages/music_player/components/bottom_player_bar.dart';
+import 'package:slime_works/pages/music_player/components/eq_panel.dart';
 import 'package:slime_works/pages/music_player/components/immersive_player_screen.dart';
 
 const _kSidebarWidth = 220.0;
@@ -39,57 +43,76 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   Widget buildContent(BuildContext context) {
     final isMobile = PlatformUtil.isMobile || getIt<DesktopScreenProvider>().isMobile.value;
 
-    return Obx(() {
-      // 沉浸式播放模式（全屏唱片机，覆盖整个页面）
-      if (viewModel.isImmersiveMode.value) {
-        return ImmersivePlayerScreen(viewModel: viewModel);
-      }
+    return ScreenChrome(
+      data: _buildScreenChromeData(context, isMobile),
+      child: Obx(() {
+        // 沉浸式播放模式（全屏唱片机，覆盖整个页面）
+        if (viewModel.isImmersiveMode.value) {
+          return ImmersivePlayerScreen(viewModel: viewModel);
+        }
 
-      // 桌面端：左侧播放列表侧边栏 + 右侧主内容 + 底部播放栏
-      if (!isMobile) {
-        return DropTarget(
-          onDragEntered: (_) => setState(() => _isDraggingFiles = true),
-          onDragExited: (_) => setState(() => _isDraggingFiles = false),
-          onDragDone: (detail) {
-            setState(() => _isDraggingFiles = false);
-            viewModel.importDroppedPaths(detail.files.map((f) => f.path).toList());
-          },
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        // 左侧播放列表
-                        SizedBox(
-                          width: _kSidebarWidth,
-                          child: PlaylistSidebar(viewModel: viewModel),
-                        ),
-                        // 右侧主内容（文件夹信息 + 歌曲列表）
-                        Expanded(child: _buildMainContent(context)),
-                      ],
+        // 桌面端：左侧播放列表侧边栏 + 右侧主内容 + 底部播放栏
+        if (!isMobile) {
+          return DropTarget(
+            onDragEntered: (_) => setState(() => _isDraggingFiles = true),
+            onDragExited: (_) => setState(() => _isDraggingFiles = false),
+            onDragDone: (detail) {
+              setState(() => _isDraggingFiles = false);
+              viewModel.importDroppedPaths(detail.files.map((f) => f.path).toList());
+            },
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          // 左侧播放列表
+                          SizedBox(
+                            width: _kSidebarWidth,
+                            child: PlaylistSidebar(viewModel: viewModel),
+                          ),
+                          // 右侧主内容（文件夹信息 + 歌曲列表）
+                          Expanded(child: _buildMainContent(context)),
+                        ],
+                      ),
                     ),
-                  ),
-                  // 底部悬浮播放栏
-                  BottomPlayerBar(viewModel: viewModel, onTapExpand: viewModel.enterImmersiveMode),
-                ],
-              ),
-              if (_isDraggingFiles)
-                Positioned.fill(child: IgnorePointer(child: _buildDragOverlay(context))),
-            ],
-          ),
-        );
-      }
+                    // 底部悬浮播放栏
+                    BottomPlayerBar(viewModel: viewModel, onTapExpand: viewModel.enterImmersiveMode),
+                  ],
+                ),
+                if (_isDraggingFiles)
+                  Positioned.fill(child: IgnorePointer(child: _buildDragOverlay(context))),
+              ],
+            ),
+          );
+        }
 
-      // 移动端：全屏布局，底部播放控制栏
-      return Column(
-        children: [
-          Expanded(child: _buildMainContent(context)),
-          BottomPlayerBar(viewModel: viewModel, onTapExpand: viewModel.enterImmersiveMode),
-        ],
-      );
-    });
+        // 移动端：全屏布局，底部播放控制栏
+        return Column(
+          children: [
+            Expanded(child: _buildMainContent(context)),
+            BottomPlayerBar(viewModel: viewModel, onTapExpand: viewModel.enterImmersiveMode),
+          ],
+        );
+      }),
+    );
+  }
+
+  /// 构建 ScreenChromeData（顶部工具栏：收藏、最近播放、均衡器）
+  ScreenChromeData _buildScreenChromeData(BuildContext context, bool isMobile) {
+    final toolbar = _MusicPlayerToolbar(
+      viewModel: viewModel,
+      onFavorites: () => _showFavorites(context),
+      onRecentPlayed: () => _showRecentPlayed(context),
+      onEqPanel: () => _showEqPanel(context),
+    );
+
+    return ScreenChromeData(
+      title: '音乐播放器',
+      toolbarHeight: AppTheme.metrics.kSpace48,
+      toolbar: toolbar,
+    );
   }
 
   /// 主内容区域：文件夹信息卡片 + 歌曲列表
@@ -425,6 +448,172 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
       ),
     );
   }
+
+  /// 显示均衡器
+  void _showEqPanel(BuildContext context) {
+    showModalBottomSheet(context: context, builder: (ctx) => const EqPanel());
+  }
+
+  /// 显示收藏列表
+  void _showFavorites(BuildContext context) async {
+    await viewModel.loadFavorites();
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                child: Row(
+                  children: [
+                    Icon(Icons.favorite_rounded, color: Theme.of(context).colorScheme.primary),
+                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    Text('收藏', style: Theme.of(context).textTheme.titleMedium),
+                    const Spacer(),
+                    Obx(() => Text(
+                      '${viewModel.favoriteItems.length} 首',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    )),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: Obx(() => viewModel.favoriteItems.isEmpty
+                    ? Center(
+                        child: Text(
+                          '暂无收藏',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).hintColor,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: viewModel.favoriteItems.length,
+                        itemBuilder: (_, index) {
+                          final item = viewModel.favoriteItems[index];
+                          return ListTile(
+                            leading: const Icon(Icons.music_note_rounded, size: 20),
+                            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                              item.artist ?? '未知艺术家',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              // 在当前列表中查找并播放
+                              final idx = viewModel.currentItems.indexWhere((i) => i.id == item.id);
+                              if (idx >= 0) {
+                                viewModel.playItem(idx);
+                              } else {
+                                viewModel.currentItems.value = [item];
+                                viewModel.playItem(0);
+                              }
+                            },
+                          );
+                        },
+                      )),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 显示最近播放
+  void _showRecentPlayed(BuildContext context) async {
+    await viewModel.loadRecentPlayed();
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                child: Row(
+                  children: [
+                    Icon(Icons.history_rounded, color: Theme.of(context).colorScheme.primary),
+                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
+                    const Spacer(),
+                    Obx(() => Text(
+                      '${viewModel.recentRecords.length} 首',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    )),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: Obx(() => viewModel.recentRecords.isEmpty
+                    ? Center(
+                        child: Text(
+                          '暂无播放记录',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).hintColor,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: viewModel.recentRecords.length,
+                        itemBuilder: (_, index) {
+                          final record = viewModel.recentRecords[index];
+                          final musicItem = viewModel.currentItems.firstWhereOrNull(
+                            (i) => i.id == record.musicId,
+                          );
+                          final title = musicItem?.title ?? '未知歌曲';
+                          final artist = musicItem?.artist;
+                          return ListTile(
+                            leading: const Icon(Icons.music_note_rounded, size: 20),
+                            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: artist != null
+                                ? Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis)
+                                : null,
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              final idx = viewModel.currentItems.indexWhere(
+                                (i) => i.id == record.musicId,
+                              );
+                              if (idx >= 0) {
+                                viewModel.playItem(idx);
+                              }
+                            },
+                          );
+                        },
+                      )),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -700,6 +889,44 @@ class _InfoChip extends StatelessWidget {
             color: Theme.of(context).hintColor,
             fontSize: AppTheme.metrics.fontSize11,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 音乐播放器顶部工具栏（收藏、最近播放、均衡器）
+class _MusicPlayerToolbar extends StatelessWidget {
+  final MusicPlayerViewModel viewModel;
+  final VoidCallback onFavorites;
+  final VoidCallback onRecentPlayed;
+  final VoidCallback onEqPanel;
+
+  const _MusicPlayerToolbar({
+    required this.viewModel,
+    required this.onFavorites,
+    required this.onRecentPlayed,
+    required this.onEqPanel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        DesktopHeadToolsButton(
+          icon: const Icon(Icons.favorite_rounded, size: 16),
+          size: 32,
+          onTap: onFavorites,
+        ),
+        DesktopHeadToolsButton(
+          icon: const Icon(Icons.history_rounded, size: 16),
+          size: 32,
+          onTap: onRecentPlayed,
+        ),
+        DesktopHeadToolsButton(
+          icon: const Icon(Icons.equalizer_rounded, size: 16),
+          size: 32,
+          onTap: onEqPanel,
         ),
       ],
     );

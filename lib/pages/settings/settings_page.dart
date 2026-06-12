@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/settings/components/aliyun_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
@@ -63,12 +64,9 @@ class _SettingsPageState extends State<SettingsPage>
       data: ScreenChromeData(
         title: '设置',
         toolbarHeight: AppTheme.metrics.kSpace48,
-        toolbar: TabBar(
-          tabAlignment: TabAlignment.start,
+        toolbar: _SettingsTabBar(
           controller: _controller,
-          isScrollable: true,
-          dividerHeight: 0,
-          tabs: _tabs.map((tab) => Tab(text: tab.label)).toList(),
+          tabs: _tabs.map((tab) => tab.label).toList(),
         ),
       ),
       child: TabBarView(
@@ -88,19 +86,15 @@ class _NodeSettingsWrapper extends StatelessWidget {
       length: 2,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final controller = DefaultTabController.of(context);
           return SizedBox(
             height: constraints.maxHeight,
-            child: const Column(
-              crossAxisAlignment: .start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TabBar(
-                  tabAlignment: TabAlignment.start,
-                  isScrollable: true,
-                  tabs: [
-                    Tab(text: '设置'),
-                    Tab(text: 'Ollama 设置'),
-                  ],
-                  dividerHeight: 0,
+                _SettingsTabBar(
+                  controller: controller,
+                  tabs: const ['设置', 'Ollama 设置'],
                 ),
                 Expanded(
                   child: TabBarView(
@@ -122,13 +116,12 @@ class _OtherSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = Platform.isAndroid || Platform.isIOS;
-    // 移动端隐藏桌面端专属标签页（播放器设置=Whisper、Sentry）
-    final tabs = <Tab>[
-      const Tab(text: '资源库'),
-      const Tab(text: 'Manga'),
-      const Tab(text: '游戏设置'),
-      if (!isMobile) const Tab(text: '播放器设置'),
-      if (!isMobile) const Tab(text: 'Sentry'),
+    final tabLabels = <String>[
+      '资源库',
+      'Manga',
+      '游戏设置',
+      if (!isMobile) '播放器设置',
+      if (!isMobile) 'Sentry',
     ];
     final children = <Widget>[
       const _ResourcesSettingsTab(),
@@ -139,19 +132,18 @@ class _OtherSettingsWrapper extends StatelessWidget {
     ];
 
     return DefaultTabController(
-      length: tabs.length,
+      length: tabLabels.length,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final controller = DefaultTabController.of(context);
           return SizedBox(
             height: constraints.maxHeight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TabBar(
-                  tabAlignment: TabAlignment.start,
-                  isScrollable: true,
-                  tabs: tabs,
-                  dividerHeight: 0,
+                _SettingsTabBar(
+                  controller: controller,
+                  tabs: tabLabels,
                 ),
                 Expanded(
                   child: TabBarView(
@@ -173,35 +165,32 @@ class _ToolsSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = Platform.isAndroid || Platform.isIOS;
-    // 移动端隐藏桌面端专属标签页（解压、阿里云 DDNS）
-    final tabs = <Tab>[
-      if (!isMobile) const Tab(text: '解压设置'),
-      if (!isMobile) const Tab(text: '阿里云'),
+    final tabLabels = <String>[
+      if (!isMobile) '解压设置',
+      if (!isMobile) '阿里云',
     ];
     final children = <Widget>[
       if (!isMobile) const ExtractSettingsTab(),
       if (!isMobile) const AliyunSettingsTab(),
     ];
 
-    // 移动端无可用标签页时显示提示
-    if (tabs.isEmpty) {
+    if (tabLabels.isEmpty) {
       return const Center(child: Text('当前平台无可用工具设置'));
     }
 
     return DefaultTabController(
-      length: tabs.length,
+      length: tabLabels.length,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final controller = DefaultTabController.of(context);
           return SizedBox(
             height: constraints.maxHeight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TabBar(
-                  tabAlignment: TabAlignment.start,
-                  isScrollable: true,
-                  tabs: tabs,
-                  dividerHeight: 0,
+                _SettingsTabBar(
+                  controller: controller,
+                  tabs: tabLabels,
                 ),
                 Expanded(
                   child: TabBarView(
@@ -231,4 +220,162 @@ class _SettingsTab {
   final Widget content;
 
   const _SettingsTab({required this.label, required this.content});
+}
+
+/// 自定义设置页 TabBar：圆角标签 + hover/按住交互 + 选中动画
+class _SettingsTabBar extends StatelessWidget {
+  final TabController? controller;
+  final List<String> tabs;
+
+  const _SettingsTabBar({
+    this.controller,
+    required this.tabs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tabController = controller ?? DefaultTabController.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(tabs.length, (index) {
+            return _SettingsTabItem(
+              label: tabs[index],
+              index: index,
+              controller: tabController,
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTabItem extends StatefulWidget {
+  final String label;
+  final int index;
+  final TabController controller;
+
+  const _SettingsTabItem({
+    required this.label,
+    required this.index,
+    required this.controller,
+  });
+
+  @override
+  State<_SettingsTabItem> createState() => _SettingsTabItemState();
+}
+
+class _SettingsTabItemState extends State<_SettingsTabItem> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _isSelected => widget.controller.index == widget.index;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    final isDark = theme.brightness == Brightness.dark;
+    final selected = _isSelected;
+
+    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+
+    Color bgColor;
+    Color textColor;
+    Color? borderColor;
+    double borderWidth = 0;
+    List<BoxShadow>? shadows;
+
+    if (selected) {
+      bgColor = primaryColor.withAlpha(isDark ? 30 : 22);
+      textColor = primaryColor;
+      borderColor = primaryColor.withAlpha(isDark ? 60 : 40);
+      borderWidth = 1.2;
+      shadows = [
+        BoxShadow(
+          color: primaryColor.withAlpha(isDark ? 15 : 10),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ];
+    } else if (_pressed) {
+      bgColor = theme.colorScheme.onSurface.withAlpha(isDark ? 18 : 12);
+      textColor = theme.colorScheme.onSurface.withAlpha(180);
+    } else if (_hovered) {
+      bgColor = theme.colorScheme.onSurface.withAlpha(isDark ? 12 : 8);
+      textColor = theme.colorScheme.onSurface.withAlpha(200);
+      shadows = [
+        BoxShadow(
+          color: theme.colorScheme.onSurface.withAlpha(4),
+          blurRadius: 4,
+          offset: const Offset(0, 1),
+        ),
+      ];
+    } else {
+      bgColor = Colors.transparent;
+      textColor = theme.colorScheme.onSurface.withAlpha(140);
+    }
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.controller.animateTo(widget.index);
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() {
+          _hovered = false;
+          _pressed = false;
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOutCubic,
+          margin: EdgeInsets.only(right: m.kSpace6),
+          padding: EdgeInsets.symmetric(
+            horizontal: m.kSpace14,
+            vertical: m.kSpace8,
+          ),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: m.radius10,
+            border: borderWidth > 0
+                ? Border.all(color: borderColor!, width: borderWidth)
+                : null,
+            boxShadow: shadows,
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: m.fontSize13,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: textColor,
+              height: 1.3,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

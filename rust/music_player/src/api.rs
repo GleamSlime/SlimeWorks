@@ -3,7 +3,7 @@ use slime_logger::{sw_info, sw_warn};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::scanner;
-use crate::types::{CueSheet, EqualizerPreset, Folder, MusicItem, PlayRecord, Playlist};
+use crate::types::{CueSheet, EqualizerPreset, Folder, MusicItem, PathMappingNode, PlayRecord, Playlist};
 
 // ── 内存缓存 ──────────────────────────────────────────────────────────────────
 static PLAYLISTS: OnceLock<Arc<Mutex<Vec<Playlist>>>> = OnceLock::new();
@@ -1134,4 +1134,11 @@ pub fn increment_folder_play_count(folder_id: String) -> Result<bool, String> {
         f.play_count = folder.play_count;
     }
     Ok(true)
+}
+
+// ── 路径映射 ─────────────────────────────────────────────────────────────────
+
+/// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
+pub fn scan_path_mapping(dir_path: String) -> Result<PathMappingNode, String> {
+    scanner::scan_path_mapping(&dir_path).map_err(|e| e.to_string())
 }

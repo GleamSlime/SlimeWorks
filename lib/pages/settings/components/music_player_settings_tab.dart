@@ -191,16 +191,38 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     }
 
     return ListView(
-      padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       children: [
-        Text(
-          '语音识别设置',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            Container(
+              width: AppTheme.metrics.kSpace24,
+              height: AppTheme.metrics.kSpace24,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withAlpha(20),
+                borderRadius: AppTheme.metrics.radius6,
+              ),
+              child: Icon(Icons.graphic_eq_outlined, size: AppTheme.metrics.iconSize12, color: Theme.of(context).colorScheme.primary),
+            ),
+            SizedBox(width: AppTheme.metrics.kSpace8),
+            Text(
+              '语音识别设置',
+              style: TextStyle(
+                fontSize: AppTheme.metrics.fontSize15,
+                height: 1.4,
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
         SizedBox(height: AppTheme.metrics.kSpace8),
         Text(
           '播放音频没有歌词时，自动使用 Whisper 模型识别语音并生成 CUE 歌词文件。',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+          style: TextStyle(
+            fontSize: AppTheme.metrics.fontSize12,
+            color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+          ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace16),
         ..._models.map((model) => _buildModelTile(context, model)),

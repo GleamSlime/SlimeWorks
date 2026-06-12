@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -6,7 +8,6 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
-import 'package:slime_works/pages/music_player/components/eq_panel.dart';
 
 /// 播放列表侧边栏（桌面端左侧）
 class PlaylistSidebar extends StatelessWidget {
@@ -60,12 +61,17 @@ class PlaylistSidebar extends StatelessWidget {
           // 面包屑导航
           Obx(() => _buildBreadcrumb(context)),
           const Divider(height: 1),
-          // 目录 + 播放列表
+          // 路径映射 + 目录 + 播放列表
           Expanded(
             child: Obx(() {
+              // 只显示当前文件夹下的路径映射
+              final currentFolderId = viewModel.currentFolderId.value;
+              final mappings = viewModel.pathMappings
+                  .where((m) => m.folderId == currentFolderId)
+                  .toList();
               final subFolders = viewModel.currentSubFolders;
               final folderPlaylists = viewModel.currentFolderPlaylists;
-              if (subFolders.isEmpty && folderPlaylists.isEmpty) {
+              if (mappings.isEmpty && subFolders.isEmpty && folderPlaylists.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -92,11 +98,20 @@ class PlaylistSidebar extends StatelessWidget {
                 );
               }
               return ListView.builder(
-                itemCount: subFolders.length + folderPlaylists.length,
+                itemCount: mappings.length + subFolders.length + folderPlaylists.length,
                 itemBuilder: (context, index) {
-                  // 先显示子目录，再显示播放列表
-                  if (index < subFolders.length) {
-                    final folder = subFolders[index];
+                  // 先显示路径映射，再显示子目录，最后播放列表
+                  if (index < mappings.length) {
+                    final mapping = mappings[index];
+                    return _PathMappingTile(
+                      node: mapping,
+                      onRemove: () => viewModel.removePathMapping(mapping.path),
+                      onRefresh: () => viewModel.refreshPathMapping(mapping.path),
+                    );
+                  }
+                  final adjustedIndex = index - mappings.length;
+                  if (adjustedIndex < subFolders.length) {
+                    final folder = subFolders[adjustedIndex];
                     return _FolderTile(
                       folder: folder,
                       onTap: () => viewModel.navigateToFolder(folder.id),
@@ -104,7 +119,7 @@ class PlaylistSidebar extends StatelessWidget {
                       onDelete: () => viewModel.deleteFolder(folder.id),
                     );
                   }
-                  final playlist = folderPlaylists[index - subFolders.length];
+                  final playlist = folderPlaylists[adjustedIndex - subFolders.length];
                   final isSelected = viewModel.currentPlaylistId.value == playlist.id;
                   return _PlaylistTile(
                     playlist: playlist,
@@ -116,34 +131,6 @@ class PlaylistSidebar extends StatelessWidget {
                 },
               );
             }),
-          ),
-          // 分隔线
-          const Divider(height: 1),
-          // 快捷操作
-          Padding(
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
-            child: Column(
-              children: [
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.favorite_rounded, size: 18),
-                  title: const Text('收藏'),
-                  onTap: () => _showFavorites(context),
-                ),
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.history_rounded, size: 18),
-                  title: const Text('最近播放'),
-                  onTap: () => _showRecentPlayed(context),
-                ),
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.equalizer_rounded, size: 18),
-                  title: const Text('均衡器'),
-                  onTap: () => _showEqPanel(context),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -234,233 +221,6 @@ class PlaylistSidebar extends StatelessWidget {
             child: const Text('创建'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showEqPanel(BuildContext context) {
-    showModalBottomSheet(context: context, builder: (ctx) => const EqPanel());
-  }
-
-  /// 显示收藏列表
-  void _showFavorites(BuildContext context) async {
-    await viewModel.loadFavorites();
-    if (!context.mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.8,
-        expand: false,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace16),
-              Row(
-                children: [
-                  Text('收藏', style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  Obx(
-                    () => Text(
-                      '${viewModel.favoriteItems.length} 首',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace12),
-              Obx(() {
-                final items = viewModel.favoriteItems;
-                if (items.isEmpty) {
-                  return Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace32),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.favorite_border_rounded,
-                            size: 40,
-                            color: Theme.of(context).hintColor,
-                          ),
-                          SizedBox(height: AppTheme.metrics.kSpace8),
-                          Text(
-                            '暂无收藏',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  children: items
-                      .map(
-                        (item) => _MusicListTile(
-                          item: item,
-                          onTap: () {
-                            // 将收藏列表设为当前播放列表并播放
-                            final index = viewModel.currentItems.indexOf(item);
-                            if (index >= 0) {
-                              viewModel.playItem(index);
-                            } else {
-                              // 如果不在当前列表中，直接播放该文件
-                              viewModel.currentItems.value = [item];
-                              viewModel.playItem(0);
-                            }
-                            Navigator.pop(ctx);
-                          },
-                          onFavoriteTap: () => viewModel.toggleFavorite(item.id),
-                        ),
-                      )
-                      .toList(),
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 显示最近播放列表
-  void _showRecentPlayed(BuildContext context) async {
-    await viewModel.loadRecentPlayed();
-    if (!context.mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.8,
-        expand: false,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace16),
-              Row(
-                children: [
-                  Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  Obx(
-                    () => Text(
-                      '${viewModel.recentRecords.length} 首',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace12),
-              Obx(() {
-                final records = viewModel.recentRecords;
-                if (records.isEmpty) {
-                  return Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace32),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.history_rounded, size: 40, color: Theme.of(context).hintColor),
-                          SizedBox(height: AppTheme.metrics.kSpace8),
-                          Text(
-                            '暂无播放记录',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  children: records.map((record) {
-                    // 从当前列表中查找歌曲信息
-                    final musicItem = viewModel.currentItems.firstWhereOrNull(
-                      (i) => i.id == record.musicId,
-                    );
-                    final title = musicItem?.title ?? '未知歌曲';
-                    final artist = musicItem?.artist;
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.music_note_rounded,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-                      ),
-                      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: artist != null
-                          ? Text(
-                              artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            )
-                          : null,
-                      trailing: Text(
-                        _formatPlayTime(record.playedAt),
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-                      ),
-                      onTap: () {
-                        // 在当前列表中查找并播放
-                        final index = viewModel.currentItems.indexWhere(
-                          (i) => i.id == record.musicId,
-                        );
-                        if (index >= 0) {
-                          viewModel.playItem(index);
-                        }
-                        Navigator.pop(ctx);
-                      },
-                    );
-                  }).toList(),
-                );
-              }),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -722,6 +482,380 @@ class _MusicListTile extends StatelessWidget {
         onPressed: onFavoriteTap,
       ),
       onTap: onTap,
+    );
+  }
+}
+
+/// 路径映射条目（可展开的树形结构）
+class _PathMappingTile extends StatefulWidget {
+  final music_api.PathMappingNodeInfo node;
+  final VoidCallback onRemove;
+  final VoidCallback onRefresh;
+
+  const _PathMappingTile({required this.node, required this.onRemove, required this.onRefresh});
+
+  @override
+  State<_PathMappingTile> createState() => _PathMappingTileState();
+}
+
+class _PathMappingTileState extends State<_PathMappingTile> {
+  bool _isExpanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 根节点标题行
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace12,
+              vertical: AppTheme.metrics.kSpace8,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+                  size: 18,
+                  color: Theme.of(context).hintColor,
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace4),
+                Icon(
+                  Icons.link_rounded,
+                  size: 16,
+                  color: node.hasAudio
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).hintColor,
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace4),
+                Expanded(
+                  child: Text(
+                    node.name,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: node.hasAudio
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (node.hasAudio)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppTheme.metrics.kSpace4,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace4),
+                    ),
+                    child: Text(
+                      '含音频',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                SizedBox(width: AppTheme.metrics.kSpace4),
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert_rounded, size: 14, color: Theme.of(context).hintColor),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  tooltip: '映射操作',
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'remove':
+                        widget.onRemove();
+                        break;
+                      case 'open_folder':
+                        Process.run('open', [widget.node.path]);
+                        break;
+                      case 'refresh':
+                        widget.onRefresh();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'open_folder', child: Text('打开文件夹所在位置')),
+                    const PopupMenuItem(value: 'refresh', child: Text('刷新映射')),
+                    const PopupMenuItem(value: 'remove', child: Text('移除映射')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        // 子节点树
+        if (_isExpanded && node.children.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(left: AppTheme.metrics.kSpace16),
+            child: _buildChildren(context, node.children, 0),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildChildren(BuildContext context, List<music_api.PathMappingNodeInfo> children, int depth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children.map((child) => _PathMappingChildTile(node: child, depth: depth)).toList(),
+    );
+  }
+}
+
+/// 路径映射子节点
+class _PathMappingChildTile extends StatefulWidget {
+  final music_api.PathMappingNodeInfo node;
+  final int depth;
+
+  const _PathMappingChildTile({required this.node, required this.depth});
+
+  @override
+  State<_PathMappingChildTile> createState() => _PathMappingChildTileState();
+}
+
+class _PathMappingChildTileState extends State<_PathMappingChildTile> {
+  bool _isExpanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final isDir = node.nodeType == music_api.PathMappingNodeType.directory;
+    final icon = _getIcon(node);
+    final iconColor = _getIconColor(context, node);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: isDir
+              ? () => setState(() => _isExpanded = !_isExpanded)
+              : () => _onFileTap(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppTheme.metrics.kSpace8,
+              vertical: AppTheme.metrics.kSpace2,
+            ),
+            child: Row(
+              children: [
+                if (isDir)
+                  Icon(
+                    _isExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+                    size: 14,
+                    color: Theme.of(context).hintColor,
+                  )
+                else
+                  SizedBox(width: 14),
+                SizedBox(width: AppTheme.metrics.kSpace4),
+                Icon(icon, size: 14, color: iconColor),
+                SizedBox(width: AppTheme.metrics.kSpace4),
+                Expanded(
+                  child: Text(
+                    node.name,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _getTextColor(context, node),
+                      fontWeight: node.hasAudio ? FontWeight.w500 : FontWeight.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (node.fileSize != null)
+                  Text(
+                    _formatFileSize(node.fileSize!),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).hintColor,
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (isDir && _isExpanded && node.children.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(left: AppTheme.metrics.kSpace12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: node.children
+                  .map((child) => _PathMappingChildTile(node: child, depth: widget.depth + 1))
+                  .toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  IconData _getIcon(music_api.PathMappingNodeInfo node) {
+    switch (node.nodeType) {
+      case music_api.PathMappingNodeType.directory:
+        return Icons.folder_rounded;
+      case music_api.PathMappingNodeType.audioFile:
+        return Icons.audiotrack_rounded;
+      case music_api.PathMappingNodeType.imageFile:
+        return Icons.image_rounded;
+      case music_api.PathMappingNodeType.cueFile:
+        return Icons.description_rounded;
+      case music_api.PathMappingNodeType.otherFile:
+        return Icons.insert_drive_file_rounded;
+    }
+  }
+
+  Color _getIconColor(BuildContext context, music_api.PathMappingNodeInfo node) {
+    switch (node.nodeType) {
+      case music_api.PathMappingNodeType.directory:
+        return Theme.of(context).colorScheme.primary.withValues(alpha: 0.7);
+      case music_api.PathMappingNodeType.audioFile:
+        return Theme.of(context).colorScheme.primary;
+      case music_api.PathMappingNodeType.imageFile:
+        return Colors.teal;
+      case music_api.PathMappingNodeType.cueFile:
+        return Colors.orange;
+      case music_api.PathMappingNodeType.otherFile:
+        return Theme.of(context).hintColor;
+    }
+  }
+
+  Color? _getTextColor(BuildContext context, music_api.PathMappingNodeInfo node) {
+    if (node.hasAudio || node.nodeType == music_api.PathMappingNodeType.audioFile) {
+      return Theme.of(context).colorScheme.primary;
+    }
+    return null;
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  /// 点击文件时的预览操作
+  void _onFileTap(BuildContext context) {
+    final node = widget.node;
+    switch (node.nodeType) {
+      case music_api.PathMappingNodeType.imageFile:
+        _previewImage(context, node);
+        break;
+      case music_api.PathMappingNodeType.cueFile:
+        _previewCue(context, node);
+        break;
+      case music_api.PathMappingNodeType.audioFile:
+        // 音频文件：用系统默认应用打开
+        Process.run('open', [node.path]);
+        break;
+      default:
+        // 其他文件：用系统默认应用打开
+        Process.run('open', [node.path]);
+        break;
+    }
+  }
+
+  /// 预览图片
+  void _previewImage(BuildContext context, music_api.PathMappingNodeInfo node) {
+    final file = File(node.path);
+    if (!file.existsSync()) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+              child: Row(
+                children: [
+                  Icon(Icons.image_rounded, size: 16, color: Colors.teal),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  Expanded(
+                    child: Text(
+                      node.name,
+                      style: Theme.of(context).textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: Image.file(
+                file,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Padding(
+                  padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
+                  child: Text('无法加载图片', style: Theme.of(context).textTheme.bodyMedium),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 预览 CUE 文件内容
+  void _previewCue(BuildContext context, music_api.PathMappingNodeInfo node) {
+    final file = File(node.path);
+    if (!file.existsSync()) return;
+    final content = file.readAsStringSync();
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: SizedBox(
+          width: 480,
+          height: 400,
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+                child: Row(
+                  children: [
+                    Icon(Icons.description_rounded, size: 16, color: Colors.orange),
+                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    Expanded(
+                      child: Text(
+                        node.name,
+                        style: Theme.of(context).textTheme.titleSmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+                  child: SelectableText(
+                    content,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

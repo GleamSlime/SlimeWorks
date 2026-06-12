@@ -99,6 +99,33 @@ pub struct FolderInfo {
     pub updated_at: i64,
 }
 
+/// 路径映射节点类型
+#[derive(Debug, Clone)]
+pub enum PathMappingNodeType {
+    Directory,
+    AudioFile,
+    ImageFile,
+    CueFile,
+    OtherFile,
+}
+
+/// 路径映射节点（树形结构，映射磁盘路径）
+#[derive(Debug, Clone)]
+pub struct PathMappingNodeInfo {
+    /// 节点名称
+    pub name: String,
+    /// 完整路径
+    pub path: String,
+    /// 节点类型
+    pub node_type: PathMappingNodeType,
+    /// 文件大小（字节），仅文件有效
+    pub file_size: Option<u64>,
+    /// 子节点
+    pub children: Vec<PathMappingNodeInfo>,
+    /// 是否包含音频文件（文件夹属性，递归检查）
+    pub has_audio: bool,
+}
+
 // ── 类型转换 ──────────────────────────────────────────────────────────────────
 
 fn convert_playlist(p: music_player::Playlist) -> Playlist {
@@ -185,6 +212,24 @@ fn convert_cue_sheet(s: music_player::CueSheet) -> CueSheetInfo {
                 track_number: t.track_number,
             })
             .collect(),
+    }
+}
+
+fn convert_path_mapping_node(n: music_player::PathMappingNode) -> PathMappingNodeInfo {
+    let node_type = match n.node_type {
+        music_player::PathMappingNodeType::Directory => PathMappingNodeType::Directory,
+        music_player::PathMappingNodeType::AudioFile => PathMappingNodeType::AudioFile,
+        music_player::PathMappingNodeType::ImageFile => PathMappingNodeType::ImageFile,
+        music_player::PathMappingNodeType::CueFile => PathMappingNodeType::CueFile,
+        music_player::PathMappingNodeType::OtherFile => PathMappingNodeType::OtherFile,
+    };
+    PathMappingNodeInfo {
+        name: n.name,
+        path: n.path,
+        node_type,
+        file_size: n.file_size,
+        children: n.children.into_iter().map(convert_path_mapping_node).collect(),
+        has_audio: n.has_audio,
     }
 }
 
@@ -736,4 +781,14 @@ fn _write_waveform_cache(cache_path: &str, samples: u32, data: &[f64]) -> std::i
     });
 
     std::fs::write(cache_path, serde_json::to_string(&json)?)
+}
+
+// ── 路径映射 API ────────────────────────────────────────────────────────────────
+
+/// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
+#[frb(sync)]
+pub fn scan_path_mapping(dir_path: String) -> anyhow::Result<PathMappingNodeInfo> {
+    music_player::scan_path_mapping(dir_path)
+        .map(convert_path_mapping_node)
+        .map_err(|e| anyhow::anyhow!(e))
 }
