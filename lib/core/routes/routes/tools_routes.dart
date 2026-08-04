@@ -186,3 +186,68 @@ class NcmDecryptRoute extends AppRouteData with $NcmDecryptRoute {
     return AppRoutes.buildPage(context, state, const NcmDecryptScreen());
   }
 }
+
+@TypedGoRoute<PowerStatsRoute>(path: '/power-stats')
+class PowerStatsRoute extends AppRouteData with $PowerStatsRoute {
+  const PowerStatsRoute();
+
+  @override
+  String get title => '电力统计';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  String get sidebarIcon => Assets.image.svg.menuBill;
+
+  @override
+  String get sidebarGroupId => 'tools';
+
+  @override
+  bool get desktopOnly => false;
+
+  static const Permission routePermission = Permission.accessPowerStats;
+  @override
+  Permission get permission => PowerStatsRoute.routePermission;
+
+  @override
+  Widget? sidebarStatusWidget(BuildContext context) {
+    try {
+      if (!GetIt.instance.isRegistered<PowerStatsService>()) return null;
+      final service = GetIt.instance.get<PowerStatsService>();
+      return Obx(() {
+        final enabled = service.enabled.value;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final activeColor = isDark ? const Color(0xFFF5A569) : LightColors.orange;
+        final color = enabled ? activeColor : Theme.of(context).hintColor.withAlpha(120);
+        return Tooltip(
+          message: enabled ? '电力统计运行中' : '电力统计已停止',
+          child: Container(
+            width: AppTheme.metrics.kSpace8,
+            height: AppTheme.metrics.kSpace8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: color.withAlpha(80),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        );
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const PowerStatsScreen());
+  }
+}

@@ -74,6 +74,9 @@ sentry_log = { path = "sentry_log" }
 # 阿里云DDNS模块（独立 crate）
 aliyun_module = { path = "aliyun_module" }
 
+# 电力定时统计模块（独立 crate）
+power_stats = { path = "power_stats" }
+
 # 音乐播放器模块（独立 crate）
 music_player = { path = "music_player" }
 
@@ -112,6 +115,7 @@ members = [
   "extract_module",
   "sentry_log",
   "aliyun_module",
+  "power_stats",
   "music_player",
   "ncm_decrypt",
   "whisper_module",

@@ -17,6 +17,7 @@ import 'package:slime_works/core/services/ncm_decrypt_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
+import 'package:slime_works/core/services/power_stats_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 
@@ -84,6 +85,9 @@ void getItInit() {
 
   // 阿里云DDNS服务
   getIt.registerLazySingleton<AliyunDdnsService>(() => AliyunDdnsService());
+
+  // 电力定时统计服务
+  getIt.registerLazySingleton<PowerStatsService>(() => PowerStatsService());
 
   // 应用更新服务
   getIt.registerLazySingleton<AppUpdateService>(() => AppUpdateService());

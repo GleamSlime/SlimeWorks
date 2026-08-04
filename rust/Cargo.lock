@@ -2772,6 +2772,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "power_stats"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "flutter_rust_bridge",
+ "lazy_static",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "slime_logger",
+ "tokio",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3117,6 +3134,7 @@ dependencies = [
  "ncm_decrypt",
  "novel_reader",
  "openssl",
+ "power_stats",
  "regex",
  "reqwest",
  "sentry_log",

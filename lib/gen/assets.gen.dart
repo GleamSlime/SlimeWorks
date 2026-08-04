@@ -202,9 +202,7 @@ class $AssetsImageTrayGen {
   List<dynamic> get values => [trayIconIco, trayIconPng];
 }
 
-class Assets {
-  const Assets._();
-
+abstract final class Assets {
   static const String aEnv = '.env';
   static const String colors = 'assets/colors.xml';
   static const $AssetsImageGen image = $AssetsImageGen();

@@ -3,14 +3,12 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
-import 'dart:io';
-
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_downsample_waveform`, `_read_waveform_cache`, `_waveform_cache_path`, `_write_waveform_cache`, `convert_cue_sheet`, `convert_eq_preset`, `convert_folder`, `convert_item`, `convert_playlist`, `convert_record`
+// These functions are ignored because they are not marked as `pub`: `_accumulate_bin`, `_extract_waveform_streaming`, `_read_waveform_cache`, `_redistribute_bins`, `_waveform_cache_path`, `_write_waveform_cache`, `convert_cue_sheet`, `convert_eq_preset`, `convert_folder`, `convert_item`, `convert_path_mapping_node`, `convert_playlist`, `convert_record`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PlayMode`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化音乐播放器数据库
 void musicInitializeDb() =>
@@ -224,6 +222,8 @@ bool incrementFolderPlayCount({required String folderId}) => RustLib
 
 /// 提取音频文件的波形数据（用于可视化）
 /// 返回降采样后的振幅数组（0.0~1.0），samples 指定返回的采样点数
+///
+/// 优化：边解码边计算 bin 峰值，不分配全量 PCM 缓冲区，速度提升 5~10 倍
 Future<Float64List> extractWaveform({
   required String audioFilePath,
   required int samples,
@@ -233,82 +233,8 @@ Future<Float64List> extractWaveform({
 );
 
 /// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
-/// 注意：此函数在 Dart 端实现，因为 frb 代码生成需要 libclang 环境
-PathMappingNodeInfo scanPathMapping({required String dirPath}) {
-  return _scanPathMappingDart(dirPath);
-}
-
-/// Dart 端实现的路径映射扫描
-PathMappingNodeInfo _scanPathMappingDart(String dirPath) {
-  final dir = Directory(dirPath);
-  if (!dir.existsSync()) {
-    throw Exception('目录不存在: $dirPath');
-  }
-  return _scanDirectory(dir);
-}
-
-PathMappingNodeInfo _scanDirectory(Directory dir) {
-  final name = dir.path.split(Platform.pathSeparator).last;
-  final children = <PathMappingNodeInfo>[];
-  bool hasAudio = false;
-
-  final entries = dir.listSync().toList();
-  entries.sort((a, b) {
-    final aIsDir = a is Directory;
-    final bIsDir = b is Directory;
-    if (aIsDir && !bIsDir) return -1;
-    if (!aIsDir && bIsDir) return 1;
-    return a.path.split(Platform.pathSeparator).last
-        .compareTo(b.path.split(Platform.pathSeparator).last);
-  });
-
-  for (final entity in entries) {
-    final entityName = entity.path.split(Platform.pathSeparator).last;
-    // 跳过隐藏文件/目录
-    if (entityName.startsWith('.')) continue;
-
-    if (entity is Directory) {
-      final child = _scanDirectory(entity);
-      children.add(child);
-      if (child.hasAudio) hasAudio = true;
-    } else if (entity is File) {
-      final nodeType = _classifyFile(entityName);
-      final isAudio = nodeType == PathMappingNodeType.audioFile;
-      if (isAudio) hasAudio = true;
-      int? fileSize;
-      try {
-        fileSize = entity.lengthSync();
-      } catch (_) {}
-      children.add(PathMappingNodeInfo(
-        name: entityName,
-        path: entity.path,
-        nodeType: nodeType,
-        fileSize: fileSize,
-        children: const [],
-        hasAudio: isAudio,
-      ));
-    }
-  }
-
-  return PathMappingNodeInfo(
-    name: name,
-    path: dir.path,
-    nodeType: PathMappingNodeType.directory,
-    fileSize: null,
-    children: children,
-    hasAudio: hasAudio,
-  );
-}
-
-PathMappingNodeType _classifyFile(String fileName) {
-  final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-  const audioExts = {'mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'ape', 'aiff', 'alac', 'wv', 'tta', 'dsd', 'dsf', 'dff'};
-  const imageExts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff', 'tif', 'ico'};
-  if (audioExts.contains(ext)) return PathMappingNodeType.audioFile;
-  if (ext == 'cue') return PathMappingNodeType.cueFile;
-  if (imageExts.contains(ext)) return PathMappingNodeType.imageFile;
-  return PathMappingNodeType.otherFile;
-}
+PathMappingNodeInfo scanPathMapping({required String dirPath}) =>
+    RustLib.instance.api.crateApiMusicPlayerScanPathMapping(dirPath: dirPath);
 
 class CueSheetInfo {
   final String? title;
@@ -557,6 +483,66 @@ class MusicItem {
           hasCue == other.hasCue;
 }
 
+/// 路径映射节点（树形结构，映射磁盘路径）
+class PathMappingNodeInfo {
+  /// 节点名称
+  final String name;
+
+  /// 完整路径
+  final String path;
+
+  /// 节点类型
+  final PathMappingNodeType nodeType;
+
+  /// 文件大小（字节），仅文件有效
+  final BigInt? fileSize;
+
+  /// 子节点
+  final List<PathMappingNodeInfo> children;
+
+  /// 是否包含音频文件（文件夹属性，递归检查）
+  final bool hasAudio;
+
+  /// 关联的文件夹ID（Dart 端赋值，用于持久化映射关系）
+  final String? folderId;
+
+  const PathMappingNodeInfo({
+    required this.name,
+    required this.path,
+    required this.nodeType,
+    this.fileSize,
+    required this.children,
+    required this.hasAudio,
+    this.folderId,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      path.hashCode ^
+      nodeType.hashCode ^
+      fileSize.hashCode ^
+      children.hashCode ^
+      hasAudio.hashCode ^
+      folderId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PathMappingNodeInfo &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          path == other.path &&
+          nodeType == other.nodeType &&
+          fileSize == other.fileSize &&
+          children == other.children &&
+          hasAudio == other.hasAudio &&
+          folderId == other.folderId;
+}
+
+/// 路径映射节点类型
+enum PathMappingNodeType { directory, audioFile, imageFile, cueFile, otherFile }
+
 class PlayRecordInfo {
   final String id;
   final String musicId;
@@ -631,71 +617,5 @@ class Playlist {
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
           isDefault == other.isDefault &&
-          folderId == other.folderId;
-}
-
-/// 路径映射节点类型
-enum PathMappingNodeType {
-  directory,
-  audioFile,
-  imageFile,
-  cueFile,
-  otherFile,
-}
-
-/// 路径映射节点（树形结构，映射磁盘路径）
-class PathMappingNodeInfo {
-  /// 节点名称
-  final String name;
-
-  /// 完整路径
-  final String path;
-
-  /// 节点类型
-  final PathMappingNodeType nodeType;
-
-  /// 文件大小（字节），仅文件有效
-  final int? fileSize;
-
-  /// 子节点
-  final List<PathMappingNodeInfo> children;
-
-  /// 是否包含音频文件（文件夹属性，递归检查）
-  final bool hasAudio;
-
-  /// 所属文件夹 ID（null 表示根级）
-  final String? folderId;
-
-  const PathMappingNodeInfo({
-    required this.name,
-    required this.path,
-    required this.nodeType,
-    this.fileSize,
-    required this.children,
-    required this.hasAudio,
-    this.folderId,
-  });
-
-  @override
-  int get hashCode =>
-      name.hashCode ^
-      path.hashCode ^
-      nodeType.hashCode ^
-      fileSize.hashCode ^
-      children.hashCode ^
-      hasAudio.hashCode ^
-      folderId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PathMappingNodeInfo &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          path == other.path &&
-          nodeType == other.nodeType &&
-          fileSize == other.fileSize &&
-          children == other.children &&
-          hasAudio == other.hasAudio &&
           folderId == other.folderId;
 }
