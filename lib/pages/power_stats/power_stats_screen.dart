@@ -665,19 +665,34 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
       String title;
       String unit;
       Color color;
+      double sumValue = 0;
+      String sumText = '';
       switch (metric) {
         case PowerChartMetric.consumption:
           title = '耗电量趋势';
           unit = 'kWh';
           color = LightColors.orange;
+          // 耗电量：所有桶累加
+          sumValue = buckets.fold<double>(0, (s, b) => s + b.consumptionKwh);
+          sumText = '${sumValue.toStringAsFixed(2)}$unit';
         case PowerChartMetric.balance:
           title = '余额变化';
           unit = '元';
           color = LightColors.blue;
+          // 余额：末值 - 首值（区间变化量）
+          if (buckets.length >= 2) {
+            sumValue = buckets.last.balanceYuan - buckets.first.balanceYuan;
+            final sign = sumValue >= 0 ? '+' : '';
+            sumText = '$sign${sumValue.toStringAsFixed(2)}$unit';
+          } else if (buckets.length == 1) {
+            sumText = '${buckets.first.balanceYuan.toStringAsFixed(2)}$unit';
+          }
         case PowerChartMetric.cost:
           title = '电费趋势';
           unit = '元';
           color = LightColors.red;
+          sumValue = buckets.fold<double>(0, (s, b) => s + b.costYuan);
+          sumText = '${sumValue.toStringAsFixed(2)}$unit';
       }
 
       return Container(
@@ -710,6 +725,29 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
+                if (sumText.isNotEmpty) ...[
+                  SizedBox(width: m.kSpace8),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: m.kSpace8,
+                      vertical: m.kSpace2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withAlpha(15),
+                      borderRadius: m.radius6,
+                      border: Border.all(color: color.withAlpha(50), width: 0.5),
+                    ),
+                    child: Text(
+                      sumText,
+                      style: TextStyle(
+                        fontSize: m.fontSize12,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 if (buckets.isNotEmpty)
                   Text(
@@ -1378,24 +1416,70 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
 
     String metricLabel;
     String valueText;
+    double currentValue;
+    double? prevValue;
+    bool isUpGood = true; // 上升为正面（绿）还是负面（红）
     switch (widget.metric) {
       case PowerChartMetric.consumption:
         metricLabel = '耗电量';
-        valueText = '${bucket.consumptionKwh.toStringAsFixed(3)} ${widget.unit}';
+        currentValue = bucket.consumptionKwh;
+        valueText = '${currentValue.toStringAsFixed(3)} ${widget.unit}';
+        // 耗电量上升=多用电=负面（红），下降=省电=正面（绿）
+        isUpGood = false;
       case PowerChartMetric.balance:
         metricLabel = '余额';
-        valueText = '${bucket.balanceYuan.toStringAsFixed(2)} ${widget.unit}';
+        currentValue = bucket.balanceYuan;
+        valueText = '${currentValue.toStringAsFixed(2)} ${widget.unit}';
+        // 余额上升=正面（绿），下降=负面（红）
+        isUpGood = true;
       case PowerChartMetric.cost:
         metricLabel = '电费';
-        valueText = '${bucket.costYuan.toStringAsFixed(2)} ${widget.unit}';
+        currentValue = bucket.costYuan;
+        valueText = '${currentValue.toStringAsFixed(2)} ${widget.unit}';
+        // 电费上升=负面（红），下降=正面（绿）
+        isUpGood = false;
+    }
+    // 取上一个数据点对比
+    if (idx > 0) {
+      final prev = widget.buckets[idx - 1];
+      switch (widget.metric) {
+        case PowerChartMetric.consumption:
+          prevValue = prev.consumptionKwh;
+        case PowerChartMetric.balance:
+          prevValue = prev.balanceYuan;
+        case PowerChartMetric.cost:
+          prevValue = prev.costYuan;
+      }
+    }
+
+    // 环比百分比
+    String? changeText;
+    Color? changeColor;
+    if (prevValue != null && prevValue.abs() > 0.0001) {
+      final change = currentValue - prevValue;
+      final pct = (change / prevValue.abs()) * 100;
+      if (pct.abs() < 0.01) {
+        changeText = '持平';
+        changeColor = theme.colorScheme.onSurface.withAlpha(140);
+      } else {
+        final arrow = pct > 0 ? '↑' : '↓';
+        changeText = '$arrow ${pct.abs().toStringAsFixed(1)}%';
+        // 上升且上升为好 → 绿；上升且上升为坏 → 红
+        final isUp = pct > 0;
+        final isGood = isUp == isUpGood;
+        changeColor = isGood ? LightColors.green : LightColors.red;
+      }
+    } else if (prevValue != null && prevValue.abs() <= 0.0001) {
+      changeText = '新增';
+      changeColor = LightColors.blue;
     }
 
     final tp = TextPainter(
       text: TextSpan(
         text: bucket.label,
         style: TextStyle(
-          fontSize: m.fontSize10,
-          color: theme.colorScheme.onSurface.withAlpha(140),
+          fontSize: m.fontSize11,
+          color: theme.colorScheme.onSurface.withAlpha(160),
           fontFamily: 'monospace',
         ),
       ),
@@ -1407,7 +1491,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
       text: TextSpan(
         text: valueText,
         style: TextStyle(
-          fontSize: m.fontSize12,
+          fontSize: m.fontSize13,
           fontWeight: FontWeight.w700,
           color: widget.color,
           fontFamily: 'monospace',
@@ -1417,9 +1501,10 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
     )..layout();
     final valueW = tp2.width;
 
-    final innerW = math.max(labelW, valueW);
-    final tooltipW = innerW + m.kSpace16 + m.kSpace6;
-    final tooltipH = 50.0;
+    // 加宽：取最大内容宽度，并设置最小宽度
+    final innerW = math.max(math.max(labelW, valueW), 96.0);
+    final tooltipW = innerW + m.kSpace20 + m.kSpace8;
+    final tooltipH = changeText != null ? 72.0 : 60.0;
 
     // tooltip 定位：优先在数据点上方，越界时翻转/夹紧
     double left = p.dx - tooltipW / 2;
@@ -1437,18 +1522,18 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
       child: IgnorePointer(
         child: Container(
           padding: EdgeInsets.symmetric(
-            horizontal: m.kSpace8,
-            vertical: m.kSpace6,
+            horizontal: m.kSpace10,
+            vertical: m.kSpace8,
           ),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withAlpha(245),
-            borderRadius: m.radius6,
-            border: Border.all(color: widget.color.withAlpha(100), width: 1),
+            color: theme.colorScheme.surface.withAlpha(248),
+            borderRadius: m.radius8,
+            border: Border.all(color: widget.color.withAlpha(120), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(50),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: Colors.black.withAlpha(60),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
@@ -1459,28 +1544,28 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
               Text(
                 bucket.label,
                 style: TextStyle(
-                  fontSize: m.fontSize10,
-                  color: theme.colorScheme.onSurface.withAlpha(140),
+                  fontSize: m.fontSize11,
+                  color: theme.colorScheme.onSurface.withAlpha(160),
                   fontFamily: 'monospace',
                 ),
               ),
-              SizedBox(height: m.kSpace2),
+              SizedBox(height: m.kSpace4),
               Row(
                 children: [
                   Container(
-                    width: m.kSpace6,
-                    height: m.kSpace6,
+                    width: m.kSpace8,
+                    height: m.kSpace8,
                     decoration: BoxDecoration(
                       color: widget.color,
                       shape: BoxShape.circle,
                     ),
                   ),
-                  SizedBox(width: m.kSpace6),
-                  Flexible(
+                  SizedBox(width: m.kSpace8),
+                  Expanded(
                     child: Text(
                       valueText,
                       style: TextStyle(
-                        fontSize: m.fontSize12,
+                        fontSize: m.fontSize13,
                         fontWeight: FontWeight.w700,
                         color: widget.color,
                         fontFamily: 'monospace',
@@ -1488,14 +1573,36 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (changeText != null && changeColor != null) ...[
+                    SizedBox(width: m.kSpace8),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: m.kSpace6,
+                        vertical: m.kSpace2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: changeColor.withAlpha(20),
+                        borderRadius: m.radius4,
+                      ),
+                      child: Text(
+                        changeText,
+                        style: TextStyle(
+                          fontSize: m.fontSize10,
+                          fontWeight: FontWeight.w700,
+                          color: changeColor,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              SizedBox(height: m.kSpace2),
+              SizedBox(height: m.kSpace4),
               Text(
                 metricLabel,
                 style: TextStyle(
-                  fontSize: m.fontSize9,
-                  color: theme.colorScheme.onSurface.withAlpha(100),
+                  fontSize: m.fontSize10,
+                  color: theme.colorScheme.onSurface.withAlpha(120),
                 ),
               ),
             ],

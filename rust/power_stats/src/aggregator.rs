@@ -105,7 +105,6 @@ pub fn aggregate(samples: &[PowerSample], range: &str, price: f64) -> Aggregated
 
     let mut buckets: Vec<StatBucket> = Vec::new();
 
-    // 用于追踪桶内采样点的处理
     let mut sample_idx = 0;
 
     while cursor <= last_ts {
@@ -122,7 +121,7 @@ pub fn aggregate(samples: &[PowerSample], range: &str, price: f64) -> Aggregated
         }
 
         if bucket_samples.is_empty() {
-            // 空桶：沿用当前余额
+            // 空桶：余额沿用，耗电留待后续分摊
             buckets.push(StatBucket {
                 label,
                 timestamp: cursor,
@@ -152,6 +151,10 @@ pub fn aggregate(samples: &[PowerSample], range: &str, price: f64) -> Aggregated
         cursor = bucket_end;
     }
 
+    // 耗电量分摊：若两个采样点跨多个空桶，按时间比例把下降差值分摊到中间各桶
+    // 避免"前桶有值、中间空、后桶突变"的失真
+    backfill_consumption(&mut buckets, &in_range, bucket_secs, price);
+
     let total_consumption: f64 = buckets.iter().map(|b| b.consumption_kwh).sum();
     let current_balance = cur_balance_yuan;
     let current_kwh = cur_balance_kwh;
@@ -174,25 +177,74 @@ pub fn aggregate(samples: &[PowerSample], range: &str, price: f64) -> Aggregated
 }
 
 /// 计算指定时间范围内的耗电量（基于最后一个采样点）
+/// 包含 start 之前的最后一个采样点作为基准，避免丢失首个差值
 fn consumption_in_range(samples: &[PowerSample], secs: i64) -> f64 {
     if samples.len() < 2 {
         return 0.0;
     }
     let last_ts = samples.last().unwrap().timestamp;
     let start = last_ts - secs;
-    let in_range: Vec<&PowerSample> = samples.iter().filter(|s| s.timestamp >= start).collect();
-    if in_range.len() < 2 {
+    // 找到 start 之前的最后一个采样点作为基准
+    let mut chain: Vec<&PowerSample> = samples
+        .iter()
+        .filter(|s| s.timestamp < start)
+        .last()
+        .map(|s| vec![s])
+        .unwrap_or_default();
+    chain.extend(samples.iter().filter(|s| s.timestamp >= start));
+    if chain.len() < 2 {
         return 0.0;
     }
-    // 累加相邻差值
+    // 累加相邻差值（只算下降部分）
     let mut total = 0.0;
-    for i in 1..in_range.len() {
-        let diff = in_range[i - 1].remaining_kwh - in_range[i].remaining_kwh;
+    for i in 1..chain.len() {
+        let diff = chain[i - 1].remaining_kwh - chain[i].remaining_kwh;
         if diff > 0.0 {
             total += diff;
         }
     }
     total
+}
+
+/// 耗电量分摊：两个采样点跨多个空桶时，按时间比例把下降差值分摊到中间各桶
+/// 避免出现"前桶有值、中间空、后桶突变"的失真
+fn backfill_consumption(
+    buckets: &mut [StatBucket],
+    in_range: &[&PowerSample],
+    bucket_secs: i64,
+    price: f64,
+) {
+    if buckets.is_empty() || in_range.len() < 2 {
+        return;
+    }
+    // 遍历相邻采样点对，找到它们之间的空桶并分摊
+    for i in 1..in_range.len() {
+        let prev = in_range[i - 1];
+        let curr = in_range[i];
+        let diff = prev.remaining_kwh - curr.remaining_kwh;
+        if diff <= 0.0 {
+            continue; // 上升（充值）或不变，不分摊
+        }
+        let prev_bucket_idx = buckets
+            .iter()
+            .position(|b| b.timestamp <= prev.timestamp && prev.timestamp < b.timestamp + bucket_secs);
+        let curr_bucket_idx = buckets
+            .iter()
+            .position(|b| b.timestamp <= curr.timestamp && curr.timestamp < b.timestamp + bucket_secs);
+        let (Some(pi), Some(ci)) = (prev_bucket_idx, curr_bucket_idx) else {
+            continue;
+        };
+        if ci <= pi {
+            continue;
+        }
+        let gap = (ci - pi) as f64;
+        // 按比例分摊到中间各桶（含 curr 桶，不含 prev 桶）
+        let share = diff / gap;
+        for j in (pi + 1)..=ci {
+            buckets[j].consumption_kwh += share;
+            buckets[j].cost_yuan = buckets[j].consumption_kwh * price;
+        }
+    }
 }
 
 /// 生成统计卡片汇总数据
