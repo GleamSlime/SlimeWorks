@@ -12,7 +12,6 @@ lazy_static = "1.5.0"
 slime_logger = { path = "slime_logger" }
 # capture_proxy 使用动态加载，不再静态链接
 reqwest = { version = "0.12", features = ["blocking"] }
-openssl = { version = "0.10", features = ["vendored"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 libloading = "0.8" # 动态库加载
@@ -117,6 +116,12 @@ members = [
   "whisper_module",
   # "ffmpeg_lib",
 ]
+
+# vendored OpenSSL 仅在 Android/Linux 需要（reqwest 的 native-tls 走 openssl-sys）。
+# Windows 走 schannel、macOS/iOS 走 Security.framework，无需 OpenSSL；
+# 且 openssl-src 在 Windows CI 路径含反斜杠时会被 Perl Configure 转义破坏导致编译失败。
+[target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = [
