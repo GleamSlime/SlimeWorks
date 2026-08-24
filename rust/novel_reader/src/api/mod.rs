@@ -138,7 +138,8 @@ fn migrate_scattered_novel_data(db_path: &str) {
         }
     }
 
-    let mut candidates = Vec::new();
+    // 显式标注类型：Android 等平台无 push 分支，否则类型推导失败（E0282）
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
     #[cfg(windows)]
     if let Ok(appdata) = std::env::var("APPDATA") {
         let base = std::path::Path::new(&appdata).join("SlimeWorks");

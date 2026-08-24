@@ -1,5 +1,5 @@
 [Setup]
-AppId={{com.gleamslime.works}}
+AppId={{APP_ID}}
 AppVersion={{APP_VERSION}}
 AppName=史莱姆工坊
 AppPublisher=GleamSlime

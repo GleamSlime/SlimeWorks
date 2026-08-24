@@ -42,7 +42,8 @@ fn migrate_scattered_passwords(db_path: &str) {
         }
     }
     // 候选：其他模块的历史数据库文件（Windows 下位于 %APPDATA%\SlimeWorks）
-    let mut candidates = Vec::new();
+    // 显式标注类型：非 Windows 平台无 push 分支，否则类型推导失败（E0282）
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
     #[cfg(windows)]
     if let Ok(appdata) = std::env::var("APPDATA") {
         let base = std::path::Path::new(&appdata).join("SlimeWorks");

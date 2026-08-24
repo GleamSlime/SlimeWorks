@@ -251,7 +251,8 @@ fn migrate_scattered_manga_history(db_path: &str) {
             return;
         }
     }
-    let mut candidates = Vec::new();
+    // 显式标注类型：非 Windows 平台无 push 分支，否则类型推导失败（E0282）
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
     #[cfg(windows)]
     if let Ok(appdata) = std::env::var("APPDATA") {
         let base = std::path::Path::new(&appdata).join("SlimeWorks");

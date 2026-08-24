@@ -1,0 +1,18 @@
+# fastforge / flutter_app_packager 的 Windows exe（Inno Setup）打包配置
+# 渲染模板：同目录下 inno_setup.iss（liquid 语法，可用变量见脚本内 {{...}}）
+app_id: com.gleamslime.works
+display_name: 史莱姆工坊
+publisher_name: GleamSlime
+publisher_url: https://github.com/GleamSlime/slime_works
+executable_name: slime_works.exe
+install_dir_name: "{autopf}\\SlimeWorks"
+setup_icon_file: windows/runner/resources/app_icon.ico
+create_desktop_icon: true
+launch_at_startup: false
+privileges_required: lowest
+architectures_allowed: x64
+architectures_install_in_64bit_mode: x64
+locales:
+  - zh
+  - en
+script_template: inno_setup.iss
