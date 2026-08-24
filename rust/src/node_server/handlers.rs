@@ -605,6 +605,70 @@ pub async fn dispatch_action(
             Ok(json!({"result": result}))
         }
 
+        // ── 电力定时统计操作 ───────────────────────────────────────────────────
+        "power_stats_get_status" => {
+            let status = power_stats::api::power_stats_get_status()
+                .map_err(|e| format!("获取电力统计状态失败: {}", e))?;
+            let parsed: Value =
+                serde_json::from_str(&status).map_err(|e| format!("解析状态失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "power_stats_get_summary" => {
+            let summary = power_stats::api::power_stats_get_summary()
+                .map_err(|e| format!("获取电力统计汇总失败: {}", e))?;
+            let parsed: Value =
+                serde_json::from_str(&summary).map_err(|e| format!("解析汇总失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "power_stats_get_aggregated" => {
+            let range = params["range"].as_str().unwrap_or("1day").to_string();
+            let aggregated = power_stats::api::power_stats_get_aggregated(range)
+                .map_err(|e| format!("获取电力聚合数据失败: {}", e))?;
+            let parsed: Value =
+                serde_json::from_str(&aggregated).map_err(|e| format!("解析聚合数据失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "power_stats_get_logs" => {
+            let logs = power_stats::api::power_stats_get_logs()
+                .map_err(|e| format!("获取电力抓取日志失败: {}", e))?;
+            let parsed: Value =
+                serde_json::from_str(&logs).map_err(|e| format!("解析日志失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "power_stats_fetch_once" => {
+            let result = power_stats::api::power_stats_fetch_once()
+                .await
+                .map_err(|e| format!("电力抓取失败: {}", e))?;
+            let parsed: Value =
+                serde_json::from_str(&result).map_err(|e| format!("解析读数失败: {}", e))?;
+            Ok(parsed)
+        }
+
+        "power_stats_start_polling" => {
+            power_stats::api::power_stats_start_polling()
+                .await
+                .map_err(|e| format!("启动电力轮询失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "power_stats_stop_polling" => {
+            power_stats::api::power_stats_stop_polling()
+                .await
+                .map_err(|e| format!("停止电力轮询失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "power_stats_set_enabled" => {
+            let enabled = params["enabled"].as_bool().unwrap_or(false);
+            power_stats::api::power_stats_set_enabled(enabled)
+                .map_err(|e| format!("设置电力统计开关失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
         // ── 音乐播放器操作 ─────────────────────────────────────────────────────
         "music_list_playlists" => {
             let playlists =

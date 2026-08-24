@@ -34,6 +34,7 @@ enum Permission {
   accessTools,
   accessSentryLog,
   accessAliyunDdns,
+  accessPowerStats,
 }
 
 class RoleManager {
@@ -58,6 +59,7 @@ class RoleManager {
       Permission.accessTools,
       Permission.accessSentryLog,
       Permission.accessAliyunDdns,
+      Permission.accessPowerStats,
     ],
     UserRole.editor: [
       Permission.viewDashboard,

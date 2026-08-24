@@ -18,6 +18,7 @@ import 'api/module_manager.dart';
 import 'api/music_player.dart';
 import 'api/ncm_decrypt.dart';
 import 'api/novel_reader.dart';
+import 'api/power_stats.dart';
 import 'api/sentry_log.dart';
 import 'api/simple.dart';
 import 'api/system_metrics.dart';

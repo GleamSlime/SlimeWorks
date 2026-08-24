@@ -503,7 +503,7 @@ class PathMappingNodeInfo {
   /// 是否包含音频文件（文件夹属性，递归检查）
   final bool hasAudio;
 
-  /// 所属文件夹 ID（null 表示根级），仅根节点有效，由 Dart 侧包装时填充
+  /// 关联的文件夹ID（Dart 端赋值，用于持久化映射关系）
   final String? folderId;
 
   const PathMappingNodeInfo({

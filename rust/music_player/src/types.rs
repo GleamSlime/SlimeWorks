@@ -162,4 +162,6 @@ pub struct PathMappingNode {
     pub children: Vec<PathMappingNode>,
     /// 是否包含音频文件（文件夹属性，递归检查）
     pub has_audio: bool,
+    /// 关联的文件夹ID（Dart 端赋值，用于持久化映射关系）
+    pub folder_id: Option<String>,
 }

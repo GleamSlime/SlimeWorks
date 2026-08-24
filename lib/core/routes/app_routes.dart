@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
@@ -45,9 +46,11 @@ import 'package:slime_works/pages/about/about_page.dart';
 import 'package:slime_works/pages/tools/tools_screen.dart';
 import 'package:slime_works/pages/sentry_log/sentry_log_screen.dart';
 import 'package:slime_works/pages/aliyun_ddns/aliyun_ddns_screen.dart';
+import 'package:slime_works/pages/power_stats/power_stats_screen.dart';
 import 'package:slime_works/pages/music_player/music_player_screen.dart';
 import 'package:slime_works/pages/ncm_decrypt/ncm_decrypt_screen.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
+import 'package:slime_works/core/services/power_stats_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 
 part 'app_routes.g.dart';
@@ -99,6 +102,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<SentryLogRoute>(path: '/sentry-log'),
     TypedGoRoute<AliyunDdnsRoute>(path: '/aliyun'),
     TypedGoRoute<NcmDecryptRoute>(path: '/ncm-decrypt'),
+    TypedGoRoute<PowerStatsRoute>(path: '/power-stats'),
   ],
 )
 class AppShellRouteData extends ShellRouteData {
@@ -143,6 +147,7 @@ class AppRoutes {
       const SentryLogRoute(),
       const AliyunDdnsRoute(),
       const NcmDecryptRoute(),
+      const PowerStatsRoute(),
 
       const NovelReaderRoute(),
       const MangaComicDetailRoute(comicId: ''),

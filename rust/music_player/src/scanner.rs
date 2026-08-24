@@ -407,6 +407,7 @@ fn scan_path_mapping_recursive(dir_path: &Path) -> PathMappingNode {
                     file_size,
                     children: Vec::new(),
                     has_audio,
+                    folder_id: None,
                 });
             }
         }
@@ -422,6 +423,7 @@ fn scan_path_mapping_recursive(dir_path: &Path) -> PathMappingNode {
         file_size: None,
         children,
         has_audio,
+        folder_id: None,
     }
 }
 

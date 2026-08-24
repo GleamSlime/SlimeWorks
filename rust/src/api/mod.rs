@@ -15,6 +15,7 @@ pub mod module_manager; // 新的统一模块管理系统（使用独立 crate�
 pub mod music_player; // 音乐播放器模块
 pub mod ncm_decrypt; // NCM 解密模块
 pub mod novel_reader; // 书籍阅读器模块
+pub mod power_stats; // 电力定时统计模块
 pub mod sentry_log; // Sentry日志收集模块
 pub mod simple;
 pub mod system_metrics;
