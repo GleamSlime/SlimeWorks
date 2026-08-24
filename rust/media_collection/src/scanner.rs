@@ -389,10 +389,11 @@ mod tests {
     #[test]
     fn collect_non_recursive_returns_only_direct_files() {
         let root = make_temp_dir();
-        fs::write(root.path().join("top.jpg"), b"fake").unwrap();
+        // 图片有最小文件大小限制（10KB），测试文件需超过阈值才不会被过滤
+        fs::write(root.path().join("top.jpg"), vec![0u8; 11 * 1024]).unwrap();
         let sub = root.path().join("sub");
         fs::create_dir(&sub).unwrap();
-        fs::write(sub.join("nested.jpg"), b"fake").unwrap();
+        fs::write(sub.join("nested.jpg"), vec![0u8; 11 * 1024]).unwrap();
 
         let items = MediaFolderScanner::collect_media_items("col-1", root.path(), false).unwrap();
         // Non-recursive: only direct children of root
@@ -407,10 +408,11 @@ mod tests {
     #[test]
     fn collect_recursive_includes_nested_files() {
         let root = make_temp_dir();
-        fs::write(root.path().join("top.jpg"), b"fake").unwrap();
+        // 图片有最小文件大小限制（10KB），测试文件需超过阈值才不会被过滤
+        fs::write(root.path().join("top.jpg"), vec![0u8; 11 * 1024]).unwrap();
         let sub = root.path().join("sub");
         fs::create_dir(&sub).unwrap();
-        fs::write(sub.join("nested.png"), b"fake").unwrap();
+        fs::write(sub.join("nested.png"), vec![0u8; 11 * 1024]).unwrap();
 
         let items = MediaFolderScanner::collect_media_items("col-2", root.path(), true).unwrap();
         assert_eq!(items.len(), 2);
@@ -419,7 +421,8 @@ mod tests {
     #[test]
     fn collect_assigns_correct_collection_id() {
         let root = make_temp_dir();
-        fs::write(root.path().join("img.jpg"), b"fake").unwrap();
+        // 图片有最小文件大小限制（10KB），测试文件需超过阈值才不会被过滤
+        fs::write(root.path().join("img.jpg"), vec![0u8; 11 * 1024]).unwrap();
 
         let items = MediaFolderScanner::collect_media_items("my-col", root.path(), false).unwrap();
         assert_eq!(items[0].collection_id, "my-col");

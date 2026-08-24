@@ -76,7 +76,22 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   // ── 图片缩放状态（缩放时禁用外层翻页手势）────────────────────────────────
   bool _imageIsZoomed = false;
   bool _currentIsVideo = false;
+
+  /// 鼠标中键是否处于按下状态（中键按住 + 滚轮 = 缩放模式）。
+  bool _middleButtonHeld = false;
   static const Duration _kImmersiveDelay = Duration(seconds: 10);
+
+  // ── 滚轮缩放通信 ───────────────────────────────────────────────────────
+  // 外层 Listener 独占指针信号（框架规则：先注册者胜，命中遍历从根到叶），
+  // 内层 Listener 永远收不到事件，因此缩放由外层判定后经此 Notifier 定向通知。
+  // 元组含义：(序号, 目标页 index, 鼠标位置, 滚轮 dy)
+  int _wheelZoomSeq = 0;
+  final _wheelZoomNotifier = ValueNotifier<(int, int, Offset, double)>((
+    0,
+    -1,
+    Offset.zero,
+    0,
+  ));
 
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
 
@@ -148,6 +163,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   void dispose() {
     _immersiveTimer?.cancel();
     _snapCtrl.dispose();
+    _wheelZoomNotifier.dispose();
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.edgeToEdge,
@@ -274,6 +290,20 @@ class _MediaViewerPageState extends State<MediaViewerPage>
 
   void _handlePointerScroll(PointerScrollEvent event) {
     if (_isDragging) return;
+    final ctrlPressed = HardwareKeyboard.instance.isControlPressed;
+    // 中键按下（以事件自身 buttons 兜底，防止 down/up 监听遗漏）
+    final middleHeld =
+        _middleButtonHeld || (event.buttons & kMiddleMouseButton) != 0;
+    // 按住 Ctrl 或鼠标中键：禁用翻页；图片页时滚轮作为缩放（视频页无缩放，忽略）
+    if (ctrlPressed || middleHeld) {
+      if (!_currentIsVideo) _requestZoom(event);
+      return;
+    }
+    // 图片已缩放：滚轮继续缩放，禁用翻页（直到重置缩放恢复 100%）
+    if (!_currentIsVideo && _imageIsZoomed) {
+      _requestZoom(event);
+      return;
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastJumpTimeMs < _kJumpCooldownMs) return;
     _resetImmersiveTimer();
@@ -290,6 +320,18 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       _jumpInstant(_scrollAccum > 0 ? 1 : -1);
       _scrollAccum = 0;
     }
+  }
+
+  /// 将滚轮事件转发给当前页的 _ImageViewer 执行锚点缩放。
+  void _requestZoom(PointerScrollEvent event) {
+    _resetImmersiveTimer();
+    _wheelZoomSeq++;
+    _wheelZoomNotifier.value = (
+      _wheelZoomSeq,
+      _currentIndex,
+      event.localPosition,
+      event.scrollDelta.dy,
+    );
   }
 
   // ── 子页面垂直滑动回调（图片缩放后用 onSwipeDelta 代替 drag）────────────
@@ -348,6 +390,8 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     }
     return _ImageViewer(
       source: source,
+      pageIndex: index,
+      wheelZoomNotifier: _wheelZoomNotifier,
       onSwipeDelta: _handleSwipeDelta,
       onSwipeEnd: () => _scrollAccum = 0,
       onSave: isMobile ? () => _saveCurrentItem(context) : null,
@@ -539,6 +583,19 @@ class _MediaViewerPageState extends State<MediaViewerPage>
             // ── 跟手拖动层 ──────────────────────────────────────────────────
             Positioned.fill(
               child: Listener(
+                // 跟踪鼠标中键按下状态：中键按住 + 滚轮 = 缩放模式
+                onPointerDown: (event) {
+                  if ((event.buttons & kMiddleMouseButton) != 0) {
+                    _middleButtonHeld = true;
+                  }
+                },
+                onPointerUp: (event) {
+                  // 抬起后剩余按下按钮不再包含中键时清除标记
+                  if ((event.buttons & kMiddleMouseButton) == 0) {
+                    _middleButtonHeld = false;
+                  }
+                },
+                onPointerCancel: (_) => _middleButtonHeld = false,
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) _handlePointerScroll(event);
                 },
@@ -978,6 +1035,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
 /// - 双指：捏合缩放 + 旋转
 /// - 双击：复原（重置缩放/旋转/位移）
 /// - 长按：触发保存（移动端）
+/// - 桌面端：Ctrl+滚轮缩放；缩放后直接滚轮继续缩放、鼠标拖拽平移
 class _ImageViewer extends StatefulWidget {
   const _ImageViewer({
     required this.source,
@@ -985,6 +1043,8 @@ class _ImageViewer extends StatefulWidget {
     required this.onSwipeEnd,
     this.onSave,
     this.onZoomChanged,
+    this.pageIndex = -1,
+    this.wheelZoomNotifier,
   });
 
   final String source;
@@ -998,6 +1058,12 @@ class _ImageViewer extends StatefulWidget {
 
   /// 图片缩放状态变化时回调（true = 已缩放/变换，false = 恢复原样）。
   final void Function(bool isZoomed)? onZoomChanged;
+
+  /// 本页在父级中的 index（用于识别滚轮缩放通知是否发给自己）。
+  final int pageIndex;
+
+  /// 父级滚轮缩放通知：(序号, 目标页 index, 鼠标位置, 滚轮 dy)。
+  final ValueNotifier<(int, int, Offset, double)>? wheelZoomNotifier;
 
   @override
   State<_ImageViewer> createState() => _ImageViewerState();
@@ -1024,6 +1090,44 @@ class _ImageViewerState extends State<_ImageViewer> {
   double _baseOffsetY = 0.0;
   double _startFocalX = 0.0;
   double _startFocalY = 0.0;
+
+  // 当前布局尺寸（滚轮缩放以鼠标位置为锚点时需要）
+  double _layoutW = 0.0;
+  double _layoutH = 0.0;
+
+  // 已处理的滚轮缩放通知序号（去重）
+  int _lastWheelSeq = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.wheelZoomNotifier?.addListener(_onWheelZoomRequest);
+  }
+
+  @override
+  void didUpdateWidget(_ImageViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.wheelZoomNotifier != widget.wheelZoomNotifier) {
+      oldWidget.wheelZoomNotifier?.removeListener(_onWheelZoomRequest);
+      widget.wheelZoomNotifier?.addListener(_onWheelZoomRequest);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.wheelZoomNotifier?.removeListener(_onWheelZoomRequest);
+    super.dispose();
+  }
+
+  /// 响应父级滚轮缩放通知：仅处理发往本页的事件。
+  void _onWheelZoomRequest() {
+    final v = widget.wheelZoomNotifier?.value;
+    if (v == null) return;
+    if (v.$2 != widget.pageIndex) return;
+    if (v.$1 == _lastWheelSeq) return;
+    _lastWheelSeq = v.$1;
+    _zoomAtPointer(v.$3, v.$4);
+  }
 
   bool get _isTransformed =>
       _scale > 1.02 ||
@@ -1056,7 +1160,16 @@ class _ImageViewerState extends State<_ImageViewer> {
     // outer Listener → _handlePointerScroll) and a PointerPanZoomUpdateEvent that reaches
     // onScaleUpdate with pointerCount==0.  Handling it here too would double-process or
     // cancel the scroll accumulation, so we skip it entirely for desktop.
-    if (isDesktop && d.pointerCount < 2) return;
+    if (isDesktop && d.pointerCount < 2) {
+      // 桌面端鼠标拖拽：缩放状态下平移图片；未缩放时忽略（翻页由外层处理）
+      if (_scale > 1.02) {
+        setState(() {
+          _offsetX += d.focalPointDelta.dx;
+          _offsetY += d.focalPointDelta.dy;
+        });
+      }
+      return;
+    }
 
     // Two-finger gesture without a real scale/rotation change is a pan swipe for navigation,
     // NOT an image transform — treat it like a single-finger swipe.
@@ -1098,9 +1211,47 @@ class _ImageViewerState extends State<_ImageViewer> {
     widget.onSwipeEnd();
   }
 
+  // ── 桌面端鼠标滚轮缩放 ──────────────────────────────────────────────
+  // 滚轮事件由父级 _handlePointerScroll 统一拦截（外层 Listener 独占指针信号），
+  // 父级判定为缩放行为后经 wheelZoomNotifier 通知本页执行 _zoomAtPointer。
+
+  /// 以鼠标位置为锚点缩放。dy < 0（滚轮向上）= 放大。
+  /// 缩放回 1.0 时清除全部变换，滚轮恢复翻页行为。
+  void _zoomAtPointer(Offset pos, double dy) {
+    const step = 1.15;
+    final raw = dy < 0 ? _scale * step : _scale / step;
+    final newScale = raw.clamp(1.0, 8.0);
+    if (newScale == _scale) {
+      // 已在边界（继续缩小但已是 1.0）→ 直接复原
+      if (_scale <= 1.0 && _isTransformed) _reset();
+      return;
+    }
+    final wasZoomed = _isTransformed;
+    if (newScale <= 1.0) {
+      // 缩放回原始大小：清除全部变换，滚轮恢复翻页行为
+      _reset();
+      return;
+    }
+    // 锚点缩放：保持鼠标下的图像内容不动（变换 = 围绕中心缩放 + 平移）
+    final k = newScale / _scale;
+    final cx = _layoutW / 2;
+    final cy = _layoutH / 2;
+    setState(() {
+      _offsetX = pos.dx - cx - (pos.dx - _offsetX - cx) * k;
+      _offsetY = pos.dy - cy - (pos.dy - _offsetY - cy) * k;
+      _scale = newScale;
+    });
+    final nowZoomed = _isTransformed;
+    if (nowZoomed != wasZoomed) {
+      widget.onZoomChanged?.call(nowZoomed);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final src = widget.source;
+    // 注意：不要在此处内嵌 Listener 拦截滚轮——指针信号由命中路径上先注册者独占，
+    // 外层 Listener 永远先于内层收到，内层拦截不会生效。滚轮逻辑统一由父级处理。
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1115,6 +1266,9 @@ class _ImageViewerState extends State<_ImageViewer> {
               builder: (context, constraints) {
                 final w = constraints.maxWidth;
                 final h = constraints.maxHeight;
+                // 记录布局尺寸，供滚轮锚点缩放计算使用
+                _layoutW = w;
+                _layoutH = h;
                 final Widget imgWidget;
                 if (src.startsWith('http')) {
                   imgWidget = Image.network(
@@ -1206,7 +1360,7 @@ class _ImageViewerState extends State<_ImageViewer> {
             ),
           ),
         ),
-        // 已变换时显示「复原」按钮
+        // 已变换时显示「重置缩放」按钮（缩放/旋转/平移后均可一键复原）
         if (_isTransformed)
           Positioned(
             bottom: AppTheme.metrics.kSpace24,
@@ -1223,7 +1377,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       Icons.zoom_out_map_rounded,
                       size: AppTheme.metrics.iconSize18,
                     ),
-                    label: const Text('复原'),
+                    label: const Text('重置缩放'),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.black.withAlpha(42),
                       foregroundColor: Colors.white,

@@ -49,9 +49,6 @@ pub fn ffprobe_cmd() -> String {
         .unwrap_or_else(|| "ffprobe".to_string())
 }
 
-// ── Cover thumbnail cache ─────────────────────────────────────────────────────
-static THUMB_CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
-
 /// 全局 ffmpeg 子进程并发上限（由 Flutter 端通过 register_ffmpeg_concurrency 设置）。
 /// 默认 2，所有启动 ffmpeg/ffprobe 的函数（ensure_cover_thumbnail / extract_video_scrub_frames 等）
 /// 共享此信号量，确保同一时刻 ffmpeg 进程数不超过此值。
@@ -202,16 +199,140 @@ impl Drop for ThumbPermit {
     }
 }
 
-fn thumb_cache_dir() -> &'static std::path::PathBuf {
-    THUMB_CACHE_DIR.get_or_init(|| {
-        let dir = std::path::Path::new(&app_data_base())
-            .join("SlimeWorks")
-            .join("library")
-            .join("media")
-            .join("covers");
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    })
+/// 资源旁的相邻缓存路径：`<资源父目录>/.SlimeWorks/tmp/<文件名>_w<宽度>.jpg`。
+///
+/// key 只用「文件名 + 宽度」（不含全路径 hash），保证缓存随资源目录一起移动时
+/// 跨设备/跨盘符仍可命中（如 Mac 生成、Windows 读取）。同一目录内文件名唯一，不会冲突。
+fn adjacent_cache_path(file_path: &std::path::Path, width: u32) -> Option<std::path::PathBuf> {
+    let parent = file_path.parent()?;
+    let file_name = file_path.file_name()?.to_string_lossy();
+    if file_name.is_empty() {
+        return None;
+    }
+    Some(
+        parent
+            .join(".SlimeWorks")
+            .join("tmp")
+            .join(format!("{}_w{}.jpg", file_name, width)),
+    )
+}
+
+/// Windows 下给 `.SlimeWorks` 目录设置隐藏属性（macOS 靠 `.` 前缀天然隐藏，无需处理）。
+#[cfg(target_os = "windows")]
+fn ensure_hidden_attr(dir: &std::path::Path) {
+    use std::os::windows::ffi::OsStrExt;
+    let wide: Vec<u16> = dir
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let attrs = winapi::um::fileapi::GetFileAttributesW(wide.as_ptr());
+        if attrs != winapi::um::fileapi::INVALID_FILE_ATTRIBUTES
+            && attrs & winapi::um::winnt::FILE_ATTRIBUTE_HIDDEN == 0
+        {
+            winapi::um::fileapi::SetFileAttributesW(
+                wide.as_ptr(),
+                attrs | winapi::um::winnt::FILE_ATTRIBUTE_HIDDEN,
+            );
+        }
+    }
+}
+
+/// 判断缓存文件是否有效命中（存在且非空）。零字节残留会被删除以便重新生成。
+fn is_valid_cache_hit(cache_path: &std::path::Path) -> bool {
+    if !cache_path.exists() {
+        return false;
+    }
+    match std::fs::metadata(cache_path) {
+        Ok(meta) if meta.len() > 0 => true,
+        _ => {
+            // zero-byte artefact from a previous failed write — remove and regenerate
+            let _ = std::fs::remove_file(cache_path);
+            false
+        }
+    }
+}
+
+/// 在集合目录树内搜索 `.SlimeWorks` 缓存目录（广度优先，限深限条目）。
+///
+/// 缓存目录按 `<资源父目录>/.SlimeWorks/tmp/` 规则建立在媒体文件实际所在目录旁，
+/// 不一定位于集合根目录；且为懒创建（生成过缩略图才存在）。
+/// 返回首个命中的路径；未命中返回 None（尚未生成过缩略图或目录被清理）。
+pub fn find_collection_config_dir(root_dir: String) -> Option<String> {
+    let root = std::path::Path::new(&root_dir);
+    if !root.is_dir() {
+        return None;
+    }
+    // 快速路径：集合根目录下直接存在 .SlimeWorks
+    let direct = root.join(".SlimeWorks");
+    if direct.is_dir() {
+        return Some(direct.to_string_lossy().into_owned());
+    }
+    // 限深限条目搜索，避免超大集合目录树造成磁盘扫描开销过大
+    const MAX_DEPTH: usize = 8;
+    const MAX_ENTRIES: usize = 20000;
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back((root.to_path_buf(), 0usize));
+    let mut visited_entries = 0usize;
+    while let Some((dir, depth)) = queue.pop_front() {
+        if depth >= MAX_DEPTH {
+            continue;
+        }
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            visited_entries += 1;
+            if visited_entries > MAX_ENTRIES {
+                return None;
+            }
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = entry.file_name();
+            if name == ".SlimeWorks" {
+                return Some(path.to_string_lossy().into_owned());
+            }
+            // 跳过隐藏目录（含缓存目录自身）避免无谓递归；
+            // 但媒体资源可能存放在隐藏子目录内的场景极少，可接受。
+            if name.to_string_lossy().starts_with('.') {
+                continue;
+            }
+            queue.push_back((path, depth + 1));
+        }
+    }
+    None
+}
+
+/// 获取集合配置目录（`.SlimeWorks`），不存在时在集合根目录创建。
+///
+/// 优先复用 [find_collection_config_dir] 的搜索：若缓存目录已在某个子目录旁存在，
+/// 直接返回而不重复创建；均未命中时在集合根目录创建（Windows 下设隐藏属性）。
+/// 集合根目录不存在或创建失败时返回 None。
+pub fn ensure_collection_config_dir(root_dir: String) -> Option<String> {
+    if let Some(found) = find_collection_config_dir(root_dir.clone()) {
+        return Some(found);
+    }
+    let root = std::path::Path::new(&root_dir);
+    if !root.is_dir() {
+        return None;
+    }
+    let dir = root.join(".SlimeWorks");
+    match std::fs::create_dir_all(&dir) {
+        Ok(_) => {
+            #[cfg(target_os = "windows")]
+            ensure_hidden_attr(&dir);
+            sw_info!("[media_scan] 已创建配置目录: {}", dir.display());
+            Some(dir.to_string_lossy().into_owned())
+        }
+        Err(e) => {
+            sw_warn!("[media_scan] 创建配置目录失败: {}", e);
+            None
+        }
+    }
 }
 
 /// Generate (or retrieve from disk cache) a JPEG thumbnail for `file_path`
@@ -258,30 +379,54 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         return None;
     }
 
-    // ② derive a stable cache key from path + target width
-    let key = format!("{}_w{}", path_key(&file_path), width);
-    let cache_path = thumb_cache_dir().join(format!("{}.jpg", key));
+    // ② 缓存路径：资源旁的相邻缓存（跨设备可移植，随资源目录一起移动）
+    let src_path = std::path::Path::new(&file_path);
+    let adjacent_path = adjacent_cache_path(src_path, width);
 
     // 记录原始文件大小（调试用）
     let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
 
-    // ③ disk cache hit — verify the file is non-empty
-    if cache_path.exists() {
-        if let Ok(meta) = std::fs::metadata(&cache_path) {
-            if meta.len() > 0 {
-                sw_debug!(
-                    "[thumb] cache-hit | src={} | orig={}B | cached={}B | w={}",
-                    file_path,
-                    orig_size,
-                    meta.len(),
-                    width
+    // ③ disk cache hit — 相邻缓存命中时不再重新生成
+    if let Some(ref p) = adjacent_path {
+        if is_valid_cache_hit(p) {
+            sw_debug!(
+                "[thumb] cache-hit(adjacent) | src={} | orig={}B | w={}",
+                file_path,
+                orig_size,
+                width
+            );
+            return Some(p.to_string_lossy().into_owned());
+        }
+    }
+
+    // ③b 确定写入目标：相邻缓存目录；创建失败（只读盘等）时无法生成缓存
+    let cache_path: std::path::PathBuf = match adjacent_path.as_ref() {
+        Some(p) => {
+            let mut writable = false;
+            if let Some(dir) = p.parent() {
+                if std::fs::create_dir_all(dir).is_ok() {
+                    writable = true;
+                    #[cfg(target_os = "windows")]
+                    if let Some(sw_dir) = src_path.parent().map(|pp| pp.join(".SlimeWorks")) {
+                        ensure_hidden_attr(&sw_dir);
+                    }
+                }
+            }
+            if writable {
+                p.clone()
+            } else {
+                sw_warn!(
+                    "[thumb] 相邻缓存目录不可写，跳过缓存生成 | src={}",
+                    file_path
                 );
-                return Some(cache_path.to_string_lossy().into_owned());
+                return None;
             }
         }
-        // zero-byte artefact from a previous failed write — remove and regenerate
-        let _ = std::fs::remove_file(&cache_path);
-    }
+        None => {
+            sw_warn!("[thumb] 无法计算相邻缓存路径，跳过缓存生成 | src={}", file_path);
+            return None;
+        }
+    };
 
     // ④ 取获并发信号量，限制同时运行的缩略图生成任务数
     acquire_thumb_permit();
@@ -556,8 +701,10 @@ static MEDIA_ITEMS: OnceLock<Mutex<Option<Vec<MediaItem>>>> = OnceLock::new();
 /// 最近一次访问 MEDIA_ITEMS 的 Unix 时间戳（秒）。供空闲检测使用。
 static LAST_MEDIA_ITEMS_ACCESS_SECS: AtomicU64 = AtomicU64::new(0);
 static MEDIA_FOLDERS: OnceLock<Arc<Mutex<Vec<MediaFolder>>>> = OnceLock::new();
-/// Caches the DB initialization result: None = success, Some(msg) = failure.
-static DB_INIT_RESULT: OnceLock<Option<String>> = OnceLock::new();
+/// 数据库初始化成功标记。只缓存「成功」结果：失败时不写入，
+/// 下次调用会重试（若数据库文件被另一进程独占锁定，锁定解除后即可恢复，
+/// 避免失败被永久缓存导致本进程内收藏等数据读写永久失效）。
+static DB_INIT_RESULT: OnceLock<()> = OnceLock::new();
 
 /// Returns the platform-specific default base dir for app data.
 fn app_data_base() -> String {
@@ -593,27 +740,118 @@ fn thumbnail_cache_dir() -> std::path::PathBuf {
     dir
 }
 
+/// 媒体库内部元数据表（迁移标记等）
+fn meta_table_name() -> String {
+    "media_meta".to_string()
+}
+
+/// 媒体库需要绑定的全部表。
+fn media_table_names() -> Vec<String> {
+    vec![
+        collection_table_name(),
+        item_table_name(),
+        folder_table_name(),
+        collection_order_table_name(),
+        favorites_table_name(),
+        smart_folder_table_name(),
+        meta_table_name(),
+    ]
+}
+
 /// Initialise the DB exactly once.  Returns the error string on failure.
 /// Exposed publicly so Dart can call it explicitly at startup.
 pub fn initialize_db() -> Result<(), String> {
-    let result = DB_INIT_RESULT.get_or_init(|| {
-        let path = default_db_path();
-        sw_info!("[media_db] Initializing DB at: {}", path);
-        match db_module::db_init(path) {
-            Ok(_) => {
-                sw_info!("[media_db] DB initialized successfully");
-                None
+    // 已成功过：直接返回（幂等）
+    if DB_INIT_RESULT.get().is_some() {
+        return Ok(());
+    }
+    let path = default_db_path();
+    sw_info!("[media_db] Initializing DB at: {}", path);
+    match db_module::db_init(path.clone()) {
+        Ok(_) => {
+            sw_info!("[media_db] DB initialized successfully");
+            // 将媒体库全部表绑定到 media.db，避免历史上多模块共享全局单例
+            // 时因初始化顺序不同导致数据写入错误文件的问题
+            for table in media_table_names() {
+                if let Err(e) = db_module::db_bind_table(table.clone(), path.clone()) {
+                    sw_warn!("[media_db] 绑定表 {} 失败: {}", table, e);
+                }
             }
-            Err(e) => {
-                sw_info!("[media_db] DB init failed: {}", e);
-                Some(e)
+            migrate_scattered_media_data(&path);
+            // 仅在成功时写入标记；失败不缓存，下次调用可重试
+            let _ = DB_INIT_RESULT.set(());
+            Ok(())
+        }
+        Err(e) => {
+            sw_info!("[media_db] DB init failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// 一次性迁移：历史上全局 db 单例「先到先得」时，媒体数据可能被写入其他模块的
+/// 文件（如 music_player.db）。这里把散落记录合并回 media.db（幂等，只执行一次）。
+fn migrate_scattered_media_data(media_db_path: &str) {
+    // 幂等标记：已迁移过则跳过
+    if let Ok(Some(flag)) = db_module::db_get(meta_table_name(), "scatter_merged_v1".to_string())
+    {
+        if flag == "1" {
+            return;
+        }
+    }
+
+    let base = std::path::Path::new(&app_data_base()).join("SlimeWorks");
+    let candidates = [base.join("music_player.db"), base.join("db.redb")];
+    let tables: Vec<String> = media_table_names()
+        .into_iter()
+        .filter(|t| *t != meta_table_name())
+        .collect();
+
+    let dst_modified = std::fs::metadata(media_db_path).and_then(|m| m.modified()).ok();
+
+    for candidate in &candidates {
+        let src = candidate.to_string_lossy().into_owned();
+        if src == media_db_path || !candidate.exists() {
+            continue;
+        }
+        // 常规表：只补齐目标缺失的记录，不覆盖已有数据
+        match db_module::db_merge_tables(src.clone(), media_db_path.to_string(), tables.clone(), false)
+        {
+            Ok(n) if n > 0 => sw_info!("[media_db] 从 {} 合并散落记录 {} 条", src, n),
+            Ok(_) => {}
+            Err(e) => sw_warn!("[media_db] 合并 {} 失败: {}", src, e),
+        }
+        // 收藏/排序：若候选文件比 media.db 更新，说明最近会话写在了候选文件，
+        // 用候选文件的收藏与排序覆盖（取最新状态）
+        let src_newer = match (
+            std::fs::metadata(candidate).and_then(|m| m.modified()).ok(),
+            dst_modified,
+        ) {
+            (Some(s), Some(d)) => s > d,
+            _ => false,
+        };
+        if src_newer {
+            for table in [favorites_table_name(), collection_order_table_name()] {
+                match db_module::db_merge_tables(
+                    src.clone(),
+                    media_db_path.to_string(),
+                    vec![table.clone()],
+                    true,
+                ) {
+                    Ok(n) if n > 0 => {
+                        sw_info!("[media_db] 从 {} 覆盖合并 {} {} 条", src, table, n)
+                    }
+                    Ok(_) => {}
+                    Err(e) => sw_warn!("[media_db] 覆盖合并 {} 失败: {}", table, e),
+                }
             }
         }
-    });
-    match result {
-        None => Ok(()),
-        Some(e) => Err(e.clone()),
     }
+    let _ = db_module::db_set(
+        meta_table_name(),
+        "scatter_merged_v1".to_string(),
+        "1".to_string(),
+    );
 }
 
 /// Ensures the DB is initialized (idempotent, no-op after first call).
@@ -1056,6 +1294,14 @@ fn upsert_collection_from_folder(
         updated_collection.title,
         updated_collection.item_count
     );
+    // 导入时预生成封面缩略图：懒创建资源旁的 .SlimeWorks 缓存目录，
+    // 并预热封面缓存（命中磁盘缓存时开销极小，重复导入不会重复生成）
+    if let Some(cover) = updated_collection.cover_path.as_deref() {
+        match ensure_cover_thumbnail(cover.to_string(), 320) {
+            Some(thumb) => sw_info!("[media_scan] 封面缩略图已预生成: {}", thumb),
+            None => sw_debug!("[media_scan] 封面缩略图预生成失败或不支持: {}", cover),
+        }
+    }
     Ok(updated_collection)
 }
 
@@ -1558,6 +1804,10 @@ pub fn transfer_collections(
 /// 打开文件所在目录（跨平台）
 pub fn open_in_file_manager(file_path: String) -> Result<(), String> {
     let path = std::path::Path::new(&file_path);
+    // 文件不存在时直接报错，避免 Explorer 打开错误目录（如“文档”）
+    if !path.exists() {
+        return Err("文件不存在，可能已被删除或移动".to_string());
+    }
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
@@ -1568,10 +1818,31 @@ pub fn open_in_file_manager(file_path: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer.exe")
-            .arg(format!("/select,{}", path.display()))
-            .spawn()
-            .map_err(|e| format!("打开失败: {}", e))?;
+        use std::os::windows::process::CommandExt;
+        // 规范化路径并剥离 \\?\ 前缀，保证 Explorer 可识别
+        let select_path = match path.canonicalize() {
+            Ok(p) => {
+                let s = p.to_string_lossy().into_owned();
+                s.strip_prefix(r"\\?\")
+                    .map(str::to_string)
+                    .unwrap_or(s)
+            }
+            Err(_) => path.display().to_string(),
+        };
+        // 用 raw_arg 绕过 Command 的自动加引号：否则 "/select,路径" 会被整体加引号，
+        // Explorer 无法解析 /select 开关，会回退打开默认目录（文档）
+        let spawn_result = std::process::Command::new("explorer.exe")
+            .raw_arg(format!("/select,{}", select_path))
+            .spawn();
+        if spawn_result.is_err() {
+            // 回退：直接打开父目录（不选中文件）
+            if let Some(parent) = path.parent() {
+                std::process::Command::new("explorer.exe")
+                    .arg(parent)
+                    .spawn()
+                    .map_err(|e| format!("打开失败: {}", e))?;
+            }
+        }
     }
     #[cfg(target_os = "linux")]
     {
@@ -1880,6 +2151,38 @@ mod tests {
         // 根路径无 file_name
         let path = Path::new("/");
         assert_eq!(default_collection_title(path), "未命名集合");
+    }
+
+    // ── adjacent_cache_path ──────────────────────────────────────────────
+
+    #[test]
+    fn adjacent_cache_path_basic() {
+        // 拼接规则：<资源父目录>/.SlimeWorks/tmp/<文件名>_w<宽度>.jpg
+        let p = Path::new("/media/photos/a.jpg");
+        assert_eq!(
+            adjacent_cache_path(p, 320),
+            Some(std::path::PathBuf::from(
+                "/media/photos/.SlimeWorks/tmp/a.jpg_w320.jpg"
+            ))
+        );
+    }
+
+    #[test]
+    fn adjacent_cache_path_key_ignores_full_path() {
+        // key 只含文件名+宽度：同一文件改换盘符/挂载点不影响缓存文件名（跨设备可移植）
+        let p1 = Path::new("D:/Photos/a.jpg");
+        let p2 = Path::new("E:/Photos/a.jpg");
+        let name1 = adjacent_cache_path(p1, 320).unwrap();
+        let name2 = adjacent_cache_path(p2, 320).unwrap();
+        assert_eq!(name1.file_name(), name2.file_name());
+        assert_eq!(name1.file_name().unwrap(), "a.jpg_w320.jpg");
+    }
+
+    #[test]
+    fn adjacent_cache_path_falls_back_when_no_parent() {
+        // 根路径无父目录/文件名 → 回退全局缓存（返回 None）
+        let p = Path::new("/");
+        assert_eq!(adjacent_cache_path(p, 320), None);
     }
 
     // ── pick_cover_path ────────────────────────────────────────────────────

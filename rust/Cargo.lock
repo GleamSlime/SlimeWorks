@@ -2242,6 +2242,7 @@ dependencies = [
  "tempfile",
  "uuid",
  "walkdir",
+ "winapi",
 ]
 
 [[package]]

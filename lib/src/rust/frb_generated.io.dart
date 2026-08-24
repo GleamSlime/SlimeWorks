@@ -336,6 +336,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NovelSearchResult> dco_decode_list_novel_search_result(dynamic raw);
 
   @protected
+  List<PathMappingNodeInfo> dco_decode_list_path_mapping_node_info(dynamic raw);
+
+  @protected
   List<PlayRecordInfo> dco_decode_list_play_record_info(dynamic raw);
 
   @protected
@@ -449,6 +452,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
+  PathMappingNodeInfo dco_decode_path_mapping_node_info(dynamic raw);
+
+  @protected
+  PathMappingNodeType dco_decode_path_mapping_node_type(dynamic raw);
 
   @protected
   PlayRecordInfo dco_decode_play_record_info(dynamic raw);
@@ -817,6 +826,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PathMappingNodeInfo> sse_decode_list_path_mapping_node_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PlayRecordInfo> sse_decode_list_play_record_info(
     SseDeserializer deserializer,
   );
@@ -944,6 +958,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
+
+  @protected
+  PathMappingNodeInfo sse_decode_path_mapping_node_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PathMappingNodeType sse_decode_path_mapping_node_type(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlayRecordInfo sse_decode_play_record_info(SseDeserializer deserializer);
@@ -1401,6 +1425,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_path_mapping_node_info(
+    List<PathMappingNodeInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_play_record_info(
     List<PlayRecordInfo> self,
     SseSerializer serializer,
@@ -1562,6 +1592,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_path_mapping_node_info(
+    PathMappingNodeInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_path_mapping_node_type(
+    PathMappingNodeType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_play_record_info(

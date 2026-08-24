@@ -7,9 +7,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
   /// 将 [folderId] 文件夹（或智能文件夹 [smartFolderId]）内的所有集合
   /// 物理迁移到用户选择的目标目录（通过 Rust FFI 执行文件操作）。
-  Future<void> transferFolderCollections({String? folderId, String? smartFolderId}) async {
+  Future<void> transferFolderCollections({
+    String? folderId,
+    String? smartFolderId,
+  }) async {
     // 1. 弹出文件夹选择器
-    final targetRoot = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择转移目标目录');
+    final targetRoot = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择转移目标目录',
+    );
     if (targetRoot == null || targetRoot.isEmpty) return;
 
     // 2. 确定集合列表
@@ -101,7 +106,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
 
       if (targetNodeId != null) {
-        await nodeSettingsService.createNodeMediaFolder(nodeId: targetNodeId, name: normalized);
+        await nodeSettingsService.createNodeMediaFolder(
+          nodeId: targetNodeId,
+          name: normalized,
+        );
         await refreshRemoteLibrary();
         return;
       }
@@ -113,7 +121,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       if (activeFolderId == null) {
         media_api.createMediaFolder(name: normalized);
       } else {
-        media_api.createChildMediaFolder(name: normalized, parentId: activeFolderId);
+        media_api.createChildMediaFolder(
+          name: normalized,
+          parentId: activeFolderId,
+        );
       }
       await loadFolders();
     } catch (error) {
@@ -150,7 +161,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   Future<void> deleteFolder(String folderId) async {
-    final parentId = mergedFolders.firstWhereOrNull((folder) => folder.id == folderId)?.parentId;
+    final parentId = mergedFolders
+        .firstWhereOrNull((folder) => folder.id == folderId)
+        ?.parentId;
     try {
       if (isRemoteFolder(folderId)) {
         final nodeId = getRemoteFolderNodeId(folderId);
@@ -158,7 +171,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程媒体文件夹映射不存在');
         }
-        await nodeSettingsService.deleteNodeMediaFolder(nodeId: nodeId, folderId: rawId);
+        await nodeSettingsService.deleteNodeMediaFolder(
+          nodeId: nodeId,
+          folderId: rawId,
+        );
         await refreshRemoteLibrary();
       } else {
         media_api.deleteMediaFolder(folderId: folderId);
@@ -170,6 +186,32 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
     } catch (error) {
       showSnack('错误', '删除文件夹失败: $error');
+    }
+  }
+
+  /// 删除文件夹及其内全部集合（仅删除库记录，不删除原始文件）。
+  /// 子文件夹仍按 Rust 默认行为提升到上一级。
+  Future<void> deleteFolderWithCollections(String folderId) async {
+    final parentId = mergedFolders
+        .firstWhereOrNull((folder) => folder.id == folderId)
+        ?.parentId;
+    try {
+      final collectionIds = mergedCollections
+          .where((collection) => collection.folderId == folderId)
+          .map((collection) => collection.id)
+          .toList();
+      for (final collectionId in collectionIds) {
+        media_api.deleteMediaCollection(collectionId: collectionId);
+      }
+      media_api.deleteMediaFolder(folderId: folderId);
+      await loadFolders();
+      await loadCollections();
+      if (currentFolderId.value == folderId) {
+        currentFolderId.value = parentId;
+      }
+      showSnack('完成', '已删除文件夹及 ${collectionIds.length} 个集合（未删除原文件）');
+    } catch (error) {
+      showSnack('错误', '删除文件夹及集合失败: $error');
     }
   }
 
@@ -193,7 +235,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         }
         // 优先使用调用方直接传入的目标文件夹 ID（由 UI 层在打开对话框前从当前文件夹捕获），
         // 避免通过全局状态推断时因节点切换或刷新导致丢失文件夹上下文。
-        final resolvedTargetRawId = targetRawFolderId ?? _resolveRemoteTargetFolderId(nodeId);
+        final resolvedTargetRawId =
+            targetRawFolderId ?? _resolveRemoteTargetFolderId(nodeId);
         final payloads = await nodeSettingsService.scanNodeMediaFolders(
           nodeId: nodeId,
           folderPath: normalized,
@@ -228,15 +271,21 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         return;
       }
       scanStatusText.value = '扫描中...';
-      final imported = await media_api.scanMediaFolders(folderPath: selectedPath);
+      final imported = await media_api.scanMediaFolders(
+        folderPath: selectedPath,
+      );
       if (imported.isEmpty) {
         await loadCollections();
         scanStatusText.value = '';
         showSnack('提示', '未发现新的媒体集合（文件夹可能已导入或无有效媒体文件）');
         return;
       }
-      final emptyCollections = imported.where((c) => c.itemCount == BigInt.zero).toList();
-      final validCollections = imported.where((c) => c.itemCount > BigInt.zero).toList();
+      final emptyCollections = imported
+          .where((c) => c.itemCount == BigInt.zero)
+          .toList();
+      final validCollections = imported
+          .where((c) => c.itemCount > BigInt.zero)
+          .toList();
       for (final empty in emptyCollections) {
         media_api.deleteMediaCollection(collectionId: empty.id);
       }
@@ -290,7 +339,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           throw ArgumentError('请输入节点目录路径');
         }
         // 优先使用调用方直接传入的目标文件夹 ID
-        final resolvedTargetRawId = targetRawFolderId ?? _resolveRemoteTargetFolderId(nodeId);
+        final resolvedTargetRawId =
+            targetRawFolderId ?? _resolveRemoteTargetFolderId(nodeId);
         final payload = await nodeSettingsService.importNodeMediaFolder(
           nodeId: nodeId,
           folderPath: normalized,
@@ -322,7 +372,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         return;
       }
       scanStatusText.value = '导入中...';
-      final collection = await media_api.importMediaFolder(folderPath: selectedPath);
+      final collection = await media_api.importMediaFolder(
+        folderPath: selectedPath,
+      );
       if (collection.itemCount == BigInt.zero) {
         media_api.deleteMediaCollection(collectionId: collection.id);
         await loadCollections();
@@ -388,23 +440,53 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
     int success = 0;
     int fail = 0;
+    bool foldersChanged = false;
     final targetFolderId = effectiveFolderId;
 
-    // 目录：使用 scanMediaFolders，每个子目录创建独立集合
+    // 目录：使用 scanMediaFolders，每个子目录创建独立集合；
+    // 并在当前目标位置下创建（或复用）与拖入目录同名的包裹文件夹，集合统一移入该包裹文件夹
     for (final dir in directoryPaths) {
-      scanStatusText.value = '扫描: ${dir.split(Platform.pathSeparator).last}';
+      final dirName = dir.split(Platform.pathSeparator).last;
+      scanStatusText.value = '扫描: $dirName';
       try {
         final collections = await media_api.scanMediaFolders(folderPath: dir);
-        final validCollections = collections.where((c) => c.itemCount > BigInt.zero).toList();
-        final emptyCollections = collections.where((c) => c.itemCount == BigInt.zero).toList();
+        final validCollections = collections
+            .where((c) => c.itemCount > BigInt.zero)
+            .toList();
+        final emptyCollections = collections
+            .where((c) => c.itemCount == BigInt.zero)
+            .toList();
         for (final empty in emptyCollections) {
           media_api.deleteMediaCollection(collectionId: empty.id);
         }
+
+        // 有有效集合时，查找/创建同名包裹文件夹（同名已存在则复用，不重复创建）
+        String? wrapperFolderId;
+        if (validCollections.isNotEmpty &&
+            dirName.isNotEmpty &&
+            (targetFolderId == null || !isRemoteFolder(targetFolderId))) {
+          final existing = folders.firstWhereOrNull(
+            (f) => f.parentId == targetFolderId && f.name == dirName,
+          );
+          if (existing != null) {
+            wrapperFolderId = existing.id;
+          } else {
+            final created = targetFolderId == null
+                ? media_api.createMediaFolder(name: dirName)
+                : media_api.createChildMediaFolder(
+                    name: dirName,
+                    parentId: targetFolderId,
+                  );
+            wrapperFolderId = created.id;
+            foldersChanged = true;
+          }
+        }
+
         for (final collection in validCollections) {
-          if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
+          if (wrapperFolderId != null) {
             media_api.moveMediaCollectionToFolder(
               collectionId: collection.id,
-              folderId: targetFolderId,
+              folderId: wrapperFolderId,
             );
           }
         }
@@ -435,7 +517,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         final collection = await media_api.importMediaFolder(folderPath: dir);
         if (collection.itemCount == BigInt.zero) {
           media_api.deleteMediaCollection(collectionId: collection.id);
-          _logger.info('[拖拽] 空集合已删除: ${dir.split(Platform.pathSeparator).last}');
+          _logger.info(
+            '[拖拽] 空集合已删除: ${dir.split(Platform.pathSeparator).last}',
+          );
           continue;
         }
         if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
@@ -457,6 +541,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
     }
 
+    // 拖入目录时可能新建了包裹文件夹，先刷新文件夹列表再刷新集合
+    if (foldersChanged) {
+      await loadFolders();
+    }
     await loadCollections();
     scanStatusText.value = '';
     isScanning.value = false;
@@ -482,7 +570,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     final rawId = getRemoteRawCollectionId(collectionId);
     if (nodeId == null) return;
 
-    final result = await FilePicker.platform.pickFiles(type: FileType.media, allowMultiple: true);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.media,
+      allowMultiple: true,
+    );
     if (result == null || result.files.isEmpty) return;
 
     isScanning.value = true;
@@ -538,7 +629,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         );
         await refreshRemoteLibrary();
       } else {
-        media_api.renameMediaCollection(collectionId: collectionId, title: normalized);
+        media_api.renameMediaCollection(
+          collectionId: collectionId,
+          title: normalized,
+        );
         await loadCollections();
       }
       if (currentCollectionId.value == collectionId) {
@@ -549,7 +643,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
-  Future<void> moveCollectionToFolder(String collectionId, String? folderId) async {
+  Future<void> moveCollectionToFolder(
+    String collectionId,
+    String? folderId,
+  ) async {
     try {
       if (isRemoteCollection(collectionId)) {
         final nodeId = getRemoteNodeId(collectionId);
@@ -557,7 +654,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (nodeId == null || rawCollectionId == null) {
           throw StateError('远程媒体集合映射不存在');
         }
-        final targetNodeId = folderId == null ? nodeId : getRemoteFolderNodeId(folderId);
+        final targetNodeId = folderId == null
+            ? nodeId
+            : getRemoteFolderNodeId(folderId);
         if (targetNodeId != nodeId) {
           throw StateError('远程媒体集合只能移动到同一节点中的文件夹');
         }
@@ -571,7 +670,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (folderId != null && isRemoteFolder(folderId)) {
           throw StateError('本地媒体集合不能移动到远程文件夹');
         }
-        media_api.moveMediaCollectionToFolder(collectionId: collectionId, folderId: folderId);
+        media_api.moveMediaCollectionToFolder(
+          collectionId: collectionId,
+          folderId: folderId,
+        );
         await loadCollections();
       }
       if (currentCollectionId.value == collectionId) {
@@ -623,7 +725,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程媒体集合映射不存在');
         }
-        await nodeSettingsService.deleteNodeMediaCollection(nodeId: nodeId, collectionId: rawId);
+        await nodeSettingsService.deleteNodeMediaCollection(
+          nodeId: nodeId,
+          collectionId: rawId,
+        );
         await refreshRemoteLibrary();
       } else {
         media_api.deleteMediaCollection(collectionId: collectionId);
@@ -642,7 +747,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         .where((id) => mergedFolders.any((folder) => folder.id == id))
         .toList();
     final collectionIds = selectedIds
-        .where((id) => mergedCollections.any((collection) => collection.id == id))
+        .where(
+          (id) => mergedCollections.any((collection) => collection.id == id),
+        )
         .toList();
     for (final collectionId in collectionIds) {
       await deleteCollection(collectionId);
@@ -661,7 +768,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       return;
     }
 
-    final localDir = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择拉取目标目录');
+    final localDir = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择拉取目标目录',
+    );
     if (localDir == null || localDir.isEmpty) return;
 
     final folderCollections = mergedCollections
@@ -682,11 +791,15 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final rawCollectionId = getRemoteRawCollectionId(collection.id);
       if (rawCollectionId == null) continue;
 
-      final safeTitle = collection.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final safeTitle = collection.title.replaceAll(
+        RegExp(r'[\\/:*?"<>|]'),
+        '_',
+      );
       final collectionDir = Directory('$localDir/$safeTitle');
       await collectionDir.create(recursive: true);
 
-      scanStatusText.value = '拉取集合 ${ci + 1}/${folderCollections.length}: ${collection.title}';
+      scanStatusText.value =
+          '拉取集合 ${ci + 1}/${folderCollections.length}: ${collection.title}';
       try {
         final items = await nodeSettingsService.fetchNodeMediaCollectionItems(
           nodeId: nodeId,
@@ -701,7 +814,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           }
           final filename = filePath.split('/').last.split('\\').last;
           final savePath = '${collectionDir.path}/$filename';
-          scanStatusText.value = '下载 ${collection.title} · $filename (${ii + 1}/${items.length})';
+          scanStatusText.value =
+              '下载 ${collection.title} · $filename (${ii + 1}/${items.length})';
           try {
             await nodeSettingsService.downloadNodeFileTo(
               nodeId: nodeId,
@@ -737,14 +851,20 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       return;
     }
 
-    final collection = mergedCollections.firstWhereOrNull((c) => c.id == collectionId);
+    final collection = mergedCollections.firstWhereOrNull(
+      (c) => c.id == collectionId,
+    );
     final title = collection?.title ?? '未命名集合';
 
-    final localDir = await FilePicker.platform.getDirectoryPath(dialogTitle: '选择拉取目标目录');
+    final localDir = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择拉取目标目录',
+    );
     if (localDir == null || localDir.isEmpty) return;
 
     final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final collectionDir = Directory('$localDir${Platform.pathSeparator}$safeTitle');
+    final collectionDir = Directory(
+      '$localDir${Platform.pathSeparator}$safeTitle',
+    );
     await collectionDir.create(recursive: true);
 
     isScanning.value = true;
@@ -765,8 +885,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           continue;
         }
         final filename = filePath.split('/').last.split('\\').last;
-        final savePath = '${collectionDir.path}${Platform.pathSeparator}$filename';
-        scanStatusText.value = '下载 $title · $filename (${ii + 1}/${items.length})';
+        final savePath =
+            '${collectionDir.path}${Platform.pathSeparator}$filename';
+        scanStatusText.value =
+            '下载 $title · $filename (${ii + 1}/${items.length})';
         try {
           await nodeSettingsService.downloadNodeFileTo(
             nodeId: nodeId,
@@ -803,7 +925,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       return;
     }
 
-    final collection = mergedCollections.firstWhereOrNull((c) => c.id == collectionId);
+    final collection = mergedCollections.firstWhereOrNull(
+      (c) => c.id == collectionId,
+    );
     final knownItemCount = collection?.itemCount.toInt() ?? 0;
     final folderId = collection?.folderId;
 
@@ -821,7 +945,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         await deleteCollection(collectionId);
         // 检查所属文件夹是否因此变空
         if (folderId != null) {
-          final remaining = mergedCollections.where((c) => c.folderId == folderId).length;
+          final remaining = mergedCollections
+              .where((c) => c.folderId == folderId)
+              .length;
           if (remaining == 0) {
             await deleteFolder(folderId);
             showSnack('完成', '已删除全部文件，集合及空文件夹已移除');
@@ -875,10 +1001,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final rawId = getRemoteRawCollectionId(collection.id);
       if (rawId == null) continue;
       try {
-        final deleted = await nodeSettingsService.deleteNodeCollectionLocalFiles(
-          nodeId: nodeId,
-          rawCollectionId: rawId,
-        );
+        final deleted = await nodeSettingsService
+            .deleteNodeCollectionLocalFiles(
+              nodeId: nodeId,
+              rawCollectionId: rawId,
+            );
         totalDeleted += deleted;
         if (deleted > 0 && deleted >= (collection.itemCount.toInt())) {
           _invalidateCollectionMediaCache(collection.id);
@@ -889,7 +1016,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
 
     // 若文件夹现在已空则一并删除
-    final stillInFolder = mergedCollections.where((c) => c.folderId == folderId).length;
+    final stillInFolder = mergedCollections
+        .where((c) => c.folderId == folderId)
+        .length;
     if (stillInFolder == 0) {
       await deleteFolder(folderId);
       showSnack('完成', '已从节点删除 $totalDeleted 个文件，文件夹已清空并移除');

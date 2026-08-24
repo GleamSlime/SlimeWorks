@@ -101,19 +101,91 @@ fn get_content_cache() -> &'static ContentCache {
     CONTENT_CACHE.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
 }
 
+/// 小说库数据库文件路径（<应用数据目录>/db.redb）
+fn novel_db_path() -> String {
+    get_app_data_dir()
+        .join("db.redb")
+        .to_string_lossy()
+        .to_string()
+}
+
+/// 将小说相关表绑定到 db.redb，并执行一次性散落数据迁移（幂等）。
+/// 返回数据库路径。
+fn bind_novel_tables() -> String {
+    let db_path_str = novel_db_path();
+    let _ = db_module::db_init(db_path_str.clone());
+    // 绑定到专属文件，避免历史上全局单例被其他模块抢先导致数据写错文件
+    for table in [
+        "novels".to_string(),
+        "novel_folders".to_string(),
+        "novel_meta".to_string(),
+    ] {
+        let _ = db_module::db_bind_table(table, db_path_str.clone());
+    }
+    migrate_scattered_novel_data(&db_path_str);
+    db_path_str
+}
+
+/// 一次性迁移：历史上全局 db 单例「先到先得」时，小说数据可能被写入其他模块的
+/// 文件（如 media.db / music_player.db）。这里把散落记录合并回 db.redb（幂等，只执行一次）。
+fn migrate_scattered_novel_data(db_path: &str) {
+    // 幂等标记：已迁移过则跳过
+    if let Ok(Some(flag)) =
+        db_module::db_get("novel_meta".to_string(), "scatter_merged_v1".to_string())
+    {
+        if flag == "1" {
+            return;
+        }
+    }
+
+    let mut candidates = Vec::new();
+    #[cfg(windows)]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let base = std::path::Path::new(&appdata).join("SlimeWorks");
+        candidates.push(base.join("media.db"));
+        candidates.push(base.join("music_player.db"));
+    }
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = std::env::var("HOME") {
+        let base = std::path::Path::new(&home)
+            .join("Library")
+            .join("Application Support")
+            .join("SlimeWorks");
+        candidates.push(base.join("media.db"));
+        candidates.push(base.join("music_player.db"));
+    }
+
+    for candidate in &candidates {
+        let src = candidate.to_string_lossy().into_owned();
+        if src == db_path || !candidate.exists() {
+            continue;
+        }
+        match db_module::db_merge_tables(
+            src.clone(),
+            db_path.to_string(),
+            vec!["novels".to_string(), "novel_folders".to_string()],
+            false,
+        ) {
+            Ok(n) if n > 0 => sw_info!("[novel_db] 从 {} 合并散落记录 {} 条", src, n),
+            Ok(_) => {}
+            Err(e) => sw_info!("[novel_db] 合并 {} 失败: {}", src, e),
+        }
+    }
+    let _ = db_module::db_set(
+        "novel_meta".to_string(),
+        "scatter_merged_v1".to_string(),
+        "1".to_string(),
+    );
+}
+
 fn get_library() -> &'static Arc<Mutex<Vec<NovelMetadata>>> {
     NOVEL_LIBRARY.get_or_init(|| {
         // 尝试初始化数据库并从表中加载已保存的书籍元数据
         let library = Arc::new(Mutex::new(Vec::new()));
 
-        // 获取应用数据目录（优先使用系统应用数据目录，而非临时目录）
-        let db_path = get_app_data_dir().join("db.redb");
-        let db_path_str = db_path.to_string_lossy().to_string();
-
+        // 绑定表到专属文件并迁移散落数据（优先使用系统应用数据目录，而非临时目录）
+        let db_path_str = bind_novel_tables();
         println!("[NovelLibrary] Database path: {}", db_path_str);
-
-        let _ = db_module::db_init(db_path_str.clone());
-        let _ = db_module::db_register_table("novels".to_string());
 
         if let Ok(records) = db_module::db_list_all("novels".to_string()) {
             if let Ok(mut lib) = library.lock() {
@@ -133,7 +205,8 @@ fn get_folder_list() -> &'static Arc<Mutex<Vec<NovelFolder>>> {
     FOLDER_LIST.get_or_init(|| {
         let folders = Arc::new(Mutex::new(Vec::new()));
 
-        let _ = db_module::db_register_table("novel_folders".to_string());
+        // 确保表已绑定到专属文件（幂等）
+        let _ = bind_novel_tables();
 
         if let Ok(records) = db_module::db_list_all("novel_folders".to_string()) {
             if let Ok(mut list) = folders.lock() {

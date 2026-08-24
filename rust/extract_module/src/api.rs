@@ -18,12 +18,54 @@ fn get_result_state() -> &'static Arc<Mutex<Option<ExtractResult>>> {
 const EXTRACT_PASSWORDS_TABLE: &str = "extract_passwords";
 
 pub fn extract_init_password_table(db_path: String) {
-    if let Err(e) = db_module::db_init(db_path) {
+    if let Err(e) = db_module::db_init(db_path.clone()) {
         sw_error!("初始化数据库失败: {}", e);
     }
-    if let Err(e) = db_module::db_register_table(EXTRACT_PASSWORDS_TABLE.to_string()) {
+    // 绑定到专属文件，避免历史上全局单例被其他模块抢先导致密码写错文件
+    if let Err(e) = db_module::db_bind_table(EXTRACT_PASSWORDS_TABLE.to_string(), db_path.clone())
+    {
         sw_error!("注册密码表失败: {}", e);
     }
+    // 一次性迁移：历史上密码可能被写入 media.db / music_player.db
+    migrate_scattered_passwords(&db_path);
+}
+
+/// 一次性迁移：把散落在其他数据库文件中的解压密码合并回专属文件（幂等）。
+fn migrate_scattered_passwords(db_path: &str) {
+    // 幂等标记存于独立的 extract_meta 表（避免污染密码列表）
+    let _ = db_module::db_bind_table("extract_meta".to_string(), db_path.to_string());
+    if let Ok(Some(flag)) =
+        db_module::db_get("extract_meta".to_string(), "scatter_merged_v1".to_string())
+    {
+        if flag == "1" {
+            return;
+        }
+    }
+    // 候选：其他模块的历史数据库文件（Windows 下位于 %APPDATA%\SlimeWorks）
+    let mut candidates = Vec::new();
+    #[cfg(windows)]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let base = std::path::Path::new(&appdata).join("SlimeWorks");
+        candidates.push(base.join("media.db"));
+        candidates.push(base.join("music_player.db"));
+    }
+    for candidate in &candidates {
+        let src = candidate.to_string_lossy().into_owned();
+        if src == db_path || !candidate.exists() {
+            continue;
+        }
+        let _ = db_module::db_merge_tables(
+            src,
+            db_path.to_string(),
+            vec![EXTRACT_PASSWORDS_TABLE.to_string()],
+            false,
+        );
+    }
+    let _ = db_module::db_set(
+        "extract_meta".to_string(),
+        "scatter_merged_v1".to_string(),
+        "1".to_string(),
+    );
 }
 
 pub fn extract_list_passwords_json() -> String {

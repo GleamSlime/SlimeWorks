@@ -35,7 +35,8 @@ class MediaBrowseGridView extends StatefulWidget {
   final void Function(SmartFolder sf, {bool isRemote}) onEditSmartFolder;
 
   /// [isRemote] 为 true 时调用远程删除，否则本地删除
-  final void Function(String id, String name, {bool isRemote}) onDeleteSmartFolder;
+  final void Function(String id, String name, {bool isRemote})
+  onDeleteSmartFolder;
 
   // ── 集合操作回调 ──────────────────────────────────────────────────────────
   final void Function(String id, String title) onRenameCollection;
@@ -44,9 +45,14 @@ class MediaBrowseGridView extends StatefulWidget {
 
   /// [isRemote] true 则显示路径弹窗，false 则打开本地文件夹
   final void Function(String path, {bool isRemote}) onOpenFolder;
-  final void Function(String id, String path, String title) onDeleteCollectionFolder;
+  final void Function(String id, String path, String title)
+  onDeleteCollectionFolder;
   final void Function(String id, String name) onDeleteNodeLocalFilesForFolder;
-  final void Function(String id, String title) onDeleteNodeLocalFilesForCollection;
+  final void Function(String id, String title)
+  onDeleteNodeLocalFilesForCollection;
+
+  /// 打开集合配置目录（集合目录下的 .SlimeWorks）回调，传入集合的文件夹路径。
+  final void Function(String collectionFolderPath) onOpenConfigDir;
 
   const MediaBrowseGridView({
     super.key,
@@ -66,6 +72,7 @@ class MediaBrowseGridView extends StatefulWidget {
     required this.onDeleteCollectionFolder,
     required this.onDeleteNodeLocalFilesForFolder,
     required this.onDeleteNodeLocalFilesForCollection,
+    required this.onOpenConfigDir,
   });
 
   @override
@@ -115,21 +122,30 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
 
   void _updateSelectionByBox() {
     if (_selectionBoxStart == null || _selectionBoxEnd == null) return;
-    final selectionRect = Rect.fromPoints(_selectionBoxStart!, _selectionBoxEnd!);
-    final gridRenderBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    final selectionRect = Rect.fromPoints(
+      _selectionBoxStart!,
+      _selectionBoxEnd!,
+    );
+    final gridRenderBox =
+        _gridKey.currentContext?.findRenderObject() as RenderBox?;
     if (gridRenderBox == null) return;
 
     final items = vm.visibleItems;
     final newSelection = <String>{};
-    final maxCrossAxisExtent = scaleW(250);
+    // 必须与下方 SliverGridDelegateWithMaxCrossAxisExtent 的几何参数一致：
+    // maxCrossAxisExtent=scaleW(220)、childAspectRatio=0.68、
+    // crossAxisCount = ceil(gridWidth / maxCrossAxisExtent)，
+    // 否则框选命中矩形与实际卡片位置错位，导致选中样式不生效。
+    final maxCrossAxisExtent = scaleW(220);
     final spacing = appMetrics.kSpace12;
     final padding = appMetrics.kSpace12;
     final gridWidth = gridRenderBox.size.width - 2 * padding;
-    final crossAxisCount = (gridWidth / (maxCrossAxisExtent + spacing)).floor();
+    final crossAxisCount = (gridWidth / maxCrossAxisExtent).ceil();
     if (crossAxisCount <= 0) return;
 
-    final itemWidth = (gridWidth - (crossAxisCount - 1) * spacing) / crossAxisCount;
-    final itemHeight = itemWidth / 0.78;
+    final itemWidth =
+        (gridWidth - (crossAxisCount - 1) * spacing) / crossAxisCount;
+    final itemHeight = itemWidth / 0.68;
 
     for (int index = 0; index < items.length; index++) {
       final row = index ~/ crossAxisCount;
@@ -160,11 +176,16 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       if (item is MediaLibrarySmartFolderItem) {
         return _buildSmartFolderCard(context, item.smartFolder);
       }
-      return _buildCollectionCard(context, (item as MediaLibraryCollectionItem).collection);
+      return _buildCollectionCard(
+        context,
+        (item as MediaLibraryCollectionItem).collection,
+      );
     });
   }
 
   Widget _buildFolderCard(BuildContext context, folder) {
+    // 同名集合分组是虚拟文件夹：不支持重命名/删除/迁移，也不接受拖放。
+    final isDupGroup = vm.isDupGroup(folder.id);
     final folderCard = MediaFolderCard(
       folder: folder,
       coverSource: vm.buildFolderCoverSource(folder),
@@ -172,7 +193,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       isSelected: vm.selectedIds.contains(folder.id),
       isRemote: vm.isRemoteFolder(folder.id),
       nodeName: vm.getRemoteFolderNodeName(folder.id),
-      isLost: vm.checkFolderLost(folder),
+      isLost: isDupGroup ? false : vm.checkFolderLost(folder),
       onTap: () {
         if (vm.isSelecting.value) {
           vm.toggleSelection(folder.id);
@@ -181,9 +202,13 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
         widget.onEnterFolder(folder.id);
       },
       onLongPress: () => vm.enterSelection(folder.id),
-      onRename: () => widget.onRenameFolderDialog(folder.id, folder.name),
-      onDelete: () => widget.onConfirmDeleteFolder(folder.id, folder.name),
-      onTransfer: vm.isRemoteFolder(folder.id)
+      onRename: isDupGroup
+          ? () => vm.showSnack('提示', '同名集合分组为自动聚合的虚拟文件夹，不支持重命名')
+          : () => widget.onRenameFolderDialog(folder.id, folder.name),
+      onDelete: isDupGroup
+          ? () => vm.showSnack('提示', '同名集合分组为自动聚合的虚拟文件夹，不支持删除')
+          : () => widget.onConfirmDeleteFolder(folder.id, folder.name),
+      onTransfer: vm.isRemoteFolder(folder.id) || isDupGroup
           ? null
           : () => vm.transferFolderCollections(folderId: folder.id),
       onPullToLocal: vm.isRemoteFolder(folder.id)
@@ -193,12 +218,15 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           ? () => widget.onDeleteNodeLocalFilesForFolder(folder.id, folder.name)
           : null,
     );
-    if (vm.isRemoteFolder(folder.id)) return folderCard;
+    if (vm.isRemoteFolder(folder.id) || isDupGroup) return folderCard;
     return DragTarget<String>(
       onWillAcceptWithDetails: (d) => !vm.isRemoteCollection(d.data),
       onAcceptWithDetails: (d) => vm.moveCollectionToFolder(d.data, folder.id),
-      builder: (ctx, candidateData, _) =>
-          _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: folderCard),
+      builder: (ctx, candidateData, _) => _buildDropHighlight(
+        ctx,
+        highlighted: candidateData.isNotEmpty,
+        child: folderCard,
+      ),
     );
   }
 
@@ -211,7 +239,9 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     final sfCard = SmartFolderCard(
       smartFolder: sf,
       coverSource: vm.buildSmartFolderCoverSource(sf),
-      matchCount: vm.mergedCollections.where((c) => vm.collectionMatchesSmartFolder(sf, c)).length,
+      matchCount: vm.mergedCollections
+          .where((c) => vm.collectionMatchesSmartFolder(sf, c))
+          .length,
       isSelected: vm.selectedIds.contains(sf.id),
       nodeName: nodeName,
       isLost: vm.checkSmartFolderLost(sf),
@@ -223,24 +253,34 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
         widget.onEnterFolder(sf.id);
       },
       onLongPress: () => vm.enterSelection(sf.id),
-      onRename: isRemoteSf ? null : () => widget.onRenameSmartFolderDialog(sf.id, sf.name),
+      onRename: isRemoteSf
+          ? null
+          : () => widget.onRenameSmartFolderDialog(sf.id, sf.name),
       onEdit: () => widget.onEditSmartFolder(sf, isRemote: isRemoteSf),
-      onDelete: () => widget.onDeleteSmartFolder(sf.id, sf.name, isRemote: isRemoteSf),
-      onTransfer: isRemoteSf ? null : () => vm.transferFolderCollections(smartFolderId: sf.id),
+      onDelete: () =>
+          widget.onDeleteSmartFolder(sf.id, sf.name, isRemote: isRemoteSf),
+      onTransfer: isRemoteSf
+          ? null
+          : () => vm.transferFolderCollections(smartFolderId: sf.id),
     );
     if (isRemoteSf) return sfCard;
-    final targetId = sf.targetFolderIds.length == 1 ? sf.targetFolderIds.first : null;
+    final targetId = sf.targetFolderIds.length == 1
+        ? sf.targetFolderIds.first
+        : null;
     if (targetId == null) return sfCard;
     return DragTarget<String>(
       onWillAcceptWithDetails: (d) => !vm.isRemoteCollection(d.data),
       onAcceptWithDetails: (d) => vm.moveCollectionToFolder(d.data, targetId),
-      builder: (ctx, candidateData, _) =>
-          _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: sfCard),
+      builder: (ctx, candidateData, _) => _buildDropHighlight(
+        ctx,
+        highlighted: candidateData.isNotEmpty,
+        child: sfCard,
+      ),
     );
   }
 
   Widget _buildCollectionCard(BuildContext context, collection) {
-    final collectionCard = MediaCollectionCard(
+    final card = MediaCollectionCard(
       collection: collection,
       coverSource: vm.buildCollectionCoverSource(collection),
       isSelected: vm.selectedIds.contains(collection.id),
@@ -258,7 +298,8 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           : () => vm.prefetchCollectionVideoFrames(collection.id),
       onRequestVideoFrame: vm.isRemoteCollection(collection.id)
           ? null
-          : (fraction) => vm.getCollectionVideoFrameAtFraction(collection.id, fraction),
+          : (fraction) =>
+                vm.getCollectionVideoFrameAtFraction(collection.id, fraction),
       onTap: () {
         if (vm.isSelecting.value) {
           vm.toggleSelection(collection.id);
@@ -267,12 +308,17 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
         widget.onEnterCollection(collection.id);
       },
       onLongPress: () => vm.enterSelection(collection.id),
-      onRename: () => widget.onRenameCollection(collection.id, collection.title),
-      onDelete: () => widget.onDeleteCollection(collection.id, collection.title),
+      onRename: () =>
+          widget.onRenameCollection(collection.id, collection.title),
+      onDelete: () =>
+          widget.onDeleteCollection(collection.id, collection.title),
       onMove: () => widget.onMoveCollection(collection.id, collection.folderId),
       onOpenFolder: vm.isRemoteCollection(collection.id)
           ? () => widget.onOpenFolder(collection.folderPath, isRemote: true)
           : () => widget.onOpenFolder(collection.folderPath, isRemote: false),
+      onOpenConfigDir: vm.isRemoteCollection(collection.id)
+          ? null
+          : () => widget.onOpenConfigDir(collection.folderPath),
       onDeleteFolder: vm.isRemoteCollection(collection.id)
           ? null
           : () => widget.onDeleteCollectionFolder(
@@ -284,15 +330,30 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           ? () => vm.pullRemoteCollectionToLocal(collection.id)
           : null,
       onDeleteNodeFiles: vm.isRemoteCollection(collection.id)
-          ? () => widget.onDeleteNodeLocalFilesForCollection(collection.id, collection.title)
+          ? () => widget.onDeleteNodeLocalFilesForCollection(
+              collection.id,
+              collection.title,
+            )
           : null,
       onToggleFavorite: () => vm.toggleFavorite(collection.id),
+    );
+
+    // 追踪鼠标悬停状态（供 Delete 快捷键定位当前悬停的集合）
+    final collectionCard = MouseRegion(
+      onEnter: (_) => vm.hoveredCollectionId.value = collection.id,
+      onExit: (_) {
+        if (vm.hoveredCollectionId.value == collection.id) {
+          vm.hoveredCollectionId.value = null;
+        }
+      },
+      child: card,
     );
 
     if (vm.isRemoteCollection(collection.id)) return collectionCard;
 
     // 仅综合排序模式下启用拖拽重排序
-    final isCombinedSort = vm.collectionSortOrder.value == CollectionSortOrder.combinedSort;
+    final isCombinedSort =
+        vm.collectionSortOrder.value == CollectionSortOrder.combinedSort;
     if (!isCombinedSort) return collectionCard;
 
     final draggable = Draggable<String>(
@@ -323,8 +384,11 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           !vm.isRemoteCollection(d.data) &&
           vm.mergedCollections.any((c) => c.id == d.data),
       onAcceptWithDetails: (d) => vm.reorderCollection(d.data, collection.id),
-      builder: (ctx, candidateData, _) =>
-          _buildDropHighlight(ctx, highlighted: candidateData.isNotEmpty, child: draggable),
+      builder: (ctx, candidateData, _) => _buildDropHighlight(
+        ctx,
+        highlighted: candidateData.isNotEmpty,
+        child: draggable,
+      ),
     );
   }
 
@@ -346,7 +410,9 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
               borderRadius: appMetrics.radius16,
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
+                  color: Theme.of(
+                    context,
+                  ).shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -359,7 +425,9 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
                   width: scaleW(72),
                   height: scaleW(72),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: appMetrics.radius16,
                   ),
                   child: Icon(
@@ -372,7 +440,9 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
                 Text(
                   isRoot ? '媒体库为空' : '当前文件夹为空',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -380,7 +450,9 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
                 Text(
                   isRoot ? '使用上方操作按钮导入集合' : '拖拽或导入媒体到此处',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ),
               ],

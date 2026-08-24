@@ -10,11 +10,15 @@ class MediaSelectionBar extends StatelessWidget {
     required this.selectedCount,
     required this.onDelete,
     required this.onCancel,
+    this.onSelectUnfavorited,
   });
 
   final int selectedCount;
   final VoidCallback onDelete;
   final VoidCallback onCancel;
+
+  /// 可选：一键选中当前文件夹内未收藏的集合（仅浏览层提供）
+  final VoidCallback? onSelectUnfavorited;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +70,13 @@ class MediaSelectionBar extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (onSelectUnfavorited != null) ...[
+                TextButton(
+                  onPressed: onSelectUnfavorited,
+                  child: const Text('选择未收藏集合'),
+                ),
+                SizedBox(width: appMetrics.kSpace8),
+              ],
               TextButton(onPressed: onCancel, child: const Text('取消选择')),
               SizedBox(width: appMetrics.kSpace8),
               FilledButton.icon(

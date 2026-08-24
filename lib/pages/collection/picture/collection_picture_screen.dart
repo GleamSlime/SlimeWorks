@@ -305,13 +305,27 @@ class _CollectionPictureScreenState
           child: Focus(
             autofocus: true,
             onKeyEvent: (node, event) {
-              if (event is! KeyDownEvent || viewModel.isInDetail) {
+              if (event is! KeyDownEvent) {
                 return KeyEventResult.ignored;
               }
-              if (event.logicalKey == LogicalKeyboardKey.escape &&
-                  viewModel.isSelecting.value) {
-                viewModel.exitSelection();
-                return KeyEventResult.handled;
+              // ESC：优先退出多选；否则逐级返回上一级（集合 → 文件夹 → 根目录）
+              if (event.logicalKey == LogicalKeyboardKey.escape) {
+                if (viewModel.isSelecting.value) {
+                  viewModel.exitSelection();
+                  return KeyEventResult.handled;
+                }
+                if (viewModel.isInDetail) {
+                  _exitCollection();
+                  return KeyEventResult.handled;
+                }
+                if (viewModel.currentFolderId.value != null) {
+                  _exitFolder();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              }
+              if (viewModel.isInDetail) {
+                return KeyEventResult.ignored;
               }
               if ((HardwareKeyboard.instance.isControlPressed ||
                       HardwareKeyboard.instance.isMetaPressed) &&
@@ -327,6 +341,15 @@ class _CollectionPictureScreenState
                   viewModel.selectedIds.isNotEmpty) {
                 _confirmDeleteSelected(context);
                 return KeyEventResult.handled;
+              }
+              // 鼠标悬停集合 + Delete：直接删除本地文件及文件夹（无需二次确认）
+              if (event.logicalKey == LogicalKeyboardKey.delete &&
+                  !viewModel.isSelecting.value) {
+                final hovered = viewModel.hoveredLocalCollection();
+                if (hovered != null) {
+                  _deleteCollectionFolder(hovered.id, hovered.folderPath);
+                  return KeyEventResult.handled;
+                }
               }
               return KeyEventResult.ignored;
             },
@@ -359,6 +382,8 @@ class _CollectionPictureScreenState
                       selectedCount: viewModel.selectedIds.length,
                       onDelete: () => _confirmDeleteSelected(context),
                       onCancel: viewModel.exitSelection,
+                      onSelectUnfavorited:
+                          viewModel.selectUnfavoritedCollections,
                     ),
                 ],
               );
@@ -605,7 +630,8 @@ class _CollectionPictureScreenState
     // 浏览模式：面包屑 + 集合排序
     final hasBreadcrumb =
         viewModel.currentFolderTrail.isNotEmpty ||
-        viewModel.currentSmartFolder != null;
+        viewModel.currentSmartFolder != null ||
+        viewModel.isInDupGroup;
     final hasNodes = viewModel.enabledRemoteNodes.isNotEmpty;
 
     // 使用 LayoutBuilder 判断宽度是否有界，避免在 AppBar.leading 等无界父容器中使用
@@ -636,70 +662,63 @@ class _CollectionPictureScreenState
               // 将左侧内容推到最左，右侧控件紧靠右边
               if (hasBoundedWidth) const Spacer(),
               if (!hasBoundedWidth) SizedBox(width: appMetrics.kSpace8),
-              // 右侧：节点数小标签 + 集合排序按钮，整体作为刚性块不溢出
+              // 右侧：节点数小标签 + 集合排序按钮，整体作为刚性块不溢出（不加宽度上限，避免窄约束下内部 Row 溢出）
               Flexible(
                 flex: 0,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 200),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasBreadcrumb && hasNodes) ...[
-                        ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: scaleW(80)),
-                          child: Text(
-                            '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasBreadcrumb && hasNodes) ...[
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: scaleW(80)),
+                        child: Text(
+                          '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(width: appMetrics.kSpace8),
-                      ],
-                      // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
-                      PopupMenuButton<CollectionSortOrder>(
-                        tooltip: '集合排序',
-                        icon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.sort_rounded, size: scaleW(18)),
-                            SizedBox(width: appMetrics.kSpace4),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: scaleW(72)),
-                              child: Text(
-                                viewModel.collectionSortOrder.value.label,
-                                style: Theme.of(context).textTheme.bodySmall,
-                                overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(width: appMetrics.kSpace8),
+                    ],
+                    // 集合排序按钮（浏览层：根目录、文件夹内、智能文件夹均显示）
+                    PopupMenuButton<CollectionSortOrder>(
+                      tooltip: '集合排序',
+                      icon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.sort_rounded, size: scaleW(18)),
+                          SizedBox(width: appMetrics.kSpace4),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: scaleW(72)),
+                            child: Text(
+                              viewModel.collectionSortOrder.value.label,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      onSelected: (v) =>
+                          viewModel.collectionSortOrder.value = v,
+                      itemBuilder: (_) => CollectionSortOrder.values
+                          .map(
+                            (o) => PopupMenuItem<CollectionSortOrder>(
+                              value: o,
+                              child: Row(
+                                children: [
+                                  if (viewModel.collectionSortOrder.value == o)
+                                    Icon(Icons.check_rounded, size: scaleW(16))
+                                  else
+                                    SizedBox(width: scaleW(16)),
+                                  SizedBox(width: appMetrics.kSpace8),
+                                  Text(o.label),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                        onSelected: (v) =>
-                            viewModel.collectionSortOrder.value = v,
-                        itemBuilder: (_) => CollectionSortOrder.values
-                            .map(
-                              (o) => PopupMenuItem<CollectionSortOrder>(
-                                value: o,
-                                child: Row(
-                                  children: [
-                                    if (viewModel.collectionSortOrder.value ==
-                                        o)
-                                      Icon(
-                                        Icons.check_rounded,
-                                        size: scaleW(16),
-                                      )
-                                    else
-                                      SizedBox(width: scaleW(16)),
-                                    SizedBox(width: appMetrics.kSpace8),
-                                    Text(o.label),
-                                  ],
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                  ), // Row
-                ), // ConstrainedBox
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ), // Row
               ), // Flexible
             ],
           ),
@@ -728,6 +747,14 @@ class _CollectionPictureScreenState
             TextButton(
               onPressed: () => _enterFolder(trail[index].id),
               child: Text(trail[index].name),
+            ),
+          ],
+          // 同名集合分组标题段（虚拟分组，面包屑末段，不可点击）
+          if (viewModel.currentDupGroupTitle != null) ...[
+            Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+            Text(
+              viewModel.currentDupGroupTitle!,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
           ],
           // Smart folder in trail (always root-level, no further sub-path)
@@ -1446,6 +1473,24 @@ class _CollectionPictureScreenState
     }
   }
 
+  /// 打开集合配置目录（.SlimeWorks）。
+  /// 缓存目录按 `<资源父目录>/.SlimeWorks` 规则创建，不一定位于集合根目录，
+  /// 因此先搜索整个集合目录树；均未命中时在集合根目录创建后再打开，
+  /// 保证导入后无论是否生成过缩略图都能打开。
+  void _openCollectionConfigDir(String collectionFolderPath) {
+    final dir = media_api.ensureCollectionConfigDir(
+      rootDir: collectionFolderPath,
+    );
+    if (dir == null) {
+      viewModel.showSnack(
+        '无法打开配置目录',
+        '集合目录不存在或无法创建 .SlimeWorks 目录：\n$collectionFolderPath',
+      );
+      return;
+    }
+    _openFolderInExplorer(dir);
+  }
+
   static String _formatBytes(BigInt bytes) {
     final d = bytes.toDouble();
     if (d < 1024) return '${d.toStringAsFixed(0)} B';
@@ -1480,6 +1525,7 @@ class _CollectionPictureScreenState
       onDeleteNodeLocalFilesForFolder: _confirmDeleteNodeLocalFilesForFolder,
       onDeleteNodeLocalFilesForCollection:
           _confirmDeleteNodeLocalFilesForCollection,
+      onOpenConfigDir: _openCollectionConfigDir,
     );
   }
 
@@ -1607,6 +1653,28 @@ class _CollectionPictureScreenState
     final availableFolders = viewModel.getAvailableFoldersForCollection(
       collectionId,
     );
+    // 层级化平铺（DFS）：一级/二级/三级文件夹均可选，缩进区分层级。
+    // availableFolders 已按名称排序，同级文件夹保持名称有序。
+    final flat = <(media_api.MediaFolder, int)>[];
+    final visited = <String>{};
+    void walk(String? parentId, int depth) {
+      for (final folder in availableFolders) {
+        if (folder.parentId != parentId || visited.contains(folder.id)) {
+          continue;
+        }
+        visited.add(folder.id);
+        flat.add((folder, depth));
+        walk(folder.id, depth + 1);
+      }
+    }
+
+    walk(null, 0);
+    // 兜底：parentId 无法对应到列表内文件夹的（如远程节点映射）平铺到一级展示
+    for (final folder in availableFolders) {
+      if (!visited.contains(folder.id)) {
+        flat.add((folder, 0));
+      }
+    }
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -1622,10 +1690,30 @@ class _CollectionPictureScreenState
                     value: null,
                     child: Text('根目录'),
                   ),
-                  ...availableFolders.map(
-                    (folder) => DropdownMenuItem<String?>(
-                      value: folder.id,
-                      child: Text(folder.name),
+                  ...flat.map(
+                    (entry) => DropdownMenuItem<String?>(
+                      value: entry.$1.id,
+                      // 下拉项处于无界宽度约束，不能用 Flexible/Expanded，
+                      // 改用 mainAxisSize.min + 限宽文本防溢出。
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(width: AppTheme.metrics.kSpace16 * entry.$2),
+                          Icon(
+                            Icons.folder_rounded,
+                            size: scaleW(16),
+                            color: Theme.of(context).hintColor,
+                          ),
+                          SizedBox(width: AppTheme.metrics.kSpace4),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: scaleW(280)),
+                            child: Text(
+                              entry.$1.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1708,23 +1796,66 @@ class _CollectionPictureScreenState
   }
 
   Future<void> _confirmDeleteFolder(String folderId, String title) async {
+    // 远程文件夹：保持原有确认逻辑（节点端默认将集合移到上一级）
+    if (viewModel.isRemoteFolder(folderId)) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('删除媒体文件夹'),
+            content: Text('确定删除“$title”吗？文件夹内集合会移动到上一级目录。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await viewModel.deleteFolder(folderId);
+                },
+                child: const Text('删除'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    // 文件夹内没有任何集合：不弹窗直接删除
+    if (viewModel.collectionCountInFolder(folderId) == 0) {
+      await viewModel.deleteFolder(folderId);
+      return;
+    }
+
+    // 文件夹内有集合：由用户选择处理方式
     await showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('删除媒体文件夹'),
-          content: Text('确定删除“$title”吗？文件夹内集合会移动到上一级目录。'),
+          content: Text(
+            '确定删除“$title”吗？\n文件夹内包含 ${viewModel.collectionCountInFolder(folderId)} 个集合，请选择处理方式：',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('取消'),
             ),
-            FilledButton(
+            TextButton(
               onPressed: () async {
                 Navigator.of(context).pop();
                 await viewModel.deleteFolder(folderId);
               },
-              child: const Text('删除'),
+              child: const Text('移到上一级'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await viewModel.deleteFolderWithCollections(folderId);
+              },
+              child: const Text('直接全部删除(不删原文件)'),
             ),
           ],
         );

@@ -169,14 +169,17 @@ class _MediaItemTileState extends State<MediaItemTile> {
         widget.onSaveToGallery != null;
     if (!hasActions) return;
     if (!mounted) return;
-    final screenSize = MediaQuery.sizeOf(context);
+    // 将全局坐标换算为 Overlay 本地坐标，保证菜单在光标位置弹出（与 MediaCollectionCard 一致）
+    final overlayBox = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final localPos = overlayBox.globalToLocal(globalPosition);
+    final overlaySize = overlayBox.size;
     final action = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        screenSize.width - globalPosition.dx,
-        screenSize.height - globalPosition.dy,
+        localPos.dx,
+        localPos.dy,
+        overlaySize.width - localPos.dx,
+        overlaySize.height - localPos.dy,
       ),
       items: [
         if (widget.onOpenFolder != null)

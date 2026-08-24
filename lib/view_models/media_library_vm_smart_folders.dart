@@ -6,24 +6,69 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   // ── 集合排序 ─────────────────────────────────────────────────────────────
 
   Future<void> _loadCollectionOrders() async {
+    // 1) SharedPreferences 为主信任源（与历史版本 media_col_order_<orderKey> 键保持一致）
     try {
-      final orders = media_api.getAllCollectionOrders();
-      for (final (orderKey, ids) in orders) {
-        _collectionOrders[orderKey] = ids;
-        _logger.info('_loadCollectionOrders: orderKey=$orderKey count=${ids.length}');
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = prefs;
+      var fromPrefs = 0;
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith(_colOrderPrefPrefix)) continue;
+        final orderKey = key.substring(_colOrderPrefPrefix.length);
+        final raw = prefs.getString(key);
+        if (raw == null || raw.isEmpty) continue;
+        try {
+          final ids = (jsonDecode(raw) as List).whereType<String>().toList();
+          if (ids.isNotEmpty) {
+            _collectionOrders[orderKey] = ids;
+            fromPrefs++;
+            _logger.info(
+              '_loadCollectionOrders[prefs]: orderKey=$orderKey count=${ids.length}',
+            );
+          }
+        } catch (e) {
+          _logger.error('解析拖拽顺序失败: key=$orderKey err=$e');
+        }
       }
-      _logger.info('_loadCollectionOrders: 共加载 ${orders.length} 条排序记录');
+      // 2) redb 作为兜底：仅补齐 prefs 中缺失的 orderKey
+      try {
+        final orders = media_api.getAllCollectionOrders();
+        for (final (orderKey, ids) in orders) {
+          if (ids.isNotEmpty && !_collectionOrders.containsKey(orderKey)) {
+            _collectionOrders[orderKey] = ids;
+          }
+        }
+        _logger.info(
+          '_loadCollectionOrders: prefs=$fromPrefs 条，redb 候选=${orders.length} 条，合计=${_collectionOrders.length} 条',
+        );
+      } catch (e) {
+        _logger.error('从 redb 加载集合排序失败: $e');
+      }
     } catch (e) {
       _logger.error('加载集合排序失败: $e');
     }
   }
 
   Future<void> _saveCollectionOrder(String orderKey, List<String> ids) async {
+    // 双写：SharedPreferences（主，重启后优先读取）+ redb（兜底）
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = prefs;
+      final key = '$_colOrderPrefPrefix$orderKey';
+      if (ids.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, jsonEncode(ids));
+      }
+      _logger.info(
+        '_saveCollectionOrder[prefs]: orderKey=$orderKey count=${ids.length}',
+      );
+    } catch (e) {
+      _logger.error('保存集合排序失败(prefs): key=$orderKey err=$e');
+    }
     try {
       media_api.saveCollectionOrder(orderKey: orderKey, ids: ids);
-      _logger.info('_saveCollectionOrder: orderKey=$orderKey count=${ids.length}');
     } catch (e) {
-      _logger.error('保存集合排序失败: key=$orderKey err=$e');
+      _logger.error('保存集合排序失败(redb): key=$orderKey err=$e');
     }
   }
 
@@ -44,7 +89,10 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
                 .map((c) => c.id)
                 .toList();
     } else {
-      ids = mergedCollections.where((c) => c.folderId == folderId).map((c) => c.id).toList();
+      ids = mergedCollections
+          .where((c) => c.folderId == folderId)
+          .map((c) => c.id)
+          .toList();
     }
 
     // 应用当前已有的自定义排序作为基准
@@ -67,7 +115,9 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
     ids.insert(toIdx, moved);
     _collectionOrders[orderKey] = ids;
     collectionOrderVersion.value++;
-    _logger.info('reorderCollection: orderKey=$orderKey newOrder=${ids.join(",")}');
+    _logger.info(
+      'reorderCollection: orderKey=$orderKey newOrder=${ids.join(",")}',
+    );
     await _saveCollectionOrder(orderKey, ids);
   }
 
@@ -101,9 +151,12 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   /// 立即从 Rust redb 重新加载智能文件夹，供调试时主动调用。
   Future<void> debugForceReloadSmartFolders() => _loadSmartFolders();
 
-  SmartFolderRegexTarget _convertRegexTarget(media_api.SmartFolderRegexTarget target) {
+  SmartFolderRegexTarget _convertRegexTarget(
+    media_api.SmartFolderRegexTarget target,
+  ) {
     return switch (target) {
-      media_api.SmartFolderRegexTarget.fileName => SmartFolderRegexTarget.fileName,
+      media_api.SmartFolderRegexTarget.fileName =>
+        SmartFolderRegexTarget.fileName,
       _ => SmartFolderRegexTarget.collectionName,
     };
   }

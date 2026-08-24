@@ -191,16 +191,55 @@ pub fn delete_model(preset_name: String) -> Result<bool, String> {
 
 /// 初始化 whisper 配置表
 pub fn initialize_whisper_db() -> Result<(), String> {
-    // 确保数据库实例已初始化（与 music_player 共用同一数据库）
+    // 确保数据库实例已初始化（与 music_player 共用同一数据库文件）
     let db_path = {
         let app_data = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
         let dir = std::path::Path::new(&app_data).join("SlimeWorks");
         let _ = std::fs::create_dir_all(&dir);
         dir.join("music_player.db").to_string_lossy().into_owned()
     };
-    let _ = db_module::db_init(db_path);
-    db_module::db_register_table("whisper_config".to_string()).map_err(|e: String| e)?;
+    let _ = db_module::db_init(db_path.clone());
+    // 绑定到专属文件，避免历史上全局单例被其他模块抢先导致配置写错文件
+    db_module::db_bind_table("whisper_config".to_string(), db_path.clone())
+        .map_err(|e: String| e)?;
+    // 一次性迁移：历史上配置可能被写入 media.db / db.redb
+    migrate_scattered_whisper_config(&db_path);
     Ok(())
+}
+
+/// 一次性迁移：把散落在其他数据库文件中的 whisper_config 合并回 music_player.db（幂等）。
+fn migrate_scattered_whisper_config(db_path: &str) {
+    // 幂等标记存于 whisper_config 表内部（配置表，不影响其他逻辑）
+    if let Ok(Some(flag)) =
+        db_module::db_get("whisper_config".to_string(), "scatter_merged_v1".to_string())
+    {
+        if flag == "1" {
+            return;
+        }
+    }
+    let base = std::path::Path::new(db_path)
+        .parent()
+        .map(|p| p.to_path_buf());
+    if let Some(base) = base {
+        for name in ["media.db"] {
+            let candidate = base.join(name);
+            if !candidate.exists() {
+                continue;
+            }
+            let src = candidate.to_string_lossy().into_owned();
+            let _ = db_module::db_merge_tables(
+                src,
+                db_path.to_string(),
+                vec!["whisper_config".to_string()],
+                false,
+            );
+        }
+    }
+    let _ = db_module::db_set(
+        "whisper_config".to_string(),
+        "scatter_merged_v1".to_string(),
+        "1".to_string(),
+    );
 }
 
 /// 识别音频文件并生成 CUE 文件

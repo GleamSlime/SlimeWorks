@@ -33,6 +33,21 @@ pub fn kill_all_ffmpeg_processes() {
     media_collection::kill_all_ffmpeg_processes();
 }
 
+/// 在集合目录树内搜索 `.SlimeWorks` 缓存目录。
+/// 缓存目录建立在媒体文件实际所在目录旁（懒创建），不一定位于集合根目录。
+/// 返回首个命中的路径；未命中返回 None。
+#[frb(sync)]
+pub fn find_collection_config_dir(root_dir: String) -> Option<String> {
+    media_collection::find_collection_config_dir(root_dir)
+}
+
+/// 获取集合配置目录（`.SlimeWorks`），不存在时在集合根目录创建（Windows 下隐藏）。
+/// 集合根目录不存在或创建失败时返回 None。
+#[frb(sync)]
+pub fn ensure_collection_config_dir(root_dir: String) -> Option<String> {
+    media_collection::ensure_collection_config_dir(root_dir)
+}
+
 #[derive(Debug, Clone)]
 pub struct MediaCollection {
     pub id: String,
@@ -213,7 +228,8 @@ pub struct CollectionStats {
 /// on failure (unsupported format, decode error, etc.).
 /// Resolution strategy: ffmpeg first (supports HEIC/AVIF), then pure-Rust
 /// `image` crate as fallback.
-#[frb(sync)]
+/// 异步（非 sync）：FRB 会在后台线程池执行，避免大图解码阻塞 Dart UI 线程；
+/// 调用方需 await，不可依赖同步返回。
 pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     media_collection::ensure_cover_thumbnail(file_path, width)
 }

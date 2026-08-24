@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -12,6 +14,7 @@ import 'package:slime_works/core/services/video_thumb_queue.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/utils/natural_compare.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
@@ -81,6 +84,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   final currentItems = <media_api.MediaItem>[].obs;
   final selectedIds = <String>{}.obs;
   final isSelecting = false.obs;
+
+  /// 鼠标当前悬停的集合 ID（浏览层，供 Delete 快捷键定位目标）
+  final hoveredCollectionId = RxnString();
   final isScanning = false.obs;
   final scanStatusText = ''.obs;
   final isLoadingItems = false.obs;
@@ -145,6 +151,52 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// collectionId → 缩略图路径（仅含成功生成的条目）。
   final _collectionVideoThumbnails = <String, String>{};
 
+  /// 本地图片条目缩略图缓存：key = 原始文件路径，value = .SlimeWorks/tmp 内缩略图路径。
+  final _itemThumbnails = <String, String>{};
+
+  /// 缩略图生成失败的文件路径集合（不重试，继续显示原图）。
+  final _itemThumbFailed = <String>{};
+
+  /// 正在执行中的封面任务 key（contains() 只覆盖等待中任务，运行中任务需单独去重）。
+  final _inFlightCoverKeys = <String>{};
+
+  /// 封面生成是否被用户暂停（取消后自动入队逻辑不再重新入队，直到手动恢复）。
+  final thumbGenerationPaused = false.obs;
+
+  /// 同名集合分组虚拟文件夹 ID 前缀。
+  static const dupGroupPrefix = 'dup-group:';
+
+  /// 是否为同名集合分组虚拟文件夹。
+  bool isDupGroup(String id) => id.startsWith(dupGroupPrefix);
+
+  /// 从分组 ID 中提取集合标题。
+  String? dupGroupTitle(String id) =>
+      isDupGroup(id) ? id.substring(dupGroupPrefix.length) : null;
+
+  /// 分组 ID → 所属父文件夹 ID（null = 根目录），在 visibleItems 构建时登记。
+  final _dupGroupParents = <String, String?>{};
+
+  /// 当前是否处于同名集合分组内。
+  bool get isInDupGroup {
+    final fid = currentFolderId.value;
+    return fid != null && isDupGroup(fid);
+  }
+
+  /// 当前同名分组标题（不在分组内时为 null）。
+  String? get currentDupGroupTitle {
+    final fid = currentFolderId.value;
+    return fid == null ? null : dupGroupTitle(fid);
+  }
+
+  /// 返回指定同名分组包含的集合列表（标题相同且属于同一父文件夹）。
+  List<media_api.MediaCollection> dupGroupCollections(String groupId) {
+    final title = dupGroupTitle(groupId);
+    final parent = _dupGroupParents[groupId];
+    return mergedCollections
+        .where((c) => c.title == title && c.folderId == parent)
+        .toList(growable: false);
+  }
+
   /// 用于集合封面生成的串行队列。
   /// 并发数与 Rust 端全局 ffmpeg 信号量一致，双重保障 ffmpeg 进程数不超限。
   final _coverQueue = VideoThumbQueue(concurrency: 2);
@@ -181,6 +233,18 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   /// 浏览视图中集合列表的排序方式。
   final collectionSortOrder = CollectionSortOrder.dateUpdated.obs;
+
+  /// 集合排序方式的持久化键（重启后恢复，防止拖拽排序因排序模式重置而失效）。
+  static const String _kSortOrderPrefKey = 'media_collection_sort_order';
+
+  /// 集合拖拽顺序的 SharedPreferences 键前缀（与历史版本保持一致，完整键 = 前缀 + orderKey）。
+  static const String _kColOrderPrefPrefix = 'media_col_order_';
+
+  /// 媒体库偏好实例（onInitAsync 中初始化，供排序持久化扩展使用）。
+  SharedPreferences? _prefs;
+
+  /// 拖拽顺序 prefs 键前缀（实例访问器，供 part 扩展使用；扩展内不能直接引用静态成员）。
+  String get _colOrderPrefPrefix => _kColOrderPrefPrefix;
 
   Worker? _nodeMutationWorker;
   Future<void>? _refreshAllFuture;
@@ -228,6 +292,8 @@ class MediaLibraryViewModel extends BaseViewModel {
 
     // 缩略图进度回调：合并两个队列的进度
     void updateProgress(int completed, int total) {
+      // 暂停期间忽略在途任务的进度回调，保持状态栏停留在暂停状态
+      if (thumbGenerationPaused.value) return;
       final c = _coverQueue.completed + _scrubQueue.completed;
       final t = _coverQueue.total + _scrubQueue.total;
       if (t > 0 && c < t) {
@@ -251,6 +317,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       // 永久 ViewModel 再次进入页面时：刷新数据 + 重新加载智能文件夹（磁盘上的数据描和内存始终保持同步）
       _logger.info('[媒体库] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
       await _loadSmartFolders();
+      // 重新加载收藏：若首次初始化时因数据库未就绪等原因加载失败，此处可恢复
+      await _loadFavorites();
       await refreshAll();
       return;
     }
@@ -263,6 +331,24 @@ class MediaLibraryViewModel extends BaseViewModel {
     await _loadSmartFolders();
     await _loadCollectionOrders();
     await _loadFavorites();
+    // 恢复集合排序方式（持久化），并监听变更实时写回，防止重启后回到默认排序
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _prefs = prefs;
+      final stored = prefs.getString(_kSortOrderPrefKey);
+      if (stored != null) {
+        collectionSortOrder.value = CollectionSortOrder.values.firstWhere(
+          (e) => e.name == stored,
+          orElse: () => CollectionSortOrder.dateUpdated,
+        );
+        _logger.info('[媒体库] 已恢复集合排序方式: $stored');
+      }
+      ever(collectionSortOrder, (v) {
+        prefs.setString(_kSortOrderPrefKey, v.name);
+      });
+    } catch (e) {
+      _logger.error('[媒体库] 恢复排序方式失败: $e');
+    }
     _logger.info('[媒体库] onInitAsync: 开始 refreshAll');
     await refreshAll();
     _logger.info(
@@ -367,6 +453,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       return sf.targetFolderIds.length == 1 ? sf.targetFolderIds.first : null;
     }
     final fid = currentFolderId.value;
+    // 同名集合分组是虚拟文件夹：操作上下文为其登记的父文件夹（可能为 null = 根目录）
+    if (fid != null && isDupGroup(fid)) return _dupGroupParents[fid];
     if (fid != null && isSmartFolder(fid)) return null;
     return fid;
   }
@@ -384,13 +472,28 @@ class MediaLibraryViewModel extends BaseViewModel {
   String get currentCollectionTitle => currentCollection?.title ?? '';
 
   String get currentBrowseTitle =>
-      currentSmartFolder?.name ?? currentFolder?.name ?? '媒体库';
+      currentSmartFolder?.name ??
+      currentDupGroupTitle ??
+      currentFolder?.name ??
+      '媒体库';
 
   List<media_api.MediaFolder> get currentFolderTrail {
     // Smart folders are always root-level virtual folders – no breadcrumb sub-trail needed
     if (currentSmartFolder != null) return [];
+    // 同名集合分组：面包屑展示其登记的父文件夹路径（分组标题段由 UI 层额外拼接）
+    final fid = currentFolderId.value;
+    if (fid != null && isDupGroup(fid)) {
+      return _folderTrailFrom(_dupGroupParents[fid]);
+    }
+    return _folderTrailFrom(fid);
+  }
+
+  /// 从指定文件夹 ID 回溯构建面包屑路径（自根到该文件夹）。
+  List<media_api.MediaFolder> _folderTrailFrom(String? folderId) {
     final trail = <media_api.MediaFolder>[];
-    var cursor = currentFolder;
+    var cursor = folderId == null
+        ? null
+        : mergedFolders.firstWhereOrNull((folder) => folder.id == folderId);
     final visited = <String>{};
     while (cursor != null && visited.add(cursor.id)) {
       trail.insert(0, cursor);
@@ -464,6 +567,14 @@ class MediaLibraryViewModel extends BaseViewModel {
     // Read favorites to register dependency
     final favOnly = showFavoritesOnly.value;
     final favIds = favoriteCollectionIds.toSet();
+    // 同名集合分组：直接返回该分组登记的集合列表（标题相同且父文件夹一致）
+    if (folderId != null && isDupGroup(folderId)) {
+      final grouped = dupGroupCollections(folderId);
+      final filtered = favOnly
+          ? grouped.where((c) => favIds.contains(c.id)).toList(growable: true)
+          : grouped.toList(growable: true);
+      return _applySortOrder(filtered, folderId);
+    }
     // Smart folder: 按智能文件夹规则过滤集合（远程集合忽略文件夹范围）
     if (folderId != null && isSmartFolder(folderId)) {
       final sf = getSmartFolder(folderId);
@@ -529,13 +640,9 @@ class MediaLibraryViewModel extends BaseViewModel {
       final result = [...list];
       switch (sort) {
         case CollectionSortOrder.nameAsc:
-          result.sort(
-            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-          );
+          result.sort((a, b) => naturalCompare(a.title, b.title));
         case CollectionSortOrder.nameDesc:
-          result.sort(
-            (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-          );
+          result.sort((a, b) => naturalCompare(b.title, a.title));
         case CollectionSortOrder.countDesc:
           result.sort((a, b) => b.itemCount.compareTo(a.itemCount));
         case CollectionSortOrder.countAsc:
@@ -570,13 +677,53 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   List<MediaLibraryItem> get visibleItems {
     // Smart folders (local + remote) are only shown at root level (currentFolderId == null)
-    final sfItems = (currentFolderId.value == null)
+    final folderId = currentFolderId.value;
+    final sfItems = (folderId == null)
         ? mergedSmartFolders.map(MediaLibrarySmartFolderItem.new).toList()
         : <MediaLibrarySmartFolderItem>[];
+    final collections = currentCollections;
+    // 同名集合分组：分组内部不再嵌套分组，直接平铺显示集合卡片；
+    // 智能文件夹内集合来自跨目录匹配，也不做同名聚合。
+    if (folderId != null && (isDupGroup(folderId) || isSmartFolder(folderId))) {
+      return <MediaLibraryItem>[
+        ...currentChildFolders.map(MediaLibraryFolderItem.new),
+        ...sfItems,
+        ...collections.map(MediaLibraryCollectionItem.new),
+      ];
+    }
+    // 按标题聚合同名集合：≥2 个同名集合折叠为虚拟分组文件夹；
+    // 首次出现位置保留顺序，其余重复项从平铺列表中移除。
+    final titleCounts = <String, int>{};
+    for (final c in collections) {
+      titleCounts[c.title] = (titleCounts[c.title] ?? 0) + 1;
+    }
+    final emittedGroupTitles = <String>{};
+    final collectionItems = <MediaLibraryItem>[];
+    for (final c in collections) {
+      if ((titleCounts[c.title] ?? 0) >= 2) {
+        if (!emittedGroupTitles.add(c.title)) continue;
+        final groupId = '$dupGroupPrefix${c.title}';
+        // 登记分组所属父文件夹，供进入分组后按标题+父目录筛选集合
+        _dupGroupParents[groupId] = folderId;
+        collectionItems.add(
+          MediaLibraryFolderItem(
+            media_api.MediaFolder(
+              id: groupId,
+              name: c.title,
+              createdAt: 0,
+              order: 0,
+              parentId: folderId,
+            ),
+          ),
+        );
+      } else {
+        collectionItems.add(MediaLibraryCollectionItem(c));
+      }
+    }
     return <MediaLibraryItem>[
       ...currentChildFolders.map(MediaLibraryFolderItem.new),
       ...sfItems,
-      ...currentCollections.map(MediaLibraryCollectionItem.new),
+      ...collectionItems,
     ];
   }
 
@@ -589,13 +736,9 @@ class MediaLibraryViewModel extends BaseViewModel {
     final items = [...currentItems];
     switch (order) {
       case MediaItemSortOrder.nameAsc:
-        items.sort(
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        );
+        items.sort((a, b) => naturalCompare(a.title, b.title));
       case MediaItemSortOrder.nameDesc:
-        items.sort(
-          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-        );
+        items.sort((a, b) => naturalCompare(b.title, a.title));
       case MediaItemSortOrder.sizeDesc:
         items.sort((a, b) => b.fileSize.compareTo(a.fileSize));
       case MediaItemSortOrder.sizeAsc:
@@ -686,6 +829,15 @@ class MediaLibraryViewModel extends BaseViewModel {
       return item.filePath;
     }
     if (!isRemoteCollection(targetCollectionId)) {
+      // 本地图片：网格缩略图（isCover=true）走缩略图管线，生成后缓存到资源旁的 .SlimeWorks/tmp；
+      // 预览大图（isCover=false）仍用原图。
+      if (isCover && item.kind == media_api.MediaKind.image) {
+        // 读取异步版本号，注册响应式依赖（缩略图生成完成后触发重建）
+        _asyncCoverVersion.value;
+        final cached = _itemThumbnails[item.filePath];
+        if (cached != null) return cached;
+        _enqueueItemThumbnail(item.filePath);
+      }
       return item.filePath;
     }
     final nodeId = getRemoteNodeId(targetCollectionId);
@@ -729,22 +881,26 @@ class MediaLibraryViewModel extends BaseViewModel {
         isCover: true,
       );
     }
-    // 本地视频封面 — 异步生成缩略图
+    // 本地视频封面 — 异步生成缩略图（暂停期间不入队）
     if (_isVideoPath(coverPath)) {
       if (_collectionVideoThumbnails.containsKey(collection.id)) {
         return _collectionVideoThumbnails[collection.id];
       }
-      if (!_coverQueue.contains(collection.id)) {
+      if (!thumbGenerationPaused.value &&
+          !_coverQueue.contains(collection.id) &&
+          !_inFlightCoverKeys.contains(collection.id)) {
         _generateCollectionVideoThumbnailAsync(collection.id, coverPath);
       }
       return null;
     }
-    // 本地音频封面 — 异步提取嵌入专辑封面
+    // 本地音频封面 — 异步提取嵌入专辑封面（暂停期间不入队）
     if (_isAudioPath(coverPath)) {
       if (_collectionVideoThumbnails.containsKey(collection.id)) {
         return _collectionVideoThumbnails[collection.id];
       }
-      if (!_coverQueue.contains(collection.id)) {
+      if (!thumbGenerationPaused.value &&
+          !_coverQueue.contains(collection.id) &&
+          !_inFlightCoverKeys.contains(collection.id)) {
         _generateCollectionAudioCoverAsync(collection.id, coverPath);
       }
       return null;
@@ -791,22 +947,37 @@ class MediaLibraryViewModel extends BaseViewModel {
     return _kAudioExtensions.contains(ext);
   }
 
+  /// 从帧列表中挑选封面帧：优先选第一个文件体积大于 1KB 的帧，
+  /// 避免选中纯黑帧（部分视频开头/中间为黑屏，生成的封面看起来像没有封面）。
+  String _pickCoverFrame(List<String> frames) {
+    for (final path in frames) {
+      try {
+        if (File(path).lengthSync() > 1024) return path;
+      } catch (_) {}
+    }
+    return frames[frames.length ~/ 2];
+  }
+
   void _generateCollectionVideoThumbnailAsync(
     String collectionId,
     String videoPath,
   ) {
     _logger.info('[VideoThumb] 入队封面: collectionId=$collectionId');
     _currentFolderCoverKeys.add(collectionId);
+    _inFlightCoverKeys.add(collectionId);
     _coverQueue.enqueue(collectionId, () async {
       _currentFolderCoverKeys.remove(collectionId);
+      _inFlightCoverKeys.remove(collectionId);
       try {
         final frames = await _doGetScrubFrames(videoPath);
         if (frames.isEmpty) {
           _logger.info('[VideoThumb] 帧为空，不缓存: collectionId=$collectionId');
           return;
         }
-        final thumb = frames[frames.length ~/ 2];
-        _logger.info('[VideoThumb] 封面生成成功: collectionId=$collectionId');
+        final thumb = _pickCoverFrame(frames);
+        _logger.info(
+          '[VideoThumb] 封面生成成功: collectionId=$collectionId thumb=$thumb',
+        );
         _collectionVideoThumbnails[collectionId] = thumb;
         _asyncCoverVersion.value++;
       } catch (e) {
@@ -821,8 +992,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   ) {
     _logger.info('[AudioCover] 入队集合封面: collectionId=$collectionId');
     _currentFolderCoverKeys.add(collectionId);
+    _inFlightCoverKeys.add(collectionId);
     _coverQueue.enqueue(collectionId, () async {
       _currentFolderCoverKeys.remove(collectionId);
+      _inFlightCoverKeys.remove(collectionId);
       try {
         final coverPath = await getAudioCoverSource(audioPath);
         if (coverPath == null || coverPath.isEmpty) {
@@ -838,9 +1011,53 @@ class MediaLibraryViewModel extends BaseViewModel {
     });
   }
 
+  /// 为本地图片条目入队缩略图生成任务（宽度取「本地图片清晰度」设置）。
+  /// 生成期间网格先显示原图，成功后切换到缩略图并缓存进 .SlimeWorks/tmp。
+  void _enqueueItemThumbnail(String filePath) {
+    if (thumbGenerationPaused.value) return;
+    if (_itemThumbnails.containsKey(filePath) ||
+        _itemThumbFailed.contains(filePath)) {
+      return;
+    }
+    final key = 'item-thumb:$filePath';
+    if (_coverQueue.contains(key) || _inFlightCoverKeys.contains(key)) return;
+    _inFlightCoverKeys.add(key);
+    _coverQueue.enqueue(key, () async {
+      _inFlightCoverKeys.remove(key);
+      try {
+        final w = mediaPrefs.localPreviewWidth.value;
+        final width = w > 0 ? w : 480;
+        // FRB 异步调用（Rust 端在后台线程池解码缩放，不阻塞 UI 线程）
+        final thumb = await media_api.ensureCoverThumbnail(
+          filePath: filePath,
+          width: width,
+        );
+        if (thumb == null || thumb.isEmpty) {
+          _itemThumbFailed.add(filePath);
+          return;
+        }
+        _logger.info('[ItemThumb] 缩略图已生成: $thumb');
+        _itemThumbnails[filePath] = thumb;
+        _asyncCoverVersion.value++;
+      } catch (e) {
+        _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$e');
+        _itemThumbFailed.add(filePath);
+      }
+    });
+  }
+
   String? buildFolderCoverSource(media_api.MediaFolder folder) {
     // 注册响应式依赖：集合排序变更时同步更新文件夹封面
     collectionOrderVersion.value;
+    // 同名集合分组封面：取分组内排序后的第一个集合封面；
+    // 依赖 _asyncCoverVersion 使视频封面异步生成后能触发重建。
+    if (isDupGroup(folder.id)) {
+      _asyncCoverVersion.value;
+      final grouped = dupGroupCollections(folder.id);
+      if (grouped.isEmpty) return null;
+      final sorted = _applySortOrder(List.of(grouped), folder.id);
+      return buildCollectionCoverSource(sorted.first);
+    }
     final collection = _findFirstCollectionForFolder(folder.id);
     if (collection == null) {
       return null;
@@ -896,7 +1113,10 @@ class MediaLibraryViewModel extends BaseViewModel {
           result.add(thumb);
           videoPaths.add(p);
           final hoverKey = 'hover:${collection.id}:$i';
-          if (thumb == null && !_coverQueue.contains(hoverKey)) {
+          if (thumb == null &&
+              !thumbGenerationPaused.value &&
+              !_coverQueue.contains(hoverKey) &&
+              !_inFlightCoverKeys.contains(hoverKey)) {
             _generateHoverVideoThumbnailAsync(collection.id, p, i, count);
           }
         } else {
@@ -984,6 +1204,8 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 内部：将 [videoPath] 的 scrub 帧抽取任务入队（[prioritize]=true 则插队首）。
   /// 结果写入 [_videoFrameCache]。
   void _enqueueOrPrioritizeScrub(String videoPath, {bool prioritize = false}) {
+    // 用户暂停封面生成期间不入队 scrub 帧任务
+    if (thumbGenerationPaused.value) return;
     if (_videoFrameCache.containsKey(videoPath)) {
       if (prioritize) _scrubQueue.prioritize(videoPath, () async {});
       return;
@@ -1019,6 +1241,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   int collectionCountInFolder(String folderId) {
+    // 同名集合分组：统计分组内集合数量而非真实文件夹下的集合
+    if (isDupGroup(folderId)) {
+      return dupGroupCollections(folderId).length;
+    }
     return mergedCollections
         .where((collection) => collection.folderId == folderId)
         .length;
@@ -1203,6 +1429,19 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   bool isFavorite(String id) => favoriteCollectionIds.contains(id);
 
+  /// 返回当前鼠标悬停的本地集合（供 Delete 快捷键直接删除文件夹）；
+  /// 未悬停、悬停对象已不存在或为远程集合时返回 null。
+  media_api.MediaCollection? hoveredLocalCollection() {
+    final id = hoveredCollectionId.value;
+    if (id == null) return null;
+    for (final c in mergedCollections) {
+      if (c.id == id) {
+        return isRemoteCollection(id) ? null : c;
+      }
+    }
+    return null;
+  }
+
   Future<void> toggleFavorite(String id) async {
     if (favoriteCollectionIds.contains(id)) {
       favoriteCollectionIds.remove(id);
@@ -1213,11 +1452,18 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   Future<void> _loadFavorites() async {
-    try {
-      final ids = media_api.getFavoriteCollectionIds();
-      favoriteCollectionIds.assignAll(ids.toSet());
-    } catch (e) {
-      _logger.error('加载收藏列表失败: $e');
+    // 数据库可能因独占锁等原因首次加载失败，失败后延迟重试一次
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final ids = media_api.getFavoriteCollectionIds();
+        favoriteCollectionIds.assignAll(ids.toSet());
+        return;
+      } catch (e) {
+        _logger.error('加载收藏列表失败(第${attempt + 1}次): $e');
+        if (attempt == 0) {
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
     }
   }
 
@@ -1356,11 +1602,37 @@ class MediaLibraryViewModel extends BaseViewModel {
       exitToRoot();
       return;
     }
+    // 同名集合分组：返回其登记的父文件夹（null = 根目录）
+    final fid = currentFolderId.value;
+    if (fid != null && isDupGroup(fid)) {
+      final parent = _dupGroupParents[fid];
+      _browseScrollOffsets.remove(fid);
+      currentFolderId.value = parent;
+      exitCollection();
+      exitSelection();
+      return;
+    }
     final parentId = currentFolder?.parentId;
     _browseScrollOffsets.remove(currentFolderId.value);
     currentFolderId.value = parentId;
     exitCollection();
     exitSelection();
+  }
+
+  /// 暂停封面生成：清空两个缩略图队列中未执行的任务，
+  /// 并置暂停标志阻止 Obx 重建时的自动重新入队，直到调用 [resumeThumbGeneration]。
+  void cancelThumbGeneration() {
+    thumbGenerationPaused.value = true;
+    _coverQueue.cancelAll();
+    _scrubQueue.cancelAll();
+    _currentFolderCoverKeys.clear();
+    thumbProgress.value = null;
+  }
+
+  /// 恢复封面生成：解除暂停标志并触发重建，卡片会重新检查并自动入队缺失封面。
+  void resumeThumbGeneration() {
+    thumbGenerationPaused.value = false;
+    _asyncCoverVersion.value++;
   }
 
   /// Navigate directly to the root browse level, restoring its saved scroll position.
@@ -1408,6 +1680,34 @@ class MediaLibraryViewModel extends BaseViewModel {
     isSelecting.value = items.isNotEmpty;
   }
 
+  /// 取消所有选择，并选中当前文件夹内全部未收藏的集合（批量操作入口）。
+  /// 智能文件夹下按其过滤规则确定范围；无未收藏集合时保持选择模式且选中为空。
+  void selectUnfavoritedCollections() {
+    final folderId = currentFolderId.value;
+    List<media_api.MediaCollection> scope;
+    if (folderId != null && isDupGroup(folderId)) {
+      scope = dupGroupCollections(folderId);
+    } else if (folderId != null && isSmartFolder(folderId)) {
+      final sf = getSmartFolder(folderId);
+      scope = sf == null
+          ? <media_api.MediaCollection>[]
+          : mergedCollections
+                .where((c) => collectionMatchesSmartFolder(sf, c))
+                .toList();
+    } else {
+      scope = mergedCollections.where((c) => c.folderId == folderId).toList();
+    }
+    final unfavoritedIds = scope
+        .where((c) => !favoriteCollectionIds.contains(c.id))
+        .map((c) => c.id)
+        .toSet();
+    _logger.info(
+      'selectUnfavoritedCollections: folderId=$folderId, scope=${scope.length}, unfavorited=${unfavoritedIds.length}',
+    );
+    isSelecting.value = true;
+    selectedIds.assignAll(unfavoritedIds);
+  }
+
   /// 返回视频的悬停悔放帧列表（异步缓存，重复调用直接返回）。
   /// 优先使用内置 ffmpeg 模块，其次系统 ffmpeg，否则返回空列表（可重试）。
   Future<List<String>> getVideoScrubFrames(String videoPath) async {
@@ -1436,7 +1736,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   Future<String?> _doGetAudioCover(String filePath) async {
     // 通过 Rust FFI 调用 ensure_cover_thumbnail（已支持音频封面提取）
     try {
-      return media_api.ensureCoverThumbnail(filePath: filePath, width: 300);
+      return await media_api.ensureCoverThumbnail(
+        filePath: filePath,
+        width: 300,
+      );
     } catch (_) {
       return null;
     }

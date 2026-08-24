@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ensure_history_table`
+// These functions are ignored because they are not marked as `pub`: `ensure_history_table`, `migrate_scattered_manga_history`
 
 /// 初始化 Manga 客户端
 void mangaInit() => RustLib.instance.api.crateApiMangaMangaInit();
@@ -201,7 +201,7 @@ Future<Uint8List> mangaFetchImage({
 /// 初始化漫画历史记录数据库
 ///
 /// 在应用启动时调用一次，传入应用数据目录下的 db 文件路径（由 Dart path_provider 提供）。
-/// db_module 是全局单例，若已初始化则幂等返回。
+/// 表绑定到该专属文件，不受其他模块初始化顺序影响。
 void mangaInitHistory({required String dbPath}) =>
     RustLib.instance.api.crateApiMangaMangaInitHistory(dbPath: dbPath);
 

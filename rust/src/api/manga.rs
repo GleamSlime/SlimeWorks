@@ -215,10 +215,10 @@ pub async fn manga_fetch_image(file_server: String, path: String) -> Result<Vec<
 const MANGA_HISTORY_TABLE: &str = "manga_history";
 const MANGA_HISTORY_KEY: &str = "items";
 
-/// 标记历史表是否已注册（防止重复 leak 内存）
+/// 标记历史表是否已注册（防止重复迁移）
 static HISTORY_TABLE_INIT: OnceLock<()> = OnceLock::new();
 
-/// 确保历史表已初始化（注册到 db_module 的已打开数据库中）
+/// 确保历史表已初始化（依赖 manga_init_history 完成绑定）
 fn ensure_history_table() {
     HISTORY_TABLE_INIT.get_or_init(|| {
         let _ = db_module::db_register_table(MANGA_HISTORY_TABLE.to_string());
@@ -228,11 +228,53 @@ fn ensure_history_table() {
 /// 初始化漫画历史记录数据库
 ///
 /// 在应用启动时调用一次，传入应用数据目录下的 db 文件路径（由 Dart path_provider 提供）。
-/// db_module 是全局单例，若已初始化则幂等返回。
+/// 表绑定到该专属文件，不受其他模块初始化顺序影响。
 #[frb(sync)]
 pub fn manga_init_history(db_path: String) {
-    let _ = db_module::db_init(db_path);
+    let _ = db_module::db_init(db_path.clone());
+    // 绑定到专属文件，避免历史上全局单例被其他模块抢先导致历史写错文件
+    if db_module::db_bind_table(MANGA_HISTORY_TABLE.to_string(), db_path.clone()).is_ok() {
+        // 一次性迁移：历史上历史数据可能被写入 media.db / music_player.db
+        migrate_scattered_manga_history(&db_path);
+    }
     ensure_history_table();
+}
+
+/// 一次性迁移：把散落在其他数据库文件中的漫画历史合并回专属文件（幂等）。
+fn migrate_scattered_manga_history(db_path: &str) {
+    // 幂等标记存于独立的 manga_meta 表
+    let _ = db_module::db_bind_table("manga_meta".to_string(), db_path.to_string());
+    if let Ok(Some(flag)) =
+        db_module::db_get("manga_meta".to_string(), "scatter_merged_v1".to_string())
+    {
+        if flag == "1" {
+            return;
+        }
+    }
+    let mut candidates = Vec::new();
+    #[cfg(windows)]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let base = std::path::Path::new(&appdata).join("SlimeWorks");
+        candidates.push(base.join("media.db"));
+        candidates.push(base.join("music_player.db"));
+    }
+    for candidate in &candidates {
+        let src = candidate.to_string_lossy().into_owned();
+        if src == db_path || !candidate.exists() {
+            continue;
+        }
+        let _ = db_module::db_merge_tables(
+            src,
+            db_path.to_string(),
+            vec![MANGA_HISTORY_TABLE.to_string()],
+            false,
+        );
+    }
+    let _ = db_module::db_set(
+        "manga_meta".to_string(),
+        "scatter_merged_v1".to_string(),
+        "1".to_string(),
+    );
 }
 
 /// 读取所有历史记录，返回 JSON 字符串（未初始化或无数据时返回空字符串）

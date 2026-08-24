@@ -27,6 +27,21 @@ void registerFfmpegConcurrency({required int limit}) => RustLib.instance.api
 void killAllFfmpegProcesses() =>
     RustLib.instance.api.crateApiMediaCollectionKillAllFfmpegProcesses();
 
+/// 在集合目录树内搜索 `.SlimeWorks` 缓存目录。
+/// 缓存目录建立在媒体文件实际所在目录旁（懒创建），不一定位于集合根目录。
+/// 返回首个命中的路径；未命中返回 None。
+String? findCollectionConfigDir({required String rootDir}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionFindCollectionConfigDir(rootDir: rootDir);
+
+/// 获取集合配置目录（`.SlimeWorks`），不存在时在集合根目录创建（Windows 下隐藏）。
+/// 集合根目录不存在或创建失败时返回 None。
+String? ensureCollectionConfigDir({required String rootDir}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionEnsureCollectionConfigDir(rootDir: rootDir);
+
 List<MediaCollection> getAllMediaCollections() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaCollections();
 
@@ -99,11 +114,15 @@ bool deleteMediaCollection({required String collectionId}) => RustLib
 /// on failure (unsupported format, decode error, etc.).
 /// Resolution strategy: ffmpeg first (supports HEIC/AVIF), then pure-Rust
 /// `image` crate as fallback.
-String? ensureCoverThumbnail({required String filePath, required int width}) =>
-    RustLib.instance.api.crateApiMediaCollectionEnsureCoverThumbnail(
-      filePath: filePath,
-      width: width,
-    );
+/// 异步（非 sync）：FRB 会在后台线程池执行，避免大图解码阻塞 Dart UI 线程；
+/// 调用方需 await，不可依赖同步返回。
+Future<String?> ensureCoverThumbnail({
+  required String filePath,
+  required int width,
+}) => RustLib.instance.api.crateApiMediaCollectionEnsureCoverThumbnail(
+  filePath: filePath,
+  width: width,
+);
 
 /// Return size + file-path list for every local collection in one pass.
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.

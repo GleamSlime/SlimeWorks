@@ -11,7 +11,9 @@ static MUSIC_ITEMS: OnceLock<Mutex<Option<Vec<MusicItem>>>> = OnceLock::new();
 static PLAY_RECORDS: OnceLock<Arc<Mutex<Vec<PlayRecord>>>> = OnceLock::new();
 static EQ_PRESETS: OnceLock<Arc<Mutex<Vec<EqualizerPreset>>>> = OnceLock::new();
 static FOLDERS: OnceLock<Arc<Mutex<Vec<Folder>>>> = OnceLock::new();
-static DB_INIT_RESULT: OnceLock<Option<String>> = OnceLock::new();
+/// 数据库初始化成功标记。只缓存「成功」结果：失败时不写入，
+/// 下次调用会重试（若数据库文件被另一进程独占锁定，锁定解除后即可恢复）。
+static DB_INIT_RESULT: OnceLock<()> = OnceLock::new();
 
 fn playlists_cache() -> &'static Arc<Mutex<Vec<Playlist>>> {
     PLAYLISTS.get_or_init(|| Arc::new(Mutex::new(Vec::new())))
@@ -75,6 +77,24 @@ fn folder_table() -> String {
     "music_folders".to_string()
 }
 
+/// 音乐库内部元数据表（迁移标记等）
+fn meta_table() -> String {
+    "music_meta".to_string()
+}
+
+/// 音乐库需要绑定的全部表（含 whisper_module 共用的配置表）
+fn music_table_names() -> Vec<String> {
+    vec![
+        playlist_table(),
+        item_table(),
+        record_table(),
+        eq_preset_table(),
+        folder_table(),
+        meta_table(),
+        "whisper_config".to_string(),
+    ]
+}
+
 // ── 辅助：从 db_list_all 提取 JSON 值列表 ────────────────────────────────────
 fn db_list_values(table: String) -> Result<Vec<String>, String> {
     let records = db_module::db_list_all(table).map_err(|e| e.to_string())?;
@@ -88,52 +108,81 @@ fn db_list_key_values(table: String) -> Result<Vec<(String, String)>, String> {
 
 // ── 初始化 ────────────────────────────────────────────────────────────────────
 pub fn initialize_db() -> Result<(), String> {
-    let result = DB_INIT_RESULT.get_or_init(|| {
-        let path = default_db_path();
-        sw_info!("[music_db] 初始化数据库: {}", path);
-        match db_module::db_init(path) {
-            Ok(_) => {
-                sw_info!("[music_db] 数据库初始化成功，注册表...");
-                // 注册所有表
-                for table in &[
-                    playlist_table(),
-                    item_table(),
-                    record_table(),
-                    eq_preset_table(),
-                    folder_table(),
-                ] {
-                    if let Err(e) = db_module::db_register_table(table.clone()) {
-                        sw_warn!("[music_db] 注册表 {} 失败: {}", table, e);
-                    } else {
-                        sw_info!("[music_db] 注册表 {} 成功", table);
-                    }
+    // 已成功过：直接返回（幂等）
+    if DB_INIT_RESULT.get().is_some() {
+        return Ok(());
+    }
+    let path = default_db_path();
+    sw_info!("[music_db] 初始化数据库: {}", path);
+    match db_module::db_init(path.clone()) {
+        Ok(_) => {
+            sw_info!("[music_db] 数据库初始化成功，绑定表...");
+            // 将所有表绑定到 music_player.db，避免历史上多模块共享全局单例
+            // 时因初始化顺序不同导致数据写入错误文件的问题
+            for table in music_table_names() {
+                if let Err(e) = db_module::db_bind_table(table.clone(), path.clone()) {
+                    sw_warn!("[music_db] 绑定表 {} 失败: {}", table, e);
+                } else {
+                    sw_info!("[music_db] 绑定表 {} 成功", table);
                 }
-                None
             }
-            Err(e) => {
-                sw_warn!("[music_db] 数据库初始化失败: {}", e);
-                Some(e)
-            }
+            migrate_scattered_music_data(&path);
+            // 仅在成功时写入标记；失败不缓存，下次调用可重试
+            let _ = DB_INIT_RESULT.set(());
+            Ok(())
         }
-    });
-    match result {
-        None => Ok(()),
-        Some(e) => Err(e.clone()),
+        Err(e) => {
+            sw_warn!("[music_db] 数据库初始化失败: {}", e);
+            Err(e)
+        }
     }
 }
 
 fn ensure_db() {
     let _ = initialize_db();
-    // 确保表已注册（即使 db_init 成功但注册表失败也能恢复）
-    for table in &[
-        playlist_table(),
-        item_table(),
-        record_table(),
-        eq_preset_table(),
-        folder_table(),
-    ] {
-        let _ = db_module::db_register_table(table.clone());
+    // 确保表已绑定（即使 db_init 成功但绑定失败也能恢复）
+    let path = default_db_path();
+    for table in music_table_names() {
+        let _ = db_module::db_bind_table(table.clone(), path.clone());
     }
+}
+
+/// 一次性迁移：历史上全局 db 单例「先到先得」时，音乐数据可能被写入其他模块的
+/// 文件（如 media.db / db.redb）。这里把散落记录合并回 music_player.db（幂等，只执行一次）。
+fn migrate_scattered_music_data(music_db_path: &str) {
+    // 幂等标记：已迁移过则跳过
+    if let Ok(Some(flag)) = db_module::db_get(meta_table(), "scatter_merged_v1".to_string()) {
+        if flag == "1" {
+            return;
+        }
+    }
+
+    let base = std::path::Path::new(&app_data_base()).join("SlimeWorks");
+    let candidates = [base.join("media.db"), base.join("db.redb")];
+    let tables = music_table_names();
+
+    for candidate in &candidates {
+        let src = candidate.to_string_lossy().into_owned();
+        if src == music_db_path || !candidate.exists() {
+            continue;
+        }
+        // 只补齐目标缺失的记录，不覆盖已有数据（音乐播放记录等取并集即可）
+        match db_module::db_merge_tables(
+            src.clone(),
+            music_db_path.to_string(),
+            tables.clone(),
+            false,
+        ) {
+            Ok(n) if n > 0 => sw_info!("[music_db] 从 {} 合并散落记录 {} 条", src, n),
+            Ok(_) => {}
+            Err(e) => sw_warn!("[music_db] 合并 {} 失败: {}", src, e),
+        }
+    }
+    let _ = db_module::db_set(
+        meta_table(),
+        "scatter_merged_v1".to_string(),
+        "1".to_string(),
+    );
 }
 
 // ── 播放列表 CRUD ─────────────────────────────────────────────────────────────

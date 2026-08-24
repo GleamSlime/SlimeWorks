@@ -31,6 +31,7 @@ class MediaCollectionCard extends StatefulWidget {
     required this.onMove,
     required this.onOpenFolder,
     required this.onToggleFavorite,
+    this.onOpenConfigDir,
     this.onDeleteFolder,
     this.onPullToLocal,
     this.onDeleteNodeFiles,
@@ -55,6 +56,10 @@ class MediaCollectionCard extends StatefulWidget {
   final VoidCallback onMove;
   final VoidCallback onOpenFolder;
   final VoidCallback onToggleFavorite;
+
+  /// 打开集合配置目录（.SlimeWorks）回调，为 null 时不显示该菜单项（远程集合无本地目录）。
+  final VoidCallback? onOpenConfigDir;
+
   final VoidCallback? onDeleteFolder;
 
   /// 拉取集合文件到本地回调（仅远程集合时有意义）。
@@ -108,7 +113,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   @override
   void initState() {
     super.initState();
-    final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
+    final prefs = getIt.isRegistered<MediaPrefsService>()
+        ? getIt.get<MediaPrefsService>()
+        : null;
     if (prefs != null) {
       _privacyWorker = ever(prefs.privacyMode, (_) {
         if (mounted) setState(() {});
@@ -127,7 +134,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     final d = bytes.toDouble();
     if (d < 1024) return '${d.toStringAsFixed(0)} B';
     if (d < 1024 * 1024) return '${(d / 1024).toStringAsFixed(1)} KB';
-    if (d < 1024 * 1024 * 1024) return '${(d / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (d < 1024 * 1024 * 1024)
+      return '${(d / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
@@ -145,14 +153,19 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         ? _swipeFraction
         : (_cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0.0);
     final count = sources.length;
-    final idx = count == 1 ? 0 : (fraction * (count - 1)).round().clamp(0, count - 1);
+    final idx = count == 1
+        ? 0
+        : (fraction * (count - 1)).round().clamp(0, count - 1);
     final src = sources[idx];
     if (src != null && src.isNotEmpty) return src;
     for (int d = 1; d < count; d++) {
       final left = idx - d;
       final right = idx + d;
-      if (left >= 0 && sources[left] != null && sources[left]!.isNotEmpty) return sources[left];
-      if (right < count && sources[right] != null && sources[right]!.isNotEmpty) {
+      if (left >= 0 && sources[left] != null && sources[left]!.isNotEmpty)
+        return sources[left];
+      if (right < count &&
+          sources[right] != null &&
+          sources[right]!.isNotEmpty) {
         return sources[right];
       }
     }
@@ -168,7 +181,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     }
     final cacheW = () {
       if (src.startsWith('http')) return null;
-      final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
+      final prefs = getIt.isRegistered<MediaPrefsService>()
+          ? getIt.get<MediaPrefsService>()
+          : null;
       final w = prefs?.localPreviewWidth.value ?? 480;
       return w > 0 ? w : null;
     }();
@@ -258,17 +273,40 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         const PopupMenuItem<String>(value: 'rename', child: Text('重命名集合')),
         const PopupMenuItem<String>(value: 'move', child: Text('移动到文件夹')),
         if (!widget.isRemote)
-          const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
+          const PopupMenuItem<String>(
+            value: 'open_folder',
+            child: Text('打开所在文件夹'),
+          ),
         if (widget.isRemote)
-          const PopupMenuItem<String>(value: 'open_folder', child: Text('查看远程路径')),
-        PopupMenuItem<String>(value: 'favorite', child: Text(widget.isFavorited ? '取消收藏' : '收藏')),
+          const PopupMenuItem<String>(
+            value: 'open_folder',
+            child: Text('查看远程路径'),
+          ),
+        if (!widget.isRemote && widget.onOpenConfigDir != null)
+          const PopupMenuItem<String>(
+            value: 'open_config_dir',
+            child: Text('打开配置目录'),
+          ),
+        PopupMenuItem<String>(
+          value: 'favorite',
+          child: Text(widget.isFavorited ? '取消收藏' : '收藏'),
+        ),
         if (widget.isRemote && widget.onPullToLocal != null)
-          const PopupMenuItem<String>(value: 'pull_to_local', child: Text('拉取到本地')),
+          const PopupMenuItem<String>(
+            value: 'pull_to_local',
+            child: Text('拉取到本地'),
+          ),
         const PopupMenuItem<String>(value: 'delete', child: Text('删除集合')),
         if (widget.onDeleteFolder != null)
-          const PopupMenuItem<String>(value: 'delete_folder', child: Text('删除文件夹')),
+          const PopupMenuItem<String>(
+            value: 'delete_folder',
+            child: Text('删除文件夹'),
+          ),
         if (widget.isRemote && widget.onDeleteNodeFiles != null)
-          const PopupMenuItem<String>(value: 'delete_node_files', child: Text('删除节点本地文件')),
+          const PopupMenuItem<String>(
+            value: 'delete_node_files',
+            child: Text('删除节点本地文件'),
+          ),
         if (PlatformUtil.isMobile)
           const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
       ],
@@ -280,6 +318,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       widget.onMove();
     } else if (action == 'open_folder') {
       widget.onOpenFolder();
+    } else if (action == 'open_config_dir') {
+      widget.onOpenConfigDir?.call();
     } else if (action == 'favorite') {
       widget.onToggleFavorite();
     } else if (action == 'pull_to_local') {
@@ -310,10 +350,12 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         onLongPressStart: PlatformUtil.isMobile
             ? (details) => _showContextMenu(context, details.globalPosition)
             : null,
-        onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
+        onSecondaryTapDown: (details) =>
+            _showContextMenu(context, details.globalPosition),
         // ── 移动端水平滑动预览 ──────────────────────────────────────────────
         onHorizontalDragStart:
-            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            PlatformUtil.isMobile &&
+                (widget.hoverCoverSources?.isNotEmpty ?? false)
             ? (d) {
                 // 触发预取（对应鼠标 onHoverEnter）
                 if (!_hoverPreviewActive) {
@@ -322,27 +364,36 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 }
                 setState(() {
                   _swipePreviewActive = true;
-                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
+                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(
+                    0.0,
+                    1.0,
+                  );
                 });
               }
             : null,
         onHorizontalDragUpdate:
-            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            PlatformUtil.isMobile &&
+                (widget.hoverCoverSources?.isNotEmpty ?? false)
             ? (d) {
                 if (!_swipePreviewActive) return;
                 setState(() {
-                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
+                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(
+                    0.0,
+                    1.0,
+                  );
                 });
               }
             : null,
         onHorizontalDragEnd:
-            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            PlatformUtil.isMobile &&
+                (widget.hoverCoverSources?.isNotEmpty ?? false)
             ? (_) {
                 setState(() => _swipePreviewActive = false);
               }
             : null,
         onHorizontalDragCancel:
-            PlatformUtil.isMobile && (widget.hoverCoverSources?.isNotEmpty ?? false)
+            PlatformUtil.isMobile &&
+                (widget.hoverCoverSources?.isNotEmpty ?? false)
             ? () {
                 setState(() => _swipePreviewActive = false);
               }
@@ -372,8 +423,13 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
           },
           onHover: (e) {
             setState(() => _hoverLocalX = e.localPosition.dx);
-            if (_hoverPreviewActive && widget.onRequestVideoFrame != null && _cardWidth > 0) {
-              final fraction = (e.localPosition.dx / _cardWidth).clamp(0.0, 1.0);
+            if (_hoverPreviewActive &&
+                widget.onRequestVideoFrame != null &&
+                _cardWidth > 0) {
+              final fraction = (e.localPosition.dx / _cardWidth).clamp(
+                0.0,
+                1.0,
+              );
               final frame = widget.onRequestVideoFrame!(fraction);
               if (frame != null && frame != _realtimeVideoFrame) {
                 setState(() => _realtimeVideoFrame = frame);
@@ -389,7 +445,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                 shape: RoundedRectangleBorder(
                   borderRadius: appMetrics.radius8,
                   side: widget.isSelected
-                      ? BorderSide(color: theme.colorScheme.primary, width: scaleW(2))
+                      ? BorderSide(
+                          color: theme.colorScheme.primary,
+                          width: scaleW(2),
+                        )
                       : BorderSide.none,
                 ),
                 child: Stack(
@@ -403,7 +462,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 120),
                         child: KeyedSubtree(
-                          key: ValueKey('${widget.collection.id}_$displaySource'),
+                          key: ValueKey(
+                            '${widget.collection.id}_$displaySource',
+                          ),
                           child: _buildCoverImage(displaySource, theme),
                         ),
                       ),
@@ -425,11 +486,15 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (widget.isLost) const LostBadge(),
-                              if (widget.isLost) SizedBox(width: appMetrics.kSpace4),
+                              if (widget.isLost)
+                                SizedBox(width: appMetrics.kSpace4),
                               ClipRRect(
                                 borderRadius: appMetrics.radius12,
                                 child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 6,
+                                    sigmaY: 6,
+                                  ),
                                   child: Container(
                                     padding: EdgeInsets.symmetric(
                                       horizontal: appMetrics.kSpace8,
@@ -469,7 +534,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                 horizontal: appMetrics.kSpace8,
                                 vertical: appMetrics.kSpace4,
                               ),
-                              color: theme.colorScheme.primaryContainer.withAlpha(200),
+                              color: theme.colorScheme.primaryContainer
+                                  .withAlpha(200),
                               child: Text(
                                 widget.nodeName!,
                                 style: TextStyle(
@@ -496,7 +562,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                         duration: _kAnimDur,
                         curve: _kAnimCurve,
                         child: AnimatedScale(
-                          scale: (_hovering || PlatformUtil.isMobile) ? 1.0 : 0.7,
+                          scale: (_hovering || PlatformUtil.isMobile)
+                              ? 1.0
+                              : 0.7,
                           duration: _kAnimDur,
                           curve: _kAnimCurve,
                           child: GestureDetector(
@@ -511,7 +579,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                   end: _hovering ? 0.0 : 8.0,
                                 ),
                                 builder: (_, sigma, child) => BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                                  filter: ImageFilter.blur(
+                                    sigmaX: sigma,
+                                    sigmaY: sigma,
+                                  ),
                                   child: child,
                                 ),
                                 child: Container(
@@ -523,7 +594,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                     widget.isFavorited
                                         ? Icons.favorite_rounded
                                         : Icons.favorite_border_rounded,
-                                    color: widget.isFavorited ? Colors.redAccent : Colors.white70,
+                                    color: widget.isFavorited
+                                        ? Colors.redAccent
+                                        : Colors.white70,
                                     size: scaleW(16),
                                   ),
                                 ),
@@ -535,7 +608,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                     ),
 
                     // ── 悬停预览进度条————————————————————————————
-                    if ((_hovering && _hoverPreviewActive || _swipePreviewActive) &&
+                    if ((_hovering && _hoverPreviewActive ||
+                            _swipePreviewActive) &&
                         !widget.isSelecting &&
                         widget.hoverCoverSources != null &&
                         widget.hoverCoverSources!.length > 1)
@@ -546,10 +620,17 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                         child: LinearProgressIndicator(
                           value: _swipePreviewActive
                               ? _swipeFraction
-                              : (_cardWidth > 0 ? (_hoverLocalX / _cardWidth).clamp(0.0, 1.0) : 0),
+                              : (_cardWidth > 0
+                                    ? (_hoverLocalX / _cardWidth).clamp(
+                                        0.0,
+                                        1.0,
+                                      )
+                                    : 0),
                           minHeight: scaleW(3),
                           backgroundColor: Colors.white24,
-                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white70),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Colors.white70,
+                          ),
                         ),
                       ),
 
@@ -561,14 +642,20 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                       child: TweenAnimationBuilder<double>(
                         duration: _kAnimDur,
                         curve: _kAnimCurve,
-                        tween: Tween(begin: _hovering ? 4.0 : 3.0, end: _hovering ? 3.0 : 4.0),
+                        tween: Tween(
+                          begin: _hovering ? 4.0 : 3.0,
+                          end: _hovering ? 3.0 : 4.0,
+                        ),
                         builder: (_, blurSigma, child) => ClipRRect(
                           borderRadius: BorderRadius.only(
                             bottomLeft: appMetrics.radius8.bottomLeft,
                             bottomRight: appMetrics.radius8.bottomRight,
                           ),
                           child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                            filter: ImageFilter.blur(
+                              sigmaX: blurSigma,
+                              sigmaY: blurSigma,
+                            ),
                             child: child,
                           ),
                         ),
@@ -583,7 +670,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                             vertical: appMetrics.kSpace10,
                           ),
                           child: AnimatedSlide(
-                            offset: _hovering ? Offset.zero : const Offset(0, 0.05),
+                            offset: _hovering
+                                ? Offset.zero
+                                : const Offset(0, 0.05),
                             duration: _kAnimDur,
                             curve: _kAnimCurve,
                             child: Column(

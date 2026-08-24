@@ -118,12 +118,14 @@ pub struct PathMappingNodeInfo {
     pub path: String,
     /// 节点类型
     pub node_type: PathMappingNodeType,
-    /// 文件大小（字节），仅文件有效
-    pub file_size: Option<u64>,
+    /// 文件大小（字节），仅文件有效（i64 映射为 Dart int，避免 BigInt 不便）
+    pub file_size: Option<i64>,
     /// 子节点
     pub children: Vec<PathMappingNodeInfo>,
     /// 是否包含音频文件（文件夹属性，递归检查）
     pub has_audio: bool,
+    /// 所属文件夹 ID（null 表示根级），仅根节点有效，由 Dart 侧包装时填充
+    pub folder_id: Option<String>,
 }
 
 // ── 类型转换 ──────────────────────────────────────────────────────────────────
@@ -227,9 +229,10 @@ fn convert_path_mapping_node(n: music_player::PathMappingNode) -> PathMappingNod
         name: n.name,
         path: n.path,
         node_type,
-        file_size: n.file_size,
+        file_size: n.file_size.map(|v| v as i64),
         children: n.children.into_iter().map(convert_path_mapping_node).collect(),
         has_audio: n.has_audio,
+        folder_id: None,
     }
 }
 

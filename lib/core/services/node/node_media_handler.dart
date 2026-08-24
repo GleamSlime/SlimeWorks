@@ -169,7 +169,10 @@ extension _NodeMediaHandlerExt on NodeSettingsService {
 
     // ② Rust 处理（磁盘缓存 + ffmpeg/image）
     try {
-      final thumbPath = media_api.ensureCoverThumbnail(filePath: filePath, width: width);
+      final thumbPath = await media_api.ensureCoverThumbnail(
+        filePath: filePath,
+        width: width,
+      );
       if (thumbPath != null && thumbPath.isNotEmpty) {
         final thumbFile = File(thumbPath);
         if (thumbFile.existsSync() && thumbFile.lengthSync() > 0) {

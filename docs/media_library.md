@@ -106,12 +106,13 @@ class SmartFolder {
 
 优先级从高到低：
 
-1. **磁盘缓存命中**：路径 `<AppSupportDir>/SlimeWorks/library/media/covers/<md5>_w<width>.jpg`，文件非空则直接返回
-2. **视频**：`ffmpeg -i input -vf scale=<width>:-1 -ss 3 -vframes 1`（先 seek 3s，失败回退 seek 0s）
-3. **音频**：`ffmpeg -i input -map 0:v:0 -frames:v 1`（提取内嵌封面）
-4. **图片**：`ffmpeg -i input -vf scale=<width>:-1`（支持 HEIC/AVIF 系统解码器）
-5. **回退**：纯 Rust `image` crate（JPEG/PNG/WebP/BMP/GIF）
-6. **全失败**：返回 `None`；视频/音频返回 404，图片 Dart 侧回退原图
+1. **相邻缓存命中**：路径 `<资源父目录>/.SlimeWorks/tmp/<文件名>_w<宽度>.jpg`，文件非空则直接返回。key 只用「文件名 + 宽度」（不含全路径 hash），缓存随资源目录一起移动时跨设备/跨盘符仍可命中（如 Mac 生成、Windows 读取）。`.SlimeWorks` 目录在 macOS 靠 `.` 前缀隐藏，Windows 下通过 `SetFileAttributesW` 设置隐藏属性；扫描器 `is_hidden_path` 会跳过 `.` 开头目录，缓存不会被扫进媒体库。
+2. **旧全局缓存命中（向后兼容）**：`<AppSupportDir>/SlimeWorks/library/media/covers/<全路径hash>_w<宽度>.jpg`，命中则直接返回；相邻缓存目录不可写（只读盘等）时新缓存也回退写入此目录。
+3. **视频**：`ffmpeg -i input -vf scale=<width>:-1 -ss 3 -vframes 1`（先 seek 3s，失败回退 seek 0s）
+4. **音频**：`ffmpeg -i input -map 0:v:0 -frames:v 1`（提取内嵌封面）
+5. **图片**：`ffmpeg -i input -vf scale=<width>:-1`（支持 HEIC/AVIF 系统解码器）
+6. **回退**：纯 Rust `image` crate（JPEG/PNG/WebP/BMP/GIF）
+7. **全失败**：返回 `None`；视频/音频返回 404，图片 Dart 侧回退原图
 
 ### Dart 内存缓存（LRU）
 
@@ -199,7 +200,7 @@ RxString currentFolderId;                    // 当前浏览的文件夹（null 
 |--------|------|------|
 | Flutter imageCache | 80 MB | 网络图片解码后的像素缓存 |
 | `_resizedBytesCache`（Dart 侧 LRU） | 80 MB | 远程封面缩略图字节缓存 |
-| Rust 磁盘封面缓存 | 无上限（按需生成） | `<AppSupportDir>/SlimeWorks/library/media/covers/` |
+| Rust 磁盘封面缓存 | 无上限（按需生成） | 优先 `<资源父目录>/.SlimeWorks/tmp/`（跨设备可移植），回退 `<AppSupportDir>/SlimeWorks/library/media/covers/` |
 
 > `_resizedBytesCache` 改为按总字节大小（80MB）LRU 淘汰，防止大量远程封面导致内存持续增长。
 
@@ -216,6 +217,7 @@ RxString currentFolderId;                    // 当前浏览的文件夹（null 
 
 缓存路径：
 - 视频帧缩略图：`<AppSupportDir>/SlimeWorks/library/media/thumbnails/`
+- 封面缩略图：优先 `<资源父目录>/.SlimeWorks/tmp/<文件名>_w<宽度>.jpg`（隐藏目录，跨设备可移植），回退旧全局目录 `<AppSupportDir>/SlimeWorks/library/media/covers/`
 
 | 设置项 | SharedPreferences Key | 默认值 |
 |--------|----------------------|--------|
@@ -228,7 +230,7 @@ RxString currentFolderId;                    // 当前浏览的文件夹（null 
 
 缓存路径：
 - 视频帧缩略图：`<AppSupportDir>/SlimeWorks/library/media/thumbnails/`
-- 封面缩略图：`<AppSupportDir>/SlimeWorks/library/media/covers/`
+- 封面缩略图：优先 `<资源父目录>/.SlimeWorks/tmp/<文件名>_w<宽度>.jpg`（隐藏目录，跨设备可移植），回退旧全局目录 `<AppSupportDir>/SlimeWorks/library/media/covers/`
 
 ## 平台支持
 

@@ -26,7 +26,8 @@ class GameDetailScreen extends BasePage<GameLibraryDetailViewModel> {
   State<GameDetailScreen> createState() => _GameDetailScreenState();
 }
 
-class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, GameDetailScreen>
+class _GameDetailScreenState
+    extends BasePageState<GameLibraryDetailViewModel, GameDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -85,7 +86,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     _nameController.text = game.name;
     _companyController.text = game.company;
     _summaryController.text = game.summary;
-    _ratingController.text = game.rating > 0 ? game.rating.toStringAsFixed(1) : '';
+    _ratingController.text = game.rating > 0
+        ? game.rating.toStringAsFixed(1)
+        : '';
     _releaseController.text = game.releaseDate;
     _pathController.text = game.path;
     _editStatus = game.status;
@@ -100,7 +103,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     return ScreenChromeData(
       title: '游戏详情',
       forceLocalChrome: true,
-      leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => context.pop(),
+      ),
     );
   }
 
@@ -113,7 +119,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     return Focus(
       autofocus: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
-        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
           if (context.canPop()) context.pop();
           return KeyEventResult.handled;
         }
@@ -133,16 +140,22 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               _buildHeader(context, game),
               Container(
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+                  border: Border(
+                    bottom: BorderSide(color: Theme.of(context).dividerColor),
+                  ),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   isScrollable: false,
                   labelColor: Theme.of(context).colorScheme.primary,
-                  unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  unselectedLabelColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant,
                   indicatorColor: Theme.of(context).colorScheme.primary,
                   indicatorWeight: 2,
-                  tabs: _tabLabels.map((String l) => Tab(text: l)).toList(growable: false),
+                  tabs: _tabLabels
+                      .map((String l) => Tab(text: l))
+                      .toList(growable: false),
                 ),
               ),
               Expanded(
@@ -183,9 +196,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 // 标题
                 Text(
                   game.name,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -200,7 +213,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 SizedBox(height: AppTheme.metrics.kSpace12),
 
                 // 简介
-                if (game.summary.trim().isNotEmpty) _buildSummary(context, game),
+                if (game.summary.trim().isNotEmpty)
+                  _buildSummary(context, game),
               ],
             ),
           ),
@@ -288,7 +302,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   horizontal: AppTheme.metrics.kSpace16,
                   vertical: AppTheme.metrics.kSpace10,
                 ),
-                backgroundColor: (Theme.of(context).brightness == Brightness.dark)
+                backgroundColor:
+                    (Theme.of(context).brightness == Brightness.dark)
                     ? DarkColors.success
                     : LightColors.success,
               ),
@@ -296,7 +311,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               icon: SizedBox(
                 width: AppTheme.metrics.kSpace16,
                 height: AppTheme.metrics.kSpace16,
-                child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
               ),
               label: const Text('游戏运行中...'),
             );
@@ -331,32 +349,43 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     vertical: AppTheme.metrics.kSpace10,
                   ),
                   shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
+                    borderRadius: BorderRadius.horizontal(
+                      left: Radius.circular(20),
+                    ),
                   ),
                 ),
                 onPressed: () => _launchGame(game),
                 icon: Icon(Icons.play_arrow, size: AppTheme.metrics.iconSize18),
                 label: const Text('启动游戏'),
               ),
-              Container(width: 1, height: 36, color: cs.onPrimary.withAlpha(60)),
+              Container(
+                width: 1,
+                height: 36,
+                color: cs.onPrimary.withAlpha(60),
+              ),
               PopupMenuButton<String>(
                 tooltip: '选择其他可执行文件启动',
                 offset: const Offset(0, 44),
                 onSelected: (String p) => _launchWithExe(game, p),
                 shadowColor: Colors.transparent,
                 itemBuilder: (_) => exePaths.map((String p) {
-                  final bool isDefault = p.trim() == (viewModel.game.value?.path.trim() ?? '');
+                  final bool isDefault =
+                      p.trim() == (viewModel.game.value?.path.trim() ?? '');
                   return PopupMenuItem<String>(
                     value: p,
                     child: Row(
                       children: <Widget>[
                         Icon(
-                          isDefault ? Icons.star_rounded : Icons.play_arrow_outlined,
+                          isDefault
+                              ? Icons.star_rounded
+                              : Icons.play_arrow_outlined,
                           size: AppTheme.metrics.iconSize16,
                           color: isDefault ? Colors.amber : null,
                         ),
                         SizedBox(width: AppTheme.metrics.kSpace8),
-                        Flexible(child: Text(p.split(Platform.pathSeparator).last)),
+                        Flexible(
+                          child: Text(p.split(Platform.pathSeparator).last),
+                        ),
                       ],
                     ),
                   );
@@ -365,7 +394,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
                   decoration: BoxDecoration(
                     color: cs.primary,
-                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(20),
+                    ),
                   ),
                   child: Icon(
                     Icons.arrow_drop_down,
@@ -429,14 +460,22 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     final List<_MetaItem> items = <_MetaItem>[
       _MetaItem(
         label: '开发商',
-        value: game.company.trim().isNotEmpty && game.company != '未知' ? game.company : '-',
+        value: game.company.trim().isNotEmpty && game.company != '未知'
+            ? game.company
+            : '-',
       ),
       _MetaItem(
         label: '评分',
         value: game.rating > 0 ? '${game.rating.toStringAsFixed(1)} / 10' : '-',
       ),
-      _MetaItem(label: '发售日期', value: game.releaseDate.trim().isNotEmpty ? game.releaseDate : '-'),
-      _MetaItem(label: '游玩时长', value: viewModel.formatDuration(game.totalPlayTimeSec)),
+      _MetaItem(
+        label: '发售日期',
+        value: game.releaseDate.trim().isNotEmpty ? game.releaseDate : '-',
+      ),
+      _MetaItem(
+        label: '游玩时长',
+        value: viewModel.formatDuration(game.totalPlayTimeSec),
+      ),
     ];
 
     return Wrap(
@@ -506,9 +545,13 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final int cols = (constraints.maxWidth / 180).floor().clamp(2, 6);
-            final double itemW = (constraints.maxWidth - (cols - 1) * 12) / cols;
+            final double itemW =
+                (constraints.maxWidth - (cols - 1) * 12) / cols;
             final List<_MetaItem> stats = <_MetaItem>[
-              _MetaItem(label: '累计游玩', value: viewModel.formatDuration(game.totalPlayTimeSec)),
+              _MetaItem(
+                label: '累计游玩',
+                value: viewModel.formatDuration(game.totalPlayTimeSec),
+              ),
               _MetaItem(label: '游玩次数', value: '${viewModel.sessions.length} 次'),
               _MetaItem(label: '当前状态', value: game.status.label),
             ];
@@ -520,12 +563,16 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     (_MetaItem s) => SizedBox(
                       width: itemW,
                       child: Card(
-                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surface.withValues(alpha: 0.72),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: AppTheme.metrics.radius12,
                           side: BorderSide(
-                            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.outline.withValues(alpha: 0.12),
                           ),
                         ),
                         child: Padding(
@@ -535,16 +582,18 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                             children: <Widget>[
                               Text(
                                 s.label,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
                               ),
                               SizedBox(height: AppTheme.metrics.kSpace4),
                               Text(
                                 s.value,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                             ],
                           ),
@@ -561,7 +610,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           children: <Widget>[
             Text(
               '游玩记录',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             OutlinedButton.icon(
@@ -591,11 +642,17 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         else
           ...viewModel.sessions.map(
             (PlaySession session) => Card(
-              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: 0.72),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: AppTheme.metrics.radius12,
-                side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+                side: BorderSide(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.12),
+                ),
               ),
               child: ListTile(
                 leading: const Icon(Icons.history),
@@ -623,7 +680,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: AppTheme.metrics.radius12,
-            side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+            side: BorderSide(
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: 0.12),
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -647,7 +708,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: AppTheme.metrics.radius12,
-            side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+            side: BorderSide(
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: 0.12),
+            ),
           ),
           child: ListTile(
             leading: const Icon(Icons.warning_amber_outlined),
@@ -667,7 +732,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: AppTheme.metrics.radius12,
-          side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+          side: BorderSide(
+            color: Theme.of(
+              context,
+            ).colorScheme.outline.withValues(alpha: 0.12),
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Padding(
@@ -677,7 +746,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Icon(Icons.menu_book_outlined, size: AppTheme.metrics.iconSize18),
+                  Icon(
+                    Icons.menu_book_outlined,
+                    size: AppTheme.metrics.iconSize18,
+                  ),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Text('萌娘百科', style: Theme.of(context).textTheme.titleSmall),
                   const Spacer(),
@@ -708,9 +780,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                           SizedBox(width: AppTheme.metrics.kSpace2),
                           Text(
                             '原文',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                           ),
                         ],
                       ),
@@ -720,7 +793,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               ),
               SizedBox(height: AppTheme.metrics.kSpace8),
               ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+                ),
                 child: SingleChildScrollView(
                   child: HtmlWidget(
                     html,
@@ -745,7 +820,11 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     customStylesBuilder: (element) {
                       switch (element.localName) {
                         case 'img':
-                          return {'display': 'block', 'max-width': '100%', 'margin': '4px 0'};
+                          return {
+                            'display': 'block',
+                            'max-width': '100%',
+                            'margin': '4px 0',
+                          };
                         case 'p':
                         case 'li':
                           return {'margin': '0', 'padding': '0'};
@@ -790,7 +869,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   labelText: '游戏名',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -802,7 +883,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   labelText: '开发商',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -819,7 +902,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   labelText: '评分 (0-10)',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -832,7 +917,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   hintText: 'YYYY-MM-DD',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -846,7 +933,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.folder_outlined),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -856,10 +945,17 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             labelText: '状态',
             border: const OutlineInputBorder(),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.6),
           ),
           items: GameStatus.values
-              .map((GameStatus e) => DropdownMenuItem<GameStatus>(value: e, child: Text(e.label)))
+              .map(
+                (GameStatus e) => DropdownMenuItem<GameStatus>(
+                  value: e,
+                  child: Text(e.label),
+                ),
+              )
               .toList(growable: false),
           onChanged: (GameStatus? v) {
             if (v != null) {
@@ -878,7 +974,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             labelText: '简介',
             border: const OutlineInputBorder(),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),
@@ -893,7 +991,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             await viewModel.refreshMetadata();
             _syncEditControllers();
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('元数据已刷新')));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('元数据已刷新')));
             }
           },
           icon: const Icon(Icons.cloud_download_outlined),
@@ -920,7 +1020,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       ),
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已保存')));
     }
   }
 
@@ -963,7 +1065,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     SizedBox(width: AppTheme.metrics.kSpace12),
                     Text(
                       '游戏运行中... 退出后将自动记录游玩时间',
-                      style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.green.shade800,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -972,11 +1077,17 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
 
           // 启动配置卡
           Card(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+            color: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.72),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: AppTheme.metrics.radius12,
-              side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+              side: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outline.withValues(alpha: 0.12),
+              ),
             ),
             child: Padding(
               padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -985,9 +1096,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 children: <Widget>[
                   Text(
                     '启动配置',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace16),
 
@@ -996,14 +1107,20 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Icon(Icons.folder_open_outlined, size: AppTheme.metrics.iconSize18),
+                        Icon(
+                          Icons.folder_open_outlined,
+                          size: AppTheme.metrics.iconSize18,
+                        ),
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         Expanded(
                           child: Text(
                             '游戏目录: ${g.gameDir}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ),
                       ],
@@ -1019,15 +1136,20 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                         title: const Text('使用 open 命令启动'),
                         subtitle: Text(
                           '适用于 Wine/Crossover 包装或需要 macOS 关联打开的程序',
-                          style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                          style: TextStyle(
+                            fontSize: AppTheme.metrics.fontSize11,
+                          ),
                         ),
                         value: viewModel.useOpenOnMacos.value,
                         onChanged: (bool v) async {
                           viewModel.useOpenOnMacos.value = v;
                           // 持久化到设置
                           try {
-                            final GameLibrarySettings cur = await viewModel.getSettings();
-                            await viewModel.saveSettings(cur.copyWith(useOpenOnMacos: v));
+                            final GameLibrarySettings cur = await viewModel
+                                .getSettings();
+                            await viewModel.saveSettings(
+                              cur.copyWith(useOpenOnMacos: v),
+                            );
                           } catch (_) {}
                         },
                       ),
@@ -1046,7 +1168,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                               vertical: AppTheme.metrics.kSpace14,
                             ),
                           ),
-                          onPressed: (g.path.trim().isNotEmpty || exePaths.isNotEmpty) && !running
+                          onPressed:
+                              (g.path.trim().isNotEmpty ||
+                                      exePaths.isNotEmpty) &&
+                                  !running
                               ? () => _launchGame(g)
                               : null,
                           icon: running
@@ -1075,7 +1200,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                         onPressed: () {
                           final String openPath = g.gameDir.trim().isNotEmpty
                               ? g.gameDir.trim()
-                              : (g.path.trim().isNotEmpty ? File(g.path).parent.path : '');
+                              : (g.path.trim().isNotEmpty
+                                    ? File(g.path).parent.path
+                                    : '');
                           if (openPath.isNotEmpty) {
                             _openContainingFolder(openPath);
                           }
@@ -1087,7 +1214,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         IconButton.outlined(
                           tooltip: _exeListExpanded ? '收起选项' : '展开可执行文件列表',
-                          onPressed: () => setState(() => _exeListExpanded = !_exeListExpanded),
+                          onPressed: () => setState(
+                            () => _exeListExpanded = !_exeListExpanded,
+                          ),
                           icon: AnimatedRotation(
                             turns: _exeListExpanded ? 0.5 : 0,
                             duration: const Duration(milliseconds: 200),
@@ -1110,14 +1239,19 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          border: Border.all(color: Theme.of(context).dividerColor),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
                           borderRadius: AppTheme.metrics.radius8,
                         ),
                         child: Column(
-                          children: exePaths.asMap().entries.map((MapEntry<int, String> entry) {
+                          children: exePaths.asMap().entries.map((
+                            MapEntry<int, String> entry,
+                          ) {
                             final String p = entry.value;
                             final bool isDefault = g.path.trim() == p;
-                            final bool isLast = entry.key == exePaths.length - 1;
+                            final bool isLast =
+                                entry.key == exePaths.length - 1;
                             return Column(
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
@@ -1131,17 +1265,25 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                                   leading: Radio<String>(value: p),
                                   title: Text(
                                     _exeName(p),
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      fontWeight: isDefault ? FontWeight.w600 : FontWeight.normal,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontWeight: isDefault
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                        ),
                                   ),
                                   subtitle: Text(
                                     p,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
                                   ),
                                   // X 按钮：移除该 exe
                                   trailing: Row(
@@ -1161,11 +1303,15 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                                         icon: Icon(
                                           Icons.close,
                                           size: AppTheme.metrics.iconSize18,
-                                          color: Theme.of(context).colorScheme.error,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
                                         ),
                                         onPressed: exePaths.length > 1
                                             ? () async {
-                                                await viewModel.removeExePath(p);
+                                                await viewModel.removeExePath(
+                                                  p,
+                                                );
                                               }
                                             : null,
                                       ),
@@ -1197,14 +1343,20 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Icon(Icons.save_outlined, size: AppTheme.metrics.iconSize18),
+                            Icon(
+                              Icons.save_outlined,
+                              size: AppTheme.metrics.iconSize18,
+                            ),
                             SizedBox(width: AppTheme.metrics.kSpace8),
                             Expanded(
                               child: Text(
                                 '存档目录: $savePath',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1212,7 +1364,10 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                             SizedBox(width: AppTheme.metrics.kSpace8),
                             TextButton.icon(
                               onPressed: () => _openContainingFolder(savePath),
-                              icon: Icon(Icons.open_in_new, size: AppTheme.metrics.iconSize16),
+                              icon: Icon(
+                                Icons.open_in_new,
+                                size: AppTheme.metrics.iconSize16,
+                              ),
                               label: const Text('打开'),
                             ),
                           ],
@@ -1224,12 +1379,14 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   OutlinedButton.icon(
                     onPressed: () async {
                       final DateTime end = DateTime.now();
-                      final DateTime start = end.subtract(const Duration(hours: 1));
+                      final DateTime start = end.subtract(
+                        const Duration(hours: 1),
+                      );
                       await viewModel.addManualSession(start: start, end: end);
                       if (mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(const SnackBar(content: Text('已追加 1 小时记录')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('已追加 1 小时记录')),
+                        );
                       }
                     },
                     icon: const Icon(Icons.add_alarm),
@@ -1243,11 +1400,17 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           // 万物皆可萌
           SizedBox(height: AppTheme.metrics.kSpace16),
           Card(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+            color: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.72),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: AppTheme.metrics.radius12,
-              side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+              side: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outline.withValues(alpha: 0.12),
+              ),
             ),
             child: Padding(
               padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1256,14 +1419,15 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 children: <Widget>[
                   Text(
                     '万物皆可萌',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace16),
                   OutlinedButton.icon(
                     onPressed: () {
-                      final String url = 'https://zh.moegirl.org.cn/${Uri.encodeComponent(g.name)}';
+                      final String url =
+                          'https://zh.moegirl.org.cn/${Uri.encodeComponent(g.name)}';
                       Process.run('open', <String>[url]);
                     },
                     icon: const Icon(Icons.open_in_browser),
@@ -1288,7 +1452,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: AppTheme.metrics.radius12,
-        side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12)),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
+        ),
       ),
       child: Padding(
         padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1297,7 +1463,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
           children: <Widget>[
             Text(
               '2DFan',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             SizedBox(height: AppTheme.metrics.kSpace16),
 
@@ -1323,7 +1491,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   Row(
                     children: <Widget>[
                       FilledButton.icon(
-                        onPressed: processing ? null : () => viewModel.downloadTwodfanSave(),
+                        onPressed: processing
+                            ? null
+                            : () => viewModel.downloadTwodfanSave(),
                         icon: processing
                             ? SizedBox(
                                 width: AppTheme.metrics.kSpace16,
@@ -1344,22 +1514,31 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                           height: 36,
                           child: OutlinedButton(
                             key: _twodfanPickerKey,
-                            onPressed: viewModel.twodfanProcessing.value || _twodfanPickerLoading
+                            onPressed:
+                                viewModel.twodfanProcessing.value ||
+                                    _twodfanPickerLoading
                                 ? null
                                 : () => _showTwodfanMenu(g),
                             style: OutlinedButton.styleFrom(
                               padding: EdgeInsets.zero,
                               shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(8)),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(8),
+                                ),
                               ),
                             ),
                             child: _twodfanPickerLoading
                                 ? const SizedBox(
                                     width: 14,
                                     height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                    ),
                                   )
-                                : Icon(Icons.expand_more, size: AppTheme.metrics.iconSize18),
+                                : Icon(
+                                    Icons.expand_more,
+                                    size: AppTheme.metrics.iconSize18,
+                                  ),
                           ),
                         ),
                       ),
@@ -1372,7 +1551,8 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: status.startsWith('下载完成')
                             ? Colors.green
-                            : (status.startsWith('下载失败') || status.startsWith('未'))
+                            : (status.startsWith('下载失败') ||
+                                  status.startsWith('未'))
                             ? Theme.of(context).colorScheme.error
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -1394,9 +1574,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                   SizedBox(height: AppTheme.metrics.kSpace8),
                   Text(
                     '存档说明',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace8),
                   _buildTwodfanDescWidget(desc),
@@ -1413,19 +1593,27 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   Future<void> _showTwodfanMenu(GameItem g) async {
     setState(() => _twodfanPickerLoading = true);
     try {
-      final List<Map<String, String>> items = await viewModel.fetchTwodfanDownloadItems();
+      final List<Map<String, String>> items = await viewModel
+          .fetchTwodfanDownloadItems();
       if (!mounted) return;
       if (items.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未找到存档资源')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('未找到存档资源')));
         return;
       }
-      final RenderBox? btnBox = _twodfanPickerKey.currentContext?.findRenderObject() as RenderBox?;
-      final RenderBox overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+      final RenderBox? btnBox =
+          _twodfanPickerKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox overlay =
+          Overlay.of(context).context.findRenderObject()! as RenderBox;
       final RelativeRect position = btnBox != null
           ? RelativeRect.fromRect(
               Rect.fromPoints(
                 btnBox.localToGlobal(Offset.zero, ancestor: overlay),
-                btnBox.localToGlobal(btnBox.size.bottomRight(Offset.zero), ancestor: overlay),
+                btnBox.localToGlobal(
+                  btnBox.size.bottomRight(Offset.zero),
+                  ancestor: overlay,
+                ),
               ),
               Offset.zero & overlay.size,
             )
@@ -1437,7 +1625,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             .asMap()
             .entries
             .map(
-              (MapEntry<int, Map<String, String>> entry) => PopupMenuItem<Map<String, String>>(
+              (
+                MapEntry<int, Map<String, String>> entry,
+              ) => PopupMenuItem<Map<String, String>>(
                 value: entry.value,
                 child: Text(
                   '${entry.key + 1}. ${entry.value['title'] ?? entry.value['path'] ?? ''}',
@@ -1456,7 +1646,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('获取存档列表失败: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('获取存档列表失败: $e')));
       }
     } finally {
       if (mounted) setState(() => _twodfanPickerLoading = false);
@@ -1466,7 +1658,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
   /// 渲染 2DFan 存档简介，将 Windows 路径高亮为可点击/可复制链接，替换用户名占位符。
   Widget _buildTwodfanDescWidget(String rawDesc) {
     final String username =
-        Platform.environment['USER'] ?? Platform.environment['USERNAME'] ?? '用户名';
+        Platform.environment['USER'] ??
+        Platform.environment['USERNAME'] ??
+        '用户名';
 
     final String text = rawDesc
         .replaceAll('你的用户名', username)
@@ -1494,11 +1688,16 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 Clipboard.setData(ClipboardData(text: path));
                 Process.run('open', <String>[path]);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('已复制: $path'), duration: const Duration(seconds: 2)),
+                  SnackBar(
+                    content: Text('已复制: $path'),
+                    duration: const Duration(seconds: 2),
+                  ),
                 );
               },
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppTheme.metrics.kSpace2,
+                ),
                 child: Text(
                   path,
                   style: TextStyle(
@@ -1538,9 +1737,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     final bool ok = await viewModel.launchGame();
     if (!ok && mounted) {
       final String? err = viewModel.errorMessage;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(err?.isNotEmpty == true ? err! : '启动失败')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err?.isNotEmpty == true ? err! : '启动失败')),
+      );
     }
   }
 
@@ -1548,9 +1747,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
     final bool ok = await viewModel.launchGame(overrideExePath: exePath);
     if (!ok && mounted) {
       final String? err = viewModel.errorMessage;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(err?.isNotEmpty == true ? err! : '启动失败')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err?.isNotEmpty == true ? err! : '启动失败')),
+      );
     }
   }
 
@@ -1577,12 +1776,16 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
         children: <Widget>[
           Text(
             '分类管理',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           SizedBox(height: AppTheme.metrics.kSpace8),
           if (viewModel.categories.isEmpty)
             Padding(
-              padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace24),
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.metrics.kSpace24,
+              ),
               child: Center(
                 child: Text(
                   '还没有分类，点击右上角「分类管理」创建',
@@ -1601,7 +1804,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
                 },
                 title: Text('${category.emoji} ${category.name}'),
                 subtitle: category.isSystem ? const Text('系统分类') : null,
-                shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppTheme.metrics.radius8,
+                ),
               ),
             ),
         ],
@@ -1619,7 +1824,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
       children: <Widget>[
         Text(
           '游玩进度',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         SizedBox(height: AppTheme.metrics.kSpace16),
         TextField(
@@ -1629,7 +1836,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.book_outlined),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1640,7 +1849,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.alt_route_outlined),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1653,7 +1864,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
             border: const OutlineInputBorder(),
             alignLabelWithHint: true,
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),
@@ -1665,7 +1878,9 @@ class _GameDetailScreenState extends BasePageState<GameLibraryDetailViewModel, G
               note: _noteController.text.trim(),
             );
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('进度已保存')));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('进度已保存')));
             }
           },
           icon: const Icon(Icons.save_outlined),
@@ -1715,11 +1930,14 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color resolvedColor = activeColor ?? Theme.of(context).colorScheme.primary;
+    final Color resolvedColor =
+        activeColor ?? Theme.of(context).colorScheme.primary;
     final Color bg = active
         ? resolvedColor.withAlpha(28)
         : Theme.of(context).colorScheme.surfaceContainerHighest;
-    final Color fg = active ? resolvedColor : Theme.of(context).colorScheme.onSurfaceVariant;
+    final Color fg = active
+        ? resolvedColor
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     final BorderSide border = active
         ? BorderSide(color: resolvedColor, width: 1.5)
         : BorderSide(color: Theme.of(context).dividerColor);
