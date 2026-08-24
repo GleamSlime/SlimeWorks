@@ -167,6 +167,17 @@ jobs:
       - name: 安装 Inno Setup
         run: choco install innosetup -y
 
+      - name: 下载 Inno Setup 中文语言文件（非官方翻译，不随安装包分发）
+        run: |
+          $langDir = "C:\Program Files (x86)\Inno Setup 6\Languages"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/refs/heads/main/Files/Languages/ChineseSimplified.isl" -OutFile "$langDir\ChineseSimplified.isl"
+          if (Test-Path "$langDir\ChineseSimplified.isl") {
+            echo "✅ 中文语言文件已就位"
+          } else {
+            echo "❌ 中文语言文件下载失败"
+            exit 1
+          }
+
       - name: 安装 fastforge
         run: dart pub global activate fastforge
 
