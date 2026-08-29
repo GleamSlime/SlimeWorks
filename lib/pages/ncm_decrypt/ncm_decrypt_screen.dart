@@ -15,7 +15,6 @@ class NcmDecryptScreen extends StatefulWidget {
 class _NcmDecryptScreenState extends State<NcmDecryptScreen> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
     final service = getIt.get<NcmDecryptService>();
 

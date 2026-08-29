@@ -66,17 +66,28 @@ class SentrySettingsService extends GetxService {
 
   bool get isLocal => selectedNodeId.value.isEmpty;
 
+  /// 安全获取节点服务：启动早期或测试环境下 GetIt 可能尚未注册，
+  /// 此时返回 null 由调用方降级为默认值，避免直接抛 Bad state 崩溃。
+  NodeSettingsService? _tryGetNodeService() {
+    final getIt = GetIt.instance;
+    if (!getIt.isRegistered<NodeSettingsService>()) return null;
+    return getIt.get<NodeSettingsService>();
+  }
+
   String? get currentNodeBaseUrl {
     if (isLocal) return null;
-    final nodeService = GetIt.instance.get<NodeSettingsService>();
+    final nodeService = _tryGetNodeService();
+    if (nodeService == null) return null;
     final node = nodeService.getNodeById(selectedNodeId.value);
     return node?.apiBaseUrl;
   }
 
   String get currentDsn {
     if (isLocal) {
-      final nodeService = GetIt.instance.get<NodeSettingsService>();
-      if (nodeService.localNodeEnabled.value && nodeService.localNodeApiList.isNotEmpty) {
+      final nodeService = _tryGetNodeService();
+      if (nodeService != null &&
+          nodeService.localNodeEnabled.value &&
+          nodeService.localNodeApiList.isNotEmpty) {
         return 'http://${nodeService.localNodeApiList.first}/<project_id>';
       }
       return 'http://127.0.0.1:17888/<project_id>';

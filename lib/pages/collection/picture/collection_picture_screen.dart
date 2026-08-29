@@ -1495,8 +1495,9 @@ class _CollectionPictureScreenState
     final d = bytes.toDouble();
     if (d < 1024) return '${d.toStringAsFixed(0)} B';
     if (d < 1024 * 1024) return '${(d / 1024).toStringAsFixed(1)} KB';
-    if (d < 1024 * 1024 * 1024)
+    if (d < 1024 * 1024 * 1024) {
       return '${(d / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
@@ -1978,8 +1979,9 @@ class _CollectionPictureScreenState
       confirmLabel: '删除文件',
       confirmColor: Theme.of(context).colorScheme.error,
     );
-    if (confirmed)
+    if (confirmed) {
       await viewModel.deleteNodeLocalFilesForCollection(collectionId);
+    }
   }
 }
 

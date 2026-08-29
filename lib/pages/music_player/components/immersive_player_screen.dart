@@ -142,7 +142,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(top: AppTheme.metrics.kSpace8),
               child: Text(
-                [if (artist != null) artist, if (album != null) album].join(' · '),
+                [?artist, ?album].join(' · '),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.7),
                 ),
@@ -663,7 +663,7 @@ class _EqSlidersState extends State<_EqSliders> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: presets.length,
-                separatorBuilder: (_, __) => SizedBox(width: AppTheme.metrics.kSpace8),
+                separatorBuilder: (_, _) => SizedBox(width: AppTheme.metrics.kSpace8),
                 itemBuilder: (context, index) {
                   final preset = presets[index];
                   final isSelected = preset.id == currentId;

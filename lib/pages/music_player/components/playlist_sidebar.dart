@@ -224,23 +224,6 @@ class PlaylistSidebar extends StatelessWidget {
       ),
     );
   }
-
-  /// 格式化播放时间
-  String _formatPlayTime(int? timestamp) {
-    if (timestamp == null) return '';
-    try {
-      final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inMinutes < 1) return '刚刚';
-      if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-      if (diff.inDays < 1) return '${diff.inHours}小时前';
-      if (diff.inDays < 7) return '${diff.inDays}天前';
-      return '${dt.month}/${dt.day}';
-    } catch (_) {
-      return '';
-    }
-  }
 }
 
 /// 面包屑导航项
@@ -442,46 +425,6 @@ class _PlaylistTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 收藏列表中的音乐条目
-class _MusicListTile extends StatelessWidget {
-  final music_api.MusicItem item;
-  final VoidCallback onTap;
-  final VoidCallback onFavoriteTap;
-
-  const _MusicListTile({required this.item, required this.onTap, required this.onFavoriteTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isFav = item.isFavorite;
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        Icons.music_note_rounded,
-        size: 18,
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-      ),
-      title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: item.artist != null
-          ? Text(
-              item.artist!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            )
-          : null,
-      trailing: IconButton(
-        icon: Icon(
-          isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          size: 18,
-          color: isFav ? Colors.redAccent : null,
-        ),
-        onPressed: onFavoriteTap,
-      ),
-      onTap: onTap,
     );
   }
 }
@@ -793,7 +736,7 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
               child: Image.file(
                 file,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Padding(
+                errorBuilder: (_, _, _) => Padding(
                   padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
                   child: Text('无法加载图片', style: Theme.of(context).textTheme.bodyMedium),
                 ),

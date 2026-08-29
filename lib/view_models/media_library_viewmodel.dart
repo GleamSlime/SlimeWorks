@@ -590,15 +590,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       _logger.info(
         '[currentCollections] 智能文件夹=${sf.name}, folderId=$folderId, merged=${mergedCollections.length}, matched=${filtered.length}, regexTarget=${sf.regexTarget}, targetFolderIds=${sf.targetFolderIds}, regexPattern=${sf.regexPattern}, keywords=${sf.keywords}',
       );
-      if (favOnly)
+      if (favOnly) {
         filtered = filtered.where((c) => favIds.contains(c.id)).toList();
+      }
       return _applySortOrder(filtered, folderId);
     }
     var filtered = mergedCollections
         .where((collection) => collection.folderId == folderId)
         .toList(growable: true);
-    if (favOnly)
+    if (favOnly) {
       filtered = filtered.where((c) => favIds.contains(c.id)).toList();
+    }
     return _applySortOrder(filtered, folderId ?? 'root');
   }
 
@@ -1123,8 +1125,9 @@ class MediaLibraryViewModel extends BaseViewModel {
           result.add(p);
         }
       }
-      if (videoPaths.isNotEmpty)
+      if (videoPaths.isNotEmpty) {
         _hoverVideoPathsCache[collection.id] = videoPaths;
+      }
       _hoverSourcesCache[collection.id] = result;
       return result;
     } catch (_) {

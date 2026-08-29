@@ -75,7 +75,8 @@ static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
 
 // ── 辅助 ─────────────────────────────────────────────────────────────────────
 
-fn kill_process_on_port(port: u16) {
+/// 尝试清理占用端口的旧进程（仅 unix 实现，Windows 下为无害空操作）
+fn kill_process_on_port(#[cfg_attr(not(unix), allow(unused_variables))] port: u16) {
     #[cfg(unix)]
     {
         let _ = std::process::Command::new("sh")

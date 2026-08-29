@@ -10,8 +10,6 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 import 'package:slime_works/pages/music_player/components/music_list_item.dart';
 import 'package:slime_works/pages/music_player/components/playlist_sidebar.dart';
@@ -707,7 +705,7 @@ class _FolderInfoHeader extends StatelessWidget {
                 fit: BoxFit.cover,
                 width: coverSize,
                 height: coverSize,
-                errorBuilder: (_, __, ___) => _buildDefaultCoverContent(context, coverSize),
+                errorBuilder: (_, _, _) => _buildDefaultCoverContent(context, coverSize),
               )
             : _buildDefaultCoverContent(context, coverSize),
       ),

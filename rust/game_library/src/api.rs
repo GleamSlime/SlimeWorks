@@ -883,7 +883,8 @@ pub async fn game_library_is_favorite(game_id: String) -> Result<bool> {
 pub async fn game_library_launch_game(
     exe_path: String,
     working_dir: String,
-    use_open: bool,
+    // 该参数仅 macOS 分支使用，其他平台允许未读取，避免条件编译警告
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))] use_open: bool,
 ) -> Result<i64> {
     use std::process::Command;
 

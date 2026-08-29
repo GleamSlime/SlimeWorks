@@ -77,7 +77,7 @@ class _EqPanelState extends State<EqPanel> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: presets.length,
-                  separatorBuilder: (_, __) => SizedBox(width: AppTheme.metrics.kSpace8),
+                  separatorBuilder: (_, _) => SizedBox(width: AppTheme.metrics.kSpace8),
                   itemBuilder: (context, index) {
                     final preset = presets[index];
                     final isSelected = preset.id == currentId;

@@ -45,7 +45,10 @@ pub struct Playlist {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub is_default: bool,
-    /// 所属目录 ID，null 表示根级
+    /// 所属目录 ID，null 表示根级。
+    /// 后加字段，必须带 #[serde(default)]，否则早期版本持久化的播放列表
+    /// （无此字段）反序列化失败，会被调用方的 filter_map 静默丢弃导致数据丢失。
+    #[serde(default)]
     pub folder_id: Option<String>,
 }
 

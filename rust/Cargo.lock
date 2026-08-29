@@ -422,7 +422,6 @@ dependencies = [
  "hyper 0.14.32",
  "lazy_static",
  "libc",
- "libloading",
  "rcgen",
  "regex",
  "rustls 0.20.9",

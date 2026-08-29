@@ -46,16 +46,7 @@ base64 = "0.22.1"
 rustls-pemfile = "2.2.0"
 x509-parser = "0.18.0"
 lazy_static = "1.5.0" # C ABI 需要
-libloading = "0.8" # 测试用
 libc = "0.2"
 
-
-[[example]]
-name = "test_dll"
-path = "test_dll.rs"
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
+# 注：release 优化配置统一由工作区根 Cargo.toml 的 [profile.release] 提供，
+# member 内的 profile 会被忽略，勿在此重复定义。

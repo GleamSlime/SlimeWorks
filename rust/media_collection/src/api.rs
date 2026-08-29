@@ -179,7 +179,7 @@ pub fn run_tracked_command(
 pub fn run_tracked_command_output(
     cmd: &mut std::process::Command,
 ) -> std::io::Result<std::process::Output> {
-    let mut child = cmd.spawn()?;
+    let child = cmd.spawn()?;
     let pid = child.id();
     if pid > 0 {
         track_ffmpeg_pid(pid);

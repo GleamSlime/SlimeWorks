@@ -148,7 +148,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
                       fit: BoxFit.cover,
                       width: coverSize,
                       height: coverSize,
-                      errorBuilder: (_, __, ___) => _buildDefaultCover(coverSize),
+                      errorBuilder: (_, _, _) => _buildDefaultCover(coverSize),
                     )
                   : _buildDefaultCover(coverSize),
             ),

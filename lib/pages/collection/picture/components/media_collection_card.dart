@@ -134,8 +134,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     final d = bytes.toDouble();
     if (d < 1024) return '${d.toStringAsFixed(0)} B';
     if (d < 1024 * 1024) return '${(d / 1024).toStringAsFixed(1)} KB';
-    if (d < 1024 * 1024 * 1024)
+    if (d < 1024 * 1024 * 1024) {
       return '${(d / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
@@ -161,8 +162,9 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     for (int d = 1; d < count; d++) {
       final left = idx - d;
       final right = idx + d;
-      if (left >= 0 && sources[left] != null && sources[left]!.isNotEmpty)
+      if (left >= 0 && sources[left] != null && sources[left]!.isNotEmpty) {
         return sources[left];
+      }
       if (right < count &&
           sources[right] != null &&
           sources[right]!.isNotEmpty) {

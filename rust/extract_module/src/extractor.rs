@@ -663,7 +663,9 @@ mod tests {
             "/source",
             &ExtractOutputMode::SameDirectory,
         );
-        assert_eq!(result, "/source/sub");
+        // 期望值用 Path 构造，避免硬编码分隔符导致跨平台（Windows）失败
+        let expected = Path::new("/source/sub").to_string_lossy().to_string();
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -685,7 +687,11 @@ mod tests {
             "/source",
             &ExtractOutputMode::ByArchiveName,
         );
-        assert_eq!(result, "/output/archive");
+        let expected = Path::new("/output")
+            .join("archive")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -696,7 +702,11 @@ mod tests {
             "/source",
             &ExtractOutputMode::PreserveStructure,
         );
-        assert_eq!(result, "/output/sub/deep");
+        let expected = Path::new("/output")
+            .join("sub/deep")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -707,7 +717,12 @@ mod tests {
             "/source",
             &ExtractOutputMode::PreserveStructure,
         );
-        assert_eq!(result, "/output/");
+        // 顶层压缩包相对父目录为空，输出即 base_output 本身（经 Path 规整）
+        let expected = Path::new("/output")
+            .join("")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(result, expected);
     }
 
     // ── cancel flag ────────────────────────────────────────────────────────

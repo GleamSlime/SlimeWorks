@@ -172,7 +172,7 @@ class BottomPlayerBar extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildDefaultCover(context, size),
+          errorBuilder: (_, _, _) => _buildDefaultCover(context, size),
         ),
       );
     }
