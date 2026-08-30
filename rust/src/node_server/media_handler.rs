@@ -3,9 +3,44 @@ use media_collection::api as media_api;
 use std::convert::Infallible;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 视频/音频流式传输的单次切片上限（2MB）
 const VIDEO_CHUNK_SIZE: u64 = 2 * 1024 * 1024;
+
+/// 节点端缩略图生成统计（供客户端轮询展示生成进度）。
+static THUMB_TOTAL: AtomicU64 = AtomicU64::new(0);
+static THUMB_COMPLETED: AtomicU64 = AtomicU64::new(0);
+
+/// 返回节点端缩略图生成进度 (已开始总数, 已完成数)。
+pub fn thumb_generation_progress() -> (u64, u64) {
+    (
+        THUMB_TOTAL.load(Ordering::Relaxed),
+        THUMB_COMPLETED.load(Ordering::Relaxed),
+    )
+}
+
+/// 带统计包装的缩略图生成：记录开始/完成计数。
+fn ensure_cover_thumbnail_tracked(file_path: &str, width: u32) -> Option<String> {
+    THUMB_TOTAL.fetch_add(1, Ordering::Relaxed);
+    let result = media_api::ensure_cover_thumbnail(file_path.to_string(), width);
+    THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
+    result
+}
+
+/// 后台为一批媒体文件生成缩略图并计入进度统计（导入后全量生成用）。
+pub fn spawn_bulk_thumbnail_generation(files: Vec<String>) {
+    if files.is_empty() {
+        return;
+    }
+    THUMB_TOTAL.fetch_add(files.len() as u64, Ordering::Relaxed);
+    std::thread::spawn(move || {
+        for file_path in files {
+            media_api::ensure_cover_thumbnail(file_path.clone(), 480);
+            THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+}
 
 /// 处理媒体文件请求 GET /node/media
 pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -96,8 +131,8 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
 
 /// 服务缩略图
 async fn serve_resized_cover(file_path: &str, width: u32) -> Result<Response<Body>, Infallible> {
-    // 调用 Rust 的缩略图生成函数
-    if let Some(thumb_path) = media_api::ensure_cover_thumbnail(file_path.to_string(), width) {
+    // 调用 Rust 的缩略图生成函数（带进度统计）
+    if let Some(thumb_path) = ensure_cover_thumbnail_tracked(file_path, width) {
         if !thumb_path.is_empty() {
             let thumb_file = Path::new(&thumb_path);
             if thumb_file.exists() {
@@ -325,9 +360,7 @@ pub async fn handle_media_query(query: &str) -> Result<Vec<u8>, String> {
     if is_cover_mode || is_image_file(file_path) {
         let width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
         if width > 0 {
-            if let Some(thumb_path) =
-                media_collection::api::ensure_cover_thumbnail(file_path.to_string(), width)
-            {
+            if let Some(thumb_path) = ensure_cover_thumbnail_tracked(file_path, width) {
                 if !thumb_path.is_empty() {
                     if let Ok(bytes) = std::fs::read(&thumb_path) {
                         return Ok(bytes);

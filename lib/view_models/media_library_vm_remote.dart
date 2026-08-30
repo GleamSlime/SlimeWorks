@@ -3,6 +3,43 @@ part of 'media_library_viewmodel.dart';
 /// 远程节点数据刷新操作。
 /// 通过 extension 挂载到 [MediaLibraryViewModel]，共享同一库私有成员。
 extension RemoteNodeOperationsExt on MediaLibraryViewModel {
+  /// 轮询所有已启用远程节点的缩略图生成进度，合计后写入 [remoteThumbProgress]。
+  /// 节点不可达时忽略本轮结果，避免误清正在显示的进度。
+  Future<void> _pollRemoteThumbProgress() async {
+    if (_remoteThumbPolling) return;
+    final nodes = nodeSettingsService.enabledRemoteNodes;
+    if (nodes.isEmpty) {
+      if (remoteThumbProgress.value != null) {
+        remoteThumbProgress.value = null;
+      }
+      return;
+    }
+    _remoteThumbPolling = true;
+    try {
+      var total = 0;
+      var completed = 0;
+      for (final node in nodes) {
+        try {
+          final response = await nodeSettingsService.callNodeAction(
+            nodeId: node.id,
+            action: 'get_thumb_progress',
+          );
+          final data = response['data'];
+          if (data is Map) {
+            total += int.tryParse('${data['total']}') ?? 0;
+            completed += int.tryParse('${data['completed']}') ?? 0;
+          }
+        } catch (_) {
+          // 单个节点失败不影响其余节点进度汇总
+        }
+      }
+      remoteThumbProgress.value =
+          (total > 0 && completed < total) ? (completed, total) : null;
+    } finally {
+      _remoteThumbPolling = false;
+    }
+  }
+
   Future<void> refreshRemoteLibrary() async {
     await _refreshRemoteFolders();
     await _refreshRemoteCollections();

@@ -36,8 +36,7 @@ class MediaViewerPage extends StatefulWidget {
   State<MediaViewerPage> createState() => _MediaViewerPageState();
 }
 
-class _MediaViewerPageState extends State<MediaViewerPage>
-    with TickerProviderStateMixin {
+class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderStateMixin {
   int _currentIndex = 0;
   String? _currentItemId;
 
@@ -86,12 +85,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   // 内层 Listener 永远收不到事件，因此缩放由外层判定后经此 Notifier 定向通知。
   // 元组含义：(序号, 目标页 index, 鼠标位置, 滚轮 dy)
   int _wheelZoomSeq = 0;
-  final _wheelZoomNotifier = ValueNotifier<(int, int, Offset, double)>((
-    0,
-    -1,
-    Offset.zero,
-    0,
-  ));
+  final _wheelZoomNotifier = ValueNotifier<(int, int, Offset, double)>((0, -1, Offset.zero, 0));
 
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
 
@@ -131,10 +125,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     _currentIsVideo =
         widget.items[_currentIndex].kind == media_api.MediaKind.video ||
         widget.items[_currentIndex].kind == media_api.MediaKind.audio;
-    _snapCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 260),
-    );
+    _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
     _snapCtrl.addListener(_onSnapTick);
     _snapCtrl.addStatusListener(_onSnapStatus);
     if (Platform.isAndroid || Platform.isIOS) {
@@ -147,9 +138,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   void didUpdateWidget(MediaViewerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.items != oldWidget.items && _currentItemId != null) {
-      final newIndex = widget.items.indexWhere(
-        (item) => item.id == _currentItemId,
-      );
+      final newIndex = widget.items.indexWhere((item) => item.id == _currentItemId);
       if (newIndex != -1 && newIndex != _currentIndex) {
         _currentIndex = newIndex;
         _prevPageWidget = null;
@@ -193,13 +182,9 @@ class _MediaViewerPageState extends State<MediaViewerPage>
           _currPageWidget = null;
           _nextPageWidget = null;
           _currentIndex = pending;
-          _currentItemId = widget.items.isNotEmpty
-              ? widget.items[_currentIndex].id
-              : null;
+          _currentItemId = widget.items.isNotEmpty ? widget.items[_currentIndex].id : null;
           final kind = widget.items[_currentIndex].kind;
-          _currentIsVideo =
-              kind == media_api.MediaKind.video ||
-              kind == media_api.MediaKind.audio;
+          _currentIsVideo = kind == media_api.MediaKind.video || kind == media_api.MediaKind.audio;
         }
         _dragOffset = 0.0;
         _isDragging = false;
@@ -255,9 +240,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     final frac = _dragOffset / screenExtent;
     int? next;
     // 正 offset = 当前页右移/下移 = "往回翻"（看上一项）
-    if (_dragOffset > 0 &&
-        (frac > _kDragCommitFraction || velocity > 400) &&
-        _currentIndex > 0) {
+    if (_dragOffset > 0 && (frac > _kDragCommitFraction || velocity > 400) && _currentIndex > 0) {
       next = _currentIndex - 1;
     } else if (_dragOffset < 0 &&
         (-frac > _kDragCommitFraction || velocity < -400) &&
@@ -292,8 +275,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     if (_isDragging) return;
     final ctrlPressed = HardwareKeyboard.instance.isControlPressed;
     // 中键按下（以事件自身 buttons 兜底，防止 down/up 监听遗漏）
-    final middleHeld =
-        _middleButtonHeld || (event.buttons & kMiddleMouseButton) != 0;
+    final middleHeld = _middleButtonHeld || (event.buttons & kMiddleMouseButton) != 0;
     // 按住 Ctrl 或鼠标中键：禁用翻页；图片页时滚轮作为缩放（视频页无缩放，忽略）
     if (ctrlPressed || middleHeld) {
       if (!_currentIsVideo) _requestZoom(event);
@@ -349,22 +331,14 @@ class _MediaViewerPageState extends State<MediaViewerPage>
 
   // ── 页面构建 ─────────────────────────────────────────────────────────────
 
-  Widget _buildPageContent(
-    BuildContext context,
-    int index, {
-    bool isActive = true,
-  }) {
+  Widget _buildPageContent(BuildContext context, int index, {bool isActive = true}) {
     if (index < 0 || index >= widget.items.length) {
       return const SizedBox.expand();
     }
     final isMobile = Platform.isAndroid || Platform.isIOS;
     final item = widget.items[index];
-    final source = widget.viewModel.buildMediaSource(
-      item,
-      collectionId: widget.collectionId,
-    );
-    if (item.kind == media_api.MediaKind.video ||
-        item.kind == media_api.MediaKind.audio) {
+    final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
+    if (item.kind == media_api.MediaKind.video || item.kind == media_api.MediaKind.audio) {
       // 构建封面 URL：本地视频用文件路径，远程视频用节点封面 URL（mode=cover）
       final coverSource = widget.viewModel.buildMediaSource(
         item,
@@ -378,8 +352,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
         isActive: isActive,
         onDragStart: () => _onDragStart(horizontal: false),
         onDragUpdate: (dy) => _onDragUpdate(dy),
-        onDragEnd: (velocity, screenExtent) =>
-            _onDragEnd(velocity, screenExtent),
+        onDragEnd: (velocity, screenExtent) => _onDragEnd(velocity, screenExtent),
         isAudio: item.kind == media_api.MediaKind.audio,
       );
     }
@@ -406,10 +379,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   Future<void> _saveCurrentItem(BuildContext context) async {
     final item = widget.items[_currentIndex];
     if (item.kind != media_api.MediaKind.image) return;
-    final source = widget.viewModel.buildMediaSource(
-      item,
-      collectionId: widget.collectionId,
-    );
+    final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (source == null || source.isEmpty) return;
 
     const maxAttempts = 3;
@@ -436,17 +406,13 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       String localPath;
       File? tmpFile;
       if (source.startsWith('http')) {
-        final resp = await http
-            .get(Uri.parse(source))
-            .timeout(const Duration(seconds: 30));
+        final resp = await http.get(Uri.parse(source)).timeout(const Duration(seconds: 30));
         if (resp.statusCode != 200) {
           throw Exception('HTTP ${resp.statusCode}');
         }
         final tmpDir = await getTemporaryDirectory();
         final ext = source.split('?').first.split('.').last.toLowerCase();
-        final validExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext)
-            ? ext
-            : 'jpg';
+        final validExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext) ? ext : 'jpg';
         tmpFile = File(
           '${tmpDir.path}/slimeworks_img_${DateTime.now().millisecondsSinceEpoch}.$validExt',
         );
@@ -459,20 +425,14 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       tmpFile?.delete().ignore();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('已保存到相册'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('已保存到相册'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存失败: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存失败: $e'), behavior: SnackBarBehavior.floating));
       }
     }
   }
@@ -485,21 +445,13 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     final isImage = item.kind == media_api.MediaKind.image;
 
     // 懒填充：只建还没构建的槽，已有的直接复用
-    _currPageWidget ??= _buildPageContent(
-      context,
-      _currentIndex,
-      isActive: true,
-    );
+    _currPageWidget ??= _buildPageContent(context, _currentIndex, isActive: true);
     if (_currentIndex > 0) {
       if (_prevPageWidget == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           setState(() {
-            _prevPageWidget = _buildPageContent(
-              context,
-              _currentIndex - 1,
-              isActive: false,
-            );
+            _prevPageWidget = _buildPageContent(context, _currentIndex - 1, isActive: false);
           });
         });
       }
@@ -511,11 +463,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           setState(() {
-            _nextPageWidget = _buildPageContent(
-              context,
-              _currentIndex + 1,
-              isActive: false,
-            );
+            _nextPageWidget = _buildPageContent(context, _currentIndex + 1, isActive: false);
           });
         });
       }
@@ -608,26 +556,17 @@ class _MediaViewerPageState extends State<MediaViewerPage>
                       ? (d) => _onDragUpdate(d.delta.dx)
                       : null,
                   onHorizontalDragEnd: (isMobile && !_imageIsZoomed)
-                      ? (d) => _onDragEnd(
-                          d.velocity.pixelsPerSecond.dx,
-                          size.width,
-                        )
+                      ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dx, size.width)
                       : null,
                   // 移动端：垂直拖动（图片缩放时禁用）
-                  onVerticalDragStart:
-                      (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                  onVerticalDragStart: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (_) => _onDragStart(horizontal: false)
                       : null,
-                  onVerticalDragUpdate:
-                      (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                  onVerticalDragUpdate: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (d) => _onDragUpdate(d.delta.dy)
                       : null,
-                  onVerticalDragEnd:
-                      (isMobile && !_imageIsZoomed && !_currentIsVideo)
-                      ? (d) => _onDragEnd(
-                          d.velocity.pixelsPerSecond.dy,
-                          size.height,
-                        )
+                  onVerticalDragEnd: (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                      ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dy, size.height)
                       : null,
                   // 单击空白区域切换 UI 可见性
                   onTap: _toggleUi,
@@ -665,16 +604,11 @@ class _MediaViewerPageState extends State<MediaViewerPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _GlassChip(
-                        current: _currentIndex,
-                        total: widget.items.length,
-                      ),
+                      _GlassChip(current: _currentIndex, total: widget.items.length),
                       _FloatingActionMenu(
                         canGoPrev: _currentIndex > 0,
                         canGoNext: _currentIndex < widget.items.length - 1,
-                        onSave: isImage
-                            ? () => _saveCurrentItem(context)
-                            : null,
+                        onSave: isImage ? () => _saveCurrentItem(context) : null,
                         onPrev: () => _jumpInstant(-1),
                         onNext: () => _jumpInstant(1),
                       ),
@@ -742,11 +676,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
 // ── 玻璃磨砂 icon 按钮 ─────────────────────────────────────────────────────
 
 class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-  });
+  const _GlassIconButton({required this.icon, required this.onTap, this.tooltip});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -765,11 +695,7 @@ class _GlassIconButton extends StatelessWidget {
             height: 42,
             color: Colors.black.withValues(alpha: 0.42),
             alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: AppTheme.metrics.iconSize22,
-            ),
+            child: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
           ),
         ),
       ),
@@ -828,13 +754,10 @@ class _GlassChipState extends State<_GlassChip> {
                   final begin = isIncoming
                       ? Offset(0, _goingForward ? 1.0 : -1.0)
                       : Offset(0, _goingForward ? -1.0 : 1.0);
-                  final pos = Tween<Offset>(begin: begin, end: Offset.zero)
-                      .animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      );
+                  final pos = Tween<Offset>(
+                    begin: begin,
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
                   return ClipRect(
                     child: SlideTransition(position: pos, child: child),
                   );
@@ -842,19 +765,13 @@ class _GlassChipState extends State<_GlassChip> {
                 child: Text(
                   '${widget.current + 1}',
                   key: ValueKey(widget.current),
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: AppTheme.metrics.fontSize13,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
                 ),
               ),
               // 总数静止，无动画
               Text(
                 ' / ${widget.total}',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: AppTheme.metrics.fontSize13,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
               ),
             ],
           ),
@@ -896,10 +813,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
   }
 
   @override
@@ -958,11 +872,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
           parent: _animController,
           curve: Interval(delayMs / 300.0, 1.0, curve: Curves.easeOutBack),
         ),
-        child: _GlassIconButton(
-          icon: icon,
-          tooltip: tooltip,
-          onTap: () => _handleAction(onTap),
-        ),
+        child: _GlassIconButton(icon: icon, tooltip: tooltip, onTap: () => _handleAction(onTap)),
       ),
     );
   }
@@ -1011,10 +921,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
       children: [
         // 展开的独立圆形按钮，每个之间有 10px 间距
         if (_expanded) ...[
-          for (final btn in actionBtns) ...[
-            btn,
-            SizedBox(height: AppTheme.metrics.kSpace10),
-          ],
+          for (final btn in actionBtns) ...[btn, SizedBox(height: AppTheme.metrics.kSpace10)],
         ],
         // 常驻折叠/展开总按钮
         _GlassIconButton(
@@ -1130,10 +1037,7 @@ class _ImageViewerState extends State<_ImageViewer> {
   }
 
   bool get _isTransformed =>
-      _scale > 1.02 ||
-      _rotation.abs() > 0.05 ||
-      _offsetX.abs() > 5 ||
-      _offsetY.abs() > 5;
+      _scale > 1.02 || _rotation.abs() > 0.05 || _offsetX.abs() > 5 || _offsetY.abs() > 5;
 
   void _reset() {
     setState(() {
@@ -1143,6 +1047,28 @@ class _ImageViewerState extends State<_ImageViewer> {
       _offsetY = 0.0;
     });
     widget.onZoomChanged?.call(false);
+  }
+
+  /// 双击位置（onDoubleTapDown 记录，供放大锚点使用）。
+  Offset? _doubleTapPos;
+
+  /// 双击：未缩放时以双击位置为锚点放大 1.3 倍；已缩放时复原。
+  void _onDoubleTap() {
+    if (_isTransformed) {
+      _reset();
+      return;
+    }
+    const targetScale = 1.3;
+    final pos = _doubleTapPos ?? Offset(_layoutW / 2, _layoutH / 2);
+    final cx = _layoutW / 2;
+    final cy = _layoutH / 2;
+    final k = targetScale / _scale;
+    setState(() {
+      _offsetX = pos.dx - cx - (pos.dx - _offsetX - cx) * k;
+      _offsetY = pos.dy - cy - (pos.dy - _offsetY - cy) * k;
+      _scale = targetScale;
+    });
+    widget.onZoomChanged?.call(true);
   }
 
   void _onScaleStart(ScaleStartDetails d) {
@@ -1256,7 +1182,8 @@ class _ImageViewerState extends State<_ImageViewer> {
       fit: StackFit.expand,
       children: [
         GestureDetector(
-          onDoubleTap: _reset,
+          onDoubleTapDown: (details) => _doubleTapPos = details.localPosition,
+          onDoubleTap: _onDoubleTap,
           onLongPress: widget.onSave,
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
@@ -1284,8 +1211,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       String label;
                       if (total != null) {
                         final pctInt = (pct! * 100).toStringAsFixed(0);
-                        label =
-                            '${_fmtBytes(loaded)} / ${_fmtBytes(total)} ($pctInt%)';
+                        label = '${_fmtBytes(loaded)} / ${_fmtBytes(total)} ($pctInt%)';
                       } else {
                         label = _fmtBytes(loaded);
                       }
@@ -1330,10 +1256,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                         alignment: Alignment.center,
                         children: [
                           child,
-                          const CircularProgressIndicator(
-                            color: Colors.white70,
-                            strokeWidth: 2.5,
-                          ),
+                          const CircularProgressIndicator(color: Colors.white70, strokeWidth: 2.5),
                         ],
                       );
                     },
@@ -1373,10 +1296,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: FilledButton.icon(
                     onPressed: _reset,
-                    icon: Icon(
-                      Icons.zoom_out_map_rounded,
-                      size: AppTheme.metrics.iconSize18,
-                    ),
+                    icon: Icon(Icons.zoom_out_map_rounded, size: AppTheme.metrics.iconSize18),
                     label: const Text('重置缩放'),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.black.withAlpha(42),
@@ -1451,13 +1371,9 @@ class _VideoPreviewState extends State<_VideoPreview> {
     debugPrint('[MVP] _VideoPreview._initPlayer source=$source');
     _playerReady = false;
     _readySub?.cancel();
-    _player = Player(
-      configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024),
-    );
+    _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));
     _videoController = VideoController(_player!);
-    final uri = source.startsWith('http')
-        ? source
-        : Uri.file(source).toString();
+    final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.single);
     _readySub = _player!.stream.videoParams.listen((params) {
@@ -1494,8 +1410,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
     if (widget.isActive) {
       final oldEmpty = oldWidget.source == null || oldWidget.source!.isEmpty;
       final newEmpty = widget.source == null || widget.source!.isEmpty;
-      final sourceChanged =
-          !oldEmpty && !newEmpty && oldWidget.source != widget.source;
+      final sourceChanged = !oldEmpty && !newEmpty && oldWidget.source != widget.source;
       debugPrint(
         '[MVP] _VideoPreview.didUpdateWidget oldSource=${oldWidget.source}, newSource=${widget.source}, oldEmpty=$oldEmpty, newEmpty=$newEmpty, sourceChanged=$sourceChanged',
       );
@@ -1525,9 +1440,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
       final cover = widget.coverSource;
       if (cover != null && cover.isNotEmpty) {
         if (cover.startsWith('http')) {
-          final resp = await http
-              .get(Uri.parse(cover))
-              .timeout(const Duration(seconds: 10));
+          final resp = await http.get(Uri.parse(cover)).timeout(const Duration(seconds: 10));
           if (resp.statusCode == 200) artBytes = resp.bodyBytes;
         } else {
           final f = File(cover);
@@ -1548,22 +1461,17 @@ class _VideoPreviewState extends State<_VideoPreview> {
   Future<void> _enterPip(BuildContext context) async {
     if (!Platform.isAndroid && !Platform.isIOS) return;
     try {
-      final supported =
-          await _mediaChannel.invokeMethod<bool>('isPipSupported') ?? false;
+      final supported = await _mediaChannel.invokeMethod<bool>('isPipSupported') ?? false;
       if (!supported) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('当前设备不支持画中画')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('当前设备不支持画中画')));
         }
         return;
       }
       await _mediaChannel.invokeMethod<void>('enterPip');
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('无法进入画中画模式')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('无法进入画中画模式')));
       }
     }
   }
@@ -1598,10 +1506,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             SizedBox(height: AppTheme.metrics.kSpace12),
             Text(
               '无法加载视频',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: AppTheme.metrics.fontSize13,
-              ),
+              style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize13),
             ),
           ],
         ),
@@ -1619,11 +1524,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
       _VideoSpeedButton(player: player),
       _VideoFitButton(
         currentFit: _videoFit,
-        onToggle: () => setState(
-          () => _videoFit = _videoFit == BoxFit.contain
-              ? BoxFit.cover
-              : BoxFit.contain,
-        ),
+        onToggle: () =>
+            setState(() => _videoFit = _videoFit == BoxFit.contain ? BoxFit.cover : BoxFit.contain),
       ),
       _VideoVolumeButton(player: player),
       // 窗口播放（画中画）
@@ -1674,11 +1576,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF12101E),
-                    Color(0xFF1A1632),
-                    Color(0xFF0D0B15),
-                  ],
+                  colors: [Color(0xFF12101E), Color(0xFF1A1632), Color(0xFF0D0B15)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -1686,24 +1584,18 @@ class _VideoPreviewState extends State<_VideoPreview> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Opacity(
-                      opacity: 0.04,
-                      child: CustomPaint(painter: _AudioWavePainter()),
-                    ),
+                    child: Opacity(opacity: 0.04, child: CustomPaint(painter: _AudioWavePainter())),
                   ),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (widget.coverSource != null &&
-                          widget.coverSource!.isNotEmpty)
+                      if (widget.coverSource != null && widget.coverSource!.isNotEmpty)
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: AppTheme.metrics.radius16,
                             boxShadow: [
                               BoxShadow(
-                                color: LightColors.primary.withValues(
-                                  alpha: 0.2,
-                                ),
+                                color: LightColors.primary.withValues(alpha: 0.2),
                                 blurRadius: 40,
                                 offset: const Offset(0, 20),
                               ),
@@ -1733,9 +1625,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                           decoration: BoxDecoration(
                             borderRadius: AppTheme.metrics.radius16,
                             color: Colors.white.withValues(alpha: 0.05),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
-                            ),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                           ),
                           alignment: Alignment.center,
                           child: Icon(
@@ -1747,9 +1637,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                       SizedBox(height: AppTheme.metrics.kSpace24),
                       if (widget.title != null && widget.title!.isNotEmpty)
                         Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppTheme.metrics.kSpace40,
-                          ),
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace40),
                           child: Text(
                             widget.title!,
                             style: TextStyle(
@@ -1783,14 +1671,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
               child: AnimatedOpacity(
                 opacity: _playerReady ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 300),
-                child:
-                    widget.coverSource != null && widget.coverSource!.isNotEmpty
+                child: widget.coverSource != null && widget.coverSource!.isNotEmpty
                     ? (widget.coverSource!.startsWith('http')
                           ? Image.network(widget.coverSource!, fit: _videoFit)
-                          : Image.file(
-                              File(widget.coverSource!),
-                              fit: _videoFit,
-                            ))
+                          : Image.file(File(widget.coverSource!), fit: _videoFit))
                     : Container(
                         color: Colors.black,
                         child: const Center(child: _GlassPulseLoader()),
@@ -1872,9 +1756,7 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
     _lastMoveTime = null;
     _lastVelocity = 0.0;
     _dragStarted = false;
-    debugPrint(
-      '[MVP] _VideoSwipeListener.onPointerDown pointer=${event.pointer}',
-    );
+    debugPrint('[MVP] _VideoSwipeListener.onPointerDown pointer=${event.pointer}');
   }
 
   void _onPointerMove(PointerMoveEvent event) {
@@ -1895,9 +1777,7 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
       _accumulatedDelta += dy;
       if (_accumulatedDelta.abs() > _kThreshold) {
         _dragStarted = true;
-        debugPrint(
-          '[MVP] _VideoSwipeListener drag started accumulatedDelta=$_accumulatedDelta',
-        );
+        debugPrint('[MVP] _VideoSwipeListener drag started accumulatedDelta=$_accumulatedDelta');
         widget.onDragStart();
         widget.onDragUpdate(_accumulatedDelta);
         _accumulatedDelta = 0.0;
@@ -1920,9 +1800,7 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
 
   void _onPointerCancel(PointerCancelEvent event) {
     if (event.pointer != _activePointerId) return;
-    debugPrint(
-      '[MVP] _VideoSwipeListener.onPointerCancel dragStarted=$_dragStarted',
-    );
+    debugPrint('[MVP] _VideoSwipeListener.onPointerCancel dragStarted=$_dragStarted');
     if (_dragStarted) {
       widget.onDragCancel();
     }
@@ -1949,9 +1827,7 @@ class _VideoSpeedButton extends StatelessWidget {
       initialData: player.state.rate,
       builder: (context, snapshot) {
         final rate = snapshot.data ?? 1.0;
-        final label = (rate == rate.truncateToDouble())
-            ? '${rate.toInt()}x'
-            : '${rate}x';
+        final label = (rate == rate.truncateToDouble()) ? '${rate.toInt()}x' : '${rate}x';
         return PopupMenuButton<double>(
           tooltip: '播放速度',
           color: Colors.black87,
@@ -1962,9 +1838,7 @@ class _VideoSpeedButton extends StatelessWidget {
                   child: Text(
                     (r == r.truncateToDouble()) ? '${r.toInt()}x' : '${r}x',
                     style: TextStyle(
-                      color: r == rate
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: r == rate ? Theme.of(context).colorScheme.primary : null,
                     ),
                   ),
                 ),
@@ -1978,10 +1852,7 @@ class _VideoSpeedButton extends StatelessWidget {
             ),
             child: Text(
               label,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: AppTheme.metrics.fontSize13,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize13),
             ),
           ),
         );
@@ -2030,11 +1901,7 @@ class _VideoVolumeButton extends StatelessWidget {
             : (vol < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
         return IconButton(
           tooltip: vol == 0 ? '取消静音' : '静音',
-          icon: Icon(
-            icon,
-            color: Colors.white,
-            size: AppTheme.metrics.iconSize22,
-          ),
+          icon: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
           onPressed: () => player.setVolume(vol == 0 ? 100.0 : 0.0),
           onLongPress: () => _showVolumeSlider(context),
         );
@@ -2078,11 +1945,7 @@ class _VideoVolumeButton extends StatelessWidget {
 }
 
 class _GlassControlIcon extends StatelessWidget {
-  const _GlassControlIcon({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-  });
+  const _GlassControlIcon({required this.icon, required this.onTap, this.tooltip});
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
@@ -2109,16 +1972,13 @@ class _GlassPulseLoader extends StatefulWidget {
   State<_GlassPulseLoader> createState() => _GlassPulseLoaderState();
 }
 
-class _GlassPulseLoaderState extends State<_GlassPulseLoader>
-    with SingleTickerProviderStateMixin {
+class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
   }
 
   @override

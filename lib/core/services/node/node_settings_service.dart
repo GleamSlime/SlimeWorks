@@ -436,6 +436,8 @@ class NodeSettingsService extends GetxService {
   Future<Map<String, dynamic>?> importNodeMediaFolder({
     required String nodeId,
     required String folderPath,
+    bool generateThumbnails = false,
+    bool preserveStructure = false,
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
@@ -445,7 +447,11 @@ class NodeSettingsService extends GetxService {
     final response = await _callNode(
       node: node,
       action: 'import_media_folder',
-      params: <String, dynamic>{'folder_path': folderPath},
+      params: <String, dynamic>{
+        'folder_path': folderPath,
+        'generate_thumbnails': generateThumbnails,
+        'preserve_structure': preserveStructure,
+      },
     );
 
     final data = response['data'];
