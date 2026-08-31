@@ -478,6 +478,10 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     }
 
     // ⑥ fallback: pure-Rust `image` crate (supports JPEG/PNG/WebP/BMP/GIF)
+    // 提前释放 ffmpeg 信号量，让纯 Rust 解码路径完全脱离 ffmpeg 并发上限。
+    // 由 Flutter 端 VideoThumbQueue.concurrency 单层控制总并发，
+    // 用户调高并发后 image crate 路径可充分利用 CPU。
+    drop(_permit);
     if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
         task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
@@ -886,6 +890,32 @@ pub fn get_all_pending_thumbnail_tasks() -> Result<Vec<ThumbnailTaskRecord>, Str
         }
     }
     Ok(result)
+}
+
+/// 按 file_path 删除所有关联的缩略图任务记录（含不同 width 的所有变体）。
+/// 在删除集合/文件时调用，避免"幽灵任务"在重启后被重新入队反复重试已不存在的文件。
+/// thumbnail_task_key 格式为 `file_path|width`，相同 file_path 的 key 共享前缀。
+fn delete_thumbnail_tasks_for_file_path(file_path: &str) {
+    let _ = db_module::db_register_table(thumbnail_task_table_name());
+    let prefix = format!("{}|", file_path);
+    let Ok(records) = db_module::db_list_all(thumbnail_task_table_name()) else {
+        return;
+    };
+    let mut deleted = 0usize;
+    for record in records {
+        if record.key.starts_with(&prefix) {
+            if db_module::db_delete(thumbnail_task_table_name(), record.key).is_ok() {
+                deleted += 1;
+            }
+        }
+    }
+    if deleted > 0 {
+        sw_debug!(
+            "[thumb-task] 清理 file_path={} 关联任务 {} 条",
+            file_path,
+            deleted
+        );
+    }
 }
 
 /// RAII 守卫：drop 时自动调用 complete_thumbnail_task 标记任务完成状态。
@@ -1796,6 +1826,18 @@ pub fn rename_media_collection(collection_id: String, title: String) -> Result<b
 }
 
 pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
+    // 先收集待删除 item 的 file_path，用于同步清理关联的缩略图任务记录
+    let file_paths_to_clean: Vec<String> = {
+        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+        ensure_items_loaded(&mut guard);
+        let items = guard.as_ref().unwrap();
+        items
+            .iter()
+            .filter(|item| item.collection_id == collection_id)
+            .map(|item| item.file_path.clone())
+            .collect()
+    };
+
     {
         let mut collections = get_collections()
             .lock()
@@ -1822,6 +1864,11 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
         }
     }
 
+    // 同步清理关联的缩略图任务记录，避免重启后被重新入队反复重试已不存在的文件
+    for file_path in &file_paths_to_clean {
+        delete_thumbnail_tasks_for_file_path(file_path);
+    }
+
     delete_collection_from_db(&collection_id);
     Ok(true)
 }
@@ -1836,6 +1883,8 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
     } else {
         false
     };
+    // 同步清理关联的缩略图任务记录，避免重启后被重新入队反复重试已不存在的文件
+    delete_thumbnail_tasks_for_file_path(&item_file_path);
     // 重新导入父目录以同步数据库
     if let Some(parent) = path.parent() {
         let _ = import_media_folder(parent.to_string_lossy().into_owned());
@@ -1851,7 +1900,11 @@ pub fn delete_collection_local_files(collection_id: String) -> Result<usize, Str
         let path = std::path::Path::new(&item.file_path);
         if path.exists() {
             match std::fs::remove_file(path) {
-                Ok(_) => deleted_count += 1,
+                Ok(_) => {
+                    // 物理文件删除成功后同步清理缩略图任务记录
+                    delete_thumbnail_tasks_for_file_path(&item.file_path);
+                    deleted_count += 1;
+                }
                 Err(e) => sw_warn!(
                     "[delete_collection_local_files] 删除失败: {} err={}",
                     item.file_path,
@@ -1893,6 +1946,7 @@ pub fn clear_all_local_media(
         collection_order_table_name(),
         favorites_table_name(),
         smart_folder_table_name(),
+        thumbnail_task_table_name(), // 同步清空缩略图任务，避免幽灵任务在重启后被重新入队
     ];
     let mut cleared_tables = 0u32;
     for table_name in &tables_to_clear {

@@ -399,9 +399,16 @@ class _CollectionPictureScreenState
               return DropTarget(
                 onDragEntered: (_) => setState(() => _isDraggingFiles = true),
                 onDragExited: (_) => setState(() => _isDraggingFiles = false),
-                onDragDone: (detail) {
+                onDragDone: (detail) async {
                   setState(() => _isDraggingFiles = false);
-                  viewModel.importDroppedPaths(detail.files.map((f) => f.path).toList());
+                  // 与点击"导入文件夹"完全一致：先弹窗确认选项再导入
+                  final options = await _showImportOptionsDialog();
+                  if (options == null) return;
+                  await viewModel.importDroppedPaths(
+                    detail.files.map((f) => f.path).toList(),
+                    generateThumbnails: options.$1,
+                    preserveStructure: options.$2,
+                  );
                 },
                 child: Stack(
                   children: [

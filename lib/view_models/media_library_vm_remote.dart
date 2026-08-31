@@ -33,8 +33,21 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
           // 单个节点失败不影响其余节点进度汇总
         }
       }
-      remoteThumbProgress.value =
-          (total > 0 && completed < total) ? (completed, total) : null;
+      if (total > 0 && completed < total) {
+        remoteThumbProgress.value = (completed, total);
+      } else if (total > 0 && completed >= total) {
+        // 100% 完成时短暂显示再清空，给用户视觉反馈
+        remoteThumbProgress.value = (completed, total);
+        _thumbCompleteTimer?.cancel();
+        _thumbCompleteTimer = Timer(const Duration(seconds: 2), () {
+          final cur = remoteThumbProgress.value;
+          if (cur != null && cur.$1 >= cur.$2) {
+            remoteThumbProgress.value = null;
+          }
+        });
+      } else {
+        remoteThumbProgress.value = null;
+      }
     } finally {
       _remoteThumbPolling = false;
     }

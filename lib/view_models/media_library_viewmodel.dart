@@ -278,6 +278,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 缩略图生成后触发缓存清理的防抖定时器（1 分钟后执行）。
   Timer? _trimCacheTimer;
 
+  /// 缩略图进度"100% 完成"短暂显示防抖定时器。
+  /// 避免从 (n-1)/n 直接消失，给用户视觉反馈再清空。
+  Timer? _thumbCompleteTimer;
+
   /// 上次扫描时各集合的 item 数量快照，用于判断是否有新增。
   final _collectionItemCountSnapshot = <String, int>{};
 
@@ -322,6 +326,17 @@ class MediaLibraryViewModel extends BaseViewModel {
       if (t > 0 && c < t) {
         thumbProgress.value = (c, t);
         _logger.info('[ThumbProgress] $c/$t');
+      } else if (t > 0 && c >= t) {
+        // 100% 完成时短暂显示再清空，避免从 (n-1)/n 直接消失无反馈
+        thumbProgress.value = (c, t);
+        _thumbCompleteTimer?.cancel();
+        _thumbCompleteTimer = Timer(const Duration(seconds: 2), () {
+          // 2 秒内若有新任务进入，thumbProgress 已被新值覆盖，此处只在仍为完成态时清空
+          final cur = thumbProgress.value;
+          if (cur != null && cur.$1 >= cur.$2) {
+            thumbProgress.value = null;
+          }
+        });
       } else {
         thumbProgress.value = null;
       }
@@ -401,6 +416,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _remoteThumbPollTimer = null;
     _trimCacheTimer?.cancel();
     _trimCacheTimer = null;
+    _thumbCompleteTimer?.cancel();
+    _thumbCompleteTimer = null;
     super.onClose();
   }
 

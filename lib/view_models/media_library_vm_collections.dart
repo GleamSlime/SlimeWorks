@@ -479,7 +479,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// 处理桌面端拖入的文件或文件夹路径列表。
   /// - 目录 → 调用 scanMediaFolders，递归发现子目录，每个子目录创建一个集合
   /// - 文件 → 去重后按父目录分组，对每个父目录调用 importMediaFolder
-  Future<void> importDroppedPaths(List<String> paths) async {
+  /// [generateThumbnails]：全部扫描入库后批量入队缩略图任务（与点击导入一致）
+  /// [preserveStructure]：按原始目录层级归档（与点击导入一致）；false 时为同名包裹文件夹
+  Future<void> importDroppedPaths(
+    List<String> paths, {
+    bool generateThumbnails = false,
+    bool preserveStructure = false,
+  }) async {
     if (paths.isEmpty) return;
     if (isScanning.value) return;
 
@@ -511,9 +517,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     int fail = 0;
     bool foldersChanged = false;
     final targetFolderId = effectiveFolderId;
+    // 收集所有扫描入库后的有效集合，用于最后统一批量入队缩略图任务
+    final allValidCollections = <media_api.MediaCollection>[];
 
     // 目录：使用 scanMediaFolders，每个子目录创建独立集合；
-    // 并在当前目标位置下创建（或复用）与拖入目录同名的包裹文件夹，集合统一移入该包裹文件夹
+    // - preserveStructure=false：在当前目标位置下创建（或复用）与拖入目录同名的包裹文件夹，集合统一移入
+    // - preserveStructure=true：按拖入目录相对层级归档（与点击导入一致）
     for (final dir in directoryPaths) {
       final dirName = dir.split(Platform.pathSeparator).last;
       scanStatusText.value = '扫描: $dirName';
@@ -525,11 +534,21 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           media_api.deleteMediaCollection(collectionId: empty.id);
         }
 
-        // 有有效集合时，查找/创建同名包裹文件夹（同名已存在则复用，不重复创建）
-        String? wrapperFolderId;
-        if (validCollections.isNotEmpty &&
+        if (preserveStructure) {
+          // 按原始目录结构归档，不在拖入位置创建包裹文件夹
+          _archiveImportedCollectionsByStructure(
+            root: dir,
+            collections: validCollections,
+            baseFolderId: (targetFolderId != null && !isRemoteFolder(targetFolderId))
+                ? targetFolderId
+                : null,
+          );
+          foldersChanged = true;
+        } else if (validCollections.isNotEmpty &&
             dirName.isNotEmpty &&
             (targetFolderId == null || !isRemoteFolder(targetFolderId))) {
+          // 查找/创建同名包裹文件夹（同名已存在则复用，不重复创建）
+          String? wrapperFolderId;
           final existing = folders.firstWhereOrNull(
             (f) => f.parentId == targetFolderId && f.name == dirName,
           );
@@ -542,16 +561,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             wrapperFolderId = created.id;
             foldersChanged = true;
           }
-        }
-
-        for (final collection in validCollections) {
-          if (wrapperFolderId != null) {
+          for (final collection in validCollections) {
             media_api.moveMediaCollectionToFolder(
               collectionId: collection.id,
               folderId: wrapperFolderId,
             );
           }
         }
+        allValidCollections.addAll(validCollections);
         success += validCollections.length;
         if (collections.isEmpty) {
           _logger.info('[拖拽] 目录无媒体: $dir');
@@ -588,6 +605,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             folderId: targetFolderId,
           );
         }
+        allValidCollections.add(collection);
         success++;
       } catch (e) {
         final errorMsg = e.toString();
@@ -599,6 +617,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           _logger.error('[拖拽] 导入失败: $dir => $e');
         }
       }
+    }
+
+    // 全部目录扫描入库后统一批量入队缩略图任务，避免边扫描边生成导致中断时只持久化一部分
+    if (generateThumbnails && allValidCollections.isNotEmpty) {
+      _enqueueBulkItemThumbnails(allValidCollections);
     }
 
     // 拖入目录时可能新建了包裹文件夹，先刷新文件夹列表再刷新集合
