@@ -509,6 +509,7 @@ fn try_ffmpeg_audio_cover(
     let ok = run_tracked_command(
         std::process::Command::new(ffmpeg_cmd())
             .args([
+                "-nostdin",
                 "-i",
                 src,
                 "-map",
@@ -522,6 +523,7 @@ fn try_ffmpeg_audio_cover(
                 "-y",
                 &dst.to_string_lossy(),
             ])
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null()),
     )
@@ -563,6 +565,7 @@ fn try_ffmpeg_video_frame(
         let ok = run_tracked_command(
             std::process::Command::new(ffmpeg_cmd())
                 .args([
+                    "-nostdin",
                     "-ss",
                     seek_secs,
                     "-i",
@@ -576,6 +579,7 @@ fn try_ffmpeg_video_frame(
                     "-y",
                     &dst.to_string_lossy(),
                 ])
+                .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null()),
         )
@@ -614,6 +618,7 @@ fn try_ffmpeg_resize(
     let ok = run_tracked_command(
         std::process::Command::new(ffmpeg_cmd())
             .args([
+                "-nostdin",
                 "-i",
                 src,
                 "-vf",
@@ -625,6 +630,7 @@ fn try_ffmpeg_resize(
                 "-y",
                 &dst.to_string_lossy(),
             ])
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null()),
     )
@@ -1059,8 +1065,9 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
         let ok = run_tracked_command(
             std::process::Command::new(ffmpeg_cmd())
                 .args([
-                    "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str,
+                    "-nostdin", "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str,
                 ])
+                .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null()),
         )
@@ -1087,6 +1094,7 @@ fn video_duration_secs(video_path: &str) -> Option<f64> {
                 "default=noprint_wrappers=1:nokey=1",
                 video_path,
             ])
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null()),
     )
@@ -1150,6 +1158,7 @@ pub fn extract_video_scrub_frames(
         let ok = run_tracked_command(
             std::process::Command::new(ffmpeg_cmd())
                 .args([
+                    "-nostdin",
                     "-i",
                     &video_path,
                     "-ss",
@@ -1163,6 +1172,7 @@ pub fn extract_video_scrub_frames(
                     "-y",
                     &out_str,
                 ])
+                .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null()),
         )
