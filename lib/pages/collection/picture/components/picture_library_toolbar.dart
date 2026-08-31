@@ -392,7 +392,9 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
                 ),
                 border: OutlineInputBorder(
                   borderRadius: AppTheme.metrics.radius8,
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                 ),
               ),
             ),

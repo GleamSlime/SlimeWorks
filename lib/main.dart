@@ -106,10 +106,14 @@ Future<void> main() async {
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   initializeLogger();
 
-  // 异步下载/初始化 ffmpeg（若内置模块不存在），完成后自动注册路径到 media_collection
+  // 异步解析 ffmpeg/ffprobe 路径：先探测系统 PATH（命中则跳过下载），
+  // 未命中则触发内置模块下载。完成后注册到 media_collection。
   if (Platform.isWindows || Platform.isMacOS) {
-    RustFFmpeg.initialize().then((_) {
-      _registerFfmpegPaths(); // 下载完成后重新注册路径
+    Future.wait([
+      RustFFmpeg.resolvePath(),
+      RustFFmpeg.resolveProbe(),
+    ]).then((_) {
+      _registerFfmpegPaths(); // 解析完成后重新注册路径
     });
   }
 

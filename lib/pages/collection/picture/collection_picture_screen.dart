@@ -1644,23 +1644,64 @@ class _CollectionPictureScreenState
   }
 
   Future<void> _confirmClearLibrary() async {
+    bool clearAppCache = true;
+    bool clearResourceCache = true;
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('清空媒体库'),
-          content: const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。确定继续吗？'),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await viewModel.clearLocalLibrary();
-              },
-              child: const Text('清空'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('清空媒体库'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。'),
+                  const SizedBox(height: 12),
+                  const Text('可选清除磁盘上的缩略图缓存：',
+                      style: TextStyle(fontSize: 13)),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: clearAppCache,
+                    onChanged: (v) =>
+                        setState(() => clearAppCache = v ?? true),
+                    title: const Text('清除应用缓存目录缩略图',
+                        style: TextStyle(fontSize: 13)),
+                    subtitle: const Text('library/media/thumbnails/',
+                        style: TextStyle(fontSize: 11)),
+                  ),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: clearResourceCache,
+                    onChanged: (v) =>
+                        setState(() => clearResourceCache = v ?? true),
+                    title: const Text('清除各资源目录 .SlimeWorks/tmp 缩略图',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消')),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error),
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await viewModel.clearLocalLibrary(
+                      clearAppThumbnailCache: clearAppCache,
+                      clearResourceThumbnailCache: clearResourceCache,
+                    );
+                  },
+                  child: const Text('清空'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

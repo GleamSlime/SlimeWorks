@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `from_inner`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
 /// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
@@ -108,6 +108,23 @@ bool deleteMediaCollection({required String collectionId}) => RustLib
     .instance
     .api
     .crateApiMediaCollectionDeleteMediaCollection(collectionId: collectionId);
+
+/// 清空本地媒体库：单事务清空所有业务表（保留 media_meta 迁移标记），
+/// 同时清空内存缓存。不删除原始媒体文件。可选清理磁盘缩略图缓存。
+/// 返回 (清空表数, 已清理缓存文件数)。
+(int, int) clearAllLocalMedia({
+  required bool clearAppThumbnailCache,
+  required bool clearResourceThumbnailCache,
+}) => RustLib.instance.api.crateApiMediaCollectionClearAllLocalMedia(
+  clearAppThumbnailCache: clearAppThumbnailCache,
+  clearResourceThumbnailCache: clearResourceThumbnailCache,
+);
+
+/// 获取所有未完成的缩略图任务（pending/running/failed 全部）。
+/// 应用启动时调用此函数，将未完成任务重新入队到 Flutter 端 VideoThumbQueue。
+/// failed 状态也会重新入队，让用户能重新尝试生成。
+List<ThumbnailTaskInfo> getAllPendingThumbnailTasks() =>
+    RustLib.instance.api.crateApiMediaCollectionGetAllPendingThumbnailTasks();
 
 /// Generate (or serve from disk cache) a JPEG thumbnail for `file_path` at
 /// `width` pixels wide.  Returns the path to the cached thumbnail, or `None`
@@ -479,3 +496,39 @@ class SmartFolderInfo {
 
 /// 正则匹配目标
 enum SmartFolderRegexTarget { collectionName, fileName }
+
+/// 缩略图任务持久化记录（用于重启后恢复未完成任务）。
+class ThumbnailTaskInfo {
+  final String filePath;
+  final int width;
+  final String status;
+  final int retries;
+  final PlatformInt64 updatedAt;
+
+  const ThumbnailTaskInfo({
+    required this.filePath,
+    required this.width,
+    required this.status,
+    required this.retries,
+    required this.updatedAt,
+  });
+
+  @override
+  int get hashCode =>
+      filePath.hashCode ^
+      width.hashCode ^
+      status.hashCode ^
+      retries.hashCode ^
+      updatedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ThumbnailTaskInfo &&
+          runtimeType == other.runtimeType &&
+          filePath == other.filePath &&
+          width == other.width &&
+          status == other.status &&
+          retries == other.retries &&
+          updatedAt == other.updatedAt;
+}

@@ -730,22 +730,21 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
-  Future<void> clearLocalLibrary() async {
+  Future<void> clearLocalLibrary({
+    bool clearAppThumbnailCache = true,
+    bool clearResourceThumbnailCache = true,
+  }) async {
     isScanning.value = true;
     scanStatusText.value = '清空本地媒体库中…';
     try {
-      final collectionSnapshot = collections.map((c) => c.id).toList();
-      for (int i = 0; i < collectionSnapshot.length; i++) {
-        media_api.deleteMediaCollection(collectionId: collectionSnapshot[i]);
-        if (i % 20 == 19) await Future.delayed(Duration.zero);
-      }
-      final folderSnapshot = folders.map((f) => f.id).toList();
-      for (int i = 0; i < folderSnapshot.length; i++) {
-        try {
-          media_api.deleteMediaFolder(folderId: folderSnapshot[i]);
-        } catch (_) {}
-        if (i % 20 == 19) await Future.delayed(Duration.zero);
-      }
+      // 单次 FFI 调用：Rust 端单事务清空所有表 + 内存 + 可选清理磁盘缓存。
+      // 相比逐条删除（N×M 次 redb 写事务），降至 6 次事务，CPU/磁盘 IO 利用率显著提升。
+      final result = media_api.clearAllLocalMedia(
+        clearAppThumbnailCache: clearAppThumbnailCache,
+        clearResourceThumbnailCache: clearResourceThumbnailCache,
+      );
+      final clearedTables = result.$1;
+      final clearedFiles = result.$2;
       currentCollectionId.value = null;
       currentFolderId.value = null;
       currentItems.clear();
@@ -754,7 +753,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       savedScrollOffset.value = 0.0;
       await loadCollections();
       await loadFolders();
-      showSnack('成功', '已清空本地媒体库');
+      showSnack(
+        '成功',
+        '已清空本地媒体库（$clearedTables 张表${clearedFiles > 0 ? " + $clearedFiles 个缓存文件" : ""}）',
+      );
     } catch (error) {
       showSnack('错误', '清空媒体库失败: $error');
     } finally {

@@ -432,6 +432,14 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     acquire_thumb_permit();
     let _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
 
+    // 标记任务为 running 并持久化（重启可恢复，failed/done 状态由 guard 在 drop 时写回）
+    mark_thumbnail_task_running(&file_path, width);
+    let mut task_guard = ThumbTaskGuard {
+        file_path: file_path.clone(),
+        width,
+        success: false,
+    }; // drop 时自动调用 complete_thumbnail_task 持久化最终状态
+
     let t0 = std::time::Instant::now();
     sw_info!(
         "[thumb] generate | src={} | orig={}B | w={}",
@@ -443,6 +451,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     // ⑤ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
     if is_video {
         if try_ffmpeg_video_frame(&file_path, &cache_path, width, t0, orig_size) {
+            task_guard.success = true;
             return Some(cache_path.to_string_lossy().into_owned());
         }
         sw_warn!("[thumb] video frame extraction failed | src={}", file_path);
@@ -452,6 +461,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     // ④b for audio: extract embedded cover art via ffmpeg
     if is_audio {
         if try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
+            task_guard.success = true;
             return Some(cache_path.to_string_lossy().into_owned());
         }
         sw_debug!(
@@ -463,11 +473,13 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
 
     // ⑤ try ffmpeg for images first (fastest, supports HEIC/AVIF via system codecs)
     if try_ffmpeg_resize(&file_path, &cache_path, width, t0, orig_size) {
+        task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
     // ⑥ fallback: pure-Rust `image` crate (supports JPEG/PNG/WebP/BMP/GIF)
     if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
+        task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
@@ -754,8 +766,140 @@ fn media_table_names() -> Vec<String> {
         collection_order_table_name(),
         favorites_table_name(),
         smart_folder_table_name(),
+        thumbnail_task_table_name(),
         meta_table_name(),
     ]
+}
+
+// ── 缩略图任务持久化（重启后可恢复）──────────────────────────────────────────
+
+/// 缩略图任务状态。
+/// - Pending: 已入队等待执行（持久化时直接写 running 字符串，未直接使用此变体）
+/// - Running: 正在执行中（进程崩溃后重启会作为 pending 重投）
+/// - Done: 已成功（理论上不入库，磁盘缓存即真相）
+/// - Failed: 生成失败（重启时也会重新入队重试）
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ThumbnailTaskStatus {
+    Pending,
+    Running,
+    Done,
+    Failed,
+}
+
+impl ThumbnailTaskStatus {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Done => "done",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+/// 缩略图任务持久化记录（存储于 media_thumbnail_tasks 表）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ThumbnailTaskRecord {
+    pub file_path: String,
+    pub width: u32,
+    pub status: String,
+    pub retries: u32,
+    pub updated_at: i64,
+}
+
+fn thumbnail_task_table_name() -> String {
+    "media_thumbnail_tasks".to_string()
+}
+
+fn thumb_task_key(file_path: &str, width: u32) -> String {
+    format!("{}|{}", file_path, width)
+}
+
+/// 标记缩略图任务为 running（若不存在则插入），retries 自增。
+/// 在真正开始生成（acquire permit 后、调用 ffmpeg 之前）调用。
+fn mark_thumbnail_task_running(file_path: &str, width: u32) {
+    let key = thumb_task_key(file_path, width);
+    let now = Utc::now().timestamp();
+    let existing = db_module::db_get(thumbnail_task_table_name(), key.clone())
+        .ok()
+        .flatten();
+    let prev_retries = existing
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<ThumbnailTaskRecord>(json).ok())
+        .map(|r| r.retries)
+        .unwrap_or(0);
+    let record = ThumbnailTaskRecord {
+        file_path: file_path.to_string(),
+        width,
+        status: ThumbnailTaskStatus::Running.as_str().to_string(),
+        retries: prev_retries + 1,
+        updated_at: now,
+    };
+    if let Ok(json) = serde_json::to_string(&record) {
+        let _ = db_module::db_set(thumbnail_task_table_name(), key, json);
+    }
+}
+
+/// 标记缩略图任务完成（成功或失败）。
+/// - 成功：删除任务记录（磁盘缓存即真相，无需保留任务状态）
+/// - 失败：更新为 failed 状态保留记录以便重启时重投重试
+fn complete_thumbnail_task(file_path: &str, width: u32, success: bool) {
+    let key = thumb_task_key(file_path, width);
+    if success {
+        let _ = db_module::db_delete(thumbnail_task_table_name(), key);
+        return;
+    }
+    let now = Utc::now().timestamp();
+    let prev_retries = db_module::db_get(thumbnail_task_table_name(), key.clone())
+        .ok()
+        .flatten()
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<ThumbnailTaskRecord>(json).ok())
+        .map(|r| r.retries)
+        .unwrap_or(0);
+    let record = ThumbnailTaskRecord {
+        file_path: file_path.to_string(),
+        width,
+        status: ThumbnailTaskStatus::Failed.as_str().to_string(),
+        retries: prev_retries,
+        updated_at: now,
+    };
+    if let Ok(json) = serde_json::to_string(&record) {
+        let _ = db_module::db_set(thumbnail_task_table_name(), key, json);
+    }
+}
+
+/// 获取所有未完成缩略图任务（pending/running/failed 全部）。
+/// 用于应用启动时恢复未完成任务队列，failed 也会重新入队让用户能重试。
+pub fn get_all_pending_thumbnail_tasks() -> Result<Vec<ThumbnailTaskRecord>, String> {
+    ensure_db_initialized();
+    let _ = db_module::db_register_table(thumbnail_task_table_name());
+    let records = db_module::db_list_all(thumbnail_task_table_name())
+        .map_err(|e| format!("读取缩略图任务表失败: {}", e))?;
+    let mut result = Vec::new();
+    for record in records {
+        if let Ok(task) = serde_json::from_str::<ThumbnailTaskRecord>(&record.value) {
+            if task.status != ThumbnailTaskStatus::Done.as_str() {
+                result.push(task);
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// RAII 守卫：drop 时自动调用 complete_thumbnail_task 标记任务完成状态。
+/// 配合 `success` 字段，调用方在 return 前设置 success=true 即可让 drop 自动持久化。
+struct ThumbTaskGuard {
+    file_path: String,
+    width: u32,
+    success: bool,
+}
+
+impl Drop for ThumbTaskGuard {
+    fn drop(&mut self) {
+        complete_thumbnail_task(&self.file_path, self.width, self.success);
+    }
 }
 
 /// Initialise the DB exactly once.  Returns the error string on failure.
@@ -1717,6 +1861,132 @@ pub fn delete_collection_local_files(collection_id: String) -> Result<usize, Str
         }
     }
     Ok(deleted_count)
+}
+
+/// 清空本地媒体库：单事务清空各业务表（保留 media_meta 迁移标记），
+/// 同时清空内存中 MEDIA_COLLECTIONS / MEDIA_ITEMS / MEDIA_FOLDERS / SMART_FOLDERS。
+/// 可选清理缩略图缓存：
+/// - clear_app_thumbnail_cache：清理应用数据目录内的 thumbnail_cache_dir()
+/// - clear_resource_thumbnail_cache：清理各 collection.folder_path 父目录下的 .SlimeWorks/tmp
+/// 不删除任何原始媒体文件。返回 (清空表数, 已清理缓存文件数)。
+pub fn clear_all_local_media(
+    clear_app_thumbnail_cache: bool,
+    clear_resource_thumbnail_cache: bool,
+) -> Result<(u32, u32), String> {
+    ensure_db_initialized();
+
+    // 先收集所有集合的 folder_path（清空后无法再获取），用于资源缓存清理
+    let folder_paths: Vec<String> = if clear_resource_thumbnail_cache {
+        let collections = get_collections()
+            .lock()
+            .map_err(|e| e.to_string())?;
+        collections.iter().map(|c| c.folder_path.clone()).collect()
+    } else {
+        Vec::new()
+    };
+
+    // 每表一次事务清空（远好于逐条删除）
+    let tables_to_clear = vec![
+        collection_table_name(),
+        item_table_name(),
+        folder_table_name(),
+        collection_order_table_name(),
+        favorites_table_name(),
+        smart_folder_table_name(),
+    ];
+    let mut cleared_tables = 0u32;
+    for table_name in &tables_to_clear {
+        let _ = db_module::db_register_table(table_name.clone());
+        match db_module::db_clear_table(table_name.clone()) {
+            Ok(_) => cleared_tables += 1,
+            Err(e) => sw_warn!("[clear_all] 清空表 {} 失败: {}", table_name, e),
+        }
+    }
+
+    // 清空内存缓存（保留 media_meta 表）
+    if let Some(mutex) = MEDIA_COLLECTIONS.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            guard.clear();
+        }
+    }
+    if let Some(mutex) = MEDIA_ITEMS.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            *guard = None; // 直接 drop 内部 Vec，下次访问时懒加载
+        }
+    }
+    if let Some(mutex) = MEDIA_FOLDERS.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            guard.clear();
+        }
+    }
+    if let Some(mutex) = SMART_FOLDERS.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            guard.clear();
+        }
+    }
+    sw_info!("[clear_all] 已清空 {} 张表 + 内存缓存", cleared_tables);
+
+    // 可选：清理应用数据目录内的缩略图缓存
+    let mut cleared_files = 0u32;
+    if clear_app_thumbnail_cache {
+        let cache_dir = thumbnail_cache_dir();
+        cleared_files += cleanup_dir_contents(&cache_dir);
+    }
+
+    // 可选：清理各资源目录 .SlimeWorks/tmp（向上查找首个命中目录）
+    if clear_resource_thumbnail_cache {
+        let mut visited: std::collections::HashSet<std::path::PathBuf> =
+            std::collections::HashSet::new();
+        for folder_path in &folder_paths {
+            let path = std::path::Path::new(folder_path);
+            let mut current = Some(path);
+            while let Some(dir) = current {
+                let sw_tmp = dir.join(".SlimeWorks").join("tmp");
+                if sw_tmp.exists() && sw_tmp.is_dir() {
+                    // 用 canonicalize 去重，避免同目录被多个 collection 重复清理
+                    if let Ok(canonical) = sw_tmp.canonicalize() {
+                        if visited.insert(canonical.clone()) {
+                            cleared_files += cleanup_dir_contents(&canonical);
+                        }
+                    }
+                    break; // 命中后停止向上查找
+                }
+                current = dir.parent();
+            }
+        }
+    }
+
+    Ok((cleared_tables, cleared_files))
+}
+
+/// 清空指定目录下所有文件与子目录（递归删除），保留目录本身。
+/// 返回已删除的条目数（文件或子目录均计 +1）。
+fn cleanup_dir_contents(dir: &std::path::Path) -> u32 {
+    if !dir.exists() {
+        return 0;
+    }
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) => {
+            sw_warn!("[cleanup] 读取目录失败: {:?} err={}", dir, e);
+            return 0;
+        }
+    };
+    let mut count = 0u32;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let result = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        if result.is_ok() {
+            count += 1;
+        } else if let Err(e) = result {
+            sw_warn!("[cleanup] 删除失败: {:?} err={}", path, e);
+        }
+    }
+    count
 }
 
 /// 将集合物理转移到目标目录，包括文件移动和数据库更新。

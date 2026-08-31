@@ -215,6 +215,50 @@ pub fn delete_media_collection(collection_id: String) -> anyhow::Result<bool> {
     media_collection::delete_media_collection(collection_id).map_err(|error| anyhow::anyhow!(error))
 }
 
+/// 清空本地媒体库：单事务清空所有业务表（保留 media_meta 迁移标记），
+/// 同时清空内存缓存。不删除原始媒体文件。可选清理磁盘缩略图缓存。
+/// 返回 (清空表数, 已清理缓存文件数)。
+#[frb(sync)]
+pub fn clear_all_local_media(
+    clear_app_thumbnail_cache: bool,
+    clear_resource_thumbnail_cache: bool,
+) -> anyhow::Result<(u32, u32)> {
+    media_collection::clear_all_local_media(
+        clear_app_thumbnail_cache,
+        clear_resource_thumbnail_cache,
+    )
+    .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 缩略图任务持久化记录（用于重启后恢复未完成任务）。
+#[derive(Debug, Clone)]
+pub struct ThumbnailTaskInfo {
+    pub file_path: String,
+    pub width: u32,
+    pub status: String,
+    pub retries: u32,
+    pub updated_at: i64,
+}
+
+/// 获取所有未完成的缩略图任务（pending/running/failed 全部）。
+/// 应用启动时调用此函数，将未完成任务重新入队到 Flutter 端 VideoThumbQueue。
+/// failed 状态也会重新入队，让用户能重新尝试生成。
+#[frb(sync)]
+pub fn get_all_pending_thumbnail_tasks() -> anyhow::Result<Vec<ThumbnailTaskInfo>> {
+    let tasks = media_collection::get_all_pending_thumbnail_tasks()
+        .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(tasks
+        .into_iter()
+        .map(|t| ThumbnailTaskInfo {
+            file_path: t.file_path,
+            width: t.width,
+            status: t.status,
+            retries: t.retries,
+            updated_at: t.updated_at,
+        })
+        .collect())
+}
+
 /// Aggregated per-collection stats returned in a single batch FFI call.
 #[derive(Debug, Clone)]
 pub struct CollectionStats {

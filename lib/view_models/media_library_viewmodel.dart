@@ -375,6 +375,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _logger.info(
       '[媒体库] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
     );
+    // 应用启动时恢复未完成的缩略图任务（pending/running/failed 全部重新入队）
+    await _restorePendingThumbnailTasks();
     // 启动集合文件夹自动扫描定时器（每 30 秒轮询）
     _folderWatchTimer?.cancel();
     _folderWatchTimer = Timer.periodic(
@@ -760,7 +762,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     while (changed) {
       changed = false;
       for (final f in allFolders) {
-        if (scopeFolderIds.contains(f.parentId) && !scopeFolderIds.contains(f.id)) {
+        if (scopeFolderIds.contains(f.parentId) &&
+            !scopeFolderIds.contains(f.id)) {
           scopeFolderIds.add(f.id);
           changed = true;
         }
@@ -799,11 +802,11 @@ class MediaLibraryViewModel extends BaseViewModel {
           _requestRemoteItemPaths(c.id);
           final paths = _remoteCollectionItemPaths[c.id];
           itemHit =
-              paths != null && paths.any((p) => _pathBasename(p).toLowerCase().contains(query));
+              paths != null &&
+              paths.any((p) => _pathBasename(p).toLowerCase().contains(query));
         } else {
-          itemHit = _getCollectionItemPaths(
-            c.id,
-          ).any((p) => _pathBasename(p).toLowerCase().contains(query));
+          itemHit = _getCollectionItemPaths(c.id)
+              .any((p) => _pathBasename(p).toLowerCase().contains(query));
         }
       }
       if ((titleHit || itemHit) && matchedCollectionIds.add(c.id)) {
@@ -854,7 +857,9 @@ class MediaLibraryViewModel extends BaseViewModel {
     final searchQueryText = searchQuery.value.trim().toLowerCase();
     var items = [...currentItems];
     if (searchQueryText.isNotEmpty) {
-      items = items.where((i) => i.title.toLowerCase().contains(searchQueryText)).toList();
+      items = items
+          .where((i) => i.title.toLowerCase().contains(searchQueryText))
+          .toList();
     }
     switch (order) {
       case MediaItemSortOrder.nameAsc:
@@ -1143,9 +1148,9 @@ class MediaLibraryViewModel extends BaseViewModel {
         });
   }
 
-  /// 为本地图片条目入队缩略图生成任务（宽度取「本地图片清晰度」设置）。
+  /// 为本地图片条目入队缩略图生成任务（宽度取「本地图片清晰度」设置，或 widthOverride）。
   /// 生成期间网格先显示原图，成功后切换到缩略图并缓存进 .SlimeWorks/tmp。
-  void _enqueueItemThumbnail(String filePath) {
+  void _enqueueItemThumbnail(String filePath, {int? widthOverride}) {
     if (thumbGenerationPaused.value) return;
     if (_itemThumbnails.containsKey(filePath) || _itemThumbFailed.contains(filePath)) {
       return;
@@ -1157,7 +1162,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         .enqueue(key, () async {
           _inFlightCoverKeys.remove(key);
           try {
-            final w = mediaPrefs.localPreviewWidth.value;
+            final w = widthOverride ?? mediaPrefs.localPreviewWidth.value;
             final width = w > 0 ? w : 480;
             // FRB 异步调用（Rust 端在后台线程池解码缩放，不阻塞 UI 线程）
             final thumb = await media_api.ensureCoverThumbnail(filePath: filePath, width: width);
@@ -1177,6 +1182,31 @@ class MediaLibraryViewModel extends BaseViewModel {
           // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
           _inFlightCoverKeys.remove(key);
         });
+  }
+
+  /// 应用启动时从持久化任务表恢复未完成的缩略图任务。
+  /// 包括 pending/running/failed 状态，全部重新入队到 VideoThumbQueue。
+  /// failed 任务从 _itemThumbFailed 移除以允许重试。
+  Future<void> _restorePendingThumbnailTasks() async {
+    try {
+      final tasks = media_api.getAllPendingThumbnailTasks();
+      if (tasks.isEmpty) return;
+      _logger.info('[ThumbRestore] 发现 ${tasks.length} 个未完成缩略图任务，开始重新入队');
+      int restored = 0;
+      for (final task in tasks) {
+        if (task.filePath.isEmpty) continue;
+        // 失败任务重新尝试：从失败集合中移除以便重新入队
+        _itemThumbFailed.remove(task.filePath);
+        _enqueueItemThumbnail(
+          task.filePath,
+          widthOverride: task.width > 0 ? task.width : null,
+        );
+        restored++;
+      }
+      _logger.info('[ThumbRestore] 已重新入队 $restored 个任务');
+    } catch (e) {
+      _logger.error('[ThumbRestore] 恢复未完成缩略图任务失败: $e');
+    }
   }
 
   String? buildFolderCoverSource(media_api.MediaFolder folder) {
