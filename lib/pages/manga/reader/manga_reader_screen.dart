@@ -42,7 +42,8 @@ class MangaReaderScreen extends BasePage<MangaReaderViewModel> {
   State<MangaReaderScreen> createState() => _MangaReaderScreenState();
 }
 
-class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaReaderScreen> {
+class _MangaReaderScreenState
+    extends BasePageState<MangaReaderViewModel, MangaReaderScreen> {
   final ScrollController _scrollController = ScrollController();
 
   /// 本地沉浸模式状态（替代全局 DesktopScreenProvider.mobileImmersiveMode）
@@ -130,7 +131,8 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
         // 向下
         _scrollUpAccum = 0;
         _scrollDownAccum += delta;
-        if (_scrollDownAccum >= _kImmersiveScrollThreshold && !_isImmersive.value) {
+        if (_scrollDownAccum >= _kImmersiveScrollThreshold &&
+            !_isImmersive.value) {
           _scrollDownAccum = 0;
           _isImmersive.value = true;
         }
@@ -149,7 +151,9 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
 
   @override
   Widget buildContent(BuildContext context) {
-    final String epsTitle = widget.epsTitle.isNotEmpty ? widget.epsTitle : '第 ${widget.epsOrder} 话';
+    final String epsTitle = widget.epsTitle.isNotEmpty
+        ? widget.epsTitle
+        : '第 ${widget.epsOrder} 话';
 
     return ColoredBox(
       color: Colors.black,
@@ -264,7 +268,10 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.62),
                           border: Border(
-                            top: BorderSide(color: Colors.white.withValues(alpha: 0.4), width: 0.5),
+                            top: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              width: 0.5,
+                            ),
                           ),
                         ),
                         child: SafeArea(
@@ -307,7 +314,10 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
             ListTile(
               leading: const Icon(Icons.download_outlined),
               title: const Text('下载'),
-              subtitle: Text('选择章节下载', style: TextStyle(fontSize: AppTheme.metrics.fontSize11)),
+              subtitle: Text(
+                '选择章节下载',
+                style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+              ),
               onTap: () {
                 Navigator.of(ctx).pop();
                 _showDownloadSheet(context);
@@ -406,15 +416,20 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                             TextButton(
                               onPressed: () {
                                 setSheetState(() {
-                                  if (selected.length == viewModel.epsList.length) {
+                                  if (selected.length ==
+                                      viewModel.epsList.length) {
                                     selected.clear();
                                   } else {
-                                    selected.addAll(viewModel.epsList.map((e) => e.order));
+                                    selected.addAll(
+                                      viewModel.epsList.map((e) => e.order),
+                                    );
                                   }
                                 });
                               },
                               child: Text(
-                                selected.length == viewModel.epsList.length ? '取消全选' : '全选',
+                                selected.length == viewModel.epsList.length
+                                    ? '取消全选'
+                                    : '全选',
                               ),
                             ),
                           ],
@@ -424,16 +439,18 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                         child: GridView.builder(
                           controller: controller,
                           padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 2.5,
-                          ),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 4,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: 8,
+                                childAspectRatio: 2.5,
+                              ),
                           itemCount: viewModel.epsList.length,
                           itemBuilder: (_, i) {
                             final ep = viewModel.epsList[i];
-                            final info = dl.entries[comic.id]?.episodes[ep.order];
+                            final info =
+                                dl.entries[comic.id]?.episodes[ep.order];
                             final isDownloaded = info?.isCompleted == true;
                             final isSelected = selected.contains(ep.order);
                             return GestureDetector(
@@ -451,12 +468,17 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                                   color: isDownloaded
                                       ? Colors.green.withValues(alpha: 0.3)
                                       : isSelected
-                                      ? Theme.of(ctx2).colorScheme.primary.withValues(alpha: 0.3)
-                                      : Theme.of(ctx2).colorScheme.surfaceContainerHighest,
+                                      ? Theme.of(ctx2).colorScheme.primary
+                                            .withValues(alpha: 0.3)
+                                      : Theme.of(
+                                          ctx2,
+                                        ).colorScheme.surfaceContainerHighest,
                                   borderRadius: AppTheme.metrics.radius6,
                                   border: isSelected
                                       ? Border.all(
-                                          color: Theme.of(ctx2).colorScheme.primary,
+                                          color: Theme.of(
+                                            ctx2,
+                                          ).colorScheme.primary,
                                           width: 1.5,
                                         )
                                       : null,
@@ -487,11 +509,15 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                                   : () {
                                       Navigator.of(ctx).pop();
                                       final eps = viewModel.epsList
-                                          .where((e) => selected.contains(e.order))
+                                          .where(
+                                            (e) => selected.contains(e.order),
+                                          )
                                           .toList();
                                       dl.downloadEpsMultiple(comic, eps);
                                     },
-                              child: Text('下载 ${selected.isEmpty ? '' : selected.length} 章'),
+                              child: Text(
+                                '下载 ${selected.isEmpty ? '' : selected.length} 章',
+                              ),
                             ),
                           ),
                         ),
@@ -537,22 +563,27 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace12),
+                padding: EdgeInsets.symmetric(
+                  vertical: AppTheme.metrics.kSpace12,
+                ),
                 child: Text(
                   '章节列表',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Expanded(
                 child: Obx(
                   () => GridView.builder(
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 2.5,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 2.5,
+                        ),
                     itemCount: viewModel.epsList.length,
                     itemBuilder: (_, i) {
                       final eps = viewModel.epsList[i];
@@ -571,7 +602,9 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                           decoration: BoxDecoration(
                             color: isCurrent
                                 ? Theme.of(ctx).colorScheme.primary
-                                : Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                                : Theme.of(
+                                    ctx,
+                                  ).colorScheme.surfaceContainerHighest,
                             borderRadius: AppTheme.metrics.radius6,
                           ),
                           child: Text(
@@ -607,7 +640,11 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, color: Colors.white70, size: AppTheme.metrics.iconSize48),
+                Icon(
+                  Icons.error_outline,
+                  color: Colors.white70,
+                  size: AppTheme.metrics.iconSize48,
+                ),
                 SizedBox(height: AppTheme.metrics.kSpace16),
                 SelectableText(
                   error,
@@ -616,7 +653,8 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace16),
                 FilledButton(
-                  onPressed: () => viewModel.loadPages(widget.comicId, widget.epsOrder),
+                  onPressed: () =>
+                      viewModel.loadPages(widget.comicId, widget.epsOrder),
                   child: const Text('重试'),
                 ),
               ],
@@ -632,7 +670,9 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
   /// [Fix] 使用 ClampingScrollPhysics，去掉 Bouncing 弹性边界减少位置重算
   Widget _buildReaderView(BuildContext context) {
     return Obx(() {
-      final extraCount = viewModel.hasMore ? 1 : (viewModel.nextEps != null ? 1 : 0);
+      final extraCount = viewModel.hasMore
+          ? 1
+          : (viewModel.nextEps != null ? 1 : 0);
       return ListView.builder(
         controller: _scrollController,
         cacheExtent: 2000,
@@ -643,7 +683,9 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
             if (viewModel.hasMore) {
               return Padding(
                 padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
-                child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+                child: const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
               );
             }
             // 所有部分已加载完毕，显示下一章公告
@@ -661,7 +703,11 @@ class _MangaReaderScreenState extends BasePageState<MangaReaderViewModel, MangaR
           final page = viewModel.pages[i];
           return Obx(
             () => Padding(
-              padding: EdgeInsets.symmetric(horizontal: viewModel.imageHorizontalPadding.value),
+              padding: EdgeInsets.symmetric(
+                horizontal:
+                    MediaQuery.of(context).size.width *
+                    (viewModel.imageHorizontalPadding.value / 100),
+              ),
               child: _ComicPageImage(
                 image: page.media,
                 pageIndex: i + 1,
@@ -710,7 +756,11 @@ class _ReaderBottomBar extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.1),
           ),
           Expanded(
-            child: _BarBtn(icon: Icons.tune_rounded, label: '设置', onTap: onSettingsTap),
+            child: _BarBtn(
+              icon: Icons.tune_rounded,
+              label: '设置',
+              onTap: onSettingsTap,
+            ),
           ),
         ],
       ),
@@ -719,7 +769,12 @@ class _ReaderBottomBar extends StatelessWidget {
 }
 
 class _BarBtn extends StatelessWidget {
-  const _BarBtn({required this.icon, required this.label, this.badge, required this.onTap});
+  const _BarBtn({
+    required this.icon,
+    required this.label,
+    this.badge,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final String? badge;
@@ -807,7 +862,8 @@ class _ComicPageImageState extends State<_ComicPageImage> {
   void _measureAndReportHeight() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final box = _containerKey.currentContext?.findRenderObject() as RenderBox?;
+      final box =
+          _containerKey.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || !box.hasSize) return;
       final h = box.size.height;
       if (h > 0) widget.onImageLoaded?.call(h);
@@ -847,7 +903,10 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                 SizedBox(height: AppTheme.metrics.kSpace12),
                 Text(
                   'P${widget.pageIndex} 加载失败',
-                  style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize11),
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: AppTheme.metrics.fontSize11,
+                  ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace8),
                 TextButton.icon(
@@ -857,7 +916,10 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                     color: Colors.white70,
                     size: AppTheme.metrics.iconSize16,
                   ),
-                  label: const Text('重试', style: TextStyle(color: Colors.white70)),
+                  label: const Text(
+                    '重试',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                 ),
               ],
             ),
@@ -926,14 +988,19 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('阅读设置', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              '阅读设置',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             SizedBox(height: AppTheme.metrics.kSpace18),
 
             // ── 图片左右间距 ──
             Row(
               children: [
                 Expanded(child: Text('图片左右间距', style: titleStyle)),
-                Text('${_padding.toInt()} px', style: labelStyle),
+                Text('${_padding.toInt()} %', style: labelStyle),
               ],
             ),
             Slider(
