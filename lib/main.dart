@@ -106,10 +106,18 @@ Future<void> main() async {
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   initializeLogger();
 
-  // 异步下载/初始化 ffmpeg（若内置模块不存在），完成后自动注册路径到 media_collection
+  // 异步解析 ffmpeg/ffprobe 路径：先探测系统 PATH（命中则跳过下载），
+  // 未命中则触发内置模块下载。完成后将解析结果注册到 media_collection。
   if (Platform.isWindows || Platform.isMacOS) {
-    RustFFmpeg.initialize().then((_) {
-      _registerFfmpegPaths(); // 下载完成后重新注册路径
+    Future.wait([
+      RustFFmpeg.resolvePath(),
+      RustFFmpeg.resolveProbe(),
+    ]).then((results) {
+      // results[0] = ffmpeg 路径，results[1] = ffprobe 路径
+      _registerFfmpegPaths(
+        ffmpegPath: results[0],
+        ffprobePath: results[1],
+      );
     });
   }
 
@@ -152,39 +160,14 @@ void configLoading() {
 }
 
 /// 注册 ffmpeg/ffprobe 路径到 Rust 端 media_collection 模块。
-/// 优先使用内置模块路径，若不存在则回退到系统 PATH。
-void _registerFfmpegPaths() {
+/// 接收 [RustFFmpeg.resolvePath]/[RustFFmpeg.resolveProbe] 的解析结果：
+/// - 非 null：使用解析到的路径（系统 PATH 中的 "ffmpeg" 或内置模块绝对路径）
+/// - null：Rust 端回退到系统 PATH 中的 "ffmpeg"/"ffprobe"
+void _registerFfmpegPaths({String? ffmpegPath, String? ffprobePath}) {
   if (!Platform.isWindows && !Platform.isMacOS) return;
-
-  final appDir = Platform.environment[Platform.isWindows ? 'APPDATA' : 'HOME'];
-  if (appDir == null) return;
-
-  final sep = Platform.pathSeparator;
-  final ext = Platform.isWindows ? '.exe' : '';
-  final ffmpegPath = '$appDir${sep}modules${sep}ffmpeg${sep}ffmpeg$ext';
-  final ffprobePath = '$appDir${sep}modules${sep}ffmpeg${sep}ffprobe$ext';
-
-  // 仅当文件存在时才注册路径，否则回退到系统 PATH
-  String? registeredFfmpeg;
-  String? registeredFfprobe;
-
-  if (File(ffmpegPath).existsSync()) {
-    registeredFfmpeg = ffmpegPath;
-    _logger.info('[FFmpeg] 注册内置 ffmpeg: $ffmpegPath');
-  } else {
-    _logger.info('[FFmpeg] 内置 ffmpeg 不存在，将使用系统 PATH');
-  }
-
-  if (File(ffprobePath).existsSync()) {
-    registeredFfprobe = ffprobePath;
-    _logger.info('[FFmpeg] 注册内置 ffprobe: $ffprobePath');
-  } else {
-    _logger.info('[FFmpeg] 内置 ffprobe 不存在，将使用系统 PATH');
-  }
-
-  registerFfmpegPaths(
-    ffmpegPath: registeredFfmpeg,
-    ffprobePath: registeredFfprobe,
+  registerFfmpegPaths(ffmpegPath: ffmpegPath, ffprobePath: ffprobePath);
+  _logger.info(
+    '[FFmpeg] 已注册到 Rust 端 | ffmpeg=$ffmpegPath | ffprobe=$ffprobePath',
   );
 }
 

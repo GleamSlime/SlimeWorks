@@ -30,8 +30,7 @@ class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
   const CollectionPictureScreen({super.key});
 
   @override
-  State<CollectionPictureScreen> createState() =>
-      _CollectionPictureScreenState();
+  State<CollectionPictureScreen> createState() => _CollectionPictureScreenState();
 }
 
 class _CollectionPictureScreenState
@@ -147,9 +146,7 @@ class _CollectionPictureScreenState
     _scrollController = ScrollController(initialScrollOffset: initialOffset);
     _scrollController.addListener(_onScroll);
     // Consume scroll-restore signals emitted by the viewmodel on exitCollection / exitFolder
-    _scrollRestoreWorker = ever<double?>(viewModel.scrollRestoreTarget, (
-      offset,
-    ) {
+    _scrollRestoreWorker = ever<double?>(viewModel.scrollRestoreTarget, (offset) {
       _logger.info('[Scroll] _scrollRestoreWorker triggered: offset=$offset');
       if (offset == null) return;
       final scrollController = _scrollController;
@@ -172,18 +169,14 @@ class _CollectionPictureScreenState
             scrollController.position.minScrollExtent,
             scrollController.position.maxScrollExtent,
           );
-          _logger.info(
-            '[Scroll] _scrollRestoreWorker: jumpTo $clamped (from $offset)',
-          );
+          _logger.info('[Scroll] _scrollRestoreWorker: jumpTo $clamped (from $offset)');
           scrollController.jumpTo(clamped);
           _logger.info(
             '[Scroll] _scrollRestoreWorker: after jumpTo, position=${scrollController.offset}',
           );
         }
         viewModel.scrollRestoreTarget.value = null;
-        _logger.info(
-          '[Scroll] _scrollRestoreWorker: set scrollRestoreTarget=null',
-        );
+        _logger.info('[Scroll] _scrollRestoreWorker: set scrollRestoreTarget=null');
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) => performRestore());
@@ -193,9 +186,7 @@ class _CollectionPictureScreenState
   void _onScroll() {
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
-      _logger.info(
-        '[Scroll] _onScroll: saved offset=${_scrollController.offset}',
-      );
+      _logger.info('[Scroll] _onScroll: saved offset=${_scrollController.offset}');
     }
   }
 
@@ -210,8 +201,7 @@ class _CollectionPictureScreenState
   }
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
-    final isMobile =
-        PlatformUtil.isMobile || getIt<DesktopScreenProvider>().isMobile.value;
+    final isMobile = PlatformUtil.isMobile || getIt<DesktopScreenProvider>().isMobile.value;
     // PictureLibraryToolbar：移动端传入 columnCount 以启用移动端控件（排序+列数调节）。
     // 桌面端传 null，对应控件由 leading 区域的 _buildActionBar 负责。
     final toolbar = PictureLibraryToolbar(
@@ -223,20 +213,16 @@ class _CollectionPictureScreenState
       onClearLibrary: () => _confirmClearLibrary(),
       onCreateSmartFolder: () => _showCreateSmartFolderDialog(),
       columnCount: isMobile ? _detailColumnCount : null,
-      onColumnDecrement:
-          isMobile && viewModel.isInDetail && _detailColumnCount > 1
+      onColumnDecrement: isMobile && viewModel.isInDetail && _detailColumnCount > 1
           ? () => setState(() => _detailColumnCount--)
           : null,
-      onColumnIncrement:
-          isMobile && viewModel.isInDetail && _detailColumnCount < 10
+      onColumnIncrement: isMobile && viewModel.isInDetail && _detailColumnCount < 10
           ? () => setState(() => _detailColumnCount++)
           : null,
       onUpload:
           (isMobile &&
               viewModel.isInDetail &&
-              viewModel.isRemoteCollection(
-                viewModel.currentCollectionId.value ?? '',
-              ))
+              viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? ''))
           ? () => viewModel.uploadMediaToCurrentCollection()
           : null,
     );
@@ -271,9 +257,7 @@ class _CollectionPictureScreenState
 
     // 桌面端：leading 显示操作栏（面包屑/统计/排序），toolbar 显示图书馆快捷按钮
     return ScreenChromeData(
-      title: viewModel.isInDetail
-          ? viewModel.currentCollectionTitle
-          : viewModel.currentBrowseTitle,
+      title: viewModel.isInDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
       leading: _buildActionBar(context),
       toolbarHeight: AppTheme.metrics.kSpace48,
       toolbar: toolbar,
@@ -343,8 +327,7 @@ class _CollectionPictureScreenState
                 return KeyEventResult.handled;
               }
               // 鼠标悬停集合 + Delete：直接删除本地文件及文件夹（无需二次确认）
-              if (event.logicalKey == LogicalKeyboardKey.delete &&
-                  !viewModel.isSelecting.value) {
+              if (event.logicalKey == LogicalKeyboardKey.delete && !viewModel.isSelecting.value) {
                 final hovered = viewModel.hoveredLocalCollection();
                 if (hovered != null) {
                   _deleteCollectionFolder(hovered.id, hovered.folderPath);
@@ -371,10 +354,7 @@ class _CollectionPictureScreenState
                           child: child,
                         );
                       },
-                      child: KeyedSubtree(
-                        key: ValueKey(pageKey),
-                        child: pageContent,
-                      ),
+                      child: KeyedSubtree(key: ValueKey(pageKey), child: pageContent),
                     ),
                   ),
                   if (viewModel.isSelecting.value)
@@ -382,8 +362,7 @@ class _CollectionPictureScreenState
                       selectedCount: viewModel.selectedIds.length,
                       onDelete: () => _confirmDeleteSelected(context),
                       onCancel: viewModel.exitSelection,
-                      onSelectUnfavorited:
-                          viewModel.selectUnfavoritedCollections,
+                      onSelectUnfavorited: viewModel.selectUnfavoritedCollections,
                     ),
                 ],
               );
@@ -420,10 +399,15 @@ class _CollectionPictureScreenState
               return DropTarget(
                 onDragEntered: (_) => setState(() => _isDraggingFiles = true),
                 onDragExited: (_) => setState(() => _isDraggingFiles = false),
-                onDragDone: (detail) {
+                onDragDone: (detail) async {
                   setState(() => _isDraggingFiles = false);
-                  viewModel.importDroppedPaths(
+                  // 与点击"导入文件夹"完全一致：先弹窗确认选项再导入
+                  final options = await _showImportOptionsDialog();
+                  if (options == null) return;
+                  await viewModel.importDroppedPaths(
                     detail.files.map((f) => f.path).toList(),
+                    generateThumbnails: options.$1,
+                    preserveStructure: options.$2,
                   );
                 },
                 child: Stack(
@@ -434,9 +418,7 @@ class _CollectionPictureScreenState
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary.withAlpha(40),
+                              color: Theme.of(context).colorScheme.primary.withAlpha(40),
                               border: Border.all(
                                 color: Theme.of(context).colorScheme.primary,
                                 width: 2,
@@ -449,22 +431,15 @@ class _CollectionPictureScreenState
                                   Icon(
                                     Icons.folder_open_rounded,
                                     size: AppTheme.metrics.iconSize64,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
+                                    color: Theme.of(context).colorScheme.primary,
                                   ),
                                   SizedBox(height: AppTheme.metrics.kSpace12),
                                   Text(
                                     '松开以导入媒体',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -487,10 +462,7 @@ class _CollectionPictureScreenState
     final showBack = inDetail || viewModel.currentFolderId.value != null;
     if (inDetail) {
       final items = viewModel.currentItems;
-      final totalSize = items.fold(
-        BigInt.zero,
-        (sum, item) => sum + item.fileSize,
-      );
+      final totalSize = items.fold(BigInt.zero, (sum, item) => sum + item.fileSize);
       return LayoutBuilder(
         builder: (context, constraints) {
           final hasBoundedWidth = constraints.hasBoundedWidth;
@@ -502,9 +474,7 @@ class _CollectionPictureScreenState
               appMetrics.kSpace4,
             ),
             child: Row(
-              mainAxisSize: hasBoundedWidth
-                  ? MainAxisSize.max
-                  : MainAxisSize.min,
+              mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
               children: [
                 // 返回按钮（左侧）
                 // When MediaViewerPage is on top (_viewerActive), this button closes
@@ -554,27 +524,18 @@ class _CollectionPictureScreenState
                       icon: const Icon(Icons.remove_rounded),
                       iconSize: scaleW(16),
                       padding: EdgeInsets.all(appMetrics.kSpace4),
-                      constraints: BoxConstraints(
-                        minWidth: scaleW(28),
-                        minHeight: scaleW(28),
-                      ),
+                      constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                       tooltip: '减少列数',
                       onPressed: _detailColumnCount > 1
                           ? () => setState(() => _detailColumnCount--)
                           : null,
                     ),
-                    Text(
-                      '$_detailColumnCount 列',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text('$_detailColumnCount 列', style: Theme.of(context).textTheme.bodySmall),
                     IconButton(
                       icon: const Icon(Icons.add_rounded),
                       iconSize: scaleW(16),
                       padding: EdgeInsets.all(appMetrics.kSpace4),
-                      constraints: BoxConstraints(
-                        minWidth: scaleW(28),
-                        minHeight: scaleW(28),
-                      ),
+                      constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                       tooltip: '增加列数',
                       onPressed: _detailColumnCount < 10
                           ? () => setState(() => _detailColumnCount++)
@@ -697,8 +658,7 @@ class _CollectionPictureScreenState
                           ),
                         ],
                       ),
-                      onSelected: (v) =>
-                          viewModel.collectionSortOrder.value = v,
+                      onSelected: (v) => viewModel.collectionSortOrder.value = v,
                       itemBuilder: (_) => CollectionSortOrder.values
                           .map(
                             (o) => PopupMenuItem<CollectionSortOrder>(
@@ -752,10 +712,7 @@ class _CollectionPictureScreenState
           // 同名集合分组标题段（虚拟分组，面包屑末段，不可点击）
           if (viewModel.currentDupGroupTitle != null) ...[
             Icon(Icons.chevron_right_rounded, size: scaleW(18)),
-            Text(
-              viewModel.currentDupGroupTitle!,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
+            Text(viewModel.currentDupGroupTitle!, style: Theme.of(context).textTheme.labelMedium),
           ],
           // Smart folder in trail (always root-level, no further sub-path)
           if (smartFolder != null) ...[
@@ -765,10 +722,7 @@ class _CollectionPictureScreenState
               children: [
                 Icon(Icons.auto_awesome_outlined, size: scaleW(14)),
                 SizedBox(width: appMetrics.kSpace4),
-                Text(
-                  smartFolder.name,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
+                Text(smartFolder.name, style: Theme.of(context).textTheme.labelMedium),
               ],
             ),
           ],
@@ -788,8 +742,7 @@ class _CollectionPictureScreenState
       return;
     }
 
-    if (activeRemoteFolderId != null &&
-        viewModel.isRemoteFolder(activeRemoteFolderId)) {
+    if (activeRemoteFolderId != null && viewModel.isRemoteFolder(activeRemoteFolderId)) {
       final nodeId = viewModel.getRemoteFolderNodeId(activeRemoteFolderId);
       if (nodeId == null) {
         viewModel.showSnack('错误', '远程文件夹映射不存在');
@@ -812,7 +765,14 @@ class _CollectionPictureScreenState
       if (scanMode) {
         await viewModel.scanFolder(localTargetFolderId: localFolderId);
       } else {
-        await viewModel.importFolder(localTargetFolderId: localFolderId);
+        // 导入前弹出增强选项（全量缩略图 / 按原始目录导入）
+        final options = await _showImportOptionsDialog();
+        if (options == null) return;
+        await viewModel.importFolder(
+          localTargetFolderId: localFolderId,
+          generateThumbnails: options.$1,
+          preserveStructure: options.$2,
+        );
       }
       return;
     }
@@ -824,6 +784,54 @@ class _CollectionPictureScreenState
     await _showNodeFolderDialog(scanMode: scanMode);
   }
 
+  /// 本地导入前的增强选项弹窗，返回 (全量生成缩略图, 按原始目录导入)；取消返回 null。
+  Future<(bool, bool)?> _showImportOptionsDialog() async {
+    bool generateThumbnails = false;
+    bool preserveStructure = false;
+    return showDialog<(bool, bool)>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('导入文件夹选项'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('导入后全文件生成缩略图'),
+                    subtitle: const Text('导入的媒体自动加入缩略图生成队列'),
+                    value: generateThumbnails,
+                    onChanged: (v) => setState(() => generateThumbnails = v ?? false),
+                  ),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('按原始目录导入'),
+                    subtitle: const Text('按导入目录创建文件夹层级，集合仍按资源父目录创建'),
+                    value: preserveStructure,
+                    onChanged: (v) => setState(() => preserveStructure = v ?? false),
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop((generateThumbnails, preserveStructure)),
+              child: const Text('选择文件夹'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _showNodeFolderDialog({
     required bool scanMode,
     String? fixedNodeId,
@@ -833,10 +841,12 @@ class _CollectionPictureScreenState
       viewModel.showSnack('提示', '没有可用节点');
       return;
     }
-    String selectedNodeId =
-        fixedNodeId ?? viewModel.enabledRemoteNodes.first.id;
+    String selectedNodeId = fixedNodeId ?? viewModel.enabledRemoteNodes.first.id;
     // 当用户切换节点时，targetRawFolderId 失效（非当前文件夹的节点）
     String? activeTargetRawFolderId = targetRawFolderId;
+    // 导入增强选项（仅导入模式显示）
+    bool generateThumbnails = false;
+    bool preserveStructure = false;
 
     // 从 SharedPreferences 加载该节点上次使用的路径
     final prefs = await SharedPreferences.getInstance();
@@ -860,10 +870,8 @@ class _CollectionPictureScreenState
                     decoration: const InputDecoration(labelText: '目标节点'),
                     items: viewModel.enabledRemoteNodes
                         .map(
-                          (node) => DropdownMenuItem<String>(
-                            value: node.id,
-                            child: Text(node.name),
-                          ),
+                          (node) =>
+                              DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
                         )
                         .toList(),
                     onChanged: (value) {
@@ -876,8 +884,7 @@ class _CollectionPictureScreenState
                         } else {
                           activeTargetRawFolderId = targetRawFolderId;
                         }
-                        final nodePath =
-                            prefs.getString('node_scan_path_$value') ?? '';
+                        final nodePath = prefs.getString('node_scan_path_$value') ?? '';
                         controller.text = nodePath;
                       });
                     },
@@ -907,11 +914,8 @@ class _CollectionPictureScreenState
                               context: context,
                               builder: (_) => NodeDirectoryPicker(
                                 nodeId: selectedNodeId,
-                                nodeSettingsService:
-                                    viewModel.nodeSettingsService,
-                                initialPath: currentPath.isEmpty
-                                    ? '/'
-                                    : currentPath,
+                                nodeSettingsService: viewModel.nodeSettingsService,
+                                initialPath: currentPath.isEmpty ? '/' : currentPath,
                               ),
                             );
                             if (picked != null) {
@@ -922,15 +926,33 @@ class _CollectionPictureScreenState
                       ),
                     ],
                   ),
+                  if (!scanMode) ...[
+                    SizedBox(height: appMetrics.kSpace12),
+                    CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('导入后全文件生成缩略图'),
+                      subtitle: const Text('导入的媒体自动加入缩略图生成队列'),
+                      value: generateThumbnails,
+                      onChanged: (v) => setState(() => generateThumbnails = v ?? false),
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('按原始目录导入'),
+                      subtitle: const Text('按导入目录创建文件夹层级，集合仍按资源父目录创建'),
+                      value: preserveStructure,
+                      onChanged: (v) => setState(() => preserveStructure = v ?? false),
+                    ),
+                  ],
                 ],
               );
             },
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 final path = controller.text.trim();
@@ -950,6 +972,8 @@ class _CollectionPictureScreenState
                     nodeId: selectedNodeId,
                     folderPath: path,
                     targetRawFolderId: activeTargetRawFolderId,
+                    generateThumbnails: generateThumbnails,
+                    preserveStructure: preserveStructure,
                   );
                 }
               },
@@ -989,15 +1013,10 @@ class _CollectionPictureScreenState
                       decoration: const InputDecoration(labelText: '创建位置'),
                       items: [
                         if (allowLocalRoot)
-                          const DropdownMenuItem<String>(
-                            value: '__local__',
-                            child: Text('本地媒体库'),
-                          ),
+                          const DropdownMenuItem<String>(value: '__local__', child: Text('本地媒体库')),
                         ...viewModel.enabledRemoteNodes.map(
-                          (node) => DropdownMenuItem<String>(
-                            value: node.id,
-                            child: Text(node.name),
-                          ),
+                          (node) =>
+                              DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
                         ),
                       ],
                       onChanged: (value) {
@@ -1016,9 +1035,7 @@ class _CollectionPictureScreenState
                       Navigator.of(context).pop();
                       await viewModel.createFolderWithName(
                         controller.text,
-                        targetNodeId: !inFolder && target != '__local__'
-                            ? target
-                            : null,
+                        targetNodeId: !inFolder && target != '__local__' ? target : null,
                       );
                     },
                   ),
@@ -1027,18 +1044,13 @@ class _CollectionPictureScreenState
             },
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
                 await viewModel.createFolderWithName(
                   controller.text,
-                  targetNodeId: !inFolder && target != '__local__'
-                      ? target
-                      : null,
+                  targetNodeId: !inFolder && target != '__local__' ? target : null,
                 );
               },
               child: const Text('确定'),
@@ -1063,8 +1075,7 @@ class _CollectionPictureScreenState
     // 如果当前正在浏览远程节点的文件夹，默认创建到该节点
     final currentFolderIdValue = viewModel.currentFolderId.value;
     String? targetNodeId;
-    if (currentFolderIdValue != null &&
-        viewModel.isRemoteFolder(currentFolderIdValue)) {
+    if (currentFolderIdValue != null && viewModel.isRemoteFolder(currentFolderIdValue)) {
       targetNodeId = viewModel.getRemoteFolderNodeId(currentFolderIdValue);
     }
     final enabledNodes = viewModel.enabledRemoteNodes;
@@ -1084,10 +1095,7 @@ class _CollectionPictureScreenState
                     TextField(
                       controller: nameCtrl,
                       autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: '文件夹名称',
-                        hintText: '例：我的收藏',
-                      ),
+                      decoration: const InputDecoration(labelText: '文件夹名称', hintText: '例：我的收藏'),
                     ),
                     if (enabledNodes.isNotEmpty) ...[
                       SizedBox(height: appMetrics.kSpace12),
@@ -1097,17 +1105,11 @@ class _CollectionPictureScreenState
                         items: [
                           DropdownMenuItem<String?>(
                             value: null,
-                            child: Text(
-                              Platform.isAndroid || Platform.isIOS
-                                  ? '本机（无本地库）'
-                                  : '本机',
-                            ),
+                            child: Text(Platform.isAndroid || Platform.isIOS ? '本机（无本地库）' : '本机'),
                           ),
                           ...enabledNodes.map(
-                            (node) => DropdownMenuItem<String?>(
-                              value: node.id,
-                              child: Text(node.name),
-                            ),
+                            (node) =>
+                                DropdownMenuItem<String?>(value: node.id, child: Text(node.name)),
                           ),
                         ],
                         onChanged: (v) => setState(() => targetNodeId = v),
@@ -1120,9 +1122,7 @@ class _CollectionPictureScreenState
                       if (snapshotFolders.isEmpty)
                         Text(
                           '（暂无文件夹）',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
+                          style: TextStyle(color: Theme.of(context).colorScheme.outline),
                         )
                       else
                         Wrap(
@@ -1149,17 +1149,11 @@ class _CollectionPictureScreenState
                     SizedBox(height: appMetrics.kSpace4),
                     SegmentedButton<SmartFolderRegexTarget>(
                       segments: SmartFolderRegexTarget.values
-                          .map(
-                            (t) =>
-                                ButtonSegment(value: t, label: Text(t.label)),
-                          )
+                          .map((t) => ButtonSegment(value: t, label: Text(t.label)))
                           .toList(),
                       selected: {regexTarget},
-                      onSelectionChanged: (s) =>
-                          setState(() => regexTarget = s.first),
-                      style: const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                      ),
+                      onSelectionChanged: (s) => setState(() => regexTarget = s.first),
+                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     ),
                     if (regexTarget == SmartFolderRegexTarget.fileName) ...[
                       SizedBox(height: appMetrics.kSpace8),
@@ -1167,32 +1161,22 @@ class _CollectionPictureScreenState
                       SizedBox(height: appMetrics.kSpace4),
                       SegmentedButton<SmartFolderFileType>(
                         segments: SmartFolderFileType.values
-                            .map(
-                              (t) =>
-                                  ButtonSegment(value: t, label: Text(t.label)),
-                            )
+                            .map((t) => ButtonSegment(value: t, label: Text(t.label)))
                             .toList(),
                         selected: {fileTypeFilter},
-                        onSelectionChanged: (s) =>
-                            setState(() => fileTypeFilter = s.first),
-                        style: const ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                        ),
+                        onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
+                        style: const ButtonStyle(visualDensity: VisualDensity.compact),
                       ),
                     ],
                     SizedBox(height: appMetrics.kSpace12),
-                    _KeywordInputList(
-                      keywords: keywords,
-                      onChanged: () => setState(() {}),
-                    ),
+                    _KeywordInputList(keywords: keywords, onChanged: () => setState(() {})),
                     SizedBox(height: appMetrics.kSpace8),
                     TextField(
                       controller: patternCtrl,
                       decoration: InputDecoration(
                         labelText: '正则匹配规则（可选）',
                         hintText: '例：大名|别名|关键词',
-                        helperText:
-                            regexTarget == SmartFolderRegexTarget.fileName
+                        helperText: regexTarget == SmartFolderRegexTarget.fileName
                             ? '留空则显示目标文件夹内符合文件类型的全部集合'
                             : '留空则显示目标文件夹内全部集合',
                       ),
@@ -1201,10 +1185,7 @@ class _CollectionPictureScreenState
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
                 FilledButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
@@ -1228,10 +1209,7 @@ class _CollectionPictureScreenState
     );
   }
 
-  Future<void> _showRenameSmartFolderDialog(
-    String id,
-    String currentName,
-  ) async {
+  Future<void> _showRenameSmartFolderDialog(String id, String currentName) async {
     final ctrl = TextEditingController(text: currentName);
     await showDialog<void>(
       context: context,
@@ -1244,10 +1222,7 @@ class _CollectionPictureScreenState
             decoration: const InputDecoration(hintText: '新名称'),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1261,10 +1236,7 @@ class _CollectionPictureScreenState
     );
   }
 
-  Future<void> _showEditSmartFolderDialog(
-    SmartFolder sf, {
-    bool isRemote = false,
-  }) async {
+  Future<void> _showEditSmartFolderDialog(SmartFolder sf, {bool isRemote = false}) async {
     await viewModel.loadFolders();
     if (!mounted) return;
     final snapshotFolders = viewModel.folders.toList();
@@ -1297,9 +1269,7 @@ class _CollectionPictureScreenState
                     if (snapshotFolders.isEmpty)
                       Text(
                         '（暂无文件夹）',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
+                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
                       )
                     else
                       Wrap(
@@ -1325,17 +1295,11 @@ class _CollectionPictureScreenState
                     SizedBox(height: appMetrics.kSpace4),
                     SegmentedButton<SmartFolderRegexTarget>(
                       segments: SmartFolderRegexTarget.values
-                          .map(
-                            (t) =>
-                                ButtonSegment(value: t, label: Text(t.label)),
-                          )
+                          .map((t) => ButtonSegment(value: t, label: Text(t.label)))
                           .toList(),
                       selected: {regexTarget},
-                      onSelectionChanged: (s) =>
-                          setState(() => regexTarget = s.first),
-                      style: const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                      ),
+                      onSelectionChanged: (s) => setState(() => regexTarget = s.first),
+                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     ),
                     if (regexTarget == SmartFolderRegexTarget.fileName) ...[
                       SizedBox(height: appMetrics.kSpace8),
@@ -1343,32 +1307,22 @@ class _CollectionPictureScreenState
                       SizedBox(height: appMetrics.kSpace4),
                       SegmentedButton<SmartFolderFileType>(
                         segments: SmartFolderFileType.values
-                            .map(
-                              (t) =>
-                                  ButtonSegment(value: t, label: Text(t.label)),
-                            )
+                            .map((t) => ButtonSegment(value: t, label: Text(t.label)))
                             .toList(),
                         selected: {fileTypeFilter},
-                        onSelectionChanged: (s) =>
-                            setState(() => fileTypeFilter = s.first),
-                        style: const ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                        ),
+                        onSelectionChanged: (s) => setState(() => fileTypeFilter = s.first),
+                        style: const ButtonStyle(visualDensity: VisualDensity.compact),
                       ),
                     ],
                     SizedBox(height: appMetrics.kSpace12),
-                    _KeywordInputList(
-                      keywords: keywords,
-                      onChanged: () => setState(() {}),
-                    ),
+                    _KeywordInputList(keywords: keywords, onChanged: () => setState(() {})),
                     SizedBox(height: appMetrics.kSpace8),
                     TextField(
                       controller: patternCtrl,
                       decoration: InputDecoration(
                         labelText: '正则匹配规则（可选）',
                         hintText: '例：大名|别名|关键词',
-                        helperText:
-                            regexTarget == SmartFolderRegexTarget.fileName
+                        helperText: regexTarget == SmartFolderRegexTarget.fileName
                             ? '留空则显示目标文件夹内符合文件类型的全部集合'
                             : '留空则显示目标文件夹内全部集合',
                       ),
@@ -1377,10 +1331,7 @@ class _CollectionPictureScreenState
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
                 FilledButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
@@ -1445,16 +1396,9 @@ class _CollectionPictureScreenState
         title: const Text('远程路径'),
         content: SelectableText(
           remotePath,
-          style: Theme.of(
-            ctx,
-          ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+          style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('关闭'))],
       ),
     );
   }
@@ -1478,14 +1422,9 @@ class _CollectionPictureScreenState
   /// 因此先搜索整个集合目录树；均未命中时在集合根目录创建后再打开，
   /// 保证导入后无论是否生成过缩略图都能打开。
   void _openCollectionConfigDir(String collectionFolderPath) {
-    final dir = media_api.ensureCollectionConfigDir(
-      rootDir: collectionFolderPath,
-    );
+    final dir = media_api.ensureCollectionConfigDir(rootDir: collectionFolderPath);
     if (dir == null) {
-      viewModel.showSnack(
-        '无法打开配置目录',
-        '集合目录不存在或无法创建 .SlimeWorks 目录：\n$collectionFolderPath',
-      );
+      viewModel.showSnack('无法打开配置目录', '集合目录不存在或无法创建 .SlimeWorks 目录：\n$collectionFolderPath');
       return;
     }
     _openFolderInExplorer(dir);
@@ -1524,8 +1463,7 @@ class _CollectionPictureScreenState
       onDeleteCollectionFolder: (id, path, title) =>
           _confirmDeleteCollectionFolder(id, path, title),
       onDeleteNodeLocalFilesForFolder: _confirmDeleteNodeLocalFilesForFolder,
-      onDeleteNodeLocalFilesForCollection:
-          _confirmDeleteNodeLocalFilesForCollection,
+      onDeleteNodeLocalFilesForCollection: _confirmDeleteNodeLocalFilesForCollection,
       onOpenConfigDir: _openCollectionConfigDir,
     );
   }
@@ -1537,9 +1475,7 @@ class _CollectionPictureScreenState
       columnCount: _detailColumnCount,
       onConfirmDelete: _confirmDeleteItemFile,
       onConfirmDeleteNodeLocalFile:
-          viewModel.isRemoteCollection(
-            viewModel.currentCollectionId.value ?? '',
-          )
+          viewModel.isRemoteCollection(viewModel.currentCollectionId.value ?? '')
           ? _confirmDeleteNodeLocalItemFile
           : null,
       onViewerStateChanged: (active) {
@@ -1572,10 +1508,7 @@ class _CollectionPictureScreenState
     if (confirmed) await viewModel.deleteRemoteItemLocalFile(item);
   }
 
-  Future<void> _showRenameDialog(
-    String collectionId,
-    String currentTitle,
-  ) async {
+  Future<void> _showRenameDialog(String collectionId, String currentTitle) async {
     final controller = TextEditingController(text: currentTitle);
     await showDialog<void>(
       context: context,
@@ -1592,10 +1525,7 @@ class _CollectionPictureScreenState
             },
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1609,10 +1539,7 @@ class _CollectionPictureScreenState
     );
   }
 
-  Future<void> _showRenameFolderDialog(
-    String folderId,
-    String currentTitle,
-  ) async {
+  Future<void> _showRenameFolderDialog(String folderId, String currentTitle) async {
     final controller = TextEditingController(text: currentTitle);
     await showDialog<void>(
       context: context,
@@ -1629,10 +1556,7 @@ class _CollectionPictureScreenState
             },
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1646,14 +1570,9 @@ class _CollectionPictureScreenState
     );
   }
 
-  Future<void> _showMoveCollectionDialog(
-    String collectionId,
-    String? currentFolderId,
-  ) async {
+  Future<void> _showMoveCollectionDialog(String collectionId, String? currentFolderId) async {
     String? selectedFolderId = currentFolderId;
-    final availableFolders = viewModel.getAvailableFoldersForCollection(
-      collectionId,
-    );
+    final availableFolders = viewModel.getAvailableFoldersForCollection(collectionId);
     // 层级化平铺（DFS）：一级/二级/三级文件夹均可选，缩进区分层级。
     // availableFolders 已按名称排序，同级文件夹保持名称有序。
     final flat = <(media_api.MediaFolder, int)>[];
@@ -1687,10 +1606,7 @@ class _CollectionPictureScreenState
                 initialValue: selectedFolderId,
                 decoration: const InputDecoration(labelText: '目标位置'),
                 items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('根目录'),
-                  ),
+                  const DropdownMenuItem<String?>(value: null, child: Text('根目录')),
                   ...flat.map(
                     (entry) => DropdownMenuItem<String?>(
                       value: entry.$1.id,
@@ -1708,10 +1624,7 @@ class _CollectionPictureScreenState
                           SizedBox(width: AppTheme.metrics.kSpace4),
                           ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: scaleW(280)),
-                            child: Text(
-                              entry.$1.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: Text(entry.$1.name, overflow: TextOverflow.ellipsis),
                           ),
                         ],
                       ),
@@ -1723,17 +1636,11 @@ class _CollectionPictureScreenState
             },
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
-                await viewModel.moveCollectionToFolder(
-                  collectionId,
-                  selectedFolderId,
-                );
+                await viewModel.moveCollectionToFolder(collectionId, selectedFolderId);
               },
               child: const Text('移动'),
             ),
@@ -1744,28 +1651,64 @@ class _CollectionPictureScreenState
   }
 
   Future<void> _confirmClearLibrary() async {
+    bool clearAppCache = true;
+    bool clearResourceCache = true;
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('清空媒体库'),
-          content: const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。确定继续吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('清空媒体库'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。'),
+                  const SizedBox(height: 12),
+                  const Text('可选清除磁盘上的缩略图缓存：',
+                      style: TextStyle(fontSize: 13)),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: clearAppCache,
+                    onChanged: (v) =>
+                        setState(() => clearAppCache = v ?? true),
+                    title: const Text('清除应用缓存目录缩略图',
+                        style: TextStyle(fontSize: 13)),
+                    subtitle: const Text('library/media/thumbnails/',
+                        style: TextStyle(fontSize: 11)),
+                  ),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: clearResourceCache,
+                    onChanged: (v) =>
+                        setState(() => clearResourceCache = v ?? true),
+                    title: const Text('清除各资源目录 .SlimeWorks/tmp 缩略图',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ],
               ),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await viewModel.clearLocalLibrary();
-              },
-              child: const Text('清空'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消')),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error),
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await viewModel.clearLocalLibrary(
+                      clearAppThumbnailCache: clearAppCache,
+                      clearResourceThumbnailCache: clearResourceCache,
+                    );
+                  },
+                  child: const Text('清空'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1779,10 +1722,7 @@ class _CollectionPictureScreenState
           title: const Text('移除媒体集合'),
           content: Text('确定将“$title”从媒体库中移除吗？不会删除原始文件。'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1806,10 +1746,7 @@ class _CollectionPictureScreenState
             title: const Text('删除媒体文件夹'),
             content: Text('确定删除“$title”吗？文件夹内集合会移动到上一级目录。'),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
               FilledButton(
                 onPressed: () async {
                   Navigator.of(context).pop();
@@ -1840,10 +1777,7 @@ class _CollectionPictureScreenState
             '确定删除“$title”吗？\n文件夹内包含 ${viewModel.collectionCountInFolder(folderId)} 个集合，请选择处理方式：',
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             TextButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1881,14 +1815,9 @@ class _CollectionPictureScreenState
             '此操作不可撤销，将永久删除该目录及其内全部文件。',
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
               onPressed: () async {
                 Navigator.of(context).pop();
                 await _deleteCollectionFolder(collectionId, folderPath);
@@ -1902,10 +1831,7 @@ class _CollectionPictureScreenState
   }
 
   /// 删除物理目录并从媒体库移除集合记录
-  Future<void> _deleteCollectionFolder(
-    String collectionId,
-    String folderPath,
-  ) async {
+  Future<void> _deleteCollectionFolder(String collectionId, String folderPath) async {
     try {
       final dir = Directory(folderPath);
       if (await dir.exists()) {
@@ -1914,12 +1840,9 @@ class _CollectionPictureScreenState
       await viewModel.deleteCollection(collectionId);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('删除文件夹失败: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除文件夹失败: $e'), behavior: SnackBarBehavior.floating));
     }
   }
 
@@ -1929,14 +1852,9 @@ class _CollectionPictureScreenState
       builder: (context) {
         return AlertDialog(
           title: const Text('批量删除媒体项目'),
-          content: Text(
-            '确定从媒体库移除已选中的 ${viewModel.selectedIds.length} 个项目吗？原始文件不会被删除。',
-          ),
+          content: Text('确定从媒体库移除已选中的 ${viewModel.selectedIds.length} 个项目吗？原始文件不会被删除。'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1950,10 +1868,7 @@ class _CollectionPictureScreenState
     );
   }
 
-  Future<void> _confirmDeleteNodeLocalFilesForFolder(
-    String folderId,
-    String folderName,
-  ) async {
+  Future<void> _confirmDeleteNodeLocalFilesForFolder(String folderId, String folderName) async {
     final confirmed = await showConfirmDialog(
       context,
       title: '删除节点本地文件',
@@ -1966,10 +1881,7 @@ class _CollectionPictureScreenState
     if (confirmed) await viewModel.deleteNodeLocalFilesForFolder(folderId);
   }
 
-  Future<void> _confirmDeleteNodeLocalFilesForCollection(
-    String collectionId,
-    String title,
-  ) async {
+  Future<void> _confirmDeleteNodeLocalFilesForCollection(String collectionId, String title) async {
     final confirmed = await showConfirmDialog(
       context,
       title: '删除节点本地文件',
@@ -2033,10 +1945,7 @@ class _KeywordInputListState extends State<_KeywordInputList> {
               for (int i = 0; i < widget.keywords.length; i++)
                 Chip(
                   label: Text(widget.keywords[i]),
-                  deleteIcon: Icon(
-                    Icons.close,
-                    size: AppTheme.metrics.iconSize16,
-                  ),
+                  deleteIcon: Icon(Icons.close, size: AppTheme.metrics.iconSize16),
                   onDeleted: () => _removeKeyword(i),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2061,10 +1970,7 @@ class _KeywordInputListState extends State<_KeywordInputList> {
             ),
             SizedBox(width: appMetrics.kSpace4),
             IconButton(
-              icon: Icon(
-                Icons.add_circle_outline,
-                size: AppTheme.metrics.iconSize20,
-              ),
+              icon: Icon(Icons.add_circle_outline, size: AppTheme.metrics.iconSize20),
               onPressed: _addKeyword,
               padding: EdgeInsets.zero,
               constraints: BoxConstraints(
@@ -2079,9 +1985,9 @@ class _KeywordInputListState extends State<_KeywordInputList> {
             padding: EdgeInsets.only(top: appMetrics.kSpace4),
             child: Text(
               '等效正则：${widget.keywords.map((k) => RegExp.escape(k)).join('|')}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).hintColor,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
             ),
           ),
       ],
@@ -2104,8 +2010,7 @@ class _AnimatedSwitcherWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isIncoming =
-        (child.key as ValueKey<String>?)?.value == pageContentKey;
+    final isIncoming = (child.key as ValueKey<String>?)?.value == pageContentKey;
     final dir = navForward ? 1.0 : -1.0;
     final tween = isIncoming
         ? Tween<Offset>(begin: Offset(dir, 0), end: Offset.zero)
@@ -2114,9 +2019,7 @@ class _AnimatedSwitcherWrapper extends StatelessWidget {
       child: ColoredBox(
         color: Theme.of(context).scaffoldBackgroundColor,
         child: SlideTransition(
-          position: tween.animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-          ),
+          position: tween.animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
           child: child,
         ),
       ),

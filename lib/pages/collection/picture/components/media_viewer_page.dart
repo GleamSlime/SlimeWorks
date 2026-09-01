@@ -1145,6 +1145,28 @@ class _ImageViewerState extends State<_ImageViewer> {
     widget.onZoomChanged?.call(false);
   }
 
+  /// 双击位置（onDoubleTapDown 记录，供放大锚点使用）。
+  Offset? _doubleTapPos;
+
+  /// 双击：未缩放时以双击位置为锚点放大 1.3 倍；已缩放时复原。
+  void _onDoubleTap() {
+    if (_isTransformed) {
+      _reset();
+      return;
+    }
+    const targetScale = 1.3;
+    final pos = _doubleTapPos ?? Offset(_layoutW / 2, _layoutH / 2);
+    final cx = _layoutW / 2;
+    final cy = _layoutH / 2;
+    final k = targetScale / _scale;
+    setState(() {
+      _offsetX = pos.dx - cx - (pos.dx - _offsetX - cx) * k;
+      _offsetY = pos.dy - cy - (pos.dy - _offsetY - cy) * k;
+      _scale = targetScale;
+    });
+    widget.onZoomChanged?.call(true);
+  }
+
   void _onScaleStart(ScaleStartDetails d) {
     _baseScale = _scale;
     _baseRotation = _rotation;
@@ -1256,7 +1278,8 @@ class _ImageViewerState extends State<_ImageViewer> {
       fit: StackFit.expand,
       children: [
         GestureDetector(
-          onDoubleTap: _reset,
+          onDoubleTapDown: (details) => _doubleTapPos = details.localPosition,
+          onDoubleTap: _onDoubleTap,
           onLongPress: widget.onSave,
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,

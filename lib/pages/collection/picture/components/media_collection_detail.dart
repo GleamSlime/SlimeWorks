@@ -204,6 +204,10 @@ class MediaCollectionDetailView extends StatelessWidget {
                   key: ValueKey(item.id),
                   item: item,
                   source: source,
+                  coverFallbackSource: viewModel.buildRemoteOriginalMediaSource(
+                    item,
+                    collectionId: collectionId,
+                  ),
                   showOverlay: viewModel.showMediaOverlay.value,
                   isLost: viewModel.checkItemLost(item),
                   onSaveToGallery: (PlatformUtil.isMobile && item.kind == media_api.MediaKind.image)

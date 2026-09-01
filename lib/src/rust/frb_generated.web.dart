@@ -383,6 +383,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SmartFolderInfo> dco_decode_list_smart_folder_info(dynamic raw);
 
   @protected
+  List<ThumbnailTaskInfo> dco_decode_list_thumbnail_task_info(dynamic raw);
+
+  @protected
   List<TranscriptionSegmentInfo> dco_decode_list_transcription_segment_info(
     dynamic raw,
   );
@@ -475,6 +478,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
+  (int, int) dco_decode_record_u_32_u_32(dynamic raw);
+
+  @protected
   ScanBatchResult dco_decode_scan_batch_result(dynamic raw);
 
   @protected
@@ -494,6 +500,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SystemResourceSnapshot dco_decode_system_resource_snapshot(dynamic raw);
+
+  @protected
+  ThumbnailTaskInfo dco_decode_thumbnail_task_info(dynamic raw);
 
   @protected
   TranscriptionResultInfo dco_decode_transcription_result_info(dynamic raw);
@@ -885,6 +894,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ThumbnailTaskInfo> sse_decode_list_thumbnail_task_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TranscriptionSegmentInfo> sse_decode_list_transcription_segment_info(
     SseDeserializer deserializer,
   );
@@ -989,6 +1003,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (int, int) sse_decode_record_u_32_u_32(SseDeserializer deserializer);
+
+  @protected
   ScanBatchResult sse_decode_scan_batch_result(SseDeserializer deserializer);
 
   @protected
@@ -1014,6 +1031,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SystemResourceSnapshot sse_decode_system_resource_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ThumbnailTaskInfo sse_decode_thumbnail_task_info(
     SseDeserializer deserializer,
   );
 
@@ -1506,6 +1528,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_thumbnail_task_info(
+    List<ThumbnailTaskInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_transcription_segment_info(
     List<TranscriptionSegmentInfo> self,
     SseSerializer serializer,
@@ -1630,6 +1658,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_u_32_u_32((int, int) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_scan_batch_result(
     ScanBatchResult self,
     SseSerializer serializer,
@@ -1665,6 +1696,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_system_resource_snapshot(
     SystemResourceSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_thumbnail_task_info(
+    ThumbnailTaskInfo self,
     SseSerializer serializer,
   );
 

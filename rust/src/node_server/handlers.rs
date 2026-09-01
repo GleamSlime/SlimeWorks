@@ -26,6 +26,15 @@ pub async fn dispatch_action(
         })),
 
         // ── 媒体集合操作 ─────────────────────────────────────────────────────
+        // 节点端缩略图生成进度（客户端轮询展示状态，移动端经节点取数时同样可见）
+        "get_thumb_progress" => {
+            let (total, completed) = super::media_handler::thumb_generation_progress();
+            Ok(json!({
+                "total": total.to_string(),
+                "completed": completed.to_string(),
+            }))
+        }
+
         "list_media_collections" => {
             let collections = media_api::get_all_media_collections()
                 .map_err(|e| format!("获取媒体集合失败: {}", e))?;
@@ -40,6 +49,7 @@ pub async fn dispatch_action(
                 .into_iter()
                 .map(|c| {
                     let total_size = stats_map.get(&c.id).map(|s| s.total_size).unwrap_or(0);
+                    // 时间戳与本地 FFI 保持一致（Unix 秒），避免客户端解析失败导致排序错乱
                     json!({
                         "id": c.id,
                         "title": c.title,
@@ -47,8 +57,8 @@ pub async fn dispatch_action(
                         "folder_id": c.folder_id,
                         "cover_path": c.cover_path,
                         "item_count": c.item_count.to_string(),
-                        "created_at": c.created_at,
-                        "updated_at": c.updated_at,
+                        "created_at": c.created_at.timestamp(),
+                        "updated_at": c.updated_at.timestamp(),
                         "total_size": total_size.to_string(),
                     })
                 })
@@ -62,10 +72,11 @@ pub async fn dispatch_action(
             let result: Vec<Value> = folders
                 .into_iter()
                 .map(|f| {
+                    // 时间戳与本地 FFI 保持一致（Unix 秒）
                     json!({
                         "id": f.id,
                         "name": f.name,
-                        "created_at": f.created_at,
+                        "created_at": f.created_at.timestamp(),
                         "order": f.order,
                         "parent_id": f.parent_id,
                     })
@@ -106,7 +117,7 @@ pub async fn dispatch_action(
             Ok(json!({
                 "id": folder.id,
                 "name": folder.name,
-                "created_at": folder.created_at,
+                "created_at": folder.created_at.timestamp(),
                 "order": folder.order,
                 "parent_id": folder.parent_id,
             }))
@@ -120,7 +131,7 @@ pub async fn dispatch_action(
             Ok(json!({
                 "id": folder.id,
                 "name": folder.name,
-                "created_at": folder.created_at,
+                "created_at": folder.created_at.timestamp(),
                 "order": folder.order,
                 "parent_id": folder.parent_id,
             }))
@@ -148,6 +159,7 @@ pub async fn dispatch_action(
             let result: Vec<Value> = collections
                 .into_iter()
                 .map(|c| {
+                    // 时间戳与本地 FFI 保持一致（Unix 秒）
                     json!({
                         "id": c.id,
                         "title": c.title,
@@ -155,8 +167,8 @@ pub async fn dispatch_action(
                         "folder_id": c.folder_id,
                         "cover_path": c.cover_path,
                         "item_count": c.item_count.to_string(),
-                        "created_at": c.created_at,
-                        "updated_at": c.updated_at,
+                        "created_at": c.created_at.timestamp(),
+                        "updated_at": c.updated_at.timestamp(),
                     })
                 })
                 .collect();
@@ -165,8 +177,32 @@ pub async fn dispatch_action(
 
         "import_media_folder" => {
             let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
+            let generate_thumbnails = params["generate_thumbnails"].as_bool().unwrap_or(false);
+            let preserve_structure = params["preserve_structure"].as_bool().unwrap_or(false);
+            // 按原始目录导入：扫描子目录集合，并按目录层级创建文件夹归档
+            if preserve_structure {
+                let collections = media_api::scan_media_folders(folder_path.clone())
+                    .map_err(|e| format!("导入媒体文件夹失败: {}", e))?;
+                let imported = import_collections_with_structure(&folder_path, collections)?;
+                if generate_thumbnails {
+                    spawn_import_thumbnail_generation(&imported);
+                }
+                return Ok(json!({
+                    "id": "",
+                    "title": "",
+                    "folder_path": folder_path,
+                    "folder_id": Value::Null,
+                    "cover_path": Value::Null,
+                    "item_count": imported.len().to_string(),
+                    "created_at": chrono::Utc::now().timestamp(),
+                    "updated_at": chrono::Utc::now().timestamp(),
+                }));
+            }
             let collection = media_api::import_media_folder(folder_path)
                 .map_err(|e| format!("导入媒体文件夹失败: {}", e))?;
+            if generate_thumbnails {
+                spawn_import_thumbnail_generation(std::slice::from_ref(&collection));
+            }
             Ok(json!({
                 "id": collection.id,
                 "title": collection.title,
@@ -174,8 +210,8 @@ pub async fn dispatch_action(
                 "folder_id": collection.folder_id,
                 "cover_path": collection.cover_path,
                 "item_count": collection.item_count.to_string(),
-                "created_at": collection.created_at,
-                "updated_at": collection.updated_at,
+                "created_at": collection.created_at.timestamp(),
+                "updated_at": collection.updated_at.timestamp(),
             }))
         }
 
@@ -626,8 +662,8 @@ pub async fn dispatch_action(
             let range = params["range"].as_str().unwrap_or("1day").to_string();
             let aggregated = power_stats::api::power_stats_get_aggregated(range)
                 .map_err(|e| format!("获取电力聚合数据失败: {}", e))?;
-            let parsed: Value =
-                serde_json::from_str(&aggregated).map_err(|e| format!("解析聚合数据失败: {}", e))?;
+            let parsed: Value = serde_json::from_str(&aggregated)
+                .map_err(|e| format!("解析聚合数据失败: {}", e))?;
             Ok(parsed)
         }
 
@@ -952,6 +988,86 @@ pub async fn dispatch_action(
         // ── 未知动作 ─────────────────────────────────────────────────────────
         _ => Err(format!("不支持的动作: {}", action)),
     }
+}
+
+/// 按原始目录结构导入：按集合目录相对导入根目录的层级创建（或复用）文件夹，
+/// 并将集合移入对应文件夹；返回归档后的集合列表。
+fn import_collections_with_structure(
+    root: &str,
+    collections: Vec<media_collection::MediaCollection>,
+) -> Result<Vec<media_collection::MediaCollection>, String> {
+    let root_norm = root.trim_end_matches(['/', '\\']);
+    let mut folder_cache: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut imported = Vec::new();
+    for collection in collections {
+        // 集合目录相对导入根目录的路径（非后代目录时跳过层级创建）
+        let rel = collection
+            .folder_path
+            .trim_end_matches(['/', '\\'])
+            .strip_prefix(root_norm)
+            .map(|r| r.trim_start_matches(['/', '\\']).to_string());
+        let mut parent_id: Option<String> = None;
+        if let Some(rel) = rel {
+            let mut acc = String::new();
+            for segment in rel.split(['/', '\\']).filter(|s| !s.is_empty()) {
+                if !acc.is_empty() {
+                    acc.push('/');
+                }
+                acc.push_str(segment);
+                let folder_id = match folder_cache.get(&acc) {
+                    Some(id) => id.clone(),
+                    None => {
+                        let folder = find_or_create_folder(segment, &parent_id)?;
+                        folder_cache.insert(acc.clone(), folder.clone());
+                        folder
+                    }
+                };
+                parent_id = Some(folder_id);
+            }
+        }
+        if let Some(pid) = parent_id {
+            media_api::move_media_collection_to_folder(collection.id.clone(), Some(pid))
+                .map_err(|e| format!("移动集合失败: {}", e))?;
+        }
+        imported.push(collection);
+    }
+    Ok(imported)
+}
+
+/// 在指定父文件夹下查找同名子文件夹，不存在时创建；返回文件夹 ID。
+fn find_or_create_folder(name: &str, parent_id: &Option<String>) -> Result<String, String> {
+    let existing = match parent_id {
+        Some(pid) => media_api::get_child_media_folders(pid.clone())
+            .map_err(|e| format!("获取子文件夹失败: {}", e))?
+            .into_iter()
+            .find(|f| f.name == name),
+        None => media_api::get_all_media_folders()
+            .map_err(|e| format!("获取文件夹失败: {}", e))?
+            .into_iter()
+            .find(|f| f.parent_id.is_none() && f.name == name),
+    };
+    if let Some(folder) = existing {
+        return Ok(folder.id);
+    }
+    let folder = match parent_id {
+        Some(pid) => media_api::create_child_media_folder(name.to_string(), pid.clone())
+            .map_err(|e| format!("创建文件夹失败: {}", e))?,
+        None => media_api::create_media_folder(name.to_string())
+            .map_err(|e| format!("创建文件夹失败: {}", e))?,
+    };
+    Ok(folder.id)
+}
+
+/// 导入后全量生成缩略图：收集集合内全部媒体文件，后台线程逐个生成并计入进度统计。
+fn spawn_import_thumbnail_generation(collections: &[media_collection::MediaCollection]) {
+    let mut files = Vec::new();
+    for collection in collections {
+        if let Ok(items) = media_api::get_media_collection_items(collection.id.clone()) {
+            files.extend(items.into_iter().map(|item| item.file_path));
+        }
+    }
+    super::media_handler::spawn_bulk_thumbnail_generation(files);
 }
 
 /// 处理文件上传请求（待完善 multipart 解析）

@@ -57,6 +57,7 @@ class PictureLibraryToolbar extends StatelessWidget {
       final statusText = viewModel.scanStatusText.value;
       final inDetail = viewModel.isInDetail;
       final thumbProgress = viewModel.thumbProgress.value;
+      final remoteThumbProgress = viewModel.remoteThumbProgress.value;
       // columnCount 非 null 表示移动端，需要在 toolbar 中显示列数 + 排序
       final showMobileDetailControls = columnCount != null && inDetail;
       final showMobileBrowseSortControl = columnCount != null && !inDetail;
@@ -85,9 +86,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                           SizedBox(
                             width: AppTheme.metrics.kSpace20,
                             height: AppTheme.metrics.kSpace20,
-                            child: const CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: const CircularProgressIndicator(strokeWidth: 2),
                           ),
                           Text(
                             statusText.isNotEmpty ? statusText : ' ',
@@ -103,10 +102,16 @@ class PictureLibraryToolbar extends StatelessWidget {
                     progress: thumbProgress,
                     onCancel: viewModel.cancelThumbGeneration,
                   )
+                // 远程节点缩略图生成进度：任务在节点端执行，客户端仅展示进度
+                else if (remoteThumbProgress != null)
+                  _ThumbProgressIndicator(progress: remoteThumbProgress)
                 else if (viewModel.thumbGenerationPaused.value)
-                  _ThumbPausedIndicator(
-                    onResume: viewModel.resumeThumbGeneration,
-                  ),
+                  _ThumbPausedIndicator(onResume: viewModel.resumeThumbGeneration),
+                // 搜索：浏览模式深度搜索当前层级；详情模式按文件名过滤资源列表
+                _LibrarySearchField(
+                  viewModel: viewModel,
+                  hintText: inDetail ? '搜索资源文件名' : '搜索文件夹/集合/资源',
+                ),
                 // 浏览模式：图书馆操作按钮
                 if (!isScanning && !inDetail)
                   Row(
@@ -154,17 +159,13 @@ class PictureLibraryToolbar extends StatelessWidget {
                         ),
                       ),
                       Tooltip(
-                        message: viewModel.showFavoritesOnly.value
-                            ? '显示全部'
-                            : '只显示收藏',
+                        message: viewModel.showFavoritesOnly.value ? '显示全部' : '只显示收藏',
                         child: DesktopHeadToolsButton(
                           icon: Icon(
                             viewModel.showFavoritesOnly.value
                                 ? Icons.favorite_rounded
                                 : Icons.favorite_border_rounded,
-                            color: viewModel.showFavoritesOnly.value
-                                ? Colors.redAccent
-                                : null,
+                            color: viewModel.showFavoritesOnly.value ? Colors.redAccent : null,
                           ),
                           size: AppTheme.metrics.kSpace40,
                           onTap: () => viewModel.showFavoritesOnly.value =
@@ -213,9 +214,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                   ),
                 if (inDetail)
                   Tooltip(
-                    message: viewModel.showMediaOverlay.value
-                        ? '隐藏叠加信息'
-                        : '显示叠加信息',
+                    message: viewModel.showMediaOverlay.value ? '隐藏叠加信息' : '显示叠加信息',
                     child: DesktopHeadToolsButton(
                       icon: Icon(
                         viewModel.showMediaOverlay.value
@@ -226,8 +225,8 @@ class PictureLibraryToolbar extends StatelessWidget {
                             : null,
                       ),
                       size: AppTheme.metrics.kSpace40,
-                      onTap: () => viewModel.showMediaOverlay.value =
-                          !viewModel.showMediaOverlay.value,
+                      onTap: () =>
+                          viewModel.showMediaOverlay.value = !viewModel.showMediaOverlay.value,
                     ),
                   ),
                 // 移动端详情模式：列数调节 + 资源排序 + 上传（桌面端此控件在 leading 区域）
@@ -239,10 +238,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                         icon: const Icon(Icons.upload_rounded),
                         iconSize: scaleW(18),
                         padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                        constraints: BoxConstraints(
-                          minWidth: scaleW(28),
-                          minHeight: scaleW(28),
-                        ),
+                        constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                         onPressed: onUpload,
                       ),
                     ),
@@ -255,25 +251,16 @@ class PictureLibraryToolbar extends StatelessWidget {
                     icon: const Icon(Icons.remove_rounded),
                     iconSize: scaleW(16),
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                    constraints: BoxConstraints(
-                      minWidth: scaleW(28),
-                      minHeight: scaleW(28),
-                    ),
+                    constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                     tooltip: '减少列数',
                     onPressed: (columnCount! > 1) ? onColumnDecrement : null,
                   ),
-                  Text(
-                    '$columnCount 列',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  Text('$columnCount 列', style: Theme.of(context).textTheme.bodySmall),
                   IconButton(
                     icon: const Icon(Icons.add_rounded),
                     iconSize: scaleW(16),
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                    constraints: BoxConstraints(
-                      minWidth: scaleW(28),
-                      minHeight: scaleW(28),
-                    ),
+                    constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                     tooltip: '增加列数',
                     onPressed: (columnCount! < 10) ? onColumnIncrement : null,
                   ),
@@ -307,9 +294,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                 // 桌面端/移动端详情模式：瀑布流布局切换
                 if (inDetail)
                   Tooltip(
-                    message: viewModel.useMasonryGrid.value
-                        ? '切换为网格布局'
-                        : '切换为瀑布流布局',
+                    message: viewModel.useMasonryGrid.value ? '切换为网格布局' : '切换为瀑布流布局',
                     child: DesktopHeadToolsButton(
                       icon: Icon(
                         viewModel.useMasonryGrid.value
@@ -320,8 +305,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                             : null,
                       ),
                       size: AppTheme.metrics.kSpace40,
-                      onTap: () => viewModel.useMasonryGrid.value =
-                          !viewModel.useMasonryGrid.value,
+                      onTap: () => viewModel.useMasonryGrid.value = !viewModel.useMasonryGrid.value,
                     ),
                   ),
                 // 刷新/同步按钮（始终显示）
@@ -339,20 +323,111 @@ class PictureLibraryToolbar extends StatelessWidget {
   }
 }
 
-/// 封面生成进度指示器：默认显示进度环 + 百分比，
-/// 鼠标悬停时额外显示取消按钮（暂停封面生成）。
-class _ThumbProgressIndicator extends StatefulWidget {
-  const _ThumbProgressIndicator({
-    required this.progress,
-    required this.onCancel,
-  });
+/// 库内搜索框：点击图标展开输入，输入即过滤；
+/// 清除按钮清空关键词并收起，过滤立即解除。
+class _LibrarySearchField extends StatefulWidget {
+  const _LibrarySearchField({required this.viewModel, required this.hintText});
 
-  final (int, int) progress;
-  final VoidCallback onCancel;
+  final MediaLibraryViewModel viewModel;
+
+  /// 输入框占位文案（浏览/详情两种模式）。
+  final String hintText;
 
   @override
-  State<_ThumbProgressIndicator> createState() =>
-      _ThumbProgressIndicatorState();
+  State<_LibrarySearchField> createState() => _LibrarySearchFieldState();
+}
+
+class _LibrarySearchFieldState extends State<_LibrarySearchField> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.viewModel.searchQuery.value);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final active = widget.viewModel.isSearchActive.value;
+      if (!active) {
+        return Tooltip(
+          message: '搜索',
+          child: DesktopHeadToolsButton(
+            icon: const Icon(Icons.search_rounded),
+            size: AppTheme.metrics.kSpace40,
+            onTap: () {
+              widget.viewModel.isSearchActive.value = true;
+              _focusNode.requestFocus();
+            },
+          ),
+        );
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: AppTheme.metrics.kSpace4,
+        children: [
+          SizedBox(
+            width: scaleW(150),
+            height: AppTheme.metrics.kSpace32,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              onChanged: (value) => widget.viewModel.searchQuery.value = value,
+              style: Theme.of(context).textTheme.bodySmall,
+              decoration: InputDecoration(
+                hintText: widget.hintText,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: AppTheme.metrics.kSpace8,
+                  vertical: AppTheme.metrics.kSpace4,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: AppTheme.metrics.radius8,
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: '清除搜索',
+            child: DesktopHeadToolsButton(
+              icon: const Icon(Icons.close_rounded),
+              size: AppTheme.metrics.kSpace40,
+              onTap: () {
+                _controller.clear();
+                widget.viewModel.searchQuery.value = '';
+                widget.viewModel.isSearchActive.value = false;
+              },
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+/// 封面生成进度指示器：默认显示进度环 + 百分比，
+/// 鼠标悬停时额外显示取消按钮（暂停封面生成）。
+/// [onCancel] 为 null 时表示远程节点任务，仅展示进度不可取消。
+class _ThumbProgressIndicator extends StatefulWidget {
+  const _ThumbProgressIndicator({required this.progress, this.onCancel});
+
+  final (int, int) progress;
+  final VoidCallback? onCancel;
+
+  @override
+  State<_ThumbProgressIndicator> createState() => _ThumbProgressIndicatorState();
 }
 
 class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
@@ -362,11 +437,13 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
   Widget build(BuildContext context) {
     final completed = widget.progress.$1;
     final total = widget.progress.$2;
+    final isRemote = widget.onCancel == null;
+    final label = isRemote ? '节点封面生成中' : '封面生成中';
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: Tooltip(
-        message: '封面生成中 $completed/$total（悬停可取消）',
+        message: isRemote ? '$label $completed/$total（远程节点任务）' : '$label $completed/$total（悬停可取消）',
         child: Row(
           mainAxisSize: MainAxisSize.min,
           spacing: AppTheme.metrics.kSpace4,
@@ -380,14 +457,11 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
               ),
             ),
             Text(
-              '封面生成中 $completed/$total',
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).hintColor,
-              ),
+              '$label $completed/$total',
+              style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
             ),
-            // 悬停时显示取消按钮
-            if (_hovering)
+            // 悬停时显示取消按钮（仅本地任务）
+            if (_hovering && !isRemote)
               Tooltip(
                 message: '暂停封面生成',
                 child: InkWell(
@@ -424,10 +498,7 @@ class _ThumbPausedIndicator extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         spacing: AppTheme.metrics.kSpace4,
         children: [
-          Text(
-            '封面生成已暂停',
-            style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
-          ),
+          Text('封面生成已暂停', style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor)),
           Tooltip(
             message: '继续生成封面',
             child: InkWell(

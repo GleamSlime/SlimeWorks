@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -27,6 +28,7 @@ class MediaItemTile extends StatefulWidget {
     this.fixedHeight,
     this.showOverlay = true,
     this.isLost = false,
+    this.coverFallbackSource,
   });
 
   final media_api.MediaItem item;
@@ -57,6 +59,9 @@ class MediaItemTile extends StatefulWidget {
   /// 瀑布流模式下由外部指定的固定高度（null = 填满格子）。
   final double? fixedHeight;
 
+  /// 远程图片兜底原图 URL：缩略图 2s 未返回时临时改用原图充当封面。
+  final String? coverFallbackSource;
+
   /// 是否显示叠加层（类型标签 + 标题栏）。
   final bool showOverlay;
 
@@ -79,6 +84,12 @@ class _MediaItemTileState extends State<MediaItemTile> {
 
   Worker? _privacyWorker;
 
+  // ── 远程缩略图 2s 超时兜底状态 ─────────────────────────────────────────
+  // 缩略图请求后台继续生成；超时后临时切原图，生成完成再切回缩略图。
+  bool _coverFallbackActive = false;
+  bool _coverThumbReady = false;
+  Timer? _coverFallbackTimer;
+
   @override
   void initState() {
     super.initState();
@@ -96,12 +107,70 @@ class _MediaItemTileState extends State<MediaItemTile> {
     if (_isAudio && widget.onRequestAudioCover != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAudioCover());
     }
+    // 远程图片：预取缩略图并启动 2s 兜底计时
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prepareCoverFallback());
+  }
+
+  @override
+  void didUpdateWidget(MediaItemTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source ||
+        oldWidget.coverFallbackSource != widget.coverFallbackSource) {
+      _coverFallbackActive = false;
+      _coverThumbReady = false;
+      _coverFallbackTimer?.cancel();
+      _coverFallbackTimer = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _prepareCoverFallback());
+    }
   }
 
   @override
   void dispose() {
+    _coverFallbackTimer?.cancel();
     _privacyWorker?.dispose();
     super.dispose();
+  }
+
+  /// 远程缩略图可用兜底时：预取缩略图 + 启动超时计时。
+  void _prepareCoverFallback() {
+    if (!mounted) return;
+    final src = widget.source;
+    final fallback = widget.coverFallbackSource;
+    // 仅远程缩略图 URL 且提供了不同于缩略图的原图 URL 时启用
+    if (src == null || !src.startsWith('http') || fallback == null || fallback == src) {
+      return;
+    }
+    _coverThumbReady = false;
+    // 后台预取缩略图（不阻塞 UI），完成后切回缩略图
+    precacheImage(NetworkImage(src), context)
+        .then((_) {
+          _coverFallbackTimer?.cancel();
+          if (!mounted) return;
+          setState(() {
+            _coverThumbReady = true;
+            _coverFallbackActive = false;
+          });
+        })
+        .catchError((_) {
+          // 缩略图生成失败：直接改用原图兜底
+          _coverFallbackTimer?.cancel();
+          if (!mounted) return;
+          setState(() => _coverFallbackActive = true);
+        });
+    // 2s 未就绪则临时采用原图
+    _coverFallbackTimer?.cancel();
+    _coverFallbackTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted || _coverThumbReady) return;
+      setState(() => _coverFallbackActive = true);
+    });
+  }
+
+  /// 计算实际展示的图片源：远程缩略图超时未返回时临时使用原图。
+  String? _coverEffectiveSrc(String? src) {
+    if (src == null || !src.startsWith('http')) return src;
+    if (_coverThumbReady) return src;
+    if (_coverFallbackActive) return widget.coverFallbackSource ?? src;
+    return src;
   }
 
   bool get _isVideo => widget.item.kind == media_api.MediaKind.video;
@@ -205,7 +274,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final src = _displaySource;
+    final src = _coverEffectiveSrc(_displaySource);
     final showCoverAnyway = src != null && src.isNotEmpty && !widget.isLost;
     final privacyOn = getIt<MediaPrefsService>().privacyMode.value;
     final blurSigma = getIt<MediaPrefsService>().privacyBlurSigma.value;

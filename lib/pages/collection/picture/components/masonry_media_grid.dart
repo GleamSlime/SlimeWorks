@@ -240,6 +240,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       key: tileKey,
       item: item,
       source: source,
+      coverFallbackSource: widget.viewModel.buildRemoteOriginalMediaSource(
+        item,
+        collectionId: widget.viewModel.currentCollectionId.value,
+      ),
       fixedHeight: tileHeight,
       showOverlay: widget.viewModel.showMediaOverlay.value,
       isLost: widget.isRemote ? false : widget.viewModel.checkItemLost(item),

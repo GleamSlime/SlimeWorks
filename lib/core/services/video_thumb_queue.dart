@@ -36,12 +36,22 @@ class _ThumbTask {
 /// - [cancelGroup]：批量取消一批 key。
 /// - [onTaskComplete]：每次任务完成（无论成功/取消/异常）时调用的回调。
 class VideoThumbQueue {
-  VideoThumbQueue({this.concurrency = 2});
+  VideoThumbQueue({int concurrency = 2}) : _concurrency = concurrency;
 
-  int concurrency;
+  int _concurrency;
   int _running = 0;
   int _totalEnqueued = 0;
   int _completed = 0;
+
+  /// 并发上限；setter 主动触发 _tick()，让用户改并发后立即拉起新任务，
+  /// 而不是等到下次 enqueue/whenComplete 才生效。
+  int get concurrency => _concurrency;
+  set concurrency(int v) {
+    if (v == _concurrency) return;
+    _concurrency = v;
+    _logger.info('[Queue] concurrency 变更: $v');
+    _tick();
+  }
 
   /// 每次任务完成后调用（可用于防抖触发缓存清理等）。
   VoidCallback? onTaskComplete;
