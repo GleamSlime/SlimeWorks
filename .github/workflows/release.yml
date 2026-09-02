@@ -200,6 +200,169 @@ jobs:
           path: dist/**/*.exe
           retention-days: 7
 
+  build-ios:
+    needs: detect-version
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-ios
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-ios-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: Flutter 依赖 + 代码生成
+        run: |
+          flutter pub get
+          flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 创建 .env 文件
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
+
+      - name: 导入 Apple 证书到 Keychain
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          if [ -z "$IOS_CERTIFICATE_P12" ]; then
+            echo "❌ 未配置 IOS_CERTIFICATE_P12 secret，跳过签名步骤"
+            exit 1
+          fi
+          # 创建临时 Keychain 并设为默认
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          # 导入 .p12 证书
+          echo "$IOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          # 允许 codesign 访问证书私钥
+          security set-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      - name: 导入 Provisioning Profile
+        env:
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: 安装 CocoaPods 依赖
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Flutter iOS 构建（no-codesign）
+        run: flutter build ios --release --no-codesign
+
+      - name: Xcode archive（生成 .xcarchive）
+        working-directory: ios
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+        run: |
+          mkdir -p build
+          xcodebuild archive \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath build/Runner.xcarchive \
+            -allowProvisioningUpdates \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            ${IOS_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID"}
+
+      - name: 生成 ExportOptions.plist
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          cat > ios/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>release-testing</string>
+              <key>teamID</key>
+              <string>${IOS_TEAM_ID}</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Xcode exportArchive（生成 IPA）
+        run: |
+          mkdir -p build/ios/ipa
+          xcodebuild -exportArchive \
+            -archivePath ios/build/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -allowProvisioningUpdates
+
+      - name: 上传到蒲公英
+        env:
+          PGYER_API_KEY: ${{ secrets.PGYER_API_KEY }}
+        run: |
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" -type f | head -1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "❌ 未找到 IPA 文件"
+            exit 1
+          fi
+          echo "📦 上传到蒲公英: $IPA_PATH"
+          RESPONSE=$(curl -s -F "file=@${IPA_PATH}" \
+            -F "_api_key=${PGYER_API_KEY}" \
+            -F "buildInstallType=2" \
+            -F "buildUpdateDescription=GitHub Actions auto build" \
+            https://www.pgyer.com/apiv2/app/upload)
+          echo "📋 蒲公英响应: $RESPONSE"
+          CODE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null || echo "-1")
+          if [ "$CODE" = "0" ]; then
+            echo "✅ 蒲公英上传成功"
+          else
+            echo "⚠️ 蒲公英上传可能失败，请检查响应"
+          fi
+
+      - name: 清理 Keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain 2>/dev/null || true
+          rm -f certificate.p12
+
+      - name: 上传 iOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: build/ios/ipa/*.ipa
+          retention-days: 7
+
   build-android:
     needs: detect-version
     runs-on: ubuntu-latest
@@ -299,7 +462,7 @@ jobs:
           fi
 
   release:
-    needs: [detect-version, build-macos, build-windows, build-android]
+    needs: [detect-version, build-macos, build-windows, build-ios, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -348,6 +511,7 @@ jobs:
             dist/**/*.dmg
             dist/**/*.exe
             dist/**/*.apk
+            dist/**/*.ipa
           draft: false
           prerelease: false
 
