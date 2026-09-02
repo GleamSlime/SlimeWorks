@@ -94,9 +94,9 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
             )
             .toList();
       case 'list_media_collections':
-        final collections = media_api.getAllMediaCollections();
+        final collections = await media_api.getAllMediaCollections();
         // 批量获取所有集合大小，一次 FFI 调用，避免 N+1 查询
-        final statsList = media_api.getAllCollectionStats();
+        final statsList = await media_api.getAllCollectionStats();
         final statsMap = {for (final s in statsList) s.collectionId: s};
         return collections.map((c) {
           final map = _mediaCollectionToJson(c);
@@ -104,7 +104,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
           return map;
         }).toList();
       case 'list_media_folders':
-        final folders = media_api.getAllMediaFolders();
+        final folders = await media_api.getAllMediaFolders();
         return folders.map(_mediaFolderToJson).toList();
       case 'list_directories':
         // 列举指定路径下的一级子目录，供客户端展示树状目录选择器
@@ -213,7 +213,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
         }
       case 'get_media_collection_items':
         final collectionId = (params['collection_id'] ?? '').toString();
-        final items = media_api.getMediaCollectionItems(collectionId: collectionId);
+        final items = await media_api.getMediaCollectionItems(collectionId: collectionId);
         return items.map(_mediaItemToJson).toList();
       case 'create_media_folder':
         final name = (params['name'] ?? '').toString();
@@ -271,7 +271,7 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
       case 'delete_media_item_local_file':
         final deleteItemId = (params['item_id'] ?? '').toString();
         final deleteCollId = (params['collection_id'] ?? '').toString();
-        final itemsForDelete = media_api.getMediaCollectionItems(collectionId: deleteCollId);
+        final itemsForDelete = await media_api.getMediaCollectionItems(collectionId: deleteCollId);
         final targetItem = itemsForDelete.where((i) => i.id == deleteItemId).firstOrNull;
         if (targetItem != null) {
           try {

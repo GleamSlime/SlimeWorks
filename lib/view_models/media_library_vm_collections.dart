@@ -356,7 +356,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       if (preserveStructure) {
         // 按原始目录导入：扫描子目录创建集合，再按目录层级创建文件夹归档
         final scanned = await media_api.scanMediaFolders(folderPath: selectedPath);
-        imported = _archiveImportedCollectionsByStructure(
+        imported = await _archiveImportedCollectionsByStructure(
           root: selectedPath,
           collections: scanned.where((c) => c.itemCount > BigInt.zero).toList(),
           baseFolderId: (targetFolderId != null && !isRemoteFolder(targetFolderId))
@@ -389,7 +389,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       }
       if (generateThumbnails) {
         // 导入后全量生成：全部文件加入缩略图队列（暂停期间由队列自行拦截）
-        _enqueueBulkItemThumbnails(imported);
+        await _enqueueBulkItemThumbnails(imported);
       }
       await loadCollections();
       scanStatusText.value = '';
@@ -410,11 +410,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
   /// 按原始目录结构归档导入的集合：按集合目录相对导入根目录的层级
   /// 创建（或复用）文件夹并将集合移入；[baseFolderId] 为层级挂载的起始父文件夹。
-  List<media_api.MediaCollection> _archiveImportedCollectionsByStructure({
+  Future<List<media_api.MediaCollection>> _archiveImportedCollectionsByStructure({
     required String root,
     required List<media_api.MediaCollection> collections,
     String? baseFolderId,
-  }) {
+  }) async {
     // 统一分隔符后做前缀匹配，计算相对层级段
     final rootNorm = root.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
     final folderCache = <String, String>{};
@@ -432,7 +432,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         final cacheKey = acc.toString();
         var folderId = folderCache[cacheKey];
         if (folderId == null) {
-          folderId = _findOrCreateLocalFolder(segment, parentId);
+          folderId = await _findOrCreateLocalFolder(segment, parentId);
           folderCache[cacheKey] = folderId;
         }
         parentId = folderId;
@@ -446,10 +446,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   /// 在 [parentId]（null = 根目录）下查找同名子文件夹，不存在时创建；返回文件夹 ID。
-  String _findOrCreateLocalFolder(String name, String? parentId) {
+  Future<String> _findOrCreateLocalFolder(String name, String? parentId) async {
     final siblings = parentId == null
-        ? media_api.getAllMediaFolders().where((f) => f.parentId == null).toList()
-        : media_api.getChildMediaFolders(parentId: parentId);
+        ? (await media_api.getAllMediaFolders()).where((f) => f.parentId == null).toList()
+        : await media_api.getChildMediaFolders(parentId: parentId);
     final existing = siblings.firstWhereOrNull((f) => f.name == name);
     if (existing != null) {
       return existing.id;
@@ -461,10 +461,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   /// 为一批集合内的全部媒体文件入队缩略图生成（导入后全量生成用）。
-  void _enqueueBulkItemThumbnails(List<media_api.MediaCollection> collections) {
+  Future<void> _enqueueBulkItemThumbnails(List<media_api.MediaCollection> collections) async {
     for (final collection in collections) {
       try {
-        final items = media_api.getMediaCollectionItems(collectionId: collection.id);
+        final items = await media_api.getMediaCollectionItems(collectionId: collection.id);
         for (final item in items) {
           _enqueueItemThumbnail(item.filePath);
         }
@@ -536,7 +536,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
         if (preserveStructure) {
           // 按原始目录结构归档，不在拖入位置创建包裹文件夹
-          _archiveImportedCollectionsByStructure(
+          await _archiveImportedCollectionsByStructure(
             root: dir,
             collections: validCollections,
             baseFolderId: (targetFolderId != null && !isRemoteFolder(targetFolderId))

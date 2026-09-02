@@ -209,7 +209,7 @@ abstract class RustLibApi extends BaseApi {
     required String installDir,
   });
 
-  List<bool> crateApiMediaCollectionCheckPathsExist({
+  Future<List<bool>> crateApiMediaCollectionCheckPathsExist({
     required List<String> paths,
   });
 
@@ -493,25 +493,27 @@ abstract class RustLibApi extends BaseApi {
     required String cacheDir,
   });
 
-  List<CollectionCount> crateApiMediaCollectionGetAllCollectionCounts();
+  Future<List<CollectionCount>> crateApiMediaCollectionGetAllCollectionCounts();
 
-  List<(String, List<String>)> crateApiMediaCollectionGetAllCollectionOrders();
+  Future<List<(String, List<String>)>>
+  crateApiMediaCollectionGetAllCollectionOrders();
 
-  List<CollectionStats> crateApiMediaCollectionGetAllCollectionStats();
+  Future<List<CollectionStats>> crateApiMediaCollectionGetAllCollectionStats();
 
   List<FolderInfo> crateApiMusicPlayerGetAllFolders();
 
   List<NovelFolder> crateApiNovelReaderGetAllFolders();
 
-  List<MediaCollection> crateApiMediaCollectionGetAllMediaCollections();
+  Future<List<MediaCollection>> crateApiMediaCollectionGetAllMediaCollections();
 
-  List<MediaFolder> crateApiMediaCollectionGetAllMediaFolders();
+  Future<List<MediaFolder>> crateApiMediaCollectionGetAllMediaFolders();
 
   List<MusicItem> crateApiMusicPlayerGetAllMusicItems();
 
   List<NovelMetadata> crateApiNovelReaderGetAllNovels();
 
-  List<ThumbnailTaskInfo> crateApiMediaCollectionGetAllPendingThumbnailTasks();
+  Future<List<ThumbnailTaskInfo>>
+  crateApiMediaCollectionGetAllPendingThumbnailTasks();
 
   List<Playlist> crateApiMusicPlayerGetAllPlaylists();
 
@@ -536,13 +538,13 @@ abstract class RustLibApi extends BaseApi {
     required String parentId,
   });
 
-  List<MediaFolder> crateApiMediaCollectionGetChildMediaFolders({
+  Future<List<MediaFolder>> crateApiMediaCollectionGetChildMediaFolders({
     required String parentId,
   });
 
   List<EqualizerPresetInfo> crateApiMusicPlayerGetEqPresets();
 
-  List<String> crateApiMediaCollectionGetFavoriteCollectionIds();
+  Future<List<String>> crateApiMediaCollectionGetFavoriteCollectionIds();
 
   List<MusicItem> crateApiMusicPlayerGetFavoriteItems();
 
@@ -552,7 +554,7 @@ abstract class RustLibApi extends BaseApi {
 
   String? crateApiCaptureGetLoggerDirectory();
 
-  List<MediaItem> crateApiMediaCollectionGetMediaCollectionItems({
+  Future<List<MediaItem>> crateApiMediaCollectionGetMediaCollectionItems({
     required String collectionId,
   });
 
@@ -2208,15 +2210,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  List<bool> crateApiMediaCollectionCheckPathsExist({
+  Future<List<bool>> crateApiMediaCollectionCheckPathsExist({
     required List<String> paths,
   }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_String(paths, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_bool,
@@ -4633,16 +4640,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  List<CollectionCount> crateApiMediaCollectionGetAllCollectionCounts() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<CollectionCount>>
+  crateApiMediaCollectionGetAllCollectionCounts() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 112,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_collection_count,
@@ -4659,16 +4668,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_all_collection_counts", argNames: []);
 
   @override
-  List<(String, List<String>)> crateApiMediaCollectionGetAllCollectionOrders() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<(String, List<String>)>>
+  crateApiMediaCollectionGetAllCollectionOrders() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 113,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_record_string_list_string,
@@ -4685,16 +4696,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_all_collection_orders", argNames: []);
 
   @override
-  List<CollectionStats> crateApiMediaCollectionGetAllCollectionStats() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<CollectionStats>> crateApiMediaCollectionGetAllCollectionStats() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 114,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_collection_stats,
@@ -4763,16 +4775,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_all_folders", argNames: []);
 
   @override
-  List<MediaCollection> crateApiMediaCollectionGetAllMediaCollections() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<MediaCollection>>
+  crateApiMediaCollectionGetAllMediaCollections() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 117,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_media_collection,
@@ -4789,16 +4803,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_all_media_collections", argNames: []);
 
   @override
-  List<MediaFolder> crateApiMediaCollectionGetAllMediaFolders() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<MediaFolder>> crateApiMediaCollectionGetAllMediaFolders() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 118,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_media_folder,
@@ -4867,16 +4882,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_all_novels", argNames: []);
 
   @override
-  List<ThumbnailTaskInfo> crateApiMediaCollectionGetAllPendingThumbnailTasks() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<ThumbnailTaskInfo>>
+  crateApiMediaCollectionGetAllPendingThumbnailTasks() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 121,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_thumbnail_task_info,
@@ -5166,19 +5183,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  List<MediaFolder> crateApiMediaCollectionGetChildMediaFolders({
+  Future<List<MediaFolder>> crateApiMediaCollectionGetChildMediaFolders({
     required String parentId,
   }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(parentId, serializer);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 131,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_media_folder,
@@ -5224,16 +5242,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_eq_presets", argNames: []);
 
   @override
-  List<String> crateApiMediaCollectionGetFavoriteCollectionIds() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<String>> crateApiMediaCollectionGetFavoriteCollectionIds() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 133,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -5363,19 +5382,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_logger_directory", argNames: []);
 
   @override
-  List<MediaItem> crateApiMediaCollectionGetMediaCollectionItems({
+  Future<List<MediaItem>> crateApiMediaCollectionGetMediaCollectionItems({
     required String collectionId,
   }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(collectionId, serializer);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 138,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_media_item,
@@ -11958,7 +11978,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CaptureProxyModule dco_decode_capture_proxy_module(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.isNotEmpty)
+    if (arr.length != 0)
       throw Exception('unexpected arr length: expect 0 but see ${arr.length}');
     return CaptureProxyModule();
   }

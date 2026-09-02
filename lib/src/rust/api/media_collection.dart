@@ -42,21 +42,22 @@ String? ensureCollectionConfigDir({required String rootDir}) => RustLib
     .api
     .crateApiMediaCollectionEnsureCollectionConfigDir(rootDir: rootDir);
 
-List<MediaCollection> getAllMediaCollections() =>
+Future<List<MediaCollection>> getAllMediaCollections() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaCollections();
 
-List<MediaFolder> getAllMediaFolders() =>
+Future<List<MediaFolder>> getAllMediaFolders() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllMediaFolders();
 
-List<MediaFolder> getChildMediaFolders({required String parentId}) => RustLib
-    .instance
-    .api
-    .crateApiMediaCollectionGetChildMediaFolders(parentId: parentId);
-
-List<MediaItem> getMediaCollectionItems({required String collectionId}) =>
-    RustLib.instance.api.crateApiMediaCollectionGetMediaCollectionItems(
-      collectionId: collectionId,
+Future<List<MediaFolder>> getChildMediaFolders({required String parentId}) =>
+    RustLib.instance.api.crateApiMediaCollectionGetChildMediaFolders(
+      parentId: parentId,
     );
+
+Future<List<MediaItem>> getMediaCollectionItems({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiMediaCollectionGetMediaCollectionItems(
+  collectionId: collectionId,
+);
 
 Future<MediaCollection> importMediaFolder({required String folderPath}) =>
     RustLib.instance.api.crateApiMediaCollectionImportMediaFolder(
@@ -123,7 +124,7 @@ bool deleteMediaCollection({required String collectionId}) => RustLib
 /// 获取所有未完成的缩略图任务（pending/running/failed 全部）。
 /// 应用启动时调用此函数，将未完成任务重新入队到 Flutter 端 VideoThumbQueue。
 /// failed 状态也会重新入队，让用户能重新尝试生成。
-List<ThumbnailTaskInfo> getAllPendingThumbnailTasks() =>
+Future<List<ThumbnailTaskInfo>> getAllPendingThumbnailTasks() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllPendingThumbnailTasks();
 
 /// Generate (or serve from disk cache) a JPEG thumbnail for `file_path` at
@@ -143,16 +144,16 @@ Future<String?> ensureCoverThumbnail({
 
 /// Return size + file-path list for every local collection in one pass.
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
-List<CollectionStats> getAllCollectionStats() =>
+Future<List<CollectionStats>> getAllCollectionStats() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionStats();
 
 /// Batch-check whether each file path exists on the local filesystem.
 /// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.
-List<bool> checkPathsExist({required List<String> paths}) =>
+Future<List<bool>> checkPathsExist({required List<String> paths}) =>
     RustLib.instance.api.crateApiMediaCollectionCheckPathsExist(paths: paths);
 
 /// Lightweight per-collection counts (no file paths), for polling file-count changes.
-List<CollectionCount> getAllCollectionCounts() =>
+Future<List<CollectionCount>> getAllCollectionCounts() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionCounts();
 
 /// Extract evenly-spaced scrub frames from a video file.
@@ -190,7 +191,7 @@ Future<void> openInFileManager({required String filePath}) => RustLib
     .crateApiMediaCollectionOpenInFileManager(filePath: filePath);
 
 /// 获取所有集合排序记录。
-List<(String, List<String>)> getAllCollectionOrders() =>
+Future<List<(String, List<String>)>> getAllCollectionOrders() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionOrders();
 
 /// 保存集合排序。
@@ -203,7 +204,7 @@ void saveCollectionOrder({
 );
 
 /// 获取收藏集合 ID 列表。
-List<String> getFavoriteCollectionIds() =>
+Future<List<String>> getFavoriteCollectionIds() =>
     RustLib.instance.api.crateApiMediaCollectionGetFavoriteCollectionIds();
 
 /// 保存收藏集合 ID 列表。

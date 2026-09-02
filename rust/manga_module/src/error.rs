@@ -1,7 +1,7 @@
 /// Manga 模块错误类型
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MangaError {
     /// 网络请求错误
     Network(String),

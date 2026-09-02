@@ -238,6 +238,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   final _lostSmartFolders = <String, bool>{};
   final _checkTimestamps = <String, int>{};
 
+  /// 条目丢失状态缓存：key = "item:{itemId}:{filePath}"，避免 build 期间同步 FFI 调用。
+  final _lostItems = <String, bool>{};
+  final _itemCheckTimestamps = <String, int>{};
+
   final remoteCollectionNodeId = <String, String>{}.obs;
   final remoteCollectionNodeName = <String, String>{}.obs;
   final remoteCollectionRawId = <String, String>{}.obs;
@@ -391,7 +395,10 @@ class MediaLibraryViewModel extends BaseViewModel {
       '[媒体库] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
     );
     // 应用启动时恢复未完成的缩略图任务（pending/running/failed 全部重新入队）
-    await _restorePendingThumbnailTasks();
+    // 延后到首屏渲染后执行，避免大量任务入队阻塞首帧绘制
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restorePendingThumbnailTasks();
+    });
     // 启动集合文件夹自动扫描定时器（每 30 秒轮询）
     _folderWatchTimer?.cancel();
     _folderWatchTimer = Timer.periodic(
@@ -1206,7 +1213,7 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// failed 任务从 _itemThumbFailed 移除以允许重试。
   Future<void> _restorePendingThumbnailTasks() async {
     try {
-      final tasks = media_api.getAllPendingThumbnailTasks();
+      final tasks = await media_api.getAllPendingThumbnailTasks();
       if (tasks.isEmpty) return;
       _logger.info('[ThumbRestore] 发现 ${tasks.length} 个未完成缩略图任务，开始重新入队');
       int restored = 0;
@@ -1272,15 +1279,16 @@ class MediaLibraryViewModel extends BaseViewModel {
     final cached = _hoverSourcesCache[collection.id];
     if (cached != null) return cached;
     try {
-      final items = media_api.getMediaCollectionItems(collectionId: collection.id);
-      if (items.isEmpty) return _hoverSourcesCache[collection.id] = const [];
-      final n = items.length;
+      // 从预热缓存读取文件路径，避免 build 期间同步 FFI 调用阻塞 UI
+      final paths = _getCollectionItemPaths(collection.id);
+      if (paths.isEmpty) return _hoverSourcesCache[collection.id] = const [];
+      final n = paths.length;
       final count = n.clamp(1, _kHoverScrubFrames);
       final result = <String?>[];
       final videoPaths = <String>[];
       for (int i = 0; i < count; i++) {
         final idx = ((i / (count - 1).clamp(1, count - 1)) * (n - 1)).round().clamp(0, n - 1);
-        final p = items[idx].filePath;
+        final p = paths[idx];
         if (_isVideoPath(p)) {
           // 视频：使用已有缩略图或 null 占位；后台触发生成
           final thumb = _collectionVideoThumbnails[collection.id];
@@ -1480,7 +1488,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     bool anyChanged = false;
     try {
       // 轻量级 FFI：只获取集合 item count，不含文件路径列表
-      final countsList = media_api.getAllCollectionCounts();
+      final countsList = await media_api.getAllCollectionCounts();
       for (final col in localCols) {
         try {
           final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount.toInt();
@@ -1510,7 +1518,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   Future<void> loadFolders() async {
     try {
-      final raw = media_api.getAllMediaFolders();
+      final raw = await media_api.getAllMediaFolders();
       _logger.info('[媒体库] loadFolders: 加载到 ${raw.length} 个文件夹');
       folders.assignAll(raw);
       // 仅当不在智能文件夹中时才自动退出：智能文件夹不在 mergedFolders 里，不应被误清除
@@ -1527,13 +1535,14 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   Future<void> loadCollections() async {
     try {
-      final rawCollections = media_api.getAllMediaCollections();
+      final rawCollections = await media_api.getAllMediaCollections();
       _logger.info('[媒体库] loadCollections: 加载到 ${rawCollections.length} 个集合');
       collections.assignAll(rawCollections);
       _hoverSourcesCache.clear();
       clearCoverCheckCache();
-      // 集合大小异步计算，避免阻塞 assignAll 后的 UI 渲染
-      _computeCollectionSizesAsync(rawCollections);
+      // 预热阶段：批量填充 _collectionSizes / _collectionItemPaths / _lostCollections
+      // 一次 await 三组缓存，避免 build 期间每张卡片单独调 FFI 阻塞 UI
+      await _prewarmCollectionCaches(rawCollections);
       if (currentCollectionId.value != null && currentCollection == null) {
         exitCollection();
       }
@@ -1543,33 +1552,73 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
   }
 
-  void _computeCollectionSizesAsync(List<media_api.MediaCollection> cols) {
-    Future.microtask(() {
-      try {
-        // 轻量级 FFI：只获取集合 size，不含文件路径列表（避免大量序列化传输）
-        final countsList = media_api.getAllCollectionCounts();
-        for (final c in countsList) {
-          _collectionSizes[c.collectionId] = c.totalSize;
-        }
-        // _collectionItemPaths 改为按需加载（见 _getCollectionItemPaths）
-      } catch (e) {
-        _logger.error('[媒体库] _computeCollectionSizesAsync 批量统计失败: $e');
+  /// 批量预热集合相关缓存：sizes / item paths / 封面存在性
+  /// 在 loadCollections 中调用，避免 build 期间每张卡片单独调 FFI 阻塞 UI
+  Future<void> _prewarmCollectionCaches(List<media_api.MediaCollection> cols) async {
+    if (cols.isEmpty) return;
+    // Phase 1: 一次 FFI 调用获取所有集合的 size + file_paths
+    try {
+      final statsList = await media_api.getAllCollectionStats();
+      for (final s in statsList) {
+        _collectionSizes[s.collectionId] = s.totalSize;
+        _collectionItemPaths[s.collectionId] = s.filePaths;
       }
-    });
+    } catch (e) {
+      _logger.error('[媒体库] _prewarmCollectionCaches stats 失败: $e');
+    }
+    // Phase 2: 批量检查本地集合的封面路径存在性，填充 _lostCollections
+    try {
+      final coverPaths = <String>[];
+      final coverOwners = <String>[];
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final c in cols) {
+        if (isRemoteCollection(c.id)) continue;
+        final p = c.coverPath;
+        if (p == null || p.isEmpty) {
+          _lostCollections[c.id] = false;
+          _checkTimestamps[c.id] = now;
+          continue;
+        }
+        coverPaths.add(p);
+        coverOwners.add(c.id);
+      }
+      if (coverPaths.isNotEmpty) {
+        final exists = await media_api.checkPathsExist(paths: coverPaths);
+        for (int i = 0; i < coverOwners.length; i++) {
+          _lostCollections[coverOwners[i]] = !exists[i];
+          _checkTimestamps[coverOwners[i]] = now;
+        }
+      }
+    } catch (e) {
+      _logger.error('[媒体库] _prewarmCollectionCaches 封面存在性失败: $e');
+    }
   }
 
-  /// 按需加载集合的文件路径列表（从 Rust FFI 获取）。
+  /// 按需读取集合的文件路径列表（从预热缓存中读取，不调 FFI）
+  /// 缓存由 loadCollections 中的 _prewarmCollectionCaches 预热；
+  /// 新集合未预热时返回空列表，等下一次 loadCollections 时填充。
   List<String> _getCollectionItemPaths(String collectionId) {
-    return _collectionItemPaths.putIfAbsent(collectionId, () {
-      try {
-        return media_api
-            .getMediaCollectionItems(collectionId: collectionId)
-            .map((i) => i.filePath)
-            .toList();
-      } catch (_) {
-        return const [];
+    return _collectionItemPaths[collectionId] ?? const [];
+  }
+
+  /// 批量预热当前集合内所有条目的丢失状态缓存。
+  /// 在 loadCurrentCollectionItems 中调用，避免 build 期间每张卡片单独调 FFI 阻塞 UI。
+  Future<void> _prewarmItemLostCache() async {
+    if (currentItems.isEmpty) return;
+    final paths = currentItems.map((i) => i.filePath).toList();
+    if (paths.isEmpty) return;
+    try {
+      final exists = await media_api.checkPathsExist(paths: paths);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (int i = 0; i < currentItems.length; i++) {
+        final item = currentItems[i];
+        final cacheKey = 'item:${item.id}:${item.filePath}';
+        _lostItems[cacheKey] = !exists[i];
+        _itemCheckTimestamps[cacheKey] = now;
       }
-    });
+    } catch (e) {
+      _logger.error('[媒体库] _prewarmItemLostCache 失败: $e');
+    }
   }
 
   BigInt getCollectionTotalSize(String id) => _collectionSizes[id] ?? BigInt.zero;
@@ -1605,7 +1654,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     // 数据库可能因独占锁等原因首次加载失败，失败后延迟重试一次
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
-        final ids = media_api.getFavoriteCollectionIds();
+        final ids = await media_api.getFavoriteCollectionIds();
         favoriteCollectionIds.assignAll(ids.toSet());
         return;
       } catch (e) {
@@ -1651,7 +1700,9 @@ class MediaLibraryViewModel extends BaseViewModel {
         );
         currentItems.assignAll(payloads.map((payload) => _buildRemoteItem(payload, collectionId)));
       } else {
-        currentItems.assignAll(media_api.getMediaCollectionItems(collectionId: collectionId));
+        currentItems.assignAll(await media_api.getMediaCollectionItems(collectionId: collectionId));
+        // 预热 item 丢失状态：一次 FFI 批量检查，避免 build 期间每张卡片同步调 FFI 阻塞 UI
+        await _prewarmItemLostCache();
       }
     } catch (error) {
       currentItems.clear();

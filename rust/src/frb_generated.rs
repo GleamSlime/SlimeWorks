@@ -1104,15 +1104,16 @@ fn wire__crate__api__module_loader__capture_proxy_module_stop_impl(
     )
 }
 fn wire__crate__api__media_collection__check_paths_exist_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "check_paths_exist",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -1126,12 +1127,14 @@ fn wire__crate__api__media_collection__check_paths_exist_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_paths = <Vec<String>>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::media_collection::check_paths_exist(api_paths),
-                )?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::media_collection::check_paths_exist(api_paths),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -3989,15 +3992,16 @@ fn wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
     )
 }
 fn wire__crate__api__media_collection__get_all_collection_counts_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_collection_counts",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4010,25 +4014,28 @@ fn wire__crate__api__media_collection__get_all_collection_counts_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_all_collection_counts()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_all_collection_counts()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
 fn wire__crate__api__media_collection__get_all_collection_orders_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_collection_orders",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4041,25 +4048,28 @@ fn wire__crate__api__media_collection__get_all_collection_orders_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_all_collection_orders()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_all_collection_orders()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
 fn wire__crate__api__media_collection__get_all_collection_stats_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_collection_stats",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4072,12 +4082,14 @@ fn wire__crate__api__media_collection__get_all_collection_stats_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_all_collection_stats()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_all_collection_stats()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -4144,15 +4156,16 @@ fn wire__crate__api__novel_reader__get_all_folders_impl(
     )
 }
 fn wire__crate__api__media_collection__get_all_media_collections_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_media_collections",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4165,25 +4178,28 @@ fn wire__crate__api__media_collection__get_all_media_collections_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_all_media_collections()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_all_media_collections()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
 fn wire__crate__api__media_collection__get_all_media_folders_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_media_folders",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4196,12 +4212,14 @@ fn wire__crate__api__media_collection__get_all_media_folders_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_all_media_folders()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_all_media_folders()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -4268,15 +4286,16 @@ fn wire__crate__api__novel_reader__get_all_novels_impl(
     )
 }
 fn wire__crate__api__media_collection__get_all_pending_thumbnail_tasks_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_pending_thumbnail_tasks",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4289,13 +4308,15 @@ fn wire__crate__api__media_collection__get_all_pending_thumbnail_tasks_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok =
-                        crate::api::media_collection::get_all_pending_thumbnail_tasks()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::media_collection::get_all_pending_thumbnail_tasks()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -4590,15 +4611,16 @@ fn wire__crate__api__novel_reader__get_child_folders_impl(
     )
 }
 fn wire__crate__api__media_collection__get_child_media_folders_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_child_media_folders",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4612,13 +4634,15 @@ fn wire__crate__api__media_collection__get_child_media_folders_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_parent_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok =
-                        crate::api::media_collection::get_child_media_folders(api_parent_id)?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::media_collection::get_child_media_folders(api_parent_id)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -4654,15 +4678,16 @@ fn wire__crate__api__music_player__get_eq_presets_impl(
     )
 }
 fn wire__crate__api__media_collection__get_favorite_collection_ids_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_favorite_collection_ids",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4675,12 +4700,15 @@ fn wire__crate__api__media_collection__get_favorite_collection_ids_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_favorite_collection_ids()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::media_collection::get_favorite_collection_ids()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -4810,15 +4838,16 @@ fn wire__crate__api__capture__get_logger_directory_impl(
     )
 }
 fn wire__crate__api__media_collection__get_media_collection_items_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_media_collection_items",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4832,14 +4861,16 @@ fn wire__crate__api__media_collection__get_media_collection_items_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_collection_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_media_collection_items(
-                        api_collection_id,
-                    )?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_media_collection_items(
+                            api_collection_id,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -13811,6 +13842,12 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        30 => wire__crate__api__media_collection__check_paths_exist_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         32 => wire__crate__api__logger__cleanup_old_logs_impl(port, ptr, rust_vec_len, data_len),
         59 => wire__crate__api__module_loader__download_capture_proxy_module_impl(
             port,
@@ -14013,7 +14050,55 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        112 => wire__crate__api__media_collection__get_all_collection_counts_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        113 => wire__crate__api__media_collection__get_all_collection_orders_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        114 => wire__crate__api__media_collection__get_all_collection_stats_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        117 => wire__crate__api__media_collection__get_all_media_collections_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        118 => wire__crate__api__media_collection__get_all_media_folders_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        121 => wire__crate__api__media_collection__get_all_pending_thumbnail_tasks_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         129 => wire__crate__api__novel_reader__get_chapter_content_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        131 => wire__crate__api__media_collection__get_child_media_folders_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        133 => wire__crate__api__media_collection__get_favorite_collection_ids_impl(
             port,
             ptr,
             rust_vec_len,
@@ -14021,6 +14106,12 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         135 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
         136 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
+        138 => wire__crate__api__media_collection__get_media_collection_items_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         139 => wire__crate__api__novel_reader__get_novel_content_impl(
             port,
             ptr,
@@ -14470,9 +14561,6 @@ fn pde_ffi_dispatcher_sync_impl(
         ),
         21 => wire__crate__api__http_bridge__call_handler_impl(ptr, rust_vec_len, data_len),
         22 => wire__crate__api__novel_reader__cancel_search_impl(ptr, rust_vec_len, data_len),
-        30 => {
-            wire__crate__api__media_collection__check_paths_exist_impl(ptr, rust_vec_len, data_len)
-        }
         31 => wire__crate__api__capture__cleanup_logger_old_files_impl(ptr, rust_vec_len, data_len),
         33 => wire__crate__api__media_collection__clear_all_local_media_impl(
             ptr,
@@ -14605,42 +14693,12 @@ fn pde_ffi_dispatcher_sync_impl(
         101 => {
             wire__crate__api__game_library__game_library_is_ready_impl(ptr, rust_vec_len, data_len)
         }
-        112 => wire__crate__api__media_collection__get_all_collection_counts_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        113 => wire__crate__api__media_collection__get_all_collection_orders_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        114 => wire__crate__api__media_collection__get_all_collection_stats_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         115 => wire__crate__api__music_player__get_all_folders_impl(ptr, rust_vec_len, data_len),
         116 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
-        117 => wire__crate__api__media_collection__get_all_media_collections_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        118 => wire__crate__api__media_collection__get_all_media_folders_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         119 => {
             wire__crate__api__music_player__get_all_music_items_impl(ptr, rust_vec_len, data_len)
         }
         120 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__media_collection__get_all_pending_thumbnail_tasks_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         122 => wire__crate__api__music_player__get_all_playlists_impl(ptr, rust_vec_len, data_len),
         123 => wire__crate__api__media_collection__get_all_smart_folders_impl(
             ptr,
@@ -14653,24 +14711,9 @@ fn pde_ffi_dispatcher_sync_impl(
         127 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
         128 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
         130 => wire__crate__api__novel_reader__get_child_folders_impl(ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__media_collection__get_child_media_folders_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         132 => wire__crate__api__music_player__get_eq_presets_impl(ptr, rust_vec_len, data_len),
-        133 => wire__crate__api__media_collection__get_favorite_collection_ids_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         134 => wire__crate__api__music_player__get_favorite_items_impl(ptr, rust_vec_len, data_len),
         137 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__media_collection__get_media_collection_items_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         140 => wire__crate__api__music_player__get_playlist_items_impl(ptr, rust_vec_len, data_len),
         141 => wire__crate__api__music_player__get_playlists_by_folder_impl(
             ptr,

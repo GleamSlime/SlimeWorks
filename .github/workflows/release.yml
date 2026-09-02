@@ -30,11 +30,15 @@ jobs:
         id: version
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
-          BUILD_NUMBER=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f2)
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y%m%d")
+          # 构建号格式：日期.commit短hash，例如 20260902.4752dad
+          BUILD_NUMBER="${BUILD_DATE}.${COMMIT_SHORT}"
+          TAG="v${VERSION}+${BUILD_NUMBER}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "tag=v${VERSION}+${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "📋 版本: $VERSION, 构建号: $BUILD_NUMBER"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "📋 版本: $VERSION, 构建号: $BUILD_NUMBER, Tag: $TAG"
 
   build-macos:
     needs: detect-version
@@ -349,6 +353,8 @@ jobs:
         run: |
           VERSION="${{ needs.detect-version.outputs.version }}"
           BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          # Sparkle 要求单调递增的整数版本号，使用 GitHub run_number 保证唯一递增
+          SPARKLE_VERSION="${{ github.run_number }}"
           FILE_SIZE="${{ steps.dmg-info.outputs.file_size }}"
           TAG="${{ needs.detect-version.outputs.tag }}"
           REPO="GleamSlime/slime_works"
@@ -371,7 +377,7 @@ jobs:
                 <pubDate>${DATE}</pubDate>
                 <enclosure
                   url="https://github.com/${REPO}/releases/download/${TAG}/${DMG_FILENAME}"
-                  sparkle:version="${BUILD_NUMBER}"
+                  sparkle:version="${SPARKLE_VERSION}"
                   sparkle:shortVersionString="${VERSION}"
                   sparkle:edSignature=""
                   length="${FILE_SIZE}"

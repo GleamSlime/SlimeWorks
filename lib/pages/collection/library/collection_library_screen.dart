@@ -20,7 +20,6 @@ import 'package:slime_works/pages/collection/library/components/library_item.dar
 import 'package:slime_works/pages/collection/library/components/library_folder_breadcrumb.dart';
 import 'package:slime_works/pages/collection/library/components/library_selection_bar.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
-import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 
 class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
@@ -45,15 +44,15 @@ class _CollectionLibraryScreenState
 
   bool _isBookLost(NovelMetadata meta) {
     if (meta.coverPath == null || meta.coverPath!.isEmpty) return false;
-    final results = media_api.checkPathsExist(paths: [meta.coverPath!]);
-    return !results.first;
+    // 直接使用 dart:io 的 existsSync，避免同步 FFI 调用（checkPathsExist 已改为异步）
+    return !File(meta.coverPath!).existsSync();
   }
 
   bool _isFolderLost(NovelFolder folder) {
     final covers = viewModel.getFolderCovers(folder.id);
     if (covers.isEmpty) return false;
-    final results = media_api.checkPathsExist(paths: covers);
-    return results.every((exists) => !exists);
+    // 直接使用 dart:io 的 existsSync，避免同步 FFI 调用（checkPathsExist 已改为异步）
+    return covers.every((p) => !File(p).existsSync());
   }
 
   /// 滚动控制器，用于保存和恢复滚动位置

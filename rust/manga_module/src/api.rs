@@ -137,7 +137,7 @@ pub async fn manga_test_channel(mode: i32, custom: String) -> Result<u64> {
 pub async fn manga_login(email: String, password: String) -> Result<String> {
     sw_info!("[Manga] 开始登录: email={}", email);
     let body = json!({ "email": email, "password": password });
-    let resp = CLIENT.post("auth/sign-in", body).await.map_err(|e| {
+    let resp = CLIENT.post_with_retry("auth/sign-in", body).await.map_err(|e| {
         sw_warn!("[Manga] 登录失败: {}", e);
         anyhow!("{}", e)
     })?;
@@ -154,7 +154,7 @@ pub async fn manga_login(email: String, password: String) -> Result<String> {
 
 pub async fn manga_get_user_profile() -> Result<String> {
     let resp = CLIENT
-        .get("users/profile")
+        .get_with_retry("users/profile")
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let user = resp
@@ -167,7 +167,7 @@ pub async fn manga_get_user_profile() -> Result<String> {
 
 pub async fn manga_punch_in() -> Result<String> {
     let resp = CLIENT
-        .post("users/punch-in", json!({}))
+        .post_with_retry("users/punch-in", json!({}))
         .await
         .map_err(|e| anyhow!("{}", e))?;
     Ok(serde_json::to_string(&resp)?)
@@ -177,7 +177,7 @@ pub async fn manga_punch_in() -> Result<String> {
 
 pub async fn manga_get_collections() -> Result<String> {
     let resp = CLIENT
-        .get("collections")
+        .get_with_retry("collections")
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let collections = resp
@@ -192,7 +192,7 @@ pub async fn manga_get_collections() -> Result<String> {
 
 pub async fn manga_get_random_comics() -> Result<String> {
     let resp = CLIENT
-        .get("comics/random")
+        .get_with_retry("comics/random")
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let comics = resp
@@ -207,7 +207,7 @@ pub async fn manga_get_random_comics() -> Result<String> {
 
 pub async fn manga_get_categories() -> Result<String> {
     let resp = CLIENT
-        .get("categories")
+        .get_with_retry("categories")
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let categories = resp
@@ -229,7 +229,7 @@ pub async fn manga_get_comics_by_category(
         urlencoding_encode(&category),
         sort
     );
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
     Ok(serde_json::to_string(&data)?)
 }
@@ -245,7 +245,7 @@ pub async fn manga_search_comics(
     let body = json!({ "keyword": keyword, "categories": categories, "sort": sort });
     let path = format!("comics/advanced-search?page={}", page);
     let resp = CLIENT
-        .post(&path, body)
+        .post_with_retry(&path, body)
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
@@ -253,7 +253,7 @@ pub async fn manga_search_comics(
 }
 
 pub async fn manga_get_keywords() -> Result<String> {
-    let resp = CLIENT.get("keywords").await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry("keywords").await.map_err(|e| anyhow!("{}", e))?;
     let keywords = resp
         .get("data")
         .and_then(|d| d.get("keywords"))
@@ -266,7 +266,7 @@ pub async fn manga_get_keywords() -> Result<String> {
 
 pub async fn manga_get_rankings(time_type: String) -> Result<String> {
     let path = format!("comics/leaderboard?tt={}&ct=VC", time_type);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let comics = resp
         .get("data")
         .and_then(|d| d.get("comics"))
@@ -279,7 +279,7 @@ pub async fn manga_get_rankings(time_type: String) -> Result<String> {
 
 pub async fn manga_get_comic_detail(comic_id: String) -> Result<String> {
     let path = format!("comics/{}", comic_id);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let comic = resp
         .get("data")
         .and_then(|d| d.get("comic"))
@@ -290,7 +290,7 @@ pub async fn manga_get_comic_detail(comic_id: String) -> Result<String> {
 
 pub async fn manga_get_comic_recommendations(comic_id: String) -> Result<String> {
     let path = format!("comics/{}/recommendation", comic_id);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let comics = resp
         .get("data")
         .and_then(|d| d.get("comics"))
@@ -301,7 +301,7 @@ pub async fn manga_get_comic_recommendations(comic_id: String) -> Result<String>
 
 pub async fn manga_get_comic_eps(comic_id: String, page: i32) -> Result<String> {
     let path = format!("comics/{}/eps?page={}", comic_id, page);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
     Ok(serde_json::to_string(&data)?)
 }
@@ -311,7 +311,7 @@ pub async fn manga_get_eps_pages(comic_id: String, eps_order: i32, page: i32) ->
         "comics/{}/order/{}/pages?page={}",
         comic_id, eps_order, page
     );
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
     Ok(serde_json::to_string(&data)?)
 }
@@ -320,7 +320,7 @@ pub async fn manga_get_eps_pages(comic_id: String, eps_order: i32, page: i32) ->
 
 pub async fn manga_get_favourites(page: i32, sort: String) -> Result<String> {
     let path = format!("users/favourite?page={}&s={}", page, sort);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
     Ok(serde_json::to_string(&data)?)
 }
@@ -328,7 +328,7 @@ pub async fn manga_get_favourites(page: i32, sort: String) -> Result<String> {
 pub async fn manga_toggle_favourite(comic_id: String) -> Result<String> {
     let path = format!("comics/{}/favourite", comic_id);
     let resp = CLIENT
-        .post(&path, json!({}))
+        .post_with_retry(&path, json!({}))
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let action = resp
@@ -342,7 +342,7 @@ pub async fn manga_toggle_favourite(comic_id: String) -> Result<String> {
 pub async fn manga_toggle_like(comic_id: String) -> Result<String> {
     let path = format!("comics/{}/like", comic_id);
     let resp = CLIENT
-        .post(&path, json!({}))
+        .post_with_retry(&path, json!({}))
         .await
         .map_err(|e| anyhow!("{}", e))?;
     let action = resp
@@ -357,14 +357,14 @@ pub async fn manga_toggle_like(comic_id: String) -> Result<String> {
 
 pub async fn manga_get_comments(comic_id: String, page: i32) -> Result<String> {
     let path = format!("comics/{}/comments?page={}", comic_id, page);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
     Ok(serde_json::to_string(&data)?)
 }
 
 pub async fn manga_get_comment_children(comment_id: String, page: i32) -> Result<String> {
     let path = format!("comments/{}/childrens?page={}", comment_id, page);
-    let resp = CLIENT.get(&path).await.map_err(|e| anyhow!("{}", e))?;
+    let resp = CLIENT.get_with_retry(&path).await.map_err(|e| anyhow!("{}", e))?;
     let data = resp.get("data").cloned().unwrap_or(resp.clone());
     Ok(serde_json::to_string(&data)?)
 }
@@ -372,7 +372,7 @@ pub async fn manga_get_comment_children(comment_id: String, page: i32) -> Result
 pub async fn manga_send_comment(comic_id: String, content: String) -> Result<String> {
     let path = format!("comics/{}/comments", comic_id);
     let resp = CLIENT
-        .post(&path, json!({ "content": content }))
+        .post_with_retry(&path, json!({ "content": content }))
         .await
         .map_err(|e| anyhow!("{}", e))?;
     Ok(serde_json::to_string(&resp)?)
@@ -381,7 +381,7 @@ pub async fn manga_send_comment(comic_id: String, content: String) -> Result<Str
 pub async fn manga_like_comment(comment_id: String) -> Result<String> {
     let path = format!("comments/{}/like", comment_id);
     let resp = CLIENT
-        .post(&path, json!({}))
+        .post_with_retry(&path, json!({}))
         .await
         .map_err(|e| anyhow!("{}", e))?;
     Ok(serde_json::to_string(&resp)?)
@@ -396,7 +396,7 @@ pub fn manga_build_image_url(file_server: String, path: String) -> String {
 
 pub async fn manga_fetch_image(file_server: String, path: String) -> Result<Vec<u8>> {
     CLIENT
-        .fetch_image_bytes(&file_server, &path)
+        .fetch_image_bytes_with_retry(&file_server, &path)
         .await
         .map_err(|e| anyhow!("{}", e))
 }
@@ -418,9 +418,9 @@ pub async fn manga_relay_api(
     body: Option<serde_json::Value>,
 ) -> anyhow::Result<serde_json::Value> {
     let result = match method.to_uppercase().as_str() {
-        "POST" => CLIENT.post(&path, body.unwrap_or_else(|| json!({}))).await,
-        "PUT" => CLIENT.put(&path).await,
-        _ => CLIENT.get(&path).await,
+        "POST" => CLIENT.post_with_retry(&path, body.unwrap_or_else(|| json!({}))).await,
+        "PUT" => CLIENT.put_with_retry(&path).await,
+        _ => CLIENT.get_with_retry(&path).await,
     };
     result.map_err(|e| anyhow::anyhow!("{}", e))
 }
@@ -428,7 +428,7 @@ pub async fn manga_relay_api(
 /// 中转图片下载（供 PC 节点服务器用）
 pub async fn manga_relay_image(file_server: String, path: String) -> anyhow::Result<Vec<u8>> {
     CLIENT
-        .fetch_image_bytes(&file_server, &path)
+        .fetch_image_bytes_with_retry(&file_server, &path)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
 }

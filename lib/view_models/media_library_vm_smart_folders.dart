@@ -31,7 +31,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
       }
       // 2) redb 作为兜底：仅补齐 prefs 中缺失的 orderKey
       try {
-        final orders = media_api.getAllCollectionOrders();
+        final orders = await media_api.getAllCollectionOrders();
         for (final (orderKey, ids) in orders) {
           if (ids.isNotEmpty && !_collectionOrders.containsKey(orderKey)) {
             _collectionOrders[orderKey] = ids;

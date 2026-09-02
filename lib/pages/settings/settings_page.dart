@@ -6,6 +6,7 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/settings/components/aliyun_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/about_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/media_settings_tab.dart';
@@ -48,6 +49,9 @@ class _SettingsPageState extends State<SettingsPage>
       if (!isMobile)
         const _SettingsTab(label: '工具设置', content: _ToolsSettingsWrapper()),
       const _SettingsTab(label: '其他设置', content: _OtherSettingsWrapper()),
+      // 桌面端显示关于（应用版本与自动更新）
+      if (!isMobile)
+        const _SettingsTab(label: '关于', content: AboutSettingsTab()),
     ];
     _controller = TabController(length: _tabs.length, vsync: this);
   }

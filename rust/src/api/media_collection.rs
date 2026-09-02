@@ -131,28 +131,28 @@ fn convert_item(item: media_collection::types::MediaItem) -> MediaItem {
     }
 }
 
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行，避免大数据集反序列化阻塞 Dart UI 线程
 pub fn get_all_media_collections() -> anyhow::Result<Vec<MediaCollection>> {
     let collections =
         media_collection::get_all_media_collections().map_err(|error| anyhow::anyhow!(error))?;
     Ok(collections.into_iter().map(convert_collection).collect())
 }
 
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行，避免阻塞 UI
 pub fn get_all_media_folders() -> anyhow::Result<Vec<MediaFolder>> {
     let folders =
         media_collection::get_all_media_folders().map_err(|error| anyhow::anyhow!(error))?;
     Ok(folders.into_iter().map(convert_folder).collect())
 }
 
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行
 pub fn get_child_media_folders(parent_id: String) -> anyhow::Result<Vec<MediaFolder>> {
     let folders = media_collection::get_child_media_folders(parent_id)
         .map_err(|error| anyhow::anyhow!(error))?;
     Ok(folders.into_iter().map(convert_folder).collect())
 }
 
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行，避免大量 item 反序列化阻塞 UI
 pub fn get_media_collection_items(collection_id: String) -> anyhow::Result<Vec<MediaItem>> {
     let items = media_collection::get_media_collection_items(collection_id)
         .map_err(|error| anyhow::anyhow!(error))?;
@@ -243,7 +243,7 @@ pub struct ThumbnailTaskInfo {
 /// 获取所有未完成的缩略图任务（pending/running/failed 全部）。
 /// 应用启动时调用此函数，将未完成任务重新入队到 Flutter 端 VideoThumbQueue。
 /// failed 状态也会重新入队，让用户能重新尝试生成。
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行，避免阻塞启动流程的 UI 渲染
 pub fn get_all_pending_thumbnail_tasks() -> anyhow::Result<Vec<ThumbnailTaskInfo>> {
     let tasks = media_collection::get_all_pending_thumbnail_tasks()
         .map_err(|e| anyhow::anyhow!(e))?;
@@ -280,7 +280,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
 
 /// Return size + file-path list for every local collection in one pass.
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行，单次批量返回所有集合的 size + file_paths
 pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
     let stats =
         media_collection::get_all_collection_stats().map_err(|error| anyhow::anyhow!(error))?;
@@ -296,13 +296,13 @@ pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
 
 /// Batch-check whether each file path exists on the local filesystem.
 /// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行，避免大量文件存在性检查阻塞 UI
 pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
     media_collection::check_paths_exist(paths)
 }
 
 /// Lightweight per-collection counts (no file paths), for polling file-count changes.
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行
 pub fn get_all_collection_counts() -> anyhow::Result<Vec<CollectionCount>> {
     media_collection::get_all_collection_counts()
         .map(|counts| {
@@ -374,7 +374,7 @@ pub fn open_in_file_manager(file_path: String) -> anyhow::Result<()> {
 // ── 集合排序 FFI 绑定 ────────────────────────────────────────────────────────
 
 /// 获取所有集合排序记录。
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行
 pub fn get_all_collection_orders() -> anyhow::Result<Vec<(String, Vec<String>)>> {
     media_collection::get_all_collection_orders().map_err(|e| anyhow::anyhow!(e))
 }
@@ -388,7 +388,7 @@ pub fn save_collection_order(order_key: String, ids: Vec<String>) -> anyhow::Res
 // ── 收藏集合 FFI 绑定 ────────────────────────────────────────────────────────
 
 /// 获取收藏集合 ID 列表。
-#[frb(sync)]
+// 异步：FRB 在后台线程池执行
 pub fn get_favorite_collection_ids() -> anyhow::Result<Vec<String>> {
     media_collection::get_favorite_collection_ids().map_err(|e| anyhow::anyhow!(e))
 }

@@ -65,9 +65,11 @@ Future<void> main() async {
   }
 
   // 初始化桌面端自动更新
-  // 先检测更新服务器连通性，不通则跳过（避免 Sparkle 弹出原生错误弹窗）
+  // 先加载自动更新开关偏好；开关开启时由 loadPrefs 内部启动闲置定时器
+  // 启动时静默检查一次新版本（不阻塞主流程，不强制安装）
   if (Platform.isMacOS || Platform.isWindows) {
-    await getIt<AppUpdateService>().checkForUpdates();
+    await getIt<AppUpdateService>().loadPrefs();
+    unawaited(getIt<AppUpdateService>().checkForUpdates());
   }
 
   // 必须在任何 Rust FFI 调用前初始化
@@ -191,6 +193,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // 转发给 AppUpdateService 更新闲置时间戳（仅桌面端自动更新生效）
+    if (Platform.isMacOS || Platform.isWindows) {
+      getIt<AppUpdateService>().onLifecycleStateChanged(state);
+    }
   }
 
   @override

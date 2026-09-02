@@ -74,13 +74,21 @@ pub const IMAGE_JUMP_LIST: &[&str] = &[
     "img.safedataplj.com",
 ];
 
+/// CDN 分流默认 IP（与 api.rs 的 DEFAULT_CDN_IP 保持一致）
+pub const DEFAULT_CDN_IP: &str = "104.18.227.172";
+
+/// API 请求失败时切换分流的最大重试次数
+const MAX_API_RETRY: usize = 3;
+/// 图片请求失败时切换分流的最大重试次数
+const MAX_IMAGE_RETRY: usize = 2;
+
 /// 分流配置
 ///
 /// 选择 API 请求的路由方式：
 /// - `Direct` — 标准直连（默认 DNS 解析）
 /// - `ChannelIp(ip)` — 分流2/3：将 `picaapi.picacomic.com` 解析到指定 IP（绕过 DNS 污染）
 /// - `ReverseProxy(base_url)` — US反代：使用该 URL 作为 API 根路径（如 `https://bika-api.jpacg.cc`）
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum ChannelMode {
     #[default]
     Direct,
@@ -390,6 +398,62 @@ impl MangaClient {
         }
     }
 
+    /// 判断两个 ChannelMode 是否等价（用于排除候选列表中的当前分流）
+    fn channels_equal(a: &ChannelMode, b: &ChannelMode) -> bool {
+        match (a, b) {
+            (ChannelMode::Direct, ChannelMode::Direct) => true,
+            (ChannelMode::ChannelIp(ip_a), ChannelMode::ChannelIp(ip_b)) => ip_a == ip_b,
+            (ChannelMode::ReverseProxy(u_a), ChannelMode::ReverseProxy(u_b)) => u_a == u_b,
+            (ChannelMode::LanRelay(a), ChannelMode::LanRelay(b)) => a == b,
+            _ => false,
+        }
+    }
+
+    /// 获取除当前分流外的候选分流列表（用于失败重试时临时切换）
+    ///
+    /// 排除 LanRelay（PC 中转地址不固定，无法假设可用），
+    /// 按 Direct → 分流2 → 分流3 → CDN → JP反代 → US反代 的优先级排序。
+    fn channel_fallback_list(current: &ChannelMode) -> Vec<ChannelMode> {
+        let all = vec![
+            ChannelMode::Direct,
+            ChannelMode::ChannelIp(CHANNEL2_IPV4.to_string()),
+            ChannelMode::ChannelIp(CHANNEL3_IPV4.to_string()),
+            ChannelMode::ChannelIp(DEFAULT_CDN_IP.to_string()),
+            ChannelMode::ReverseProxy("https://bika-api.jpacg.cc".to_string()),
+            ChannelMode::ReverseProxy("https://bika2-api.jpacg.cc".to_string()),
+        ];
+        all.into_iter()
+            .filter(|c| !Self::channels_equal(c, current))
+            .collect()
+    }
+
+    /// 判断错误是否可重试（切换分流重试）
+    ///
+    /// 可重试：网络错误、API 业务码错误（排除 401 未登录和 400 参数错误）
+    /// 不可重试：未登录、JSON 解析错误、其他错误
+    fn is_retryable_error(err: &MangaError) -> bool {
+        match err {
+            MangaError::Network(_) => true,
+            MangaError::Api(code, _) => !matches!(*code, 401 | 400),
+            _ => false,
+        }
+    }
+
+    /// 分流模式描述（用于日志）
+    fn channel_brief(channel: &ChannelMode) -> &'static str {
+        match channel {
+            ChannelMode::Direct => "直连",
+            ChannelMode::ChannelIp(ip) if *ip == CHANNEL2_IPV4 => "分流2",
+            ChannelMode::ChannelIp(ip) if *ip == CHANNEL3_IPV4 => "分流3",
+            ChannelMode::ChannelIp(ip) if *ip == DEFAULT_CDN_IP => "CDN",
+            ChannelMode::ChannelIp(_) => "CDN自定义",
+            ChannelMode::ReverseProxy(u) if *u == "https://bika-api.jpacg.cc" => "JP反代",
+            ChannelMode::ReverseProxy(u) if *u == "https://bika2-api.jpacg.cc" => "US反代",
+            ChannelMode::ReverseProxy(_) => "自定义反代",
+            ChannelMode::LanRelay(_) => "PC中转",
+        }
+    }
+
     /// 测试指定分流模式的连通性，返回延迟（毫秒）
     ///
     /// **测试行为与原项目一致**：
@@ -655,24 +719,37 @@ impl MangaClient {
             let state = self.state.read();
             (state.channel.clone(), state.image_server.clone())
         };
+        self.fetch_image_bytes_with_channel(file_server, path, &channel, &image_server)
+            .await
+    }
 
+    /// 图片下载（使用指定分流，不修改全局状态，用于重试场景）
+    async fn fetch_image_bytes_with_channel(
+        &self,
+        file_server: &str,
+        path: &str,
+        channel: &ChannelMode,
+        image_server: &str,
+    ) -> MangaResult<Vec<u8>> {
         // PC 中转模式：图片也经由局域网节点获取
-        if let ChannelMode::LanRelay(relay_addr) = &channel {
-            return self.fetch_image_via_relay(file_server, path, &relay_addr.clone()).await;
+        if let ChannelMode::LanRelay(relay_addr) = channel {
+            return self
+                .fetch_image_via_relay(file_server, path, relay_addr)
+                .await;
         }
 
-        let candidate_urls = Self::build_image_candidate_urls(file_server, path, &image_server);
+        let candidate_urls = Self::build_image_candidate_urls(file_server, path, image_server);
         let client = self.build_client()?;
         let mut last_error: Option<MangaError> = None;
 
         for raw_url in candidate_urls {
-            let request_url = Self::compose_image_url_for_channel(&raw_url, &channel)?;
+            let request_url = Self::compose_image_url_for_channel(&raw_url, channel)?;
             sw_debug!(
                 "[Manga IMG] 下载图片 url={} channel={:?}",
                 request_url, channel
             );
 
-            let result = match &channel {
+            let result = match channel {
                 ChannelMode::ChannelIp(ip) => {
                     let mut last_ip_err: Option<MangaError> = None;
                     for candidate_ip in Self::channel_ip_candidates(ip) {
@@ -744,6 +821,59 @@ impl MangaClient {
 
         Err(last_error
             .unwrap_or_else(|| MangaError::Network("图片请求失败：没有可用候选地址".to_string())))
+    }
+
+    /// 图片下载（带自动重试：失败时切换分流重试，最多 MAX_IMAGE_RETRY 次）
+    ///
+    /// 临时切换不修改全局分流配置，重试完毕后用户原选分流不变。
+    pub async fn fetch_image_bytes_with_retry(
+        &self,
+        file_server: &str,
+        path: &str,
+    ) -> MangaResult<Vec<u8>> {
+        let (original, image_server) = {
+            let state = self.state.read();
+            (state.channel.clone(), state.image_server.clone())
+        };
+        match self
+            .fetch_image_bytes_with_channel(file_server, path, &original, &image_server)
+            .await
+        {
+            Ok(v) => Ok(v),
+            Err(e) if Self::is_retryable_error(&e) => {
+                let mut last_err = e;
+                let fallbacks = Self::channel_fallback_list(&original);
+                for fallback in fallbacks.iter().take(MAX_IMAGE_RETRY) {
+                    sw_warn!(
+                        "[Manga重试] IMG file_server={} path={} 从[{}]切换到[{}]",
+                        file_server,
+                        path,
+                        Self::channel_brief(&original),
+                        Self::channel_brief(fallback)
+                    );
+                    match self
+                        .fetch_image_bytes_with_channel(file_server, path, fallback, &image_server)
+                        .await
+                    {
+                        Ok(v) => {
+                            sw_info!(
+                                "[Manga重试] IMG 成功 path={} via [{}]",
+                                path,
+                                Self::channel_brief(fallback)
+                            );
+                            return Ok(v);
+                        }
+                        Err(e2) if Self::is_retryable_error(&e2) => {
+                            last_err = e2;
+                            continue;
+                        }
+                        Err(e2) => return Err(e2),
+                    }
+                }
+                Err(last_err)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// 获取当前生效的 API 根 URL
@@ -818,25 +948,29 @@ impl MangaClient {
             .map_err(|e| MangaError::Network(e.to_string()))
     }
 
-    /// GET 请求
+    /// GET 请求（使用当前全局分流）
     pub async fn get(&self, path: &str) -> MangaResult<Value> {
-        let (token, channel) = {
+        let channel = self.state.read().channel.clone();
+        self.get_with_channel(path, &channel).await
+    }
+
+    /// GET 请求（使用指定分流，不修改全局状态，用于重试场景）
+    async fn get_with_channel(&self, path: &str, channel: &ChannelMode) -> MangaResult<Value> {
+        let token = {
             let s = self.state.read();
-            let token = if s.token.is_empty() {
+            if s.token.is_empty() {
                 None
             } else {
                 Some(s.token.clone())
-            };
-            let channel = s.channel.clone();
-            (token, channel)
+            }
         };
 
-        let url = Self::compose_url_for_channel(path, &channel);
+        let url = Self::compose_url_for_channel(path, channel);
         sw_debug!("[Manga GET] {}", url);
 
         // PC 中转模式：转发到局域网节点服务器
-        if let ChannelMode::LanRelay(relay_addr) = &channel {
-            return self.call_relay_api(path, "GET", None, &relay_addr.clone()).await;
+        if let ChannelMode::LanRelay(relay_addr) = channel {
+            return self.call_relay_api(path, "GET", None, relay_addr).await;
         }
 
         let auth_token = if path.starts_with("auth/") {
@@ -845,10 +979,10 @@ impl MangaClient {
             token.as_deref()
         };
         let mut headers = signature::build_headers(path, "GET", auth_token);
-        Self::rewrite_headers_for_channel(&mut headers, &channel);
+        Self::rewrite_headers_for_channel(&mut headers, channel);
 
         // 分流2/3：通过 Hyper FixedConnector 绕过系统 DNS，直连目标 IP
-        if let ChannelMode::ChannelIp(ip_str) = &channel {
+        if let ChannelMode::ChannelIp(ip_str) = channel {
             let mut last_err: Option<MangaError> = None;
             for candidate_ip in Self::channel_ip_candidates(ip_str) {
                 match self
@@ -905,31 +1039,79 @@ impl MangaClient {
         check_api_response(status, body)
     }
 
-    /// POST 请求
+    /// GET 请求（带自动重试：失败时切换分流重试，最多 MAX_API_RETRY 次）
+    ///
+    /// 临时切换不修改全局分流配置，重试完毕后用户原选分流不变。
+    pub async fn get_with_retry(&self, path: &str) -> MangaResult<Value> {
+        let original = self.state.read().channel.clone();
+        match self.get_with_channel(path, &original).await {
+            Ok(v) => Ok(v),
+            Err(e) if Self::is_retryable_error(&e) => {
+                let mut last_err = e;
+                let fallbacks = Self::channel_fallback_list(&original);
+                for fallback in fallbacks.iter().take(MAX_API_RETRY) {
+                    sw_warn!(
+                        "[Manga重试] GET path={} 从[{}]切换到[{}]",
+                        path,
+                        Self::channel_brief(&original),
+                        Self::channel_brief(fallback)
+                    );
+                    match self.get_with_channel(path, fallback).await {
+                        Ok(v) => {
+                            sw_info!(
+                                "[Manga重试] GET 成功 path={} via [{}]",
+                                path,
+                                Self::channel_brief(fallback)
+                            );
+                            return Ok(v);
+                        }
+                        Err(e2) if Self::is_retryable_error(&e2) => {
+                            last_err = e2;
+                            continue;
+                        }
+                        Err(e2) => return Err(e2),
+                    }
+                }
+                Err(last_err)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// POST 请求（使用当前全局分流）
     pub async fn post(&self, path: &str, body: Value) -> MangaResult<Value> {
-        let (token, channel, channel_desc) = {
+        let channel = self.state.read().channel.clone();
+        self.post_with_channel(path, body, &channel).await
+    }
+
+    /// POST 请求（使用指定分流，不修改全局状态，用于重试场景）
+    async fn post_with_channel(
+        &self,
+        path: &str,
+        body: Value,
+        channel: &ChannelMode,
+    ) -> MangaResult<Value> {
+        let token = {
             let s = self.state.read();
-            let token = if s.token.is_empty() {
+            if s.token.is_empty() {
                 None
             } else {
                 Some(s.token.clone())
-            };
-            let channel = s.channel.clone();
-            let desc = match &s.channel {
-                ChannelMode::Direct => "直连".to_string(),
-                ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
-                ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
-                ChannelMode::LanRelay(addr) => format!("中转:{}", addr),
-            };
-            (token, channel, desc)
+            }
+        };
+        let channel_desc = match channel {
+            ChannelMode::Direct => "直连".to_string(),
+            ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
+            ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
+            ChannelMode::LanRelay(addr) => format!("中转:{}", addr),
         };
 
-        let url = Self::compose_url_for_channel(path, &channel);
+        let url = Self::compose_url_for_channel(path, channel);
         sw_debug!("[Manga POST] {} [{}]", url, channel_desc);
 
         // PC 中转模式：转发到局域网节点服务器
-        if let ChannelMode::LanRelay(relay_addr) = &channel {
-            return self.call_relay_api(path, "POST", Some(&body), &relay_addr.clone()).await;
+        if let ChannelMode::LanRelay(relay_addr) = channel {
+            return self.call_relay_api(path, "POST", Some(&body), relay_addr).await;
         }
 
         let auth_token = if path.starts_with("auth/") {
@@ -938,10 +1120,10 @@ impl MangaClient {
             token.as_deref()
         };
         let mut headers = signature::build_headers(path, "POST", auth_token);
-        Self::rewrite_headers_for_channel(&mut headers, &channel);
+        Self::rewrite_headers_for_channel(&mut headers, channel);
 
         // 分流2/3：通过 Hyper FixedConnector 绕过系统 DNS，直连目标 IP
-        if let ChannelMode::ChannelIp(ip_str) = &channel {
+        if let ChannelMode::ChannelIp(ip_str) = channel {
             let mut last_err: Option<MangaError> = None;
             for candidate_ip in Self::channel_ip_candidates(ip_str) {
                 match self
@@ -1004,31 +1186,74 @@ impl MangaClient {
         check_api_response(status, resp_body)
     }
 
-    /// PUT 请求
+    /// POST 请求（带自动重试：失败时切换分流重试，最多 MAX_API_RETRY 次）
+    ///
+    /// 临时切换不修改全局分流配置，重试完毕后用户原选分流不变。
+    pub async fn post_with_retry(&self, path: &str, body: Value) -> MangaResult<Value> {
+        let original = self.state.read().channel.clone();
+        match self.post_with_channel(path, body.clone(), &original).await {
+            Ok(v) => Ok(v),
+            Err(e) if Self::is_retryable_error(&e) => {
+                let mut last_err = e;
+                let fallbacks = Self::channel_fallback_list(&original);
+                for fallback in fallbacks.iter().take(MAX_API_RETRY) {
+                    sw_warn!(
+                        "[Manga重试] POST path={} 从[{}]切换到[{}]",
+                        path,
+                        Self::channel_brief(&original),
+                        Self::channel_brief(fallback)
+                    );
+                    match self.post_with_channel(path, body.clone(), fallback).await {
+                        Ok(v) => {
+                            sw_info!(
+                                "[Manga重试] POST 成功 path={} via [{}]",
+                                path,
+                                Self::channel_brief(fallback)
+                            );
+                            return Ok(v);
+                        }
+                        Err(e2) if Self::is_retryable_error(&e2) => {
+                            last_err = e2;
+                            continue;
+                        }
+                        Err(e2) => return Err(e2),
+                    }
+                }
+                Err(last_err)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// PUT 请求（使用当前全局分流）
     pub async fn put(&self, path: &str) -> MangaResult<Value> {
-        let (token, channel, channel_desc) = {
+        let channel = self.state.read().channel.clone();
+        self.put_with_channel(path, &channel).await
+    }
+
+    /// PUT 请求（使用指定分流，不修改全局状态，用于重试场景）
+    async fn put_with_channel(&self, path: &str, channel: &ChannelMode) -> MangaResult<Value> {
+        let token = {
             let s = self.state.read();
-            let token = if s.token.is_empty() {
+            if s.token.is_empty() {
                 None
             } else {
                 Some(s.token.clone())
-            };
-            let channel = s.channel.clone();
-            let desc = match &s.channel {
-                ChannelMode::Direct => "直连".to_string(),
-                ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
-                ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
-                ChannelMode::LanRelay(addr) => format!("中转:{}", addr),
-            };
-            (token, channel, desc)
+            }
+        };
+        let channel_desc = match channel {
+            ChannelMode::Direct => "直连".to_string(),
+            ChannelMode::ChannelIp(ip) => format!("IP:{}", ip),
+            ChannelMode::ReverseProxy(u) => format!("反代:{}", u),
+            ChannelMode::LanRelay(addr) => format!("中转:{}", addr),
         };
 
-        let url = Self::compose_url_for_channel(path, &channel);
+        let url = Self::compose_url_for_channel(path, channel);
         sw_debug!("[Manga PUT] {} [{}]", url, channel_desc);
 
         // PC 中转模式：转发到局域网节点服务器
-        if let ChannelMode::LanRelay(relay_addr) = &channel {
-            return self.call_relay_api(path, "PUT", None, &relay_addr.clone()).await;
+        if let ChannelMode::LanRelay(relay_addr) = channel {
+            return self.call_relay_api(path, "PUT", None, relay_addr).await;
         }
 
         let auth_token = if path.starts_with("auth/") {
@@ -1037,10 +1262,10 @@ impl MangaClient {
             token.as_deref()
         };
         let mut headers = signature::build_headers(path, "PUT", auth_token);
-        Self::rewrite_headers_for_channel(&mut headers, &channel);
+        Self::rewrite_headers_for_channel(&mut headers, channel);
 
         // 分流2/3：通过 Hyper FixedConnector 绕过系统 DNS，直连目标 IP
-        if let ChannelMode::ChannelIp(ip_str) = &channel {
+        if let ChannelMode::ChannelIp(ip_str) = channel {
             let mut last_err: Option<MangaError> = None;
             for candidate_ip in Self::channel_ip_candidates(ip_str) {
                 match self
@@ -1095,6 +1320,45 @@ impl MangaClient {
             );
         }
         check_api_response(status, resp_body)
+    }
+
+    /// PUT 请求（带自动重试：失败时切换分流重试，最多 MAX_API_RETRY 次）
+    ///
+    /// 临时切换不修改全局分流配置，重试完毕后用户原选分流不变。
+    pub async fn put_with_retry(&self, path: &str) -> MangaResult<Value> {
+        let original = self.state.read().channel.clone();
+        match self.put_with_channel(path, &original).await {
+            Ok(v) => Ok(v),
+            Err(e) if Self::is_retryable_error(&e) => {
+                let mut last_err = e;
+                let fallbacks = Self::channel_fallback_list(&original);
+                for fallback in fallbacks.iter().take(MAX_API_RETRY) {
+                    sw_warn!(
+                        "[Manga重试] PUT path={} 从[{}]切换到[{}]",
+                        path,
+                        Self::channel_brief(&original),
+                        Self::channel_brief(fallback)
+                    );
+                    match self.put_with_channel(path, fallback).await {
+                        Ok(v) => {
+                            sw_info!(
+                                "[Manga重试] PUT 成功 path={} via [{}]",
+                                path,
+                                Self::channel_brief(fallback)
+                            );
+                            return Ok(v);
+                        }
+                        Err(e2) if Self::is_retryable_error(&e2) => {
+                            last_err = e2;
+                            continue;
+                        }
+                        Err(e2) => return Err(e2),
+                    }
+                }
+                Err(last_err)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     // ==================== PC 中转辅助方法 ====================
@@ -1264,5 +1528,619 @@ fn check_api_response(http_status: u16, body: Value) -> MangaResult<Value> {
             http_status, code, msg
         );
         Err(MangaError::Api(code, msg))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! 漫画模块重试机制的单元测试
+    //!
+    //! 覆盖范围：
+    //! - `channels_equal` / `channel_fallback_list`：候选分流列表生成
+    //! - `is_retryable_error`：重试触发判定
+    //! - `channel_brief`：日志分流描述
+    //! - `check_api_response`：HTTP 响应→错误类型映射（重试判定的依据）
+    //! - 重试决策序列模拟：验证 fallback list 与 is_retryable_error 协同的行为
+
+    use super::*;
+
+    /// 构造已知分流 IP，简化测试代码
+    fn ch2() -> ChannelMode {
+        ChannelMode::ChannelIp(CHANNEL2_IPV4.to_string())
+    }
+    fn ch3() -> ChannelMode {
+        ChannelMode::ChannelIp(CHANNEL3_IPV4.to_string())
+    }
+    fn ch_cdn() -> ChannelMode {
+        ChannelMode::ChannelIp(DEFAULT_CDN_IP.to_string())
+    }
+    fn ch_jp() -> ChannelMode {
+        ChannelMode::ReverseProxy("https://bika-api.jpacg.cc".to_string())
+    }
+    fn ch_us() -> ChannelMode {
+        ChannelMode::ReverseProxy("https://bika2-api.jpacg.cc".to_string())
+    }
+    fn ch_relay() -> ChannelMode {
+        ChannelMode::LanRelay("192.168.1.100:8888".to_string())
+    }
+    fn ch_custom_ip(ip: &str) -> ChannelMode {
+        ChannelMode::ChannelIp(ip.to_string())
+    }
+    fn ch_custom_proxy(u: &str) -> ChannelMode {
+        ChannelMode::ReverseProxy(u.to_string())
+    }
+
+    // ==================== channels_equal ====================
+
+    #[test]
+    fn channels_equal_same_variants() {
+        assert!(MangaClient::channels_equal(
+            &ChannelMode::Direct,
+            &ChannelMode::Direct
+        ));
+        assert!(MangaClient::channels_equal(&ch2(), &ch2()));
+        assert!(MangaClient::channels_equal(&ch3(), &ch3()));
+        assert!(MangaClient::channels_equal(&ch_cdn(), &ch_cdn()));
+        assert!(MangaClient::channels_equal(&ch_jp(), &ch_jp()));
+        assert!(MangaClient::channels_equal(&ch_us(), &ch_us()));
+        assert!(MangaClient::channels_equal(&ch_relay(), &ch_relay()));
+    }
+
+    #[test]
+    fn channels_equal_different_ip() {
+        assert!(!MangaClient::channels_equal(
+            &ch2(),
+            &ch3()
+        ));
+        assert!(!MangaClient::channels_equal(
+            &ch2(),
+            &ch_custom_ip("9.9.9.9")
+        ));
+        assert!(!MangaClient::channels_equal(
+            &ch_cdn(),
+            &ch_custom_ip("9.9.9.9")
+        ));
+    }
+
+    #[test]
+    fn channels_equal_different_proxy_url() {
+        assert!(!MangaClient::channels_equal(&ch_jp(), &ch_us()));
+        assert!(!MangaClient::channels_equal(
+            &ch_jp(),
+            &ch_custom_proxy("https://example.com")
+        ));
+    }
+
+    #[test]
+    fn channels_equal_different_relay_addr() {
+        let a = ChannelMode::LanRelay("192.168.1.1:8888".to_string());
+        let b = ChannelMode::LanRelay("10.0.0.1:9999".to_string());
+        assert!(!MangaClient::channels_equal(&a, &b));
+    }
+
+    #[test]
+    fn channels_equal_cross_variant() {
+        // 不同变体之间一律视为不等
+        assert!(!MangaClient::channels_equal(
+            &ChannelMode::Direct,
+            &ch2()
+        ));
+        assert!(!MangaClient::channels_equal(&ch2(), &ch_jp()));
+        assert!(!MangaClient::channels_equal(&ch_jp(), &ch_relay()));
+        assert!(!MangaClient::channels_equal(
+            &ch_relay(),
+            &ChannelMode::Direct
+        ));
+    }
+
+    // ==================== channel_fallback_list ====================
+
+    #[test]
+    fn fallback_list_for_direct_has_five_entries() {
+        let list = MangaClient::channel_fallback_list(&ChannelMode::Direct);
+        assert_eq!(list.len(), 5);
+        assert_eq!(list[0], ch2());
+        assert_eq!(list[1], ch3());
+        assert_eq!(list[2], ch_cdn());
+        assert_eq!(list[3], ch_jp());
+        assert_eq!(list[4], ch_us());
+    }
+
+    #[test]
+    fn fallback_list_for_channel2_excludes_self() {
+        let list = MangaClient::channel_fallback_list(&ch2());
+        assert_eq!(list.len(), 5);
+        // 当前分流2 不应出现在候选中
+        assert!(list.iter().all(|c| !MangaClient::channels_equal(c, &ch2())));
+        assert_eq!(list[0], ChannelMode::Direct);
+        assert_eq!(list[1], ch3());
+        assert_eq!(list[2], ch_cdn());
+        assert_eq!(list[3], ch_jp());
+        assert_eq!(list[4], ch_us());
+    }
+
+    #[test]
+    fn fallback_list_for_cdn_excludes_self() {
+        let list = MangaClient::channel_fallback_list(&ch_cdn());
+        assert_eq!(list.len(), 5);
+        assert!(list
+            .iter()
+            .all(|c| !MangaClient::channels_equal(c, &ch_cdn())));
+    }
+
+    #[test]
+    fn fallback_list_for_jp_proxy_excludes_self() {
+        let list = MangaClient::channel_fallback_list(&ch_jp());
+        assert_eq!(list.len(), 5);
+        assert!(list.iter().all(|c| !MangaClient::channels_equal(c, &ch_jp())));
+        assert_eq!(list[0], ChannelMode::Direct);
+        assert_eq!(list[4], ch_us());
+    }
+
+    #[test]
+    fn fallback_list_for_lanrelay_excludes_self_but_includes_all_others() {
+        // LanRelay 不在标准候选池中，但当前是 LanRelay 时应给出全部 6 个标准候选
+        let list = MangaClient::channel_fallback_list(&ch_relay());
+        assert_eq!(list.len(), 6);
+        assert!(list
+            .iter()
+            .all(|c| !MangaClient::channels_equal(c, &ch_relay())));
+        assert_eq!(list[0], ChannelMode::Direct);
+        assert_eq!(list[5], ch_us());
+    }
+
+    #[test]
+    fn fallback_list_for_custom_ip_keeps_all_standard_channels() {
+        // 自定义 IP 不在标准列表中，候选列表保留全部 6 个标准分流
+        let list = MangaClient::channel_fallback_list(&ch_custom_ip("9.9.9.9"));
+        assert_eq!(list.len(), 6);
+        assert_eq!(list[0], ChannelMode::Direct);
+        assert_eq!(list[1], ch2());
+        assert_eq!(list[2], ch3());
+        assert_eq!(list[3], ch_cdn());
+        assert_eq!(list[4], ch_jp());
+        assert_eq!(list[5], ch_us());
+    }
+
+    #[test]
+    fn fallback_list_always_excludes_lanrelay() {
+        // 标准候选池中不含 LanRelay（地址不固定，无法假设可用）
+        for current in [
+            ChannelMode::Direct,
+            ch2(),
+            ch3(),
+            ch_cdn(),
+            ch_jp(),
+            ch_us(),
+            ch_custom_ip("9.9.9.9"),
+            ch_custom_proxy("https://x"),
+        ] {
+            let list = MangaClient::channel_fallback_list(&current);
+            assert!(
+                list.iter()
+                    .all(|c| !matches!(c, ChannelMode::LanRelay(_))),
+                "当前为 {:?} 时候选列表不应包含 LanRelay",
+                current
+            );
+        }
+    }
+
+    #[test]
+    fn fallback_list_order_is_stable() {
+        // 排序始终为 Direct → 分流2 → 分流3 → CDN → JP → US
+        let expected_order = vec![
+            ChannelMode::Direct,
+            ch2(),
+            ch3(),
+            ch_cdn(),
+            ch_jp(),
+            ch_us(),
+        ];
+        // 取一个会让候选列表包含全部 6 项的当前分流
+        let list = MangaClient::channel_fallback_list(&ch_relay());
+        assert_eq!(list, expected_order);
+    }
+
+    // ==================== is_retryable_error ====================
+
+    #[test]
+    fn network_error_is_retryable() {
+        assert!(MangaClient::is_retryable_error(&MangaError::Network(
+            "连接超时".to_string()
+        )));
+        assert!(MangaClient::is_retryable_error(&MangaError::Network(
+            "DNS 解析失败".to_string()
+        )));
+        assert!(MangaClient::is_retryable_error(&MangaError::Network(
+            "图片请求失败 HTTP=500 url=xxx".to_string()
+        )));
+    }
+
+    #[test]
+    fn api_error_401_not_retryable() {
+        // 未登录错误切换分流无意义
+        assert!(!MangaClient::is_retryable_error(&MangaError::Api(
+            401,
+            "未登录".to_string()
+        )));
+    }
+
+    #[test]
+    fn api_error_400_not_retryable() {
+        // 参数错误通常是客户端问题，切换分流无意义
+        assert!(!MangaClient::is_retryable_error(&MangaError::Api(
+            400,
+            "参数错误".to_string()
+        )));
+    }
+
+    #[test]
+    fn api_error_5xx_is_retryable() {
+        assert!(MangaClient::is_retryable_error(&MangaError::Api(
+            500,
+            "服务器内部错误".to_string()
+        )));
+        assert!(MangaClient::is_retryable_error(&MangaError::Api(
+            502,
+            "Bad Gateway".to_string()
+        )));
+        assert!(MangaClient::is_retryable_error(&MangaError::Api(
+            503,
+            "Service Unavailable".to_string()
+        )));
+    }
+
+    #[test]
+    fn api_error_4xx_other_than_400_401_is_retryable() {
+        // 403/404/429 等切换分流可能有效
+        assert!(MangaClient::is_retryable_error(&MangaError::Api(
+            403,
+            "禁止访问".to_string()
+        )));
+        assert!(MangaClient::is_retryable_error(&MangaError::Api(
+            404,
+            "不存在".to_string()
+        )));
+        assert!(MangaClient::is_retryable_error(&MangaError::Api(
+            429,
+            "Too Many Requests".to_string()
+        )));
+    }
+
+    #[test]
+    fn unauthorized_not_retryable() {
+        assert!(!MangaClient::is_retryable_error(&MangaError::Unauthorized));
+    }
+
+    #[test]
+    fn parse_error_not_retryable() {
+        // JSON 解析失败通常是响应内容问题，切换分流不会解决
+        assert!(!MangaClient::is_retryable_error(&MangaError::Parse(
+            "invalid JSON".to_string()
+        )));
+    }
+
+    #[test]
+    fn other_error_not_retryable() {
+        assert!(!MangaClient::is_retryable_error(&MangaError::Other(
+            "未知错误".to_string()
+        )));
+    }
+
+    // ==================== channel_brief ====================
+
+    #[test]
+    fn channel_brief_known_modes() {
+        assert_eq!(MangaClient::channel_brief(&ChannelMode::Direct), "直连");
+        assert_eq!(MangaClient::channel_brief(&ch2()), "分流2");
+        assert_eq!(MangaClient::channel_brief(&ch3()), "分流3");
+        assert_eq!(MangaClient::channel_brief(&ch_cdn()), "CDN");
+        assert_eq!(MangaClient::channel_brief(&ch_jp()), "JP反代");
+        assert_eq!(MangaClient::channel_brief(&ch_us()), "US反代");
+        assert_eq!(MangaClient::channel_brief(&ch_relay()), "PC中转");
+    }
+
+    #[test]
+    fn channel_brief_custom_ip_and_proxy() {
+        assert_eq!(
+            MangaClient::channel_brief(&ch_custom_ip("9.9.9.9")),
+            "CDN自定义"
+        );
+        assert_eq!(
+            MangaClient::channel_brief(&ch_custom_proxy("https://example.com")),
+            "自定义反代"
+        );
+    }
+
+    // ==================== check_api_response ====================
+
+    #[test]
+    fn check_api_response_code_200_ok() {
+        let body = serde_json::json!({ "code": 200, "data": "ok" });
+        let result = check_api_response(200, body).expect("应解析为 Ok");
+        assert_eq!(result.get("data").and_then(|v| v.as_str()), Some("ok"));
+    }
+
+    #[test]
+    fn check_api_response_body_code_401_returns_unauthorized() {
+        let body = serde_json::json!({ "code": 401, "message": "未登录" });
+        let err = check_api_response(200, body).unwrap_err();
+        assert!(matches!(err, MangaError::Unauthorized));
+    }
+
+    #[test]
+    fn check_api_response_http_401_returns_unauthorized() {
+        // 即使 body 没有 code 字段，HTTP 401 也判定为未登录
+        let body = serde_json::json!({ "message": "禁止" });
+        let err = check_api_response(401, body).unwrap_err();
+        assert!(matches!(err, MangaError::Unauthorized));
+    }
+
+    #[test]
+    fn check_api_response_500_returns_api_error() {
+        let body = serde_json::json!({ "code": 500, "message": "服务器错误" });
+        let err = check_api_response(500, body).unwrap_err();
+        match err {
+            MangaError::Api(code, msg) => {
+                assert_eq!(code, 500);
+                assert_eq!(msg, "服务器错误");
+            }
+            other => panic!("期望 Api(500, _), 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn check_api_response_no_code_field_falls_back_to_http_status() {
+        // body 没有 code 字段时，用 HTTP 状态码作为 code
+        let body = serde_json::json!({ "data": "ok" });
+        let result = check_api_response(200, body);
+        assert!(result.is_ok());
+
+        let err = check_api_response(500, serde_json::json!({})).unwrap_err();
+        match err {
+            MangaError::Api(code, _) => assert_eq!(code, 500),
+            other => panic!("期望 Api(500, _), 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn check_api_response_missing_message_uses_default() {
+        let body = serde_json::json!({ "code": 500 }); // 无 message 字段
+        let err = check_api_response(500, body).unwrap_err();
+        match err {
+            MangaError::Api(_, msg) => assert_eq!(msg, "未知错误"),
+            other => panic!("期望 Api(_, _), 实际 {:?}", other),
+        }
+    }
+
+    // ==================== 重试决策序列模拟 ====================
+    //
+    // 以下测试不发起真实网络请求，而是模拟 *_with_retry 内部的决策路径：
+    // 给定一系列错误响应，验证 fallback list + is_retryable_error 的协同行为
+    // 是否符合预期（是否触发切换、是否提前终止、是否最终失败）。
+
+    /// 模拟重试循环的决策结果
+    #[derive(Debug)]
+    enum RetryOutcome {
+        /// 首次成功，无需重试
+        ImmediateOk,
+        /// 经过若干次切换后成功（包含尝试过的分流数）
+        OkAfter(Vec<ChannelMode>),
+        /// 重试耗尽后失败（最后一次错误）
+        Exhausted(MangaError),
+        /// 遇到不可重试错误，立即中止
+        Aborted(MangaError),
+    }
+
+    /// 模拟 *_with_retry 的核心决策循环
+    ///
+    /// `errors_per_attempt`：按候选顺序（含初始 current）依次返回错误。
+    ///   - None 表示该次成功
+    ///   - Some(err) 表示该次返回指定错误
+    /// 长度应足够覆盖所有候选，否则视为成功（剩余默认成功）。
+    fn simulate_retry_decision(
+        current: &ChannelMode,
+        max_retries: usize,
+        errors_per_attempt: &[Option<MangaError>],
+    ) -> RetryOutcome {
+        // 第 0 次：用当前分流
+        match errors_per_attempt.first() {
+            None => return RetryOutcome::ImmediateOk,
+            Some(None) => return RetryOutcome::ImmediateOk,
+            Some(Some(e)) if !MangaClient::is_retryable_error(e) => {
+                return RetryOutcome::Aborted(e.clone())
+            }
+            Some(Some(_)) => {}
+        }
+
+        let fallbacks = MangaClient::channel_fallback_list(current);
+        let mut tried: Vec<ChannelMode> = Vec::new();
+
+        for (idx, fallback) in fallbacks.iter().take(max_retries).enumerate() {
+            tried.push(fallback.clone());
+            // errors_per_attempt[0] 是首次（current）的结果
+            // errors_per_attempt[idx + 1] 是第 idx+1 个 fallback 的结果
+            let outcome = errors_per_attempt.get(idx + 1);
+            match outcome {
+                None | Some(None) => return RetryOutcome::OkAfter(tried),
+                Some(Some(e)) if !MangaClient::is_retryable_error(e) => {
+                    return RetryOutcome::Aborted(e.clone())
+                }
+                Some(Some(_)) => continue,
+            }
+        }
+
+        // 耗尽候选后，取实际最后一次尝试的错误
+        // 最后一次 fallback 索引为 min(max_retries, fallbacks.len()) - 1，
+        // 对应 errors_per_attempt[min(max_retries, fallbacks.len())]
+        let last_attempt_idx = max_retries.min(fallbacks.len());
+        let last_err = match errors_per_attempt.get(last_attempt_idx) {
+            Some(Some(e)) => e.clone(),
+            _ => MangaError::Network("所有候选均不可达".to_string()),
+        };
+        RetryOutcome::Exhausted(last_err)
+    }
+
+    #[test]
+    fn retry_sequence_first_attempt_ok() {
+        // 首次成功，不进入重试
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 3, &[None]);
+        assert!(matches!(outcome, RetryOutcome::ImmediateOk));
+    }
+
+    #[test]
+    fn retry_sequence_network_error_then_success() {
+        // 第1次 Direct 网络错误 → 切到分流2 → 成功
+        let errors = vec![
+            Some(MangaError::Network("连接失败".to_string())),
+            None, // 分流2 成功
+        ];
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 3, &errors);
+        match outcome {
+            RetryOutcome::OkAfter(tried) => {
+                assert_eq!(tried.len(), 1);
+                assert_eq!(tried[0], ch2());
+            }
+            other => panic!("期望 OkAfter, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_multiple_failures_then_success() {
+        // Direct 失败 → 分流2 失败 → 分流3 成功
+        let errors = vec![
+            Some(MangaError::Network("超时".to_string())),
+            Some(MangaError::Api(500, "服务器错误".to_string())),
+            None, // 分流3 成功
+        ];
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 3, &errors);
+        match outcome {
+            RetryOutcome::OkAfter(tried) => {
+                assert_eq!(tried.len(), 2);
+                assert_eq!(tried[0], ch2());
+                assert_eq!(tried[1], ch3());
+            }
+            other => panic!("期望 OkAfter, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_exhausted_all_attempts() {
+        // 所有候选都失败（包括 5xx 错误，可重试），最终耗尽
+        let errors = vec![
+            Some(MangaError::Network("超时".to_string())),
+            Some(MangaError::Api(500, "x".to_string())),
+            Some(MangaError::Api(503, "x".to_string())),
+            Some(MangaError::Api(502, "x".to_string())),
+        ];
+        // max_retries=3，会尝试 3 个 fallback（不包含首次）
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 3, &errors);
+        match outcome {
+            RetryOutcome::Exhausted(err) => {
+                assert!(matches!(err, MangaError::Api(502, _)));
+            }
+            other => panic!("期望 Exhausted, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_aborts_on_unauthorized() {
+        // 首次返回 401 → 不重试，立即中止
+        let errors = vec![Some(MangaError::Api(401, "未登录".to_string()))];
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 3, &errors);
+        match outcome {
+            RetryOutcome::Aborted(err) => {
+                assert!(matches!(err, MangaError::Api(401, _)));
+            }
+            other => panic!("期望 Aborted, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_aborts_on_400_after_network_error() {
+        // Direct 网络错误（可重试）→ 切到分流2 → 返回 400（不可重试，中止）
+        let errors = vec![
+            Some(MangaError::Network("超时".to_string())),
+            Some(MangaError::Api(400, "参数错误".to_string())),
+        ];
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 3, &errors);
+        match outcome {
+            RetryOutcome::Aborted(err) => {
+                assert!(matches!(err, MangaError::Api(400, _)));
+            }
+            other => panic!("期望 Aborted, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_respects_max_retries() {
+        // 即使有更多候选，也只尝试 max_retries 次
+        // Direct 失败 + 5 次失败（但 max_retries=2 只会尝试 2 个 fallback）
+        let errors = vec![
+            Some(MangaError::Network("e1".to_string())),
+            Some(MangaError::Network("e2".to_string())),
+            Some(MangaError::Network("e3".to_string())),
+            Some(MangaError::Network("e4".to_string())),
+            Some(MangaError::Network("e5".to_string())),
+            Some(MangaError::Network("e6".to_string())),
+        ];
+        let outcome = simulate_retry_decision(&ChannelMode::Direct, 2, &errors);
+        match outcome {
+            RetryOutcome::Exhausted(err) => {
+                // 第 3 次尝试（首次 + 2 个 fallback）的错误是 e3
+                assert!(matches!(err, MangaError::Network(ref m) if m == "e3"));
+            }
+            other => panic!("期望 Exhausted, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_for_lanrelay_uses_all_six_standard_channels() {
+        // 当前是 LanRelay，候选有 6 个标准分流；首次失败后从 Direct 开始尝试
+        let errors = vec![
+            Some(MangaError::Network("PC 中转服务器宕机".to_string())),
+            None, // Direct 成功
+        ];
+        let outcome = simulate_retry_decision(&ch_relay(), 3, &errors);
+        match outcome {
+            RetryOutcome::OkAfter(tried) => {
+                assert_eq!(tried.len(), 1);
+                assert_eq!(tried[0], ChannelMode::Direct);
+            }
+            other => panic!("期望 OkAfter, 实际 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retry_sequence_api_5xx_triggers_retry() {
+        // 5xx 业务码错误应该触发重试
+        let errors = vec![
+            Some(MangaError::Api(503, "Service Unavailable".to_string())),
+            None,
+        ];
+        let outcome = simulate_retry_decision(&ch_jp(), 3, &errors);
+        match outcome {
+            RetryOutcome::OkAfter(tried) => {
+                assert_eq!(tried[0], ChannelMode::Direct);
+            }
+            other => panic!("期望 OkAfter, 实际 {:?}", other),
+        }
+    }
+
+    // ==================== 常量一致性 ====================
+
+    #[test]
+    fn default_cdn_ip_constant_matches_api_rs() {
+        // 与 api.rs 中的 DEFAULT_CDN_IP 保持一致
+        assert_eq!(DEFAULT_CDN_IP, "104.18.227.172");
+    }
+
+    #[test]
+    fn max_retry_constants_are_sensible() {
+        // 重试次数应在合理范围（1~5）
+        assert!(MAX_API_RETRY >= 1 && MAX_API_RETRY <= 5);
+        assert!(MAX_IMAGE_RETRY >= 1 && MAX_IMAGE_RETRY <= 5);
+        // API 重试次数应大于等于图片（API 无其他回退机制）
+        assert!(MAX_API_RETRY >= MAX_IMAGE_RETRY);
     }
 }
