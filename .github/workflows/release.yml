@@ -240,6 +240,9 @@ jobs:
           PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
           ENVEOF
 
+      - name: 预缓存 iOS 引擎（Flutter.xcframework）
+        run: flutter precache --ios
+
       - name: 导入 Apple 证书到 Keychain
         env:
           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
