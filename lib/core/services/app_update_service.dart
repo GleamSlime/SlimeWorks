@@ -14,7 +14,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 
 class AppUpdateService {
   static const String _feedUrl =
-      'https://gleamslime.github.io/slime_works/appcast.xml';
+      'https://gleamslime.github.io/SlimeWorks/appcast.xml';
   static const String _feedHost = 'gleamslime.github.io';
 
   // 自动更新偏好键

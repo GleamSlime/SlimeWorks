@@ -257,8 +257,8 @@ jobs:
           # 导入 .p12 证书
           echo "$IOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
           security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          # 允许 codesign 访问证书私钥
-          security set-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          # 允许 codesign 访问证书私钥（macOS 13+ 使用 set-key-partition-list）
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
       - name: 导入 Provisioning Profile
         env:
@@ -523,7 +523,7 @@ jobs:
           SPARKLE_VERSION="${{ github.run_number }}"
           FILE_SIZE="${{ steps.dmg-info.outputs.file_size }}"
           TAG="${{ needs.detect-version.outputs.tag }}"
-          REPO="GleamSlime/slime_works"
+          REPO="GleamSlime/SlimeWorks"
           DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
           DMG_FILENAME=$(find dist/ -name "*.dmg" -type f -exec basename {} \; | head -1)
