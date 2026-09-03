@@ -272,8 +272,17 @@ jobs:
         env:
           IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
         run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+          PP_DIR=~/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$PP_DIR"
+          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_DIR/profile.mobileprovision"
+          # 提取 UUID 和 Name（codesign 通过 UUID 文件名查找 profile）
+          PP_UUID=$(security cms -D -i "$PP_DIR/profile.mobileprovision" | plutil -extract UUID.Raw os -o - -)
+          PP_NAME=$(security cms -D -i "$PP_DIR/profile.mobileprovision" | plutil -extract Name.Raw os -o - -)
+          mv "$PP_DIR/profile.mobileprovision" "$PP_DIR/${PP_UUID}.mobileprovision"
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+          echo "PP_NAME=$PP_NAME" >> $GITHUB_ENV
+          echo "Profile UUID: $PP_UUID"
+          echo "Profile Name: $PP_NAME"
 
       - name: 安装 CocoaPods 依赖
         working-directory: ios
@@ -287,6 +296,8 @@ jobs:
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
           IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+          PP_UUID: ${{ env.PP_UUID }}
+          PP_NAME: ${{ env.PP_NAME }}
         run: |
           mkdir -p build
           xcodebuild archive \
@@ -294,15 +305,19 @@ jobs:
             -scheme Runner \
             -configuration Release \
             -archivePath build/Runner.xcarchive \
-            -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
             DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_NAME" \
             ${IOS_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID"}
 
       - name: 生成 ExportOptions.plist
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+          PP_NAME: ${{ env.PP_NAME }}
         run: |
+          BUNDLE_ID="${IOS_BUNDLE_ID:-com.gleamslime.works}"
           cat > ios/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -313,7 +328,12 @@ jobs:
               <key>teamID</key>
               <string>${IOS_TEAM_ID}</string>
               <key>signingStyle</key>
-              <string>automatic</string>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${BUNDLE_ID}</key>
+                  <string>${PP_NAME}</string>
+              </dict>
               <key>stripSwiftSymbols</key>
               <true/>
               <key>uploadBitcode</key>
@@ -332,8 +352,7 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath ios/build/Runner.xcarchive \
             -exportPath build/ios/ipa \
-            -exportOptionsPlist ios/ExportOptions.plist \
-            -allowProvisioningUpdates
+            -exportOptionsPlist ios/ExportOptions.plist
 
       - name: 上传到蒲公英
         env:
