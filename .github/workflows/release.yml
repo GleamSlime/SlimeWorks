@@ -275,9 +275,13 @@ jobs:
           PP_DIR=~/Library/MobileDevice/Provisioning\ Profiles
           mkdir -p "$PP_DIR"
           echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_DIR/profile.mobileprovision"
+          # 解码 mobileprovision（PKCS#7 签名格式）为 plist 临时文件
+          security cms -D -i "$PP_DIR/profile.mobileprovision" > /tmp/profile.plist
           # 提取 UUID 和 Name（codesign 通过 UUID 文件名查找 profile）
-          PP_UUID=$(security cms -D -i "$PP_DIR/profile.mobileprovision" | plutil -extract UUID.Raw os -o - -)
-          PP_NAME=$(security cms -D -i "$PP_DIR/profile.mobileprovision" | plutil -extract Name.Raw os -o - -)
+          PP_UUID=$(plutil -extract UUID raw -o - /tmp/profile.plist)
+          PP_NAME=$(plutil -extract Name raw -o - /tmp/profile.plist)
+          rm -f /tmp/profile.plist
+          # 用 UUID 重命名（codesign 按文件名匹配）
           mv "$PP_DIR/profile.mobileprovision" "$PP_DIR/${PP_UUID}.mobileprovision"
           echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
           echo "PP_NAME=$PP_NAME" >> $GITHUB_ENV
