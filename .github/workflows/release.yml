@@ -295,25 +295,53 @@ jobs:
       - name: Flutter iOS 构建（no-codesign）
         run: flutter build ios --release --no-codesign
 
+      - name: 验证证书可用性
+        env:
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          # 列出当前 keychain 搜索路径
+          echo "=== Keychain search list ==="
+          security list-keychains -d user
+          # 确认临时 keychain 在搜索路径最前
+          security list-keychains -d user -s build.keychain login.keychain
+          security list-keychains -d user
+          # 解锁 keychain（archive 时如果 keychain 锁住会报 User interaction is not allowed）
+          security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          # 列出可用于 codesigning 的 identity（确认证书已导入且私钥可访问）
+          echo "=== Available signing identities ==="
+          security find-identity -p codesigning -v build.keychain
+          # 显示 keychain 中所有证书的 Common Name（确认证书类型）
+          echo "=== All certificates in keychain ==="
+          security find-certificate -a build.keychain | grep -E '"labl"|"cnam"' || true
+
       - name: Xcode archive（生成 .xcarchive）
         working-directory: ios
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
           IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
           PP_UUID: ${{ env.PP_UUID }}
           PP_NAME: ${{ env.PP_NAME }}
         run: |
+          # 解锁 keychain 确保私钥可访问
+          security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          # 创建临时 xcconfig，只给 Runner target 传签名参数
+          # Pods 用 Podfile post_install hook 中设置的空字符串（优先级高于 -xcconfig）
+          cat > /tmp/RunnerSign.xcconfig << EOF
+          #include "Flutter/Release.xcconfig"
+          CODE_SIGN_STYLE = Manual
+          CODE_SIGN_IDENTITY = iPhone Distribution
+          DEVELOPMENT_TEAM = ${IOS_TEAM_ID}
+          PROVISIONING_PROFILE_SPECIFIER = ${PP_NAME}
+          ${IOS_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER = ${IOS_BUNDLE_ID}}
+          EOF
           mkdir -p build
           xcodebuild archive \
             -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -archivePath build/Runner.xcarchive \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
-            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_NAME" \
-            ${IOS_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID"}
+            -xcconfig /tmp/RunnerSign.xcconfig
 
       - name: 生成 ExportOptions.plist
         env:
