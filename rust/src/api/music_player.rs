@@ -45,6 +45,15 @@ pub struct MusicItem {
     pub has_cue: bool,
 }
 
+/// 远程音乐项输入（用于添加 HTTP 流地址到播放列表）
+#[derive(Debug, Clone)]
+pub struct RemoteMusicItem {
+    pub title: String,
+    pub url: String,
+    pub duration_ms: Option<u64>,
+    pub track_number: Option<u32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CueTrackInfo {
     pub title: String,
@@ -339,6 +348,25 @@ pub fn import_music_paths(
     paths: Vec<String>,
 ) -> anyhow::Result<Vec<MusicItem>> {
     music_player::import_music_paths(playlist_id, paths)
+        .map(|items| items.into_iter().map(convert_item).collect())
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 批量添加远程音乐项（HTTP 流地址，不检查本地文件）
+pub fn add_remote_music_items(
+    playlist_id: String,
+    items: Vec<RemoteMusicItem>,
+) -> anyhow::Result<Vec<MusicItem>> {
+    let remote_items: Vec<music_player::RemoteMusicItem> = items
+        .into_iter()
+        .map(|i| music_player::RemoteMusicItem {
+            title: i.title,
+            url: i.url,
+            duration_ms: i.duration_ms,
+            track_number: i.track_number,
+        })
+        .collect();
+    music_player::add_remote_music_items(playlist_id, remote_items)
         .map(|items| items.into_iter().map(convert_item).collect())
         .map_err(|e| anyhow::anyhow!(e))
 }

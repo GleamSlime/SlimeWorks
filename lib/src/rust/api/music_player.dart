@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `_accumulate_bin`, `_extract_waveform_streaming`, `_read_waveform_cache`, `_redistribute_bins`, `_waveform_cache_path`, `_write_waveform_cache`, `convert_cue_sheet`, `convert_eq_preset`, `convert_folder`, `convert_item`, `convert_path_mapping_node`, `convert_playlist`, `convert_record`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PlayMode`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化音乐播放器数据库
 void musicInitializeDb() =>
@@ -83,6 +83,15 @@ Future<List<MusicItem>> importMusicPaths({
 }) => RustLib.instance.api.crateApiMusicPlayerImportMusicPaths(
   playlistId: playlistId,
   paths: paths,
+);
+
+/// 批量添加远程音乐项（HTTP 流地址，不检查本地文件）
+Future<List<MusicItem>> addRemoteMusicItems({
+  required String playlistId,
+  required List<RemoteMusicItem> items,
+}) => RustLib.instance.api.crateApiMusicPlayerAddRemoteMusicItems(
+  playlistId: playlistId,
+  items: items,
 );
 
 /// 删除音乐条目
@@ -618,4 +627,36 @@ class Playlist {
           updatedAt == other.updatedAt &&
           isDefault == other.isDefault &&
           folderId == other.folderId;
+}
+
+/// 远程音乐项输入（用于添加 HTTP 流地址到播放列表）
+class RemoteMusicItem {
+  final String title;
+  final String url;
+  final BigInt? durationMs;
+  final int? trackNumber;
+
+  const RemoteMusicItem({
+    required this.title,
+    required this.url,
+    this.durationMs,
+    this.trackNumber,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      url.hashCode ^
+      durationMs.hashCode ^
+      trackNumber.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RemoteMusicItem &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          url == other.url &&
+          durationMs == other.durationMs &&
+          trackNumber == other.trackNumber;
 }

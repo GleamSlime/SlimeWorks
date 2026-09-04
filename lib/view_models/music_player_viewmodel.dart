@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -762,6 +764,258 @@ class MusicPlayerViewModel extends BaseViewModel {
     await _savePathMappingDirs();
   }
 
+  // ── ASMR 链接导入 ─────────────────────────────────────────────────────────
+
+  // asmr.one API 地址（前端 preconnect 暴露）
+  static const _asmrApiBase = 'https://api.asmr-200.com';
+
+  /// 缓存的系统代理设置，避免每次请求都调用 scutil
+  String? _cachedSystemProxy;
+  bool _proxyChecked = false;
+
+  /// 读取 macOS 系统代理设置
+  /// Dart 的 HttpClient 不会自动读取 macOS 系统代理，只读 HTTP_PROXY 环境变量
+  /// 而 asmr.one 的 API 在国内需走代理才能访问，故需手动读取系统代理配置
+  String? _getSystemProxy() {
+    if (_proxyChecked) return _cachedSystemProxy;
+    _proxyChecked = true;
+    if (!Platform.isMacOS) return null;
+    try {
+      final result = Process.runSync('scutil', ['--proxy']);
+      final output = result.stdout as String;
+      // 优先 HTTPS 代理
+      final httpsEnable = RegExp(r'HTTPSEnable\s*:\s*(\d+)').firstMatch(output);
+      final httpsHost = RegExp(r'HTTPSProxy\s*:\s*(\S+)').firstMatch(output);
+      final httpsPort = RegExp(r'HTTPSPort\s*:\s*(\d+)').firstMatch(output);
+      if (httpsEnable?.group(1) == '1' && httpsHost != null && httpsPort != null) {
+        _cachedSystemProxy = 'PROXY ${httpsHost.group(1)}:${httpsPort.group(1)}';
+        return _cachedSystemProxy;
+      }
+      // 其次 HTTP 代理
+      final httpEnable = RegExp(r'HTTPEnable\s*:\s*(\d+)').firstMatch(output);
+      final httpHost = RegExp(r'HTTPProxy\s*:\s*(\S+)').firstMatch(output);
+      final httpPort = RegExp(r'HTTPPort\s*:\s*(\d+)').firstMatch(output);
+      if (httpEnable?.group(1) == '1' && httpHost != null && httpPort != null) {
+        _cachedSystemProxy = 'PROXY ${httpHost.group(1)}:${httpPort.group(1)}';
+        return _cachedSystemProxy;
+      }
+    } catch (_) {
+      // scutil 不可用或解析失败，走直连
+    }
+    return null;
+  }
+
+  /// 创建跳过 SSL 证书验证并使用系统代理的 Dio 实例
+  Dio _createInsecureDio() {
+    final proxy = _getSystemProxy();
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 20),
+      headers: {'User-Agent': 'Mozilla/5.0'},
+      responseType: ResponseType.json,
+    ));
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.badCertificateCallback = (_, _, _) => true;
+        if (proxy != null) {
+          client.findProxy = (uri) => proxy;
+        }
+        return client;
+      },
+    );
+    return dio;
+  }
+
+  /// 从 URL 中提取 RJ/BJ/VJ 编号
+  String? _extractWorkCode(String url) {
+    final match = RegExp(r'([RBV]J\d{6,8})', caseSensitive: false).firstMatch(url);
+    return match?.group(1)?.toUpperCase();
+  }
+
+  /// 将 RJ 编号转为 API 路径用的数字 ID（去前缀，保留前导0）
+  /// 例：RJ01292783 → 01292783
+  String? _workCodeToApiId(String? workCode) {
+    if (workCode == null) return null;
+    final digits = workCode.replaceAll(RegExp(r'^[RBV]J', caseSensitive: false), '');
+    return digits.isEmpty ? null : digits;
+  }
+
+  /// 递归构建 ASMR 树结构
+  _AsmrTreeNode _buildAsmrNode(Map<String, dynamic> json) {
+    final type = json['type'] as String? ?? 'other';
+    final title = (json['title'] as String?)?.trim() ?? '未命名';
+    final downloadUrl = json['mediaDownloadUrl'] as String?;
+    final streamUrl = json['mediaStreamUrl'] as String?;
+    final size = (json['size'] as num?)?.toInt();
+    final durSec = (json['duration'] as num?)?.toDouble();
+    final children = json['children'] as List<dynamic>?;
+    // 默认选中音频文件
+    final selected = type == 'audio';
+    return _AsmrTreeNode(
+      type: type,
+      title: title,
+      downloadUrl: downloadUrl,
+      streamUrl: streamUrl,
+      sizeBytes: size,
+      durationSec: durSec,
+      selected: selected,
+      children: children?.map((c) => _buildAsmrNode(c as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  /// 从 asmr.one 链接获取作品信息（标题 + 封面 + 完整树结构）
+  Future<_AsmrWorkInfo?> _fetchAsmrWorkInfo(String url) async {
+    try {
+      final workCode = _extractWorkCode(url);
+      if (workCode == null) {
+        _logger.info('[播放器] ASMR链接中未找到作品编号');
+        return null;
+      }
+      final apiId = _workCodeToApiId(workCode)!;
+      final dio = _createInsecureDio();
+
+      // Step1: guest 登录
+      final loginResp = await dio.post<dynamic>(
+        '$_asmrApiBase/api/auth/me',
+        data: {'name': 'guest', 'password': 'guest'},
+        options: Options(headers: {
+          'authorization': '',
+          'Content-Type': 'application/json',
+        }),
+      );
+      final token = (loginResp.data as Map<String, dynamic>)['token'] as String?;
+      if (token == null || token.isEmpty) {
+        _logger.info('[播放器] ASMR guest登录未返回token');
+        return null;
+      }
+      final authHeader = {'Authorization': 'Bearer $token'};
+
+      // Step2: workInfo 拿标题和封面
+      final infoResp = await dio.get<dynamic>(
+        '$_asmrApiBase/api/workInfo/$apiId',
+        options: Options(headers: authHeader),
+      );
+      final infoData = infoResp.data as Map<String, dynamic>;
+      final title = (infoData['title'] as String?)?.trim();
+      if (title == null || title.isEmpty) {
+        _logger.info('[播放器] ASMR workInfo 无标题, id=$apiId');
+        return null;
+      }
+      final coverUrl = infoData['mainCoverUrl'] as String?;
+
+      // Step3: tracks 拿完整树
+      final tracksResp = await dio.get<dynamic>(
+        '$_asmrApiBase/api/tracks/$apiId?v=2',
+        options: Options(headers: authHeader),
+      );
+      final tracksList = tracksResp.data as List<dynamic>;
+      final tree = tracksList
+          .map((n) => _buildAsmrNode(n as Map<String, dynamic>))
+          .toList();
+      _logger.info('[播放器] ASMR $workCode 标题=$title, 封面=${coverUrl != null}');
+      return _AsmrWorkInfo(title: title, coverUrl: coverUrl, tree: tree);
+    } catch (e) {
+      _logger.info('[播放器] 抓取ASMR作品信息失败: $e');
+      return null;
+    }
+  }
+
+  /// ASMR 链接导入：获取作品标题和音轨流地址，
+  /// 在 asmr 子文件夹下创建播放列表并批量导入远程音乐项
+  Future<String?> importAsmrLink(String url) async {
+    isImporting.value = true;
+    importingStatus.value = '正在获取ASMR作品信息...';
+    try {
+      final info = await _fetchAsmrWorkInfo(url);
+      if (info == null || info.tracks.isEmpty) {
+        importingStatus.value = '获取ASMR作品信息失败';
+        return null;
+      }
+
+      importingStatus.value = '正在创建ASMR目录结构...';
+      final asmrFolder = _findOrCreateAsmrFolder();
+      if (asmrFolder == null) {
+        importingStatus.value = '创建ASMR文件夹失败';
+        return null;
+      }
+
+      importingStatus.value = '正在创建播放列表「${info.title}」...';
+      final playlist = music_api.createPlaylistInFolder(
+        name: info.title,
+        folderId: asmrFolder.id,
+      );
+
+      importingStatus.value = '正在导入 ${info.tracks.length} 首音轨...';
+      final remoteItems = info.tracks
+          .map((a) => music_api.RemoteMusicItem(
+                title: a.title,
+                url: a.url,
+                durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
+                trackNumber: null,
+              ))
+          .toList();
+      await music_api.addRemoteMusicItems(
+        playlistId: playlist.id,
+        items: remoteItems,
+      );
+
+      // 刷新数据并切换到新列表
+      await _loadFolders();
+      await navigateToFolder(asmrFolder.id);
+      await selectPlaylist(playlist.id);
+      importingStatus.value = '已导入 ${info.tracks.length} 首音轨';
+
+      _logger.info('[播放器] ASMR导入完成: ${info.title}, ${info.tracks.length}首');
+      return playlist.id;
+    } catch (e) {
+      _logger.info('[播放器] ASMR链接导入失败: $e');
+      importingStatus.value = '导入失败: $e';
+      return null;
+    } finally {
+      Future.delayed(const Duration(seconds: 3), () {
+        isImporting.value = false;
+        importingStatus.value = '';
+      });
+    }
+  }
+
+  /// 在系统资源管理器中显示并选中文件
+  Future<void> revealInFileManager(String filePath) async {
+    try {
+      if (filePath.startsWith('http')) return;
+      final file = File(filePath);
+      if (!file.existsSync()) return;
+      if (Platform.isMacOS) {
+        await Process.run('open', ['-R', filePath]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', ['/select,$filePath']);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [file.parent.path]);
+      }
+    } catch (e) {
+      _logger.info('[播放器] 打开资源管理器失败: $e');
+    }
+  }
+
+  /// 查找或创建当前目录下的 asmr 子文件夹
+  music_api.FolderInfo? _findOrCreateAsmrFolder() {
+    try {
+      // 在当前目录的子文件夹中查找名为 asmr 的
+      final existing = folders.firstWhereOrNull(
+        (f) => f.parentId == currentFolderId.value && f.name == 'asmr',
+      );
+      if (existing != null) return existing;
+      // 不存在则创建
+      final created = music_api.createFolder(name: 'asmr', parentId: currentFolderId.value);
+      folders.add(created);
+      return created;
+    } catch (e) {
+      _logger.info('[播放器] 创建asmr文件夹失败: $e');
+      return null;
+    }
+  }
+
   // ── 音乐操作 ─────────────────────────────────────────────────────────────
 
   Future<void> deleteMusicItem(String itemId) async {
@@ -1212,4 +1466,59 @@ class MusicPlayerViewModel extends BaseViewModel {
       );
     }
   }
+}
+
+/// ASMR 树节点（对应 tracks API 的 folder/audio/image/other）
+class AsmrTreeNode {
+  final String type;
+  final String title;
+  final String? downloadUrl;
+  final String? streamUrl;
+  final int? sizeBytes;
+  final double? durationSec;
+  final List<AsmrTreeNode> children;
+  bool selected;
+
+  AsmrTreeNode({
+    required this.type,
+    required this.title,
+    this.downloadUrl,
+    this.streamUrl,
+    this.sizeBytes,
+    this.durationSec,
+    List<AsmrTreeNode>? children,
+    this.selected = false,
+  }) : children = children ?? [];
+
+  bool get isFile => type != 'folder';
+
+  /// 递归统计选中的文件节点
+  List<AsmrTreeNode> get selectedFiles {
+    final result = <AsmrTreeNode>[];
+    void walk(AsmrTreeNode n) {
+      if (n.isFile && n.selected && n.downloadUrl != null) {
+        result.add(n);
+      }
+      for (final c in n.children) {
+        walk(c);
+      }
+    }
+    walk(this);
+    return result;
+  }
+
+  void syncChildren() {
+    for (final c in children) {
+      c.selected = selected;
+      c.syncChildren();
+    }
+  }
+}
+
+/// ASMR 作品信息（标题 + 封面 + 树结构）
+class AsmrWorkInfo {
+  final String title;
+  final String? coverUrl;
+  final List<AsmrTreeNode> tree;
+  AsmrWorkInfo({required this.title, this.coverUrl, required this.tree});
 }

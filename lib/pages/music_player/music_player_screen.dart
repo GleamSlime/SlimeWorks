@@ -195,6 +195,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         onPlayAll: songCount > 0 ? () => viewModel.playItem(0) : null,
         onImportFiles: viewModel.pickAndImportFiles,
         onImportFolder: viewModel.pickAndImportFolder,
+        onImportAsmr: () => _showAsmrImportDialog(context),
         onSettings: () => _showPlaylistSettings(context),
       );
     });
@@ -235,6 +236,12 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                   onPressed: viewModel.pickAndImportFolder,
                   icon: const Icon(Icons.folder_open_rounded),
                   label: const Text('选择文件夹'),
+                ),
+                SizedBox(width: AppTheme.metrics.kSpace8),
+                OutlinedButton.icon(
+                  onPressed: () => _showAsmrImportDialog(context),
+                  icon: const Icon(Icons.link_rounded),
+                  label: const Text('ASMR链接'),
                 ),
               ],
             ),
@@ -279,6 +286,11 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                 tooltip: '导入文件夹',
               ),
               IconButton(
+                onPressed: () => _showAsmrImportDialog(context),
+                icon: const Icon(Icons.link_rounded),
+                tooltip: 'ASMR链接导入',
+              ),
+              IconButton(
                 onPressed: () => _showCreatePlaylistDialog(context),
                 icon: const Icon(Icons.add_rounded),
                 tooltip: '新建播放列表',
@@ -303,6 +315,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                 onFavoriteTap: () => viewModel.toggleFavorite(item.id),
                 onDeleteTap: () => viewModel.deleteMusicItem(item.id),
                 onTranscribeTap: () => viewModel.transcribeItem(item),
+                onRevealTap: () => viewModel.revealInFileManager(item.filePath),
               );
             },
           ),
@@ -441,6 +454,65 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
               Navigator.of(ctx).pop();
             },
             child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ASMR 链接导入对话框
+  void _showAsmrImportDialog(BuildContext context) {
+    final urlController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ASMR 链接导入'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '自动获取作品标题和音轨流地址，在 asmr 文件夹下创建播放列表并直接导入。',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).hintColor,
+                    ),
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace12),
+              TextField(
+                controller: urlController,
+                decoration: const InputDecoration(
+                  labelText: 'ASMR 链接',
+                  hintText: 'https://asmr.one/work/RJ01292783',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) {
+                  final url = urlController.text.trim();
+                  if (url.isEmpty) return;
+                  Navigator.of(ctx).pop();
+                  viewModel.importAsmrLink(url);
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              final url = urlController.text.trim();
+              if (url.isEmpty) return;
+              Navigator.of(ctx).pop();
+              viewModel.importAsmrLink(url);
+            },
+            icon: const Icon(Icons.link_rounded, size: 18),
+            label: const Text('导入'),
           ),
         ],
       ),
@@ -628,6 +700,7 @@ class _FolderInfoHeader extends StatelessWidget {
   final VoidCallback? onPlayAll;
   final VoidCallback onImportFiles;
   final VoidCallback onImportFolder;
+  final VoidCallback onImportAsmr;
   final VoidCallback onSettings;
 
   const _FolderInfoHeader({
@@ -641,6 +714,7 @@ class _FolderInfoHeader extends StatelessWidget {
     this.onPlayAll,
     required this.onImportFiles,
     required this.onImportFolder,
+    required this.onImportAsmr,
     required this.onSettings,
   });
 
@@ -833,6 +907,20 @@ class _FolderInfoHeader extends StatelessWidget {
               onPressed: onImportFolder,
               icon: const Icon(Icons.folder_open_rounded, size: 18),
               label: const Text('导入文件夹'),
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppTheme.metrics.kSpace12,
+                  vertical: AppTheme.metrics.kSpace6,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            SizedBox(width: AppTheme.metrics.kSpace8),
+            // ASMR 链接导入
+            OutlinedButton.icon(
+              onPressed: onImportAsmr,
+              icon: const Icon(Icons.link_rounded, size: 18),
+              label: const Text('ASMR链接'),
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.symmetric(
                   horizontal: AppTheme.metrics.kSpace12,

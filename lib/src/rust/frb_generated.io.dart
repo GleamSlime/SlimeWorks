@@ -369,6 +369,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
+  List<RemoteMusicItem> dco_decode_list_remote_music_item(dynamic raw);
+
+  @protected
   List<ScanBatchResult> dco_decode_list_scan_batch_result(dynamic raw);
 
   @protected
@@ -477,6 +480,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int) dco_decode_record_u_32_u_32(dynamic raw);
+
+  @protected
+  RemoteMusicItem dco_decode_remote_music_item(dynamic raw);
 
   @protected
   ScanBatchResult dco_decode_scan_batch_result(dynamic raw);
@@ -874,6 +880,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RemoteMusicItem> sse_decode_list_remote_music_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ScanBatchResult> sse_decode_list_scan_batch_result(
     SseDeserializer deserializer,
   );
@@ -1002,6 +1013,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int) sse_decode_record_u_32_u_32(SseDeserializer deserializer);
+
+  @protected
+  RemoteMusicItem sse_decode_remote_music_item(SseDeserializer deserializer);
 
   @protected
   ScanBatchResult sse_decode_scan_batch_result(SseDeserializer deserializer);
@@ -1502,6 +1516,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_remote_music_item(
+    List<RemoteMusicItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_scan_batch_result(
     List<ScanBatchResult> self,
     SseSerializer serializer,
@@ -1657,6 +1677,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_record_u_32_u_32((int, int) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_remote_music_item(
+    RemoteMusicItem self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_scan_batch_result(

@@ -76,6 +76,15 @@ pub struct MusicItem {
     pub has_cue: bool,
 }
 
+/// 远程音乐项输入（用于添加 HTTP 流地址到播放列表）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteMusicItem {
+    pub title: String,
+    pub url: String,
+    pub duration_ms: Option<u64>,
+    pub track_number: Option<u32>,
+}
+
 /// CUE 音轨信息（从 .cue 文件解析）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CueTrack {

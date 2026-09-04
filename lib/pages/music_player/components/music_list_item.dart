@@ -13,6 +13,7 @@ class MusicListItem extends StatelessWidget {
   final VoidCallback onFavoriteTap;
   final VoidCallback onDeleteTap;
   final VoidCallback? onTranscribeTap;
+  final VoidCallback? onRevealTap;
 
   const MusicListItem({
     super.key,
@@ -23,6 +24,7 @@ class MusicListItem extends StatelessWidget {
     required this.onFavoriteTap,
     required this.onDeleteTap,
     this.onTranscribeTap,
+    this.onRevealTap,
   });
 
   @override
@@ -94,12 +96,23 @@ class MusicListItem extends StatelessWidget {
                 case 'transcribe':
                   onTranscribeTap?.call();
                   break;
+                case 'reveal':
+                  onRevealTap?.call();
+                  break;
               }
             },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(value: 'transcribe', child: Text('语音识别')),
-              const PopupMenuItem(value: 'delete', child: Text('删除')),
-            ],
+            itemBuilder: (ctx) {
+              final items = <PopupMenuEntry<String>>[
+                const PopupMenuItem(value: 'transcribe', child: Text('语音识别')),
+              ];
+              // 仅本地文件可「在资源管理器打开」
+              final isLocal = !item.filePath.startsWith('http') && File(item.filePath).existsSync();
+              if (isLocal) {
+                items.add(const PopupMenuItem(value: 'reveal', child: Text('在资源管理器打开')));
+              }
+              items.add(const PopupMenuItem(value: 'delete', child: Text('删除')));
+              return items;
+            },
           ),
         ],
       ),

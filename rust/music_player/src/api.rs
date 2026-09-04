@@ -3,7 +3,7 @@ use slime_logger::{sw_info, sw_warn};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::scanner;
-use crate::types::{CueSheet, EqualizerPreset, Folder, MusicItem, PathMappingNode, PlayRecord, Playlist};
+use crate::types::{CueSheet, EqualizerPreset, Folder, MusicItem, PathMappingNode, PlayRecord, Playlist, RemoteMusicItem};
 
 // ── 内存缓存 ──────────────────────────────────────────────────────────────────
 static PLAYLISTS: OnceLock<Arc<Mutex<Vec<Playlist>>>> = OnceLock::new();
@@ -469,6 +469,53 @@ pub fn import_music_paths(
             }
         }
     }
+    Ok(items)
+}
+
+/// 批量添加远程音乐项（HTTP 流地址，不检查本地文件存在性）
+pub fn add_remote_music_items(
+    playlist_id: String,
+    remote_items: Vec<RemoteMusicItem>,
+) -> Result<Vec<MusicItem>, String> {
+    ensure_db();
+    let existing = get_playlist_items(playlist_id.clone()).unwrap_or_default();
+    let mut max_order = existing.iter().map(|i| i.order).max().unwrap_or(-1);
+
+    let _ = db_module::db_register_table(item_table());
+    let mut items = Vec::new();
+    for r in remote_items {
+        max_order += 1;
+        let item = MusicItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            playlist_id: playlist_id.clone(),
+            title: r.title,
+            artist: None,
+            album: None,
+            file_path: r.url,
+            duration_ms: r.duration_ms,
+            track_number: r.track_number,
+            disc_number: None,
+            year: None,
+            genre: None,
+            cover_path: None,
+            file_size: 0,
+            modified_at: Utc::now(),
+            order: max_order,
+            is_favorite: false,
+            has_cue: false,
+        };
+        let json = serde_json::to_string(&item).map_err(|e| e.to_string())?;
+        db_module::db_set(item_table(), item.id.clone(), json).map_err(|e| e.to_string())?;
+        items.push(item);
+    }
+
+    if !items.is_empty() {
+        update_playlist_count(&playlist_id)?;
+        // 清空缓存
+        let mut guard = music_items_cache().lock().unwrap();
+        *guard = None;
+    }
+    sw_info!("[music_player] 批量添加远程音乐项 {} 首", items.len());
     Ok(items)
 }
 
