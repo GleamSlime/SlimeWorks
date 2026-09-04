@@ -356,8 +356,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (isInitialized) {
       // 永久 ViewModel 再次进入页面时：刷新数据 + 重新加载智能文件夹（磁盘上的数据描和内存始终保持同步）
       _logger.info('[媒体库] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
-      await _loadSmartFolders();
-      // 重新加载收藏：若首次初始化时因数据库未就绪等原因加载失败，此处可恢复
+      // _loadSmartFolders 已在 refreshAll 内部调用，此处不重复调，避免重复读 redb
       await _loadFavorites();
       await refreshAll();
       return;

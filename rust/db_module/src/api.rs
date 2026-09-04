@@ -222,19 +222,39 @@ pub fn db_merge_tables(
         let dst_name: &'static str = Box::leak(table.clone().into_boxed_str());
         let _ = dst.register_table(dst_name);
 
-        // 源库中不存在该表时跳过
-        let records = match src.list_all(table) {
+        // 单次读事务拉取源表全部记录
+        let src_records = match src.list_all(table) {
             Ok(records) => records,
             Err(_) => continue,
         };
-        for (key, value) in records {
-            let exists = dst.get(table, &key).map(|v| v.is_some()).unwrap_or(false);
-            if !exists || overwrite {
-                dst.set(table, &key, &value)
-                    .map_err(|e| format!("Failed to merge record: {}", e))?;
-                copied += 1;
-            }
+        if src_records.is_empty() {
+            continue;
         }
+
+        // 计算需写入的记录：覆盖模式直接全量；补齐模式用 list_keys 一次取目标键集合
+        let to_write: Vec<(String, String)> = if overwrite {
+            src_records
+        } else {
+            let dst_keys: std::collections::HashSet<String> = match dst.list_keys(table) {
+                Ok(keys) => keys.into_iter().collect(),
+                Err(_) => continue,
+            };
+            src_records
+                .into_iter()
+                .filter(|(k, _)| !dst_keys.contains(k))
+                .collect()
+        };
+
+        if to_write.is_empty() {
+            continue;
+        }
+
+        let n = to_write.len() as u64;
+        // 单次写事务批量插入，避免逐条 commit 造成 fsync 风暴
+        if let Err(e) = dst.batch_set(table, &to_write) {
+            return Err(format!("Failed to merge records: {}", e));
+        }
+        copied += n;
     }
     Ok(copied)
 }

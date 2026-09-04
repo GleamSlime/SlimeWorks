@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +48,8 @@ class AppUpdateService {
 
   /// 从 SharedPreferences 加载偏好，启动时调用
   Future<void> loadPrefs() async {
+    // Debug 模式下禁用更新检查（避免开发期间弹出更新提示）
+    if (kDebugMode) return;
     if (!Platform.isMacOS && !Platform.isWindows) return;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -174,7 +177,13 @@ class AppUpdateService {
     }
   }
 
+  /// 用户主动触发检查更新（设置页"立即检查"按钮）
   Future<void> checkForUpdates({bool silent = true}) async {
+    // Debug 模式下不弹更新提示
+    if (kDebugMode) {
+      _logger.info('[应用更新] Debug 模式，跳过更新检查');
+      return;
+    }
     if (isChecking.value) return;
     isChecking.value = true;
     lastCheckHadUpdate = false;

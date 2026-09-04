@@ -666,7 +666,6 @@ class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
                 padding: EdgeInsets.all(m.kSpace20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
@@ -704,14 +703,17 @@ class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: m.kSpace6),
-                    Text(
-                      widget.feature.description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).hintColor,
-                        height: 1.4,
+                    // 用 Flexible 包裹，允许描述文本在卡片高度紧张时收缩，避免 sub-pixel 溢出
+                    Flexible(
+                      child: Text(
+                        widget.feature.description,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).hintColor,
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     const Spacer(),
                     Row(
