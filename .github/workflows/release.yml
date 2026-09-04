@@ -325,12 +325,16 @@ jobs:
         run: |
           # 解锁 keychain 确保私钥可访问
           security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          # 列出可用 codesigning 身份，辅助诊断
+          echo "=== Available signing identities ==="
+          security find-identity -p codesigning -v build.keychain || true
           # 创建临时 xcconfig，只给 Runner target 传签名参数
           # Pods 用 Podfile post_install hook 中设置的空字符串（优先级高于 -xcconfig）
+          # 注意：不写 CODE_SIGN_IDENTITY，让 Xcode 根据 PROVISIONING_PROFILE_SPECIFIER 自动匹配证书
+          # 避免 "iPhone Distribution" vs "Apple Distribution" CN 不一致问题
           cat > /tmp/RunnerSign.xcconfig << EOF
           #include "Flutter/Release.xcconfig"
           CODE_SIGN_STYLE = Manual
-          CODE_SIGN_IDENTITY = iPhone Distribution
           DEVELOPMENT_TEAM = ${IOS_TEAM_ID}
           PROVISIONING_PROFILE_SPECIFIER = ${PP_NAME}
           ${IOS_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER = ${IOS_BUNDLE_ID}}
