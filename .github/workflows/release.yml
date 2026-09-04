@@ -276,15 +276,16 @@ jobs:
           echo "=== 导入后 keychain 中的所有证书 ==="
           security find-certificate -a build.keychain || true
           echo "=== 可用 codesigning 身份 ==="
-          security find-identity -p codesigning -v build.keychain || true
-          # 如果没有任何可用身份，提前失败
-          IDENTITY_COUNT=$(security find-identity -p codesigning -v build.keychain | grep -c "valid identities" || echo "0")
-          if echo "$IDENTITY_COUNT" | grep -q "0 valid"; then
+          IDENTITY_OUTPUT=$(security find-identity -p codesigning -v build.keychain)
+          echo "$IDENTITY_OUTPUT"
+          # 如果输出包含 "0 valid identities"，提前失败
+          if echo "$IDENTITY_OUTPUT" | grep -q "0 valid identities"; then
             echo "❌ keychain 中没有可用的 codesigning 身份，证书导入失败"
             echo "可能原因："
             echo "1. IOS_CERTIFICATE_P12 base64 字符串有换行（在 GitHub Secret 中应该是一行连续字符串）"
             echo "2. IOS_CERTIFICATE_PASSWORD 与导出 .p12 时设置的密码不一致"
             echo "3. .p12 文件不包含私钥（导出时未展开证书查看私钥）"
+            echo "4. .p12 是开发证书（iOS Development）而不是分发证书（iOS/Apple Distribution）"
             exit 1
           fi
 
