@@ -262,11 +262,31 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          # 把 build.keychain 加入搜索路径最前
+          security list-keychains -d user -s build.keychain login.keychain
           # 导入 .p12 证书
           echo "$IOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
+          echo "=== p12 文件信息 ==="
+          ls -la certificate.p12
+          file certificate.p12
           security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           # 允许 codesign 访问证书私钥（macOS 13+ 使用 set-key-partition-list）
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          # 立即验证证书导入是否成功
+          echo "=== 导入后 keychain 中的所有证书 ==="
+          security find-certificate -a build.keychain || true
+          echo "=== 可用 codesigning 身份 ==="
+          security find-identity -p codesigning -v build.keychain || true
+          # 如果没有任何可用身份，提前失败
+          IDENTITY_COUNT=$(security find-identity -p codesigning -v build.keychain | grep -c "valid identities" || echo "0")
+          if echo "$IDENTITY_COUNT" | grep -q "0 valid"; then
+            echo "❌ keychain 中没有可用的 codesigning 身份，证书导入失败"
+            echo "可能原因："
+            echo "1. IOS_CERTIFICATE_P12 base64 字符串有换行（在 GitHub Secret 中应该是一行连续字符串）"
+            echo "2. IOS_CERTIFICATE_PASSWORD 与导出 .p12 时设置的密码不一致"
+            echo "3. .p12 文件不包含私钥（导出时未展开证书查看私钥）"
+            exit 1
+          fi
 
       - name: 导入 Provisioning Profile
         env:
@@ -331,9 +351,8 @@ jobs:
           # 创建临时 xcconfig，只给 Runner target 传签名参数
           # Pods 用 Podfile post_install hook 中设置的空字符串（优先级高于 -xcconfig）
           # 注意：不写 CODE_SIGN_IDENTITY，让 Xcode 根据 PROVISIONING_PROFILE_SPECIFIER 自动匹配证书
-          # 避免 "iPhone Distribution" vs "Apple Distribution" CN 不一致问题
+          # 注意：不写 #include，避免相对路径解析失败（Generated.xcconfig 已由 flutter build 处理）
           cat > /tmp/RunnerSign.xcconfig << EOF
-          #include "Flutter/Release.xcconfig"
           CODE_SIGN_STYLE = Manual
           DEVELOPMENT_TEAM = ${IOS_TEAM_ID}
           PROVISIONING_PROFILE_SPECIFIER = ${PP_NAME}
