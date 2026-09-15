@@ -35,6 +35,66 @@ enum PlayerPlayMode {
   const PlayerPlayMode(this.label, this.icon);
 }
 
+/// ASMR 树节点（目录或音轨）
+class _AsmrTreeNode {
+  final String type;
+  final String title;
+  final String? downloadUrl;
+  final String? streamUrl;
+  final int? sizeBytes;
+  final double? durationSec;
+  final bool selected;
+  final List<_AsmrTreeNode>? children;
+
+  const _AsmrTreeNode({
+    required this.type,
+    required this.title,
+    this.downloadUrl,
+    this.streamUrl,
+    this.sizeBytes,
+    this.durationSec,
+    required this.selected,
+    this.children,
+  });
+
+  /// 是否为音轨文件
+  bool get isAudio => type == 'audio';
+
+  /// 音轨播放地址（优先流地址，其次下载地址）
+  String? get url => streamUrl ?? downloadUrl;
+
+  /// 音轨时长（毫秒）
+  int? get durationMs =>
+      durationSec != null ? (durationSec! * 1000).round() : null;
+}
+
+/// ASMR 作品信息（标题 + 封面 + 完整树结构）
+class _AsmrWorkInfo {
+  final String title;
+  final String? coverUrl;
+  final List<_AsmrTreeNode> tree;
+
+  const _AsmrWorkInfo({
+    required this.title,
+    this.coverUrl,
+    required this.tree,
+  });
+
+  /// 展开树中所有音轨
+  List<_AsmrTreeNode> get tracks {
+    final result = <_AsmrTreeNode>[];
+    void walk(List<_AsmrTreeNode> nodes) {
+      for (final n in nodes) {
+        if (n.isAudio && n.url != null) result.add(n);
+        if (n.children != null) walk(n.children!);
+      }
+    }
+
+    walk(tree);
+    return result;
+  }
+}
+
 /// 音乐播放器 ViewModel
 class MusicPlayerViewModel extends BaseViewModel {
   final NodeSettingsService _nodeService = getIt<NodeSettingsService>();
@@ -950,7 +1010,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       final remoteItems = info.tracks
           .map((a) => music_api.RemoteMusicItem(
                 title: a.title,
-                url: a.url,
+                url: a.url!,
                 durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
                 trackNumber: null,
               ))

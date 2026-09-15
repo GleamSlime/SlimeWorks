@@ -336,6 +336,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
             )
           : null,
       onToggleFavorite: () => vm.toggleFavorite(collection.id),
+      onSimilarSearch: () => vm.startSimilarSearch(collection),
     );
 
     // 追踪鼠标悬停状态（供 Delete 快捷键定位当前悬停的集合）

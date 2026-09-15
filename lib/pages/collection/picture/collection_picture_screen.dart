@@ -264,6 +264,63 @@ class _CollectionPictureScreenState
     );
   }
 
+  /// 底部居中悬浮「清除搜索结果」按钮（相似查找激活时显示，点击清除筛选）。
+  /// 返回 null 表示相似查找未激活，无需渲染。
+  Widget? _similarClearOverlay(BuildContext context) {
+    if (viewModel.similarSearchQuery.value.trim().isEmpty) return null;
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: AppTheme.metrics.kSpace20,
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: viewModel.clearSimilarSearch,
+            borderRadius: AppTheme.metrics.radius999,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace16,
+                vertical: AppTheme.metrics.kSpace8,
+              ),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer.withAlpha(235),
+                borderRadius: AppTheme.metrics.radius999,
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).shadowColor.withValues(alpha: 0.22),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.close_rounded,
+                    size: AppTheme.metrics.iconSize18,
+                    color: scheme.onPrimaryContainer,
+                  ),
+                  SizedBox(width: AppTheme.metrics.kSpace6),
+                  Text(
+                    '清除搜索结果',
+                    style: TextStyle(
+                      color: scheme.onPrimaryContainer,
+                      fontSize: AppTheme.metrics.fontSize13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget buildContent(BuildContext context) {
     return Obx(() {
@@ -366,11 +423,17 @@ class _CollectionPictureScreenState
                     ),
                 ],
               );
+              // 相似查找激活时的底部悬浮「清除搜索结果」按钮（null 表示未激活）
+              final clearBtn = _similarClearOverlay(context);
               // 仅桌面端启用文件拖拽导入
               if (Platform.isAndroid || Platform.isIOS) {
                 // 移动端：有内部导航层级时，在左边缘叠加一个右滑返回手势区域。
                 // 补偿 PopScope 在 iOS CupertinoPage 中只拦截 Android 返回键的不足。
-                if (!hasInternalBackLevel) return body;
+                if (!hasInternalBackLevel) {
+                  return clearBtn == null
+                      ? body
+                      : Stack(children: [body, clearBtn]);
+                }
                 return Stack(
                   children: [
                     body,
@@ -393,6 +456,7 @@ class _CollectionPictureScreenState
                         child: const SizedBox.expand(),
                       ),
                     ),
+                    ?clearBtn,
                   ],
                 );
               }
@@ -447,6 +511,7 @@ class _CollectionPictureScreenState
                           ),
                         ),
                       ),
+                    ?clearBtn,
                   ],
                 ),
               );
