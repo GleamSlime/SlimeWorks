@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
 import 'package:share_plus/share_plus.dart';
@@ -1083,6 +1084,25 @@ class LanTransferViewModel extends BaseViewModel {
     required bool isError,
     Duration duration = const Duration(seconds: 2),
   }) {
+    // 页面已销毁时（onClose 里 stopService 的失败回调就在这一类时机到达）不再弹提示，
+    // 否则会把局域网页的错误条甩到用户已经切换过去的页面上
+    if (isClosed) {
+      _logger.i('ViewModel 已关闭，跳过提示: $message');
+      return;
+    }
+
+    final scheduler = SchedulerBinding.instance;
+    if (scheduler.schedulerPhase != SchedulerPhase.idle &&
+        scheduler.schedulerPhase != SchedulerPhase.postFrameCallbacks) {
+      // 关闭页面会触发 onClose → stopService，其失败回调可能正落在 build/layout 阶段，
+      // 此时 ScaffoldMessenger.showSnackBar 内部的 setState 会抛
+      // "called when widget tree was locked"，推迟到本帧绘制完成后再弹
+      scheduler.addPostFrameCallback((_) {
+        _showSnack(message: message, isError: isError, duration: duration);
+      });
+      return;
+    }
+
     final BuildContext? context = navigatorKey.currentContext;
     if (context == null) {
       _logger.i('Skip snack because no navigator context: $message');
