@@ -842,7 +842,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   }
 
   /// 递归构建 ASMR 树结构
-  _AsmrTreeNode _buildAsmrNode(Map<String, dynamic> json) {
+  AsmrTreeNode _buildAsmrNode(Map<String, dynamic> json) {
     final type = json['type'] as String? ?? 'other';
     final title = (json['title'] as String?)?.trim() ?? '未命名';
     final downloadUrl = json['mediaDownloadUrl'] as String?;
@@ -852,7 +852,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     final children = json['children'] as List<dynamic>?;
     // 默认选中音频文件
     final selected = type == 'audio';
-    return _AsmrTreeNode(
+    return AsmrTreeNode(
       type: type,
       title: title,
       downloadUrl: downloadUrl,
@@ -865,7 +865,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   }
 
   /// 从 asmr.one 链接获取作品信息（标题 + 封面 + 完整树结构）
-  Future<_AsmrWorkInfo?> _fetchAsmrWorkInfo(String url) async {
+  Future<AsmrWorkInfo?> _fetchAsmrWorkInfo(String url) async {
     try {
       final workCode = _extractWorkCode(url);
       if (workCode == null) {
@@ -914,7 +914,7 @@ class MusicPlayerViewModel extends BaseViewModel {
           .map((n) => _buildAsmrNode(n as Map<String, dynamic>))
           .toList();
       _logger.info('[播放器] ASMR $workCode 标题=$title, 封面=${coverUrl != null}');
-      return _AsmrWorkInfo(title: title, coverUrl: coverUrl, tree: tree);
+      return AsmrWorkInfo(title: title, coverUrl: coverUrl, tree: tree);
     } catch (e) {
       _logger.info('[播放器] 抓取ASMR作品信息失败: $e');
       return null;
@@ -948,9 +948,10 @@ class MusicPlayerViewModel extends BaseViewModel {
 
       importingStatus.value = '正在导入 ${info.tracks.length} 首音轨...';
       final remoteItems = info.tracks
+          .where((a) => a.playUrl != null)
           .map((a) => music_api.RemoteMusicItem(
                 title: a.title,
-                url: a.url,
+                url: a.playUrl!,
                 durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
                 trackNumber: null,
               ))
@@ -964,9 +965,9 @@ class MusicPlayerViewModel extends BaseViewModel {
       await _loadFolders();
       await navigateToFolder(asmrFolder.id);
       await selectPlaylist(playlist.id);
-      importingStatus.value = '已导入 ${info.tracks.length} 首音轨';
+      importingStatus.value = '已导入 ${remoteItems.length} 首音轨';
 
-      _logger.info('[播放器] ASMR导入完成: ${info.title}, ${info.tracks.length}首');
+      _logger.info('[播放器] ASMR导入完成: ${info.title}, ${remoteItems.length}首');
       return playlist.id;
     } catch (e) {
       _logger.info('[播放器] ASMR链接导入失败: $e');
@@ -1513,6 +1514,25 @@ class AsmrTreeNode {
       c.syncChildren();
     }
   }
+
+  /// 递归收集所有音频节点（深度优先，保持树内顺序）
+  List<AsmrTreeNode> get audioFiles {
+    final result = <AsmrTreeNode>[];
+    void walk(AsmrTreeNode n) {
+      if (n.type == 'audio') result.add(n);
+      for (final c in n.children) {
+        walk(c);
+      }
+    }
+    walk(this);
+    return result;
+  }
+
+  /// 播放用地址：优先流地址，回退下载地址
+  String? get playUrl => streamUrl ?? downloadUrl;
+
+  /// 时长（毫秒）
+  int? get durationMs => durationSec == null ? null : (durationSec! * 1000).round();
 }
 
 /// ASMR 作品信息（标题 + 封面 + 树结构）
@@ -1521,4 +1541,7 @@ class AsmrWorkInfo {
   final String? coverUrl;
   final List<AsmrTreeNode> tree;
   AsmrWorkInfo({required this.title, this.coverUrl, required this.tree});
+
+  /// 展平后的全部可播放音轨
+  List<AsmrTreeNode> get tracks => tree.expand((n) => n.audioFiles).toList();
 }

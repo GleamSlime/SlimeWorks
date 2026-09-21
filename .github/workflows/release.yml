@@ -545,7 +545,7 @@ jobs:
           fi
 
   release:
-    needs: [detect-version, build-macos, build-windows, build-ios, build-android]
+    needs: [detect-version, build-macos, build-windows, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
