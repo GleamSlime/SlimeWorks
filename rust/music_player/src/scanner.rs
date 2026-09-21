@@ -4,7 +4,8 @@ use lofty::probe::Probe;
 use lofty::tag::Accessor;
 use regex::Regex;
 use slime_logger::{sw_debug, sw_info, sw_warn};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::types::{CueSheet, CueTrack, MusicItem, PathMappingNode, PathMappingNodeType};
@@ -14,6 +15,51 @@ const AUDIO_EXTENSIONS: &[&str] = &[
     "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "ape", "aiff", "alac", "wv", "tta",
     "dsd", "dsf", "dff",
 ];
+
+/// 同目录封面图的候选文件名（必须全小写，配合 `DirIndex` 的小写键查找）
+const COVER_FILE_NAMES: &[&str] = &[
+    "cover.jpg",
+    "cover.jpeg",
+    "cover.png",
+    "folder.jpg",
+    "folder.jpeg",
+    "folder.png",
+    "front.jpg",
+    "front.jpeg",
+    "front.png",
+    "album.jpg",
+    "album.jpeg",
+    "album.png",
+];
+
+/// 目录文件名索引：一次 `read_dir` 建好，供同级 `.cue` 与封面探测复用。
+///
+/// 原先每个音频文件都要对同一目录做最多 14 次 `exists()`（每次一趟 stat），
+/// 上千曲的库单是「找同级附属文件」就产生上万次系统调用。
+/// 注意这里按小写名匹配，比原来的 `{stem}.cue` / `{stem}.CUE` 两种精确拼法
+/// 更宽松（`.Cue` 之类也能命中），与 Windows 本身大小写不敏感的语义一致。
+#[derive(Default)]
+struct DirIndex {
+    by_lower: HashMap<String, String>,
+}
+
+impl DirIndex {
+    fn load(dir: &Path) -> Self {
+        let mut index = Self::default();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                index.by_lower.insert(name.to_lowercase(), name);
+            }
+        }
+        index
+    }
+
+    /// 按小写名取回目录中实际存在的原始文件名。
+    fn lookup(&self, lower_name: &str) -> Option<&str> {
+        self.by_lower.get(lower_name).map(|s| s.as_str())
+    }
+}
 
 /// 从音频文件中提取时长（毫秒）和标签信息
 pub fn extract_audio_metadata(file_path: &Path) -> AudioMetadata {
@@ -97,6 +143,7 @@ pub fn scan_audio_files(dir_path: &str, playlist_id: &str) -> Result<Vec<MusicIt
     sw_info!("[music_scanner] 开始扫描音频目录: {}", dir_path);
     let mut items = Vec::new();
     let mut order = 0;
+    let mut dir_indexes: HashMap<PathBuf, DirIndex> = HashMap::new();
 
     for entry in WalkDir::new(path)
         .into_iter()
@@ -138,12 +185,27 @@ pub fn scan_audio_files(dir_path: &str, playlist_id: &str) -> Result<Vec<MusicIt
 
         let file_path_str = file_path.to_string_lossy().to_string();
 
-        // 尝试从同级目录查找 .cue 文件
-        let cue_path = find_cue_for_audio(&file_path_str);
-        let has_cue = cue_path.is_some();
-
-        // 尝试提取封面（同目录下的 cover.jpg / folder.jpg 等）
-        let cover_path = find_cover_for_audio(file_path);
+        // 同级附属文件（.cue / 封面）探测走目录索引：每个目录只 read_dir 一次。
+        // 原先每个音频文件都要对同一目录重复做最多 14 次 exists()（每次一趟 stat）。
+        let (has_cue, cover_path) = match file_path.parent() {
+            Some(dir) => {
+                let index = dir_indexes
+                    .entry(dir.to_path_buf())
+                    .or_insert_with(|| DirIndex::load(dir));
+                let stem_lower = file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let has_cue = index.lookup(&format!("{}.cue", stem_lower)).is_some();
+                let cover_path = COVER_FILE_NAMES
+                    .iter()
+                    .find_map(|name| index.lookup(name))
+                    .map(|found| dir.join(found).to_string_lossy().into_owned());
+                (has_cue, cover_path)
+            }
+            None => (false, None),
+        };
 
         // 提取音频元数据（时长、标签等）
         let audio_meta = extract_audio_metadata(file_path);
@@ -196,21 +258,7 @@ pub fn find_cue_for_audio(audio_path: &str) -> Option<String> {
 /// 查找音频文件所在目录的封面图片
 pub fn find_cover_for_audio(audio_path: &Path) -> Option<String> {
     let dir = audio_path.parent()?;
-    let cover_names = &[
-        "cover.jpg",
-        "cover.jpeg",
-        "cover.png",
-        "folder.jpg",
-        "folder.jpeg",
-        "folder.png",
-        "front.jpg",
-        "front.jpeg",
-        "front.png",
-        "album.jpg",
-        "album.jpeg",
-        "album.png",
-    ];
-    for name in cover_names {
+    for name in COVER_FILE_NAMES {
         let cover_path = dir.join(name);
         if cover_path.exists() {
             return Some(cover_path.to_string_lossy().to_string());

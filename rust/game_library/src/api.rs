@@ -1181,20 +1181,30 @@ pub async fn game_library_save_settings(settings: GameLibrarySettings) -> Result
 /// 检查路径列表中哪些已录入（用于批量导入去重），返回已存在的路径
 pub async fn game_library_check_paths_exist(paths: Vec<String>) -> Result<Vec<String>> {
     with_conn(|conn| {
+        // 一次性取出全部 path / game_dir 建集合，替代逐个查库。
+        // 原先的 `WHERE LOWER(TRIM(path)) = ?1` 对列套了函数，索引不可用，
+        // 每个待校验路径都要全表扫一遍 —— P 个路径就是 P 次全表扫描。
+        let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
+        {
+            let mut stmt = conn
+                .prepare("SELECT path, game_dir FROM games")
+                .context("准备游戏路径查询失败")?;
+            let mut rows = stmt.query([]).context("读取游戏路径失败")?;
+            while let Some(row) = rows.next()? {
+                let path: String = row.get(0)?;
+                let game_dir: String = row.get(1)?;
+                known.insert(path.trim().to_lowercase());
+                known.insert(game_dir.trim().to_lowercase());
+            }
+        }
+
         let mut existing: Vec<String> = Vec::new();
         for path in &paths {
             let p = path.trim().to_lowercase();
             if p.is_empty() {
                 continue;
             }
-            let count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM games WHERE LOWER(TRIM(path)) = ?1 OR LOWER(TRIM(game_dir)) = ?1",
-                    params![&p],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-            if count > 0 {
+            if known.contains(&p) {
                 existing.push(path.clone());
             }
         }

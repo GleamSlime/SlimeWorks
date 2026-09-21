@@ -811,6 +811,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     final blurSigma = getIt.isRegistered<MediaPrefsService>()
         ? getIt<MediaPrefsService>().privacyBlurSigma.value
         : 15.0;
+    // 网格封面按预览宽度解码，避免每张原图（可达数 MB）整幅进内存
+    final previewWidth = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>().localPreviewWidth.value
+        : 480;
+    final cacheWidth = previewWidth > 0 ? previewWidth : null;
     try {
       final coverPath = widget.metadata.coverPath;
       Widget coverWidget;
@@ -826,7 +831,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
               curve: Curves.easeOut,
               child: Hero(
                 tag: 'book_cover_${widget.metadata.id}',
-                child: Image.memory(bytes, fit: BoxFit.cover),
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.cover,
+                  cacheWidth: cacheWidth,
+                ),
               ),
             ),
           );
@@ -847,6 +856,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                   file,
                   key: ValueKey('${file.path}_${file.lastModifiedSync().millisecondsSinceEpoch}'),
                   fit: BoxFit.cover,
+                  cacheWidth: cacheWidth,
                 ),
               ),
             ),

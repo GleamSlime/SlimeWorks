@@ -171,6 +171,24 @@ pub fn db_batch_set(table_name: String, records: Vec<DbRecord>) -> DbResult<()> 
         .map_err(|e| format!("Failed to batch set: {}", e))
 }
 
+/// 在同一事务内完成批量写入与批量删除，返回实际操作的记录数。
+///
+/// 仅供 Rust 业务层调用（不加 `#[frb]`，不导出到 Dart）：导入/重建索引这类
+/// 需要一次落盘成百上千条变更的场景应使用本函数，替代逐条 `db_set`/`db_delete`。
+pub fn db_batch_write(
+    table_name: String,
+    sets: Vec<DbRecord>,
+    deletes: Vec<String>,
+) -> DbResult<u32> {
+    let storage = resolve(&table_name)?;
+    let sets: Vec<(String, String)> = sets.into_iter().map(|r| (r.key, r.value)).collect();
+
+    storage
+        .batch_write(&table_name, &sets, &deletes)
+        .map(|n| n as u32)
+        .map_err(|e| format!("Failed to batch write: {}", e))
+}
+
 /// 获取记录总数
 #[frb(sync)]
 pub fn db_count(table_name: String) -> DbResult<i32> {

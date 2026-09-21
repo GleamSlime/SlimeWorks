@@ -38,6 +38,8 @@ impl SentryLogStorage {
     }
 
     pub fn store_event(&self, project_id: &str, event: &SentryEvent) -> Result<()> {
+        // 事件、项目索引、项目统计合入同一事务：原先拆成两次 commit，
+        // 每条日志要付两趟磁盘刷写，日志风暴时写入吞吐直接减半。
         let write_txn = self.db.begin_write()?;
 
         {
@@ -49,42 +51,24 @@ impl SentryLogStorage {
             let pe_key = format!("{}:{}", project_id, event.event_id);
             let timestamp = event.timestamp.as_deref().unwrap_or("");
             pe_table.insert(pe_key.as_str(), timestamp)?;
-        }
 
-        write_txn.commit()?;
-
-        self.update_project_stats(project_id, event)?;
-
-        Ok(())
-    }
-
-    fn update_project_stats(&self, project_id: &str, event: &SentryEvent) -> Result<()> {
-        let write_txn = self.db.begin_write()?;
-
-        {
             let mut proj_table = write_txn.open_table(PROJECTS_TABLE)?;
-            let project = {
-                let existing = proj_table.get(project_id)?;
-                match existing {
-                    Some(val) => serde_json::from_str(val.value())
-                        .unwrap_or_else(|_| self.create_default_project(project_id)),
-                    None => self.create_default_project(project_id),
-                }
+            let mut project = match proj_table.get(project_id)? {
+                Some(val) => serde_json::from_str(val.value())
+                    .unwrap_or_else(|_| self.create_default_project(project_id)),
+                None => self.create_default_project(project_id),
             };
-
-            let mut project = project;
             project.event_count += 1;
             project.last_event_at = event.timestamp.clone();
-
             if event.platform.is_some() && project.platform.is_none() {
                 project.platform = event.platform.clone();
             }
-
             let proj_json = serde_json::to_string(&project).context("序列化项目信息失败")?;
             proj_table.insert(project_id, proj_json.as_str())?;
         }
 
         write_txn.commit()?;
+
         Ok(())
     }
 
@@ -270,13 +254,47 @@ impl SentryLogStorage {
         Ok(existed)
     }
 
+    /// 批量删除事件：合并到单个事务，并对 project_events 索引只做一趟扫描。
+    /// 逐条调用 `delete_event` 会让 M 个事件付 M 次 commit，且每次都全表扫一遍
+    /// 索引表，总代价 O(M×P)；合并后为 O(M+P)。
     pub fn delete_events(&self, event_ids: &[String]) -> Result<u64> {
+        if event_ids.is_empty() {
+            return Ok(0);
+        }
+        // pe_key 形如 `{project_id}:{event_id}`，event_id 本身不含 ':'，
+        // 故取最后一段即可还原 event_id 用于集合比对。
+        let targets: std::collections::HashSet<&str> =
+            event_ids.iter().map(|s| s.as_str()).collect();
+
+        let write_txn = self.db.begin_write()?;
         let mut deleted = 0u64;
-        for id in event_ids {
-            if self.delete_event(id)? {
-                deleted += 1;
+        {
+            let mut events_table = write_txn.open_table(EVENTS_TABLE)?;
+            for id in event_ids {
+                if events_table.remove(id.as_str())?.is_some() {
+                    deleted += 1;
+                }
+            }
+
+            let mut pe_table = write_txn.open_table(PROJECT_EVENTS_TABLE)?;
+            let keys_to_remove: Vec<String> = pe_table
+                .iter()?
+                .filter_map(|item| {
+                    let (key, _) = item.ok()?;
+                    let key_str = key.value().to_string();
+                    match key_str.rsplit_once(':') {
+                        Some((_, event_id)) if targets.contains(event_id) => Some(key_str),
+                        _ => None,
+                    }
+                })
+                .collect();
+
+            for key in keys_to_remove {
+                pe_table.remove(key.as_str())?;
             }
         }
+
+        write_txn.commit()?;
         Ok(deleted)
     }
 

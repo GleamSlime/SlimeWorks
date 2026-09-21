@@ -282,7 +282,12 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                     final coverFile = File(coverPaths[idx]);
                                     if (coverFile.existsSync()) {
                                       return Expanded(
-                                        child: Image.file(coverFile, fit: BoxFit.cover),
+                                        // 九宫格里每格只有几十像素宽，按显示尺寸解码
+                                        child: Image.file(
+                                          coverFile,
+                                          fit: BoxFit.cover,
+                                          cacheWidth: 200,
+                                        ),
                                       );
                                     }
                                   }
@@ -302,7 +307,11 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                     final coverFile = File(coverPaths[idx]);
                                     if (coverFile.existsSync()) {
                                       return Expanded(
-                                        child: Image.file(coverFile, fit: BoxFit.cover),
+                                        child: Image.file(
+                                          coverFile,
+                                          fit: BoxFit.cover,
+                                          cacheWidth: 200,
+                                        ),
                                       );
                                     }
                                   }

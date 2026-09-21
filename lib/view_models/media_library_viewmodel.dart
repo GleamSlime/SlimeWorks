@@ -428,27 +428,34 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   List<media_api.MediaFolder> get mergedFolders {
-    final items = <media_api.MediaFolder>[...folders, ...remoteFolders];
-    items.sort((left, right) {
-      final orderCompare = left.order.compareTo(right.order);
+    // 排序键一次算好，避免比较器里反复 toLowerCase 生成临时字符串
+    final keyed = [
+      for (final item in <media_api.MediaFolder>[...folders, ...remoteFolders])
+        (item, item.name.toLowerCase()),
+    ];
+    keyed.sort((left, right) {
+      final orderCompare = left.$1.order.compareTo(right.$1.order);
       if (orderCompare != 0) {
         return orderCompare;
       }
-      return left.name.toLowerCase().compareTo(right.name.toLowerCase());
+      return left.$2.compareTo(right.$2);
     });
-    return items;
+    return keyed.map((e) => e.$1).toList();
   }
 
   List<media_api.MediaCollection> get mergedCollections {
-    final items = <media_api.MediaCollection>[...collections, ...remoteCollections];
-    items.sort((left, right) {
-      final cmp = right.updatedAt.compareTo(left.updatedAt);
+    final keyed = [
+      for (final item in <media_api.MediaCollection>[...collections, ...remoteCollections])
+        (item, item.title.toLowerCase()),
+    ];
+    keyed.sort((left, right) {
+      final cmp = right.$1.updatedAt.compareTo(left.$1.updatedAt);
       if (cmp != 0) {
         return cmp;
       }
-      return left.title.toLowerCase().compareTo(right.title.toLowerCase());
+      return left.$2.compareTo(right.$2);
     });
-    return items;
+    return keyed.map((e) => e.$1).toList();
   }
 
   media_api.MediaFolder? get currentFolder {

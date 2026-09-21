@@ -20,7 +20,7 @@ use hyper_util::{
     client::legacy::{connect::dns::Name, connect::HttpConnector, Client as HyperClient},
     rt::TokioExecutor,
 };
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use reqwest::{Client, Url};
 use rustls::{
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
@@ -28,6 +28,7 @@ use rustls::{
     ClientConfig, DigitallySignedStruct, Error as RustlsError, SignatureScheme,
 };
 use serde_json::Value;
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::future::{ready, Ready};
 use std::io;
@@ -120,12 +121,21 @@ impl Default for ClientState {
 /// Manga 客户端，线程安全（内部使用 `Arc<RwLock<>>` 保护状态）
 pub struct MangaClient {
     state: Arc<RwLock<ClientState>>,
+    /// `build_client_with_channel` 的结果缓存，key 为 `channel_cache_key` 的输出。
+    /// reqwest::Client 内部持有连接池与 TLS 根证书库，必须复用；
+    /// Clone 只是递增 Arc 引用计数，不复制连接池。
+    client_cache: Arc<Mutex<HashMap<String, Client>>>,
 }
+
+/// 客户端缓存条目上限。分流模式数量有限，达到该值即整体重置，
+/// 防止用户反复切换反代地址时无界增长。
+const CLIENT_CACHE_LIMIT: usize = 32;
 
 impl Default for MangaClient {
     fn default() -> Self {
         MangaClient {
             state: Arc::new(RwLock::new(ClientState::default())),
+            client_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -890,6 +900,10 @@ impl MangaClient {
     }
 
     /// 根据可选的临时 channel 模式构建客户端（None 表示使用当前状态）
+    ///
+    /// 结果按「分流模式 + 代理地址」缓存复用。此前每张图片下载、每个 API 请求都要
+    /// 重新 `Client::build()` 一个实例——那会重建连接池并重新加载 TLS 根证书库，
+    /// keep-alive 完全失效，每个请求白付 1~2 个 RTT。
     pub fn build_client_with_channel(
         &self,
         override_channel: Option<&ChannelMode>,
@@ -899,6 +913,29 @@ impl MangaClient {
         let channel = override_channel.unwrap_or(&state.channel).clone();
         drop(state); // 尽早释放读锁
 
+        let key = Self::client_cache_key(&channel, &proxy_url);
+        if let Some(cached) = self.client_cache.lock().get(&key) {
+            return Ok(cached.clone());
+        }
+
+        let client = self.build_client_uncached(&channel, &proxy_url)?;
+        let mut cache = self.client_cache.lock();
+        if cache.len() >= CLIENT_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(key, client.clone());
+        Ok(client)
+    }
+
+    fn client_cache_key(channel: &ChannelMode, proxy_url: &str) -> String {
+        format!("{:?}|{}", channel, proxy_url)
+    }
+
+    fn build_client_uncached(
+        &self,
+        channel: &ChannelMode,
+        proxy_url: &str,
+    ) -> MangaResult<Client> {
         // PC 中转模式不需要特殊客户端配置
         if matches!(channel, ChannelMode::LanRelay(_)) {
             return Client::builder()
@@ -915,7 +952,7 @@ impl MangaClient {
         // 分流2/3：用指定 IP 覆盖域名 DNS 解析（SNI 保持原域名）
         // 同时关闭证书校验——原项目 httpx.Client(verify=False) 亦如此处理，
         // 因为 Cloudflare 共享 IP 上 SNI 映射不保证与目标域名证书完全匹配。
-        if let ChannelMode::ChannelIp(ip_str) = &channel {
+        if let ChannelMode::ChannelIp(ip_str) = channel {
             let addrs: Vec<SocketAddr> = Self::channel_ip_candidates(ip_str)
                 .into_iter()
                 .map(|ip| {
@@ -938,7 +975,7 @@ impl MangaClient {
 
         // 代理（分流时通常不需要代理，但保留兼容性）
         if !proxy_url.is_empty() {
-            let proxy = reqwest::Proxy::all(&proxy_url)
+            let proxy = reqwest::Proxy::all(proxy_url)
                 .map_err(|e| MangaError::Network(format!("代理配置无效: {}", e)))?;
             builder = builder.proxy(proxy);
         }
@@ -1363,6 +1400,25 @@ impl MangaClient {
 
     // ==================== PC 中转辅助方法 ====================
 
+    /// PC 中转用 HTTP 客户端（按超时档位复用）。
+    /// 中转请求/图片下载原本每次调用都 `Client::builder().build()` 一次，
+    /// 等于每张图都重建连接池，keep-alive 全部作废。
+    fn relay_client(timeout_secs: u64) -> MangaResult<Client> {
+        static RELAY_API: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+        static RELAY_IMAGE: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+        let slot = if timeout_secs <= 20 { &RELAY_API } else { &RELAY_IMAGE };
+        let cached = slot.get_or_init(|| {
+            Client::builder()
+                .timeout(Duration::from_secs(timeout_secs))
+                .build()
+                .unwrap_or_else(|e| {
+                    sw_warn!("[Manga中转] 构建 HTTP 客户端失败，使用默认值: {}", e);
+                    Client::new()
+                })
+        });
+        Ok(cached.clone())
+    }
+
     /// 通过 PC 节点服务器中转 API 请求
     async fn call_relay_api(
         &self,
@@ -1377,10 +1433,7 @@ impl MangaClient {
             "method": method,
             "body": body,
         });
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(20))
-            .build()
-            .map_err(|e| MangaError::Network(e.to_string()))?;
+        let client = Self::relay_client(20)?;
         let resp = client
             .post(&relay_url)
             .json(&req_body)
@@ -1426,10 +1479,7 @@ impl MangaClient {
             "http://{}/manga/img?file_server={}&path={}",
             relay_addr, fs_enc, path_enc
         );
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| MangaError::Network(e.to_string()))?;
+        let client = Self::relay_client(30)?;
         let resp = client.get(&relay_url).send().await.map_err(|e| {
             MangaError::Network(format!("PC中转图片请求失败 addr={}: {}", relay_addr, e))
         })?;

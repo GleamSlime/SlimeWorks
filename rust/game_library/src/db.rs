@@ -4,6 +4,12 @@ use rusqlite::{params, Connection};
 const SYSTEM_FAVORITES_ID: &str = "system:favorites";
 
 pub fn init_db(conn: &Connection) -> Result<()> {
+    // WAL：默认 journal_mode=delete 下任何写操作都会阻塞读，且每次提交都要
+    // 创建/重命名日志文件。游戏库同时存在「进程追踪持续写时长」和「界面频繁读」，
+    // 开 WAL + synchronous=NORMAL 可显著减少互相阻塞。
+    // 某些网络文件系统不支持 WAL，失败时静默退回默认模式即可。
+    let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
+
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS games (

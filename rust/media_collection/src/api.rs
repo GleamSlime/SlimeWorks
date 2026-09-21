@@ -241,16 +241,16 @@ fn ensure_hidden_attr(dir: &std::path::Path) {
 
 /// 判断缓存文件是否有效命中（存在且非空）。零字节残留会被删除以便重新生成。
 fn is_valid_cache_hit(cache_path: &std::path::Path) -> bool {
-    if !cache_path.exists() {
-        return false;
-    }
+    // exists() + metadata() 是两次 stat；缓存命中是本函数的主场景，
+    // 直接用一次 metadata() 的 Err 分支表达「不存在」。
     match std::fs::metadata(cache_path) {
-        Ok(meta) if meta.len() > 0 => true,
-        _ => {
+        Ok(meta) if meta.is_file() && meta.len() > 0 => true,
+        Ok(_) => {
             // zero-byte artefact from a previous failed write — remove and regenerate
             let _ = std::fs::remove_file(cache_path);
             false
         }
+        Err(_) => false,
     }
 }
 
@@ -383,21 +383,17 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     let src_path = std::path::Path::new(&file_path);
     let adjacent_path = adjacent_cache_path(src_path, width);
 
-    // 记录原始文件大小（调试用）
-    let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
-
     // ③ disk cache hit — 相邻缓存命中时不再重新生成
     if let Some(ref p) = adjacent_path {
         if is_valid_cache_hit(p) {
-            sw_debug!(
-                "[thumb] cache-hit(adjacent) | src={} | orig={}B | w={}",
-                file_path,
-                orig_size,
-                width
-            );
+            sw_debug!("[thumb] cache-hit(adjacent) | src={} | w={}", file_path, width);
             return Some(p.to_string_lossy().into_owned());
         }
     }
+
+    // 记录原始文件大小（仅供生成阶段的耗时/压缩比日志使用）：
+    // 放在缓存命中判断之后，避免命中时也付一次 stat。
+    let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
 
     // ③b 确定写入目标：相邻缓存目录；创建失败（只读盘等）时无法生成缓存
     let cache_path: std::path::PathBuf = match adjacent_path.as_ref() {
@@ -430,7 +426,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
 
     // ④ 取获并发信号量，限制同时运行的缩略图生成任务数
     acquire_thumb_permit();
-    let _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
+    let mut _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
 
     // 标记任务为 running 并持久化（重启可恢复，failed/done 状态由 guard 在 drop 时写回）
     mark_thumbnail_task_running(&file_path, width);
@@ -471,18 +467,37 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         return None;
     }
 
-    // ⑤ try ffmpeg for images first (fastest, supports HEIC/AVIF via system codecs)
+    // ⑤ 常规位图（`image` crate 已启用 jpeg/png/gif/webp/bmp 解码）直接走纯 Rust 缩放：
+    //    省掉一次 ffmpeg 进程 fork（约 30-80ms，还要在并发上限 2 的信号量前排队），
+    //    批量生成时这是唯一有意义的并行度来源。
+    //    HEIC/AVIF 依赖系统编解码器，仍然 ffmpeg 优先。
+    let plain_bitmap = lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".png")
+        || lower.ends_with(".gif")
+        || lower.ends_with(".webp")
+        || lower.ends_with(".bmp");
+
+    if plain_bitmap {
+        // 纯 Rust 路径不占 ffmpeg 信号量，提前释放
+        drop(_permit);
+        if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
+            task_guard.success = true;
+            return Some(cache_path.to_string_lossy().into_owned());
+        }
+        // 纯 Rust 解码失败（异常编码/文件损坏）时回退 ffmpeg，重新取信号量
+        acquire_thumb_permit();
+        _permit = ThumbPermit;
+    }
+
     if try_ffmpeg_resize(&file_path, &cache_path, width, t0, orig_size) {
         task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
-    // ⑥ fallback: pure-Rust `image` crate (supports JPEG/PNG/WebP/BMP/GIF)
-    // 提前释放 ffmpeg 信号量，让纯 Rust 解码路径完全脱离 ffmpeg 并发上限。
-    // 由 Flutter 端 VideoThumbQueue.concurrency 单层控制总并发，
-    // 用户调高并发后 image crate 路径可充分利用 CPU。
+    // ⑥ fallback: 纯 Rust `image` crate（非常规位图才需要，位图已在 ⑤ 尝试过）
     drop(_permit);
-    if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
+    if !plain_bitmap && try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
         task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
@@ -826,24 +841,49 @@ fn thumb_task_key(file_path: &str, width: u32) -> String {
     format!("{}|{}", file_path, width)
 }
 
+/// 本次会话内各缩略图任务的累计重试次数，key 同 `thumb_task_key`。
+///
+/// 取代 mark/complete 里各一次 `db_get`：读回旧记录纯粹只为了拿 retries，
+/// 而这条记录刚刚就是本函数自己写的。放内存后单张缩略图的任务状态落库
+/// 从 3 次事务降到 2 次。启动恢复与按路径清理时会同步维护，保证跨重启连续。
+static THUMB_RETRY_COUNTS: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+
+fn thumb_retry_map() -> &'static Mutex<HashMap<String, u32>> {
+    THUMB_RETRY_COUNTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn bump_thumb_retry_count(key: &str) -> u32 {
+    let mut map = thumb_retry_map()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let next = map.get(key).copied().unwrap_or(0) + 1;
+    map.insert(key.to_string(), next);
+    next
+}
+
+fn thumb_retry_count(key: &str) -> u32 {
+    let map = thumb_retry_map()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    map.get(key).copied().unwrap_or(0)
+}
+
+fn forget_thumb_retry_count(key: &str) {
+    if let Ok(mut map) = thumb_retry_map().lock() {
+        map.remove(key);
+    }
+}
+
 /// 标记缩略图任务为 running（若不存在则插入），retries 自增。
 /// 在真正开始生成（acquire permit 后、调用 ffmpeg 之前）调用。
 fn mark_thumbnail_task_running(file_path: &str, width: u32) {
     let key = thumb_task_key(file_path, width);
     let now = Utc::now().timestamp();
-    let existing = db_module::db_get(thumbnail_task_table_name(), key.clone())
-        .ok()
-        .flatten();
-    let prev_retries = existing
-        .as_deref()
-        .and_then(|json| serde_json::from_str::<ThumbnailTaskRecord>(json).ok())
-        .map(|r| r.retries)
-        .unwrap_or(0);
     let record = ThumbnailTaskRecord {
         file_path: file_path.to_string(),
         width,
         status: ThumbnailTaskStatus::Running.as_str().to_string(),
-        retries: prev_retries + 1,
+        retries: bump_thumb_retry_count(&key),
         updated_at: now,
     };
     if let Ok(json) = serde_json::to_string(&record) {
@@ -857,22 +897,16 @@ fn mark_thumbnail_task_running(file_path: &str, width: u32) {
 fn complete_thumbnail_task(file_path: &str, width: u32, success: bool) {
     let key = thumb_task_key(file_path, width);
     if success {
+        forget_thumb_retry_count(&key);
         let _ = db_module::db_delete(thumbnail_task_table_name(), key);
         return;
     }
     let now = Utc::now().timestamp();
-    let prev_retries = db_module::db_get(thumbnail_task_table_name(), key.clone())
-        .ok()
-        .flatten()
-        .as_deref()
-        .and_then(|json| serde_json::from_str::<ThumbnailTaskRecord>(json).ok())
-        .map(|r| r.retries)
-        .unwrap_or(0);
     let record = ThumbnailTaskRecord {
         file_path: file_path.to_string(),
         width,
         status: ThumbnailTaskStatus::Failed.as_str().to_string(),
-        retries: prev_retries,
+        retries: thumb_retry_count(&key),
         updated_at: now,
     };
     if let Ok(json) = serde_json::to_string(&record) {
@@ -891,6 +925,12 @@ pub fn get_all_pending_thumbnail_tasks() -> Result<Vec<ThumbnailTaskRecord>, Str
     for record in records {
         if let Ok(task) = serde_json::from_str::<ThumbnailTaskRecord>(&record.value) {
             if task.status != ThumbnailTaskStatus::Done.as_str() {
+                // 顺带把 retries 灌回内存表，保证跨重启的重试计数连续
+                // （见 `THUMB_RETRY_COUNTS`，落库路径上已不再回读 DB）。
+                if let Ok(mut map) = thumb_retry_map().lock() {
+                    map.entry(thumb_task_key(&task.file_path, task.width))
+                        .or_insert(task.retries);
+                }
                 result.push(task);
             }
         }
@@ -902,26 +942,51 @@ pub fn get_all_pending_thumbnail_tasks() -> Result<Vec<ThumbnailTaskRecord>, Str
 /// 在删除集合/文件时调用，避免"幽灵任务"在重启后被重新入队反复重试已不存在的文件。
 /// thumbnail_task_key 格式为 `file_path|width`，相同 file_path 的 key 共享前缀。
 fn delete_thumbnail_tasks_for_file_path(file_path: &str) {
+    delete_thumbnail_tasks_for_file_paths(std::slice::from_ref(&file_path.to_string()));
+}
+
+/// 批量版本：一趟 `db_list_all` + 一个删除事务。
+/// 单路径版本被集合删除按文件逐个调用时，代价是「文件数 × 全表扫描」；
+/// 合并后与文件数无关。
+fn delete_thumbnail_tasks_for_file_paths(file_paths: &[String]) {
+    if file_paths.is_empty() {
+        return;
+    }
     let _ = db_module::db_register_table(thumbnail_task_table_name());
-    let prefix = format!("{}|", file_path);
+    let targets: std::collections::HashSet<&str> =
+        file_paths.iter().map(|p| p.as_str()).collect();
     let Ok(records) = db_module::db_list_all(thumbnail_task_table_name()) else {
         return;
     };
-    let mut deleted = 0usize;
-    for record in records {
-        if record.key.starts_with(&prefix) {
-            if db_module::db_delete(thumbnail_task_table_name(), record.key).is_ok() {
-                deleted += 1;
-            }
+    // key 形如 `file_path|width`，width 不含 '|'，故按最后一段切分即可还原 file_path。
+    // 用集合查找替代逐前缀比对，否则「文件数 × 记录数」的字符串比较又绕回原问题。
+    let keys: Vec<String> = records
+        .into_iter()
+        .map(|r| r.key)
+        .filter(|key| match key.rsplit_once('|') {
+            Some((file_path, _)) => targets.contains(file_path),
+            None => false,
+        })
+        .collect();
+    if keys.is_empty() {
+        return;
+    }
+    let deleted = keys.len();
+    // 同步清掉内存里的重试计数，避免长期驻留
+    if let Ok(mut map) = thumb_retry_map().lock() {
+        for key in &keys {
+            map.remove(key);
         }
     }
-    if deleted > 0 {
-        sw_debug!(
-            "[thumb-task] 清理 file_path={} 关联任务 {} 条",
-            file_path,
-            deleted
-        );
+    if let Err(error) = db_module::db_batch_write(thumbnail_task_table_name(), Vec::new(), keys) {
+        sw_debug!("[thumb-task] 批量清理任务记录失败: {}", error);
+        return;
     }
+    sw_debug!(
+        "[thumb-task] 清理 {} 个 file_path 关联任务 {} 条",
+        file_paths.len(),
+        deleted
+    );
 }
 
 /// RAII 守卫：drop 时自动调用 complete_thumbnail_task 标记任务完成状态。
@@ -1326,9 +1391,13 @@ fn persist_collection(collection: &MediaCollection) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-fn persist_item(item: &MediaItem) -> Result<(), String> {
-    let json = serde_json::to_string(item).map_err(|error| error.to_string())?;
-    db_module::db_set(item_table_name(), item.id.clone(), json).map_err(|error| error.to_string())
+fn item_to_record(item: &MediaItem) -> Option<db_module::DbRecord> {
+    serde_json::to_string(item)
+        .ok()
+        .map(|value| db_module::DbRecord {
+            key: item.id.clone(),
+            value,
+        })
 }
 
 fn persist_folder(folder: &MediaFolder) -> Result<(), String> {
@@ -1337,8 +1406,18 @@ fn persist_folder(folder: &MediaFolder) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-fn delete_item_from_db(item_id: &str) {
-    let _ = db_module::db_delete(item_table_name(), item_id.to_string());
+/// 批量删除条目记录：合并为单个事务，避免逐条 delete 触发逐次磁盘刷写。
+fn delete_items_from_db(item_ids: &[String]) {
+    if item_ids.is_empty() {
+        return;
+    }
+    if let Err(error) = db_module::db_batch_write(
+        item_table_name(),
+        Vec::new(),
+        item_ids.to_vec(),
+    ) {
+        sw_debug!("[media_scan] 批量删除媒体条目失败: {}", error);
+    }
 }
 
 fn delete_collection_from_db(collection_id: &str) {
@@ -1422,20 +1501,20 @@ fn upsert_collection_from_folder(
             .filter(|item| item.collection_id == collection_id)
             .map(|item| item.id.clone())
             .collect::<Vec<String>>();
-        stored_items.retain(|item| item.collection_id != collection_id);
-        for item_id in removed_ids {
-            delete_item_from_db(&item_id);
-        }
-        for item in &items {
-            if let Err(error) = persist_item(item) {
-                sw_debug!(
-                    "[media_scan] persist_item failed for {:?}: {}",
-                    item.file_path,
-                    error
-                );
+
+        // 同一次导入的增删合并到单个 redb 事务：逐条 db_set/db_delete 会让 N 个
+        // 条目触发 N 次 commit（每次一趟磁盘刷写），导入上千文件时是分钟级差距。
+        let sets = items
+            .iter()
+            .filter_map(item_to_record)
+            .collect::<Vec<_>>();
+        match db_module::db_batch_write(item_table_name(), sets, removed_ids) {
+            Ok(_) => {
+                stored_items.retain(|item| item.collection_id != collection_id);
+                stored_items.extend(items.iter().cloned());
             }
+            Err(error) => sw_debug!("[media_scan] 批量写入媒体条目失败: {}", error),
         }
-        stored_items.extend(items.iter().cloned());
     }
 
     let now = Utc::now();
@@ -1638,31 +1717,28 @@ pub fn get_all_media_collections() -> Result<Vec<MediaCollection>, String> {
     let collections = get_collections()
         .lock()
         .map_err(|error| error.to_string())?;
-    let mut result = collections.clone();
-    result.sort_by(|left, right| {
-        right
-            .updated_at
-            .cmp(&left.updated_at)
-            .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
-    });
-    Ok(result)
+    // 排序键先算好：把 `to_lowercase()` 写在比较函数里会让每次比较都新分配两个
+    // String，一次排序就是 O(n log n) 次堆分配。
+    let mut keyed = collections
+        .iter()
+        .map(|c| (c.updated_at, c.title.to_lowercase(), c.clone()))
+        .collect::<Vec<_>>();
+    keyed.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    Ok(keyed.into_iter().map(|(_, _, c)| c).collect())
 }
 
 pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem>, String> {
     let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
     ensure_items_loaded(&mut guard);
     let items = guard.as_ref().unwrap();
-    let mut result = items
+    let mut keyed = items
         .iter()
         .filter(|item| item.collection_id == collection_id)
-        .cloned()
-        .collect::<Vec<MediaItem>>();
-    result.sort_by(|left, right| {
-        left.order
-            .cmp(&right.order)
-            .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
-    });
-    Ok(result)
+        .map(|item| (item.order, item.title.to_lowercase(), item.clone()))
+        .collect::<Vec<_>>();
+    // 同上：排序键预计算，避免比较函数里反复 to_lowercase 分配
+    keyed.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
+    Ok(keyed.into_iter().map(|(_, _, item)| item).collect())
 }
 
 /// Aggregated per-collection stats: total file size and all file paths.
@@ -1869,15 +1945,11 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
             .map(|item| item.id.clone())
             .collect::<Vec<String>>();
         items.retain(|item| item.collection_id != collection_id);
-        for item_id in removed_ids {
-            delete_item_from_db(&item_id);
-        }
+        delete_items_from_db(&removed_ids);
     }
 
     // 同步清理关联的缩略图任务记录，避免重启后被重新入队反复重试已不存在的文件
-    for file_path in &file_paths_to_clean {
-        delete_thumbnail_tasks_for_file_path(file_path);
-    }
+    delete_thumbnail_tasks_for_file_paths(&file_paths_to_clean);
 
     delete_collection_from_db(&collection_id);
     Ok(true)
@@ -1906,13 +1978,14 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
 pub fn delete_collection_local_files(collection_id: String) -> Result<usize, String> {
     let items = get_media_collection_items(collection_id.clone())?;
     let mut deleted_count = 0;
+    let mut deleted_paths = Vec::new();
     for item in &items {
         let path = std::path::Path::new(&item.file_path);
         if path.exists() {
             match std::fs::remove_file(path) {
                 Ok(_) => {
-                    // 物理文件删除成功后同步清理缩略图任务记录
-                    delete_thumbnail_tasks_for_file_path(&item.file_path);
+                    // 物理文件删除成功后同步清理缩略图任务记录（循环外一次性批量清）
+                    deleted_paths.push(item.file_path.clone());
                     deleted_count += 1;
                 }
                 Err(e) => sw_warn!(
@@ -1923,6 +1996,7 @@ pub fn delete_collection_local_files(collection_id: String) -> Result<usize, Str
             }
         }
     }
+    delete_thumbnail_tasks_for_file_paths(&deleted_paths);
     Ok(deleted_count)
 }
 

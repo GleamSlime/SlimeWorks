@@ -65,6 +65,24 @@ fn item_table() -> String {
     "music_items".to_string()
 }
 
+/// 批量落库音乐条目：合并到单个 redb 事务。
+/// 逐条 `db_set` 会为每个条目触发一次 commit（一趟磁盘刷写），
+/// 导入上千曲目时这是分钟级与秒级的差距。
+fn persist_items_batch(items: &[MusicItem]) -> Result<(), String> {
+    if items.is_empty() {
+        return Ok(());
+    }
+    let sets = items
+        .iter()
+        .filter_map(|item| {
+            serde_json::to_string(item)
+                .ok()
+                .map(|value| db_module::DbRecord { key: item.id.clone(), value })
+        })
+        .collect::<Vec<_>>();
+    db_module::db_batch_write(item_table(), sets, Vec::new()).map(|_| ())
+}
+
 fn record_table() -> String {
     "music_play_records".to_string()
 }
@@ -363,12 +381,9 @@ pub fn import_music_folder(
         }
     }
 
-    // 保存到数据库
+    // 保存到数据库（单事务批量写入）
     let _ = db_module::db_register_table(item_table());
-    for item in &items {
-        let json = serde_json::to_string(item).map_err(|e| e.to_string())?;
-        db_module::db_set(item_table(), item.id.clone(), json).map_err(|e| e.to_string())?;
-    }
+    persist_items_batch(&items).map_err(|e| e.to_string())?;
 
     // 更新播放列表的 item_count
     update_playlist_count(&playlist_id)?;
@@ -504,10 +519,9 @@ pub fn add_remote_music_items(
             is_favorite: false,
             has_cue: false,
         };
-        let json = serde_json::to_string(&item).map_err(|e| e.to_string())?;
-        db_module::db_set(item_table(), item.id.clone(), json).map_err(|e| e.to_string())?;
         items.push(item);
     }
+    persist_items_batch(&items).map_err(|e| e.to_string())?;
 
     if !items.is_empty() {
         update_playlist_count(&playlist_id)?;
@@ -592,15 +606,16 @@ pub fn save_playlist_order(_playlist_id: String, item_ids: Vec<String>) -> Resul
     ensure_db();
     let _ = db_module::db_register_table(item_table());
 
+    let mut reordered = Vec::new();
     for (order, id) in item_ids.iter().enumerate() {
         let raw = db_module::db_get(item_table(), id.clone()).map_err(|e| e.to_string())?;
         if let Some(value) = raw {
             let mut item: MusicItem = serde_json::from_str(&value).map_err(|e| e.to_string())?;
             item.order = order as i32;
-            let json = serde_json::to_string(&item).map_err(|e| e.to_string())?;
-            db_module::db_set(item_table(), id.clone(), json).map_err(|e| e.to_string())?;
+            reordered.push(item);
         }
     }
+    persist_items_batch(&reordered).map_err(|e| e.to_string())?;
 
     // 清空缓存
     {

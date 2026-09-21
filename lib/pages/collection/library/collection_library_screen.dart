@@ -1054,7 +1054,8 @@ class _CollectionLibraryScreenState
         final blurSigma = getIt.isRegistered<MediaPrefsService>()
             ? getIt<MediaPrefsService>().privacyBlurSigma.value
             : 15.0;
-        final rawCover = Image.file(File(meta.coverPath!), fit: BoxFit.cover);
+        // 拖拽反馈只有 100px 宽，按显示尺寸解码避免整张封面进内存
+        final rawCover = Image.file(File(meta.coverPath!), fit: BoxFit.cover, cacheWidth: 200);
         cover = privacyOn
             ? ClipRRect(
                 child: Stack(

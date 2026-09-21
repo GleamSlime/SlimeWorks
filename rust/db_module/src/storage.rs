@@ -162,6 +162,43 @@ impl DbStorage {
         Ok(())
     }
 
+    /// 同一事务内批量写入并批量删除。
+    ///
+    /// redb 每次 `commit()` 都会落盘一次 WAL/fsync，因此导入类场景下逐条
+    /// `set`/`delete` 的代价是 O(n) 次磁盘刷写。把一次导入的全部增删合并到
+    /// 本方法后，代价降为常数 1 次提交。
+    pub fn batch_write(
+        &self,
+        table_name: &str,
+        sets: &[(String, String)],
+        deletes: &[String],
+    ) -> Result<usize> {
+        if sets.is_empty() && deletes.is_empty() {
+            return Ok(0);
+        }
+
+        let tables = self.tables.lock().unwrap();
+        let table_def = tables
+            .get(table_name)
+            .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
+
+        let db = self.db.lock().unwrap();
+        let write_txn = db.begin_write()?;
+
+        {
+            let mut table = write_txn.open_table(*table_def)?;
+            for key in deletes {
+                table.remove(key.as_str())?;
+            }
+            for (key, value) in sets {
+                table.insert(key.as_str(), value.as_str())?;
+            }
+        }
+
+        write_txn.commit()?;
+        Ok(sets.len() + deletes.len())
+    }
+
     /// 获取表中的记录总数
     pub fn count(&self, table_name: &str) -> Result<usize> {
         let tables = self.tables.lock().unwrap();

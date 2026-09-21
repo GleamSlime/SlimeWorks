@@ -1740,12 +1740,15 @@ class _VideoPreviewState extends State<_VideoPreview> {
                                     width: 200,
                                     height: 200,
                                     fit: BoxFit.cover,
+                                    // 只按显示尺寸解码：封面原图可能是数百 MB 的大图
+                                    cacheWidth: 400,
                                   )
                                 : Image.file(
                                     File(widget.coverSource!),
                                     width: 200,
                                     height: 200,
                                     fit: BoxFit.cover,
+                                    cacheWidth: 400,
                                   ),
                           ),
                         )

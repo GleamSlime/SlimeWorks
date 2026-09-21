@@ -29,8 +29,18 @@ static SHARED_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 fn shared_runtime() -> &'static tokio::runtime::Runtime {
     SHARED_RT.get_or_init(|| {
+        // worker 数必须与并发连接容量同量级：连接线程各自 `block_on` 提交任务后
+        // 就在等这个 runtime 出结果，worker 只有 2 个时第 3 个并发请求开始排队，
+        // 而缩略图生成会占住 worker 几百毫秒（内部还要等同步 ffmpeg 子进程）。
+        let workers = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .clamp(4, MAX_CONNECTIONS);
         tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+            .worker_threads(workers)
+            // 未移入 spawn_blocking 的同步 IO 落在阻塞线程池上，给它足够的额度
+            // 兜底，避免饿死 worker。
+            .max_blocking_threads(workers * 4)
             .enable_all()
             .build()
             .expect("build node-server tokio runtime")

@@ -30,6 +30,7 @@
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
 | Manga 漫画 | [docs/manga.md](manga.md) | `lib/pages/manga/` · `rust/manga_module/` |
 | 音乐播放器 | [docs/music_player.md](music_player.md) | `lib/pages/music_player/` · `rust/music_player/` |
+| 节点服务安全（**仅方案文档，未实施**） | [docs/node_server_security.md](node_server_security.md) | `rust/src/node_server/` · `lib/core/services/node/` |
 
 ---
 

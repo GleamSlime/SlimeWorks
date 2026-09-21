@@ -59,8 +59,34 @@ class _ReaderContentState extends State<ReaderContent> {
   static const int _virtualScrollThreshold = 200000; // 200KB 触发虚拟滚动（提高阈值以支持base64图片）
   static const int _chunkSize = 15000; // 每块 15KB（增加块大小避免截断大图片）
   List<String> _contentChunks = [];
+
+  /// _contentChunks 各块在全文中的起始偏移（末位为全文长度），避免每次渲染块都回溯求和
+  List<int> _chunkOffsets = const [0];
   String _cachedContent = '';
   bool _useVirtualScroll = false;
+  bool _hasImages = false;
+  bool _containsHtmlTags = false;
+
+  /// 上一帧产出的已处理 HTML（图片内联 + 段落化），按内容实例 + 章节复用
+  String? _processedHtml;
+  String? _processedHtmlSource;
+  int _processedHtmlChapter = -1;
+
+  // ever() 返回的 Worker 必须显式释放，否则 State（含 MB 级分块缓存）会随监听器泄漏
+  Worker? _searchScrollWorker;
+  Worker? _selectedSearchWorker;
+
+  /// 内容是否含 HTML 标签：整段正文只会检查一次，正则提前编译避免每次构建都重建
+  static final RegExp _htmlTagPattern = RegExp(
+    r'<\s*(p|br|div|span|img|style|h[1-6])\b',
+    caseSensitive: false,
+  );
+  static final RegExp _imgTagPattern = RegExp(r'<img[^>]*>', caseSensitive: false);
+  static final RegExp _closeTagPattern = RegExp(r'</p>|</div>|<br/>|<br>', caseSensitive: false);
+  static final RegExp _paragraphTagPattern = RegExp(
+    r'<\s*(p|br|div)\b',
+    caseSensitive: false,
+  );
 
   @override
   void initState() {
@@ -69,33 +95,20 @@ class _ReaderContentState extends State<ReaderContent> {
     // (调试临时代码已移除) 保持默认不强制纯文本，允许 HTML 渲染分支输出调试信息
 
     // 监听搜索结果滚动触发
-    ever(widget.controller.searchScrollTrigger, (_) {
-      // 调试日志：记录搜索触发时的匹配数量与当前选中索引
-      try {
-        final matchCount = widget.controller.searchMatches.length;
-        final sel = widget.controller.selectedSearchIndex.value;
-        _logger.info('[Reader] searchScrollTrigger fired: matches=$matchCount selectedIndex=$sel');
-      } catch (e) {
-        _logger.error('[Reader] searchScrollTrigger log error: $e');
-      }
+    _searchScrollWorker = ever(widget.controller.searchScrollTrigger, (_) {
       _scrollToCurrentSearchResult();
     });
 
     // 当选中搜索索引变化时强制重建以确保高亮更新（某些 .isNotEmpty 访问可能未触发 Obx 重建）
-    ever(widget.controller.selectedSearchIndex, (_) {
-      try {
-        _logger.info(
-          '[Reader] selectedSearchIndex changed: ${widget.controller.selectedSearchIndex.value}',
-        );
-      } catch (_) {
-        // 日志输出错误可忽略
-      }
+    _selectedSearchWorker = ever(widget.controller.selectedSearchIndex, (_) {
       if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
+    _searchScrollWorker?.dispose();
+    _selectedSearchWorker?.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -113,10 +126,7 @@ class _ReaderContentState extends State<ReaderContent> {
     String processedContent = content;
     if (shouldHighlight && keyword.isNotEmpty) {
       // 判断是HTML还是纯文本
-      final isHtml = RegExp(
-        r'<\s*(p|br|div|span|img|style|h[1-6])\b',
-        caseSensitive: false,
-      ).hasMatch(content);
+      final isHtml = _htmlTagPattern.hasMatch(content);
       if (isHtml) {
         processedContent = _highlightHtml(content, keyword, selectedOccurrence: selectedOccurrence);
         // 嵌入本地图片
@@ -136,34 +146,27 @@ class _ReaderContentState extends State<ReaderContent> {
       // 如果不是最后一块，尝试在合适的位置分割（避免切断HTML标签）
       if (end < processedContent.length) {
         // 检查是否在img标签内部（特别是base64图片）
-        final remainingContent = processedContent.substring(start);
-        final imgStartPattern = RegExp(r'<img[^>]*>', caseSensitive: false);
-        final imgMatch = imgStartPattern.firstMatch(remainingContent);
+        // 用 start 偏移在原串上查找，避免每块都 substring 复制剩余全文（否则整体退化为 O(n²)）
+        RegExpMatch? imgMatch;
+        for (final match in _imgTagPattern.allMatches(processedContent, start)) {
+          imgMatch = match;
+          break;
+        }
 
-        if (imgMatch != null && imgMatch.start < (end - start) && imgMatch.end > (end - start)) {
+        if (imgMatch != null && imgMatch.start < end && imgMatch.end > end) {
           // 当前分割点在img标签内部，移动到img标签结束后
-          final adjustedEnd = start + imgMatch.end;
+          final adjustedEnd = imgMatch.end;
           if (adjustedEnd < processedContent.length) {
             end = adjustedEnd;
             _logger.info('[VirtualScroll] Adjusted split to avoid breaking img tag at position $end');
           }
         } else {
-          // 优先在段落结束标签后分割
-          final closeTags = [r'</p>', r'</div>', r'<br>', r'<br/>'];
-          int bestSplit = -1;
+          // 优先在段落结束标签后分割（取本块后半段内最靠后的闭合标签）
           int minDistance = _chunkSize ~/ 2; // 在后半部分寻找分割点
-
-          for (final tag in closeTags) {
-            final tagPattern = RegExp(tag, caseSensitive: false);
-            final matches = tagPattern.allMatches(processedContent, start + minDistance);
-            for (final match in matches) {
-              if (match.end <= end) {
-                bestSplit = match.end;
-              } else {
-                break;
-              }
-            }
-            if (bestSplit != -1) break;
+          int bestSplit = -1;
+          for (final match in _closeTagPattern.allMatches(processedContent, start + minDistance)) {
+            if (match.end > end) break;
+            bestSplit = match.end;
           }
 
           // 如果找到合适的标签分割点，使用它
@@ -183,18 +186,6 @@ class _ReaderContentState extends State<ReaderContent> {
 
       final chunk = processedContent.substring(start, end);
       chunks.add(chunk);
-
-      // 验证chunk是否包含完整的img标签
-      if (chunk.contains('<img')) {
-        final imgCount = RegExp(r'<img[^>]*>', caseSensitive: false).allMatches(chunk).length;
-        final imgOpenCount = chunk.allOccurrences('<img');
-        if (imgOpenCount != imgCount) {
-          _logger.info(
-            '[VirtualScroll] WARNING: Chunk may contain incomplete img tag! imgOpen=$imgOpenCount complete=$imgCount',
-          );
-        }
-      }
-
       start = end;
     }
 
@@ -202,6 +193,15 @@ class _ReaderContentState extends State<ReaderContent> {
       '[VirtualScroll] Split content into ${chunks.length} chunks, total length: ${processedContent.length}',
     );
     return chunks;
+  }
+
+  /// 记录分块结果并同步前缀偏移表，供高亮定位按块序号 O(1) 取起始位置
+  void _setContentChunks(List<String> chunks) {
+    _contentChunks = chunks;
+    _chunkOffsets = List<int>.filled(chunks.length + 1, 0);
+    for (int i = 0; i < chunks.length; i++) {
+      _chunkOffsets[i + 1] = _chunkOffsets[i] + chunks[i].length;
+    }
   }
 
   void _scrollToTop() {
@@ -350,22 +350,21 @@ class _ReaderContentState extends State<ReaderContent> {
     final contentPadding = _resolvedContentPadding(isNarrow);
 
     return Obx(() {
-      final buildStart = DateTime.now();
-      _logger.info('[Novel UI] ReaderContent build started');
-
       final currentContent = controller.currentContent.value;
       final resolvedLineHeight = controller.lineHeight.value;
 
       if (currentContent.isEmpty) {
-        _logger.info('[Novel UI] Content is empty');
         return Center(
           child: Text('暂无内容', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
         );
       }
 
-      // 检查是否需要使用虚拟滚动（内容超过阈值）
+      // 内容变化时才重新判定渲染方式与分块：这些都是对全文的扫描，放进每次 build 会随
+      // 窗口宽度/行高/主题等无关重建反复执行
       if (currentContent != _cachedContent) {
         _cachedContent = currentContent;
+        _hasImages = currentContent.contains('<img');
+        _containsHtmlTags = _htmlTagPattern.hasMatch(currentContent);
         _useVirtualScroll = currentContent.length > _virtualScrollThreshold;
         if (_useVirtualScroll) {
           // 检查是否有搜索高亮需求
@@ -389,62 +388,24 @@ class _ReaderContentState extends State<ReaderContent> {
           }
 
           // 分块时如果有搜索，先进行高亮处理
-          _contentChunks = _splitContentIntoChunks(
-            currentContent,
-            shouldHighlight: hasSearch,
-            keyword: keyword,
-            selectedOccurrence: selectedOccurrence,
+          _setContentChunks(
+            _splitContentIntoChunks(
+              currentContent,
+              shouldHighlight: hasSearch,
+              keyword: keyword,
+              selectedOccurrence: selectedOccurrence,
+            ),
           );
           _logger.info('[VirtualScroll] Enabled for content size: ${currentContent.length} chars');
         } else {
-          _contentChunks = [];
+          _setContentChunks(const []);
           _logger.info('[VirtualScroll] Disabled, using standard rendering');
         }
       }
 
-      _logger.info('[Novel UI] Building content view, length: ${currentContent.length} chars');
-
-      // 调试日志：输出 content 中是否包含 class 与 img 引用，便于定位样式和图片问题
-      try {
-        final previewLen = currentContent.length > 300 ? 300 : currentContent.length;
-        _logger.info('[Novel UI] content preview: ${currentContent.substring(0, previewLen)}');
-        if (currentContent.contains('class="') || currentContent.contains("class='")) {
-          _logger.info('[Novel UI] content contains class attributes');
-        }
-
-        // 检查img标签
-        final imgReg = RegExp(r'''<img[^>]*src=["']([^"']+)["']''', caseSensitive: false);
-        final imgMatches = imgReg.allMatches(currentContent).toList();
-        if (imgMatches.isNotEmpty) {
-          _logger.info('[Novel UI] Found ${imgMatches.length} img tags');
-          for (int i = 0; i < imgMatches.length && i < 3; i++) {
-            final src = imgMatches[i].group(1) ?? '';
-            final srcPreview = src.length > 100 ? '${src.substring(0, 100)}...' : src;
-            _logger.info(
-              '[Novel UI] Image $i src type: ${src.startsWith('data:image') ? 'base64' : 'url'}, preview: $srcPreview',
-            );
-          }
-        }
-
-        // 检查是否有不完整的img标签
-        final imgOpenCount = currentContent.allOccurrences('<img');
-        final imgCompleteCount = imgMatches.length;
-        if (imgOpenCount != imgCompleteCount) {
-          _logger.info(
-            '[Novel UI] WARNING: Found $imgOpenCount <img but only $imgCompleteCount complete tags!',
-          );
-        }
-      } catch (e) {
-        _logger.error('[Novel UI] content debug error: $e');
-      }
-
       // 是否包含 HTML 标签或图片（用于决定默认使用 HTML 渲染或允许切换为纯文本）
-      final containsHtmlTags = RegExp(
-        r'<\s*(p|br|div|span|img|style|h[1-6])\b',
-        caseSensitive: false,
-      ).hasMatch(currentContent);
-      final hasImages = currentContent.contains('<img');
-      final shouldRenderHtml = containsHtmlTags || hasImages;
+      final shouldRenderHtml = _containsHtmlTags || _hasImages;
+      final hasImages = _hasImages;
 
       // 仅在章节变化时滚动到顶部（避免每次 rebuild 都滚动）
       final currentIndex = controller.currentChapterIndex.value;
@@ -462,7 +423,6 @@ class _ReaderContentState extends State<ReaderContent> {
           context,
           controller,
           currentContent,
-          buildStart,
           isNarrow,
           contentPadding,
           resolvedLineHeight,
@@ -568,11 +528,6 @@ class _ReaderContentState extends State<ReaderContent> {
                 Builder(
                   builder: (context) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      final duration = DateTime.now().difference(buildStart);
-                      _logger.info(
-                        '[Novel UI] ReaderContent fully rendered in ${duration.inMilliseconds}ms',
-                      );
-
                       // 如果有选中的搜索结果，滚动到该位置
                       if (controller.selectedSearchIndex.value >= 0 &&
                           controller.searchMatches.isNotEmpty) {
@@ -586,96 +541,73 @@ class _ReaderContentState extends State<ReaderContent> {
 
                     // 检查是否有搜索关键词需要高亮
                     final hasSearch = controller.searchMatches.isNotEmpty;
-                    // 调试：记录 searchMatches 长度与当前章节索引，方便定位高亮是否会被执行
-                    try {
-                      _logger.info(
-                        '[Reader] build: hasSearch=$hasSearch searchMatches=${controller.searchMatches.length} currentChapter=${controller.currentChapterIndex.value} selectedIndex=${controller.selectedSearchIndex.value}',
-                      );
-                      if (controller.searchMatches.isNotEmpty) {
-                        final first = controller.searchMatches.first;
-                        _logger.info(
-                          '[Reader] build: firstMatch chapterIndex=${first.chapterIndex} position=${first.position} snippet="${first.snippet}"',
-                        );
-                      }
-                    } catch (e) {
-                      _logger.error('[Reader] build log error: $e');
-                    }
 
                     // 检查是否包含图片标签（epub内容）
                     // final hasImages 已在外部计算
 
                     // 如果内容包含 HTML（或图片），使用 HTML 渲染（优先级最高）
                     if (shouldRenderHtml) {
-                      _logger.info(
-                        '[Reader] Rendering HTML content (containsHtml=$containsHtmlTags, hasImages=$hasImages)',
-                      );
-
-                      // 检查是否有缓存的已处理HTML
                       final currentChapterIdx = controller.currentChapterIndex.value;
                       String? cachedHtml = controller.getCachedHtml(currentChapterIdx);
                       String embeddedHtml;
 
-                      if (cachedHtml != null && !hasSearch) {
-                        // 使用缓存（仅在无搜索时使用缓存）
-                        embeddedHtml = cachedHtml;
-                        _logger.info('[Reader] Using cached HTML for chapter $currentChapterIdx');
-                      } else {
-                        // 处理HTML
-                        final htmlProcessStart = DateTime.now();
-                        String htmlData = currentContent;
-
-                        if (hasSearch && controller.searchMatches.isNotEmpty) {
-                          final chapterMatches = controller.searchMatches
-                              .where(
-                                (m) =>
-                                    m.chapterIndex.toInt() == controller.currentChapterIndex.value,
-                              )
-                              .toList();
-                          if (chapterMatches.isNotEmpty) {
-                            // 若当前有选中的搜索结果并且在本章节，计算它是本章节中第几个匹配
-                            int? selectedOccurrence;
-                            if (controller.selectedSearchIndex.value >= 0 &&
-                                controller.selectedSearchIndex.value <
-                                    controller.searchMatches.length) {
-                              final sel =
-                                  controller.searchMatches[controller.selectedSearchIndex.value];
-                              if (sel.chapterIndex.toInt() ==
-                                  controller.currentChapterIndex.value) {
-                                // 计算选中的是本章节的第几个匹配（从0开始）
-                                int occurrenceInChapter = 0;
-                                for (int i = 0; i < controller.selectedSearchIndex.value; i++) {
-                                  if (controller.searchMatches[i].chapterIndex.toInt() ==
-                                      controller.currentChapterIndex.value) {
-                                    occurrenceInChapter++;
-                                  }
-                                }
-                                selectedOccurrence = occurrenceInChapter;
+                      // 先算出本章节实际生效的高亮参数，它同时作为渲染缓存键的一部分
+                      String highlightKeyword = '';
+                      int? highlightOccurrence;
+                      if (hasSearch) {
+                        final chapterMatches = controller.searchMatches
+                            .where((m) => m.chapterIndex.toInt() == currentChapterIdx)
+                            .toList();
+                        if (chapterMatches.isNotEmpty) {
+                          final selectedIndex = controller.selectedSearchIndex.value;
+                          if (selectedIndex >= 0 &&
+                              selectedIndex < controller.searchMatches.length &&
+                              controller.searchMatches[selectedIndex].chapterIndex.toInt() ==
+                                  currentChapterIdx) {
+                            // 计算选中的是本章节的第几个匹配（从0开始）
+                            int occurrenceInChapter = 0;
+                            for (int i = 0; i < selectedIndex; i++) {
+                              if (controller.searchMatches[i].chapterIndex.toInt() ==
+                                  currentChapterIdx) {
+                                occurrenceInChapter++;
                               }
                             }
-                            // 优先使用用户原始搜索词，若为空则回退到 snippet
-                            final keyword = controller.lastSearchQuery.value.trim().isNotEmpty
-                                ? controller.lastSearchQuery.value.trim()
-                                : chapterMatches.first.snippet.trim();
-                            _logger.info(
-                              '[Reader] Preparing HTML highlight: keyword="$keyword" selectedOccurrence=$selectedOccurrence chapterMatches=${chapterMatches.length}',
-                            );
-                            htmlData = _highlightHtml(
-                              htmlData,
-                              keyword,
-                              selectedOccurrence: selectedOccurrence,
-                            );
+                            highlightOccurrence = occurrenceInChapter;
                           }
+                          // 优先使用用户原始搜索词，若为空则回退到 snippet
+                          final query = controller.lastSearchQuery.value.trim();
+                          highlightKeyword = query.isNotEmpty
+                              ? query
+                              : chapterMatches.first.snippet.trim();
+                        }
+                      }
+
+                      if (cachedHtml != null && highlightKeyword.isEmpty) {
+                        // 无搜索时使用 ViewModel 层的已处理 HTML 缓存
+                        embeddedHtml = cachedHtml;
+                        _logger.info('[Reader] Using cached HTML for chapter $currentChapterIdx');
+                      } else if (highlightKeyword.isEmpty &&
+                          _processedHtml != null &&
+                          identical(_processedHtmlSource, currentContent) &&
+                          _processedHtmlChapter == currentChapterIdx) {
+                        // 命中上一帧结果：行高/主题/窗口尺寸等无关重建不再重跑正则与图片内联
+                        embeddedHtml = _processedHtml!;
+                      } else {
+                        // 处理HTML
+                        String htmlData = currentContent;
+                        if (highlightKeyword.isNotEmpty) {
+                          htmlData = _highlightHtml(
+                            htmlData,
+                            highlightKeyword,
+                            selectedOccurrence: highlightOccurrence,
+                          );
                         }
                         // 将本地 file:// 图片替换为 base64 data URL，以避免依赖不同版本的自定义图片 API
                         embeddedHtml = _embedLocalImages(htmlData);
 
                         // 如果 HTML 中没有段落/换行/div 标签，说明内容可能是带换行的纯文本。
                         // 把连续空行转换为段落 (<p>..</p>)，并把单个换行转换为 <br/> ，以便正确渲染段落。
-                        final hasParagraphLike = RegExp(
-                          r'<\s*(p|br|div)\b',
-                          caseSensitive: false,
-                        ).hasMatch(embeddedHtml);
-                        if (!hasParagraphLike) {
+                        if (!_paragraphTagPattern.hasMatch(embeddedHtml)) {
                           try {
                             String t = embeddedHtml.trim();
                             // 将多个连续空行作为段落分隔
@@ -683,28 +615,20 @@ class _ReaderContentState extends State<ReaderContent> {
                             // 将剩余单个换行转为 <br/>
                             t = t.replaceAll(RegExp(r'\r?\n'), '<br/>');
                             embeddedHtml = '<p>$t</p>';
-                            _logger.info(
-                              '[Reader][HTMLTransform] converted plain newlines to <p>/<br/>',
-                            );
                           } catch (e) {
                             _logger.error('[Reader][HTMLTransform] failed: $e');
                           }
                         }
 
-                        final htmlProcessDuration = DateTime.now()
-                            .difference(htmlProcessStart)
-                            .inMilliseconds;
-                        _logger.info('[Reader] HTML processing took ${htmlProcessDuration}ms');
-
-                        // 缓存处理后的HTML（仅在无搜索时缓存）
-                        if (!hasSearch) {
+                        // 仅在无高亮时留存结果，高亮版本随选中项变化不适合复用
+                        if (highlightKeyword.isEmpty) {
+                          _processedHtmlSource = currentContent;
+                          _processedHtmlChapter = currentChapterIdx;
+                          _processedHtml = embeddedHtml;
                           controller.cacheHtml(currentChapterIdx, embeddedHtml);
                         }
                       }
 
-                      _logger.info(
-                        '[Reader] Embedded HTML length=${embeddedHtml.length} contains_mark_selected=${embeddedHtml.contains("<mark_selected>")}',
-                      );
                       // 提供“纯文本模式”切换：如果用户需要选择/复制文本，可切换为纯文本视图（丢失部分 HTML 格式）
                       if (_showPlainTextMode) {
                         String plain = embeddedHtml;
@@ -973,7 +897,6 @@ class _ReaderContentState extends State<ReaderContent> {
     BuildContext context,
     NovelReaderViewModel controller,
     String currentContent,
-    DateTime buildStart,
     bool isNarrow,
     EdgeInsets contentPadding,
     double lineHeight,
@@ -1079,16 +1002,6 @@ class _ReaderContentState extends State<ReaderContent> {
               padding: EdgeInsets.fromLTRB(contentPadding.left, 0, contentPadding.right, 0),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
-                  // 添加渲染时间日志
-                  if (index == 0) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      final duration = DateTime.now().difference(buildStart);
-                      _logger.info(
-                        '[VirtualScroll] Initial chunks rendered in ${duration.inMilliseconds}ms',
-                      );
-                    });
-                  }
-
                   final chunk = _contentChunks[index];
                   // 根据格式决定渲染方式
                   if (shouldRenderHtml && !_showPlainTextMode) {
@@ -1099,7 +1012,14 @@ class _ReaderContentState extends State<ReaderContent> {
                     if (_showPlainTextMode || !shouldRenderHtml) {
                       textChunk = _convertHtmlToPlainText(chunk);
                     }
-                    return _buildTextChunk(textChunk, controller, hasSearch, context, lineHeight);
+                    return _buildTextChunk(
+                      textChunk,
+                      controller,
+                      hasSearch,
+                      context,
+                      lineHeight,
+                      index,
+                    );
                   }
                 }, childCount: _contentChunks.length),
               ),
@@ -1255,17 +1175,14 @@ class _ReaderContentState extends State<ReaderContent> {
     bool hasSearch,
     BuildContext context,
     double lineHeight,
+    int chunkIndex,
   ) {
     // 在虚拟滚动模式下，我们需要基于块的内容构建高亮
     // 由于搜索位置是基于整个文本的，我们需要计算当前块在整个文本中的偏移
     if (hasSearch && controller.searchMatches.isNotEmpty) {
-      // 计算当前块的起始位置
-      int chunkStartPos = 0;
-      final currentChunkIndex = _contentChunks.indexOf(textChunk);
-      for (int i = 0; i < currentChunkIndex; i++) {
-        chunkStartPos += _contentChunks[i].length;
-      }
-      final chunkEndPos = chunkStartPos + textChunk.length;
+      // 前缀偏移表在分块时一次性算好，这里 O(1) 取值
+      final chunkStartPos = _chunkOffsets[chunkIndex];
+      final chunkEndPos = _chunkOffsets[chunkIndex + 1];
 
       // 获取当前章节的搜索匹配
       final currentChapterIndex = controller.currentChapterIndex.value;
@@ -1485,20 +1402,6 @@ class _ReaderContentState extends State<ReaderContent> {
       );
     }
 
-    // 调试：记录匹配信息与选中索引，帮助定位高亮为何未出现
-    try {
-      final selIdx = controller.selectedSearchIndex.value;
-      _logger.info(
-        '[Reader] _buildHighlightedText: chapterMatches=${chapterMatches.length} selectedSearchIndex=$selIdx',
-      );
-      for (int i = 0; i < chapterMatches.length; i++) {
-        final m = chapterMatches[i];
-        _logger.info('[Reader] match[$i] pos=${m.position} snippet="${m.snippet}"');
-      }
-    } catch (e) {
-      _logger.error('[Reader] _buildHighlightedText log error: $e');
-    }
-
     // 构建高亮文本片段
     final spans = <TextSpan>[];
     int lastEnd = 0;
@@ -1516,12 +1419,14 @@ class _ReaderContentState extends State<ReaderContent> {
       );
     }
 
+    // 优先使用用户原始搜索词（若存在），否则从snippet中提取首个非空 token 作为回退
+    final queryKeyword = controller.lastSearchQuery.value.trim();
+
     for (int i = 0; i < chapterMatches.length; i++) {
       final match = chapterMatches[i];
       int matchStart = match.position.toInt();
 
-      // 优先使用用户原始搜索词（若存在），否则从snippet中提取首个非空 token 作为回退
-      String searchKeyword = controller.lastSearchQuery.value.trim();
+      String searchKeyword = queryKeyword;
       if (searchKeyword.isEmpty) {
         final snippetLines = match.snippet.split(RegExp(r'[\n\r]'));
         if (snippetLines.isNotEmpty) {
@@ -1760,134 +1665,139 @@ class _ReaderContentState extends State<ReaderContent> {
     }
   }
 
-  // 将本地 file:// 或 file:/// 路径的图片内联为 base64 data URL
+  // 将本地 file:// 或 file:/// 路径的图片内嵌为 base64 data URL
+  // 单趟扫描 + StringBuffer 写出：旧实现对每个 <img> 都全文 toLowerCase() 并整体重建字符串，
+  // 图片数量一多就退化成 O(图片数 × 全文长度)
   String _embedLocalImages(String html) {
     try {
-      String out = html;
+      final lower = html.toLowerCase();
+      final out = StringBuffer();
+      int cursor = 0; // out 中已写出的 html 位置
       int idx = 0;
       while (true) {
-        final imgIdx = out.toLowerCase().indexOf('<img', idx);
+        final imgIdx = lower.indexOf('<img', idx);
         if (imgIdx == -1) break;
 
         const srcKey = 'src=';
-        final srcPos = out.toLowerCase().indexOf(srcKey, imgIdx);
+        final srcPos = lower.indexOf(srcKey, imgIdx);
         if (srcPos == -1) {
           idx = imgIdx + 4;
           continue;
         }
 
         int q = srcPos + srcKey.length;
-        while (q < out.length &&
-            (out[q] == ' ' || out[q] == '\t' || out[q] == '\n' || out[q] == '\r')) {
+        while (q < html.length &&
+            (html[q] == ' ' || html[q] == '\t' || html[q] == '\n' || html[q] == '\r')) {
           q++;
         }
-        if (q >= out.length) break;
-        final quote = out[q];
+        if (q >= html.length) break;
+        final quote = html[q];
         if (quote != '"' && quote != "'") {
           idx = srcPos + srcKey.length;
           continue;
         }
-        final endQuote = out.indexOf(quote, q + 1);
+        final endQuote = html.indexOf(quote, q + 1);
         if (endQuote == -1) break;
 
-        final src = out.substring(q + 1, endQuote);
-        if (src.isEmpty) {
-          idx = endQuote + 1;
-          continue;
-        }
+        final src = html.substring(q + 1, endQuote);
+        idx = endQuote + 1;
+        if (src.isEmpty) continue;
 
-        try {
-          final lower = src.toLowerCase();
-          if (lower.startsWith('data:') ||
-              lower.startsWith('http:') ||
-              lower.startsWith('https:')) {
-            idx = endQuote + 1;
-            continue;
-          }
+        final dataUrl = _localImageDataUrl(src);
+        if (dataUrl == null) continue;
 
-          String path = '';
-          if (lower.startsWith('file:')) {
-            try {
-              final uri = Uri.parse(src);
-              path = uri.toFilePath(windows: Platform.isWindows);
-            } catch (_) {
-              path = src.replaceFirst(RegExp(r'^file:///?'), '');
-              if (Platform.isWindows && path.startsWith('/')) path = path.substring(1);
-            }
-          } else {
-            path = src.replaceAll('\\', '/');
-            if (!File(path).existsSync()) {
-              final cwdPath = '${Directory.current.path}/$path';
-              if (File(cwdPath).existsSync()) path = cwdPath;
-            }
-          }
-
-          File file = File(path);
-          if (!file.existsSync()) {
-            // 尝试在同一 epub_images/<id> 目录下按文件名搜索（处理内部存在额外目录如 OPS 的情况）
-            final baseLower = path.toLowerCase();
-            final marker = '${Platform.pathSeparator}epub_images${Platform.pathSeparator}';
-            final markerIdx = baseLower.indexOf(marker);
-            if (markerIdx >= 0) {
-              final after = path.substring(markerIdx + marker.length);
-              final parts = after.split(Platform.pathSeparator);
-              if (parts.isNotEmpty) {
-                final novelId = parts[0];
-                final baseDir = Directory(
-                  '${path.substring(0, markerIdx + marker.length)}$novelId',
-                );
-                if (baseDir.existsSync()) {
-                  final basename = path.split(Platform.pathSeparator).last;
-                  try {
-                    final found = baseDir
-                        .listSync(recursive: true)
-                        .whereType<File>()
-                        .firstWhere(
-                          (f) => f.path.split(Platform.pathSeparator).last == basename,
-                          orElse: () => File(''),
-                        );
-                    if (found.path.isNotEmpty && found.existsSync()) {
-                      file = found;
-                      path = file.path;
-                    }
-                  } catch (_) {}
-                }
-              }
-            }
-          }
-          if (!file.existsSync()) {
-            _logger.error('[Reader] Image file not found: $path');
-            idx = endQuote + 1;
-            continue;
-          }
-
-          final bytes = file.readAsBytesSync();
-          final b64 = base64Encode(bytes);
-          final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '';
-          final mime =
-              {
-                'png': 'image/png',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'gif': 'image/gif',
-                'webp': 'image/webp',
-                'svg': 'image/svg+xml',
-              }[ext] ??
-              'application/octet-stream';
-          final dataUrl = 'data:$mime;base64,$b64';
-
-          out = out.substring(0, q + 1) + dataUrl + out.substring(endQuote);
-          idx = q + 1 + dataUrl.length;
-        } catch (e) {
-          _logger.error('[Reader] Failed to embed image src="$src": $e');
-          idx = endQuote + 1;
-          continue;
-        }
+        out.write(html.substring(cursor, q + 1));
+        out.write(dataUrl);
+        cursor = endQuote;
       }
-      return out;
+      out.write(html.substring(cursor));
+      return out.toString();
     } catch (e) {
       _logger.error('[Reader] _embedLocalImages error: $e');
       return html;
+    }
+  }
+
+  /// 解析本地图片 src 并返回 base64 data URL；远端/data 协议或文件缺失时返回 null
+  String? _localImageDataUrl(String src) {
+    try {
+      final lower = src.toLowerCase();
+      if (lower.startsWith('data:') ||
+          lower.startsWith('http:') ||
+          lower.startsWith('https:')) {
+        return null;
+      }
+
+      String path = '';
+      if (lower.startsWith('file:')) {
+        try {
+          final uri = Uri.parse(src);
+          path = uri.toFilePath(windows: Platform.isWindows);
+        } catch (_) {
+          path = src.replaceFirst(RegExp(r'^file:///?'), '');
+          if (Platform.isWindows && path.startsWith('/')) path = path.substring(1);
+        }
+      } else {
+        path = src.replaceAll('\\', '/');
+        if (!File(path).existsSync()) {
+          final cwdPath = '${Directory.current.path}/$path';
+          if (File(cwdPath).existsSync()) path = cwdPath;
+        }
+      }
+
+      File file = File(path);
+      if (!file.existsSync()) {
+        // 尝试在同一 epub_images/<id> 目录下按文件名搜索（处理内部存在额外目录如 OPS 的情况）
+        final baseLower = path.toLowerCase();
+        final marker = '${Platform.pathSeparator}epub_images${Platform.pathSeparator}';
+        final markerIdx = baseLower.indexOf(marker);
+        if (markerIdx >= 0) {
+          final after = path.substring(markerIdx + marker.length);
+          final parts = after.split(Platform.pathSeparator);
+          if (parts.isNotEmpty) {
+            final novelId = parts[0];
+            final baseDir = Directory('${path.substring(0, markerIdx + marker.length)}$novelId');
+            if (baseDir.existsSync()) {
+              final basename = path.split(Platform.pathSeparator).last;
+              try {
+                final found = baseDir
+                    .listSync(recursive: true)
+                    .whereType<File>()
+                    .firstWhere(
+                      (f) => f.path.split(Platform.pathSeparator).last == basename,
+                      orElse: () => File(''),
+                    );
+                if (found.path.isNotEmpty && found.existsSync()) {
+                  file = found;
+                  path = file.path;
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      }
+      if (!file.existsSync()) {
+        _logger.error('[Reader] Image file not found: $path');
+        return null;
+      }
+
+      final bytes = file.readAsBytesSync();
+      final b64 = base64Encode(bytes);
+      final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '';
+      final mime =
+          {
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'svg': 'image/svg+xml',
+          }[ext] ??
+          'application/octet-stream';
+      return 'data:$mime;base64,$b64';
+    } catch (e) {
+      _logger.error('[Reader] Failed to embed image src="$src": $e');
+      return null;
     }
   }
 }

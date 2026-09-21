@@ -42,10 +42,24 @@ pub async fn fetch_meter_reading(meter_id: &str) -> Result<MeterReading, String>
 
 /// 从HTML中提取剩余电量、剩余金额、表名称、综合费用
 fn parse_html(html: &str, meter_id: &str) -> Result<MeterReading, String> {
-    let kwh_re = Regex::new(r"剩余电量[:：]\s*</span>\s*<label[^>]*>\s*([\d.]+)\s*</label>").unwrap();
-    let yuan_re = Regex::new(r"剩余金额[:：]\s*</span>\s*<label[^>]*>\s*([\d.]+)\s*</label>").unwrap();
-    let name_re = Regex::new(r"表.*?名.*?称[:：]\s*</span>\s*<label[^>]*>\s*([^<]+?)\s*</label>").unwrap();
-    let price_re = Regex::new(r"综合费用[:：]\s*</span>\s*<label[^>]*>\s*([\d.]+)\s*</label>").unwrap();
+    // 正则在模块生命周期内只编译一次：本函数随电表轮询反复调用，
+    // 每次重新 `Regex::new` 4 个模式纯属重复开销。
+    static KWH_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    static YUAN_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    static NAME_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    static PRICE_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let kwh_re = KWH_RE.get_or_init(|| {
+        Regex::new(r"剩余电量[:：]\s*</span>\s*<label[^>]*>\s*([\d.]+)\s*</label>").unwrap()
+    });
+    let yuan_re = YUAN_RE.get_or_init(|| {
+        Regex::new(r"剩余金额[:：]\s*</span>\s*<label[^>]*>\s*([\d.]+)\s*</label>").unwrap()
+    });
+    let name_re = NAME_RE.get_or_init(|| {
+        Regex::new(r"表.*?名.*?称[:：]\s*</span>\s*<label[^>]*>\s*([^<]+?)\s*</label>").unwrap()
+    });
+    let price_re = PRICE_RE.get_or_init(|| {
+        Regex::new(r"综合费用[:：]\s*</span>\s*<label[^>]*>\s*([\d.]+)\s*</label>").unwrap()
+    });
 
     let remaining_kwh = kwh_re
         .captures(html)

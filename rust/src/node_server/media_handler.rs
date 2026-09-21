@@ -29,16 +29,42 @@ fn ensure_cover_thumbnail_tracked(file_path: &str, width: u32) -> Option<String>
 }
 
 /// 后台为一批媒体文件生成缩略图并计入进度统计（导入后全量生成用）。
+///
+/// 并发度取 CPU 逻辑核数：缩略图生成是 CPU 密集（解码+缩放）而非纯 IO 等待，
+/// 单线程串行时 N 张图的总耗时就是 N 倍。ffmpeg 子进程另有全局信号量限流，
+/// 因此并行的是「常规位图的纯 Rust 缩放」这条大头路径。
 pub fn spawn_bulk_thumbnail_generation(files: Vec<String>) {
     if files.is_empty() {
         return;
     }
     THUMB_TOTAL.fetch_add(files.len() as u64, Ordering::Relaxed);
+
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(files.len());
+    let pending = std::sync::Arc::new(std::sync::Mutex::new(
+        files.into_iter().collect::<std::collections::VecDeque<String>>(),
+    ));
+
+    // 保持原有的「立即返回、后台跑完」语义：scope 会等待 worker 结束，
+    // 因此整块并行放到一个后台线程里执行。
     std::thread::spawn(move || {
-        for file_path in files {
-            media_api::ensure_cover_thumbnail(file_path.clone(), 480);
-            THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
-        }
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let pending = std::sync::Arc::clone(&pending);
+                scope.spawn(move || loop {
+                    // 每个 worker 取一个再做，避免静态切片在文件耗时不均时出现长尾
+                    let Some(file_path) =
+                        pending.lock().unwrap_or_else(|e| e.into_inner()).pop_back()
+                    else {
+                        break;
+                    };
+                    media_api::ensure_cover_thumbnail(file_path, 480);
+                    THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
+                });
+            }
+        });
     });
 }
 
@@ -131,44 +157,93 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
 
 /// 服务缩略图
 async fn serve_resized_cover(file_path: &str, width: u32) -> Result<Response<Body>, Infallible> {
+    // 同 handle_media_query：生成与读取都阻塞，移入 spawn_blocking 以免占住 worker
+    let file_path = file_path.to_string();
+    let result = tokio::task::spawn_blocking(move || {
+        read_cover_bytes_blocking(&file_path, width)
+    })
+    .await
+    .unwrap_or(None);
+
+    match result {
+        Some((bytes, content_type)) => Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", content_type)
+            .header("Content-Length", bytes.len().to_string())
+            .body(Body::from(bytes))
+            .unwrap()),
+        None => Ok(error_plain(StatusCode::NOT_FOUND, "no cover available")),
+    }
+}
+
+/// 读取（必要时生成）封面缩略图字节。返回 None 表示音视频无内嵌封面。
+fn read_cover_bytes_blocking(file_path: &str, width: u32) -> Option<(Vec<u8>, String)> {
+    use std::path::Path;
+
     // 调用 Rust 的缩略图生成函数（带进度统计）
     if let Some(thumb_path) = ensure_cover_thumbnail_tracked(file_path, width) {
         if !thumb_path.is_empty() {
-            let thumb_file = Path::new(&thumb_path);
-            if thumb_file.exists() {
-                if let Ok(bytes) = fs::read(thumb_file) {
-                    return Ok(Response::builder()
-                        .status(StatusCode::OK)
-                        .header("Content-Type", "image/jpeg")
-                        .header("Content-Length", bytes.len().to_string())
-                        .body(Body::from(bytes))
-                        .unwrap());
-                }
+            if let Ok(bytes) = fs::read(Path::new(&thumb_path)) {
+                return Some((bytes, "image/jpeg".to_string()));
             }
         }
     }
 
     // 如果是音频/视频文件且无法生成封面，返回 404
     if is_av_file(file_path) {
-        return Ok(error_plain(StatusCode::NOT_FOUND, "no cover available"));
+        return None;
     }
 
     // 对于图片文件，回退到原图
-    match fs::read(file_path) {
-        Ok(bytes) => {
-            let content_type = guess_media_content_type(file_path);
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", &content_type)
-                .header("Content-Length", bytes.len().to_string())
-                .body(Body::from(bytes))
-                .unwrap())
-        }
-        Err(_) => Ok(error_plain(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "failed to read file",
-        )),
-    }
+    fs::read(file_path)
+        .ok()
+        .map(|bytes| (bytes, guess_media_content_type(file_path)))
+}
+
+/// Range 头解析用正则，只编译一次。
+/// 原先 `Regex::new` 写在每个媒体请求的处理路径上，模式编译+堆分配是纯浪费。
+static RANGE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+
+fn range_regex() -> &'static regex::Regex {
+    RANGE_RE.get_or_init(|| {
+        regex::Regex::new(r"bytes=(\d*)-(\d*)").expect("固定的 Range 正则应可编译")
+    })
+}
+
+/// 把请求的 `[start, requested_end]` 裁剪到文件实际范围内，并套用单次传输上限。
+///
+/// 关键是不变式 `start <= capped_end`：两个调用方都用 `capped_end - start + 1`
+/// 求长度，起点越界时这个 u64 减法会回绕成天文数字（release 下变成超大分配、
+/// debug 下直接 panic），远程反复触发即可拖垮服务。
+fn clamp_range(
+    start: u64,
+    requested_end: u64,
+    total_length: u64,
+    limit_chunk: bool,
+) -> (u64, u64) {
+    let bounded_end = requested_end.min(total_length.saturating_sub(1));
+    let start = start.min(bounded_end);
+    let capped_end = if limit_chunk {
+        bounded_end.min(start.saturating_add(VIDEO_CHUNK_SIZE - 1))
+    } else {
+        bounded_end
+    };
+    (start, capped_end)
+}
+
+/// 解析 `Range: bytes=start-end` 并裁剪；格式不合法时返回 None。
+fn resolve_range(
+    range: &str,
+    total_length: u64,
+    limit_chunk: bool,
+) -> Option<(u64, u64)> {
+    let captures = range_regex().captures(range)?;
+    let start: u64 = captures.get(1)?.as_str().parse().ok()?;
+    let requested_end: u64 = captures
+        .get(2)
+        .and_then(|m| m.as_str().parse().ok())
+        .unwrap_or(total_length.saturating_sub(1));
+    Some(clamp_range(start, requested_end, total_length, limit_chunk))
 }
 
 /// 处理 Range 请求：使用文件 seek 只读取所需字节范围，避免将整个大文件载入内存
@@ -182,24 +257,8 @@ fn serve_range_request(
     use std::io::{Read, Seek, SeekFrom};
 
     // 解析 Range: bytes=start-end
-    let re = regex::Regex::new(r"bytes=(\d*)-(\d*)").unwrap();
-    if let Some(captures) = re.captures(range) {
-        let start: u64 = captures
-            .get(1)
-            .and_then(|m| m.as_str().parse().ok())
-            .unwrap_or(0);
-        let requested_end: u64 = captures
-            .get(2)
-            .and_then(|m| m.as_str().parse().ok())
-            .unwrap_or(total_length.saturating_sub(1));
-
-        let bounded_end = requested_end.min(total_length.saturating_sub(1));
-        // 对视频/音频限制单次切片大小，防止一次性传输超大文件
-        let capped_end = if is_av_content_type(content_type) {
-            bounded_end.min(start + VIDEO_CHUNK_SIZE - 1)
-        } else {
-            bounded_end
-        };
+    if let Some((start, capped_end)) = resolve_range(range, total_length, is_av_content_type(content_type))
+    {
         let range_length = (capped_end - start + 1) as usize;
 
         // 打开文件并 seek 到 start，只读取所需字节
@@ -337,8 +396,6 @@ fn is_av_file(path: &str) -> bool {
 /// query 为 URL query string，例如 "path=/foo.jpg&width=240"。
 /// 返回原始字节或错误字符串。
 pub async fn handle_media_query(query: &str) -> Result<Vec<u8>, String> {
-    use std::path::Path;
-
     let params: std::collections::HashMap<String, String> =
         url::form_urlencoded::parse(query.as_bytes())
             .into_owned()
@@ -347,15 +404,33 @@ pub async fn handle_media_query(query: &str) -> Result<Vec<u8>, String> {
     let file_path = params
         .get("path")
         .filter(|p| !p.is_empty())
+        .cloned()
         .ok_or_else(|| "missing path".to_string())?;
+
+    let requested_width = params.get("width").and_then(|s| s.parse::<u32>().ok());
+    let is_cover_mode = params.get("mode").map(|m| m == "cover").unwrap_or(false);
+
+    // stat + 缩略图生成（解码/缩放，内部还要同步等待 ffmpeg 子进程）+ 文件读取
+    // 全是阻塞操作。跑在 runtime worker 上会让本可并发的其它请求排队等待，
+    // 因此整体移入 spawn_blocking。
+    tokio::task::spawn_blocking(move || {
+        handle_media_query_blocking(&file_path, requested_width, is_cover_mode)
+    })
+    .await
+    .map_err(|e| format!("媒体任务 join 失败: {}", e))?
+}
+
+fn handle_media_query_blocking(
+    file_path: &str,
+    requested_width: Option<u32>,
+    is_cover_mode: bool,
+) -> Result<Vec<u8>, String> {
+    use std::path::Path;
 
     let path = Path::new(file_path);
     if !path.exists() {
         return Err(format!("file not found: {}", file_path));
     }
-
-    let requested_width = params.get("width").and_then(|s| s.parse::<u32>().ok());
-    let is_cover_mode = params.get("mode").map(|m| m == "cover").unwrap_or(false);
 
     if is_cover_mode || is_image_file(file_path) {
         let width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
@@ -398,37 +473,18 @@ pub fn serve_media_file_with_range(
     let total_length = metadata.len();
     let content_type = guess_media_content_type(file_path);
 
-    // 解析 Range 头，例如 "bytes=0-1048575"
-    let (start, end_requested) = if let Some(range_str) = range {
-        let re = regex::Regex::new(r"bytes=(\d*)-(\d*)").unwrap();
-        if let Some(caps) = re.captures(range_str) {
-            let s: u64 = caps
-                .get(1)
-                .and_then(|m| m.as_str().parse().ok())
-                .unwrap_or(0);
-            let e: u64 = caps
-                .get(2)
-                .and_then(|m| m.as_str().parse().ok())
-                .unwrap_or(total_length.saturating_sub(1));
-            (s, e)
-        } else {
-            (0, total_length.saturating_sub(1))
-        }
-    } else {
-        // 无 Range 时主动返回首个切片，促使播放器转用 Range 请求
-        (
-            0,
-            (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)),
-        )
-    };
-
-    let bounded_end = end_requested.min(total_length.saturating_sub(1));
     // 对视频/音频限制单次最大传输量，防止将整个大文件载入内存
     let is_av = is_video_file(file_path) || is_audio_file(file_path);
-    let capped_end = if is_av {
-        bounded_end.min(start + VIDEO_CHUNK_SIZE - 1)
-    } else {
-        bounded_end
+    let (start, capped_end) = match range {
+        Some(range_str) => resolve_range(range_str, total_length, is_av)
+            .ok_or_else(|| "invalid range header".to_string())?,
+        // 无 Range 时主动返回首个切片，促使播放器转用 Range 请求
+        None => clamp_range(
+            0,
+            (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)),
+            total_length,
+            false,
+        ),
     };
     let range_length = (capped_end - start + 1) as usize;
 

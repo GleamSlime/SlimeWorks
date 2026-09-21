@@ -81,10 +81,11 @@ Future<void> main() async {
   // 初始化 media_kit（视频播放）
   MediaKit.ensureInitialized();
 
-  // 恢复 Manga 登录态与网络配置
-  await getIt<MangaService>().init();
   // 恢复 Manga 下载元数据
   await getIt<MangaDownloadService>().init();
+  // Manga 登录态恢复含一次网络请求（失败时要等超时），放到首帧之后，
+  // 避免漫画服务器不可达时把整个应用卡在启动画面上
+  unawaited(getIt<MangaService>().init());
 
   // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满），
   // 设为 80MB 缓解远程媒体库浏览时内存持续增长问题。
