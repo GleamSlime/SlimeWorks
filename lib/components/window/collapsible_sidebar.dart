@@ -230,42 +230,46 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
             begin: const Offset(-0.15, 0),
             end: Offset.zero,
           ).animate(_entranceAnimation),
-          child: Container(
-            margin: EdgeInsets.all(AppTheme.metrics.kSpace6),
-            child: AnimatedContainer(
-              duration: widget.animationDuration,
-              curve: Curves.easeInOutCubic,
-              width: targetWidth,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: AppTheme.metrics.radius12,
-                boxShadow: desktopScreen.isDesktop.value
-                    ? [
-                        BoxShadow(
-                          color: theme.shadowColor.withAlpha(18),
-                          blurRadius: scaleW(16),
-                          offset: Offset(scaleW(2), scaleW(2)),
-                        ),
-                        BoxShadow(
-                          color: (isDark ? DarkColors.primary : LightColors.primary).withAlpha(8),
-                          blurRadius: scaleW(24),
-                          offset: Offset(0, scaleW(4)),
-                        ),
-                      ]
-                    : null,
-                gradient: AppTheme.sideBarTheme(
-                  context,
-                  alpha: globalBackgroundPath.isNotEmpty ? 100 : 255,
-                ),
-                border: Border.all(
+          child: AnimatedContainer(
+            duration: widget.animationDuration,
+            curve: Curves.easeInOutCubic,
+            width: targetWidth,
+            // 侧栏贴住窗口左/上/下边缘，圆角交给 macOS 的窗口蒙版去裁（实测内容
+            // 层确实会被裁），这样两个圆角天然一致。原来的 margin+radius12 浮卡
+            // 比窗口角（实测半径约 19pt）更方，两条弧在角上会分叉露出底下的振动层。
+            padding: EdgeInsets.only(
+              left: AppTheme.metrics.kSpace6,
+              top: AppTheme.metrics.kSpace6,
+              bottom: AppTheme.metrics.kSpace6,
+            ),
+            decoration: BoxDecoration(
+              // 这里原来还写了 color: colorScheme.surface，但 BoxDecoration 里
+              // gradient 会盖掉 color，那行是不生效的，删掉免得误以为侧栏必须是不透明。
+              // 原来还有一圈 boxShadow：贴边之后阴影左侧被窗口裁掉、右侧被同一行
+              // 里后画的内容区盖住，已经完全不可见，所以删掉。
+              gradient: AppTheme.sideBarTheme(
+                context,
+                // macOS 下留透明度，让原生 behindWindow 振动层透出来形成磨砂；
+                // 其它平台没有这一层，保持实心否则直接透出桌面。
+                // 165 实测会把振动层的背景细节压平（侧栏 sd 0.36，且完全不跟壁纸
+                // 变色），降到 120 后侧栏底色会随壁纸走暖，透出感才成立。
+                // 深浅色不对称：浅色玻璃压在亮壁纸上对比余量大，深色玻璃压在亮
+                // 壁纸上会被提亮到中灰、浅色字只剩 2.8:1，所以深色主题取值更高。
+                alpha: globalBackgroundPath.isNotEmpty
+                    ? 100
+                    : (Platform.isMacOS ? (isDark ? 175 : 120) : 255),
+              ),
+              // 只剩右侧一条发丝分隔线：四周描边在贴边布局下会被窗口蒙版裁掉半截
+              border: Border(
+                right: BorderSide(
                   width: 1.w,
                   color: isDark
                       ? DarkColors.white10.withAlpha((255 * 0.6).toInt())
                       : Colors.white.withAlpha(180),
                 ),
               ),
-              child: _buildSidebarContent(context, controller, isExpanded, showExtends),
             ),
+            child: _buildSidebarContent(context, controller, isExpanded, showExtends),
           ),
         ),
       );

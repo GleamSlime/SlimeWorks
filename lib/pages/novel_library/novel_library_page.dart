@@ -443,6 +443,8 @@ class NovelLibraryPage extends StatelessWidget {
                       return Draggable<NovelMetadata>(
                         data: novel,
                         feedback: Material(
+                          // canvasColor 现为透明，拖拽浮影需要自己铺底
+                          color: Theme.of(context).colorScheme.surface,
                           elevation: 8,
                           child: Opacity(
                             opacity: 0.8,

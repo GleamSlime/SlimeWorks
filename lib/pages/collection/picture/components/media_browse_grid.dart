@@ -359,6 +359,8 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     final draggable = Draggable<String>(
       data: collection.id,
       feedback: Material(
+        // canvasColor 现为透明，拖拽浮影需要自己铺底
+        color: Theme.of(context).colorScheme.surface,
         elevation: 8,
         borderRadius: appMetrics.radius8,
         child: SizedBox(

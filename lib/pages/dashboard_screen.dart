@@ -11,6 +11,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 
 /// 概览页面
 class DashboardScreen extends StatefulWidget {
@@ -136,13 +137,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 SizedBox(height: AppTheme.metrics.kSpace12),
                 ShaderMask(
                   shaderCallback: (bounds) {
-                    return LinearGradient(
-                      colors: isDark
-                          ? [DarkColors.primary, DarkColors.purple, DarkColors.blue]
-                          : [LightColors.primary, LightColors.purple, LightColors.indigo],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ).createShader(bounds);
+                    // 走语义层的渐变：原先直接用 primary/purple/indigo 三个浅色，
+                    // 在白底上对比度只有约 1.5，标题几乎看不清。
+                    return AppSemantic.of(
+                      context
+                    ).accentGradient.createShader(bounds);
                   },
                   child: Text(
                     '工坊系统',

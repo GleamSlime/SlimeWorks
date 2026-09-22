@@ -49,7 +49,9 @@ class DesktopScaffold extends StatefulWidget {
       minimumSize: const Size(_minWidth, _minHeight),
       center: false,
       titleBarStyle: TitleBarStyle.hidden,
-      backgroundColor: LightColors.background1,
+      // macOS 下原生窗口底色必须留透明，否则 MainFlutterWindow 挂的振动层
+      // 会被这层不透明底色彻底盖住。
+      backgroundColor: Platform.isMacOS ? Colors.transparent : LightColors.background1,
       windowButtonVisibility: false,
       title: desktopScreen.title.value,
     );
@@ -115,8 +117,14 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    // macOS 桌面端不再由根层铺满不透明底色，否则侧栏永远透不出桌面内容。
+    // 内容区的不透明改由 _DesktopShell 自己补——两侧职责分开：侧栏留透明，
+    // 主区必须实心，否则文字会直接压在桌面上。
+    final bool bleedThroughWindow = Platform.isMacOS && !isMobile;
     return Material(
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: bleedThroughWindow
+          ? Colors.transparent
+          : Theme.of(context).scaffoldBackgroundColor,
       child: isMobile
           ? widget.child
           : Stack(

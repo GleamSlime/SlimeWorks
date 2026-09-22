@@ -1,4 +1,6 @@
-platform :osx, '11.0'
+# Xcode 26 起支持的最低 macOS deployment target；低于此值会直接编译失败。
+MIN_MACOS = '12.0'
+platform :osx, MIN_MACOS
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -38,6 +40,15 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+    # 很多插件的 podspec 仍写着 10.14/10.15/11.0，podspec 的值会盖过上面的
+    # platform，Xcode 26 起直接报 error 而不是 warning。统一抬到最低支持版本。
+    target.build_configurations.each do |config|
+      current = config.build_settings['MACOSX_DEPLOYMENT_TARGET']
+      next if current.nil?
+      if Gem::Version.new(current.to_s) < Gem::Version.new(MIN_MACOS)
+        config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = MIN_MACOS
+      end
+    end
     if target.name == 'rust_lib_slime_works'
       target.build_configurations.each do |config|
         config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']

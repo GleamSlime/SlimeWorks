@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'base_viewmodel.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 const Loggers _logger = Loggers(name: '网络监听');
 
 
@@ -286,7 +287,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
 
     // 显示初始化加载状态
     if (_pageInitState == PageInitState.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoading();
     }
 
     // 初始化成功，显示正常内容
@@ -319,10 +320,8 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
           return Stack(
             children: [
               buildContent(context),
-              Container(
-                color: Colors.black.withValues(alpha: 0.3),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
+              // 走语义遮罩：原先硬编码 Colors.black30，暗色下几乎看不出层级
+              const Scrim(child: AppLoading()),
             ],
           );
         }

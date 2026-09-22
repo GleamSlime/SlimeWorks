@@ -6,10 +6,15 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'app_colors.dart';
+import 'app_semantics.dart';
 
 const Loggers _logger = Loggers(name: '主题');
 
-ThemeMetrics appMetrics = AppTheme.metrics;
+/// 全局度量快捷方式。
+///
+/// 必须写成 getter：历史上它是一个 `static final` 快照，而 [AppTheme.resetMetrics]
+/// 只替换 `AppTheme.metrics`，导致 310 处 `appMetrics.x` 在窗口缩放后仍使用旧值。
+ThemeMetrics get appMetrics => AppTheme.metrics;
 
 class AppTheme {
   AppTheme._();
@@ -24,6 +29,13 @@ class AppTheme {
   static const String _themeModeKey = 'theme_mode';
   static const String _accentColorKey = 'accent_color';
   static const String _fontScaleKey = 'font_scale';
+
+  /// 项目自带字体族名。
+  ///
+  /// ThemeData.fontFamily 只喂给 ThemeData 自己生成的那份 textTheme；一旦
+  /// copyWith 换成手写 TextTheme 就会丢，全站静默回退到系统字体。所以字阶
+  /// 构建完必须显式 apply 一次。
+  static const String _fontFamily = 'FZLanTingYuanS-EB-GB';
 
   /// 启动时从持久化存储加载主题配置（仅加载输入参数，不触发 ScreenUtil）。
   static Future<void> loadSavedTheme() async {
@@ -48,36 +60,65 @@ class AppTheme {
   static ThemeData buildCustomDark(Color accent, double fontScale) =>
       _applyCustomization(darkTheme, accent, fontScale);
 
+  /// 把用户自选的强调色与字号缩放套用回基础主题。
+  ///
+  /// 重点：自定义色必须同步注入 [AppSemantic]，否则所有走语义层的组件
+  /// 仍然显示默认紫，只有老代码跟随——这正是"改了主题色但很多地方不变"的成因。
   static ThemeData _applyCustomization(ThemeData base, Color accent, double scale) {
-    final scaledText = _scaleTextTheme(base.textTheme, scale);
-    final scaledPrimary = _scaleTextTheme(base.primaryTextTheme, scale);
+    final isDark = base.brightness == Brightness.dark;
+    final semantic = base.extension<AppSemantic>() ?? (isDark ? AppSemantic.dark : AppSemantic.light);
+
+    // 用户可能选到一个很浅（或很深）的颜色。规则统一为：强调色必须先在其所属
+    // 模式的表面上足够醒目，再据此决定它上面放黑字还是白字。
+    // 若反过来固定用白字，暗色模式下会被压成一个发黑的紫块——正是原来的表现问题。
+    final fill = _ensureContrast(accent, semantic.surface);
+    final onAccent = _contrastColor(fill);
+    final accentText = fill;
+
     final cs = base.colorScheme.copyWith(
-      primary: accent,
-      secondary: accent,
-      onPrimary: _contrastColor(accent),
+      primary: fill,
+      secondary: fill,
+      onPrimary: onAccent,
+      surface: semantic.surface,
     );
-    return base.copyWith(
+
+    final themed = base.copyWith(
       colorScheme: cs,
-      primaryColor: accent,
-      appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: cs.surface,
+      primaryColor: fill,
+      extensions: [
+        ...base.extensions.values,
+        semantic.copyWith(
+          accent: fill,
+          accentOn: onAccent,
+          accentText: accentText,
+          accentContainer: Color.alphaBlend(fill.withValues(alpha: isDark ? 0.18 : 0.10), cs.surface),
+          accentContainerBorder: fill.withValues(alpha: isDark ? 0.34 : 0.26),
+        ),
+      ],
+    );
+
+    return themed.copyWith(
+      appBarTheme: themed.appBarTheme.copyWith(
+        backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      tabBarTheme: base.tabBarTheme.copyWith(
-        indicator: UnderlineTabIndicator(borderSide: BorderSide(color: accent, width: 3)),
+      tabBarTheme: themed.tabBarTheme.copyWith(
+        indicator: UnderlineTabIndicator(
+          borderSide: BorderSide(color: fill, width: scaleW(2.5)),
+        ),
         labelColor: cs.onSurface,
         unselectedLabelColor: cs.onSurface.withValues(alpha: 0.55),
       ),
-      textTheme: scaledText,
-      primaryTextTheme: scaledPrimary,
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: _contrastColor(accent),
-        ),
+      textTheme: _scaleTextTheme(base.textTheme, scale),
+      primaryTextTheme: _scaleTextTheme(base.primaryTextTheme, scale),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: _elevatedButton(fill, onAccent)),
+      filledButtonTheme: FilledButtonThemeData(style: _filledButton(fill, onAccent)),
+      textButtonTheme: TextButtonThemeData(style: _textButton(accentText)),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: _outlinedButton(accentText, semantic.border),
       ),
-      sliderTheme: base.sliderTheme.copyWith(thumbColor: accent, activeTrackColor: accent),
+      sliderTheme: themed.sliderTheme.copyWith(thumbColor: fill, activeTrackColor: fill),
     );
   }
 
@@ -106,399 +147,581 @@ class AppTheme {
     return s!.copyWith(fontSize: s.fontSize! * scale);
   }
 
-  static Color _contrastColor(Color c) => c.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  static Color _contrastColor(Color c) =>
+      c.computeLuminance() > 0.52 ? Colors.black : Colors.white;
 
+  /// 调整 [c] 的明度，直到它与 [background] 的对比度达到 [target]（默认 4.5:1）。
+  ///
+  /// 用户自选主题色时这是必需的：软紫 #A89FEE 铺在白底上对比度只有 1.9，
+  /// 直接当文字色或按钮底色就会"看着发灰、看不清"。
+  static Color _ensureContrast(Color c, Color background, {double target = 4.5}) {
+    // 背景偏亮则把 c 往黑压，偏暗则往白提。
+    final towardWhite = background.computeLuminance() < 0.5;
+    var result = c;
+    for (var i = 0; i < 12; i++) {
+      if (_contrastRatio(result, background) >= target) return result;
+      result = Color.lerp(
+        result,
+        towardWhite ? Colors.white : Colors.black,
+        0.1,
+      )!;
+    }
+    return result;
+  }
+
+  static double _contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    return (la + 0.05) / (lb + 0.05) < 1 ? (lb + 0.05) / (la + 0.05) : (la + 0.05) / (lb + 0.05);
+  }
+
+  // ── 度量 ──
   static ThemeMetrics metrics = ThemeMetrics();
   static RxInt metricsVersion = 0.obs;
 
-  /// 亮色主题
-  static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      primaryColor: LightColors.primary,
-      scaffoldBackgroundColor: LightColors.background3,
-      fontFamily: 'FZLanTingYuanS-EB-GB',
+  // ── 组件主题片段（明暗共用同一套结构，只有颜色不同） ──────────────
+  // 历史上明暗两份主题是各写一遍的，暗色 OutlinedButton 里出现 LightColors.primary
+  // 就是这么来的。改为单一定义、颜色从语义层取，结构上杜绝此类漂移。
 
-      // 颜色方案
-      colorScheme: const ColorScheme.light(
-        primary: LightColors.primary,
-        secondary: LightColors.purple,
-        tertiary: LightColors.overlayLight,
-        surface: LightColors.background1,
-        error: LightColors.red,
-        onPrimary: LightColors.white100,
-        onSecondary: LightColors.white100,
-        onSurface: LightColors.black100,
-        onError: LightColors.white100,
-        outlineVariant: LightColors.black1,
+  static ButtonStyle _elevatedButton(Color fill, Color on) => ElevatedButton.styleFrom(
+    backgroundColor: fill,
+    foregroundColor: on,
+    elevation: 0,
+    padding: EdgeInsets.symmetric(
+      horizontal: metrics.kSpace18,
+      vertical: metrics.kSpace10,
+    ),
+    minimumSize: Size(scaleW(0), metrics.kSpace32),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
+    textStyle: TextStyle(
+      fontSize: scaleS(13),
+      fontWeight: FontWeight.w500,
+      height: 1.2,
+      letterSpacing: 0.2,
+    ),
+  );
+
+  static ButtonStyle _filledButton(Color fill, Color on) => FilledButton.styleFrom(
+    backgroundColor: fill,
+    foregroundColor: on,
+    elevation: 0,
+    padding: EdgeInsets.symmetric(
+      horizontal: metrics.kSpace18,
+      vertical: metrics.kSpace10,
+    ),
+    minimumSize: Size(scaleW(0), metrics.kSpace32),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
+    textStyle: TextStyle(
+      fontSize: scaleS(13),
+      fontWeight: FontWeight.w500,
+      height: 1.2,
+      letterSpacing: 0.2,
+    ),
+  );
+
+  static ButtonStyle _textButton(Color accentText) => TextButton.styleFrom(
+    foregroundColor: accentText,
+    // 注意：文字按钮不应带描边，历史上这里加了 side 导致 134 处看起来像线框按钮。
+    padding: EdgeInsets.symmetric(
+      horizontal: metrics.kSpace12,
+      vertical: metrics.kSpace8,
+    ),
+    minimumSize: Size(scaleW(0), metrics.kSpace32),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
+    textStyle: TextStyle(
+      fontSize: scaleS(13),
+      fontWeight: FontWeight.w500,
+      height: 1.2,
+      letterSpacing: 0.2,
+    ),
+  );
+
+  static ButtonStyle _outlinedButton(Color accentText, Color borderColor) =>
+      OutlinedButton.styleFrom(
+        foregroundColor: accentText,
+        side: BorderSide(color: borderColor, width: scaleW(1)),
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.kSpace18,
+          vertical: metrics.kSpace10,
+        ),
+        minimumSize: Size(scaleW(0), metrics.kSpace32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
+        textStyle: TextStyle(
+          fontSize: scaleS(13),
+          fontWeight: FontWeight.w500,
+          height: 1.2,
+          letterSpacing: 0.2,
+        ),
+      );
+
+  /// 亮色主题
+  static ThemeData get lightTheme => _buildBase(AppSemantic.light);
+
+  /// 暗色主题
+  static ThemeData get darkTheme => _buildBase(AppSemantic.dark);
+
+  /// 唯一的主题构建入口：明暗只在 [AppSemantic] 里不同，结构完全一致。
+  static ThemeData _buildBase(AppSemantic s) {
+    final m = metrics;
+    final accent = s.accent;
+    final onAccent = s.accentOn;
+
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: s.isDark ? Brightness.dark : Brightness.light,
+      fontFamily: _fontFamily,
+    );
+
+    return base.copyWith(
+      primaryColor: accent,
+      scaffoldBackgroundColor: s.canvas,
+      // canvasColor 是"没有显式声明颜色的 Material 的默认底色"。本项目所有表面
+      // 都必须走 AppSemantic 显式取色，所以这里留透明：任何漏配颜色的 Material
+      // 只会画不出来，不会像之前那样在窗口最底下铺一层不透明白，把 macOS 的
+      // 窗口透出/磨砂彻底挡死（flutter_easyloading 的根 Material 就是受害者）。
+      canvasColor: Colors.transparent,
+      splashColor: accent.withValues(alpha: 0.06),
+      highlightColor: accent.withValues(alpha: 0.04),
+      shadowColor: s.isDark ? DarkColors.black100 : LightColors.black100,
+      hoverColor: s.surfaceHover,
+      focusColor: accent.withValues(alpha: 0.18),
+      disabledColor: s.textDisabled,
+      hintColor: s.textTertiary,
+      dividerColor: s.hairline,
+      // InkRipple 比 InkSparkle 安静，适合工具类界面
+      splashFactory: InkRipple.splashFactory,
+
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: accent,
+        brightness: s.isDark ? Brightness.dark : Brightness.light,
+        primary: accent,
+        onPrimary: onAccent,
+        secondary: accent,
+        onSecondary: onAccent,
+        surface: s.surface,
+        onSurface: s.textPrimary,
+        surfaceContainerLowest: s.surfaceSunken,
+        surfaceContainerLow: s.surface,
+        surfaceContainer: s.surface,
+        surfaceContainerHigh: s.surfaceRaised,
+        surfaceContainerHighest: s.surfaceRaised,
+        outline: s.border,
+        outlineVariant: s.hairline,
+        error: s.danger.color,
+        onError: Colors.white,
+        errorContainer: s.danger.container,
+        onErrorContainer: s.danger.onContainer,
+        scrim: s.scrim,
       ),
 
-      // 应用栏主题
+      extensions: [s],
+
+      // ── 应用栏：底色交给页面自己控制，避免与磨砂层叠加出双层背景 ──
       appBarTheme: AppBarTheme(
-        backgroundColor: LightColors.background1,
-        foregroundColor: LightColors.black100,
+        backgroundColor: Colors.transparent,
+        foregroundColor: s.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          fontSize: scaleS(18),
+          fontSize: scaleS(16),
           fontWeight: FontWeight.w600,
-          color: LightColors.black100,
+          color: s.textPrimary,
           height: 1.4,
         ),
+        iconTheme: IconThemeData(color: s.textSecondary, size: m.iconSize20),
       ),
 
-      // 卡片主题
+      // ── 卡片：修复原先"白底 + white80 描边"不可见 / 暗色刺眼的问题 ──
       cardTheme: CardThemeData(
-        color: LightColors.background1,
-        elevation: 2,
+        color: s.surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: metrics.radius12,
-          side: BorderSide(color: LightColors.white80, width: scaleW(0.5)),
+          borderRadius: m.radiusCard,
+          side: BorderSide(color: s.hairline, width: scaleW(1)),
         ),
       ),
 
-      // 文本主题
-      textTheme: TextTheme(
-        displayLarge: TextStyle(
-          fontSize: scaleS(72),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.2,
-        ),
-        displayMedium: TextStyle(
-          fontSize: scaleS(48),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.2,
-        ),
-        displaySmall: TextStyle(
-          fontSize: scaleS(36),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.3,
-        ),
-        headlineLarge: TextStyle(
-          fontSize: scaleS(28),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.3,
-        ),
-        headlineMedium: TextStyle(
-          fontSize: scaleS(22),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.4,
-        ),
-        headlineSmall: TextStyle(
-          fontSize: scaleS(18),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.4,
-        ),
-        titleLarge: TextStyle(
-          fontSize: scaleS(15),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.5,
-        ),
-        titleMedium: TextStyle(
-          fontSize: scaleS(13),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.5,
-        ),
-        bodyLarge: TextStyle(
-          fontSize: scaleS(15),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black80,
-          height: 1.5,
-        ),
-        bodyMedium: TextStyle(
-          fontSize: scaleS(13),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black80,
-          height: 1.5,
-        ),
-        bodySmall: TextStyle(
-          fontSize: scaleS(11),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black80,
-          height: 1.5,
-        ),
-        labelLarge: TextStyle(
-          fontSize: scaleS(13),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black100,
-          height: 1.2,
-          letterSpacing: 0.5,
-        ),
-        labelMedium: TextStyle(
-          fontSize: scaleS(11),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black40,
-          height: 1.4,
-        ),
-        labelSmall: TextStyle(
-          fontSize: scaleS(9),
-          fontWeight: FontWeight.w500,
-          color: LightColors.black40,
-          height: 1.5,
-          letterSpacing: 1.5,
-        ),
-      ),
-      // 按钮主题
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: LightColors.primary,
-          foregroundColor: LightColors.white100,
-          elevation: 0,
-          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace24, vertical: metrics.kSpace12),
-          shape: RoundedRectangleBorder(borderRadius: metrics.radius8),
-          textStyle: TextStyle(
-            fontSize: scaleS(13),
-            fontWeight: FontWeight.w500,
-            height: 1.2,
-            letterSpacing: 0.5,
-          ),
-          side: BorderSide(color: LightColors.primary, width: 1),
-        ),
-      ),
+      // ── 排版：明暗共用同一份定义，字重不再两边不一致 ──
+      textTheme: _textTheme(s),
 
-      // 文本按钮主题
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: LightColors.primary,
-          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16, vertical: metrics.kSpace8),
-          textStyle: TextStyle(
-            fontSize: scaleS(13),
-            fontWeight: FontWeight.w500,
-            height: 1.2,
-            letterSpacing: 0.5,
-          ),
-          side: BorderSide(color: LightColors.primary, width: 1),
-        ),
-      ),
-
-      // 线框按钮主题
+      // ── 按钮：四档（主/填充/文字/线框）共用同一圆角与内距，只差配色 ──
+      elevatedButtonTheme: ElevatedButtonThemeData(style: _elevatedButton(accent, onAccent)),
+      filledButtonTheme: FilledButtonThemeData(style: _filledButton(accent, onAccent)),
+      textButtonTheme: TextButtonThemeData(style: _textButton(s.accentText)),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace24, vertical: metrics.kSpace12),
-          shape: RoundedRectangleBorder(borderRadius: metrics.radius8),
-          textStyle: TextStyle(
-            fontSize: scaleS(13),
-            fontWeight: FontWeight.w500,
-            height: 1.2,
-            letterSpacing: 0.5,
-            color: LightColors.primary,
-          ),
-          side: BorderSide(color: LightColors.primary, width: 1),
+        style: _outlinedButton(s.accentText, s.border),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: s.textSecondary,
+          highlightColor: s.surfaceHover,
+          hoverColor: s.surfaceHover,
+          padding: EdgeInsets.all(m.kSpace6),
+          shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
         ),
       ),
 
-      // 输入框主题
+      // ── 输入框 ──
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: LightColors.background2,
-        border: OutlineInputBorder(borderRadius: metrics.radius8, borderSide: BorderSide.none),
+        fillColor: s.surfaceSunken,
+        isDense: true,
+        hintStyle: TextStyle(color: s.textTertiary, fontSize: scaleS(13)),
+        labelStyle: TextStyle(color: s.textSecondary, fontSize: scaleS(13)),
+        floatingLabelStyle: TextStyle(color: s.accentText, fontSize: scaleS(12)),
+        border: OutlineInputBorder(
+          borderRadius: m.radiusField,
+          borderSide: BorderSide(color: s.border, width: scaleW(1)),
+        ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: metrics.radius8,
-          borderSide: BorderSide.none,
+          borderRadius: m.radiusField,
+          borderSide: BorderSide(color: s.hairline, width: scaleW(1)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: metrics.radius8,
-          borderSide: const BorderSide(color: LightColors.primary, width: 2),
+          borderRadius: m.radiusField,
+          borderSide: BorderSide(color: s.accent, width: scaleW(1.6)),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: metrics.radius8,
-          borderSide: const BorderSide(color: LightColors.red, width: 1),
+          borderRadius: m.radiusField,
+          borderSide: BorderSide(color: s.danger.color, width: scaleW(1)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: m.radiusField,
+          borderSide: BorderSide(color: s.danger.color, width: scaleW(1.6)),
         ),
         contentPadding: EdgeInsets.symmetric(
-          horizontal: metrics.kSpace16,
-          vertical: metrics.kSpace12,
+          horizontal: m.kSpace12,
+          vertical: m.kSpace10,
         ),
       ),
 
-      // 图标主题
-      iconTheme: const IconThemeData(color: LightColors.black80, size: 24),
+      // ── 图标 ──
+      iconTheme: IconThemeData(color: s.textSecondary, size: m.iconSize20),
+      primaryIconTheme: IconThemeData(color: s.textPrimary, size: m.iconSize20),
 
-      // 分割线主题
-      dividerTheme: DividerThemeData(color: LightColors.black10, thickness: scaleW(0.5), space: 1),
+      // ── 分割线 ──
+      dividerTheme: DividerThemeData(
+        color: s.hairline,
+        thickness: scaleW(1),
+        space: scaleW(1),
+      ),
 
-      hintColor: LightColors.black40,
+      // ── 浮层 / 弹窗 ──
+      dialogTheme: DialogThemeData(
+        backgroundColor: s.surfaceRaised,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: m.radiusOverlay),
+        titleTextStyle: TextStyle(
+          fontSize: scaleS(16),
+          fontWeight: FontWeight.w600,
+          color: s.textPrimary,
+        ),
+        contentTextStyle: TextStyle(
+          fontSize: scaleS(13),
+          height: 1.6,
+          color: s.textSecondary,
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: s.surfaceRaised,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(m.radiusOverlay.topLeft.x),
+          ),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: s.surfaceRaised,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: m.radiusPanel),
+        textStyle: TextStyle(fontSize: scaleS(13), color: s.textPrimary),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: s.isDark ? AppSurfaces.darkSurfaceRaised : AppSurfaces.lightTextPrimary,
+          borderRadius: m.radius6,
+        ),
+        textStyle: TextStyle(
+          fontSize: scaleS(11),
+          color: s.isDark ? AppSurfaces.darkTextPrimary : Colors.white,
+        ),
+        padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
+        waitDuration: const Duration(milliseconds: 500),
+      ),
 
-      dividerColor: LightColors.black10,
+      // ── 导航 ──
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: Colors.transparent,
+        indicatorColor: s.accentContainer,
+        selectedIconTheme: IconThemeData(color: s.accent),
+        unselectedIconTheme: IconThemeData(color: s.textTertiary),
+        selectedLabelTextStyle: TextStyle(
+          fontSize: scaleS(12),
+          fontWeight: FontWeight.w600,
+          color: s.accentText,
+        ),
+        unselectedLabelTextStyle: TextStyle(fontSize: scaleS(12), color: s.textTertiary),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: s.surface,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: s.accentContainer,
+        elevation: 0,
+        height: m.kSpace56,
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontSize: scaleS(11),
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w500,
+            color: states.contains(WidgetState.selected) ? s.accentText : s.textTertiary,
+          ),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        labelColor: s.textPrimary,
+        unselectedLabelColor: s.textTertiary,
+        labelStyle: TextStyle(fontSize: scaleS(13), fontWeight: FontWeight.w600),
+        unselectedLabelStyle: TextStyle(fontSize: scaleS(13), fontWeight: FontWeight.w500),
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: s.accentContainer,
+          borderRadius: m.radiusControl,
+          border: Border.all(color: s.accentContainerBorder, width: scaleW(1)),
+        ),
+      ),
+
+      // ── 列表 ──
+      listTileTheme: ListTileThemeData(
+        iconColor: s.textSecondary,
+        textColor: s.textPrimary,
+        titleTextStyle: TextStyle(
+          fontSize: scaleS(13),
+          fontWeight: FontWeight.w500,
+          color: s.textPrimary,
+        ),
+        subtitleTextStyle: TextStyle(fontSize: scaleS(12), color: s.textSecondary),
+        shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
+        contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace4),
+      ),
+
+      // ── 选择控件 ──
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? Colors.white : s.textTertiary,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? accent : s.surfaceSunken,
+        ),
+        trackOutlineColor: WidgetStatePropertyAll(s.hairline),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? accent : Colors.transparent,
+        ),
+        checkColor: WidgetStatePropertyAll(onAccent),
+        side: BorderSide(color: s.borderStrong, width: scaleW(1.4)),
+        shape: RoundedRectangleBorder(borderRadius: m.radius4),
+        splashRadius: 0,
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? accent : s.textTertiary,
+        ),
+      ),
+      sliderTheme: SliderThemeData(
+        thumbColor: accent,
+        activeTrackColor: accent,
+        inactiveTrackColor: s.surfaceSunken,
+        overlayColor: accent.withValues(alpha: 0.12),
+        trackHeight: scaleW(4),
+      ),
+
+      // ── 标签 / 进度 ──
+      chipTheme: ChipThemeData(
+        backgroundColor: s.surfaceSunken,
+        selectedColor: s.accentContainer,
+        side: BorderSide(color: s.hairline, width: scaleW(1)),
+        shape: RoundedRectangleBorder(borderRadius: m.radiusPill),
+        labelStyle: TextStyle(
+          fontSize: scaleS(12),
+          fontWeight: FontWeight.w500,
+          color: s.textSecondary,
+        ),
+        padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace4),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accent,
+        linearTrackColor: s.surfaceSunken,
+        circularTrackColor: s.surfaceSunken,
+      ),
+
+      // ── 滚动条 ──
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(s.textTertiary.withValues(alpha: 0.28)),
+        thickness: const WidgetStatePropertyAll(8),
+        radius: const Radius.circular(8),
+        mainAxisMargin: 4,
+        crossAxisMargin: 3,
+      ),
+
+      // ── 其它 ──
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: s.isDark ? AppSurfaces.darkSurfaceRaised : AppSurfaces.lightTextPrimary,
+        contentTextStyle: TextStyle(
+          fontSize: scaleS(13),
+          color: s.isDark ? s.textPrimary : Colors.white,
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateColor.resolveWith(
+            (states) => states.contains(WidgetState.selected) ? s.accentContainer : Colors.transparent,
+          ),
+          foregroundColor: WidgetStateColor.resolveWith(
+            (states) => states.contains(WidgetState.selected) ? s.accentText : s.textSecondary,
+          ),
+          side: WidgetStatePropertyAll(BorderSide(color: s.hairline, width: scaleW(1))),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: m.radiusControl),
+          ),
+          textStyle: WidgetStatePropertyAll(
+            TextStyle(fontSize: scaleS(12), fontWeight: FontWeight.w500),
+          ),
+        ),
+      ),
     );
   }
 
-  /// 暗色主题
-  static ThemeData get darkTheme {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      primaryColor: DarkColors.primary,
-      scaffoldBackgroundColor: DarkColors.background1,
-      fontFamily: 'FZLanTingYuanS-EB-GB',
-
-      // 颜色方案
-      colorScheme: const ColorScheme.dark(
-        primary: DarkColors.primary,
-        secondary: DarkColors.purple,
-        surface: DarkColors.background1,
-        error: DarkColors.red,
-        onPrimary: DarkColors.black100,
-        onSecondary: DarkColors.black100,
-        onSurface: DarkColors.white100,
-        onError: DarkColors.black100,
+  /// 单一来源的字阶定义（明暗共用，只换色）
+  static TextTheme _textTheme(AppSemantic s) {
+    return TextTheme(
+      displayLarge: TextStyle(
+        fontSize: scaleS(32),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.25,
+        letterSpacing: -0.5,
       ),
-
-      // 应用栏主题
-      appBarTheme: AppBarTheme(
-        backgroundColor: DarkColors.background1,
-        foregroundColor: DarkColors.white100,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: false,
-        titleTextStyle: TextStyle(
-          fontSize: scaleS(18),
-          fontWeight: FontWeight.w600,
-          color: DarkColors.white100,
-          height: 1.4,
-        ),
+      displayMedium: TextStyle(
+        fontSize: scaleS(26),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.3,
       ),
-
-      // 卡片主题
-      cardTheme: CardThemeData(
-        color: DarkColors.background2,
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: metrics.radius12,
-          side: BorderSide(color: DarkColors.white80, width: scaleW(0.5)),
-        ),
+      displaySmall: TextStyle(
+        fontSize: scaleS(22),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.35,
       ),
-
-      // 文本主题
-      textTheme: TextTheme(
-        displayLarge: TextStyle(fontSize: scaleS(72), color: DarkColors.white100, height: 1.2),
-        displayMedium: TextStyle(fontSize: scaleS(48), color: DarkColors.white100, height: 1.2),
-        displaySmall: TextStyle(fontSize: scaleS(36), color: DarkColors.white100, height: 1.3),
-        headlineLarge: TextStyle(fontSize: scaleS(28), color: DarkColors.white100, height: 1.3),
-        headlineMedium: TextStyle(fontSize: scaleS(22), color: DarkColors.white100, height: 1.4),
-        headlineSmall: TextStyle(fontSize: scaleS(18), color: DarkColors.white100, height: 1.4),
-        titleLarge: TextStyle(fontSize: scaleS(15), color: DarkColors.white100, height: 1.5),
-        titleMedium: TextStyle(fontSize: scaleS(13), color: DarkColors.white100, height: 1.5),
-        bodyLarge: TextStyle(fontSize: scaleS(15), color: DarkColors.white80, height: 1.5),
-        bodyMedium: TextStyle(fontSize: scaleS(13), color: DarkColors.white80, height: 1.5),
-        bodySmall: TextStyle(fontSize: scaleS(11), color: DarkColors.white80, height: 1.5),
-        labelLarge: TextStyle(
-          fontSize: scaleS(13),
-          color: DarkColors.white100,
-          height: 1.2,
-          letterSpacing: 0.5,
-        ),
-        labelMedium: TextStyle(fontSize: scaleS(11), color: DarkColors.white40, height: 1.4),
-        labelSmall: TextStyle(
-          fontSize: scaleS(9),
-          color: DarkColors.white40,
-          height: 1.5,
-          letterSpacing: 1.5,
-        ),
+      headlineLarge: TextStyle(
+        fontSize: scaleS(20),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.4,
       ),
-      // 按钮主题
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: DarkColors.primary,
-          foregroundColor: DarkColors.black100,
-          elevation: 0,
-          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace24, vertical: metrics.kSpace12),
-          shape: RoundedRectangleBorder(borderRadius: metrics.radius8),
-          textStyle: TextStyle(
-            fontSize: scaleS(13),
-            fontWeight: FontWeight.w500,
-            height: 1.2,
-            letterSpacing: 0.5,
-          ),
-          side: BorderSide(color: DarkColors.primary, width: 1),
-        ),
+      headlineMedium: TextStyle(
+        fontSize: scaleS(18),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.45,
       ),
-
-      // 文本按钮主题
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: DarkColors.primary,
-          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16, vertical: metrics.kSpace8),
-          textStyle: TextStyle(
-            fontSize: scaleS(13),
-            fontWeight: FontWeight.w500,
-            height: 1.2,
-            letterSpacing: 0.5,
-          ),
-          side: BorderSide(color: DarkColors.primary, width: 1),
-        ),
+      headlineSmall: TextStyle(
+        fontSize: scaleS(16),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.5,
       ),
-
-      // 线框按钮主题
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: DarkColors.primary,
-          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace24, vertical: metrics.kSpace12),
-          shape: RoundedRectangleBorder(borderRadius: metrics.radius8),
-          textStyle: TextStyle(
-            fontSize: scaleS(13),
-            fontWeight: FontWeight.w500,
-            height: 1.2,
-            letterSpacing: 0.5,
-            color: LightColors.primary,
-          ),
-          side: BorderSide(color: DarkColors.primary, width: 1),
-        ),
+      titleLarge: TextStyle(
+        fontSize: scaleS(15),
+        fontWeight: FontWeight.w600,
+        color: s.textPrimary,
+        height: 1.5,
       ),
-
-      // 输入框主题
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: DarkColors.background2,
-        border: OutlineInputBorder(borderRadius: metrics.radius8, borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: metrics.radius8,
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: metrics.radius8,
-          borderSide: const BorderSide(color: DarkColors.primary, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: metrics.radius8,
-          borderSide: const BorderSide(color: DarkColors.red, width: 1),
-        ),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: metrics.kSpace16,
-          vertical: metrics.kSpace12,
-        ),
+      titleMedium: TextStyle(
+        fontSize: scaleS(14),
+        fontWeight: FontWeight.w500,
+        color: s.textPrimary,
+        height: 1.55,
       ),
-
-      // 图标主题
-      iconTheme: const IconThemeData(color: DarkColors.white80, size: 24),
-
-      // 分割线主题
-      dividerTheme: const DividerThemeData(color: DarkColors.white10, thickness: 1, space: 1),
-
-      hintColor: DarkColors.white40,
-    );
+      titleSmall: TextStyle(
+        fontSize: scaleS(13),
+        fontWeight: FontWeight.w600,
+        color: s.textSecondary,
+        height: 1.5,
+      ),
+      bodyLarge: TextStyle(
+        fontSize: scaleS(14),
+        fontWeight: FontWeight.w400,
+        color: s.textPrimary,
+        height: 1.7,
+      ),
+      bodyMedium: TextStyle(
+        fontSize: scaleS(13),
+        fontWeight: FontWeight.w400,
+        color: s.textSecondary,
+        height: 1.65,
+      ),
+      bodySmall: TextStyle(
+        fontSize: scaleS(12),
+        fontWeight: FontWeight.w400,
+        color: s.textTertiary,
+        height: 1.6,
+      ),
+      labelLarge: TextStyle(
+        fontSize: scaleS(13),
+        fontWeight: FontWeight.w500,
+        color: s.textPrimary,
+        height: 1.2,
+        letterSpacing: 0.2,
+      ),
+      labelMedium: TextStyle(
+        fontSize: scaleS(12),
+        fontWeight: FontWeight.w500,
+        color: s.textSecondary,
+        height: 1.4,
+      ),
+      labelSmall: TextStyle(
+        fontSize: scaleS(11),
+        fontWeight: FontWeight.w600,
+        color: s.textTertiary,
+        height: 1.5,
+        letterSpacing: 0.6,
+      ),
+    ).apply(fontFamily: _fontFamily);
   }
 
   static bool isLight(BuildContext context) {
     return Theme.of(context).brightness == Brightness.light;
   }
 
+  /// 侧边栏渐变底（保留旧签名，颜色改由语义层驱动）
+  /// 侧栏底色。
+  ///
+  /// 用"下沉表面"而不是玻璃色：玻璃 tint 在浅色模式合成后接近纯白，
+  /// 和卡片同色，侧栏读不出是一个独立面板。保留 LinearGradient 返回类型
+  /// 是为了兼容调用方，两帧同色即纯色。
   static LinearGradient sideBarTheme(BuildContext context, {int alpha = 255}) {
+    final s = AppSemantic.of(context);
+    final tint = s.surfaceSunken.withAlpha(alpha);
     return LinearGradient(
-      colors: isLight(context)
-          ? [const Color(0xFFF8F9FB).withAlpha(alpha), const Color(0xFFF8F9FB).withAlpha(alpha)]
-          : [const Color(0xFF20201E).withAlpha(alpha), const Color(0xFF1F1F1D).withAlpha(alpha)],
+      colors: [tint, tint],
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
     );
@@ -508,6 +731,105 @@ class AppTheme {
     _logger.info('[主题] 重新计算界面尺寸中...');
     metrics = ThemeMetrics();
     metricsVersion.value++;
+  }
+}
+
+/// 语义化文本样式（供共享组件与业务页面复用）
+///
+/// 项目规范文档一直引用 `AppTextStyles`，但此前并不存在——各页面因此各自
+/// 手搭字号/字重组合，形成 12 种"小节标题"。这里补齐，作为唯一的文本角色来源。
+class AppTextStyles {
+  AppTextStyles._();
+
+  /// 页面主标题
+  static TextStyle pageTitle(BuildContext context) =>
+      Theme.of(context).textTheme.headlineMedium!;
+
+  /// 所有手写样式的统一出口。
+  ///
+  /// 必须从主题字阶派生而不是裸 `TextStyle(...)`：裸构造会丢 fontFamily，
+  /// 项目自带字体就不生效了（历史上正是这个原因全站静默回退到系统字体）。
+  static TextStyle _role(
+    BuildContext context, {
+    required double fontSize,
+    required Color color,
+    FontWeight weight = FontWeight.w400,
+    double? height,
+    double? letterSpacing,
+  }) => Theme.of(context).textTheme.bodyMedium!.copyWith(
+    fontSize: fontSize,
+    fontWeight: weight,
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
+
+  /// 小节标题（原 12 种变体统一到此）
+  static TextStyle sectionTitle(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize15,
+    weight: FontWeight.w600,
+    color: AppSemantic.of(context).textPrimary,
+    height: 1.45,
+    letterSpacing: 0.1,
+  );
+
+  /// 卡片标题
+  static TextStyle cardTitle(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize13,
+    weight: FontWeight.w600,
+    color: AppSemantic.of(context).textPrimary,
+    height: 1.45,
+  );
+
+  /// 正文
+  static TextStyle body(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize13,
+    color: AppSemantic.of(context).textSecondary,
+    height: 1.6,
+  );
+
+  /// 次要说明文字
+  static TextStyle caption(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize11,
+    color: AppSemantic.of(context).textTertiary,
+    height: 1.5,
+  );
+
+  /// 分组标签 / 全大写小字（原侧边栏分组标题风格）
+  static TextStyle overline(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize10,
+    weight: FontWeight.w600,
+    color: AppSemantic.of(context).textTertiary,
+    height: 1.4,
+    letterSpacing: 0.9,
+  );
+
+  /// 数据大屏数字
+  static TextStyle metric(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize28,
+    weight: FontWeight.w600,
+    color: AppSemantic.of(context).textPrimary,
+    height: 1.15,
+    letterSpacing: -0.4,
+  );
+
+  /// 等宽（日志/路径/代码）
+  static TextStyle mono(BuildContext context, {double? size}) {
+    final s = AppSemantic.of(context);
+    return TextStyle(
+      fontFamily: 'Menlo',
+      fontFamilyFallback: const [' monospace ', 'Courier'],
+      fontSize: size ?? AppTheme.metrics.fontSize12,
+      fontWeight: FontWeight.w400,
+      color: s.textSecondary,
+      height: 1.55,
+    );
   }
 }
 
@@ -526,20 +848,46 @@ class ThemeMetrics {
   final BorderRadius radius22;
   final BorderRadius radius24;
   final BorderRadius radius25;
+  final BorderRadius radius28;
   final BorderRadius radius32;
+  final BorderRadius radius40;
   final BorderRadius radius100;
   final BorderRadius radius999;
+
+  // ── 语义圆角：调用点应优先使用这一组，而不是记数字 ──
+  /// 按钮 / 输入框等控件
+  final BorderRadius radiusControl;
+
+  /// 文本输入框
+  final BorderRadius radiusField;
+
+  /// 卡片 / 列表项
+  final BorderRadius radiusCard;
+
+  /// 面板 / 分栏容器
+  final BorderRadius radiusPanel;
+
+  /// 弹窗 / 抽屉等浮层
+  final BorderRadius radiusOverlay;
+
+  /// 胶囊（标签、徽标）
+  final BorderRadius radiusPill;
 
   final double fontSize9;
   final double fontSize10;
   final double fontSize11;
   final double fontSize12;
   final double fontSize13;
+  final double fontSize14;
   final double fontSize15;
+  final double fontSize16;
+  final double fontSize17;
   final double fontSize18;
   final double fontSize20;
   final double fontSize22;
+  final double fontSize24;
   final double fontSize28;
+  final double fontSize32;
   final double fontSize36;
   final double fontSize48;
   final double fontSize72;
@@ -562,6 +910,8 @@ class ThemeMetrics {
   final double kSpace40;
   final double kSpace44;
   final double kSpace48;
+  final double kSpace56;
+  final double kSpace64;
   final double kSpace80;
 
   // Padding aliases
@@ -610,9 +960,19 @@ class ThemeMetrics {
       radius22 = BorderRadius.all(Radius.circular(scaleW(22.r))),
       radius24 = BorderRadius.all(Radius.circular(scaleW(24.r))),
       radius25 = BorderRadius.all(Radius.circular(scaleW(25.r))),
+      radius28 = BorderRadius.all(Radius.circular(scaleW(28.r))),
       radius32 = BorderRadius.all(Radius.circular(scaleW(32.r))),
+      radius40 = BorderRadius.all(Radius.circular(scaleW(40.r))),
       radius100 = BorderRadius.all(Radius.circular(scaleW(100.r))),
       radius999 = BorderRadius.all(Radius.circular(scaleW(999.r))),
+
+      // 语义圆角复用已有数值，保证迁移前后观感一致
+      radiusControl = BorderRadius.all(Radius.circular(scaleW(9.r))),
+      radiusField = BorderRadius.all(Radius.circular(scaleW(11.r))),
+      radiusCard = BorderRadius.all(Radius.circular(scaleW(14.r))),
+      radiusPanel = BorderRadius.all(Radius.circular(scaleW(18.r))),
+      radiusOverlay = BorderRadius.all(Radius.circular(scaleW(22.r))),
+      radiusPill = BorderRadius.all(Radius.circular(scaleW(999.r))),
 
       iconSize12 = scaleSWithUserFont(12),
       iconSize13 = scaleSWithUserFont(13),
@@ -636,11 +996,16 @@ class ThemeMetrics {
       fontSize11 = scaleSWithUserFont(11),
       fontSize12 = scaleSWithUserFont(12),
       fontSize13 = scaleSWithUserFont(13),
+      fontSize14 = scaleSWithUserFont(14),
       fontSize15 = scaleSWithUserFont(15),
+      fontSize16 = scaleSWithUserFont(16),
+      fontSize17 = scaleSWithUserFont(17),
       fontSize18 = scaleSWithUserFont(18),
       fontSize20 = scaleSWithUserFont(20),
       fontSize22 = scaleSWithUserFont(22),
+      fontSize24 = scaleSWithUserFont(24),
       fontSize28 = scaleSWithUserFont(28),
+      fontSize32 = scaleSWithUserFont(32),
       fontSize36 = scaleSWithUserFont(36),
       fontSize48 = scaleSWithUserFont(48),
       fontSize72 = scaleSWithUserFont(72),
@@ -663,13 +1028,17 @@ class ThemeMetrics {
       kSpace40 = scaleW(40),
       kSpace44 = scaleW(44),
       kSpace48 = scaleW(48),
+      kSpace56 = scaleW(56),
+      kSpace64 = scaleW(64),
       kSpace80 = scaleW(80),
 
       boxShadow10 = (() {
         final ctx = navigatorKey.currentContext;
-        final isDark = ctx != null && Theme.of(ctx).brightness == Brightness.dark;
+        final s = ctx == null
+            ? AppSemantic.light
+            : AppSemantic.of(ctx);
         return BoxShadow(
-          color: isDark ? DarkColors.black10 : LightColors.black10,
+          color: s.shadowKey,
           blurRadius: scaleW(8),
           offset: Offset(0, scaleH(4)),
         );

@@ -1,454 +1,1053 @@
-import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/provider/main.dart';
-
-import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_chips.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
+import 'package:slime_works/core/widgets/glass_surface.dart';
+import 'package:slime_works/core/widgets/page_container.dart';
+import 'package:slime_works/core/widgets/section_header.dart';
 
-/// 主题演示页面
-/// 展示所有字体大小和颜色的效果
-class ThemePreviewScreen extends StatelessWidget {
+/// 设计系统总览（原"主题预览"）
+///
+/// 这是本次 UI 统一的验收工具：所有 token、组件、明暗差异、磨砂与投影
+/// 都在这一个页面里可比对。改一处主题定义，这里立刻能看出全站效果，
+/// 不必逐个页面翻。
+class ThemePreviewScreen extends StatefulWidget {
   const ThemePreviewScreen({super.key});
 
-  DesktopScreenProvider get desktopScreen => getIt.get<DesktopScreenProvider>();
+  @override
+  State<ThemePreviewScreen> createState() => _ThemePreviewScreenState();
+}
+
+class _ThemePreviewScreenState extends State<ThemePreviewScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
+    return ScreenChrome(
+      data: ScreenChromeData(
+        title: '设计系统总览',
+        actions: [
+          // 明暗切换：语义层是否真的自动解析，切一下就知道了
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('浅色')),
+              ButtonSegment(value: true, label: Text('深色')),
+            ],
+            selected: {s.isDark},
+            showSelectedIcon: false,
+            onSelectionChanged: (v) {
+              // 只写响应式状态：MyApp 的 build 里 Obx 会据此重建 theme/darkTheme。
+              // 不能用 Get.changeThemeMode——本项目用的是 MaterialApp.router，
+              // Get 并未持有 ThemeData 控制权，调用会抛异常。
+              AppTheme.themeModeObs.value = v.first ? ThemeMode.dark : ThemeMode.light;
+            },
+          ),
+          SizedBox(width: m.kSpace12),
+        ],
+      ),
+      child: Scaffold(
+        body: DefaultTabController(
+          length: 5,
+          child: Column(
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: m.kSpace24),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: s.hairline, width: scaleW(1))),
+                ),
+                child: const TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  dividerHeight: 0,
+                  tabs: [
+                    Tab(text: '色彩与表面'),
+                    Tab(text: '排版'),
+                    Tab(text: '组件'),
+                    Tab(text: '玻璃与投影'),
+                    Tab(text: '动效'),
+                  ],
+                ),
+              ),
+              const Expanded(
+                child: TabBarView(
+                  children: [
+                    _ColorTab(),
+                    _TypographyTab(),
+                    _ComponentsTab(),
+                    _GlassTab(),
+                    _MotionTab(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 各 Tab 的公共外壳：统一内距与最大宽度
+class _Pane extends StatelessWidget {
+  const _Pane({required this.children});
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-
-    /// 构建排版系统展示
-    Widget buildTypographySection(bool isDark) {
-      ThemeData theme = Theme.of(context);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '排版系统',
-            style: TextStyle(fontSize: AppTheme.metrics.fontSize22, height: 1.4,
-              color: isDark ? DarkColors.white100 : LightColors.black100,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-
-          SizedBox(height: AppTheme.metrics.kSpace16),
-          Obx(
-            () => Text(
-              "桌面尺寸: ${desktopScreen.width.value.toStringAsFixed(0)} x ${desktopScreen.height.value.toStringAsFixed(0)} (是否为移动端: ${desktopScreen.isMobile.value})",
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
-            ),
-          ),
-
-          SizedBox(height: AppTheme.metrics.kSpace16),
-
-          // H1 - H6
-          _buildTextStyleItem('H1', TextStyle(fontSize: AppTheme.metrics.fontSize72, height: 1.2,), '96px', isDark),
-          _buildTextStyleItem('H2', TextStyle(fontSize: AppTheme.metrics.fontSize48, height: 1.2,), '60px', isDark),
-          _buildTextStyleItem('H3', TextStyle(fontSize: AppTheme.metrics.fontSize36, height: 1.3,), '48px', isDark),
-          _buildTextStyleItem('H4', TextStyle(fontSize: AppTheme.metrics.fontSize28, height: 1.3,), '34px', isDark),
-          _buildTextStyleItem('H5', TextStyle(fontSize: AppTheme.metrics.fontSize22, height: 1.4), '24px', isDark),
-          _buildTextStyleItem('H6', TextStyle(fontSize: AppTheme.metrics.fontSize18, height: 1.4,), '20px', isDark),
-
-          Divider(height: AppTheme.metrics.kSpace32),
-
-          // Subtitle & Body
-          _buildTextStyleItem('Subtitle1', TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,), '16px', isDark),
-          _buildTextStyleItem('Subtitle2', TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,), '14px', isDark),
-          _buildTextStyleItem('Body1', TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5), '16px', isDark),
-          _buildTextStyleItem('Body2', TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5), '14px', isDark),
-          _buildTextStyleItem('Body3', TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.5,), '12px', isDark),
-
-          Divider(height: AppTheme.metrics.kSpace32),
-
-          _buildTextStyleItem(
-            'HeadlineLarge',
-            theme.textTheme.headlineLarge,
-            '${theme.textTheme.headlineLarge?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'headlineMedium',
-            theme.textTheme.headlineMedium,
-            '${theme.textTheme.headlineMedium?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'headlineSmall',
-            theme.textTheme.headlineSmall,
-            '${theme.textTheme.headlineSmall?.fontSize ?? 0}px',
-            isDark,
-          ),
-
-          Divider(height: AppTheme.metrics.kSpace32),
-
-          _buildTextStyleItem(
-            'labelLarge',
-            theme.textTheme.labelLarge,
-            '${theme.textTheme.labelLarge?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'labelMedium',
-            theme.textTheme.labelMedium,
-            '${theme.textTheme.labelMedium?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'labelSmall',
-            theme.textTheme.labelSmall,
-            '${theme.textTheme.labelSmall?.fontSize ?? 0}px',
-            isDark,
-          ),
-
-          Divider(height: AppTheme.metrics.kSpace32),
-
-          _buildTextStyleItem(
-            'bodyLarge',
-            theme.textTheme.bodyLarge,
-            '${theme.textTheme.bodyLarge?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'bodyMedium',
-            theme.textTheme.bodyMedium,
-            '${theme.textTheme.bodyMedium?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'bodySmall',
-            theme.textTheme.bodySmall,
-            '${theme.textTheme.bodySmall?.fontSize ?? 0}px',
-            isDark,
-          ),
-
-          Divider(height: AppTheme.metrics.kSpace32),
-
-          _buildTextStyleItem(
-            'titleLarge',
-            theme.textTheme.titleLarge,
-            '${theme.textTheme.titleLarge?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'titleMedium',
-            theme.textTheme.titleMedium,
-            '${theme.textTheme.titleMedium?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'titleSmall',
-            theme.textTheme.titleSmall,
-            '${theme.textTheme.titleSmall?.fontSize ?? 0}px',
-            isDark,
-          ),
-
-          Divider(height: AppTheme.metrics.kSpace32),
-
-          _buildTextStyleItem(
-            'displayLarge',
-            theme.textTheme.displayLarge,
-            '${theme.textTheme.displayLarge?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'displayMedium',
-            theme.textTheme.displayMedium,
-            '${theme.textTheme.displayMedium?.fontSize ?? 0}px',
-            isDark,
-          ),
-          _buildTextStyleItem(
-            'displaySmall',
-            theme.textTheme.displaySmall,
-            '${theme.textTheme.displaySmall?.fontSize ?? 0}px',
-            isDark,
-          ),
-        ],
-      );
-    }
-
-    return ScreenChrome(
-      data: const ScreenChromeData(title: '主题预览'),
-      child: Scaffold(
-        body: SingleChildScrollView(
-          padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 切换系统主题
-              SwitchListTile(
-                title: Text(
-                  '切换系统主题',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,
-                    color: isDark ? DarkColors.white100 : LightColors.black100,
-                  ),
-                ),
-                value: Get.isDarkMode,
-                onChanged: (value) {
-                  if (value) {
-                    Get.changeThemeMode(ThemeMode.dark);
-                  } else {
-                    Get.changeThemeMode(ThemeMode.light);
-                  }
-                },
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace32),
-
-              // 字体大小展示
-              buildTypographySection(isDark),
-
-              SizedBox(height: AppTheme.metrics.kSpace48),
-
-              // 颜色展示
-              _buildColorsSection(isDark),
-
-              SizedBox(height: AppTheme.metrics.kSpace48),
-
-              // 组件展示
-              _buildComponentsSection(isDark),
-            ],
-          ),
+    return SingleChildScrollView(
+      child: ContentContainer(
+        width: ContentWidth.wide,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final c in children) ...[c, SizedBox(height: AppTheme.metrics.kSpace32)],
+          ],
         ),
       ),
     );
   }
+}
 
-  /// 构建单个文本样式展示项
-  Widget _buildTextStyleItem(String name, TextStyle? style, String size, bool isDark) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              name,
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
-            ),
-          ),
-          SizedBox(
-            width: 80,
-            child: Text(
-              size,
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white40 : LightColors.black40),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              'Typography 排版示例',
-              style: style?.copyWith(color: isDark ? DarkColors.white100 : LightColors.black100),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _Block extends StatelessWidget {
+  const _Block({required this.title, required this.child, this.note});
+  final String title;
+  final Widget child;
+  final String? note;
 
-  /// 构建颜色系统展示
-  Widget _buildColorsSection(bool isDark) {
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '颜色系统',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize22, height: 1.4,
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: AppTheme.metrics.kSpace16),
+        SectionHeader(title: title, subtitle: note),
+        child,
+        SizedBox(height: m.kSpace8),
+      ],
+    );
+  }
+}
 
-        // 黑白色系
-        Text(
-          '黑白色系',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-          ),
-        ),
-        SizedBox(height: AppTheme.metrics.kSpace12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+// ───────────────────────────── 色彩 ─────────────────────────────
+
+/// 语义色经主题插值后可能带小数通道，这里统一成 #RRGGBB 展示
+String _colorHex(Color c) {
+  String part(double v) => v.clamp(0, 1).round()
+      .toRadixString(16)
+      .padLeft(2, '0')
+      .toUpperCase();
+  return '#${part(c.r)}${part(c.g)}${part(c.b)}';
+}
+
+
+class _ColorTab extends StatelessWidget {
+  const _ColorTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
+    Widget swatch(String name, Color color, {String? hex}) {
+      return SizedBox(
+        width: scaleW(150),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isDark) ...[
-              _buildColorBox('White 100%', DarkColors.white100),
-              _buildColorBox('White 80%', DarkColors.white80),
-              _buildColorBox('White 40%', DarkColors.white40),
-              _buildColorBox('White 20%', DarkColors.white20),
-              _buildColorBox('White 15%', DarkColors.white15),
-              _buildColorBox('White 10%', DarkColors.white10),
-            ] else ...[
-              _buildColorBox('Black 100%', LightColors.black100),
-              _buildColorBox('Black 80%', LightColors.black80),
-              _buildColorBox('Black 40%', LightColors.black40),
-              _buildColorBox('Black 20%', LightColors.black20),
-              _buildColorBox('Black 10%', LightColors.black10),
-            ],
+            Container(
+              height: scaleW(52),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: m.radius8,
+                border: Border.all(color: s.border, width: scaleW(1)),
+              ),
+            ),
+            SizedBox(height: m.kSpace6),
+            Text(name, style: AppTextStyles.caption(context)),
+            Text(
+              hex ?? _colorHex(color),
+              style: AppTextStyles.mono(context, size: m.fontSize10),
+            ),
           ],
         ),
+      );
+    }
 
-        SizedBox(height: AppTheme.metrics.kSpace24),
+    Widget row(List<Widget> children) => Wrap(
+      spacing: m.kSpace16,
+      runSpacing: m.kSpace16,
+      children: children,
+    );
 
-        // 主色和次要颜色
-        Text(
-          '主色与次要颜色',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,
-            color: isDark ? DarkColors.white100 : LightColors.black100,
+    return _Pane(
+      children: [
+        _Block(
+          title: '表面层次',
+          note: '同一色相下的小幅明度阶梯。页面深度靠它，而不是靠彩色块。',
+          child: row([
+            swatch('canvas 画布', s.canvas),
+            swatch('surface 表面', s.surface),
+            swatch('raised 浮起', s.surfaceRaised),
+            swatch('sunken 下沉', s.surfaceSunken),
+            swatch('hover 悬停', s.surfaceHover),
+            swatch('active 选中', s.surfaceActive),
+          ]),
+        ),
+        _Block(
+          title: '描边三档',
+          note:
+              '历史上 black1/white1 与 black10/white10 取值相同（都是 0x1A），'
+              '发丝线实际以 10% 绘制，因此全站分割线偏重。现已分离。',
+          child: row([
+            _BorderedBox('hairline 发丝线', s.hairline),
+            _BorderedBox('border 常规', s.border),
+            _BorderedBox('borderStrong 强调', s.borderStrong),
+          ]),
+        ),
+        _Block(
+          title: '文字层级',
+          child: row([
+            swatch('textPrimary', s.textPrimary),
+            swatch('textSecondary', s.textSecondary),
+            swatch('textTertiary', s.textTertiary),
+            swatch('textDisabled', s.textDisabled),
+          ]),
+        ),
+        _Block(
+          title: '强调色',
+          note:
+              '亮色下主色从品牌软紫自动加深到可承载白字的深度'
+              '（#A89FEE 对白底对比度仅 1.9，直接用会发灰）。',
+          child: row([
+            swatch('accent 强调', s.accent),
+            swatch('accentText 文字', s.accentText),
+            swatch('accentContainer 容器', s.accentContainer),
+            swatch('brand.soft 品牌软紫', AppBrand.soft),
+          ]),
+        ),
+        _Block(
+          title: '语义状态色',
+          note: '取代 259 处 Colors.green / orange / red 裸用；容器底与文字同源于一个角色。',
+          child: row([
+            for (final tone in Tone.values)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  StatusChip(label: tone.name, tone: tone, showDot: true),
+                  SizedBox(height: m.kSpace8),
+                  StatusChip(label: tone.name, tone: tone, dense: true),
+                ],
+              ),
+          ]),
+        ),
+        _Block(
+          title: '自定义主题色跟随',
+          note: '改主色时语义层必须同步，否则新组件不动、只有老代码变——这是原实现的断层。',
+          child: _AccentPickerRow(color: AppTheme.accentColorObs.value),
+        ),
+        _Block(
+          title: '字号缩放跟随',
+          child: Obx(
+            () => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('当前 ${AppTheme.fontScaleObs.value.toStringAsFixed(2)}x'),
+                SizedBox(height: m.kSpace8),
+                Slider(
+                  value: AppTheme.fontScaleObs.value,
+                  min: 0.8,
+                  max: 1.4,
+                  divisions: 12,
+                  onChanged: (v) => AppTheme.fontScaleObs.value = v,
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(height: AppTheme.metrics.kSpace12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _buildColorBox('Primary', isDark ? DarkColors.primary : LightColors.primary),
-            _buildColorBox('Purple', isDark ? DarkColors.purple : LightColors.purple),
-            _buildColorBox('Indigo', isDark ? DarkColors.indigo : LightColors.indigo),
-            _buildColorBox('Blue', isDark ? DarkColors.blue : LightColors.blue),
-            _buildColorBox('Cyan', isDark ? DarkColors.cyan : LightColors.cyan),
-            _buildColorBox('Mint', isDark ? DarkColors.mint : LightColors.mint),
-            _buildColorBox('Green', isDark ? DarkColors.green : LightColors.green),
-            _buildColorBox('Yellow', isDark ? DarkColors.yellow : LightColors.yellow),
-            _buildColorBox('Orange', isDark ? DarkColors.orange : LightColors.orange),
-            _buildColorBox('Red', isDark ? DarkColors.red : LightColors.red),
-          ],
-        ),
-
-        SizedBox(height: AppTheme.metrics.kSpace24),
-
-        // 背景色
-        Text(
-          '背景色',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5,
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-          ),
-        ),
-        SizedBox(height: AppTheme.metrics.kSpace12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _buildColorBox(
-              'Background 1',
-              isDark ? DarkColors.background1 : LightColors.background1,
-            ),
-            _buildColorBox(
-              'Background 2',
-              isDark ? DarkColors.background2 : LightColors.background2,
-            ),
-            _buildColorBox(
-              'Background 3',
-              isDark ? DarkColors.background3 : LightColors.background3,
-            ),
-            _buildColorBox(
-              'Background 4',
-              isDark ? DarkColors.background4 : LightColors.background4,
-            ),
-            _buildColorBox(
-              'Background 5',
-              isDark ? DarkColors.background5 : LightColors.background5,
-            ),
-            _buildColorBox(
-              'Background 6',
-              isDark ? DarkColors.background6 : LightColors.background6,
-            ),
-          ],
         ),
       ],
     );
   }
 
-  /// 构建颜色块
-  Widget _buildColorBox(String name, Color color) {
-    return Container(
-      width: 150,
-      height: 80,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: AppTheme.metrics.radius8,
-        border: Border.all(color: Colors.grey.withAlpha(77), width: 1),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        name,
-        style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-          color: _getContrastColor(color),
-          fontWeight: FontWeight.w500,
-        ),
+}
+
+class _BorderedBox extends StatelessWidget {
+  const _BorderedBox(this.label, this.borderColor);
+  final String label;
+  final Color borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return SizedBox(
+      width: scaleW(180),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: scaleW(52),
+            decoration: BoxDecoration(
+              color: s.surface,
+              borderRadius: m.radius8,
+              border: Border.all(color: borderColor, width: scaleW(1)),
+            ),
+          ),
+          SizedBox(height: m.kSpace6),
+          Text(label, style: AppTextStyles.caption(context)),
+        ],
       ),
     );
   }
+}
 
-  /// 获取对比色（用于文本显示）
-  Color _getContrastColor(Color color) {
-    final luminance = color.computeLuminance();
-    return luminance > 0.5 ? Colors.black : Colors.white;
-  }
+class _AccentPickerRow extends StatelessWidget {
+  const _AccentPickerRow({required this.color});
+  final Color color;
 
-  /// 构建组件展示
-  Widget _buildComponentsSection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  static const List<Color> _presets = [
+    Color(0xFFA89FEE),
+    Color(0xFF6F5FD9),
+    Color(0xFF6FB8E8),
+    Color(0xFF82D7BB),
+    Color(0xFFF5A569),
+    Color(0xFFFF6C74),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return Wrap(
+      spacing: m.kSpace10,
+      runSpacing: m.kSpace10,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(
-          '组件示例',
-          style: TextStyle(fontSize: AppTheme.metrics.fontSize22, height: 1.4,
-            color: isDark ? DarkColors.white100 : LightColors.black100,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: AppTheme.metrics.kSpace16),
-
-        // 按钮
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            ElevatedButton(onPressed: () {}, child: const Text('主要按钮')),
-            TextButton(onPressed: () {}, child: const Text('文本按钮')),
-            OutlinedButton(onPressed: () {}, child: const Text('轮廓按钮')),
-          ],
-        ),
-
-        SizedBox(height: AppTheme.metrics.kSpace24),
-
-        // 输入框
-        const SizedBox(
-          width: 300,
-          child: TextField(
-            decoration: InputDecoration(
-              labelText: '标签',
-              hintText: '请输入内容...',
-              prefixIcon: Icon(Icons.search),
+        for (final c in _presets)
+          GestureDetector(
+            onTap: () => AppTheme.accentColorObs.value = c,
+            child: Container(
+              width: scaleW(28),
+              height: scaleW(28),
+              decoration: BoxDecoration(
+                color: c,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: c == color ? Colors.black : Colors.transparent,
+                  width: scaleW(2),
+                ),
+              ),
             ),
           ),
+        Text('当前：${_colorHex(color)}', style: AppTextStyles.caption(context)),
+      ],
+    );
+  }
+
+}
+
+// ───────────────────────────── 排版 ─────────────────────────────
+
+class _TypographyTab extends StatelessWidget {
+  const _TypographyTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+
+    Widget item(String role, TextStyle? style, String source) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: m.kSpace8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            SizedBox(
+              width: scaleW(120),
+              child: Text(role, style: AppTextStyles.caption(context)),
+            ),
+            SizedBox(
+              width: scaleW(110),
+              child: Text(source, style: AppTextStyles.mono(context, size: m.fontSize10)),
+            ),
+            Expanded(
+              child: Text('SlimeWorks 设计系统 Aa 0123456789', style: style),
+            ),
+          ],
         ),
+      );
+    }
 
-        SizedBox(height: AppTheme.metrics.kSpace24),
+    return _Pane(
+      children: [
+        _Block(
+          title: '语义文本角色',
+          note: '规范文档一直引用 AppTextStyles 但它此前并不存在，各页因此手搭字号——这是 12 种小节标题的成因。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              item('pageTitle', AppTextStyles.pageTitle(context), 'AppTextStyles'),
+              item('sectionTitle', AppTextStyles.sectionTitle(context), 'AppTextStyles'),
+              item('cardTitle', AppTextStyles.cardTitle(context), 'AppTextStyles'),
+              item('body', AppTextStyles.body(context), 'AppTextStyles'),
+              item('caption', AppTextStyles.caption(context), 'AppTextStyles'),
+              item('overline', AppTextStyles.overline(context), 'AppTextStyles'),
+              item('metric', AppTextStyles.metric(context), 'AppTextStyles'),
+            ],
+          ),
+        ),
+        _Block(
+          title: 'Material 文本槽位',
+          note: '明暗两套主题现在共用同一份定义，字重不再一边 w500 一边缺省。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              item('displayLarge', theme.textTheme.displayLarge, 'textTheme'),
+              item('displaySmall', theme.textTheme.displaySmall, 'textTheme'),
+              item('headlineMedium', theme.textTheme.headlineMedium, 'textTheme'),
+              item('titleLarge', theme.textTheme.titleLarge, 'textTheme'),
+              item('titleMedium', theme.textTheme.titleMedium, 'textTheme'),
+              item('bodyLarge', theme.textTheme.bodyLarge, 'textTheme'),
+              item('bodyMedium', theme.textTheme.bodyMedium, 'textTheme'),
+              item('bodySmall', theme.textTheme.bodySmall, 'textTheme'),
+              item('labelSmall', theme.textTheme.labelSmall, 'textTheme'),
+            ],
+          ),
+        ),
+        _Block(
+          title: '字号令牌',
+          child: Wrap(
+            spacing: m.kSpace16,
+            runSpacing: m.kSpace10,
+            children: [
+              for (final e in <String, double>{
+                'fontSize9': m.fontSize9,
+                'fontSize10': m.fontSize10,
+                'fontSize11': m.fontSize11,
+                'fontSize12': m.fontSize12,
+                'fontSize13': m.fontSize13,
+                'fontSize14': m.fontSize14,
+                'fontSize15': m.fontSize15,
+                'fontSize16': m.fontSize16,
+                'fontSize18': m.fontSize18,
+                'fontSize20': m.fontSize20,
+                'fontSize24': m.fontSize24,
+                'fontSize28': m.fontSize28,
+              }.entries)
+                Text('${e.key} · ${e.value.toStringAsFixed(1)}',
+                    style: TextStyle(fontSize: e.value, color: AppSemantic.of(context).textSecondary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-        // 卡片
-        Card(
-          child: Padding(
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '卡片标题',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize18, height: 1.4,
-                    color: isDark ? DarkColors.white100 : LightColors.black100,
-                  ),
+// ───────────────────────────── 组件 ─────────────────────────────
+
+class _ComponentsTab extends StatelessWidget {
+  const _ComponentsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
+    return _Pane(
+      children: [
+        _Block(
+          title: '按钮四档',
+          note:
+              'FilledButton 原本用了 54 次却没有对应主题，落到 M3 默认胶囊圆角，'
+              '与 Elevated/Outlined 的 radius8 不一致；TextButton 主题被加了描边，'
+              '导致 134 个文字按钮看起来像线框按钮。',
+          child: Wrap(
+            spacing: m.kSpace12,
+            runSpacing: m.kSpace12,
+            children: [
+              ElevatedButton(onPressed: () {}, child: const Text('Elevated')),
+              FilledButton(onPressed: () {}, child: const Text('Filled')),
+              OutlinedButton(onPressed: () {}, child: const Text('Outlined')),
+              TextButton(onPressed: () {}, child: const Text('Text')),
+              const FilledButton(onPressed: null, child: Text('Disabled')),
+            ],
+          ),
+        ),
+        _Block(
+          title: '图标按钮 / 选择控件',
+          child: Wrap(
+            spacing: m.kSpace12,
+            runSpacing: m.kSpace12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const ToolIconButton(icon: Icons.search_outlined),
+              const ToolIconButton(icon: Icons.tune, selected: true),
+              const ToolIconButton(icon: Icons.more_horiz),
+              Switch(value: true, onChanged: (_) {}),
+              Switch(value: false, onChanged: (_) {}),
+              Checkbox(value: true, onChanged: (_) {}),
+              Checkbox(value: null, onChanged: (_) {}),
+              RadioGroup<int>(
+                groupValue: 0,
+                onChanged: (_) {},
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [Radio(value: 0), Radio(value: 1)],
                 ),
-                SizedBox(height: AppTheme.metrics.kSpace8),
-                Text(
-                  '这是一个示例卡片，展示了卡片的样式效果。',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
-                    color: isDark ? DarkColors.white80 : LightColors.black80,
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '输入框',
+          child: SizedBox(
+            width: scaleW(320),
+            child: Column(
+              children: [
+                const TextField(
+                  decoration: InputDecoration(labelText: '标签', hintText: '占位文本'),
+                ),
+                SizedBox(height: m.kSpace12),
+                const TextField(
+                  decoration: InputDecoration(
+                    labelText: '错误态',
+                    errorText: '这里需要填写',
                   ),
                 ),
               ],
             ),
+          ),
+        ),
+        _Block(
+          title: '卡片',
+          child: Row(
+            children: [
+              Expanded(
+                child: AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('标准卡片', style: AppTextStyles.cardTitle(context)),
+                      SizedBox(height: m.kSpace6),
+                      Text('表面色 + 发丝描边，无投影。', style: AppTextStyles.body(context)),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: AppCard(
+                  elevated: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('抬升卡片', style: AppTextStyles.cardTitle(context)),
+                      SizedBox(height: m.kSpace6),
+                      Text('叠加语义投影，跟随明暗主题。', style: AppTextStyles.body(context)),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: AppCard(
+                  selected: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('选中卡片', style: AppTextStyles.cardTitle(context)),
+                      SizedBox(height: m.kSpace6),
+                      Text('强调色容器底 + 强调描边。', style: AppTextStyles.body(context)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '统计卡',
+          note: '原先 _StatCardHover / StatCard / _StatChip / _InfoChip / _StatusPill 等 6 种实现。',
+          child: Row(
+            children: [
+              Expanded(
+                child: StatCard(
+                  label: '媒体总数',
+                  value: '12,480',
+                  icon: Icons.photo_library_outlined,
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: StatCard(
+                  label: '下载中',
+                  value: '8',
+                  hint: '8 项进行中 · 2 排队',
+                  icon: Icons.downloading_rounded,
+                  tone: s.info,
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: StatCard(
+                  label: '异常',
+                  value: '3',
+                  icon: Icons.error_outline_rounded,
+                  tone: s.danger,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '标签与徽标',
+          child: Wrap(
+            spacing: m.kSpace10,
+            runSpacing: m.kSpace10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const TagChip(label: '科幻'),
+              const TagChip(label: '已选', selected: true),
+              const TagChip(label: '可移除', onRemoved: null),
+              const CountBadge(count: 12),
+              const CountBadge(count: 240),
+              const CountBadge(count: 3, tone: Tone.danger),
+              const StatusDot(tone: Tone.success, pulsing: true),
+            ],
+          ),
+        ),
+        _Block(
+          title: '空状态 / 加载 / 骨架',
+          note: '10 份各写各的空状态收敛到此；加载改骨架屏，避免列表高度跳动。',
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AppCard(
+                  padding: EdgeInsets.zero,
+                  child: SizedBox(
+                    height: scaleW(180),
+                    child: EmptyState(
+                      title: '还没有内容',
+                      description: '导入本地文件或连接节点后即可开始浏览。',
+                      icon: Icons.folder_open_outlined,
+                      action: const FilledButton(
+                        onPressed: null,
+                        child: Text('去导入'),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SkeletonBox(height: 18, width: 140),
+                      SizedBox(height: m.kSpace10),
+                      const SkeletonBox(height: 12),
+                      SizedBox(height: m.kSpace6),
+                      const SkeletonBox(height: 12, width: 200),
+                      SizedBox(height: m.kSpace14),
+                      const SkeletonBox(height: 60, borderRadius: null),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '分栏与内容宽度',
+          note: '18 种 maxWidth 收敛为 4 档语义档位。',
+          child: Wrap(
+            spacing: m.kSpace10,
+            runSpacing: m.kSpace10,
+            children: [for (final w in ContentWidth.values) TagChip(label: '${w.name} · ${w.rawMaxWidth}')],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ───────────────────────────── 玻璃 ─────────────────────────────
+
+class _GlassTab extends StatefulWidget {
+  const _GlassTab();
+
+  @override
+  State<_GlassTab> createState() => _GlassTabState();
+}
+
+class _GlassTabState extends State<_GlassTab> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
+    return _Pane(
+      children: [
+        _Block(
+          title: '圆角令牌',
+          note: '语义命名，调用点不必再记数字；music_player 等模块曾手写 6 种未走令牌的圆角。',
+          child: Wrap(
+            spacing: m.kSpace16,
+            runSpacing: m.kSpace16,
+            children: [
+              _radiusBox('radiusControl', m.radiusControl),
+              _radiusBox('radiusField', m.radiusField),
+              _radiusBox('radiusCard', m.radiusCard),
+              _radiusBox('radiusPanel', m.radiusPanel),
+              _radiusBox('radiusOverlay', m.radiusOverlay),
+              _radiusBox('radiusPill', m.radiusPill),
+            ],
+          ),
+        ),
+        _Block(
+          title: '间距节奏',
+          child: Wrap(
+            spacing: m.kSpace12,
+            runSpacing: m.kSpace8,
+            crossAxisAlignment: WrapCrossAlignment.end,
+            children: [
+              for (final e in <String, double>{
+                'kSpace2': m.kSpace2,
+                'kSpace4': m.kSpace4,
+                'kSpace6': m.kSpace6,
+                'kSpace8': m.kSpace8,
+                'kSpace12': m.kSpace12,
+                'kSpace16': m.kSpace16,
+                'kSpace20': m.kSpace20,
+                'kSpace24': m.kSpace24,
+                'kSpace32': m.kSpace32,
+              }.entries)
+                Column(
+                  children: [
+                    Container(
+                      width: e.value * 2,
+                      height: scaleW(20),
+                      color: s.accent.withValues(alpha: 0.5),
+                    ),
+                    SizedBox(height: m.kSpace4),
+                    Text('${e.key}\n${e.value.toStringAsFixed(1)}',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.mono(context, size: m.fontSize10)),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '抬升层级',
+          child: Row(
+            children: [
+              for (final e in Elevation.values) ...[
+                Expanded(
+                  child: Container(
+                    height: scaleW(72),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.surface,
+                      borderRadius: m.radius8,
+                      boxShadow: s.elevation(e),
+                    ),
+                    child: Text(e.name, style: AppTextStyles.caption(context)),
+                  ),
+                ),
+                SizedBox(width: m.kSpace16),
+              ],
+            ],
+          ),
+        ),
+        _Block(
+          title: '磨砂玻璃：面板透出背后内容',
+          note:
+              '下方列表会滚动，玻璃面板浮在其上。看到列表在面板下变得柔和即为生效。'
+              '侧边栏透出"桌面"需再叠一层原生 NSVisualEffectView（窗口级）。',
+          child: SizedBox(
+            height: scaleW(300),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ListView.builder(
+                    controller: _controller,
+                    itemCount: 40,
+                    itemBuilder: (context, i) => Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: m.kSpace8,
+                        vertical: m.kSpace4,
+                      ),
+                      child: Container(
+                        height: scaleW(28),
+                        alignment: Alignment.centerLeft,
+                        padding: EdgeInsets.symmetric(horizontal: m.kSpace10),
+                        decoration: BoxDecoration(
+                          color: i.isEven ? s.surfaceSunken : s.surfaceHover,
+                          borderRadius: m.radius6,
+                        ),
+                        child: Text('列表行 $i', style: AppTextStyles.caption(context)),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: scaleW(40),
+                  right: scaleW(40),
+                  top: scaleW(70),
+                  child: GlassSurface(
+                    child: Padding(
+                      padding: EdgeInsets.all(m.kSpace20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('GlassSurface', style: AppTextStyles.cardTitle(context)),
+                          SizedBox(height: m.kSpace6),
+                          Text(
+                            'tint + blur ${s.glassBlur.round()} + 发丝描边',
+                            style: AppTextStyles.caption(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: scaleW(24),
+                  bottom: scaleW(24),
+                  child: GlassFloat(
+                    child: Row(
+                      children: [
+                        const ToolIconButton(icon: Icons.play_arrow_rounded),
+                        const ToolIconButton(icon: Icons.skip_next_rounded),
+                        SizedBox(width: m.kSpace6),
+                        Text('悬浮工具条', style: AppTextStyles.caption(context)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        _Block(
+          title: '与不透明表面对比',
+          child: Row(
+            children: [
+              Expanded(
+                child: AppCard(
+                  child: Text('不透明表面', style: AppTextStyles.caption(context)),
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: GlassSurface(
+                  padding: EdgeInsets.all(m.kSpace16),
+                  child: Text('玻璃表面', style: AppTextStyles.caption(context)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _radiusBox(String label, BorderRadius radius) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Column(
+      children: [
+        Container(
+          width: scaleW(72),
+          height: scaleW(48),
+          decoration: BoxDecoration(
+            color: s.accentContainer,
+            borderRadius: radius,
+            border: Border.all(color: s.accentContainerBorder, width: scaleW(1)),
+          ),
+        ),
+        SizedBox(height: m.kSpace6),
+        Text(label, style: AppTextStyles.caption(context)),
+      ],
+    );
+  }
+}
+
+// ───────────────────────────── 动效 ─────────────────────────────
+
+class _MotionTab extends StatefulWidget {
+  const _MotionTab();
+
+  @override
+  State<_MotionTab> createState() => _MotionTabState();
+}
+
+class _MotionTabState extends State<_MotionTab> {
+  bool _expanded = false;
+  int _replay = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
+    return _Pane(
+      children: [
+        _Block(
+          title: '时长与曲线',
+          note: '原先满屏 250/280/300/400/600ms 各写各的，观感忽快忽慢。',
+          child: Wrap(
+            spacing: m.kSpace12,
+            runSpacing: m.kSpace12,
+            children: [
+              for (final e in <String, Duration>{
+                'instant': AppMotion.instant,
+                'fast': AppMotion.fast,
+                'base': AppMotion.base,
+                'slow': AppMotion.slow,
+                'emphasis': AppMotion.emphasis,
+              }.entries)
+                StatusChip(label: '${e.key} · ${e.value.inMilliseconds}ms', tone: Tone.accent),
+            ],
+          ),
+        ),
+        _Block(
+          title: '悬停：改底色而非缩放',
+          note: '卡片 hover 用 1.04 缩放会让整排内容抖动重叠，是廉价感主要来源。',
+          child: Row(
+            children: [
+              Expanded(
+                child: Hoverable(
+                  onTap: () {},
+                  borderRadius: m.radiusCard,
+                  child: Container(
+                    height: scaleW(72),
+                    alignment: Alignment.center,
+                    child: Text('Hoverable（底色）', style: AppTextStyles.caption(context)),
+                  ),
+                ),
+              ),
+              SizedBox(width: m.kSpace16),
+              Expanded(
+                child: AppCard(
+                  onTap: () {},
+                  child: Text('AppCard（自带悬停态）', style: AppTextStyles.caption(context)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '展开 / 收起',
+          child: AppCard(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SectionHeader(
+                  title: '点击切换',
+                  subtitle: 'duration=${AppMotion.base.inMilliseconds}ms · emphasizedDecelerate',
+                  trailing: AnimatedRotation(
+                    duration: AppMotion.base,
+                    curve: AppMotion.standard,
+                    turns: _expanded ? 0.25 : 0,
+                    child: Icon(Icons.chevron_right, size: m.iconSize18, color: s.textTertiary),
+                  ),
+                ),
+                AnimatedSize(
+                  duration: AppMotion.base,
+                  curve: AppMotion.decelerate,
+                  alignment: Alignment.topCenter,
+                  child: _expanded
+                      ? Padding(
+                          padding: EdgeInsets.only(bottom: m.kSpace8),
+                          child: Text(
+                            '展开后的内容。AnimatedSize 配 topCenter 可避免收起时向上跳。',
+                            style: AppTextStyles.body(context),
+                          ),
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
+              ],
+            ),
+          ),
+        ),
+        _Block(
+          title: '交错入场',
+          note: '取代各页手写的 Future.delayed(300 + index * 80)——那种写法会造成可点击但无内容的空窗。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _replay++),
+                child: const Text('重播动画'),
+              ),
+              SizedBox(height: m.kSpace12),
+              KeyedSubtree(
+                key: ValueKey('stagger-$_replay'),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < 6; i++)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(right: i == 5 ? 0 : m.kSpace10),
+                          child: StaggerEntrance(
+                            index: i,
+                            child: Container(
+                              height: scaleW(56),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: s.accentContainer,
+                                borderRadius: m.radius8,
+                                border: Border.all(
+                                  color: s.accentContainerBorder,
+                                  width: scaleW(1),
+                                ),
+                              ),
+                              child: Text('$i', style: AppTextStyles.caption(context)),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '脉冲状态点',
+          child: Wrap(
+            spacing: m.kSpace20,
+            runSpacing: m.kSpace12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const StatusDot(tone: Tone.success, pulsing: true),
+              const StatusDot(tone: Tone.warning, pulsing: true),
+              const StatusDot(tone: Tone.danger, pulsing: true),
+              Text('用于节点在线、下载中等持续状态', style: AppTextStyles.caption(context)),
+            ],
           ),
         ),
       ],

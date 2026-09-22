@@ -976,7 +976,7 @@ class _CollectionLibraryScreenState
               onDragStarted: () {
                 developer.log('dragStarted (desktop) id=${item.id}', name: '库-拖拽');
               },
-              feedback: _buildDragFeedback(item),
+              feedback: _buildDragFeedback(context, item),
               childWhenDragging: Opacity(opacity: 0.3, child: child),
               child: child,
             ),
@@ -992,7 +992,7 @@ class _CollectionLibraryScreenState
                 developer.log('dragStarted (mobile) id=${item.id}', name: '库-拖拽');
                 if (!isSelecting) viewModel.enterSelection(item.id);
               },
-              feedback: _buildDragFeedback(item),
+              feedback: _buildDragFeedback(context, item),
               childWhenDragging: Opacity(opacity: 0.3, child: child),
               child: child,
             ),
@@ -1039,7 +1039,7 @@ class _CollectionLibraryScreenState
     return const SizedBox.shrink();
   }
 
-  Widget _buildDragFeedback(LibraryItem item) {
+  Widget _buildDragFeedback(BuildContext context, LibraryItem item) {
     // 简化并明确括号/层级，减少语法错误风险
     if (item is LibraryBookItem) {
       final meta = item.metadata;
@@ -1084,6 +1084,8 @@ class _CollectionLibraryScreenState
         child: Opacity(
           opacity: 0.85,
           child: Material(
+            // canvasColor 现为透明，拖拽浮影需要自己铺底
+            color: Theme.of(context).colorScheme.surface,
             elevation: 12,
             borderRadius: AppTheme.metrics.radius8,
             clipBehavior: Clip.antiAlias,
@@ -1129,6 +1131,8 @@ class _CollectionLibraryScreenState
         child: Opacity(
           opacity: 0.85,
           child: Material(
+            // canvasColor 现为透明，拖拽浮影需要自己铺底
+            color: Theme.of(context).colorScheme.surface,
             elevation: 12,
             borderRadius: AppTheme.metrics.radius8,
             child: SizedBox(

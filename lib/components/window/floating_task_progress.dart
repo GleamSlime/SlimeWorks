@@ -39,6 +39,8 @@ class FloatingTaskProgress extends StatelessWidget {
         right: AppTheme.metrics.kSpace16,
         bottom: AppTheme.metrics.kSpace16,
         child: Material(
+          // 主题里 canvasColor 已改为透明，浮层必须自己声明底色
+          color: Theme.of(context).colorScheme.surface,
           elevation: 8,
           borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace12),
           child: Container(
