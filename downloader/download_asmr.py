@@ -21,8 +21,13 @@ import os
 import re
 import sys
 import time
+import ssl
 import urllib.request
 import urllib.error
+
+# 全局 SSL context。默认验证证书; 传 --insecure 时使用不验证的 context,
+# 以兼容走代理(MITM)导致证书链无法被 Python 识别的情况。
+UNVERIFIED_CTX = ssl._create_unverified_context()
 
 API_TEMPLATE = "https://api.asmr-200.com/api/tracks/{work_id}?v=2"
 HEADERS = {
@@ -55,14 +60,19 @@ def extract_work_id(ident: str) -> str:
     return digits
 
 
-def fetch_tracks(work_id: str, timeout: int = 30) -> list:
+def _ctx(insecure: bool):
+    """返回 ssl context: insecure 时跳过证书验证(代理 MITM 场景)。"""
+    return UNVERIFIED_CTX if insecure else None
+
+
+def fetch_tracks(work_id: str, timeout: int = 30, insecure: bool = False) -> list:
     """请求 tracks API, 返回 JSON 数组。"""
     url = API_TEMPLATE.format(work_id=work_id)
     req = urllib.request.Request(url, headers=HEADERS)
     last_err = None
     for attempt in range(1, MAX_RETRY + 1):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, context=_ctx(insecure)) as resp:
                 import json
                 data = json.load(resp)
             if not isinstance(data, list):
@@ -106,7 +116,8 @@ def _yield_file(dirpath, node):
     return (dirpath, title, url, size)
 
 
-def download_file(url: str, save_path: str, expected_size=0, timeout: int = 60):
+def download_file(url: str, save_path: str, expected_size=0, timeout: int = 60,
+                  insecure: bool = False):
     """带断点续传/重试的单个文件下载, 返回是否成功。"""
     mode = "ab"
     exist_size = os.path.getsize(save_path) if os.path.exists(save_path) else 0
@@ -120,7 +131,7 @@ def download_file(url: str, save_path: str, expected_size=0, timeout: int = 60):
             headers["Range"] = f"bytes={exist_size}-"
         req = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp, open(save_path, mode) as f:
+            with urllib.request.urlopen(req, timeout=timeout, context=_ctx(insecure)) as resp, open(save_path, mode) as f:
                 total = exist_size
                 while True:
                     chunk = resp.read(CHUNK)
@@ -160,13 +171,15 @@ def main():
     ap.add_argument("ident", help="作品标识: RJ号 / work URL / 纯数字")
     ap.add_argument("-o", "--outdir", default="downloads", help="下载保存根目录 (默认 downloads)")
     ap.add_argument("-f", "--format", default="", help="只下载指定格式, 如 mp3/wav (默认全部)")
+    ap.add_argument("-k", "--insecure", action="store_true",
+                    help="跳过 SSL 证书验证 (走代理/自签证书场景用)")
     args = ap.parse_args()
 
     work_id = extract_work_id(args.ident)
     print(f"[info] work_id = {work_id}")
 
     # 获取文件清单
-    tracks = fetch_tracks(work_id)
+    tracks = fetch_tracks(work_id, insecure=args.insecure)
 
     # 确定顶层输出目录(去掉前导0的RJ作品号作为目录名)
     dir_name = f"RJ{work_id.lstrip('0') or '0'}".upper()
@@ -194,7 +207,7 @@ def main():
         save_dir = os.path.join(root, rel_dir) if rel_dir else root
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, title)
-        if download_file(url, save_path, expected_size=size):
+        if download_file(url, save_path, expected_size=size, insecure=args.insecure):
             ok += 1
         else:
             fail += 1

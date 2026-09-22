@@ -133,13 +133,18 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
             color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
             child: Row(
               children: [
+                // 有确定进度时显示确定进度条，否则转圈
                 SizedBox(
                   width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  child: viewModel.importingProgress.value < 0
+                      ? CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : LinearProgressIndicator(
+                          value: viewModel.importingProgress.value.clamp(0.0, 1.0),
+                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                        ),
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace12),
                 Expanded(
@@ -463,40 +468,106 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   /// ASMR 链接导入对话框
   void _showAsmrImportDialog(BuildContext context) {
     final urlController = TextEditingController();
+    // 下载选项（本地下载模式默认开启）
+    var downloadLocal = true;
+    var remoteStream = false;
+    var mp3 = true;
+    var wav = false;
+
+    void submit() {
+      final url = urlController.text.trim();
+      if (url.isEmpty) return;
+      final formats = <String>{if (mp3) 'mp3', if (wav) 'wav'};
+      Navigator.of(context).pop();
+      viewModel.importAsmrLink(
+        url,
+        downloadLocal: downloadLocal,
+        remoteStream: remoteStream,
+        formats: formats,
+      );
+    }
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('ASMR 链接导入'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '自动获取作品标题和音轨流地址，在 asmr 文件夹下创建播放列表并直接导入。',
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(ctx).hintColor,
-                    ),
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace12),
-              TextField(
-                controller: urlController,
-                decoration: const InputDecoration(
-                  labelText: 'ASMR 链接',
-                  hintText: 'https://asmr.one/work/RJ01292783',
-                  isDense: true,
-                  border: OutlineInputBorder(),
+        content: StatefulBuilder(
+          builder: (ctx, setState) => SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '自动抓取作品信息：可下载到本地「下载/asmr」目录并导入，或直接导入远程流地址。',
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).hintColor,
+                      ),
                 ),
-                onSubmitted: (_) {
-                  final url = urlController.text.trim();
-                  if (url.isEmpty) return;
-                  Navigator.of(ctx).pop();
-                  viewModel.importAsmrLink(url);
-                },
-              ),
-            ],
+                SizedBox(height: AppTheme.metrics.kSpace12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'ASMR 链接',
+                    hintText: 'https://asmr.one/work/RJ01292783',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => submit(),
+                ),
+                SizedBox(height: AppTheme.metrics.kSpace8),
+                // 下载方式
+                CheckboxListTile(
+                  value: downloadLocal,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('下载到本地'),
+                  subtitle: const Text('音频保存到「下载/asmr」并扫描入库'),
+                  onChanged: (v) => setState(() {
+                    downloadLocal = v ?? false;
+                    if (downloadLocal) remoteStream = false;
+                  }),
+                ),
+                CheckboxListTile(
+                  value: remoteStream,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('远程流地址'),
+                  subtitle: const Text('仅导入可在线播放的流地址，不下载文件'),
+                  onChanged: (v) => setState(() {
+                    remoteStream = v ?? false;
+                    if (remoteStream) downloadLocal = false;
+                  }),
+                ),
+                // 下载格式（本地下载模式可选）
+                if (downloadLocal) ...[
+                  Divider(height: AppTheme.metrics.kSpace16),
+                  Text(
+                    '下载格式',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(ctx).hintColor,
+                        ),
+                  ),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: mp3,
+                        onChanged: (v) => setState(() => mp3 = v ?? false),
+                      ),
+                      const Text('mp3'),
+                      SizedBox(width: AppTheme.metrics.kSpace16),
+                      Checkbox(
+                        value: wav,
+                        onChanged: (v) => setState(() => wav = v ?? false),
+                      ),
+                      const Text('wav'),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
         actions: [
@@ -505,12 +576,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
             child: const Text('取消'),
           ),
           ElevatedButton.icon(
-            onPressed: () {
-              final url = urlController.text.trim();
-              if (url.isEmpty) return;
-              Navigator.of(ctx).pop();
-              viewModel.importAsmrLink(url);
-            },
+            onPressed: submit,
             icon: const Icon(Icons.link_rounded, size: 18),
             label: const Text('导入'),
           ),

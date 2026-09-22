@@ -161,6 +161,9 @@ class MusicPlayerViewModel extends BaseViewModel {
   /// 导入状态文本
   final importingStatus = ''.obs;
 
+  /// 导入总进度（0.0~1.0），下载本地文件时实时更新；-1 表示不确定进度
+  final importingProgress = (-1.0).obs;
+
   // ── 沉浸式播放 ───────────────────────────────────────────────────────────
   /// 是否进入沉浸式播放全屏
   final isImmersiveMode = false.obs;
@@ -921,10 +924,18 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
   }
 
-  /// ASMR 链接导入：获取作品标题和音轨流地址，
-  /// 在 asmr 子文件夹下创建播放列表并批量导入远程音乐项
-  Future<String?> importAsmrLink(String url) async {
+  /// ASMR 链接导入：根据选项决定下载本地文件或导入远程流地址。
+  /// [downloadLocal] 为真时下载音频到系统「下载/asmr/RJ{work}」并扫描入库；
+  /// [remoteStream] 为真且未下载时，按远程流地址导入。
+  /// [formats] 为要下载的格式集合（mp3/wav 等，仅下载模式有效）。
+  Future<String?> importAsmrLink(
+    String url, {
+    bool downloadLocal = true,
+    bool remoteStream = false,
+    Set<String> formats = const {'mp3'},
+  }) async {
     isImporting.value = true;
+    importingProgress.value = -1;
     importingStatus.value = '正在获取ASMR作品信息...';
     try {
       final info = await _fetchAsmrWorkInfo(url);
@@ -933,42 +944,25 @@ class MusicPlayerViewModel extends BaseViewModel {
         return null;
       }
 
-      importingStatus.value = '正在创建ASMR目录结构...';
-      final asmrFolder = _findOrCreateAsmrFolder();
-      if (asmrFolder == null) {
-        importingStatus.value = '创建ASMR文件夹失败';
+      String? playlistId;
+      if (downloadLocal && formats.isNotEmpty) {
+        playlistId = await _downloadAndImport(info, url, formats);
+      } else if (remoteStream) {
+        playlistId = await _importRemoteStream(info);
+      }
+
+      if (playlistId == null) {
+        if (importingStatus.value == '获取ASMR作品信息失败') return null;
+        importingStatus.value = '导入失败';
         return null;
       }
 
-      importingStatus.value = '正在创建播放列表「${info.title}」...';
-      final playlist = music_api.createPlaylistInFolder(
-        name: info.title,
-        folderId: asmrFolder.id,
-      );
-
-      importingStatus.value = '正在导入 ${info.tracks.length} 首音轨...';
-      final remoteItems = info.tracks
-          .where((a) => a.playUrl != null)
-          .map((a) => music_api.RemoteMusicItem(
-                title: a.title,
-                url: a.playUrl!,
-                durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
-                trackNumber: null,
-              ))
-          .toList();
-      await music_api.addRemoteMusicItems(
-        playlistId: playlist.id,
-        items: remoteItems,
-      );
-
       // 刷新数据并切换到新列表
       await _loadFolders();
-      await navigateToFolder(asmrFolder.id);
-      await selectPlaylist(playlist.id);
-      importingStatus.value = '已导入 ${remoteItems.length} 首音轨';
-
-      _logger.info('[播放器] ASMR导入完成: ${info.title}, ${remoteItems.length}首');
-      return playlist.id;
+      final asmrFolder = _findOrCreateAsmrFolder();
+      if (asmrFolder != null) await navigateToFolder(asmrFolder.id);
+      await selectPlaylist(playlistId);
+      return playlistId;
     } catch (e) {
       _logger.info('[播放器] ASMR链接导入失败: $e');
       importingStatus.value = '导入失败: $e';
@@ -977,7 +971,216 @@ class MusicPlayerViewModel extends BaseViewModel {
       Future.delayed(const Duration(seconds: 3), () {
         isImporting.value = false;
         importingStatus.value = '';
+        importingProgress.value = -1;
       });
+    }
+  }
+
+  /// 下载本地模式：把所选格式的音频下载到系统「下载/asmr/RJ{work}」，再扫描入库
+  Future<String?> _downloadAndImport(
+    AsmrWorkInfo info,
+    String url,
+    Set<String> formats,
+  ) async {
+    importingStatus.value = '正在创建ASMR目录结构...';
+    final asmrFolder = _findOrCreateAsmrFolder();
+    if (asmrFolder == null) {
+      importingStatus.value = '创建ASMR文件夹失败';
+      return null;
+    }
+
+    final workCode = _extractWorkCode(url);
+    final root = '${_downloadsDir()}/asmr/RJ${_workCodeDirName(workCode)}';
+
+    // 按格式收集待下载的音频文件（保留树内相对目录）
+    final entries = <({String relDir, String title, String url, int size})>[];
+    for (final n in info.tree) {
+      _collectDownloads(n, '', formats, entries);
+    }
+    if (entries.isEmpty) {
+      importingStatus.value = '所选格式无可用音轨';
+      return null;
+    }
+
+    importingStatus.value = '正在创建播放列表「${info.title}」...';
+    final playlist = music_api.createPlaylistInFolder(
+      name: info.title,
+      folderId: asmrFolder.id,
+    );
+
+    // 统计总字节数用于整体进度
+    final totalBytes = entries.fold<int>(0, (s, e) => s + (e.size > 0 ? e.size : 0));
+    var doneBytes = 0;
+
+    for (var i = 0; i < entries.length; i++) {
+      final e = entries[i];
+      final dir = e.relDir.isEmpty ? root : '$root/${e.relDir}';
+      Directory(dir).createSync(recursive: true);
+      final savePath = '$dir/${e.title}';
+      final idx = i + 1;
+      importingProgress.value = totalBytes > 0 ? doneBytes / totalBytes : -1;
+      importingStatus.value = '正在下载 ($idx/${entries.length}) ${e.title}';
+      try {
+        await _streamDownload(e.url, savePath, e.size, (recv) {
+          importingStatus.value = '正在下载 ($idx/${entries.length}) ${e.title} ${_fmtBytes(recv)}';
+          if (totalBytes > 0) {
+            importingProgress.value = (doneBytes + recv) / totalBytes;
+          }
+        });
+      } catch (err) {
+        _logger.info('[播放器] 下载文件失败: ${e.title} $err');
+        importingStatus.value = '下载失败: ${e.title}';
+      }
+      doneBytes += e.size > 0 ? e.size : 0;
+    }
+
+    importingProgress.value = -1;
+    importingStatus.value = '正在扫描入库...';
+    final items = await music_api.importMusicFolder(
+      playlistId: playlist.id,
+      folderPath: root,
+    );
+
+    importingStatus.value = '已下载并导入 ${items.length} 首';
+    _logger.info('[播放器] ASMR下载入库完成: ${info.title}, ${items.length}首');
+    return playlist.id;
+  }
+
+  /// 远程流模式：在 asmr 文件夹下创建播放列表并批量导入远程音乐项
+  Future<String?> _importRemoteStream(AsmrWorkInfo info) async {
+    importingStatus.value = '正在创建ASMR目录结构...';
+    final asmrFolder = _findOrCreateAsmrFolder();
+    if (asmrFolder == null) {
+      importingStatus.value = '创建ASMR文件夹失败';
+      return null;
+    }
+
+    importingStatus.value = '正在创建播放列表「${info.title}」...';
+    final playlist = music_api.createPlaylistInFolder(
+      name: info.title,
+      folderId: asmrFolder.id,
+    );
+
+    importingStatus.value = '正在导入 ${info.tracks.length} 首音轨...';
+    final remoteItems = info.tracks
+        .where((a) => a.playUrl != null)
+        .map((a) => music_api.RemoteMusicItem(
+              title: a.title,
+              url: a.playUrl!,
+              durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
+              trackNumber: null,
+            ))
+        .toList();
+    await music_api.addRemoteMusicItems(
+      playlistId: playlist.id,
+      items: remoteItems,
+    );
+
+    importingStatus.value = '已导入 ${remoteItems.length} 首音轨';
+    return playlist.id;
+  }
+
+  /// 递归收集指定格式的音频文件（folder -> 目录，audio -> 文件）
+  void _collectDownloads(
+    AsmrTreeNode node,
+    String baseDir,
+    Set<String> formats,
+    List<({String relDir, String title, String url, int size})> out,
+  ) {
+    if (node.type == 'folder') {
+      final dir = baseDir.isEmpty ? node.title : '$baseDir/${node.title}';
+      for (final c in node.children) {
+        _collectDownloads(c, dir, formats, out);
+      }
+      return;
+    }
+    if (node.type != 'audio') return;
+    final url = node.downloadUrl ?? node.streamUrl;
+    if (url == null) return;
+    final lower = node.title.toLowerCase();
+    final matched = formats.any((f) => lower.endsWith('.${f.toLowerCase()}'));
+    if (!matched) return;
+    out.add((
+      relDir: baseDir,
+      title: node.title,
+      url: url,
+      size: node.sizeBytes ?? 0,
+    ));
+  }
+
+  /// 系统下载目录
+  String _downloadsDir() {
+    if (Platform.isMacOS) {
+      final home = Platform.environment['HOME'];
+      if (home != null) return '$home/Downloads';
+    } else if (Platform.isWindows) {
+      final profile = Platform.environment['USERPROFILE'];
+      if (profile != null) return '$profile/Downloads';
+    }
+    return Directory.systemTemp.path;
+  }
+
+  /// RJ 编号去掉前缀和前导0作为目录名（例：RJ01418453 -> 1418453）
+  String _workCodeDirName(String? workCode) {
+    if (workCode == null) return 'unknown';
+    final digits = workCode.replaceFirst(RegExp(r'^[RBV]J', caseSensitive: false), '');
+    final trimmed = digits.replaceFirst(RegExp(r'^0+'), '');
+    return trimmed.isEmpty ? 'unknown' : trimmed;
+  }
+
+  /// 字节数格式化
+  String _fmtBytes(int bytes) {
+    if (bytes <= 0) return '0B';
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    return '${(bytes / 1024 / 1024).toStringAsFixed(1)}MB';
+  }
+
+  /// 流式下载文件（走系统代理 + 跳过证书校验，支持基于 Range 的断点续传），
+  /// 通过 [onProgress] 回调已接收字节数
+  Future<void> _streamDownload(
+    String url,
+    String savePath,
+    int expectedSize,
+    void Function(int received) onProgress,
+  ) async {
+    final proxy = _getSystemProxy();
+    final client = HttpClient();
+    client.badCertificateCallback = (_, _, _) => true;
+    if (proxy != null) client.findProxy = (uri) => proxy;
+    try {
+      final file = File(savePath);
+      var exist = file.existsSync() ? file.lengthSync() : 0;
+      // 文件已完整，直接跳过
+      if (expectedSize > 0 && exist >= expectedSize) {
+        onProgress(exist);
+        return;
+      }
+      final request = await client.getUrl(Uri.parse(url));
+      request.headers.set(HttpHeaders.userAgentHeader, 'Mozilla/5.0');
+      request.headers.set(HttpHeaders.acceptHeader, '*/*');
+      if (exist > 0) request.headers.set(HttpHeaders.rangeHeader, 'bytes=$exist-');
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok &&
+          response.statusCode != HttpStatus.partialContent) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final raf = file.openWrite(mode: FileMode.writeOnlyAppend);
+      var received = exist;
+      await for (final chunk in response) {
+        raf.add(chunk);
+        received += chunk.length;
+        onProgress(received);
+        // 事件循环让位，避免长下载阻塞 UI
+        await Future.delayed(Duration.zero);
+      }
+      await raf.flush();
+      await raf.close();
+      if (expectedSize > 0 && received < expectedSize) {
+        throw Exception('下载不完整 $received/$expectedSize');
+      }
+    } finally {
+      client.close();
     }
   }
 
