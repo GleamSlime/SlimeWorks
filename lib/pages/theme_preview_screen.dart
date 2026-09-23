@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
@@ -869,6 +874,7 @@ class _GlassTabState extends State<_GlassTab> {
             ],
           ),
         ),
+        if (Platform.isWindows) _BackdropDiagnosticsBlock(),
       ],
     );
   }
@@ -889,6 +895,79 @@ class _GlassTabState extends State<_GlassTab> {
         ),
         SizedBox(height: m.kSpace6),
         Text(label, style: AppTextStyles.caption(context)),
+      ],
+    );
+  }
+}
+
+/// Windows 系统材质（Mica / 压克力）诊断。
+///
+/// 原生查得到的部分只是“DWM 认了这个材质”；材质画在顶层窗口上，而 Flutter 的内容
+/// 画在它的一块子窗口里，子窗口的透明像素让不让材质透出来，属性里读不到，只能在这里
+/// 当场换一种看效果。改的只是当前窗口的材质，不会留下副作用。
+class _BackdropDiagnosticsBlock extends StatelessWidget {
+  const _BackdropDiagnosticsBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return _Block(
+      title: '系统材质（Windows）',
+      note: '下面这几个值是原生回读回来的真实结果，不是请求值。'
+          '换材质后侧栏应当跟着透出桌面的色调；如果发黑或毫无变化，'
+          '说明材质被 Flutter 的子窗口挡住了，Windows 只能退回实心底。',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: m.kSpace16,
+            runSpacing: m.kSpace6,
+            children: [
+              _fact(context, '系统 build', '${WindowsBackdrop.buildNumber}'),
+              _fact(context, '透明效果',
+                  WindowsBackdrop.transparentEffectsEnabled ? '开' : '关'),
+              _fact(context, '公开材质属性',
+                  WindowsBackdrop.publicBackdropSupported ? '支持' : '不支持'),
+              _fact(context, '内部 Mica 属性',
+                  WindowsBackdrop.legacyMicaSupported ? '支持' : '不支持'),
+              // 磨砂开关读的是 provider 里的 Rx，包一层 Obx 才能在换材质后跟着翻。
+              Obx(() => _fact(
+                    context,
+                    '界面磨砂',
+                    getIt<DesktopScreenProvider>().windowsBackdropActive.value
+                        ? '开'
+                        : '关（实心底）',
+                  )),
+            ],
+          ),
+          SizedBox(height: m.kSpace12),
+          Obx(() => Wrap(
+                spacing: m.kSpace8,
+                children: [
+                  for (final kind in BackdropKind.values)
+                    OutlinedButton(
+                      onPressed: () => WindowsBackdrop.apply(kind),
+                      child: Text(WindowsBackdrop.applied == kind
+                          ? '${kind.name}（当前）'
+                          : kind.name),
+                    ),
+                ],
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _fact(BuildContext context, String label, String value) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$label：', style: AppTextStyles.caption(context)),
+        Text(value,
+            style: AppTextStyles.mono(context, size: m.fontSize11)
+                .copyWith(color: s.textPrimary)),
       ],
     );
   }

@@ -11,6 +11,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/components/window/floating_task_progress.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 
 class DesktopScaffold extends StatefulWidget {
   final Widget child;
@@ -37,6 +38,13 @@ class DesktopScaffold extends StatefulWidget {
 
     DesktopScreenProvider desktopScreen = getIt.get<DesktopScreenProvider>();
 
+    // 先探一次系统材质：窗口底色要不要留透明，取决于材质有没有真的挂上。
+    // 必须在下面拼 WindowOptions 之前 await 完，否则首帧会先实心再闪成磨砂。
+    await WindowsBackdrop.probe();
+
+    // 必须在下面拼 WindowOptions 之前探完：窗口底色要不要留透明，取决于材质有没有挂上。
+    await WindowsBackdrop.probe();
+
     double initWidth = positionService.windowWidth.clamp(_minWidth, double.infinity);
     double initHeight = positionService.windowHeight.clamp(_minHeight, double.infinity);
     initHeight = initWidth / _aspectRatio;
@@ -51,7 +59,7 @@ class DesktopScaffold extends StatefulWidget {
       titleBarStyle: TitleBarStyle.hidden,
       // macOS 下原生窗口底色必须留透明，否则 MainFlutterWindow 挂的振动层
       // 会被这层不透明底色彻底盖住。
-      backgroundColor: Platform.isMacOS ? Colors.transparent : LightColors.background1,
+      backgroundColor: WindowGlass.sidebar ? Colors.transparent : LightColors.background1,
       windowButtonVisibility: false,
       title: desktopScreen.title.value,
     );
@@ -120,7 +128,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
     // macOS 桌面端不再由根层铺满不透明底色，否则侧栏永远透不出桌面内容。
     // 内容区的不透明改由 _DesktopShell 自己补——两侧职责分开：侧栏留透明，
     // 主区必须实心，否则文字会直接压在桌面上。
-    final bool bleedThroughWindow = Platform.isMacOS && !isMobile;
+    final bool bleedThroughWindow = WindowGlass.sidebar && !isMobile;
     return Material(
       color: bleedThroughWindow
           ? Colors.transparent

@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 
 import 'package:slime_works/components/buttons/svg_button.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
@@ -257,7 +258,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                 // 壁纸上会被提亮到中灰、浅色字只剩 2.8:1，所以深色主题取值更高。
                 alpha: globalBackgroundPath.isNotEmpty
                     ? 100
-                    : (Platform.isMacOS ? (isDark ? 175 : 120) : 255),
+                    : (WindowGlass.sidebar ? (isDark ? 175 : 120) : 255),
               ),
               // 只剩右侧一条发丝分隔线：四周描边在贴边布局下会被窗口蒙版裁掉半截
               border: Border(

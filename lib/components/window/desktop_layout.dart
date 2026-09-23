@@ -8,6 +8,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 
 class DesktopLayout extends StatefulWidget {
   final Widget child;
@@ -46,13 +47,6 @@ class _DesktopLayoutState extends State<DesktopLayout> {
   }
 }
 
-/// macOS 上内容底色的玻璃不透明度。
-///
-/// 只有 macOS 有原生 behindWindow 振动层可以透；其它平台窗口本身不透明，
-/// 留半透明只会和窗口底色混色，拿不到磨砂。正文密度远高于侧栏，所以这里
-/// 给的值更高（更实），先把正文对比度守住。
-const int kContentGlassAlphaMacOS = 180;
-
 class _DesktopShell extends StatelessWidget {
   final Widget sidebar;
   final Widget child;
@@ -63,7 +57,7 @@ class _DesktopShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final isImmersive = getIt<DesktopScreenProvider>().desktopImmersiveMode.value;
-      final contentAlpha = Platform.isMacOS ? kContentGlassAlphaMacOS : 255;
+      final contentAlpha = WindowGlass.contentAlpha;
       if (isImmersive) {
         // 沉浸模式：不显示侧边栏和顶部栏，整窗都是内容区。
         return _ContentSurface(alpha: contentAlpha, child: child);

@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "window_backdrop.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -27,6 +28,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  RegisterBackdropChannel();
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -45,6 +48,59 @@ void FlutterWindow::OnDestroy() {
   }
 
   Win32Window::OnDestroy();
+}
+
+// 材质能力/开关走 MethodChannel 暴露给 Dart。Dart 侧的磨砂透明度必须以“材质真的
+// 挂上了”为前提，而不是按平台名字猜，所以这里只提供查询和开关，不预设要挂哪种。
+void FlutterWindow::RegisterBackdropChannel() {
+  backdrop_channel_ = flutter::MethodChannel<flutter::EncodableValue>::Create(
+      flutter_controller_->engine()->messenger(),
+      "slime_works/desktop_backdrop", &flutter::StandardMethodCodec::GetInstance());
+
+  backdrop_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        const std::string& method = call.method_name();
+        if (method == "getCapability") {
+          const WindowsBackdropCapability capability =
+              QueryWindowsBackdropCapability();
+          // MethodResult::Success 收的是指针，所以先落一个具名值再取地址。
+          const flutter::EncodableValue payload(flutter::EncodableMap{
+              {flutter::EncodableValue("transparentEffectsEnabled"),
+               flutter::EncodableValue(capability.transparent_effects_enabled)},
+              {flutter::EncodableValue("publicBackdropSupported"),
+               flutter::EncodableValue(capability.public_backdrop_supported)},
+              {flutter::EncodableValue("legacyMicaSupported"),
+               flutter::EncodableValue(capability.legacy_mica_supported)},
+              {flutter::EncodableValue("buildNumber"),
+               flutter::EncodableValue(static_cast<int>(
+                   capability.build_number))},
+          });
+          result->Success(&payload);
+          return;
+        }
+        if (method == "setBackdrop") {
+          const flutter::EncodableValue* argument = call.args();
+          const std::string* requested =
+              argument == nullptr
+                  ? nullptr
+                  : std::get_if<std::string>(argument);
+          WindowsBackdropKind kind =
+              WindowsBackdropKindFromName(requested == nullptr
+                                              ? nullptr
+                                              : requested->c_str());
+          if (kind == WindowsBackdropKind::None) {
+            ClearWindowsBackdrop(GetHandle());
+          } else {
+            kind = ApplyWindowsBackdrop(GetHandle(), kind);
+          }
+          const flutter::EncodableValue applied_name(WindowsBackdropKindName(kind));
+          result->Success(&applied_name);
+          return;
+        }
+        result->NotImplemented();
+      });
 }
 
 LRESULT

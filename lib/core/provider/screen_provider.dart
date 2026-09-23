@@ -65,6 +65,13 @@ abstract class DesktopScreenProvider {
   /// 桌面端沉浸模式（隐藏侧边栏和顶部栏）
   RxBool desktopImmersiveMode = false.obs;
 
+  /// Windows 的系统背景材质（Mica/压克力）是否真的挂上了。
+  ///
+  /// 侧栏的半透明以它为准：材质没挂上时半透明只会压在一片黑上。做成 Rx 是为了
+  /// 让主题预览页能当场换材质、当场看到侧栏跟着变。macOS 不走这一项，那边由
+  /// MainFlutterWindow 直接挂振动层，见 WindowGlass。
+  RxBool windowsBackdropActive = false.obs;
+
   /// 设置窗口宽度
   void setWidth(double w);
 
