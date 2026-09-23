@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
@@ -19,7 +20,7 @@ class PlaylistSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: Theme.of(context).colorScheme.surface.withAlpha(WindowGlass.panelAlpha),
         border: Border(right: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
         borderRadius: AppTheme.metrics.radius10,
       ),

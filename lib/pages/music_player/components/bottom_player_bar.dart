@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
 /// 底部悬浮播放控制栏（网易音乐风格）
@@ -85,7 +86,10 @@ class BottomPlayerBar extends StatelessWidget {
   BoxDecoration _buildBarDecoration(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return BoxDecoration(
-      color: isDark ? const Color(0xFF1E1E1C) : const Color(0xFFFAFAFA),
+      // 播放条压在列表之上，整块实心就把整窗的磨砂截断了；降到面板档，
+      // 上面还有内容区的底色兜着，文字对比度不受影响。
+      color: (isDark ? const Color(0xFF1E1E1C) : const Color(0xFFFAFAFA))
+          .withAlpha(WindowGlass.panelAlpha),
       border: Border(
         top: BorderSide(
           color: Theme.of(context).dividerColor,

@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
+
 import 'app_colors.dart';
 import 'app_semantics.dart';
 
@@ -415,8 +417,10 @@ class AppTheme {
       ),
 
       // ── 浮层 / 弹窗 ──
+      // 浮层统一按 WindowGlass.overlayAlpha 留一点透明度：完全实心就没有任何层次，
+      // 但也不能太透——菜单/对话框底下就是页面的文字，糊在一起读不了。
       dialogTheme: DialogThemeData(
-        backgroundColor: s.surfaceRaised,
+        backgroundColor: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: m.radiusOverlay),
@@ -432,7 +436,7 @@ class AppTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: s.surfaceRaised,
+        backgroundColor: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -442,10 +446,13 @@ class AppTheme {
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: s.surfaceRaised,
+        color: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: m.radiusPanel),
+        shape: RoundedRectangleBorder(
+          borderRadius: m.radiusPanel,
+          side: BorderSide(color: s.glassBorder, width: scaleW(1)),
+        ),
         textStyle: TextStyle(fontSize: scaleS(13), color: s.textPrimary),
       ),
       tooltipTheme: TooltipThemeData(

@@ -10,6 +10,7 @@ import 'package:slime_works/components/dialogs/confirm_dialog.dart';
 import 'package:slime_works/components/dialogs/node_directory_picker.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -2017,7 +2018,9 @@ class _AnimatedSwitcherWrapper extends StatelessWidget {
         : Tween<Offset>(begin: Offset.zero, end: Offset(-dir, 0));
     return ClipRect(
       child: ColoredBox(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        // 转场时得有一层底，否则新旧两页互相透出来。用和内容区同一档玻璃透明度，
+        // 而不是 scaffoldBackgroundColor 的实心画布——后者会把整页的磨砂彻底盖掉。
+        color: AppSemantic.of(context).canvas.withAlpha(WindowGlass.contentAlpha),
         child: SlideTransition(
           position: tween.animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
           child: child,

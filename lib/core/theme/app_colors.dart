@@ -161,7 +161,11 @@ class AppSurfaces {
   static const Color lightSurfaceSunken = Color(0xFFEBEBE7);
 
   /// 交互态
-  static const Color lightSurfaceHover = Color(0xFFF4F4F1);
+  ///
+  /// 悬停是"状态层"，必须用水洗而不是实心色：实心底一压上去，底下那层窗口磨砂就
+  /// 断了（实测表现为鼠标移到侧栏分组标题上出现一块不透的白斑）。这里的透明度换算
+  /// 过：压在亮色画布 #F1F1EE 上仍然是原来的 #F4F4F1，颜色没变，只是透得下去了。
+  static const Color lightSurfaceHover = Color(0x2DFFFFFF);
   static const Color lightSurfaceActive = Color(0xFFEDEDFA);
 
   /// 亮色下极轻的分隔（用于相邻表面几乎无接缝处）
@@ -190,7 +194,9 @@ class AppSurfaces {
   static const Color darkSurfaceSunken = Color(0xFF1A1B17);
 
   /// 交互态
-  static const Color darkSurfaceHover = Color(0xFF2E2F2B);
+  ///
+  /// 同亮色：压在暗色画布 #141512 上仍还原成原来的 #2E2F2B，只是改成了水洗。
+  static const Color darkSurfaceHover = Color(0x1CFFFFFF);
   static const Color darkSurfaceActive = Color(0xFF322F45);
 
   static const Color darkHairline = Color(0x14FFFFFF);

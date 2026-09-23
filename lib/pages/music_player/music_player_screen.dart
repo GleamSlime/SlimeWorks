@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -602,70 +603,66 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         minChildSize: 0.3,
         maxChildSize: 0.8,
         expand: false,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-                child: Row(
-                  children: [
-                    Icon(Icons.favorite_rounded, color: Theme.of(context).colorScheme.primary),
-                    SizedBox(width: AppTheme.metrics.kSpace8),
-                    Text('收藏', style: Theme.of(context).textTheme.titleMedium),
-                    const Spacer(),
-                    Obx(() => Text(
-                      '${viewModel.favoriteItems.length} 首',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    )),
-                  ],
-                ),
+        // 底色交给 bottomSheetTheme：这里原来又铺了一层实心 scaffoldBackgroundColor，
+        // 把主题的浮层配色整个盖掉，抽屉因此完全不透。
+        builder: (_, scrollController) => Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+              child: Row(
+                children: [
+                  Icon(Icons.favorite_rounded, color: Theme.of(context).colorScheme.primary),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  Text('收藏', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  Obx(() => Text(
+                    '${viewModel.favoriteItems.length} 首',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  )),
+                ],
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: Obx(() => viewModel.favoriteItems.isEmpty
-                    ? Center(
-                        child: Text(
-                          '暂无收藏',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).hintColor,
-                          ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Obx(() => viewModel.favoriteItems.isEmpty
+                  ? Center(
+                      child: Text(
+                        '暂无收藏',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).hintColor,
                         ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: viewModel.favoriteItems.length,
-                        itemBuilder: (_, index) {
-                          final item = viewModel.favoriteItems[index];
-                          return ListTile(
-                            leading: const Icon(Icons.music_note_rounded, size: 20),
-                            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(
-                              item.artist ?? '未知艺术家',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              // 在当前列表中查找并播放
-                              final idx = viewModel.currentItems.indexWhere((i) => i.id == item.id);
-                              if (idx >= 0) {
-                                viewModel.playItem(idx);
-                              } else {
-                                viewModel.currentItems.value = [item];
-                                viewModel.playItem(0);
-                              }
-                            },
-                          );
-                        },
-                      )),
-              ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: viewModel.favoriteItems.length,
+                      itemBuilder: (_, index) {
+                        final item = viewModel.favoriteItems[index];
+                        return ListTile(
+                          leading: const Icon(Icons.music_note_rounded, size: 20),
+                          title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(
+                            item.artist ?? '未知艺术家',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            // 在当前列表中查找并播放
+                            final idx = viewModel.currentItems.indexWhere((i) => i.id == item.id);
+                            if (idx >= 0) {
+                              viewModel.playItem(idx);
+                            } else {
+                              viewModel.currentItems.value = [item];
+                              viewModel.playItem(0);
+                            }
+                          },
+                        );
+                      },
+                    )),
+            ),
             ],
           ),
-        ),
       ),
     );
   }
@@ -682,71 +679,66 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         minChildSize: 0.3,
         maxChildSize: 0.8,
         expand: false,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.metrics.kSpace16)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-                child: Row(
-                  children: [
-                    Icon(Icons.history_rounded, color: Theme.of(context).colorScheme.primary),
-                    SizedBox(width: AppTheme.metrics.kSpace8),
-                    Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
-                    const Spacer(),
-                    Obx(() => Text(
-                      '${viewModel.recentRecords.length} 首',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    )),
-                  ],
-                ),
+        // 同上：抽屉底色交给 bottomSheetTheme，这里不再铺一层实心画布。
+        builder: (_, scrollController) => Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+              child: Row(
+                children: [
+                  Icon(Icons.history_rounded, color: Theme.of(context).colorScheme.primary),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  Obx(() => Text(
+                    '${viewModel.recentRecords.length} 首',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  )),
+                ],
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: Obx(() => viewModel.recentRecords.isEmpty
-                    ? Center(
-                        child: Text(
-                          '暂无播放记录',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).hintColor,
-                          ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Obx(() => viewModel.recentRecords.isEmpty
+                  ? Center(
+                      child: Text(
+                        '暂无播放记录',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).hintColor,
                         ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: viewModel.recentRecords.length,
-                        itemBuilder: (_, index) {
-                          final record = viewModel.recentRecords[index];
-                          final musicItem = viewModel.currentItems.firstWhereOrNull(
-                            (i) => i.id == record.musicId,
-                          );
-                          final title = musicItem?.title ?? '未知歌曲';
-                          final artist = musicItem?.artist;
-                          return ListTile(
-                            leading: const Icon(Icons.music_note_rounded, size: 20),
-                            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: artist != null
-                                ? Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis)
-                                : null,
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              final idx = viewModel.currentItems.indexWhere(
-                                (i) => i.id == record.musicId,
-                              );
-                              if (idx >= 0) {
-                                viewModel.playItem(idx);
-                              }
-                            },
-                          );
-                        },
-                      )),
-              ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: viewModel.recentRecords.length,
+                      itemBuilder: (_, index) {
+                        final record = viewModel.recentRecords[index];
+                        final musicItem = viewModel.currentItems.firstWhereOrNull(
+                          (i) => i.id == record.musicId,
+                        );
+                        final title = musicItem?.title ?? '未知歌曲';
+                        final artist = musicItem?.artist;
+                        return ListTile(
+                          leading: const Icon(Icons.music_note_rounded, size: 20),
+                          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: artist != null
+                              ? Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis)
+                              : null,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            final idx = viewModel.currentItems.indexWhere(
+                              (i) => i.id == record.musicId,
+                            );
+                            if (idx >= 0) {
+                              viewModel.playItem(idx);
+                            }
+                          },
+                        );
+                      },
+                    )),
+            ),
             ],
           ),
-        ),
       ),
     );
   }
@@ -796,12 +788,15 @@ class _FolderInfoHeader extends StatelessWidget {
         AppTheme.metrics.kSpace16,
       ),
       decoration: BoxDecoration(
+        // 整块不透明会把窗口磨砂彻底盖掉；渐变本身保留，只降到分区面板那一档。
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF252523), const Color(0xFF1A1A18)]
-              : [const Color(0xFFF5F5F3), const Color(0xFFEDEDEB)],
+          colors: (isDark
+                  ? const [Color(0xFF252523), Color(0xFF1A1A18)]
+                  : const [Color(0xFFF5F5F3), Color(0xFFEDEDEB)])
+              .map((color) => color.withAlpha(WindowGlass.panelAlpha))
+              .toList(),
         ),
         border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
       ),
