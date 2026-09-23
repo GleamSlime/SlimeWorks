@@ -5,11 +5,14 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
-/// 统一可交互容器：悬停时改变**底色**而非缩放。
+/// 统一可交互容器：悬停时改变**状态层**而非缩放。
 ///
 /// 为什么不用缩放做 hover 反馈：`CuePressable` 的 1.04 放大适合图标这类
 /// 小面积元素；用在卡片上会让整排内容抖动、相邻卡片互相重叠，是"廉价感"
 /// 的主要来源。工具类界面通行做法是底色 + 描边提亮，位移只留给按压瞬间。
+///
+/// 水洗画在内容**之上**（Stack 顶层），不是之下：画在下面的话，子节点那层
+/// 不透明卡片底色会把它整个盖掉，hover 永远看不见——这正是原来的 bug。
 class Hoverable extends StatefulWidget {
   const Hoverable({
     super.key,
@@ -47,13 +50,15 @@ class _HoverableState extends State<Hoverable> {
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
-    final color = !_interactive
-        ? widget.defaultColor
+    // 状态层：悬停用中性水洗，按压用强调色水洗。两者都必须是**半透明**的，
+    // 因为它画在内容之上——实心色会把卡片里的文字整个盖掉。
+    final Color wash = !_interactive
+        ? Colors.transparent
         : _pressed
-        ? (widget.pressColor ?? s.surfaceActive)
+        ? (widget.pressColor ?? s.accent.withValues(alpha: 0.12))
         : _hovered
         ? (widget.hoverColor ?? s.surfaceHover)
-        : widget.defaultColor;
+        : Colors.transparent;
 
     return MouseRegion(
       cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
@@ -66,11 +71,32 @@ class _HoverableState extends State<Hoverable> {
         onTapDown: _interactive ? (_) => setState(() => _pressed = true) : null,
         onTapUp: _interactive ? (_) => setState(() => _pressed = false) : null,
         onTapCancel: _interactive ? () => setState(() => _pressed = false) : null,
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          decoration: BoxDecoration(color: color, borderRadius: widget.borderRadius),
-          child: widget.child,
+        child: Stack(
+          children: [
+            // 底色在内容之下
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: widget.defaultColor,
+                  borderRadius: widget.borderRadius,
+                ),
+              ),
+            ),
+            widget.child,
+            // 状态层在内容之上；不吃事件，点击仍然落到下面的内容
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedContainer(
+                  duration: AppMotion.fast,
+                  curve: AppMotion.standard,
+                  decoration: BoxDecoration(
+                    color: wash,
+                    borderRadius: widget.borderRadius,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

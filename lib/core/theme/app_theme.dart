@@ -829,6 +829,18 @@ class AppTextStyles {
     height: 1.45,
   );
 
+  /// 列表行标题
+  ///
+  /// 和 cardTitle 差一档字重：整页卡片标题需要撑住区块，列表行里几十条同名行
+  /// 用 w600 会糊成一片黑。数值与 listTileTheme.titleTextStyle 保持同档。
+  static TextStyle rowTitle(BuildContext context) => _role(
+    context,
+    fontSize: AppTheme.metrics.fontSize13,
+    weight: FontWeight.w500,
+    color: AppSemantic.of(context).textPrimary,
+    height: 1.4,
+  );
+
   /// 正文
   static TextStyle body(BuildContext context) => _role(
     context,

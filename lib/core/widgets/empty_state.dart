@@ -189,7 +189,9 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
           width: widget.width,
           height: widget.height ?? m.kSpace12,
           decoration: BoxDecoration(
-            color: Color.lerp(s.surfaceSunken, s.surfaceHover, _controller.value),
+            // 两端都必须是实心表面色：状态层（surfaceHover）是半透明水洗，
+            // lerp 到端点会连 alpha 一起插值，骨架屏会在最亮的一帧直接消失。
+            color: Color.lerp(s.surfaceSunken, s.surfaceRaised, _controller.value),
             borderRadius: widget.borderRadius ?? m.radius6,
           ),
         );

@@ -163,9 +163,13 @@ class AppSurfaces {
   /// 交互态
   ///
   /// 悬停是"状态层"，必须用水洗而不是实心色：实心底一压上去，底下那层窗口磨砂就
-  /// 断了（实测表现为鼠标移到侧栏分组标题上出现一块不透的白斑）。这里的透明度换算
-  /// 过：压在亮色画布 #F1F1EE 上仍然是原来的 #F4F4F1，颜色没变，只是透得下去了。
-  static const Color lightSurfaceHover = Color(0x2DFFFFFF);
+  /// 断了（实测表现为鼠标移到侧栏分组标题上出现一块不透的白斑）。
+  ///
+  /// 水洗的方向必须跟着底色走：亮色侧的表面是白（#FFFFFF 卡片 / #F1F1EE 画布），
+  /// 再往上叠白色就是零反馈——原来这颗 0x2DFFFFFF 正是这个问题，卡片、列表行、
+  /// 菜单在亮色模式下全都没有悬停。改成半透明黑，压白得 #E8E8E8、压画布得 #E0E0DC，
+  /// 依旧透得下去。暗色侧表面本来就比白亮，继续用提亮的白水洗。
+  static const Color lightSurfaceHover = Color(0x14000000);
   static const Color lightSurfaceActive = Color(0xFFEDEDFA);
 
   /// 亮色下极轻的分隔（用于相邻表面几乎无接缝处）
@@ -195,7 +199,8 @@ class AppSurfaces {
 
   /// 交互态
   ///
-  /// 同亮色：压在暗色画布 #141512 上仍还原成原来的 #2E2F2B，只是改成了水洗。
+  /// 暗色侧的表面比白暗，所以这里继续用**提亮**的白水洗（压在暗色画布 #141512 上
+  /// 仍还原成原来的 #2E2F2B）。方向与亮色相反是有意为之：水洗永远朝"看得见"那侧走。
   static const Color darkSurfaceHover = Color(0x1CFFFFFF);
   static const Color darkSurfaceActive = Color(0xFF322F45);
 

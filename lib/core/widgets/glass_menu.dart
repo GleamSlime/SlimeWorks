@@ -40,7 +40,7 @@ class GlassMenuItem<T> extends PopupMenuItem<T> {
        );
 }
 
-class _GlassMenuRow extends StatefulWidget {
+class _GlassMenuRow extends StatelessWidget {
   const _GlassMenuRow({
     required this.label,
     required this.icon,
@@ -56,78 +56,49 @@ class _GlassMenuRow extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<_GlassMenuRow> createState() => _GlassMenuRowState();
-}
-
-class _GlassMenuRowState extends State<_GlassMenuRow> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final label = widget.label;
-    final icon = widget.icon;
     // 危险项整行染色（图标+文字），比只在文案后面加个红叉更能阻止误点。
     // 常规项和禁用项一律留 null：颜色交给主题的 labelTextStyle。这里一旦自己染色，
     // Text 的 style 会盖掉 DefaultTextStyle，禁用项就看不出被禁用了。
-    final Color? foreground = !widget.enabled
+    final Color? foreground = !enabled
         ? null
-        : widget.destructive
+        : destructive
         ? s.danger.color
-        : widget.selected
+        : selected
         ? s.accent
         : null;
-    final iconColor =
-        foreground ?? (widget.enabled ? s.textPrimary : s.textDisabled);
+    final iconColor = foreground ?? (enabled ? s.textPrimary : s.textDisabled);
     // 图标槽固定宽度：没有图标的条目也要留位，否则同一菜单里文字会参差。
     final slot = m.iconSize16 + m.kSpace8;
 
-    return MouseRegion(
-      // Material 自带的菜单悬停层高亮薄到几乎看不见，在半透明浮层上更是等于没有反馈。
-      // 这里自己画一颗水洗药丸；键盘聚焦仍由外层 InkWell 的高亮负责。
-      onEnter: widget.enabled ? (_) => setState(() => _hovered = true) : null,
-      onExit: widget.enabled ? (_) => setState(() => _hovered = false) : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 90),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.symmetric(
-          horizontal: m.kSpace6,
-          vertical: m.kSpace4,
-        ),
-        decoration: BoxDecoration(
-          // 不能用 surfaceHover：那是一层 17% 的**白**水洗，设计给比白更暗的表面用，
-          // 而菜单底就是白——叠上去等于没有反馈。改成半透明强调色，明暗两侧都看得见，
-          // 且不覆盖浮层自身的透明度。
-          color: _hovered
-              ? s.accent.withValues(alpha: 0.10)
-              : Colors.transparent,
-          borderRadius: m.radiusControl,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: slot,
-              child: widget.selected
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: m.iconSize16,
-                      color: s.accent,
-                    )
-                  : icon == null
-                  ? null
-                  : Icon(icon, size: m.iconSize16, color: iconColor),
+    // 悬停水洗不自建：外层 InkWell 用的就是 ThemeData.hoverColor（= surfaceHover），
+    // 再叠一颗自己的圆角药丸会变成方块+药丸两层灰。
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: m.kSpace6,
+        vertical: m.kSpace4,
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: slot,
+            child: selected
+                ? Icon(Icons.check_rounded, size: m.iconSize16, color: s.accent)
+                : icon == null
+                ? null
+                : Icon(icon, size: m.iconSize16, color: iconColor),
+          ),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: foreground),
             ),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: foreground),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
