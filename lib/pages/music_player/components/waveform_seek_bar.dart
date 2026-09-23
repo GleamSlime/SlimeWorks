@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+
 /// 波形进度条组件
 ///
 /// 显示音频波形图，已播放部分高亮，点击可跳转播放位置
@@ -31,6 +34,9 @@ class WaveformSeekBar extends StatelessWidget {
   /// 波形条圆角
   final double barRadius;
 
+  /// 区域高度；不给就用 kSpace48 这一档
+  final double? height;
+
   const WaveformSeekBar({
     super.key,
     required this.waveform,
@@ -42,18 +48,23 @@ class WaveformSeekBar extends StatelessWidget {
     this.isLoading = false,
     this.barGap = 2.0,
     this.barRadius = 2.0,
+    this.height,
   });
 
   @override
   Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    final h = height ?? m.kSpace48;
     if (isLoading) {
-      return const SizedBox(
-        height: 48,
+      return SizedBox(
+        height: h,
         child: Center(
           child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            width: m.iconSize20,
+            height: m.iconSize20,
+            // 转圈跟着波形自己的配色走：默认会拿主题的强调色，
+            // 压在深色封面上时亮色模式下几乎看不见。
+            child: CircularProgressIndicator(strokeWidth: scaleW(2), color: activeColor),
           ),
         ),
       );
@@ -84,7 +95,7 @@ class WaveformSeekBar extends StatelessWidget {
             _handleSeek(details.localPosition.dx, width);
           },
           child: CustomPaint(
-            size: Size(width, 48),
+            size: Size(width, h),
             painter: _WaveformPainter(
               waveform: waveform,
               progress: progress,

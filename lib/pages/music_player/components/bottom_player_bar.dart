@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_chips.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
@@ -25,7 +28,7 @@ class BottomPlayerBar extends StatelessWidget {
       return GestureDetector(
         onTap: onTapExpand,
         child: Container(
-          height: 72,
+          height: scaleW(72),
           decoration: _buildBarDecoration(context),
           child: Column(
             children: [
@@ -47,7 +50,7 @@ class BottomPlayerBar extends StatelessWidget {
     final progress = duration > 0 ? position / duration : 0.0;
 
     return SizedBox(
-      height: 3,
+      height: scaleW(3),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return GestureDetector(
@@ -58,21 +61,14 @@ class BottomPlayerBar extends StatelessWidget {
             child: Stack(
               children: [
                 // 背景轨道
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
-                  ),
+                Positioned.fill(
+                  child: ColoredBox(color: AppSemantic.of(context).border),
                 ),
                 // 已播放进度
                 FractionallySizedBox(
                   widthFactor: progress.clamp(0.0, 1.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.horizontal(
-                        right: Radius.circular(AppTheme.metrics.kSpace2),
-                      ),
-                    ),
+                  child: ColoredBox(
+                    color: AppSemantic.of(context).accent,
                   ),
                 ),
               ],
@@ -84,24 +80,16 @@ class BottomPlayerBar extends StatelessWidget {
   }
 
   BoxDecoration _buildBarDecoration(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
     return BoxDecoration(
-      // 播放条压在列表之上，整块实心就把整窗的磨砂截断了；降到面板档，
+      // 播放条压在列表之上，整块实心就把整窗的磨砂截断了；浮层档透明度，
       // 上面还有内容区的底色兜着，文字对比度不受影响。
-      color: (isDark ? const Color(0xFF1E1E1C) : const Color(0xFFFAFAFA))
-          .withAlpha(WindowGlass.panelAlpha),
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).dividerColor,
-          width: 0.5,
-        ),
-      ),
+      color: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
+      border: Border(top: BorderSide(color: s.hairline, width: scaleW(1))),
+      // 投影朝上：这条是贴在窗口底边的停靠栏，向下的影子落在窗口外等于没有。
       boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
-          blurRadius: 8,
-          offset: const Offset(0, -2),
-        ),
+        for (final shadow in s.elevation(Elevation.floating))
+          shadow.copyWith(offset: Offset(shadow.offset.dx, -shadow.offset.dy.abs())),
       ],
     );
   }
@@ -142,20 +130,14 @@ class BottomPlayerBar extends StatelessWidget {
             children: [
               Text(
                 title.isEmpty ? '未选择歌曲' : title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: AppTheme.metrics.fontSize13,
-                ),
+                style: AppTextStyles.cardTitle(context),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               if (artist != null)
                 Text(
                   artist,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                    fontSize: AppTheme.metrics.fontSize11,
-                  ),
+                  style: AppTextStyles.caption(context),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -167,10 +149,10 @@ class BottomPlayerBar extends StatelessWidget {
   }
 
   Widget _buildCoverThumb(BuildContext context, String? coverPath) {
-    const size = 44.0;
+    final size = scaleW(44);
     if (coverPath != null && File(coverPath).existsSync()) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace6),
+        borderRadius: AppTheme.metrics.radius6,
         child: Image.file(
           File(coverPath),
           width: size,
@@ -184,23 +166,28 @@ class BottomPlayerBar extends StatelessWidget {
   }
 
   Widget _buildDefaultCover(BuildContext context, double size) {
+    final s = AppSemantic.of(context);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace6),
+        // 占位底必须比卡片更暗：这里原来是 surfaceRaised（亮色下就是白），
+        // 压在白色播放条上等于一块看不见的空白。
+        color: s.surfaceSunken,
+        borderRadius: AppTheme.metrics.radius6,
       ),
       child: Icon(
         Icons.music_note_rounded,
         size: size * 0.45,
-        color: Theme.of(context).hintColor,
+        color: s.textTertiary,
       ),
     );
   }
 
   /// 中间播放控件
   Widget _buildPlayControls(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final playing = viewModel.isPlaying.value;
     final mode = viewModel.playMode.value;
 
@@ -211,51 +198,58 @@ class BottomPlayerBar extends StatelessWidget {
         // 播放模式
         IconButton(
           onPressed: viewModel.cyclePlayMode,
-          icon: Icon(mode.icon, size: 18),
+          icon: Icon(mode.icon, size: m.iconSize18),
           tooltip: mode.label,
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          color: mode != PlayerPlayMode.sequential
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).hintColor,
+          constraints: BoxConstraints(
+            minWidth: m.kSpace32,
+            minHeight: m.kSpace32,
+          ),
+          color: mode != PlayerPlayMode.sequential ? s.accent : s.textTertiary,
         ),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 上一曲
         IconButton(
           onPressed: viewModel.playPrevious,
           icon: const Icon(Icons.skip_previous_rounded),
-          iconSize: 22,
+          iconSize: m.iconSize22,
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          constraints: BoxConstraints(
+            minWidth: scaleW(36),
+            minHeight: scaleW(36),
+          ),
         ),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 播放/暂停
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Theme.of(context).colorScheme.primary,
+        IconButton(
+          onPressed: viewModel.togglePlayPause,
+          icon: Icon(
+            playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
           ),
-          child: IconButton(
-            onPressed: viewModel.togglePlayPause,
-            icon: Icon(
-              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              color: Theme.of(context).colorScheme.onPrimary,
-            ),
-            iconSize: 26,
+          iconSize: scaleW(26),
+          // 底色必须走 styleFrom 而不是外面套一个圆形 Container：Container 在
+          // InkWell 之下，涟漪会方形溢出圆钮，圆形底也吃不到按压反馈。
+          style: IconButton.styleFrom(
+            backgroundColor: s.accent,
+            foregroundColor: s.accentOn,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            minimumSize: Size(scaleW(40), scaleW(40)),
+            shape: const CircleBorder(),
           ),
         ),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 下一曲
         IconButton(
           onPressed: viewModel.playNext,
           icon: const Icon(Icons.skip_next_rounded),
-          iconSize: 22,
+          iconSize: m.iconSize22,
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          constraints: BoxConstraints(
+            minWidth: scaleW(36),
+            minHeight: scaleW(36),
+          ),
         ),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 收藏
         Obx(() {
           final item = viewModel.currentItem;
@@ -264,11 +258,15 @@ class BottomPlayerBar extends StatelessWidget {
             onPressed: item != null ? () => viewModel.toggleFavorite(item.id) : null,
             icon: Icon(
               isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-              size: 18,
+              size: m.iconSize18,
             ),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            color: isFav ? Colors.redAccent : Theme.of(context).hintColor,
+            constraints: BoxConstraints(
+              minWidth: m.kSpace32,
+              minHeight: m.kSpace32,
+            ),
+            // 收藏是"选中"，不是"危险"：用强调色，和全站选中态一个口径。
+            color: isFav ? s.accent : s.textTertiary,
           );
         }),
       ],
@@ -277,72 +275,41 @@ class BottomPlayerBar extends StatelessWidget {
 
   /// 右侧功能按钮
   Widget _buildRightActions(BuildContext context) {
+    final m = AppTheme.metrics;
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         // 播放顺序指示
         Obx(() {
           final mode = viewModel.playMode.value;
-          return _ActionChip(
+          return ToolIconButton(
             icon: mode.icon,
-            label: mode.label,
-            active: mode != PlayerPlayMode.sequential,
-            onTap: viewModel.cyclePlayMode,
+            tooltip: mode.label,
+            selected: mode != PlayerPlayMode.sequential,
+            onPressed: viewModel.cyclePlayMode,
           );
         }),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 歌词
-        Obx(() => _ActionChip(
+        Obx(() => ToolIconButton(
           icon: Icons.lyrics_outlined,
-          label: '歌词',
-          active: viewModel.showLyricsPanel.value,
-          onTap: viewModel.toggleLyricsPanel,
+          tooltip: '歌词',
+          selected: viewModel.showLyricsPanel.value,
+          onPressed: viewModel.toggleLyricsPanel,
         )),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 音量
         _VolumePopup(viewModel: viewModel),
-        SizedBox(width: AppTheme.metrics.kSpace4),
+        SizedBox(width: m.kSpace4),
         // 播放列表
-        IconButton(
+        ToolIconButton(
+          icon: Icons.queue_music_rounded,
+          tooltip: '播放列表',
           onPressed: () {
             // 切换侧边栏可见性（由主页面处理）
           },
-          icon: const Icon(Icons.queue_music_rounded, size: 20),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          color: Theme.of(context).hintColor,
-          tooltip: '播放列表',
         ),
       ],
-    );
-  }
-}
-
-/// 功能小按钮（带激活态）
-class _ActionChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    this.active = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: label,
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icon, size: 18),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-        color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).hintColor,
-      ),
     );
   }
 }
@@ -354,38 +321,50 @@ class _VolumePopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
     return PopupMenuButton<void>(
-      icon: Obx(() => Icon(
-        viewModel.volume.value == 0
-            ? Icons.volume_off_rounded
-            : viewModel.volume.value < 50
-                ? Icons.volume_down_rounded
-                : Icons.volume_up_rounded,
-        size: 20,
-        color: Theme.of(context).hintColor,
-      )),
+      icon: Obx(() {
+        final v = viewModel.volume.value;
+        return Icon(
+          v == 0
+              ? Icons.volume_off_rounded
+              : v < 50
+              ? Icons.volume_down_rounded
+              : Icons.volume_up_rounded,
+          size: m.iconSize20,
+          color: s.textTertiary,
+        );
+      }),
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      constraints: BoxConstraints(
+        minWidth: m.kSpace32,
+        minHeight: m.kSpace32,
+      ),
       position: PopupMenuPosition.over,
       itemBuilder: (ctx) => [
+        // 菜单里塞控件：这条必须是 enabled:false，否则点滑块会直接关掉整个菜单。
         PopupMenuItem<void>(
           enabled: false,
-          height: 48,
+          height: scaleW(34),
           child: Obx(() => Row(
             children: [
               Icon(
                 viewModel.volume.value == 0
                     ? Icons.volume_off_rounded
                     : Icons.volume_down_rounded,
-                size: 18,
-                color: Theme.of(context).hintColor,
+                size: m.iconSize18,
+                color: s.textTertiary,
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
+              SizedBox(width: m.kSpace8),
               Expanded(
                 child: SliderTheme(
                   data: SliderThemeData(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    trackHeight: scaleW(3),
+                    thumbShape: RoundSliderThumbShape(
+                      enabledThumbRadius: m.kSpace6,
+                    ),
                   ),
                   child: Slider(
                     value: viewModel.volume.value.toDouble(),
@@ -395,12 +374,12 @@ class _VolumePopup extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(width: AppTheme.metrics.kSpace4),
+              SizedBox(width: m.kSpace4),
               SizedBox(
-                width: 32,
+                width: m.kSpace32,
                 child: Text(
                   '${viewModel.volume.value}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: AppTextStyles.caption(context),
                   textAlign: TextAlign.end,
                 ),
               ),

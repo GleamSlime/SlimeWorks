@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
@@ -68,12 +69,12 @@ class _EqPanelState extends State<EqPanel> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('均衡器', style: Theme.of(context).textTheme.titleMedium),
+            Text('均衡器', style: AppTextStyles.sectionTitle(context)),
             SizedBox(height: AppTheme.metrics.kSpace12),
             // 预设选择
             if (presets.isNotEmpty)
               SizedBox(
-                height: 36,
+                height: scaleW(36),
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: presets.length,
@@ -96,7 +97,7 @@ class _EqPanelState extends State<EqPanel> {
             SizedBox(height: AppTheme.metrics.kSpace16),
             // 均衡器滑块
             SizedBox(
-              height: 200,
+              height: scaleW(200),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: List.generate(10, (i) {
@@ -104,7 +105,7 @@ class _EqPanelState extends State<EqPanel> {
                     children: [
                       Text(
                         '${_bands[i] > 0 ? "+" : ""}${_bands[i].toStringAsFixed(1)}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: AppTextStyles.caption(context),
                       ),
                       Expanded(
                         child: RotatedBox(
@@ -124,7 +125,7 @@ class _EqPanelState extends State<EqPanel> {
                           ),
                         ),
                       ),
-                      Text(freqLabels[i], style: Theme.of(context).textTheme.bodySmall),
+                      Text(freqLabels[i], style: AppTextStyles.caption(context)),
                     ],
                   );
                 }),

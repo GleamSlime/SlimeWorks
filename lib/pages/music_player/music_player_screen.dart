@@ -18,7 +18,10 @@ import 'package:slime_works/pages/music_player/components/bottom_player_bar.dart
 import 'package:slime_works/pages/music_player/components/eq_panel.dart';
 import 'package:slime_works/pages/music_player/components/immersive_player_screen.dart';
 
-const _kSidebarWidth = 220.0;
+/// 侧边栏宽度
+///
+/// 用 getter 而不是 const：scaleW 按当前窗口宽度折算，写死 220 的话窗口缩小侧边栏也不会跟着收。
+double get _kSidebarWidth => scaleW(220);
 
 class MusicPlayerScreen extends BasePage<MusicPlayerViewModel> {
   const MusicPlayerScreen({super.key});
@@ -101,7 +104,6 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   /// 构建 ScreenChromeData（顶部工具栏：收藏、最近播放、均衡器）
   ScreenChromeData _buildScreenChromeData(BuildContext context, bool isMobile) {
     final toolbar = _MusicPlayerToolbar(
-      viewModel: viewModel,
       onFavorites: () => _showFavorites(context),
       onRecentPlayed: () => _showRecentPlayed(context),
       onEqPanel: () => _showEqPanel(context),
@@ -125,35 +127,37 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
           if (!viewModel.isImporting.value && viewModel.importingStatus.value.isEmpty) {
             return const SizedBox.shrink();
           }
+          final s = AppSemantic.of(context);
+          final m = AppTheme.metrics;
           return Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace16,
-              vertical: AppTheme.metrics.kSpace8,
+              horizontal: m.kSpace16,
+              vertical: m.kSpace8,
             ),
-            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
+            // 强调色容器：原来用 colorScheme.primaryContainer 是 fromSeed 派生出来的，
+            // 不跟着 accent 主题色走，换主题色时这块会单独变色。
+            color: s.accentContainer,
             child: Row(
               children: [
                 // 有确定进度时显示确定进度条，否则转圈
                 SizedBox(
-                  width: 16,
+                  width: m.iconSize16,
                   child: viewModel.importingProgress.value < 0
                       ? CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.primary,
+                          strokeWidth: scaleW(2),
+                          color: s.accent,
                         )
                       : LinearProgressIndicator(
                           value: viewModel.importingProgress.value.clamp(0.0, 1.0),
-                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                          backgroundColor: s.accent.withValues(alpha: 0.2),
                         ),
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace12),
+                SizedBox(width: m.kSpace12),
                 Expanded(
                   child: Text(
                     viewModel.importingStatus.value,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
+                    style: AppTextStyles.body(context).copyWith(color: s.accentText),
                   ),
                 ),
               ],
@@ -208,153 +212,146 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   }
 
   /// 歌曲列表
+  ///
+  /// 搜索栏常驻：空列表原先整块换成"暂无音乐 + 导入按钮"，把搜索框一起带走了，
+  /// 于是搜不到结果时用户既改不了关键词，也看不到自己其实在搜索。
   Widget _buildSongList(BuildContext context) {
     final items = viewModel.filteredItems;
-
-    if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.music_note_rounded,
-              size: AppTheme.metrics.iconSize48,
-              color: Theme.of(context).hintColor,
-            ),
-            SizedBox(height: AppTheme.metrics.kSpace12),
-            Text(
-              '暂无音乐，点击导入按钮添加',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
-            ),
-            SizedBox(height: AppTheme.metrics.kSpace12),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: viewModel.pickAndImportFiles,
-                  icon: const Icon(Icons.file_open_rounded),
-                  label: const Text('选择文件'),
-                ),
-                SizedBox(width: AppTheme.metrics.kSpace8),
-                ElevatedButton.icon(
-                  onPressed: viewModel.pickAndImportFolder,
-                  icon: const Icon(Icons.folder_open_rounded),
-                  label: const Text('选择文件夹'),
-                ),
-                SizedBox(width: AppTheme.metrics.kSpace8),
-                OutlinedButton.icon(
-                  onPressed: () => _showAsmrImportDialog(context),
-                  icon: const Icon(Icons.link_rounded),
-                  label: const Text('ASMR链接'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
+    final m = AppTheme.metrics;
 
     return Column(
       children: [
         // 搜索栏 + 操作按钮
         Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppTheme.metrics.kSpace16,
-            vertical: AppTheme.metrics.kSpace8,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace8),
           child: Row(
             children: [
               // 搜索
               Expanded(
                 child: TextField(
-                  decoration: InputDecoration(
-                    hintText: '搜索歌曲...',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    isDense: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace8),
-                    ),
-                  ),
                   onChanged: (v) => viewModel.searchQuery.value = v,
+                  decoration: const InputDecoration(
+                    hintText: '搜索歌曲...',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
                 ),
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
-              IconButton(
-                onPressed: viewModel.pickAndImportFiles,
-                icon: const Icon(Icons.file_open_rounded),
+              SizedBox(width: m.kSpace8),
+              ToolIconButton(
+                icon: Icons.file_open_rounded,
                 tooltip: '导入文件',
+                onPressed: viewModel.pickAndImportFiles,
               ),
-              IconButton(
-                onPressed: viewModel.pickAndImportFolder,
-                icon: const Icon(Icons.folder_open_rounded),
+              ToolIconButton(
+                icon: Icons.folder_open_rounded,
                 tooltip: '导入文件夹',
+                onPressed: viewModel.pickAndImportFolder,
               ),
-              IconButton(
-                onPressed: () => _showAsmrImportDialog(context),
-                icon: const Icon(Icons.link_rounded),
+              ToolIconButton(
+                icon: Icons.link_rounded,
                 tooltip: 'ASMR链接导入',
+                onPressed: () => _showAsmrImportDialog(context),
               ),
-              IconButton(
-                onPressed: () => _showCreatePlaylistDialog(context),
-                icon: const Icon(Icons.add_rounded),
+              ToolIconButton(
+                icon: Icons.add_rounded,
                 tooltip: '新建播放列表',
+                onPressed: () => _showCreatePlaylistDialog(context),
               ),
             ],
           ),
         ),
         // 列表
         Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final isCurrent =
-                  viewModel.currentIndex.value == viewModel.currentItems.indexOf(item);
-              return MusicListItem(
-                item: item,
-                isCurrent: isCurrent,
-                isPlaying: isCurrent && viewModel.isPlaying.value,
-                onTap: () => viewModel.playItem(viewModel.currentItems.indexOf(item)),
-                onFavoriteTap: () => viewModel.toggleFavorite(item.id),
-                onDeleteTap: () => viewModel.deleteMusicItem(item.id),
-                onTranscribeTap: () => viewModel.transcribeItem(item),
-                onRevealTap: () => viewModel.revealInFileManager(item.filePath),
-              );
-            },
-          ),
+          child: items.isEmpty
+              ? _buildEmptySongs(context)
+              : ListView.builder(
+                  padding: EdgeInsets.symmetric(horizontal: m.kSpace16),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    final isCurrent =
+                        viewModel.currentIndex.value == viewModel.currentItems.indexOf(item);
+                    return MusicListItem(
+                      item: item,
+                      isCurrent: isCurrent,
+                      isPlaying: isCurrent && viewModel.isPlaying.value,
+                      onTap: () => viewModel.playItem(viewModel.currentItems.indexOf(item)),
+                      onFavoriteTap: () => viewModel.toggleFavorite(item.id),
+                      onDeleteTap: () => viewModel.deleteMusicItem(item.id),
+                      onTranscribeTap: () => viewModel.transcribeItem(item),
+                      onRevealTap: () => viewModel.revealInFileManager(item.filePath),
+                    );
+                  },
+                ),
         ),
       ],
     );
   }
 
+  Widget _buildEmptySongs(BuildContext context) {
+    final m = AppTheme.metrics;
+    // 搜索无结果和真的没导入过是两回事，共用一句"点击导入按钮添加"会让人以为列表被清空了。
+    if (viewModel.searchQuery.value.trim().isNotEmpty) {
+      return const EmptyState(
+        icon: Icons.search_rounded,
+        title: '未找到匹配的歌曲',
+        description: '换个关键词试试',
+      );
+    }
+    return EmptyState(
+      icon: Icons.music_note_rounded,
+      title: '暂无音乐',
+      description: '把音频文件直接拖进窗口，或用下面的按钮导入',
+      action: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: m.kSpace8,
+        runSpacing: m.kSpace8,
+        children: [
+          ElevatedButton.icon(
+            onPressed: viewModel.pickAndImportFiles,
+            icon: const Icon(Icons.file_open_rounded),
+            label: const Text('选择文件'),
+          ),
+          ElevatedButton.icon(
+            onPressed: viewModel.pickAndImportFolder,
+            icon: const Icon(Icons.folder_open_rounded),
+            label: const Text('选择文件夹'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _showAsmrImportDialog(context),
+            icon: const Icon(Icons.link_rounded),
+            label: const Text('ASMR链接'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 拖拽导入覆盖层
   Widget _buildDragOverlay(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-        border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.music_note_rounded,
-              size: AppTheme.metrics.iconSize64,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            SizedBox(height: AppTheme.metrics.kSpace12),
-            Text(
-              '松开以导入音乐',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Padding(
+      // 内缩一圈再画描边：贴窗口边的描边会被 macOS 的圆角切掉，看着像渲染坏了。
+      padding: EdgeInsets.all(m.kSpace10),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: s.accent.withValues(alpha: 0.08),
+          borderRadius: m.radiusPanel,
+          border: Border.all(color: s.accent, width: scaleW(2)),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.music_note_rounded, size: m.iconSize64, color: s.accent),
+              SizedBox(height: m.kSpace12),
+              Text(
+                '松开以导入音乐',
+                style: AppTextStyles.sectionTitle(context).copyWith(color: s.accentText),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -364,49 +361,54 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   void _showPlaylistSettings(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_rounded),
-              title: const Text('重命名'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showRenamePlaylistDialog(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.image_rounded),
-              title: const Text('更换封面'),
-              onTap: () => Navigator.pop(ctx),
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder_rounded),
-              title: const Text('移动到目录'),
-              onTap: () => Navigator.pop(ctx),
-            ),
-            // 批量语音识别
-            ListTile(
-              leading: const Icon(Icons.record_voice_over_rounded),
-              title: const Text('批量语音识别'),
-              subtitle: Text(
-                '识别当前列表 ${viewModel.currentItems.length} 首歌曲',
-                style: Theme.of(context).textTheme.bodySmall,
+      builder: (ctx) {
+        final s = AppSemantic.of(ctx);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('重命名'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showRenamePlaylistDialog(context);
+                },
               ),
-              onTap: () {
-                Navigator.pop(ctx);
-                viewModel.transcribeAllItems();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded),
-              title: const Text('删除播放列表'),
-              onTap: () => Navigator.pop(ctx),
-            ),
-          ],
-        ),
-      ),
+              ListTile(
+                leading: const Icon(Icons.image_rounded),
+                title: const Text('更换封面'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_rounded),
+                title: const Text('移动到目录'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              // 批量语音识别
+              ListTile(
+                leading: const Icon(Icons.record_voice_over_rounded),
+                title: const Text('批量语音识别'),
+                subtitle: Text(
+                  '识别当前列表 ${viewModel.currentItems.length} 首歌曲',
+                  style: AppTextStyles.caption(ctx),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  viewModel.transcribeAllItems();
+                },
+              ),
+              const AppDivider(),
+              // 危险项整行染色：混在一列普通操作里最容易被顺手点到。
+              ListTile(
+                leading: Icon(Icons.delete_outline_rounded, color: s.danger.color),
+                title: Text('删除播放列表', style: TextStyle(color: s.danger.color)),
+                onTap: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -421,7 +423,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         title: const Text('重命名'),
         content: TextField(
           controller: nameController,
-          decoration: const InputDecoration(hintText: '名称', isDense: true),
+          decoration: const InputDecoration(hintText: '名称'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
@@ -447,7 +449,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         title: const Text('新建播放列表'),
         content: TextField(
           controller: nameController,
-          decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
+          decoration: const InputDecoration(hintText: '播放列表名称'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
@@ -494,16 +496,14 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         title: const Text('ASMR 链接导入'),
         content: StatefulBuilder(
           builder: (ctx, setState) => SizedBox(
-            width: 420,
+            width: scaleW(420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '自动抓取作品信息：可下载到本地「下载/asmr」目录并导入，或直接导入远程流地址。',
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(ctx).hintColor,
-                      ),
+                  style: AppTextStyles.caption(ctx),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace12),
                 TextField(
@@ -511,8 +511,6 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                   decoration: const InputDecoration(
                     labelText: 'ASMR 链接',
                     hintText: 'https://asmr.one/work/RJ01292783',
-                    isDense: true,
-                    border: OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => submit(),
                 ),
@@ -544,12 +542,10 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                 ),
                 // 下载格式（本地下载模式可选）
                 if (downloadLocal) ...[
-                  Divider(height: AppTheme.metrics.kSpace16),
+                  AppDivider(spacing: AppTheme.metrics.kSpace16),
                   Text(
                     '下载格式',
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(ctx).hintColor,
-                        ),
+                    style: AppTextStyles.caption(ctx),
                   ),
                   Row(
                     children: [
@@ -578,7 +574,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
           ),
           ElevatedButton.icon(
             onPressed: submit,
-            icon: const Icon(Icons.link_rounded, size: 18),
+            icon: Icon(Icons.link_rounded, size: AppTheme.metrics.iconSize18),
             label: const Text('导入'),
           ),
         ],
@@ -588,81 +584,94 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
 
   /// 显示均衡器
   void _showEqPanel(BuildContext context) {
-    showModalBottomSheet(context: context, builder: (ctx) => const EqPanel());
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => const EqPanel(),
+    );
+  }
+
+  /// 收藏 / 最近播放共用的底部抽屉
+  ///
+  /// 这两个抽屉原先各写了一遍完整的 sheet（标题行、分割线、空态、行样式），
+  /// 改一处就得记得改两处。这里只留差异：标题、图标、数据源和行内容。
+  /// 数据源用回调传：抽屉里的 Obx 需要在弹开后继续跟随 Rx 变化。
+  void _showTrackSheet<T>({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required String emptyTitle,
+    required List<T> Function() items,
+    required Widget Function(BuildContext context, T item) tileBuilder,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      // 底色交给 bottomSheetTheme：这里再铺一层实心画布会把主题的浮层配色整个盖掉，抽屉因此不透。
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (_, scrollController) => Obx(() {
+          final list = items();
+          final m = AppTheme.metrics;
+          return Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(m.kSpace16),
+                child: Row(
+                  children: [
+                    Icon(icon, size: m.iconSize18, color: AppSemantic.of(ctx).accent),
+                    SizedBox(width: m.kSpace8),
+                    Text(title, style: AppTextStyles.sectionTitle(ctx)),
+                    const Spacer(),
+                    Text('${list.length} 首', style: AppTextStyles.caption(ctx)),
+                  ],
+                ),
+              ),
+              const AppDivider(),
+              Expanded(
+                child: list.isEmpty
+                    ? EmptyState(icon: icon, title: emptyTitle, compact: true)
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: list.length,
+                        itemBuilder: (_, index) => tileBuilder(ctx, list[index]),
+                      ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
   }
 
   /// 显示收藏列表
   void _showFavorites(BuildContext context) async {
     await viewModel.loadFavorites();
     if (!context.mounted) return;
-    showModalBottomSheet(
+    _showTrackSheet(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.8,
-        expand: false,
-        // 底色交给 bottomSheetTheme：这里原来又铺了一层实心 scaffoldBackgroundColor，
-        // 把主题的浮层配色整个盖掉，抽屉因此完全不透。
-        builder: (_, scrollController) => Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-              child: Row(
-                children: [
-                  Icon(Icons.favorite_rounded, color: Theme.of(context).colorScheme.primary),
-                  SizedBox(width: AppTheme.metrics.kSpace8),
-                  Text('收藏', style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  Obx(() => Text(
-                    '${viewModel.favoriteItems.length} 首',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  )),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: Obx(() => viewModel.favoriteItems.isEmpty
-                  ? Center(
-                      child: Text(
-                        '暂无收藏',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).hintColor,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: scrollController,
-                      itemCount: viewModel.favoriteItems.length,
-                      itemBuilder: (_, index) {
-                        final item = viewModel.favoriteItems[index];
-                        return ListTile(
-                          leading: const Icon(Icons.music_note_rounded, size: 20),
-                          title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(
-                            item.artist ?? '未知艺术家',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            // 在当前列表中查找并播放
-                            final idx = viewModel.currentItems.indexWhere((i) => i.id == item.id);
-                            if (idx >= 0) {
-                              viewModel.playItem(idx);
-                            } else {
-                              viewModel.currentItems.value = [item];
-                              viewModel.playItem(0);
-                            }
-                          },
-                        );
-                      },
-                    )),
-            ),
-            ],
-          ),
+      title: '收藏',
+      icon: Icons.favorite_rounded,
+      emptyTitle: '暂无收藏',
+      items: () => viewModel.favoriteItems,
+      tileBuilder: (ctx, item) => _TrackTile(
+        title: item.title,
+        artist: item.artist,
+        onTap: () {
+          Navigator.pop(ctx);
+          // 在当前列表中查找并播放
+          final idx = viewModel.currentItems.indexWhere((i) => i.id == item.id);
+          if (idx >= 0) {
+            viewModel.playItem(idx);
+          } else {
+            viewModel.currentItems.value = [item];
+            viewModel.playItem(0);
+          }
+        },
       ),
     );
   }
@@ -671,74 +680,57 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   void _showRecentPlayed(BuildContext context) async {
     await viewModel.loadRecentPlayed();
     if (!context.mounted) return;
-    showModalBottomSheet(
+    _showTrackSheet(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.8,
-        expand: false,
-        // 同上：抽屉底色交给 bottomSheetTheme，这里不再铺一层实心画布。
-        builder: (_, scrollController) => Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-              child: Row(
-                children: [
-                  Icon(Icons.history_rounded, color: Theme.of(context).colorScheme.primary),
-                  SizedBox(width: AppTheme.metrics.kSpace8),
-                  Text('最近播放', style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  Obx(() => Text(
-                    '${viewModel.recentRecords.length} 首',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  )),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: Obx(() => viewModel.recentRecords.isEmpty
-                  ? Center(
-                      child: Text(
-                        '暂无播放记录',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).hintColor,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: scrollController,
-                      itemCount: viewModel.recentRecords.length,
-                      itemBuilder: (_, index) {
-                        final record = viewModel.recentRecords[index];
-                        final musicItem = viewModel.currentItems.firstWhereOrNull(
-                          (i) => i.id == record.musicId,
-                        );
-                        final title = musicItem?.title ?? '未知歌曲';
-                        final artist = musicItem?.artist;
-                        return ListTile(
-                          leading: const Icon(Icons.music_note_rounded, size: 20),
-                          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: artist != null
-                              ? Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis)
-                              : null,
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            final idx = viewModel.currentItems.indexWhere(
-                              (i) => i.id == record.musicId,
-                            );
-                            if (idx >= 0) {
-                              viewModel.playItem(idx);
-                            }
-                          },
-                        );
-                      },
-                    )),
-            ),
-            ],
-          ),
+      title: '最近播放',
+      icon: Icons.history_rounded,
+      emptyTitle: '暂无播放记录',
+      items: () => viewModel.recentRecords,
+      tileBuilder: (ctx, record) {
+        final musicItem = viewModel.currentItems.firstWhereOrNull(
+          (i) => i.id == record.musicId,
+        );
+        return _TrackTile(
+          title: musicItem?.title ?? '未知歌曲',
+          artist: musicItem?.artist,
+          onTap: () {
+            Navigator.pop(ctx);
+            final idx = viewModel.currentItems.indexWhere((i) => i.id == record.musicId);
+            if (idx >= 0) viewModel.playItem(idx);
+          },
+        );
+      },
+    );
+  }
+}
+
+/// 抽屉里的歌曲行
+class _TrackTile extends StatelessWidget {
+  const _TrackTile({required this.title, this.artist, this.onTap});
+
+  final String title;
+  final String? artist;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return ListTile(
+      dense: true,
+      onTap: onTap,
+      leading: Icon(Icons.music_note_rounded, size: m.iconSize20, color: s.textTertiary),
+      title: Text(
+        title,
+        style: AppTextStyles.rowTitle(context),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        artist ?? '未知艺术家',
+        style: AppTextStyles.caption(context),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -778,34 +770,29 @@ class _FolderInfoHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppTheme.metrics.kSpace24,
-        AppTheme.metrics.kSpace20,
-        AppTheme.metrics.kSpace24,
-        AppTheme.metrics.kSpace16,
-      ),
+      padding: EdgeInsets.fromLTRB(m.kSpace24, m.kSpace20, m.kSpace24, m.kSpace16),
       decoration: BoxDecoration(
         // 整块不透明会把窗口磨砂彻底盖掉；渐变本身保留，只降到分区面板那一档。
+        // 原来这里按 isDark 手写了两组十六进制色，换主题色时这块不会跟着变。
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: (isDark
-                  ? const [Color(0xFF252523), Color(0xFF1A1A18)]
-                  : const [Color(0xFFF5F5F3), Color(0xFFEDEDEB)])
+          colors: [s.surface, s.surfaceSunken]
               .map((color) => color.withAlpha(WindowGlass.panelAlpha))
               .toList(),
         ),
-        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+        border: Border(bottom: BorderSide(color: s.hairline, width: scaleW(1))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 封面
           _buildCover(context),
-          SizedBox(width: AppTheme.metrics.kSpace20),
+          SizedBox(width: m.kSpace20),
           // 信息 + 操作
           Expanded(child: _buildInfo(context)),
         ],
@@ -814,7 +801,9 @@ class _FolderInfoHeader extends StatelessWidget {
   }
 
   Widget _buildCover(BuildContext context) {
-    const coverSize = 96.0;
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    final coverSize = scaleW(96);
     final hasCover = coverPath != null && File(coverPath!).existsSync();
 
     return GestureDetector(
@@ -823,15 +812,11 @@ class _FolderInfoHeader extends StatelessWidget {
         width: coverSize,
         height: coverSize,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace12),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          borderRadius: m.radiusCard,
+          // 占位底色必须是比表面更暗的一档：surfaceContainerHighest 在亮色下比白卡片还亮，
+          // 没封面的时候这里就是一片纯白，看不出是块可点的封面区域。
+          color: s.surfaceSunken,
+          boxShadow: s.elevation(Elevation.raised),
         ),
         clipBehavior: Clip.antiAlias,
         child: hasCover
@@ -848,8 +833,10 @@ class _FolderInfoHeader extends StatelessWidget {
   }
 
   Widget _buildDefaultCoverContent(BuildContext context, double size) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Container(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: s.surfaceSunken,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -857,16 +844,16 @@ class _FolderInfoHeader extends StatelessWidget {
           Icon(
             Icons.music_note_rounded,
             size: size * 0.35,
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+            color: s.accent.withValues(alpha: 0.4),
           ),
           // 右下角设置图标
           Positioned(
-            right: 4,
-            bottom: 4,
+            right: m.kSpace4,
+            bottom: m.kSpace4,
             child: Icon(
               Icons.settings_rounded,
-              size: 14,
-              color: Theme.of(context).hintColor.withValues(alpha: 0.5),
+              size: m.iconSize14,
+              color: s.textTertiary.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -875,6 +862,8 @@ class _FolderInfoHeader extends StatelessWidget {
   }
 
   Widget _buildInfo(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -882,17 +871,15 @@ class _FolderInfoHeader extends StatelessWidget {
         // 名称
         Text(
           name,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, height: 1.2),
+          style: AppTextStyles.pageTitle(context),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        SizedBox(height: AppTheme.metrics.kSpace8),
+        SizedBox(height: m.kSpace8),
         // 统计信息标签
         Wrap(
-          spacing: AppTheme.metrics.kSpace8,
-          runSpacing: AppTheme.metrics.kSpace4,
+          spacing: m.kSpace12,
+          runSpacing: m.kSpace4,
           children: [
             _InfoChip(icon: Icons.audiotrack_rounded, label: '$songCount 首'),
             if (playCount > 0)
@@ -905,100 +892,89 @@ class _FolderInfoHeader extends StatelessWidget {
         ),
         if (tags != null && tags!.isNotEmpty)
           Padding(
-            padding: EdgeInsets.only(top: AppTheme.metrics.kSpace4),
+            padding: EdgeInsets.only(top: m.kSpace8),
             child: Wrap(
-              spacing: AppTheme.metrics.kSpace4,
-              children: tags!.split(',').map((t) {
-                final tag = t.trim();
-                if (tag.isEmpty) return const SizedBox.shrink();
-                return Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppTheme.metrics.kSpace8,
-                    vertical: AppTheme.metrics.kSpace2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace4),
-                  ),
-                  child: Text(
-                    tag,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontSize: AppTheme.metrics.fontSize10,
-                    ),
-                  ),
-                );
-              }).toList(),
+              spacing: m.kSpace6,
+              runSpacing: m.kSpace4,
+              children: [
+                for (final raw in tags!.split(','))
+                  if (raw.trim().isNotEmpty) TagChip(label: raw.trim()),
+              ],
             ),
           ),
-        SizedBox(height: AppTheme.metrics.kSpace12),
+        SizedBox(height: m.kSpace12),
         // 操作按钮
+        // 按钮区用 Wrap 而不是 Row： Row + Spacer 在窗口变窄时会直接溢出报错。
         Row(
           children: [
-            // 全部播放
-            ElevatedButton.icon(
-              onPressed: onPlayAll,
-              icon: const Icon(Icons.play_arrow_rounded, size: 20),
-              label: const Text('全部播放'),
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.metrics.kSpace16,
-                  vertical: AppTheme.metrics.kSpace6,
-                ),
-                visualDensity: VisualDensity.compact,
+            Expanded(
+              child: Wrap(
+                spacing: m.kSpace8,
+                runSpacing: m.kSpace8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  // 全部播放
+                  ElevatedButton.icon(
+                    onPressed: onPlayAll,
+                    icon: Icon(Icons.play_arrow_rounded, size: m.iconSize20),
+                    label: const Text('全部播放'),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: m.kSpace16,
+                        vertical: m.kSpace6,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  // 导入文件
+                  OutlinedButton.icon(
+                    onPressed: onImportFiles,
+                    icon: Icon(Icons.file_open_rounded, size: m.iconSize18),
+                    label: const Text('导入文件'),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: m.kSpace12,
+                        vertical: m.kSpace6,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  // 导入文件夹
+                  OutlinedButton.icon(
+                    onPressed: onImportFolder,
+                    icon: Icon(Icons.folder_open_rounded, size: m.iconSize18),
+                    label: const Text('导入文件夹'),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: m.kSpace12,
+                        vertical: m.kSpace6,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  // ASMR 链接导入
+                  OutlinedButton.icon(
+                    onPressed: onImportAsmr,
+                    icon: Icon(Icons.link_rounded, size: m.iconSize18),
+                    label: const Text('ASMR链接'),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: m.kSpace12,
+                        vertical: m.kSpace6,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(width: AppTheme.metrics.kSpace8),
-            // 导入文件
-            OutlinedButton.icon(
-              onPressed: onImportFiles,
-              icon: const Icon(Icons.file_open_rounded, size: 18),
-              label: const Text('导入文件'),
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.metrics.kSpace12,
-                  vertical: AppTheme.metrics.kSpace6,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            SizedBox(width: AppTheme.metrics.kSpace8),
-            // 导入文件夹
-            OutlinedButton.icon(
-              onPressed: onImportFolder,
-              icon: const Icon(Icons.folder_open_rounded, size: 18),
-              label: const Text('导入文件夹'),
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.metrics.kSpace12,
-                  vertical: AppTheme.metrics.kSpace6,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            SizedBox(width: AppTheme.metrics.kSpace8),
-            // ASMR 链接导入
-            OutlinedButton.icon(
-              onPressed: onImportAsmr,
-              icon: const Icon(Icons.link_rounded, size: 18),
-              label: const Text('ASMR链接'),
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.metrics.kSpace12,
-                  vertical: AppTheme.metrics.kSpace6,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            const Spacer(),
+            SizedBox(width: m.kSpace8),
             // 设置
             IconButton(
               onPressed: onSettings,
               icon: const Icon(Icons.more_horiz_rounded),
               tooltip: '设置',
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              ),
+              style: IconButton.styleFrom(backgroundColor: s.surfaceSunken),
             ),
           ],
         ),
@@ -1025,18 +1001,14 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Theme.of(context).hintColor),
-        SizedBox(width: AppTheme.metrics.kSpace2),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).hintColor,
-            fontSize: AppTheme.metrics.fontSize11,
-          ),
-        ),
+        Icon(icon, size: m.iconSize14, color: s.textTertiary),
+        SizedBox(width: m.kSpace4),
+        Text(label, style: AppTextStyles.caption(context)),
       ],
     );
   }
@@ -1044,13 +1016,11 @@ class _InfoChip extends StatelessWidget {
 
 /// 音乐播放器顶部工具栏（收藏、最近播放、均衡器）
 class _MusicPlayerToolbar extends StatelessWidget {
-  final MusicPlayerViewModel viewModel;
   final VoidCallback onFavorites;
   final VoidCallback onRecentPlayed;
   final VoidCallback onEqPanel;
 
   const _MusicPlayerToolbar({
-    required this.viewModel,
     required this.onFavorites,
     required this.onRecentPlayed,
     required this.onEqPanel,
@@ -1058,21 +1028,22 @@ class _MusicPlayerToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
     return Row(
       children: [
         DesktopHeadToolsButton(
-          icon: const Icon(Icons.favorite_rounded, size: 16),
-          size: 32,
+          icon: Icon(Icons.favorite_rounded, size: m.iconSize16),
+          size: m.iconSize32,
           onTap: onFavorites,
         ),
         DesktopHeadToolsButton(
-          icon: const Icon(Icons.history_rounded, size: 16),
-          size: 32,
+          icon: Icon(Icons.history_rounded, size: m.iconSize16),
+          size: m.iconSize32,
           onTap: onRecentPlayed,
         ),
         DesktopHeadToolsButton(
-          icon: const Icon(Icons.equalizer_rounded, size: 16),
-          size: 32,
+          icon: Icon(Icons.equalizer_rounded, size: m.iconSize16),
+          size: m.iconSize32,
           onTap: onEqPanel,
         ),
       ],

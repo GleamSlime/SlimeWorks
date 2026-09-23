@@ -3,10 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
+import 'package:slime_works/core/widgets/app_chips.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
@@ -19,11 +24,13 @@ class PlaylistSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withAlpha(WindowGlass.panelAlpha),
-        border: Border(right: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+        color: s.surface.withAlpha(WindowGlass.panelAlpha),
+        // 原来只画右边一条描边却配了圆角：圆角处描边断开，看着像缺了一角。
         borderRadius: AppTheme.metrics.radius10,
+        border: Border.all(color: s.hairline, width: scaleW(1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,22 +45,17 @@ class PlaylistSidebar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text(
-                  '播放列表',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                ),
+                Text('播放列表', style: AppTextStyles.cardTitle(context)),
                 const Spacer(),
                 // 新建子目录
-                IconButton(
-                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                ToolIconButton(
+                  icon: Icons.create_new_folder_outlined,
                   onPressed: () => _showCreateFolderDialog(context),
                   tooltip: '新建子目录',
                 ),
                 // 新建播放列表
-                IconButton(
-                  icon: const Icon(Icons.add_rounded, size: 18),
+                ToolIconButton(
+                  icon: Icons.add_rounded,
                   onPressed: () => _showCreatePlaylistDialog(context),
                   tooltip: '新建播放列表',
                 ),
@@ -62,7 +64,7 @@ class PlaylistSidebar extends StatelessWidget {
           ),
           // 面包屑导航
           Obx(() => _buildBreadcrumb(context)),
-          const Divider(height: 1),
+          const AppDivider(),
           // 路径映射 + 目录 + 播放列表
           Expanded(
             child: Obx(() {
@@ -74,24 +76,23 @@ class PlaylistSidebar extends StatelessWidget {
               final subFolders = viewModel.currentSubFolders;
               final folderPlaylists = viewModel.currentFolderPlaylists;
               if (mappings.isEmpty && subFolders.isEmpty && folderPlaylists.isEmpty) {
-                return Center(
-                  child: Column(
+                return EmptyState(
+                  title: '暂无内容',
+                  icon: Icons.folder_open_rounded,
+                  compact: true,
+                  action: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '暂无内容',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-                      ),
-                      SizedBox(height: AppTheme.metrics.kSpace8),
                       TextButton.icon(
-                        icon: const Icon(Icons.create_new_folder_outlined, size: 16),
+                        icon: Icon(
+                          Icons.create_new_folder_outlined,
+                          size: AppTheme.metrics.iconSize16,
+                        ),
                         label: const Text('新建子目录'),
                         onPressed: () => _showCreateFolderDialog(context),
                       ),
                       TextButton.icon(
-                        icon: const Icon(Icons.add_rounded, size: 16),
+                        icon: Icon(Icons.add_rounded, size: AppTheme.metrics.iconSize16),
                         label: const Text('新建播放列表'),
                         onPressed: () => _showCreatePlaylistDialog(context),
                       ),
@@ -162,8 +163,8 @@ class PlaylistSidebar extends StatelessWidget {
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
               child: Icon(
                 Icons.chevron_right_rounded,
-                size: 14,
-                color: Theme.of(context).hintColor,
+                size: AppTheme.metrics.iconSize14,
+                color: AppSemantic.of(context).textTertiary,
               ),
             ),
             _BreadcrumbChip(
@@ -242,11 +243,16 @@ class _BreadcrumbChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4, vertical: 2),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace4,
+          vertical: scaleW(2),
+        ),
         child: Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: isActive ? Theme.of(context).colorScheme.primary : Theme.of(context).hintColor,
+          style: AppTextStyles.body(context).copyWith(
+            color: isActive
+                ? AppSemantic.of(context).accent
+                : AppSemantic.of(context).textTertiary,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -271,16 +277,24 @@ class _FolderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return ListTile(
       dense: true,
       leading: Icon(
         Icons.folder_rounded,
-        size: 18,
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+        size: m.iconSize18,
+        // 目录比播放列表低一档权重：同一层里靠饱和度区分，而不是靠字号。
+        color: s.accent.withValues(alpha: 0.7),
       ),
-      title: Text(folder.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(
+        folder.name,
+        style: AppTextStyles.rowTitle(context),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       trailing: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert_rounded, size: 16),
+        icon: Icon(Icons.more_vert_rounded, size: m.iconSize16),
         onSelected: (action) {
           switch (action) {
             case 'rename':
@@ -378,27 +392,33 @@ class _PlaylistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return ListTile(
       dense: true,
       selected: isSelected,
-      selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+      // 选中底用 accentContainer 而不是 primary@10% 手搓：这是全站的"选中"语言。
+      selectedTileColor: s.accentContainer,
       leading: Icon(
         playlist.isDefault ? Icons.queue_music_rounded : Icons.playlist_play_rounded,
-        size: 18,
-        color: isSelected ? Theme.of(context).colorScheme.primary : null,
+        size: m.iconSize18,
+        color: isSelected ? s.accent : null,
       ),
       title: Text(
         playlist.name,
-        style: TextStyle(
-          color: isSelected ? Theme.of(context).colorScheme.primary : null,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        style: AppTextStyles.rowTitle(context).copyWith(
+          color: isSelected ? s.accent : s.textPrimary,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text('${playlist.itemCount} 首', style: Theme.of(context).textTheme.bodySmall),
+      subtitle: Text(
+        '${playlist.itemCount} 首',
+        style: AppTextStyles.caption(context),
+      ),
       trailing: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert_rounded, size: 16),
+        icon: Icon(Icons.more_vert_rounded, size: m.iconSize16),
         onSelected: (action) {
           switch (action) {
             case 'rename':
@@ -472,6 +492,8 @@ class _PathMappingTileState extends State<_PathMappingTile> {
   @override
   Widget build(BuildContext context) {
     final node = widget.node;
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -487,26 +509,22 @@ class _PathMappingTileState extends State<_PathMappingTile> {
               children: [
                 Icon(
                   _isExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
-                  size: 18,
-                  color: Theme.of(context).hintColor,
+                  size: m.iconSize18,
+                  color: s.textTertiary,
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Icon(
                   Icons.link_rounded,
-                  size: 16,
-                  color: node.hasAudio
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).hintColor,
+                  size: m.iconSize16,
+                  color: node.hasAudio ? s.accent : s.textTertiary,
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Expanded(
                   child: Text(
                     node.name,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: node.hasAudio
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                    style: AppTextStyles.rowTitle(context).copyWith(
+                      fontSize: m.fontSize12,
+                      color: node.hasAudio ? s.accent : s.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -516,25 +534,30 @@ class _PathMappingTileState extends State<_PathMappingTile> {
                   Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: AppTheme.metrics.kSpace4,
-                      vertical: 1,
+                      vertical: scaleW(1),
                     ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace4),
+                      color: s.accentContainer,
+                      borderRadius: m.radius4,
                     ),
                     child: Text(
                       '含音频',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontSize: 10,
+                      style: AppTextStyles.overline(context).copyWith(
+                        color: s.accentText,
+                        fontSize: m.fontSize10,
+                        letterSpacing: 0,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert_rounded, size: 14, color: Theme.of(context).hintColor),
+                  icon: Icon(Icons.more_vert_rounded, size: m.iconSize14, color: s.textTertiary),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  constraints: BoxConstraints(
+                    minWidth: m.kSpace24,
+                    minHeight: m.kSpace24,
+                  ),
                   tooltip: '映射操作',
                   onSelected: (value) {
                     switch (value) {
@@ -628,20 +651,21 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
                 if (isDir)
                   Icon(
                     _isExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
-                    size: 14,
-                    color: Theme.of(context).hintColor,
+                    size: AppTheme.metrics.iconSize14,
+                    color: AppSemantic.of(context).textTertiary,
                   )
                 else
-                  SizedBox(width: 14),
+                  SizedBox(width: AppTheme.metrics.iconSize14),
                 SizedBox(width: AppTheme.metrics.kSpace4),
-                Icon(icon, size: 14, color: iconColor),
+                Icon(icon, size: AppTheme.metrics.iconSize14, color: iconColor),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Expanded(
                   child: Text(
                     node.name,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: AppTextStyles.rowTitle(context).copyWith(
+                      fontSize: AppTheme.metrics.fontSize12,
                       color: _getTextColor(context, node),
-                      fontWeight: node.hasAudio ? FontWeight.w500 : FontWeight.normal,
+                      fontWeight: node.hasAudio ? FontWeight.w500 : FontWeight.w400,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -650,9 +674,8 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
                 if (node.fileSize != null)
                   Text(
                     _formatFileSize(node.fileSize!),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).hintColor,
-                      fontSize: 10,
+                    style: AppTextStyles.caption(context).copyWith(
+                      fontSize: AppTheme.metrics.fontSize10,
                     ),
                   ),
               ],
@@ -689,23 +712,26 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
   }
 
   Color _getIconColor(BuildContext context, music_api.PathMappingNodeInfo node) {
+    final s = AppSemantic.of(context);
     switch (node.nodeType) {
       case music_api.PathMappingNodeType.directory:
-        return Theme.of(context).colorScheme.primary.withValues(alpha: 0.7);
+        return s.accent.withValues(alpha: 0.7);
       case music_api.PathMappingNodeType.audioFile:
-        return Theme.of(context).colorScheme.primary;
+        return s.accent;
       case music_api.PathMappingNodeType.imageFile:
-        return Colors.teal;
+        // 图片/歌词的类型色走状态色族：裸 Colors.teal / Colors.orange 不随明暗，
+        // 在暗色面板上就是一块刺眼的生色。
+        return s.info.color;
       case music_api.PathMappingNodeType.cueFile:
-        return Colors.orange;
+        return s.warning.color;
       case music_api.PathMappingNodeType.otherFile:
-        return Theme.of(context).hintColor;
+        return s.textTertiary;
     }
   }
 
   Color? _getTextColor(BuildContext context, music_api.PathMappingNodeInfo node) {
     if (node.hasAudio || node.nodeType == music_api.PathMappingNodeType.audioFile) {
-      return Theme.of(context).colorScheme.primary;
+      return AppSemantic.of(context).accent;
     }
     return null;
   }
@@ -743,6 +769,7 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
   void _previewImage(BuildContext context, music_api.PathMappingNodeInfo node) {
     final file = File(node.path);
     if (!file.existsSync()) return;
+    final m = AppTheme.metrics;
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -750,21 +777,25 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+              padding: EdgeInsets.all(m.kSpace8),
               child: Row(
                 children: [
-                  Icon(Icons.image_rounded, size: 16, color: Colors.teal),
-                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  Icon(
+                    Icons.image_rounded,
+                    size: m.iconSize16,
+                    color: AppSemantic.of(context).info.color,
+                  ),
+                  SizedBox(width: m.kSpace8),
                   Expanded(
                     child: Text(
                       node.name,
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: AppTextStyles.cardTitle(context),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18),
+                    icon: Icon(Icons.close_rounded, size: m.iconSize18),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -775,8 +806,8 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
                 file,
                 fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => Padding(
-                  padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
-                  child: Text('无法加载图片', style: Theme.of(context).textTheme.bodyMedium),
+                  padding: EdgeInsets.all(m.kSpace32),
+                  child: Text('无法加载图片', style: AppTextStyles.body(context)),
                 ),
               ),
             ),
@@ -791,47 +822,45 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
     final file = File(node.path);
     if (!file.existsSync()) return;
     final content = file.readAsStringSync();
+    final m = AppTheme.metrics;
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         child: SizedBox(
-          width: 480,
-          height: 400,
+          width: scaleW(480),
+          height: scaleW(400),
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
+                padding: EdgeInsets.all(m.kSpace8),
                 child: Row(
                   children: [
-                    Icon(Icons.description_rounded, size: 16, color: Colors.orange),
-                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    Icon(
+                      Icons.description_rounded,
+                      size: m.iconSize16,
+                      color: AppSemantic.of(context).warning.color,
+                    ),
+                    SizedBox(width: m.kSpace8),
                     Expanded(
                       child: Text(
                         node.name,
-                        style: Theme.of(context).textTheme.titleSmall,
+                        style: AppTextStyles.cardTitle(context),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18),
+                      icon: Icon(Icons.close_rounded, size: m.iconSize18),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              const AppDivider(),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                  child: SelectableText(
-                    content,
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
-                    ),
-                  ),
+                  padding: EdgeInsets.all(m.kSpace12),
+                  child: SelectableText(content, style: AppTextStyles.mono(context)),
                 ),
               ),
             ],

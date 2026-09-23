@@ -4,12 +4,46 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
+import 'package:slime_works/pages/music_player/components/eq_panel.dart';
 import 'package:slime_works/pages/music_player/components/vinyl_disc_animation.dart';
 import 'package:slime_works/pages/music_player/components/player_controls.dart';
 import 'package:slime_works/pages/music_player/components/waveform_seek_bar.dart';
+
+/// 沉浸式页面画在封面模糊层上，底色恒为深色，所以这一页的文字/轨道色不走语义色：
+/// 语义色（textSecondary 等）是按"压在浅色表面上"设计的，放到深色 art 上会直接看不见。
+/// 这里把原先散落的二十多处 `Colors.white.withValues(alpha: x)` 收成一套档位，
+/// 保证同一层信息在页面各处是同一个白度。
+abstract final class _OnArt {
+  static const Color primary = Colors.white;
+  static const Color secondary = Color(0xCCFFFFFF); // 80%，图标与需要分量的文字
+  static const Color muted = Color(0xB3FFFFFF); // 70%，说明文字与未选中态
+  static const Color faint = Color(0x66FFFFFF); // 40%，歌词的未播放行
+  static const Color track = Color(0xE6FFFFFF); // 90%
+  static const Color trackDim = Color(0x4DFFFFFF); // 30%
+  static const Color hairline = Color(0x26FFFFFF); // 15%
+  static const Color panel = Color(0xB3000000); // 70% 黑，浮层底
+}
+
+/// 压在 art 上的滑块：进度条和音量浮层用同一份轨道口径
+SliderThemeData _onArtSliderTheme() {
+  return SliderThemeData(
+    trackHeight: scaleW(3),
+    thumbShape: RoundSliderThumbShape(enabledThumbRadius: scaleW(6)),
+    overlayShape: RoundSliderOverlayShape(overlayRadius: scaleW(12)),
+    activeTrackColor: _OnArt.track,
+    inactiveTrackColor: _OnArt.trackDim,
+    thumbColor: _OnArt.primary,
+  );
+}
+
+/// art 上的小号说明文字：进度时间、按钮标签、歌词行标签共用一档
+TextStyle _artCaption(BuildContext context) =>
+    AppTextStyles.caption(context).copyWith(color: _OnArt.muted);
 
 /// 沉浸式播放器页面（全屏唱片机）
 ///
@@ -55,19 +89,17 @@ class ImmersivePlayerScreen extends StatelessWidget {
 
   /// 顶部工具栏
   Widget _buildTopBar(BuildContext context) {
+    final m = AppTheme.metrics;
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.metrics.kSpace8,
-        vertical: AppTheme.metrics.kSpace4,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
       child: Row(
         children: [
           // 返回按钮
           IconButton(
             onPressed: viewModel.exitImmersiveMode,
             icon: const Icon(Icons.keyboard_arrow_down_rounded),
-            iconSize: 28,
-            color: Colors.white,
+            iconSize: m.iconSize28,
+            color: _OnArt.primary,
             tooltip: '收起',
           ),
           const Spacer(),
@@ -77,7 +109,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
               _showMoreOptions(context);
             },
             icon: const Icon(Icons.more_vert_rounded),
-            color: Colors.white,
+            color: _OnArt.primary,
             tooltip: '更多',
           ),
         ],
@@ -85,34 +117,33 @@ class ImmersivePlayerScreen extends StatelessWidget {
     );
   }
 
-  /// 中间唱片机区域（白色背景）或歌词面板
+  /// 中间唱片机区域或歌词面板
   Widget _buildVinylArea(BuildContext context, String? coverPath, bool playing) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Obx(() {
       final showLyrics = viewModel.showLyricsPanel.value;
       if (showLyrics && viewModel.currentLyrics.isNotEmpty) {
         return _LyricsPanel(viewModel: viewModel);
       }
+      final plateSize = scaleW(320);
       // 默认显示唱片机
       return Center(
         child: Container(
-          width: 320,
-          height: 320,
+          width: plateSize,
+          height: plateSize,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
+            // 白色唱片垫是有意跨明暗保持不变的：黑胶本体是深色物理质感，
+            // 换成主题表面色后暗色模式下盘面会糊进背景里。
+            color: _OnArt.primary,
+            borderRadius: m.radiusOverlay,
+            boxShadow: s.elevation(Elevation.card),
           ),
           child: Center(
             child: VinylDiscAnimation(
               coverPath: coverPath,
               isPlaying: playing,
-              size: 260,
+              size: scaleW(260),
             ),
           ),
         ),
@@ -122,45 +153,41 @@ class ImmersivePlayerScreen extends StatelessWidget {
 
   /// 底部信息 + 控制区
   Widget _buildBottomArea(BuildContext context, String title, String? artist, String? album) {
+    final m = AppTheme.metrics;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+      padding: EdgeInsets.symmetric(horizontal: m.kSpace24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // 歌曲信息
           Text(
             title.isEmpty ? '未选择歌曲' : title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: AppTextStyles.pageTitle(context).copyWith(color: _OnArt.primary),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           if (artist != null || album != null)
             Padding(
-              padding: EdgeInsets.only(top: AppTheme.metrics.kSpace8),
+              padding: EdgeInsets.only(top: m.kSpace8),
               child: Text(
                 [?artist, ?album].join(' · '),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
+                style: AppTextStyles.body(context).copyWith(color: _OnArt.muted),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-          SizedBox(height: AppTheme.metrics.kSpace24),
+          SizedBox(height: m.kSpace24),
           // 进度条
           _buildProgressBar(context),
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          SizedBox(height: m.kSpace16),
           // 播放控制（紧凑模式：仅上一首/播放/下一首，白色图标）
-          PlayerControls(viewModel: viewModel, compact: true, color: Colors.white),
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          PlayerControls(viewModel: viewModel, compact: true, color: _OnArt.primary),
+          SizedBox(height: m.kSpace16),
           // 底部功能按钮
           _buildBottomActions(context),
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          SizedBox(height: m.kSpace16),
         ],
       ),
     );
@@ -168,6 +195,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
 
   /// 进度条（普通模式或波形模式）
   Widget _buildProgressBar(BuildContext context) {
+    final m = AppTheme.metrics;
     return Obx(() {
       final position = viewModel.currentPositionMs.value;
       final duration = viewModel.durationMs.value;
@@ -185,21 +213,14 @@ class ImmersivePlayerScreen extends StatelessWidget {
               positionMs: position,
               durationMs: duration,
               onSeek: viewModel.seekTo,
-              activeColor: Colors.white.withValues(alpha: 0.9),
-              inactiveColor: Colors.white.withValues(alpha: 0.3),
+              activeColor: _OnArt.track,
+              inactiveColor: _OnArt.trackDim,
               isLoading: isLoading,
             )
           else
             // 普通进度条
             SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                activeTrackColor: Colors.white.withValues(alpha: 0.9),
-                inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                thumbColor: Colors.white,
-              ),
+              data: _onArtSliderTheme(),
               child: Slider(
                 value: duration > 0 ? position.clamp(0, duration).toDouble() : 0,
                 min: 0,
@@ -207,23 +228,13 @@ class ImmersivePlayerScreen extends StatelessWidget {
                 onChanged: (v) => viewModel.seekTo(v.toInt()),
               ),
             ),
-          SizedBox(height: 4),
+          SizedBox(height: m.kSpace4),
           // 时间显示
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                viewModel.formatDuration(position),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
-              ),
-              Text(
-                viewModel.formatDuration(duration),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
-              ),
+              Text(viewModel.formatDuration(position), style: _artCaption(context)),
+              Text(viewModel.formatDuration(duration), style: _artCaption(context)),
             ],
           ),
         ],
@@ -251,11 +262,12 @@ class ImmersivePlayerScreen extends StatelessWidget {
           final item = viewModel.currentItem;
           final isFav = item?.isFavorite ?? false;
           return _ActionButton(
+            // 选中态靠"空心→实心"区分，不额外染红：原先的 Colors.redAccent
+            // 既不在状态色体系里，也不在这页的白色口径里。
             icon: isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
             label: '收藏',
             active: isFav,
             onTap: item != null ? () => viewModel.toggleFavorite(item.id) : null,
-            activeColor: Colors.redAccent,
           );
         }),
         // 歌词
@@ -313,47 +325,12 @@ class ImmersivePlayerScreen extends StatelessWidget {
   }
 
   void _showEqPanel(BuildContext context) {
+    // 复用主页面那份 EqPanel：这里原先自己写过一套 _EqSliders，
+    // 拖滑块只改本地状态、不 applyEqBands，沉浸式里调 EQ 等于没调。
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
-        maxChildSize: 0.8,
-        expand: false,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppTheme.metrics.kSpace16),
-            ),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace16),
-              Text(
-                '均衡器',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              SizedBox(height: AppTheme.metrics.kSpace16),
-              // 均衡器内容（简化版）
-              _EqSliders(viewModel: viewModel),
-            ],
-          ),
-        ),
-      ),
+      showDragHandle: true,
+      builder: (_) => const EqPanel(),
     );
   }
 }
@@ -379,12 +356,10 @@ class _BlurredBackground extends StatelessWidget {
               height: double.infinity,
             ),
           ),
-        // 半透明黑色遮罩
+        // 半透明遮罩：把封面压暗到能看清白色文字，档位用全局 scrim 而不是本地再调一次
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.6),
-          ),
+          child: ColoredBox(color: AppSemantic.of(context).scrim),
         ),
       ],
     );
@@ -397,37 +372,30 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback? onTap;
-  final Color? activeColor;
 
   const _ActionButton({
     required this.icon,
     required this.label,
     this.active = false,
     this.onTap,
-    this.activeColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = active
-        ? (activeColor ?? Theme.of(context).colorScheme.primary)
-        : Colors.white.withValues(alpha: 0.7);
+    // 选中用纯白、未选中用 70% 白：这页压在深色 art 上，
+    // 语义强调色在亮色模式下是深色，选中态会变成"看不见的那一档"。
+    final color = active ? _OnArt.primary : _OnArt.muted;
+    final m = AppTheme.metrics;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           onPressed: onTap,
-          icon: Icon(icon, size: 24),
+          icon: Icon(icon, size: m.iconSize24),
           color: color,
         ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: color,
-            fontSize: AppTheme.metrics.fontSize10,
-          ),
-        ),
+        Text(label, style: _artCaption(context).copyWith(color: color)),
       ],
     );
   }
@@ -440,6 +408,7 @@ class _VolumeSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -453,18 +422,12 @@ class _VolumeSlider extends StatelessWidget {
                   : vol < 50
                       ? Icons.volume_down_rounded
                       : Icons.volume_up_rounded,
-              size: 24,
+              size: m.iconSize24,
             );
           }),
-          color: Colors.white.withValues(alpha: 0.7),
+          color: _OnArt.muted,
         ),
-        Text(
-          '音量',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.7),
-            fontSize: AppTheme.metrics.fontSize10,
-          ),
-        ),
+        Text('音量', style: _artCaption(context)),
       ],
     );
   }
@@ -505,12 +468,14 @@ class _VolumePopupOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final popupWidth = 200.0;
-    final popupHeight = 48.0;
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    final popupWidth = scaleW(200);
+    final popupHeight = scaleW(48);
     // 浮层居中于音量按钮上方
     final left = (anchorOffset.dx + anchorSize.width / 2 - popupWidth / 2)
-        .clamp(16.0, MediaQuery.of(context).size.width - popupWidth - 16.0);
-    final top = anchorOffset.dy - popupHeight - 12.0;
+        .clamp(m.kSpace16, MediaQuery.of(context).size.width - popupWidth - m.kSpace16);
+    final top = anchorOffset.dy - popupHeight - m.kSpace12;
 
     return Stack(
       children: [
@@ -532,15 +497,13 @@ class _VolumePopupOverlay extends StatelessWidget {
               width: popupWidth,
               height: popupHeight,
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  width: 1,
-                ),
+                color: _OnArt.panel,
+                borderRadius: m.radiusPill,
+                border: Border.all(color: _OnArt.hairline, width: scaleW(1)),
+                boxShadow: s.elevation(Elevation.overlay),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: m.kSpace16),
                 child: Row(
                   children: [
                     // 静音按钮
@@ -554,29 +517,18 @@ class _VolumePopupOverlay extends StatelessWidget {
                               : vol < 50
                                   ? Icons.volume_down_rounded
                                   : Icons.volume_up_rounded,
-                          size: 20,
-                          color: Colors.white.withValues(alpha: 0.8),
+                          size: m.iconSize20,
+                          color: _OnArt.secondary,
                         ),
                       );
                     }),
-                    const SizedBox(width: 8),
+                    SizedBox(width: m.kSpace8),
                     // 音量滑块
                     Expanded(
                       child: Obx(() {
                         final vol = viewModel.volume.value;
                         return SliderTheme(
-                          data: SliderThemeData(
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 6,
-                            ),
-                            overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 12,
-                            ),
-                            activeTrackColor: Colors.white.withValues(alpha: 0.9),
-                            inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                            thumbColor: Colors.white,
-                          ),
+                          data: _onArtSliderTheme(),
                           child: Slider(
                             value: vol.toDouble(),
                             min: 0,
@@ -594,142 +546,6 @@ class _VolumePopupOverlay extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-/// 均衡器滑块组（沉浸式播放器内使用）
-class _EqSliders extends StatefulWidget {
-  final MusicPlayerViewModel viewModel;
-  const _EqSliders({required this.viewModel});
-
-  @override
-  State<_EqSliders> createState() => _EqSlidersState();
-}
-
-class _EqSlidersState extends State<_EqSliders> {
-  /// 本地管理的频段增益值，不受 Obx 重建影响
-  late List<double> _bands;
-
-  /// 当前选中的预设 ID（本地缓存，用于检测切换）
-  String? _lastPresetId;
-
-  @override
-  void initState() {
-    super.initState();
-    _bands = List.filled(10, 0.0);
-    // 打开时加载均衡器预设
-    widget.viewModel.loadEqPresets();
-  }
-
-  /// 从预设同步 bands 到本地状态
-  void _syncBandsFromPreset(music_api.EqualizerPresetInfo? preset) {
-    for (int i = 0; i < 10; i++) {
-      _bands[i] = preset != null && i < preset.bands.length
-          ? preset.bands[i]
-          : 0.0;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const freqLabels = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
-
-    return Obx(() {
-      final presets = widget.viewModel.eqPresets;
-      final currentId = widget.viewModel.currentEqPresetId.value;
-
-      // 检测预设切换，从预设同步 bands
-      if (currentId != _lastPresetId) {
-        _lastPresetId = currentId;
-        music_api.EqualizerPresetInfo? currentPreset;
-        if (currentId != null) {
-          for (final p in presets) {
-            if (p.id == currentId) {
-              currentPreset = p;
-              break;
-            }
-          }
-        }
-        _syncBandsFromPreset(currentPreset);
-      }
-
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 预设选择
-          if (presets.isNotEmpty)
-            SizedBox(
-              height: 36,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: presets.length,
-                separatorBuilder: (_, _) => SizedBox(width: AppTheme.metrics.kSpace8),
-                itemBuilder: (context, index) {
-                  final preset = presets[index];
-                  final isSelected = preset.id == currentId;
-                  return ChoiceChip(
-                    label: Text(preset.name),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      widget.viewModel.currentEqPresetId.value = preset.id;
-                    },
-                  );
-                },
-              ),
-            ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
-          SizedBox(
-            height: 180,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(10, (i) {
-                return Column(
-                  children: [
-                    Text(
-                      '${_bands[i] > 0 ? "+" : ""}${_bands[i].toStringAsFixed(1)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.8),
-                      ),
-                    ),
-                    Expanded(
-                      child: RotatedBox(
-                        quarterTurns: 3,
-                        child: SliderTheme(
-                          data: SliderThemeData(
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                            activeTrackColor: Colors.white.withValues(alpha: 0.9),
-                            inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                            thumbColor: Colors.white,
-                          ),
-                          child: Slider(
-                            value: _bands[i].clamp(-12.0, 12.0),
-                            min: -12,
-                            max: 12,
-                            divisions: 24,
-                            onChanged: (v) {
-                              setState(() {
-                                _bands[i] = v;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      freqLabels[i],
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-        ],
-      );
-    });
   }
 }
 
@@ -753,9 +569,11 @@ class _LyricsPanelState extends State<_LyricsPanel> {
 
   void _scrollToIndex(int index) {
     if (!_scrollController.hasClients) return;
-    // 每行大约高度 48，居中显示
-    const itemHeight = 48.0;
-    final targetOffset = (index * itemHeight) - (_scrollController.position.viewportDimension / 2) + (itemHeight / 2);
+    // 行高必须和 ListView 的 itemExtent 取同一个 token，否则高亮行会越滚越偏
+    final itemHeight = AppTheme.metrics.kSpace48;
+    final targetOffset =
+        (index * itemHeight) - (_scrollController.position.viewportDimension / 2) +
+            (itemHeight / 2);
     final clamped = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
     _scrollController.animateTo(
       clamped,
@@ -766,6 +584,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
     return Obx(() {
       final lyrics = widget.viewModel.currentLyrics;
       final currentIndex = widget.viewModel.currentLyricIndex.value;
@@ -782,9 +601,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         return Center(
           child: Text(
             '暂无歌词',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
+            style: AppTextStyles.body(context).copyWith(color: _OnArt.muted),
           ),
         );
       }
@@ -793,48 +610,40 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         children: [
           // 翻译按钮
           Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace24,
-              vertical: AppTheme.metrics.kSpace4,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (isTranslating)
                   Padding(
-                    padding: EdgeInsets.only(right: AppTheme.metrics.kSpace8),
+                    padding: EdgeInsets.only(right: m.kSpace8),
                     child: SizedBox(
-                      width: 14,
-                      height: 14,
+                      width: m.iconSize14,
+                      height: m.iconSize14,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white.withValues(alpha: 0.7),
+                        strokeWidth: scaleW(2),
+                        color: _OnArt.muted,
                       ),
                     ),
                   ),
                 TextButton.icon(
                   onPressed: isTranslating ? null : widget.viewModel.translateLyrics,
+                  // 这页恒压在深色 art 上，选中态用白色而不是强调色：
+                  // 亮色主题的 accent 是深色，落在 art 上等于把按钮关掉。
                   icon: Icon(
-                    hasTranslation ? Icons.translate_rounded : Icons.translate_rounded,
-                    size: 16,
-                    color: hasTranslation
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white.withValues(alpha: 0.7),
+                    Icons.translate_rounded,
+                    size: m.iconSize16,
+                    color: hasTranslation ? _OnArt.primary : _OnArt.muted,
                   ),
                   label: Text(
                     hasTranslation ? '显示原文' : '翻译为中文',
                     style: TextStyle(
-                      color: hasTranslation
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.white.withValues(alpha: 0.7),
-                      fontSize: AppTheme.metrics.fontSize12,
+                      color: hasTranslation ? _OnArt.primary : _OnArt.muted,
+                      fontSize: m.fontSize12,
                     ),
                   ),
                   style: TextButton.styleFrom(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppTheme.metrics.kSpace8,
-                      vertical: AppTheme.metrics.kSpace2,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace2),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -845,14 +654,15 @@ class _LyricsPanelState extends State<_LyricsPanel> {
           // 歌词列表
           Expanded(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace24),
               child: ListView.builder(
                 controller: _scrollController,
                 padding: EdgeInsets.symmetric(
                   vertical: MediaQuery.of(context).size.height * 0.15,
                 ),
                 itemCount: lyrics.length,
-                itemExtent: 48,
+                // 行高与 _scrollToIndex 的居中计算必须同一个值，否则高亮行会越滚越偏
+                itemExtent: m.kSpace48,
                 itemBuilder: (context, index) {
                   final isCurrent = index == currentIndex;
                   final track = lyrics[index];
@@ -861,17 +671,21 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                   return GestureDetector(
                     onTap: () => widget.viewModel.seekTo(track.startMs.toInt()),
                     child: Center(
-                      child: Text(
-                        displayText,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: isCurrent
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: 0.4),
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                          fontSize: isCurrent ? 18 : 15,
+                      // 逐行淡入淡出而不是硬切：歌词高亮每隔几秒换一次，
+                      // 瞬时切换在暗背景上会闪一下。动画时长走全局 AppMotion。
+                      child: AnimatedDefaultTextStyle(
+                        duration: AppMotion.base,
+                        curve: AppMotion.standard,
+                        style: AppTextStyles.body(context).copyWith(
+                          color: isCurrent ? _OnArt.primary : _OnArt.faint,
+                          fontSize: isCurrent ? m.fontSize18 : m.fontSize15,
+                          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Text(
+                          displayText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   );

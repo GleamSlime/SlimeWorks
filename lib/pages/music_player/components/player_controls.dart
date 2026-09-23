@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
 /// 播放控制按钮组
@@ -21,6 +23,8 @@ class PlayerControls extends StatelessWidget {
   }
 
   Widget _buildFull(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Obx(() {
       final playing = viewModel.isPlaying.value;
       final mode = viewModel.playMode.value;
@@ -34,19 +38,23 @@ class PlayerControls extends StatelessWidget {
           Row(
             children: [
               SizedBox(
-                width: 40,
+                width: m.kSpace40,
                 child: Text(
                   viewModel.formatDuration(position),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: AppTextStyles.caption(context),
                   textAlign: TextAlign.center,
                 ),
               ),
               Expanded(
                 child: SliderTheme(
                   data: SliderThemeData(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                    trackHeight: scaleW(3),
+                    thumbShape: RoundSliderThumbShape(
+                      enabledThumbRadius: m.kSpace6,
+                    ),
+                    overlayShape: RoundSliderOverlayShape(
+                      overlayRadius: m.kSpace12,
+                    ),
                   ),
                   child: Slider(
                     value: duration > 0 ? position.clamp(0, duration).toDouble() : 0,
@@ -57,16 +65,16 @@ class PlayerControls extends StatelessWidget {
                 ),
               ),
               SizedBox(
-                width: 40,
+                width: m.kSpace40,
                 child: Text(
                   viewModel.formatDuration(duration),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: AppTextStyles.caption(context),
                   textAlign: TextAlign.center,
                 ),
               ),
             ],
           ),
-          SizedBox(height: AppTheme.metrics.kSpace4),
+          SizedBox(height: m.kSpace4),
           // 控制按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -74,37 +82,35 @@ class PlayerControls extends StatelessWidget {
               // 播放模式
               IconButton(
                 onPressed: viewModel.cyclePlayMode,
-                icon: Icon(mode.icon, size: 20),
+                icon: Icon(mode.icon, size: m.iconSize20),
                 tooltip: mode.label,
-                color: mode != PlayerPlayMode.sequential
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
+                color: mode != PlayerPlayMode.sequential ? s.accent : null,
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
+              SizedBox(width: m.kSpace8),
               // 上一曲
               IconButton(
                 onPressed: viewModel.playPrevious,
                 icon: const Icon(Icons.skip_previous_rounded),
-                iconSize: 28,
+                iconSize: m.iconSize28,
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
+              SizedBox(width: m.kSpace8),
               // 播放/暂停
               IconButton(
                 onPressed: viewModel.togglePlayPause,
                 icon: Icon(
                   playing ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded,
                 ),
-                iconSize: 40,
-                color: Theme.of(context).colorScheme.primary,
+                iconSize: m.iconSize40,
+                color: s.accent,
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
+              SizedBox(width: m.kSpace8),
               // 下一曲
               IconButton(
                 onPressed: viewModel.playNext,
                 icon: const Icon(Icons.skip_next_rounded),
-                iconSize: 28,
+                iconSize: m.iconSize28,
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
+              SizedBox(width: m.kSpace8),
               // 收藏
               Obx(() {
                 final item = viewModel.currentItem;
@@ -113,8 +119,9 @@ class PlayerControls extends StatelessWidget {
                   onPressed: item != null ? () => viewModel.toggleFavorite(item.id) : null,
                   icon: Icon(
                     isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    size: 20,
-                    color: isFav ? Colors.redAccent : null,
+                    size: m.iconSize20,
+                    // 收藏是"选中"，用强调色；原来的 Colors.redAccent 不在状态色体系里。
+                    color: isFav ? s.accent : null,
                   ),
                 );
               }),
@@ -126,7 +133,8 @@ class PlayerControls extends StatelessWidget {
   }
 
   Widget _buildCompact(BuildContext context) {
-    final iconColor = color ?? Theme.of(context).colorScheme.primary;
+    final m = AppTheme.metrics;
+    final iconColor = color ?? AppSemantic.of(context).accent;
     return Obx(() {
       final playing = viewModel.isPlaying.value;
       return Row(
@@ -134,17 +142,17 @@ class PlayerControls extends StatelessWidget {
         children: [
           IconButton(
             onPressed: viewModel.playPrevious,
-            icon: const Icon(Icons.skip_previous_rounded, size: 38),
+            icon: Icon(Icons.skip_previous_rounded, size: scaleW(38)),
             color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.togglePlayPause,
-            icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 48),
+            icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: m.iconSize48),
             color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.playNext,
-            icon: const Icon(Icons.skip_next_rounded, size: 38),
+            icon: Icon(Icons.skip_next_rounded, size: scaleW(38)),
             color: iconColor,
           ),
         ],

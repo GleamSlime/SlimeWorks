@@ -3,6 +3,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+/// 唱片本体的质感色
+///
+/// 黑胶在任何主题下都是黑的，所以这一组值不跟明暗走。
+const Color _discPlaceholderColor = Color(0xFF3a3a3a);
+
 /// 唱片机播放动效组件（参考网易音乐黑胶唱片风格）
 ///
 /// 特性：
@@ -80,7 +85,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
             builder: (context, child) {
               return Transform.rotate(angle: _spinController.value * 2 * pi, child: child);
             },
-            child: _buildDisc(context, discSize, coverSize),
+            child: _buildDisc(discSize, coverSize),
           ),
           // 唱臂（后绘制，在唱片上方）
           Positioned(top: 0, right: discSize * 0.15, child: _buildToneArm(discSize)),
@@ -90,7 +95,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
   }
 
   /// 黑胶唱片
-  Widget _buildDisc(BuildContext context, double discSize, double coverSize) {
+  Widget _buildDisc(double discSize, double coverSize) {
     return Container(
       width: discSize,
       height: discSize,
@@ -138,7 +143,10 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
             height: coverSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              // 无封面时的占位色必须跟着唱片本身的暗色质感走：这里原先用主题的
+              // surfaceContainerHighest，亮色模式下会在黑胶上挖出一个白圆盘，
+              // 和下面 _buildDefaultCover 的深灰占位也对不上。
+              color: _discPlaceholderColor,
               border: Border.all(color: Colors.black.withValues(alpha: 0.3), width: 1),
             ),
             child: ClipOval(
@@ -170,7 +178,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
 
   Widget _buildDefaultCover(double size) {
     return Container(
-      color: const Color(0xFF3a3a3a),
+      color: _discPlaceholderColor,
       child: Icon(
         Icons.music_note_rounded,
         size: size * 0.4,
