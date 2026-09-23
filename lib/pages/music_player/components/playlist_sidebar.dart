@@ -7,6 +7,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 
@@ -294,9 +295,22 @@ class _FolderTile extends StatelessWidget {
           }
         },
         itemBuilder: (ctx) => [
-          const PopupMenuItem(value: 'transcribe', child: Text('批量语音识别')),
-          const PopupMenuItem(value: 'rename', child: Text('重命名')),
-          const PopupMenuItem(value: 'delete', child: Text('删除')),
+          GlassMenuItem(
+            value: 'transcribe',
+            label: '批量语音识别',
+            icon: Icons.graphic_eq_rounded,
+          ),
+          GlassMenuItem(
+            value: 'rename',
+            label: '重命名',
+            icon: Icons.drive_file_rename_outline_rounded,
+          ),
+          GlassMenuItem(
+            value: 'delete',
+            label: '删除',
+            icon: Icons.delete_outline_rounded,
+            destructive: true,
+          ),
         ],
       ),
       onTap: onTap,
@@ -396,8 +410,18 @@ class _PlaylistTile extends StatelessWidget {
           }
         },
         itemBuilder: (ctx) => [
-          const PopupMenuItem(value: 'rename', child: Text('重命名')),
-          if (!playlist.isDefault) const PopupMenuItem(value: 'delete', child: Text('删除')),
+          GlassMenuItem(
+            value: 'rename',
+            label: '重命名',
+            icon: Icons.drive_file_rename_outline_rounded,
+          ),
+          if (!playlist.isDefault)
+            GlassMenuItem(
+              value: 'delete',
+              label: '删除',
+              icon: Icons.delete_outline_rounded,
+              destructive: true,
+            ),
         ],
       ),
       onTap: onTap,
@@ -526,9 +550,22 @@ class _PathMappingTileState extends State<_PathMappingTile> {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'open_folder', child: Text('打开文件夹所在位置')),
-                    const PopupMenuItem(value: 'refresh', child: Text('刷新映射')),
-                    const PopupMenuItem(value: 'remove', child: Text('移除映射')),
+                    GlassMenuItem(
+                      value: 'open_folder',
+                      label: '打开文件夹所在位置',
+                      icon: Icons.folder_open_rounded,
+                    ),
+                    GlassMenuItem(
+                      value: 'refresh',
+                      label: '刷新映射',
+                      icon: Icons.refresh_rounded,
+                    ),
+                    GlassMenuItem(
+                      value: 'remove',
+                      label: '移除映射',
+                      icon: Icons.link_off_rounded,
+                      destructive: true,
+                    ),
                   ],
                 ),
               ],

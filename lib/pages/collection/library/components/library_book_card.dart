@@ -75,73 +75,37 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         Offset.zero & overlaySize,
       ),
       items: [
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'info',
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: scaleW(18)),
-              SizedBox(width: scaleW(8)),
-              const Text('书籍信息'),
-            ],
-          ),
+          label: '书籍信息',
+          icon: Icons.info_outline_rounded,
         ),
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'rename',
-          child: Row(
-            children: [
-              Icon(Icons.edit_outlined, size: scaleW(18)),
-              SizedBox(width: scaleW(8)),
-              const Text('重命名'),
-            ],
-          ),
+          label: '重命名',
+          icon: Icons.edit_outlined,
         ),
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'cover',
-          child: Row(
-            children: [
-              Icon(Icons.image_outlined, size: scaleW(18)),
-              SizedBox(width: scaleW(8)),
-              const Text('编辑封面'),
-            ],
-          ),
+          label: '编辑封面',
+          icon: Icons.image_outlined,
         ),
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'favorite',
-          child: Row(
-            children: [
-              Icon(
-                meta.isFavorite ? Icons.star : Icons.star_border,
-                size: scaleW(18),
-                color: meta.isFavorite ? Colors.amber : null,
-              ),
-              SizedBox(width: scaleW(8)),
-              Text(meta.isFavorite ? '取消收藏' : '加入收藏'),
-            ],
-          ),
+          label: meta.isFavorite ? '取消收藏' : '加入收藏',
+          icon: meta.isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
         ),
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'move',
-          child: Row(
-            children: [
-              Icon(Icons.drive_file_move_outlined, size: scaleW(18)),
-              SizedBox(width: scaleW(8)),
-              const Text('移动到文件夹'),
-            ],
-          ),
+          label: '移动到文件夹',
+          icon: Icons.drive_file_move_rounded,
         ),
-        PopupMenuItem(
+        const PopupMenuDivider(),
+        GlassMenuItem<String>(
           value: 'delete',
-          child: Row(
-            children: [
-              Icon(
-                Icons.delete_outlined,
-                size: scaleW(18),
-                color: Theme.of(context).colorScheme.error,
-              ),
-              SizedBox(width: scaleW(8)),
-              Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
-          ),
+          label: '删除',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
         ),
       ],
     );

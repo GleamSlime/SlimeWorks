@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
@@ -119,28 +121,17 @@ class NodeSwitcherButton extends StatelessWidget {
       barrierColor: isDark ? DarkColors.overlay : LightColors.overlay.withAlpha(120),
       isScrollControlled: true,
       builder: (sheetCtx) {
+        final s = AppSemantic.of(sheetCtx);
         return Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.55),
           margin: EdgeInsets.all(m.kSpace12),
+          // 原来底色按 isDark 手挑 DarkColors/LightColors.background1（实心、和主题脱钩），
+          // 投影也是手搓的两层。换成语义层：浮层配色、玻璃描边、投影档位全站一个口径。
           decoration: BoxDecoration(
-            color: isDark ? DarkColors.background1 : LightColors.background1,
-            borderRadius: m.radius16,
-            border: Border.all(
-              color: isDark ? DarkColors.white10 : LightColors.black10,
-              width: 0.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(40),
-                blurRadius: scaleW(24),
-                offset: Offset(0, scaleW(8)),
-              ),
-              BoxShadow(
-                color: accent.withAlpha(12),
-                blurRadius: scaleW(48),
-                offset: Offset(0, scaleW(2)),
-              ),
-            ],
+            color: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
+            borderRadius: m.radiusPanel,
+            border: Border.all(color: s.glassBorder, width: scaleW(1)),
+            boxShadow: s.elevation(Elevation.overlay),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

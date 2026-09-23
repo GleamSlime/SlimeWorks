@@ -422,8 +422,13 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: m.radiusOverlay),
+        // 和菜单同一个道理：对话框是压在整页之上的最高一层，靠投影而不是亮度分层。
+        elevation: scaleW(16),
+        shadowColor: s.shadowKey,
+        shape: RoundedRectangleBorder(
+          borderRadius: m.radiusOverlay,
+          side: BorderSide(color: s.glassBorder, width: scaleW(1)),
+        ),
         titleTextStyle: TextStyle(
           fontSize: scaleS(16),
           fontWeight: FontWeight.w600,
@@ -438,22 +443,56 @@ class AppTheme {
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        elevation: scaleW(10),
+        shadowColor: s.shadowKey,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(m.radiusOverlay.topLeft.x),
           ),
+          side: BorderSide(color: s.glassBorder, width: scaleW(1)),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        // 菜单原来 elevation 0，贴在页面上像一个被裁出来的洞，完全分不出前后层次。
+        // 浮层要靠自己那层投影站起来，而不是靠自己变亮。
+        elevation: scaleW(8),
+        shadowColor: s.shadowKey,
         shape: RoundedRectangleBorder(
           borderRadius: m.radiusPanel,
           side: BorderSide(color: s.glassBorder, width: scaleW(1)),
         ),
-        textStyle: TextStyle(fontSize: scaleS(13), color: s.textPrimary),
+        // M3 下菜单项文字走 labelTextStyle，textStyle 只参与旧渲染路径；两处都写，
+        // 免得一改 useMaterial3 就发现菜单字号又飘回 SDK 默认值。
+        // fontFamily 必须显式带上：裸 TextStyle 拿不到 ThemeData.fontFamily，
+        // 菜单会静默回退系统字体，和页面里其他文字对不上。
+        textStyle: TextStyle(
+          fontFamily: _fontFamily,
+          fontSize: scaleS(13),
+          color: s.textPrimary,
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontFamily: _fontFamily,
+            fontSize: scaleS(13),
+            fontWeight: FontWeight.w500,
+            height: 1.25,
+            color: states.contains(WidgetState.disabled)
+                ? s.textDisabled
+                : s.textPrimary,
+          ),
+        ),
+        // 默认只有 vertical:8，高亮条会一路顶到圆角边缘。四周留一圈，菜单立刻
+        // 像"卡片里装着条目"而不是"一块色皮"。
+        menuPadding: EdgeInsets.symmetric(
+          horizontal: m.kSpace4,
+          vertical: m.kSpace4,
+        ),
+        iconColor: s.textSecondary,
+        iconSize: m.iconSize16,
+        // 桌面端菜单项一律手型指针；原来是个别调用点自己裹 MouseRegion，漏一处就不一致。
+        mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(

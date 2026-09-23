@@ -2,6 +2,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/src/rust/api/module_manager.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 
 
 import 'dart:io';
@@ -308,23 +309,21 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                 ),
                 PopupMenuButton<String>(
                   itemBuilder: (context) => [
-                    PopupMenuItem(
+                    GlassMenuItem<String>(
                       value: 'update',
-                      child: Row(children: [const Icon(Icons.update), SizedBox(width: AppTheme.metrics.kSpace8), const Text('检查更新')]),
+                      label: '检查更新',
+                      icon: Icons.update_rounded,
                     ),
-                    PopupMenuItem(
+                    GlassMenuItem<String>(
                       value: 'reinstall',
-                      child: Row(children: [const Icon(Icons.refresh), SizedBox(width: AppTheme.metrics.kSpace8), const Text('重新安装')]),
+                      label: '重新安装',
+                      icon: Icons.refresh_rounded,
                     ),
-                    PopupMenuItem(
+                    GlassMenuItem<String>(
                       value: 'uninstall',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-                          SizedBox(width: AppTheme.metrics.kSpace8),
-                          Text('卸载', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                        ],
-                      ),
+                      label: '卸载',
+                      icon: Icons.delete_outline_rounded,
+                      destructive: true,
                     ),
                   ],
                   onSelected: (value) {

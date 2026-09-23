@@ -16,6 +16,7 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_search_viewmodel.dart';
@@ -458,19 +459,11 @@ class _SortButton extends StatelessWidget {
   }
 
   PopupMenuItem<MangaSortOrder> _buildItem(MangaSortOrder value, String label, IconData icon) {
-    return PopupMenuItem<MangaSortOrder>(
+    return GlassMenuItem<MangaSortOrder>(
       value: value,
-      child: Row(
-        children: [
-          Icon(icon, size: AppTheme.metrics.iconSize18),
-          SizedBox(width: AppTheme.metrics.kSpace8),
-          Text(label),
-          if (current == value) ...[
-            const Spacer(),
-            Icon(Icons.check, size: AppTheme.metrics.iconSize16),
-          ],
-        ],
-      ),
+      label: label,
+      icon: icon,
+      selected: current == value,
     );
   }
 }

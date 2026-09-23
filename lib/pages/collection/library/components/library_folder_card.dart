@@ -113,45 +113,17 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
         Rect.fromLTWH(localPos.dx, localPos.dy, 1, 1),
         Offset.zero & overlaySize,
       ),
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: appMetrics.radius8),
+      // 圆角/投影这里不再各写一份：popupMenuTheme 就是全站浮层的口径。
       items: [
-        PopupMenuItem(
-          padding: EdgeInsets.symmetric(
-            horizontal: appMetrics.kSpace12,
-            vertical: appMetrics.kSpace4,
-          ),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: Row(
-              children: [
-                Icon(Icons.drive_file_rename_outline, size: appMetrics.fontSize15),
-                SizedBox(width: appMetrics.kSpace12),
-                const Text('重命名'),
-              ],
-            ),
-          ),
+        GlassMenuItem<void>(
+          label: '重命名',
+          icon: Icons.drive_file_rename_outline_rounded,
           onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) => _showRenameDialog(ctx)),
         ),
-        PopupMenuItem(
-          padding: EdgeInsets.symmetric(
-            horizontal: appMetrics.kSpace12,
-            vertical: appMetrics.kSpace4,
-          ),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.delete_outline,
-                  size: appMetrics.fontSize15,
-                  color: Theme.of(ctx).colorScheme.error,
-                ),
-                SizedBox(width: appMetrics.kSpace12),
-                Text('删除文件夹', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
-              ],
-            ),
-          ),
+        GlassMenuItem<void>(
+          label: '删除文件夹',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
           onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) => _confirmDelete(ctx)),
         ),
       ],

@@ -59,13 +59,39 @@ class SmartFolderCard extends StatelessWidget {
         overlaySize.height - localPos.dy,
       ),
       items: [
-        if (onRename != null) const PopupMenuItem<String>(value: 'rename', child: Text('重命名')),
-        if (onEdit != null) const PopupMenuItem<String>(value: 'edit', child: Text('编辑智能文件夹')),
+        if (onRename != null)
+          GlassMenuItem<String>(
+            value: 'rename',
+            label: '重命名',
+            icon: Icons.drive_file_rename_outline_rounded,
+          ),
+        if (onEdit != null)
+          GlassMenuItem<String>(
+            value: 'edit',
+            label: '编辑智能文件夹',
+            icon: Icons.auto_awesome_rounded,
+          ),
         if (onTransfer != null)
-          const PopupMenuItem<String>(value: 'transfer', child: Text('转移集合到...')),
-        if (onDelete != null) const PopupMenuItem<String>(value: 'delete', child: Text('删除智能文件夹')),
+          GlassMenuItem<String>(
+            value: 'transfer',
+            label: '转移集合到...',
+            icon: Icons.drive_folder_upload_rounded,
+          ),
         if (PlatformUtil.isMobile)
-          const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
+          GlassMenuItem<String>(
+            value: 'select',
+            label: '进入多选',
+            icon: Icons.checklist_rounded,
+          ),
+        if (onDelete != null) ...[
+          const PopupMenuDivider(),
+          GlassMenuItem<String>(
+            value: 'delete',
+            label: '删除智能文件夹',
+            icon: Icons.delete_outline_rounded,
+            destructive: true,
+          ),
+        ],
       ],
     );
     if (action == 'rename') {

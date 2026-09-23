@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 
 /// 音乐列表条目
@@ -103,14 +104,32 @@ class MusicListItem extends StatelessWidget {
             },
             itemBuilder: (ctx) {
               final items = <PopupMenuEntry<String>>[
-                const PopupMenuItem(value: 'transcribe', child: Text('语音识别')),
+                GlassMenuItem(
+                  value: 'transcribe',
+                  label: '语音识别',
+                  icon: Icons.graphic_eq_rounded,
+                ),
               ];
               // 仅本地文件可「在资源管理器打开」
               final isLocal = !item.filePath.startsWith('http') && File(item.filePath).existsSync();
               if (isLocal) {
-                items.add(const PopupMenuItem(value: 'reveal', child: Text('在资源管理器打开')));
+                items.add(
+                  GlassMenuItem(
+                    value: 'reveal',
+                    label: '在资源管理器打开',
+                    icon: Icons.folder_open_rounded,
+                  ),
+                );
               }
-              items.add(const PopupMenuItem(value: 'delete', child: Text('删除')));
+              // 删除是这条菜单里唯一的不可逆操作，单独染成危险色，不靠位置区分。
+              items.add(
+                GlassMenuItem(
+                  value: 'delete',
+                  label: '删除',
+                  icon: Icons.delete_outline_rounded,
+                  destructive: true,
+                ),
+              );
               return items;
             },
           ),

@@ -1,4 +1,5 @@
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -242,11 +243,11 @@ class ReaderToolbar extends StatelessWidget {
             }
           },
           itemBuilder: (context) => [
-            PopupMenuItem(
+            GlassMenuItem<String>(
               value: 'delete',
-              child: Row(
-                children: [Icon(Icons.delete, size: AppTheme.metrics.iconSize20), SizedBox(width: AppTheme.metrics.kSpace8), const Text('删除书本')],
-              ),
+              label: '删除书本',
+              icon: Icons.delete_outline_rounded,
+              destructive: true,
             ),
           ],
         ),

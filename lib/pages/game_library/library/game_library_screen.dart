@@ -795,64 +795,41 @@ class _GameCardState extends State<_GameCard> {
         overlay.size.height - localPos.dy,
       ),
       items: <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'select',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              widget.isSelected ? Icons.check_box_outlined : Icons.check_box_outline_blank,
-            ),
-            title: Text(widget.isSelected ? '取消选择' : '选择'),
-          ),
+          label: widget.isSelected ? '取消选择' : '选择',
+          icon: widget.isSelected
+              ? Icons.check_box_rounded
+              : Icons.check_box_outline_blank_rounded,
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'launch',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.play_circle_outline),
-            title: Text('启动游戏'),
-          ),
+          label: '启动游戏',
+          icon: Icons.play_circle_outline_rounded,
         ),
         const PopupMenuDivider(),
-        PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'favorite',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(widget.isFavorite ? Icons.favorite : Icons.favorite_border),
-            title: Text(widget.isFavorite ? '取消收藏' : '添加收藏'),
-          ),
+          label: widget.isFavorite ? '取消收藏' : '添加收藏',
+          icon: widget.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
         ),
-        const PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'refresh_meta',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.cloud_download_outlined),
-            title: Text('刷新元数据'),
-          ),
+          label: '刷新元数据',
+          icon: Icons.cloud_download_outlined,
         ),
-        const PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'open_folder',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.folder_open_outlined),
-            title: Text('打开所在文件夹'),
-          ),
+          label: '打开所在文件夹',
+          icon: Icons.folder_open_rounded,
         ),
         const PopupMenuDivider(),
-        PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'delete',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-            title: Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
+          label: '删除',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
         ),
       ],
     ).then((String? value) {
@@ -973,49 +950,28 @@ class _GameCardState extends State<_GameCard> {
                               }
                             },
                             itemBuilder: (_) => <PopupMenuEntry<String>>[
-                              PopupMenuItem<String>(
+                              GlassMenuItem<String>(
                                 value: 'favorite',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(
-                                    widget.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                  ),
-                                  title: Text(widget.isFavorite ? '取消收藏' : '添加收藏'),
-                                ),
+                                label: widget.isFavorite ? '取消收藏' : '添加收藏',
+                                icon: widget.isFavorite
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
                               ),
-                              const PopupMenuItem<String>(
+                              GlassMenuItem<String>(
                                 value: 'launch',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(Icons.play_circle_outline),
-                                  title: Text('启动游戏'),
-                                ),
+                                label: '启动游戏',
+                                icon: Icons.play_circle_outline_rounded,
                               ),
-                              const PopupMenuItem<String>(
+                              GlassMenuItem<String>(
                                 value: 'open_folder',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(Icons.folder_open_outlined),
-                                  title: Text('打开所在文件夹'),
-                                ),
+                                label: '打开所在文件夹',
+                                icon: Icons.folder_open_rounded,
                               ),
-                              PopupMenuItem<String>(
+                              GlassMenuItem<String>(
                                 value: 'delete',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(
-                                    Icons.delete_outline,
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                  title: Text(
-                                    '删除',
-                                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                                  ),
-                                ),
+                                label: '删除',
+                                icon: Icons.delete_outline_rounded,
+                                destructive: true,
                               ),
                             ],
                           ),

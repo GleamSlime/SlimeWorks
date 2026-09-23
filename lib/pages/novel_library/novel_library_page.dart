@@ -6,6 +6,7 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/pages/novel_library/components/novel_card.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -20,29 +21,16 @@ class NovelLibraryPage extends StatelessWidget {
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       items: [
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'move_to_folder',
-          child: Row(
-            children: [
-              Icon(Icons.folder, size: AppTheme.metrics.iconSize18),
-              SizedBox(width: AppTheme.metrics.kSpace8),
-              const Text('移动到文件夹'),
-            ],
-          ),
+          label: '移动到文件夹',
+          icon: Icons.folder_open_rounded,
         ),
-        PopupMenuItem(
+        GlassMenuItem<String>(
           value: 'delete',
-          child: Row(
-            children: [
-              Icon(
-                Icons.delete,
-                size: AppTheme.metrics.iconSize18,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
-              Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
-          ),
+          label: '删除',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
         ),
       ],
     ).then((value) {

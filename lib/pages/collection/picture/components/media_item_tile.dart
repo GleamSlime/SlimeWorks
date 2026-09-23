@@ -242,6 +242,10 @@ class _MediaItemTileState extends State<MediaItemTile> {
     final overlayBox = Overlay.of(context).context.findRenderObject()! as RenderBox;
     final localPos = overlayBox.globalToLocal(globalPosition);
     final overlaySize = overlayBox.size;
+    final hasDestructive =
+        widget.onDeleteFile != null || widget.onDeleteNodeLocalFile != null;
+    final hasPlainActions =
+        widget.onOpenFolder != null || widget.onSaveToGallery != null;
     final action = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -252,16 +256,36 @@ class _MediaItemTileState extends State<MediaItemTile> {
       ),
       items: [
         if (widget.onOpenFolder != null)
-          const PopupMenuItem<String>(value: 'open_folder', child: Text('打开所在文件夹')),
-        if (widget.onSaveToGallery != null)
-          const PopupMenuItem<String>(value: 'save', child: Text('保存到相册')),
-        if (widget.onDeleteFile != null)
-          const PopupMenuItem<String>(value: 'delete', child: Text('删除本地文件')),
-        if (widget.onDeleteNodeLocalFile != null)
-          PopupMenuItem<String>(
-            value: 'delete_node_local',
-            child: Text(widget.deleteNodeLocalFileLabel ?? '删除节点本地文件'),
+          GlassMenuItem<String>(
+            value: 'open_folder',
+            label: '打开所在文件夹',
+            icon: Icons.folder_open_rounded,
           ),
+        if (widget.onSaveToGallery != null)
+          GlassMenuItem<String>(
+            value: 'save',
+            label: '保存到相册',
+            icon: Icons.photo_library_outlined,
+          ),
+        if (hasDestructive) ...[
+          // 不可逆动作和普通动作之间断一行：这条菜单是右键就地弹出的，
+          // 鼠标停在原处就能连点，不分组很容易一顺手删掉文件。
+          if (hasPlainActions) const PopupMenuDivider(),
+          if (widget.onDeleteFile != null)
+            GlassMenuItem<String>(
+              value: 'delete',
+              label: '删除本地文件',
+              icon: Icons.delete_outline_rounded,
+              destructive: true,
+            ),
+          if (widget.onDeleteNodeLocalFile != null)
+            GlassMenuItem<String>(
+              value: 'delete_node_local',
+              label: widget.deleteNodeLocalFileLabel ?? '删除节点本地文件',
+              icon: Icons.cloud_off_rounded,
+              destructive: true,
+            ),
+        ],
       ],
     );
     if (!mounted) return;

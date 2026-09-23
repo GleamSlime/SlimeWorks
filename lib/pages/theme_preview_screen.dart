@@ -16,6 +16,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/widgets/app_chips.dart';
 import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
+import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/core/widgets/glass_surface.dart';
 import 'package:slime_works/core/widgets/page_container.dart';
 import 'package:slime_works/core/widgets/section_header.dart';
@@ -869,6 +870,59 @@ class _GlassTabState extends State<_GlassTab> {
                 child: GlassSurface(
                   padding: EdgeInsets.all(m.kSpace16),
                   child: Text('玻璃表面', style: AppTextStyles.caption(context)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _Block(
+          title: '菜单',
+          note:
+              '弹的是真菜单，样式即 popupMenuTheme：行高从 Material 默认的 48 收到 30，'
+              '图标槽定宽所以文字齐整，选中项打勾、危险项整行染色，普通项与删除之间断行。'
+              '下面这个用的是 position: under（贴着按钮下方展开，不盖住按钮本身）。',
+          child: Row(
+            children: [
+              PopupMenuButton<String>(
+                position: PopupMenuPosition.under,
+                itemBuilder: (_) => [
+                  GlassMenuItem<String>(
+                    value: 'sort',
+                    label: '按修改时间',
+                    icon: Icons.schedule_rounded,
+                    selected: true,
+                  ),
+                  GlassMenuItem<String>(
+                    value: 'name',
+                    label: '按文件名',
+                    icon: Icons.sort_by_alpha_rounded,
+                  ),
+                  GlassMenuItem<String>(
+                    value: 'pin',
+                    label: '固定到侧边栏',
+                    icon: Icons.push_pin_rounded,
+                  ),
+                  const PopupMenuDivider(),
+                  GlassMenuItem<String>(
+                    value: 'delete',
+                    label: '从库中移除',
+                    icon: Icons.delete_outline_rounded,
+                    destructive: true,
+                  ),
+                ],
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: m.kSpace12,
+                    vertical: m.kSpace8,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sort_rounded, size: m.iconSize16),
+                      SizedBox(width: m.kSpace6),
+                      Text('打开示例菜单', style: AppTextStyles.caption(context)),
+                    ],
+                  ),
                 ),
               ),
             ],

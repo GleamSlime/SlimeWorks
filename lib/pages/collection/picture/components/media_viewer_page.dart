@@ -1980,19 +1980,16 @@ class _VideoSpeedButton extends StatelessWidget {
             : '${rate}x';
         return PopupMenuButton<double>(
           tooltip: '播放速度',
-          color: Colors.black87,
+          // 原来这里写死 Colors.black87：切到亮色主题就成了一块黑斑，而且绕开了
+          // 全站浮层的圆角、描边和投影。交给 popupMenuTheme。
           itemBuilder: (_) => [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
               .map(
-                (r) => PopupMenuItem<double>(
+                (r) => GlassMenuItem<double>(
                   value: r,
-                  child: Text(
-                    (r == r.truncateToDouble()) ? '${r.toInt()}x' : '${r}x',
-                    style: TextStyle(
-                      color: r == rate
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                    ),
-                  ),
+                  label: (r == r.truncateToDouble())
+                      ? '${r.toInt()}x'
+                      : '${r}x',
+                  selected: r == rate,
                 ),
               )
               .toList(),

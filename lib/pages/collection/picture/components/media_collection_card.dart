@@ -272,45 +272,76 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         overlaySize.height - localPos.dy,
       ),
       items: [
-        const PopupMenuItem<String>(value: 'rename', child: Text('重命名集合')),
-        const PopupMenuItem<String>(value: 'move', child: Text('移动到文件夹')),
+        GlassMenuItem<String>(
+          value: 'rename',
+          label: '重命名集合',
+          icon: Icons.drive_file_rename_outline_rounded,
+        ),
+        GlassMenuItem<String>(
+          value: 'move',
+          label: '移动到文件夹',
+          icon: Icons.drive_file_move_rounded,
+        ),
         if (!widget.isRemote)
-          const PopupMenuItem<String>(
+          GlassMenuItem<String>(
             value: 'open_folder',
-            child: Text('打开所在文件夹'),
+            label: '打开所在文件夹',
+            icon: Icons.folder_open_rounded,
           ),
         if (widget.isRemote)
-          const PopupMenuItem<String>(
+          GlassMenuItem<String>(
             value: 'open_folder',
-            child: Text('查看远程路径'),
+            label: '查看远程路径',
+            icon: Icons.link_rounded,
           ),
         if (!widget.isRemote && widget.onOpenConfigDir != null)
-          const PopupMenuItem<String>(
+          GlassMenuItem<String>(
             value: 'open_config_dir',
-            child: Text('打开配置目录'),
+            label: '打开配置目录',
+            icon: Icons.settings_suggest_rounded,
           ),
-        PopupMenuItem<String>(
+        GlassMenuItem<String>(
           value: 'favorite',
-          child: Text(widget.isFavorited ? '取消收藏' : '收藏'),
+          label: widget.isFavorited ? '取消收藏' : '收藏',
+          icon: widget.isFavorited
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
         ),
         if (widget.isRemote && widget.onPullToLocal != null)
-          const PopupMenuItem<String>(
+          GlassMenuItem<String>(
             value: 'pull_to_local',
-            child: Text('拉取到本地'),
-          ),
-        const PopupMenuItem<String>(value: 'delete', child: Text('删除集合')),
-        if (widget.onDeleteFolder != null)
-          const PopupMenuItem<String>(
-            value: 'delete_folder',
-            child: Text('删除文件夹'),
-          ),
-        if (widget.isRemote && widget.onDeleteNodeFiles != null)
-          const PopupMenuItem<String>(
-            value: 'delete_node_files',
-            child: Text('删除节点本地文件'),
+            label: '拉取到本地',
+            icon: Icons.download_rounded,
           ),
         if (PlatformUtil.isMobile)
-          const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
+          GlassMenuItem<String>(
+            value: 'select',
+            label: '进入多选',
+            icon: Icons.checklist_rounded,
+          ),
+        // 三个删除项统一收到最后，中间断一行：这条菜单十项、原来近 500 高，
+        // 删除混在普通操作里最容易误点。
+        const PopupMenuDivider(),
+        GlassMenuItem<String>(
+          value: 'delete',
+          label: '删除集合',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
+        ),
+        if (widget.onDeleteFolder != null)
+          GlassMenuItem<String>(
+            value: 'delete_folder',
+            label: '删除文件夹',
+            icon: Icons.delete_sweep_rounded,
+            destructive: true,
+          ),
+        if (widget.isRemote && widget.onDeleteNodeFiles != null)
+          GlassMenuItem<String>(
+            value: 'delete_node_files',
+            label: '删除节点本地文件',
+            icon: Icons.cloud_off_rounded,
+            destructive: true,
+          ),
       ],
     );
     if (!mounted) return;

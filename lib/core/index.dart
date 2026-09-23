@@ -31,4 +31,5 @@ export 'widgets/app_chips.dart';
 export 'widgets/section_header.dart';
 export 'widgets/empty_state.dart';
 export 'widgets/glass_surface.dart';
+export 'widgets/glass_menu.dart';
 export 'widgets/page_container.dart';

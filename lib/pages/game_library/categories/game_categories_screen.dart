@@ -82,9 +82,18 @@ class _GameCategoriesScreenState
                             _confirmDelete(category);
                           }
                         },
-                        itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                          PopupMenuItem<String>(value: 'edit', child: Text('编辑')),
-                          PopupMenuItem<String>(value: 'delete', child: Text('删除')),
+                        itemBuilder: (_) => <PopupMenuEntry<String>>[
+                          GlassMenuItem<String>(
+                            value: 'edit',
+                            label: '编辑',
+                            icon: Icons.edit_outlined,
+                          ),
+                          GlassMenuItem<String>(
+                            value: 'delete',
+                            label: '删除',
+                            icon: Icons.delete_outline_rounded,
+                            destructive: true,
+                          ),
                         ],
                       ),
               ),

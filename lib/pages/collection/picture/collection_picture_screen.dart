@@ -566,18 +566,10 @@ class _CollectionPictureScreenState
                   onSelected: (v) => viewModel.itemSortOrder.value = v,
                   itemBuilder: (_) => MediaItemSortOrder.values
                       .map(
-                        (o) => PopupMenuItem<MediaItemSortOrder>(
+                        (o) => GlassMenuItem<MediaItemSortOrder>(
                           value: o,
-                          child: Row(
-                            children: [
-                              if (viewModel.itemSortOrder.value == o)
-                                Icon(Icons.check_rounded, size: scaleW(16))
-                              else
-                                SizedBox(width: scaleW(16)),
-                              SizedBox(width: appMetrics.kSpace8),
-                              Text(o.label),
-                            ],
-                          ),
+                          label: o.label,
+                          selected: viewModel.itemSortOrder.value == o,
                         ),
                       )
                       .toList(),
@@ -662,18 +654,11 @@ class _CollectionPictureScreenState
                       onSelected: (v) => viewModel.collectionSortOrder.value = v,
                       itemBuilder: (_) => CollectionSortOrder.values
                           .map(
-                            (o) => PopupMenuItem<CollectionSortOrder>(
+                            (o) => GlassMenuItem<CollectionSortOrder>(
                               value: o,
-                              child: Row(
-                                children: [
-                                  if (viewModel.collectionSortOrder.value == o)
-                                    Icon(Icons.check_rounded, size: scaleW(16))
-                                  else
-                                    SizedBox(width: scaleW(16)),
-                                  SizedBox(width: appMetrics.kSpace8),
-                                  Text(o.label),
-                                ],
-                              ),
+                              label: o.label,
+                              selected:
+                                  viewModel.collectionSortOrder.value == o,
                             ),
                           )
                           .toList(),

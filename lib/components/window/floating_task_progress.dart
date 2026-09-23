@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/glass_surface.dart';
 
 /// 应用边缘悬浮任务进度指示器
 ///
@@ -38,22 +39,14 @@ class FloatingTaskProgress extends StatelessWidget {
       return Positioned(
         right: AppTheme.metrics.kSpace16,
         bottom: AppTheme.metrics.kSpace16,
-        child: Material(
-          // 主题里 canvasColor 已改为透明，浮层必须自己声明底色
-          color: Theme.of(context).colorScheme.surface,
-          elevation: 8,
-          borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace12),
-          child: Container(
-            width: 280,
+        // 原来是 Material + Container 两层各铺一次实色 + dividerColor 描边：右下角这块
+        // 卡片把底下的内容整个糊住，和窗口磨砂毫无关系。换成 GlassFloat 后就有了
+        // 局部模糊、玻璃描边和统一的投影档位。宽度仍在最外层给，保证卡片尺寸不变。
+        child: SizedBox(
+          width: 280,
+          child: GlassFloat(
+            borderRadius: AppTheme.metrics.radiusCard,
             padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace12),
-              border: Border.all(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,

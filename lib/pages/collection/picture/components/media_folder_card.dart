@@ -89,16 +89,43 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
         overlaySize.height - localPos.dy,
       ),
       items: [
-        const PopupMenuItem<String>(value: 'rename', child: Text('重命名文件夹')),
+        GlassMenuItem<String>(
+          value: 'rename',
+          label: '重命名文件夹',
+          icon: Icons.drive_file_rename_outline_rounded,
+        ),
         if (widget.onTransfer != null)
-          const PopupMenuItem<String>(value: 'transfer', child: Text('转移集合到...')),
+          GlassMenuItem<String>(
+            value: 'transfer',
+            label: '转移集合到...',
+            icon: Icons.drive_folder_upload_rounded,
+          ),
         if (widget.isRemote && widget.onPullToLocal != null)
-          const PopupMenuItem<String>(value: 'pull_to_local', child: Text('拉取到本地')),
-        if (widget.isRemote && widget.onDeleteNodeFiles != null)
-          const PopupMenuItem<String>(value: 'delete_node_files', child: Text('删除节点本地文件')),
-        const PopupMenuItem<String>(value: 'delete', child: Text('删除文件夹')),
+          GlassMenuItem<String>(
+            value: 'pull_to_local',
+            label: '拉取到本地',
+            icon: Icons.download_rounded,
+          ),
         if (PlatformUtil.isMobile)
-          const PopupMenuItem<String>(value: 'select', child: Text('进入多选')),
+          GlassMenuItem<String>(
+            value: 'select',
+            label: '进入多选',
+            icon: Icons.checklist_rounded,
+          ),
+        const PopupMenuDivider(),
+        if (widget.isRemote && widget.onDeleteNodeFiles != null)
+          GlassMenuItem<String>(
+            value: 'delete_node_files',
+            label: '删除节点本地文件',
+            icon: Icons.cloud_off_rounded,
+            destructive: true,
+          ),
+        GlassMenuItem<String>(
+          value: 'delete',
+          label: '删除文件夹',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
+        ),
       ],
     );
     if (action == 'rename') {
