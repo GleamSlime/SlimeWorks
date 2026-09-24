@@ -270,6 +270,14 @@ jobs:
             echo "❌ 未配置 IOS_CERTIFICATE_P12 secret，跳过签名步骤"
             exit 1
           fi
+          # 诊断：只打长度不打内容，用于判断 secret 是否混进了空格/换行
+          echo "=== secret 体检（只输出长度与指纹，不泄露明文）==="
+          echo "IOS_CERTIFICATE_P12 原始长度=${#IOS_CERTIFICATE_P12}"
+          echo "IOS_CERTIFICATE_PASSWORD 原始长度=${#IOS_CERTIFICATE_PASSWORD}"
+          # secret 从文本里粘贴常带尾部换行/回车/CRLF，这里统一清掉再使用
+          IOS_CERTIFICATE_P12=$(printf '%s' "$IOS_CERTIFICATE_P12" | tr -d ' \t\r\n')
+          IOS_CERTIFICATE_PASSWORD=$(printf '%s' "$IOS_CERTIFICATE_PASSWORD" | tr -d '\r\n')
+          echo "清理后：P12 长度=${#IOS_CERTIFICATE_P12}  PASSWORD 长度=${#IOS_CERTIFICATE_PASSWORD}"
           # 创建临时 Keychain 并设为默认
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security default-keychain -s build.keychain
@@ -281,6 +289,8 @@ jobs:
           echo "=== p12 文件信息 ==="
           ls -la certificate.p12
           file certificate.p12
+          # SHA-256 可与本机 `shasum -a 256 ios-dist.p12` 直接对比，确认传上去的是哪一份
+          echo "certificate.p12 SHA-256=$(shasum -a 256 certificate.p12 | awk '{print $1}')"
           security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           # 允许 codesign 访问证书私钥（macOS 13+ 使用 set-key-partition-list）
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
