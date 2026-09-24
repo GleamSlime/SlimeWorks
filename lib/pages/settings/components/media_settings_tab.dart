@@ -296,7 +296,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         SizedBox(height: AppTheme.metrics.kSpace16),
 
-        // ── 远程封面清晰度 ──────────────────────────────────────────────────
+        // ── 节点可用图片清晰度 ──────────────────────────────────────────────
         _SettingsCard(
           theme: theme,
           child: Obx(() {
@@ -310,7 +310,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('远程封面清晰度', style: theme.textTheme.titleSmall),
+                    Text('节点可用图片清晰度', style: theme.textTheme.titleSmall),
                     Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: AppTheme.metrics.kSpace10,
@@ -332,7 +332,8 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
-                  '从远程节点获取集合封面图片时使用的目标宽度，降低清晰度可节省上行带宽。选"原图"则不压缩。',
+                  '从节点拉取集合封面缩略图时使用的目标宽度，降低清晰度可节省上行带宽。'
+                  '选"随本地清晰度"则严格跟随本地缩略图质量（含原图）。仅作用于节点访问链路，不参与本地资源缩略图生成。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
@@ -359,7 +360,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         SizedBox(height: AppTheme.metrics.kSpace16),
 
-        // ── 远程图片清晰度 ──────────────────────────────────────────────────
+        // ── 拉取远程图片清晰度 ──────────────────────────────────────────────
         _SettingsCard(
           theme: theme,
           child: Obx(() {
@@ -373,7 +374,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('远程图片清晰度', style: theme.textTheme.titleSmall),
+                    Text('拉取远程图片清晰度', style: theme.textTheme.titleSmall),
                     Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: AppTheme.metrics.kSpace10,
@@ -395,7 +396,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
-                  '点开图片预览时从远程节点拉取的最大宽度，与封面清晰度独立控制。选"原图"则不压缩（默认）。',
+                  '点开图片预览时从节点拉取的最大宽度，与节点可用图片清晰度独立控制。选"原图"则不压缩（默认）。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),
@@ -422,7 +423,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         SizedBox(height: AppTheme.metrics.kSpace16),
 
-        // ── 本地预览图质量 ──────────────────────────────────────────────────
+        // ── 本地缩略图质量 ──────────────────────────────────────────────────
         _SettingsCard(
           theme: theme,
           child: Obx(() {
@@ -436,7 +437,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('本地预览图质量', style: theme.textTheme.titleSmall),
+                    Text('本地缩略图质量', style: theme.textTheme.titleSmall),
                     Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: AppTheme.metrics.kSpace10,
@@ -458,8 +459,8 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
-                  '列表中本地图片解码时的 cacheWidth，降低分辨率可减少内存占用和加载时间。'
-                  '选"原图"则按完整尺寸解码（适合高分辨率屏幕）。',
+                  '为本地媒体资源生成缓存缩略图（写入资源旁 .SlimeWorks 目录）使用的目标宽度，'
+                  '同时作为列表图片的解码宽度。选"原图"则按完整尺寸解码（适合高分辨率屏幕）。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),

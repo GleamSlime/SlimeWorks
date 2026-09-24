@@ -254,13 +254,49 @@ impl MediaFolderScanner {
             media_paths.len(),
             folder
         );
-        let mut items = Vec::with_capacity(media_paths.len());
-        for (index, path) in media_paths.iter().enumerate() {
-            match build_media_item(collection_id, index as i32, path) {
-                Ok(item) => items.push(item),
-                Err(error) => println!("Skipping media file {:?}: {}", path, error),
+        // 并行构建文件元数据：ffprobe/图片头读取是扫描的主要耗时，串行时逐个子进程排队、
+        // CPU 空转。结果按原始索引回填，order 仍为排序后的位置号，
+        // 与串行语义完全一致（被跳过的文件同样占号）。
+        // 并发上限 8：ffprobe 是子进程，过多并发反而抢占磁盘 IO。
+        let workers = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .min(media_paths.len())
+            .min(8)
+            .max(1);
+        let next_index = std::sync::atomic::AtomicUsize::new(0);
+        let slots: std::sync::Mutex<Vec<Option<MediaItem>>> =
+            std::sync::Mutex::new((0..media_paths.len()).map(|_| None).collect());
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                // 注意：必须共享引用，AtomicUsize 的 clone 会复制计数值导致各线程重复处理
+                let next_index = &next_index;
+                let slots = &slots;
+                let paths = &media_paths;
+                scope.spawn(move || {
+                    loop {
+                        let index = next_index.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if index >= paths.len() {
+                            break;
+                        }
+                        match build_media_item(collection_id, index as i32, &paths[index]) {
+                            Ok(item) => {
+                                if let Ok(mut guard) = slots.lock() {
+                                    guard[index] = Some(item);
+                                }
+                            }
+                            Err(error) => {
+                                println!("Skipping media file {:?}: {}", paths[index], error);
+                            }
+                        }
+                    }
+                });
             }
-        }
+        });
+        let items = slots
+            .into_inner()
+            .map(|guard| guard.into_iter().flatten().collect())
+            .unwrap_or_default();
         Ok(items)
     }
 

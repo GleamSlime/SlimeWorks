@@ -177,7 +177,7 @@ class AppUpdateService {
     }
   }
 
-  /// 用户主动触发检查更新（设置页"立即检查"按钮）
+  /// 用户主动触发检查更新（关于页"检查更新"按钮）
   Future<void> checkForUpdates({bool silent = true}) async {
     // Debug 模式下不弹更新提示
     if (kDebugMode) {

@@ -1,11 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
+import 'package:slime_works/core/services/app_update_service.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 
 class AboutPage extends StatelessWidget {
@@ -13,6 +17,11 @@ class AboutPage extends StatelessWidget {
 
   static const String _appDescription = '一站式数字内容管理与创作平台';
   static const String _copyright = '© 2026 gleamslime.com';
+
+  AppUpdateService get _service => getIt<AppUpdateService>();
+
+  // 仅 macOS/Windows 支持原生自动更新
+  bool get _supportsAutoUpdate => Platform.isMacOS || Platform.isWindows;
 
   @override
   Widget build(BuildContext context) {
@@ -25,22 +34,28 @@ class AboutPage extends StatelessWidget {
               horizontal: AppTheme.metrics.kSpace40,
               vertical: AppTheme.metrics.kSpace32,
             ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Column(
-                children: [
-                  _buildHeader(context),
-                  SizedBox(height: AppTheme.metrics.kSpace32),
-                  _buildDescription(context),
-                  SizedBox(height: AppTheme.metrics.kSpace24),
-                  _buildVersionInfo(context),
-                  SizedBox(height: AppTheme.metrics.kSpace24),
-                  _buildTechStack(context),
-                  SizedBox(height: AppTheme.metrics.kSpace24),
-                  _buildLinks(context),
-                  SizedBox(height: AppTheme.metrics.kSpace32),
-                  _buildCopyright(context),
-                ],
+            // 内层 Center 让滚动容器撑满窗口宽度，滚动条才贴着窗口右边缘；
+            // 内容宽度仍由 ConstrainedBox 限制并居中。
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Column(
+                  children: [
+                    _buildHeader(context),
+                    SizedBox(height: AppTheme.metrics.kSpace32),
+                    _buildDescription(context),
+                    SizedBox(height: AppTheme.metrics.kSpace24),
+                    _buildVersionInfo(context),
+                    SizedBox(height: AppTheme.metrics.kSpace24),
+                    _buildUpdateSection(context),
+                    SizedBox(height: AppTheme.metrics.kSpace24),
+                    _buildTechStack(context),
+                    SizedBox(height: AppTheme.metrics.kSpace24),
+                    _buildLinks(context),
+                    SizedBox(height: AppTheme.metrics.kSpace32),
+                    _buildCopyright(context),
+                  ],
+                ),
               ),
             ),
           ),
@@ -143,6 +158,181 @@ class AboutPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildUpdateSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: m.kSpace12),
+          child: Text(
+            '应用更新',
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (!_supportsAutoUpdate)
+          _AboutCard(
+            child: Text(
+              '当前平台不支持应用内自动更新，请前往 GitHub Releases 手动下载新版本',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withAlpha(140),
+                height: 1.5,
+              ),
+            ),
+          )
+        else
+          _AboutCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildAutoUpdateSwitch(context),
+                Divider(height: 1, color: theme.dividerColor),
+                _buildCheckUpdateButton(context),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 自动更新开关：闲置检查 + 原生下载安装
+  Widget _buildAutoUpdateSwitch(BuildContext context) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    final isDark = theme.brightness == Brightness.dark;
+    final brandColor = isDark ? DarkColors.primary : LightColors.primary;
+
+    return Obx(() {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: m.kSpace10),
+        child: Row(
+          children: [
+            Icon(Icons.autorenew_rounded, size: m.iconSize20, color: brandColor),
+            SizedBox(width: m.kSpace12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('自动更新', style: theme.textTheme.bodyMedium),
+                  SizedBox(height: m.kSpace2),
+                  Text(
+                    '闲置 5 分钟后自动检查 GitHub 新版本，发现更新自动下载安装',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(120),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: m.kSpace12),
+            Switch(
+              value: _service.autoUpdateEnabled.value,
+              activeThumbColor: brandColor,
+              onChanged: (v) async {
+                await _service.setAutoUpdateEnabled(v);
+                EasyLoading.showInfo(v ? '已开启自动更新' : '已关闭自动更新');
+              },
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  /// 检查更新：展示上次检查结果并提供手动触发入口
+  Widget _buildCheckUpdateButton(BuildContext context) {
+    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    return Obx(() {
+      final checking = _service.isChecking.value;
+      final info = _service.updateInfo.value;
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: m.kSpace10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (info != null) ...[
+              Row(
+                children: [
+                  Icon(
+                    Icons.new_releases_rounded,
+                    size: m.iconSize16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  SizedBox(width: m.kSpace6),
+                  Expanded(
+                    child: Text(
+                      '发现新版本: v${info.version} (Build ${info.buildNumber})',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (info.description.isNotEmpty) ...[
+                SizedBox(height: m.kSpace6),
+                Text(
+                  info.description,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(140),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              SizedBox(height: m.kSpace12),
+            ],
+            Row(
+              children: [
+                Icon(
+                  Icons.system_update_alt_rounded,
+                  size: m.iconSize20,
+                  color: theme.colorScheme.primary,
+                ),
+                SizedBox(width: m.kSpace12),
+                Expanded(
+                  child: Text(
+                    '发现新版本后会弹窗提示，也可手动检查',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(140),
+                    ),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: checking
+                      ? null
+                      : () async {
+                          await _service.checkForUpdates(silent: false);
+                          if (!_service.lastCheckHadUpdate) {
+                            EasyLoading.showInfo('当前已是最新版本');
+                          }
+                        },
+                  icon: checking
+                      ? SizedBox(
+                          width: m.iconSize16,
+                          height: m.iconSize16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : Icon(Icons.refresh_rounded, size: m.iconSize16),
+                  label: Text(
+                    checking ? '检查中...' : '检查更新',
+                    style: TextStyle(fontSize: m.fontSize13),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildTechStack(BuildContext context) {

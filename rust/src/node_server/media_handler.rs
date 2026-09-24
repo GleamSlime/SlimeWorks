@@ -20,10 +20,10 @@ pub fn thumb_generation_progress() -> (u64, u64) {
     )
 }
 
-/// 带统计包装的缩略图生成：记录开始/完成计数。
-fn ensure_cover_thumbnail_tracked(file_path: &str, width: u32) -> Option<String> {
+/// 带统计包装的节点缩略图生成：只走内存缓存（1 小时 TTL），不落盘、不污染本地邻近缓存。
+fn generate_thumbnail_bytes_tracked(file_path: &str, width: u32) -> Option<Vec<u8>> {
     THUMB_TOTAL.fetch_add(1, Ordering::Relaxed);
-    let result = media_api::ensure_cover_thumbnail(file_path.to_string(), width);
+    let result = media_api::generate_thumbnail_bytes(file_path.to_string(), width);
     THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
     result
 }
@@ -60,7 +60,7 @@ pub fn spawn_bulk_thumbnail_generation(files: Vec<String>) {
                     else {
                         break;
                     };
-                    media_api::ensure_cover_thumbnail(file_path, 480);
+                    media_api::generate_thumbnail_bytes(file_path, 480);
                     THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
                 });
             }
@@ -178,15 +178,9 @@ async fn serve_resized_cover(file_path: &str, width: u32) -> Result<Response<Bod
 
 /// 读取（必要时生成）封面缩略图字节。返回 None 表示音视频无内嵌封面。
 fn read_cover_bytes_blocking(file_path: &str, width: u32) -> Option<(Vec<u8>, String)> {
-    use std::path::Path;
-
-    // 调用 Rust 的缩略图生成函数（带进度统计）
-    if let Some(thumb_path) = ensure_cover_thumbnail_tracked(file_path, width) {
-        if !thumb_path.is_empty() {
-            if let Ok(bytes) = fs::read(Path::new(&thumb_path)) {
-                return Some((bytes, "image/jpeg".to_string()));
-            }
-        }
+    // 节点服务期缩略图只走内存缓存（1 小时 TTL），不写资源旁邻近缓存，避免污染本地资源缩略图
+    if let Some(bytes) = generate_thumbnail_bytes_tracked(file_path, width) {
+        return Some((bytes, "image/jpeg".to_string()));
     }
 
     // 如果是音频/视频文件且无法生成封面，返回 404
@@ -435,12 +429,9 @@ fn handle_media_query_blocking(
     if is_cover_mode || is_image_file(file_path) {
         let width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
         if width > 0 {
-            if let Some(thumb_path) = ensure_cover_thumbnail_tracked(file_path, width) {
-                if !thumb_path.is_empty() {
-                    if let Ok(bytes) = std::fs::read(&thumb_path) {
-                        return Ok(bytes);
-                    }
-                }
+            // 节点服务期缩略图只走内存缓存，不落盘、不污染本地邻近缓存
+            if let Some(bytes) = generate_thumbnail_bytes_tracked(file_path, width) {
+                return Ok(bytes);
             }
         }
         if is_av_file(file_path) {

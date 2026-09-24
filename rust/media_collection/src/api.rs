@@ -729,6 +729,224 @@ fn try_rust_image_resize(
     }
 }
 
+// ── 节点服务期内存缩略图缓存（不落盘）─────────────────────────────────────────
+//
+// 节点对外服务 / bulk 预热只使用这份内存缓存：远程客户端请求什么宽度，
+// 都不再把该宽度的 jpg 写进资源旁的 .SlimeWorks/tmp 邻近缓存，
+// 避免远程请求宽度污染本地资源缩略图（邻近缓存只由本地链路按「本地缩略图质量」写入）。
+// 条目最长存活 1 小时：读取时判过期 + 清扫线程每 5 分钟主动回收，保证到期释放。
+
+/// 节点内存缩略图缓存条目。
+struct NodeThumbEntry {
+    bytes: Vec<u8>,
+    inserted_at: std::time::Instant,
+}
+
+const NODE_THUMB_TTL_SECS: u64 = 60 * 60;
+const NODE_THUMB_SWEEP_SECS: u64 = 5 * 60;
+/// 内存占用上限：超过时按最早插入顺序逐出（缩略图单张几十 KB，64MB 可存约千张）。
+const NODE_THUMB_MAX_BYTES: usize = 64 * 1024 * 1024;
+
+static NODE_THUMB_CACHE: OnceLock<Mutex<HashMap<String, NodeThumbEntry>>> = OnceLock::new();
+static NODE_THUMB_TOTAL_BYTES: AtomicU64 = AtomicU64::new(0);
+static NODE_THUMB_TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// 获取（并按需启动）节点内存缓存的锁；首次初始化时拉起清扫线程。
+fn node_thumb_lock() -> &'static Mutex<HashMap<String, NodeThumbEntry>> {
+    NODE_THUMB_CACHE.get_or_init(|| {
+        std::thread::spawn(|| loop {
+            std::thread::sleep(std::time::Duration::from_secs(NODE_THUMB_SWEEP_SECS));
+            if let Some(lock) = NODE_THUMB_CACHE.get() {
+                let mut map = lock.lock().unwrap_or_else(|e| e.into_inner());
+                let expired: Vec<String> = map
+                    .iter()
+                    .filter(|(_, e)| e.inserted_at.elapsed().as_secs() >= NODE_THUMB_TTL_SECS)
+                    .map(|(k, _)| k.clone())
+                    .collect();
+                for k in expired {
+                    if let Some(entry) = map.remove(&k) {
+                        NODE_THUMB_TOTAL_BYTES.fetch_sub(
+                            entry.bytes.len() as u64,
+                            Ordering::Relaxed,
+                        );
+                    }
+                }
+            }
+        });
+        Mutex::new(HashMap::new())
+    })
+}
+
+fn node_thumb_get(key: &str) -> Option<Vec<u8>> {
+    let mut map = node_thumb_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(entry) = map.get(key) {
+        if entry.inserted_at.elapsed().as_secs() < NODE_THUMB_TTL_SECS {
+            return Some(entry.bytes.clone());
+        }
+        // 已过期：移除并归还计数，走重新生成
+        let len = map.remove(key).map(|e| e.bytes.len()).unwrap_or(0);
+        NODE_THUMB_TOTAL_BYTES.fetch_sub(len as u64, Ordering::Relaxed);
+    }
+    None
+}
+
+fn node_thumb_put(key: &str, bytes: Vec<u8>) {
+    let mut map = node_thumb_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let mut total = NODE_THUMB_TOTAL_BYTES.load(Ordering::Relaxed) as usize;
+    // 先清过期，再按最早插入逐出到容量以内
+    let expired: Vec<String> = map
+        .iter()
+        .filter(|(_, e)| e.inserted_at.elapsed().as_secs() >= NODE_THUMB_TTL_SECS)
+        .map(|(k, _)| k.clone())
+        .collect();
+    for k in &expired {
+        if let Some(entry) = map.remove(k) {
+            total = total.saturating_sub(entry.bytes.len());
+        }
+    }
+    while total + bytes.len() > NODE_THUMB_MAX_BYTES {
+        let oldest = map
+            .iter()
+            .min_by_key(|(_, e)| e.inserted_at)
+            .map(|(k, _)| k.clone());
+        match oldest {
+            Some(k) => {
+                if let Some(entry) = map.remove(&k) {
+                    total = total.saturating_sub(entry.bytes.len());
+                }
+            }
+            None => break,
+        }
+    }
+    total = total.saturating_add(bytes.len());
+    map.insert(
+        key.to_string(),
+        NodeThumbEntry {
+            bytes,
+            inserted_at: std::time::Instant::now(),
+        },
+    );
+    NODE_THUMB_TOTAL_BYTES.store(total as u64, Ordering::Relaxed);
+}
+
+/// 生成节点服务用的 JPEG 缩略图字节：命中内存缓存直接返回；未命中则现场生成，
+/// 只存内存缓存，**绝不写资源旁邻近缓存**（与 ensure_cover_thumbnail 的关键区别）。
+/// 不支持的扩展名或生成失败返回 None。
+pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>> {
+    let lower = file_path.to_lowercase();
+    let is_plain_image = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"]
+        .iter()
+        .any(|e| lower.ends_with(e));
+    let is_image = is_plain_image
+        || [".heic", ".heif", ".avif"].iter().any(|e| lower.ends_with(e));
+    let is_video = [
+        ".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".flv", ".wmv", ".ts", ".m2ts", ".mpg",
+        ".mpeg",
+    ]
+    .iter()
+    .any(|e| lower.ends_with(e));
+    let is_audio = [
+        ".mp3", ".flac", ".aac", ".m4a", ".ogg", ".opus", ".wav", ".wma", ".ape", ".aiff",
+        ".alac",
+    ]
+    .iter()
+    .any(|e| lower.ends_with(e));
+    if !is_image && !is_video && !is_audio {
+        return None;
+    }
+
+    let key = format!("{}|{}", file_path, width);
+    if let Some(cached) = node_thumb_get(&key) {
+        return Some(cached);
+    }
+
+    let t0 = std::time::Instant::now();
+    let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+    let generated = if is_plain_image {
+        resize_to_jpeg_bytes(&file_path, width)
+    } else {
+        // 视频/音频/HEIC/AVIF：ffmpeg 只能输出到文件，写系统临时文件、读完立即删除，不留持久产物
+        generate_via_ffmpeg_temp(&file_path, width, is_video, is_audio, t0, orig_size)
+    };
+
+    match generated {
+        Some(bytes) if !bytes.is_empty() => {
+            sw_debug!(
+                "[node-thumb] generate | src={} | w={} | bytes={}B | elapsed={:?}",
+                file_path,
+                width,
+                bytes.len(),
+                t0.elapsed()
+            );
+            let out = bytes.clone();
+            node_thumb_put(&key, bytes);
+            Some(out)
+        }
+        _ => {
+            sw_debug!("[node-thumb] generate failed | src={} | w={}", file_path, width);
+            None
+        }
+    }
+}
+
+/// 纯内存位图缩放：解码 → Triangle 缩放 → JPEG 编码到内存缓冲，全程不落盘。
+fn resize_to_jpeg_bytes(src: &str, width: u32) -> Option<Vec<u8>> {
+    let bytes = std::fs::read(src).ok()?;
+    let img = image::load_from_memory(&bytes).ok()?;
+    let orig_w = img.width();
+    let orig_h = img.height();
+    if orig_w == 0 {
+        return None;
+    }
+    let target_w = width.min(orig_w);
+    let target_h = ((orig_h as f64) * (target_w as f64) / (orig_w as f64)) as u32;
+    let resized = img.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
+    let mut buf = std::io::Cursor::new(Vec::new());
+    resized
+        .write_to(&mut buf, image::ImageFormat::Jpeg)
+        .ok()?;
+    Some(buf.into_inner())
+}
+
+/// 借 ffmpeg 生成到系统临时文件（复用既有 try_ffmpeg_* 逻辑），读回字节后立即删除，
+/// 不在资源旁留下任何缓存产物。
+fn generate_via_ffmpeg_temp(
+    src: &str,
+    width: u32,
+    is_video: bool,
+    is_audio: bool,
+    t0: std::time::Instant,
+    orig_size: u64,
+) -> Option<Vec<u8>> {
+    let seq = NODE_THUMB_TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let dst = std::env::temp_dir().join(format!(
+        "slimeworks_node_thumb_{}_{:x}_w{}.jpg",
+        std::process::id(),
+        seq,
+        width
+    ));
+    acquire_thumb_permit();
+    let _permit = ThumbPermit;
+    let ok = if is_video {
+        try_ffmpeg_video_frame(src, &dst, width, t0, orig_size)
+    } else if is_audio {
+        try_ffmpeg_audio_cover(src, &dst, width, t0, orig_size)
+    } else {
+        try_ffmpeg_resize(src, &dst, width, t0, orig_size)
+    };
+    let bytes = if ok {
+        std::fs::read(&dst).ok().filter(|b| !b.is_empty())
+    } else {
+        None
+    };
+    let _ = std::fs::remove_file(&dst);
+    bytes
+}
+
 static MEDIA_COLLECTIONS: OnceLock<Arc<Mutex<Vec<MediaCollection>>>> = OnceLock::new();
 /// MEDIA_ITEMS 使用可清除模式：OnceLock 持有 Mutex，Mutex 持有 Option<Vec>。
 /// - None  = 未加载（首次或被 release_items_from_memory 清除后）
@@ -1104,16 +1322,6 @@ fn ensure_db_initialized() {
     let _ = initialize_db();
 }
 
-/// Simple FNV-1a hash for deriving a stable short key from a path string.
-fn path_key(path: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in path.bytes() {
-        hash ^= b as u64;
-        hash = hash.wrapping_mul(0x100_0000_01b3);
-    }
-    format!("{:016x}", hash)
-}
-
 /// Try to extract a single thumbnail frame from `video_path` using the system
 /// ffmpeg binary.  The frame is cached at `thumbnails/{id}.jpg` and the path
 /// returned on success.
@@ -1170,8 +1378,24 @@ fn video_duration_secs(video_path: &str) -> Option<f64> {
         .ok()
 }
 
+/// 视频旁的邻近预览帧目录：`<视频父目录>/.SlimeWorks/video/tmp/scrub/<视频文件名>/`。
+/// 与封面邻近缓存同属资源目录树，键只用文件名（不含路径），
+/// 保证整个资源文件夹跨设备/跨盘符移动后缓存仍可命中。
+fn adjacent_scrub_dir(video_path: &str) -> Option<std::path::PathBuf> {
+    let parent = Path::new(video_path).parent()?;
+    let file_name = Path::new(video_path).file_name()?;
+    Some(
+        parent
+            .join(".SlimeWorks")
+            .join("video")
+            .join("tmp")
+            .join("scrub")
+            .join(file_name),
+    )
+}
+
 /// Extract `frame_count` evenly-spaced frames from a video using system ffmpeg.
-/// Frames are cached in `thumbnails/scrub/<path_key>/frame_NN.jpg`.
+/// Frames are cached in `<视频父目录>/.SlimeWorks/video/tmp/scrub/<视频文件名>/frame_NN.jpg`.
 /// Returns the list of frame file paths that were successfully created.
 /// 受全局 ffmpeg 并发信号量控制，确保不会超过用户设置的并发上限。
 pub fn extract_video_scrub_frames(
@@ -1179,8 +1403,8 @@ pub fn extract_video_scrub_frames(
     frame_count: u32,
 ) -> Result<Vec<String>, String> {
     let n = (frame_count.max(2)) as usize;
-    let key = path_key(&video_path);
-    let frame_dir = thumbnail_cache_dir().join("scrub").join(&key);
+    let frame_dir = adjacent_scrub_dir(&video_path)
+        .ok_or_else(|| format!("无法计算视频邻近预览帧目录: {}", video_path))?;
 
     // Return cached frames if they all exist.
     let cached: Vec<String> = (0..n)
@@ -1194,7 +1418,12 @@ pub fn extract_video_scrub_frames(
     if cached.iter().all(|p| std::path::Path::new(p).exists()) {
         return Ok(cached);
     }
-    let _ = std::fs::create_dir_all(&frame_dir);
+    std::fs::create_dir_all(&frame_dir)
+        .map_err(|e| format!("创建预览帧目录失败（只读盘？）: {} | {}", frame_dir.display(), e))?;
+    #[cfg(target_os = "windows")]
+    if let Some(sw_dir) = Path::new(&video_path).parent().map(|p| p.join(".SlimeWorks")) {
+        ensure_hidden_attr(&sw_dir);
+    }
 
     // 获取全局 ffmpeg 并发信号量（整个函数执行期间持有，内部串行启动 ffmpeg）
     acquire_thumb_permit();

@@ -991,7 +991,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       return null;
     }
     if (isCover) {
-      final width = mediaPrefs.remoteCoverWidth.value;
+      // 「随本地」档在此解析为本地缩略图质量；0=原图时不带 width 参数，节点直传原图
+      final width = mediaPrefs.effectiveRemoteCoverWidth;
       return nodeSettingsService.buildNodeMediaUrl(
         nodeId: nodeId,
         filePath: item.filePath,
@@ -1032,11 +1033,11 @@ class MediaLibraryViewModel extends BaseViewModel {
       return null;
     }
     if (isRemoteCollection(collection.id)) {
-      // 远程集合：视频/音频封面路径均通过节点 URL 返回（服务端 ensureCoverThumbnail 提取帧/封面）
+      // 远程集合：视频/音频封面路径均通过节点 URL 返回（服务端节点内存缩略图提取帧/封面，不落盘）
       final nodeId = getRemoteNodeId(collection.id);
       if (nodeId == null) return null;
-      // 应用远程封面清晰度设置，节省上行带宽；isCover=true 使服务端用对应保护策略
-      final width = mediaPrefs.remoteCoverWidth.value;
+      // 应用节点可用图片清晰度（含「随本地」档），节省上行带宽；isCover=true 使服务端用对应保护策略
+      final width = mediaPrefs.effectiveRemoteCoverWidth;
       return nodeSettingsService.buildNodeMediaUrl(
         nodeId: nodeId,
         filePath: coverPath,

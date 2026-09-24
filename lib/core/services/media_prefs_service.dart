@@ -63,14 +63,24 @@ class MediaPrefsService {
   /// 封面生成并发量 1-20 (默认 2)。
   final concurrency = 2.obs;
 
-  /// 远程节点封面拉取宽度(px)，0 表示原图，默认 240px。
+  /// 「节点可用图片清晰度」的特殊档位：跟随「本地缩略图质量」，含原图(0)时也用原图。
+  static const followLocalWidth = -1;
+
+  /// 节点可用图片宽度(px)：从节点拉取集合封面缩略图时用的目标宽度，0 表示原图，默认 240px。
+  /// 取值为 [followLocalWidth](-1) 时严格跟随 [localPreviewWidth]。
   final remoteCoverWidth = 240.obs;
 
-  /// 远程节点图片预览拉取宽度(px)，0 表示原图，默认 0（原图）。
+  /// 实际生效的节点可用图片宽度：「随本地」档取本地缩略图质量（含原图）。
+  int get effectiveRemoteCoverWidth =>
+      remoteCoverWidth.value == followLocalWidth
+          ? localPreviewWidth.value
+          : remoteCoverWidth.value;
+
+  /// 拉取远程图片宽度(px)，0 表示原图，默认 0（原图）。
   final remoteImageWidth = 0.obs;
 
-  /// 本地图片列表缩略图解码宽度(px)，0 表示原图，默认 480px。
-  /// Flutter Image 的 cacheWidth 参数，在解码阶段缩放，无需写临时文件。
+  /// 本地缩略图质量(px)：为本地媒体资源生成缓存缩略图（资源旁 .SlimeWorks/tmp）
+  /// 的目标宽度，同时用作列表图片解码的 cacheWidth；0 表示原图，默认 480px。
   final localPreviewWidth = 480.obs;
 
   /// 缓存大小上限（字节），0 表示不限制，默认 1 GB。
@@ -96,8 +106,9 @@ class MediaPrefsService {
     (label: '无限制', value: 0),
   ];
 
-  /// 远程封面宽度预设列表。
+  /// 节点可用图片宽度预设列表。
   static const remoteCoverWidthPresets = [
+    (label: '随本地', value: followLocalWidth),
     (label: '原图', value: 0),
     (label: '960px', value: 960),
     (label: '720px', value: 720),
@@ -110,7 +121,7 @@ class MediaPrefsService {
     (label: '50px', value: 50),
   ];
 
-  /// 远程图片预览宽度预设列表（比封面更高分辨率）。
+  /// 拉取远程图片宽度预设列表（比封面更高分辨率）。
   static const remoteImageWidthPresets = [
     (label: '原图', value: 0),
     (label: '1920px', value: 1920),
@@ -120,7 +131,7 @@ class MediaPrefsService {
     (label: '360px', value: 360),
   ];
 
-  /// 本地图片列表预览宽度预设列表。
+  /// 本地缩略图质量预设列表。
   static const localPreviewWidthPresets = [
     (label: '原图', value: 0),
     (label: '1080px', value: 1080),
@@ -169,9 +180,9 @@ class MediaPrefsService {
     await prefs.setInt(_keyConcurrency, concurrency.value);
   }
 
-  /// 设置远程封面拉取宽度，0 表示原图。
+  /// 设置节点可用图片宽度，0 表示原图，-1（[followLocalWidth]）表示随本地缩略图质量。
   Future<void> setRemoteCoverWidth(int v) async {
-    remoteCoverWidth.value = v < 0 ? 0 : v;
+    remoteCoverWidth.value = v == followLocalWidth ? v : (v < 0 ? 0 : v);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyRemoteCoverWidth, remoteCoverWidth.value);
   }
