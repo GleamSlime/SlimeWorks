@@ -1,0 +1,650 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".gitignore"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.41.0-0.0.pre"
+  RUST_VERSION: "1.92.0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 提取版本号
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y%m%d")
+          # 构建号格式：日期.commit短hash，例如 20260902.4752dad
+          BUILD_NUMBER="${BUILD_DATE}.${COMMIT_SHORT}"
+          TAG="v${VERSION}+${BUILD_NUMBER}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "📋 版本: $VERSION, 构建号: $BUILD_NUMBER, Tag: $TAG"
+
+  build-macos:
+    needs: detect-version
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: Flutter 依赖 + 代码生成
+        run: |
+          flutter pub get
+          flutter pub run build_runner build --delete-conflicting-outputs
+          flutter precache --macos
+
+      - name: 创建 .env 文件（占位）
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
+
+      - name: 修复 CocoaPods 环境
+        run: |
+          brew uninstall cocoapods 2>/dev/null || true
+          gem install cocoapods -n /usr/local/bin --no-document
+          pod --version
+
+      - name: 安装 CocoaPods 依赖
+        working-directory: macos
+        run: pod install --repo-update
+
+      - name: 安装 appdmg
+        run: npm install -g appdmg
+
+      - name: 安装 fastforge
+        run: dart pub global activate fastforge
+
+      - name: 打包 macOS DMG
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fastforge package --platform macos --target dmg
+
+      - name: Ad-hoc 代码签名
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          if [ -n "$DMG_PATH" ]; then
+            codesign --force --deep --sign - "$DMG_PATH"
+          fi
+
+      - name: 上传 macOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/**/*.dmg
+          retention-days: 7
+
+  build-windows:
+    needs: detect-version
+    runs-on: windows-2022
+    steps:
+      - name: 配置 Git 支持 Unicode
+        run: |
+          git config --global core.quotepath false
+          git config --global core.longpaths true
+          git config --global core.autocrlf input
+
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: Flutter 依赖 + 代码生成
+        run: |
+          flutter pub get
+          flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 创建 .env 文件（占位）
+        shell: bash
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
+
+      - name: 安装 Inno Setup
+        run: choco install innosetup -y
+
+      - name: 下载 Inno Setup 中文语言文件（非官方翻译，不随安装包分发）
+        run: |
+          $langDir = "C:\Program Files (x86)\Inno Setup 6\Languages"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/refs/heads/main/Files/Languages/ChineseSimplified.isl" -OutFile "$langDir\ChineseSimplified.isl"
+          if (Test-Path "$langDir\ChineseSimplified.isl") {
+            echo "✅ 中文语言文件已就位"
+          } else {
+            echo "❌ 中文语言文件下载失败"
+            exit 1
+          }
+
+      - name: 安装 fastforge
+        run: dart pub global activate fastforge
+
+      - name: 打包 Windows EXE
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
+        run: |
+          $env:Path += ";$env:LOCALAPPDATA\Pub\Cache\bin"
+          fastforge package --platform windows --target exe
+
+      - name: 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/**/*.exe
+          retention-days: 7
+
+  # ===== build-ios 暂时停用（2026-09-21）=====
+  # GitHub Actions 上该 job 持续报错，先把整段注释掉，让 macOS / Windows / Android 正常出包。
+  # 恢复方法：去掉本段每行的 "# " 前缀即可（iOS 证书/描述文件相关 secret 需一并确认）。
+  # 说明：release 与 publish-pgyer 两个 job 都不依赖 build-ios，ios-ipa 产物也没有下游消费方，
+  #      因此注释掉不会影响其它平台的发布。
+#   build-ios:
+#     needs: detect-version
+#     runs-on: macos-15
+#     steps:
+#       - uses: actions/checkout@v4
+# 
+#       - name: 选择最新 Xcode（含 iOS 18 SDK，支持 isiOSAppOnVision）
+#         uses: maxim-lobanov/setup-xcode@v1
+#         with:
+#           xcode-version: latest-stable
+# 
+#       - name: 安装 Rust
+#         uses: dtolnay/rust-toolchain@stable
+#         with:
+#           toolchain: ${{ env.RUST_VERSION }}
+#           targets: aarch64-apple-ios
+# 
+#       - name: 缓存 Cargo
+#         uses: actions/cache@v4
+#         with:
+#           path: |
+#             ~/.cargo/registry
+#             ~/.cargo/git
+#             rust/target
+#           key: ${{ runner.os }}-cargo-ios-${{ hashFiles('rust/Cargo.lock') }}
+#           restore-keys: ${{ runner.os }}-cargo-ios-
+# 
+#       - name: 安装 Flutter
+#         uses: subosito/flutter-action@v2
+#         with:
+#           flutter-version: ${{ env.FLUTTER_VERSION }}
+#           channel: master
+# 
+#       - name: Flutter 依赖 + 代码生成
+#         run: |
+#           flutter pub get
+#           flutter pub run build_runner build --delete-conflicting-outputs
+# 
+#       - name: 创建 .env 文件
+#         run: |
+#           cat > .env << 'ENVEOF'
+#           PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+#           PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+#           ENVEOF
+# 
+#       - name: 预缓存 iOS 引擎（Flutter.xcframework）
+#         run: flutter precache --ios
+# 
+#       - name: 导入 Apple 证书到 Keychain
+#         env:
+#           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+#           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+#           KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+#         run: |
+#           if [ -z "$IOS_CERTIFICATE_P12" ]; then
+#             echo "❌ 未配置 IOS_CERTIFICATE_P12 secret，跳过签名步骤"
+#             exit 1
+#           fi
+#           # 创建临时 Keychain 并设为默认
+#           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+#           security default-keychain -s build.keychain
+#           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+#           # 把 build.keychain 加入搜索路径最前
+#           security list-keychains -d user -s build.keychain login.keychain
+#           # 导入 .p12 证书
+#           echo "$IOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
+#           echo "=== p12 文件信息 ==="
+#           ls -la certificate.p12
+#           file certificate.p12
+#           security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+#           # 允许 codesign 访问证书私钥（macOS 13+ 使用 set-key-partition-list）
+#           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+#           # 立即验证证书导入是否成功
+#           echo "=== 导入后 keychain 中的所有证书 ==="
+#           security find-certificate -a build.keychain || true
+#           echo "=== 可用 codesigning 身份 ==="
+#           IDENTITY_OUTPUT=$(security find-identity -p codesigning -v build.keychain)
+#           echo "$IDENTITY_OUTPUT"
+#           # 如果输出包含 "0 valid identities"，提前失败
+#           if echo "$IDENTITY_OUTPUT" | grep -q "0 valid identities"; then
+#             echo "❌ keychain 中没有可用的 codesigning 身份，证书导入失败"
+#             echo "可能原因："
+#             echo "1. IOS_CERTIFICATE_P12 base64 字符串有换行（在 GitHub Secret 中应该是一行连续字符串）"
+#             echo "2. IOS_CERTIFICATE_PASSWORD 与导出 .p12 时设置的密码不一致"
+#             echo "3. .p12 文件不包含私钥（导出时未展开证书查看私钥）"
+#             echo "4. .p12 是开发证书（iOS Development）而不是分发证书（iOS/Apple Distribution）"
+#             exit 1
+#           fi
+# 
+#       - name: 导入 Provisioning Profile
+#         env:
+#           IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+#         run: |
+#           PP_DIR=~/Library/MobileDevice/Provisioning\ Profiles
+#           mkdir -p "$PP_DIR"
+#           echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_DIR/profile.mobileprovision"
+#           # 解码 mobileprovision（PKCS#7 签名格式）为 plist 临时文件
+#           security cms -D -i "$PP_DIR/profile.mobileprovision" > /tmp/profile.plist
+#           # 提取 UUID 和 Name（codesign 通过 UUID 文件名查找 profile）
+#           PP_UUID=$(plutil -extract UUID raw -o - /tmp/profile.plist)
+#           PP_NAME=$(plutil -extract Name raw -o - /tmp/profile.plist)
+#           rm -f /tmp/profile.plist
+#           # 用 UUID 重命名（codesign 按文件名匹配）
+#           mv "$PP_DIR/profile.mobileprovision" "$PP_DIR/${PP_UUID}.mobileprovision"
+#           echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+#           echo "PP_NAME=$PP_NAME" >> $GITHUB_ENV
+#           echo "Profile UUID: $PP_UUID"
+#           echo "Profile Name: $PP_NAME"
+# 
+#       - name: 安装 CocoaPods 依赖
+#         working-directory: ios
+#         run: pod install --repo-update
+# 
+#       - name: Flutter iOS 构建（no-codesign）
+#         run: flutter build ios --release --no-codesign
+# 
+#       - name: 验证证书可用性
+#         env:
+#           IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+#         run: |
+#           # 列出当前 keychain 搜索路径
+#           echo "=== Keychain search list ==="
+#           security list-keychains -d user
+#           # 确认临时 keychain 在搜索路径最前
+#           security list-keychains -d user -s build.keychain login.keychain
+#           security list-keychains -d user
+#           # 解锁 keychain（archive 时如果 keychain 锁住会报 User interaction is not allowed）
+#           security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+#           # 列出可用于 codesigning 的 identity（确认证书已导入且私钥可访问）
+#           echo "=== Available signing identities ==="
+#           security find-identity -p codesigning -v build.keychain
+#           # 显示 keychain 中所有证书的 Common Name（确认证书类型）
+#           echo "=== All certificates in keychain ==="
+#           security find-certificate -a build.keychain | grep -E '"labl"|"cnam"' || true
+# 
+#       - name: Xcode archive（生成 .xcarchive）
+#         working-directory: ios
+#         env:
+#           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+#           IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+#           IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+#           PP_UUID: ${{ env.PP_UUID }}
+#           PP_NAME: ${{ env.PP_NAME }}
+#         run: |
+#           # 解锁 keychain 确保私钥可访问
+#           security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+#           # 列出可用 codesigning 身份，辅助诊断
+#           echo "=== Available signing identities ==="
+#           security find-identity -p codesigning -v build.keychain || true
+#           # 创建临时 xcconfig，只给 Runner target 传签名参数
+#           # Pods 用 Podfile post_install hook 中设置的空字符串（优先级高于 -xcconfig）
+#           # 注意：不写 CODE_SIGN_IDENTITY，让 Xcode 根据 PROVISIONING_PROFILE_SPECIFIER 自动匹配证书
+#           # 注意：不写 #include，避免相对路径解析失败（Generated.xcconfig 已由 flutter build 处理）
+#           cat > /tmp/RunnerSign.xcconfig << EOF
+#           CODE_SIGN_STYLE = Manual
+#           DEVELOPMENT_TEAM = ${IOS_TEAM_ID}
+#           PROVISIONING_PROFILE_SPECIFIER = ${PP_NAME}
+#           ${IOS_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER = ${IOS_BUNDLE_ID}}
+#           EOF
+#           mkdir -p build
+#           xcodebuild archive \
+#             -workspace Runner.xcworkspace \
+#             -scheme Runner \
+#             -configuration Release \
+#             -archivePath build/Runner.xcarchive \
+#             -xcconfig /tmp/RunnerSign.xcconfig
+# 
+#       - name: 生成 ExportOptions.plist
+#         env:
+#           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+#           IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+#           PP_NAME: ${{ env.PP_NAME }}
+#         run: |
+#           BUNDLE_ID="${IOS_BUNDLE_ID:-com.gleamslime.works}"
+#           cat > ios/ExportOptions.plist << EOF
+#           <?xml version="1.0" encoding="UTF-8"?>
+#           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+#           <plist version="1.0">
+#           <dict>
+#               <key>method</key>
+#               <string>release-testing</string>
+#               <key>teamID</key>
+#               <string>${IOS_TEAM_ID}</string>
+#               <key>signingStyle</key>
+#               <string>manual</string>
+#               <key>provisioningProfiles</key>
+#               <dict>
+#                   <key>${BUNDLE_ID}</key>
+#                   <string>${PP_NAME}</string>
+#               </dict>
+#               <key>stripSwiftSymbols</key>
+#               <true/>
+#               <key>uploadBitcode</key>
+#               <false/>
+#               <key>uploadSymbols</key>
+#               <true/>
+#               <key>compileBitcode</key>
+#               <false/>
+#           </dict>
+#           </plist>
+#           EOF
+# 
+#       - name: Xcode exportArchive（生成 IPA）
+#         run: |
+#           mkdir -p build/ios/ipa
+#           xcodebuild -exportArchive \
+#             -archivePath ios/build/Runner.xcarchive \
+#             -exportPath build/ios/ipa \
+#             -exportOptionsPlist ios/ExportOptions.plist
+# 
+#       - name: 上传到蒲公英
+#         env:
+#           PGYER_API_KEY: ${{ secrets.PGYER_API_KEY }}
+#         run: |
+#           IPA_PATH=$(find build/ios/ipa -name "*.ipa" -type f | head -1)
+#           if [ -z "$IPA_PATH" ]; then
+#             echo "❌ 未找到 IPA 文件"
+#             exit 1
+#           fi
+#           echo "📦 上传到蒲公英: $IPA_PATH"
+#           RESPONSE=$(curl -s -F "file=@${IPA_PATH}" \
+#             -F "_api_key=${PGYER_API_KEY}" \
+#             -F "buildInstallType=2" \
+#             -F "buildUpdateDescription=GitHub Actions auto build" \
+#             https://www.pgyer.com/apiv2/app/upload)
+#           echo "📋 蒲公英响应: $RESPONSE"
+#           CODE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null || echo "-1")
+#           if [ "$CODE" = "0" ]; then
+#             echo "✅ 蒲公英上传成功"
+#           else
+#             echo "⚠️ 蒲公英上传可能失败，请检查响应"
+#           fi
+# 
+#       - name: 清理 Keychain
+#         if: always()
+#         run: |
+#           security delete-keychain build.keychain 2>/dev/null || true
+#           rm -f certificate.p12
+# 
+#       - name: 上传 iOS 产物
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: ios-ipa
+#           path: build/ios/ipa/*.ipa
+#           retention-days: 7
+# 
+  build-android:
+    needs: detect-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-android-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-android-
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: 安装 Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Flutter 依赖 + 代码生成
+        run: |
+          flutter pub get
+          flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 创建 .env 文件
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY=${{ secrets.PICACG_SIGN_KEY }}
+          ENVEOF
+
+      - name: 打包 Android APK
+        env:
+          PICACG_API_KEY: ${{ secrets.PICACG_API_KEY }}
+          PICACG_SIGN_KEY: ${{ secrets.PICACG_SIGN_KEY }}
+        run: flutter build apk --release
+
+      - name: 上传 Android 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
+
+  publish-pgyer:
+    needs: [detect-version, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载 APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: apk/
+
+      - name: 上传到蒲公英
+        env:
+          PGYER_API_KEY: ${{ secrets.PGYER_API_KEY }}
+        run: |
+          APK_PATH=$(find apk/ -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ 未找到 APK 文件"
+            exit 1
+          fi
+          echo "📦 上传到蒲公英: $APK_PATH"
+          RESPONSE=$(curl -s -F "file=@${APK_PATH}" \
+            -F "_api_key=${PGYER_API_KEY}" \
+            -F "buildInstallType=2" \
+            https://www.pgyer.com/apiv2/app/upload)
+          echo "📋 蒲公英响应: $RESPONSE"
+          CODE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null || echo "-1")
+          if [ "$CODE" = "0" ]; then
+            echo "✅ 蒲公英上传成功"
+          else
+            echo "⚠️ 蒲公英上传可能失败，请检查响应"
+          fi
+
+  release:
+    needs: [detect-version, build-macos, build-windows, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 下载所有产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: 列出产物
+        run: find dist/ -type f | head -20
+
+      - name: 获取 DMG 文件信息
+        id: dmg-info
+        run: |
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          FILE_SIZE=0
+          if [ -n "$DMG_PATH" ]; then
+            FILE_SIZE=$(stat -c%s "$DMG_PATH" 2>/dev/null || echo "0")
+          fi
+          echo "file_size=$FILE_SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: 创建或更新 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.detect-version.outputs.tag }}
+          name: "SlimeWorks v${{ needs.detect-version.outputs.version }}"
+          body: |
+            ## SlimeWorks v${{ needs.detect-version.outputs.version }}
+
+            Build: ${{ needs.detect-version.outputs.build_number }}
+
+            ### Downloads
+            - **macOS**: Download `.dmg`, drag to Applications
+            - **Windows**: Download `.exe` installer
+            - **Android**: Download `.apk` (also available on PGYER)
+
+            ---
+            *Built by GitHub Actions*
+          files: |
+            dist/**/*.dmg
+            dist/**/*.exe
+            dist/**/*.apk
+            dist/**/*.ipa
+          draft: false
+          prerelease: false
+
+      - name: 更新 appcast.xml
+        run: |
+          VERSION="${{ needs.detect-version.outputs.version }}"
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          # Sparkle 要求单调递增的整数版本号，使用 GitHub run_number 保证唯一递增
+          SPARKLE_VERSION="${{ github.run_number }}"
+          FILE_SIZE="${{ steps.dmg-info.outputs.file_size }}"
+          TAG="${{ needs.detect-version.outputs.tag }}"
+          REPO="GleamSlime/SlimeWorks"
+          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+
+          DMG_FILENAME=$(find dist/ -name "*.dmg" -type f -exec basename {} \; | head -1)
+
+          cat > docs/appcast.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
+            <channel>
+              <title>SlimeWorks</title>
+              <language>zh-CN</language>
+              <link>https://github.com/${REPO}</link>
+              <item>
+                <title>${VERSION}</title>
+                <description>
+                  <![CDATA[Auto build v${VERSION}+${BUILD_NUMBER}]]>
+                </description>
+                <pubDate>${DATE}</pubDate>
+                <enclosure
+                  url="https://github.com/${REPO}/releases/download/${TAG}/${DMG_FILENAME}"
+                  sparkle:version="${SPARKLE_VERSION}"
+                  sparkle:shortVersionString="${VERSION}"
+                  sparkle:edSignature=""
+                  length="${FILE_SIZE}"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+      - name: 提交 appcast.xml 到 main 分支
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: 更新 appcast.xml for ${{ needs.detect-version.outputs.tag }}"
+          file_pattern: docs/appcast.xml
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"

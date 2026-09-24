@@ -1926,7 +1926,8 @@ class _CollectionPictureScreenState
       title: '删除节点本地文件',
       message:
           '此操作将永久删除远程节点上"$folderName"文件夹内所有集合的本地文件，且不可恢复。\n\n'
-          '集合数据库记录保留，仅删除物理文件。确定继续吗？',
+          '同时清理各集合目录内的 .SlimeWorks 缓存目录；被清空的集合目录会一并删除（不波及上级目录），'
+          '对应集合记录随之移除。确定继续吗？',
       confirmLabel: '删除文件',
       confirmColor: Theme.of(context).colorScheme.error,
     );
@@ -1939,7 +1940,8 @@ class _CollectionPictureScreenState
       title: '删除节点本地文件',
       message:
           '此操作将永久删除远程节点上"$title"集合的本地文件，且不可恢复。\n\n'
-          '集合数据库记录保留，仅删除物理文件。确定继续吗？',
+          '同时清理该集合目录内的 .SlimeWorks 缓存目录；被清空的集合目录会一并删除（不波及上级目录），'
+          '对应集合记录随之移除。确定继续吗？',
       confirmLabel: '删除文件',
       confirmColor: Theme.of(context).colorScheme.error,
     );

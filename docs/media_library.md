@@ -174,7 +174,7 @@ Rust 节点服务器的 `/node/media` 路由完整支持 HTTP Range 请求，供
 | `list_directories` | 列举一级子目录 |
 | `rename_media_collection` | 重命名集合 |
 | `delete_media_collection` | 删除集合（保留文件） |
-| `delete_collection_local_files` | 删除集合的本地物理文件 |
+| `delete_collection_local_files` | 删除集合的本地物理文件，并清理集合内 .SlimeWorks 缓存与清空的集合目录 |
 | `move_media_collection_to_folder` | 将集合移至指定文件夹 |
 | `create_media_folder` | 创建根文件夹 |
 | `create_child_media_folder` | 创建子文件夹 |

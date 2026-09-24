@@ -2193,6 +2193,8 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
 }
 
 /// 删除集合内所有媒体文件的物理文件，返回已删除的文件数量。
+/// 资源清完后顺带清理该集合目录树内的 `.SlimeWorks` 缓存目录，集合目录因此变空时
+/// 连目录一起删（只删集合目录自身，不碰上级目录）。
 pub fn delete_collection_local_files(collection_id: String) -> Result<usize, String> {
     let items = get_media_collection_items(collection_id.clone())?;
     let mut deleted_count = 0;
@@ -2215,7 +2217,142 @@ pub fn delete_collection_local_files(collection_id: String) -> Result<usize, Str
         }
     }
     delete_thumbnail_tasks_for_file_paths(&deleted_paths);
+    // 即使一个文件都没删到（DB 有记录但文件早已被外部清掉）也要走目录清理，
+    // 否则残留的空集合目录和 .SlimeWorks 永远没人收。
+    cleanup_collection_physical_dirs(&collection_id);
     Ok(deleted_count)
+}
+
+/// 收集 `root` 目录树内**所有** `.SlimeWorks` 缓存目录（广度优先，限深限条目）。
+///
+/// 与 [find_collection_config_dir] 只取首个命中不同：缓存是按媒体文件的父目录就近
+/// 懒创建的，一个集合树内可能存在多个，清理时必须收全。
+fn collect_collection_config_dirs(root: &Path) -> Vec<std::path::PathBuf> {
+    const MAX_DEPTH: usize = 8;
+    const MAX_ENTRIES: usize = 20000;
+    let mut found = Vec::new();
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back((root.to_path_buf(), 0usize));
+    let mut visited_entries = 0usize;
+    while let Some((dir, depth)) = queue.pop_front() {
+        if depth >= MAX_DEPTH {
+            continue;
+        }
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            visited_entries += 1;
+            if visited_entries > MAX_ENTRIES {
+                sw_warn!("[delete_collection_local_files] 目录树过大，缓存目录搜索提前结束");
+                return found;
+            }
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = entry.file_name();
+            if name == ".SlimeWorks" {
+                found.push(path);
+                continue;
+            }
+            // 隐藏目录不递归（缓存目录自身已单独处理），命中概率极低且省扫描开销
+            if name.to_string_lossy().starts_with('.') {
+                continue;
+            }
+            queue.push_back((path, depth + 1));
+        }
+    }
+    found
+}
+
+/// 清理集合的物理目录残留：先删掉目录树内的 `.SlimeWorks` 缓存目录，再在集合目录
+/// 已空时删除该目录本身。
+fn cleanup_collection_physical_dirs(collection_id: &str) {
+    let Ok(collections) = get_collections().lock() else {
+        return;
+    };
+    let Some(folder_path) = collections
+        .iter()
+        .find(|collection| collection.id == collection_id)
+        .map(|collection| collection.folder_path.clone())
+    else {
+        return;
+    };
+    drop(collections);
+
+    cleanup_empty_collection_dir(Path::new(&folder_path));
+}
+
+/// 删除 `root` 目录树内所有 `.SlimeWorks` 缓存目录，并在 `root` 因此变空时删掉它。
+///
+/// 刻意只判断 `root` 自身、只删这一层，绝不向上传播删除父目录——上层的扫描根目录
+/// 可能还挂着其他集合，删错不可恢复。
+fn cleanup_empty_collection_dir(root: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+
+    for config_dir in collect_collection_config_dirs(root) {
+        match std::fs::remove_dir_all(&config_dir) {
+            Ok(_) => sw_info!(
+                "[delete_collection_local_files] 已删除缓存目录: {}",
+                config_dir.display()
+            ),
+            Err(e) => sw_warn!(
+                "[delete_collection_local_files] 缓存目录删除失败: {} err={}",
+                config_dir.display(),
+                e
+            ),
+        }
+    }
+
+    // 媒体文件是按子目录分布的，缓存清完后集合内会剩一串空壳目录，
+    // 不先收掉它们集合根永远判不为空。
+    let root_now_empty = prune_empty_dirs_inside(root, 0);
+    if !root_now_empty {
+        return;
+    }
+    match std::fs::remove_dir(root) {
+        Ok(_) => sw_info!(
+            "[delete_collection_local_files] 集合目录已空，一并删除: {}",
+            root.display()
+        ),
+        Err(e) => sw_warn!(
+            "[delete_collection_local_files] 空集合目录删除失败: {} err={}",
+            root.display(),
+            e
+        ),
+    }
+}
+
+/// 自底向上删除 `dir` 内部已变空的子目录，返回处理完后 `dir` 自身是否为空。
+///
+/// 递归严格以 `dir` 为界，不会删除 `dir` 本身，也就永远不会波及集合目录的上级。
+/// 限深只为防御异常深的目录树导致递归过深；超限的分支直接按"非空"处理，宁可不删。
+fn prune_empty_dirs_inside(dir: &Path, depth: usize) -> bool {
+    const MAX_DEPTH: usize = 32;
+    if depth >= MAX_DEPTH {
+        return false;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    let sub_dirs: Vec<std::path::PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect();
+    for sub_dir in sub_dirs {
+        if prune_empty_dirs_inside(&sub_dir, depth + 1) {
+            // 符号链接指向的目录 remove_dir 会失败，失败即保留，保守不误删
+            let _ = std::fs::remove_dir(&sub_dir);
+        }
+    }
+    std::fs::read_dir(dir)
+        .map(|mut entries| entries.next().is_none())
+        .unwrap_or(false)
 }
 
 /// 清空本地媒体库：单事务清空各业务表（保留 media_meta 迁移标记），
@@ -2864,5 +3001,90 @@ mod tests {
         let s = result.unwrap();
         // 应包含路径末段
         assert!(s.contains("slime_test_8675309"), "got: {s}");
+    }
+
+    // ── cleanup_empty_collection_dir / collect_collection_config_dirs ──────
+
+    /// 在临时目录下搭一棵独立的集合目录树，返回 (集合根目录, 其父目录)。
+    /// 父目录里放一个兄弟目录，用来断言清理绝不会波及上级。
+    fn make_collection_tree(case: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let parent = std::env::temp_dir().join(format!(
+            "slime_sw_cleanup_{}_{}",
+            std::process::id(),
+            case
+        ));
+        let root = parent.join("vol01");
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(parent.join("sibling")).unwrap();
+        std::fs::create_dir_all(root.join("pages")).unwrap();
+        std::fs::create_dir_all(root.join(".SlimeWorks/tmp")).unwrap();
+        std::fs::create_dir_all(root.join("pages/.SlimeWorks/tmp")).unwrap();
+        std::fs::write(root.join(".SlimeWorks/tmp/a.jpg_w320.jpg"), b"x").unwrap();
+        std::fs::write(root.join("pages/.SlimeWorks/tmp/b.jpg_w320.jpg"), b"x").unwrap();
+        (root, parent)
+    }
+
+    #[test]
+    fn collect_config_dirs_finds_all_nested_cache_dirs() {
+        let (root, parent) = make_collection_tree("collect_all");
+        let mut found = collect_collection_config_dirs(&root);
+        found.sort();
+        let names: Vec<String> = found
+            .iter()
+            .map(|p| p.strip_prefix(&root).unwrap().display().to_string())
+            .collect();
+        assert_eq!(
+            names,
+            vec![".SlimeWorks".to_string(), "pages/.SlimeWorks".to_string()],
+            "嵌套的缓存目录必须全部收齐，got: {names:?}"
+        );
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn cleanup_removes_cache_dirs_and_empty_collection_dir() {
+        let (root, parent) = make_collection_tree("all_empty");
+        // 媒体文件按子目录分布，真实流程里由 delete_collection_local_files 逐个删；
+        // 这里模拟删完后的状态：只剩空壳子目录和缓存目录
+        std::fs::write(root.join("pages/001.jpg"), b"x").unwrap();
+        std::fs::remove_file(root.join("pages/001.jpg")).unwrap();
+
+        cleanup_empty_collection_dir(&root);
+
+        assert!(!root.exists(), "集合目录已空时应连目录一起删除");
+        assert!(
+            parent.join("sibling").exists() && parent.exists(),
+            "父级目录必须原样保留，不得向上传播删除"
+        );
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn cleanup_prunes_empty_subdirs_but_keeps_dir_with_content() {
+        let (root, parent) = make_collection_tree("partial_left");
+        // 集合根里留一个非媒体残留文件，子目录 pages 则彻底空掉
+        std::fs::write(root.join("说明.txt"), b"x").unwrap();
+
+        cleanup_empty_collection_dir(&root);
+
+        assert!(!root.join(".SlimeWorks").exists(), "缓存目录应先被清掉");
+        assert!(
+            !root.join("pages").exists(),
+            "空壳子目录必须收掉，否则集合根永远判不为空"
+        );
+        assert!(root.join("说明.txt").exists());
+        assert!(root.exists(), "仍有残留内容时不得删除集合目录");
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn cleanup_is_noop_when_collection_dir_missing() {
+        let parent = std::env::temp_dir().join(format!(
+            "slime_sw_cleanup_{}_missing",
+            std::process::id()
+        ));
+        // 目录压根不存在时不应 panic，也不应凭空造出父目录
+        cleanup_empty_collection_dir(&parent.join("vol01"));
+        assert!(!parent.exists());
     }
 }
