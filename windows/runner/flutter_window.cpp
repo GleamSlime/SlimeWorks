@@ -53,9 +53,9 @@ void FlutterWindow::OnDestroy() {
 // 材质能力/开关走 MethodChannel 暴露给 Dart。Dart 侧的磨砂透明度必须以“材质真的
 // 挂上了”为前提，而不是按平台名字猜，所以这里只提供查询和开关，不预设要挂哪种。
 void FlutterWindow::RegisterBackdropChannel() {
-  backdrop_channel_ = flutter::MethodChannel<flutter::EncodableValue>::Create(
-      flutter_controller_->engine()->messenger(),
-      "slime_works/desktop_backdrop", &flutter::StandardMethodCodec::GetInstance());
+  backdrop_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "slime_works/desktop_backdrop",
+      &flutter::StandardMethodCodec::GetInstance());
 
   backdrop_channel_->SetMethodCallHandler(
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
@@ -65,8 +65,9 @@ void FlutterWindow::RegisterBackdropChannel() {
         if (method == "getCapability") {
           const WindowsBackdropCapability capability =
               QueryWindowsBackdropCapability();
-          // MethodResult::Success 收的是指针，所以先落一个具名值再取地址。
-          const flutter::EncodableValue payload(flutter::EncodableMap{
+          // MethodResult::Success 收的是值而非指针；这里先落一个具名值只是为了
+          // 让 map 的初始化列表可读，move 出去避免再拷一份。
+          flutter::EncodableValue payload(flutter::EncodableMap{
               {flutter::EncodableValue("transparentEffectsEnabled"),
                flutter::EncodableValue(capability.transparent_effects_enabled)},
               {flutter::EncodableValue("publicBackdropSupported"),
@@ -77,11 +78,11 @@ void FlutterWindow::RegisterBackdropChannel() {
                flutter::EncodableValue(static_cast<int>(
                    capability.build_number))},
           });
-          result->Success(&payload);
+          result->Success(std::move(payload));
           return;
         }
         if (method == "setBackdrop") {
-          const flutter::EncodableValue* argument = call.args();
+          const flutter::EncodableValue* argument = call.arguments();
           const std::string* requested =
               argument == nullptr
                   ? nullptr
@@ -95,8 +96,8 @@ void FlutterWindow::RegisterBackdropChannel() {
           } else {
             kind = ApplyWindowsBackdrop(GetHandle(), kind);
           }
-          const flutter::EncodableValue applied_name(WindowsBackdropKindName(kind));
-          result->Success(&applied_name);
+          flutter::EncodableValue applied_name(WindowsBackdropKindName(kind));
+          result->Success(std::move(applied_name));
           return;
         }
         result->NotImplemented();
