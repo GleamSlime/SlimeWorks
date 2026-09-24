@@ -474,6 +474,77 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
+  /// 重新扫描选中（或当前打开）集合的物理目录，增量同步磁盘变动。
+  ///
+  /// 去重保证：Rust 端 upsert 以规范化 folder_path 匹配已有集合并复用其 ID，
+  /// 条目按"整集合删旧插新"重写，因此不会产生重复资源；收藏键为集合 ID，不受影响。
+  /// 仅处理本地集合；扫描完成后只为新增文件入队缩略图生成。
+  Future<void> rescanCollection() async {
+    if (isScanning.value) return;
+    if (Platform.isIOS || Platform.isAndroid) {
+      showSnack('提示', '移动端不支持本地重新扫描');
+      return;
+    }
+    // 目标集合：优先使用浏览模式长按选中的本地集合；未选中时退回当前打开的集合
+    final List<media_api.MediaCollection> targets;
+    if (selectedIds.isNotEmpty) {
+      targets = collections
+          .where((c) => selectedIds.contains(c.id) && !isRemoteCollection(c.id))
+          .toList(growable: false);
+    } else {
+      final openId = currentCollectionId.value;
+      final openCol = (openId != null && !isRemoteCollection(openId)) ? currentCollection : null;
+      targets = openCol == null ? const [] : [openCol];
+    }
+    if (targets.isEmpty) {
+      showSnack('提示', '请先选中要重新扫描的集合');
+      return;
+    }
+    isScanning.value = true;
+    scanStatusText.value = '重新扫描中...';
+    int totalNew = 0;
+    int fail = 0;
+    for (final col in targets) {
+      try {
+        final oldPaths = (await media_api.getMediaCollectionItems(collectionId: col.id))
+            .map((item) => item.filePath)
+            .toSet();
+        scanStatusText.value = '重新扫描: ${col.title}';
+        // 走专用 rescan FFI：绕开"已导入"拦截，对同一 folder_path 做 upsert
+        // 覆盖，磁盘新增文件被拾取、已删文件被清掉，条目不会重复
+        await media_api.rescanMediaFolder(folderPath: col.folderPath);
+        final newItems = (await media_api.getMediaCollectionItems(collectionId: col.id))
+            .where((item) => !oldPaths.contains(item.filePath))
+            .toList(growable: false);
+        totalNew += newItems.length;
+        // 仅为新增文件生成缩略图（新文件必然无旁路缓存）
+        for (final item in newItems) {
+          _enqueueItemThumbnail(item.filePath);
+        }
+      } catch (e) {
+        fail++;
+        _logger.error('[Rescan] 集合 ${col.title} 重新扫描失败: $e');
+      }
+    }
+    await loadCollections();
+    if (currentCollectionId.value != null &&
+        !isRemoteCollection(currentCollectionId.value!) &&
+        targets.any((c) => c.id == currentCollectionId.value)) {
+      await loadCurrentCollectionItems();
+    }
+    scanStatusText.value = '';
+    isScanning.value = false;
+    final scanned = targets.length - fail;
+    _logger.info('[Rescan] 完成: 扫描 $scanned 个集合，新增 $totalNew 项，失败 $fail 个');
+    if (fail > 0 && scanned == 0) {
+      showSnack('错误', '重新扫描失败，请检查目录是否存在');
+    } else if (totalNew > 0) {
+      showSnack('成功', '重新扫描完成，新增 $totalNew 个资源');
+    } else {
+      showSnack('提示', '重新扫描完成，未发现新文件');
+    }
+  }
+
   // ── 集合 CRUD ────────────────────────────────────────────────────────────
 
   /// 处理桌面端拖入的文件或文件夹路径列表。

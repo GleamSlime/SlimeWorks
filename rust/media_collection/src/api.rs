@@ -426,7 +426,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
 
     // ④ 取获并发信号量，限制同时运行的缩略图生成任务数
     acquire_thumb_permit();
-    let mut _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
+    let _permit = ThumbPermit; // 自动释放信号量，无论从哪条路径返回
 
     // 标记任务为 running 并持久化（重启可恢复，failed/done 状态由 guard 在 drop 时写回）
     mark_thumbnail_task_running(&file_path, width);
@@ -467,37 +467,18 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         return None;
     }
 
-    // ⑤ 常规位图（`image` crate 已启用 jpeg/png/gif/webp/bmp 解码）直接走纯 Rust 缩放：
-    //    省掉一次 ffmpeg 进程 fork（约 30-80ms，还要在并发上限 2 的信号量前排队），
-    //    批量生成时这是唯一有意义的并行度来源。
-    //    HEIC/AVIF 依赖系统编解码器，仍然 ffmpeg 优先。
-    let plain_bitmap = lower.ends_with(".jpg")
-        || lower.ends_with(".jpeg")
-        || lower.ends_with(".png")
-        || lower.ends_with(".gif")
-        || lower.ends_with(".webp")
-        || lower.ends_with(".bmp");
-
-    if plain_bitmap {
-        // 纯 Rust 路径不占 ffmpeg 信号量，提前释放
-        drop(_permit);
-        if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
-            task_guard.success = true;
-            return Some(cache_path.to_string_lossy().into_owned());
-        }
-        // 纯 Rust 解码失败（异常编码/文件损坏）时回退 ffmpeg，重新取信号量
-        acquire_thumb_permit();
-        _permit = ThumbPermit;
-    }
-
+    // ⑦ 统一 ffmpeg 优先（含常规位图）：未打包的 debug 构建里 image crate 慢一个数量级
+    //    （release 实测 ~196ms/张，debug 实测 ~1.9s/张），而 ffmpeg 子进程不受构建
+    //    profile 影响。代价是位图也占 ffmpeg 信号量、批量生成按并发上限串行，
+    //    且 ffmpeg 缺失时仍会回退纯 Rust，不会丢功能。
     if try_ffmpeg_resize(&file_path, &cache_path, width, t0, orig_size) {
         task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
-    // ⑥ fallback: 纯 Rust `image` crate（非常规位图才需要，位图已在 ⑤ 尝试过）
+    // ⑧ fallback: ffmpeg 不可用/解码失败时释放信号量，回退纯 Rust `image` crate
     drop(_permit);
-    if !plain_bitmap && try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
+    if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
         task_guard.success = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
@@ -2044,6 +2025,14 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
         return Err(format!("该文件夹已导入: {}", folder_path));
     }
     upsert_collection_from_folder(Path::new(&folder_path), true)
+}
+
+/// 重新扫描已导入集合的物理目录：跳过"已导入"拦截，直接走 upsert 覆盖入库。
+/// 条目按集合整体删旧插新，磁盘新增文件被拾取、已删文件被清理，天然不产生重复。
+pub fn rescan_media_folder(folder_path: String) -> Result<MediaCollection, String> {
+    let normalized = normalize_folder_path(Path::new(&folder_path))?;
+    sw_debug!("[media_scan] rescan_media_folder: 重新扫描 {:?}", normalized);
+    upsert_collection_from_folder(Path::new(&normalized), true)
 }
 
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {

@@ -273,9 +273,6 @@ class MediaLibraryViewModel extends BaseViewModel {
   Worker? _nodeMutationWorker;
   Future<void>? _refreshAllFuture;
 
-  /// 集合文件夹自动扫描定时器（每 30 秒后台轮询）。
-  Timer? _folderWatchTimer;
-
   /// 远程节点缩略图进度轮询定时器（每 2 秒）。
   Timer? _remoteThumbPollTimer;
 
@@ -288,9 +285,6 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 缩略图进度"100% 完成"短暂显示防抖定时器。
   /// 避免从 (n-1)/n 直接消失，给用户视觉反馈再清空。
   Timer? _thumbCompleteTimer;
-
-  /// 上次扫描时各集合的 item 数量快照，用于判断是否有新增。
-  final _collectionItemCountSnapshot = <String, int>{};
 
   /// 将并发量同步到 Rust 端全局 ffmpeg 信号量，同时更新 Flutter 端队列并发限制。
   void _syncConcurrency(int v) {
@@ -401,12 +395,6 @@ class MediaLibraryViewModel extends BaseViewModel {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restorePendingThumbnailTasks();
     });
-    // 启动集合文件夹自动扫描定时器（每 30 秒轮询）
-    _folderWatchTimer?.cancel();
-    _folderWatchTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _pollCollectionFolders(),
-    );
     // 启动远程节点缩略图进度轮询（节点端生成封面时客户端可见状态与进度）
     _remoteThumbPollTimer?.cancel();
     _remoteThumbPollTimer = Timer.periodic(
@@ -419,8 +407,6 @@ class MediaLibraryViewModel extends BaseViewModel {
   void onClose() {
     _nodeMutationWorker?.dispose();
     _nodeMutationWorker = null;
-    _folderWatchTimer?.cancel();
-    _folderWatchTimer = null;
     _remoteThumbPollTimer?.cancel();
     _remoteThumbPollTimer = null;
     _trimCacheTimer?.cancel();
@@ -1576,42 +1562,6 @@ class MediaLibraryViewModel extends BaseViewModel {
         .whenComplete(() {
           isLoadingRemote.value = false;
         });
-  }
-
-  /// 后台轮询：通过 Rust FFI 检查本地集合文件数量变化，有则静默增量更新。
-  Future<void> _pollCollectionFolders() async {
-    // 只处理本地集合，跳过远程
-    final localCols = collections.toList(growable: false);
-    _logger.info('_pollCollectionFolders: 开始轮询 ${localCols.length} 个本地集合');
-    bool anyChanged = false;
-    try {
-      // 轻量级 FFI：只获取集合 item count，不含文件路径列表
-      final countsList = await media_api.getAllCollectionCounts();
-      for (final col in localCols) {
-        try {
-          final prev = _collectionItemCountSnapshot[col.id] ?? col.itemCount.toInt();
-          final countEntry = countsList.where((c) => c.collectionId == col.id).firstOrNull;
-          final count = countEntry?.itemCount ?? 0;
-          _collectionItemCountSnapshot[col.id] = count;
-          if (count != prev) {
-            _logger.info('_pollCollectionFolders: 集合[${col.title}] prev=$prev now=$count，触发增量扫描');
-            await media_api.importMediaFolder(folderPath: col.folderPath);
-            anyChanged = true;
-          }
-        } catch (e) {
-          _logger.info('_pollCollectionFolders: 集合 ${col.id} 检查异常: $e');
-        }
-      }
-    } catch (e) {
-      _logger.error('_pollCollectionFolders: 批量统计失败: $e');
-    }
-    if (anyChanged) {
-      _logger.info('_pollCollectionFolders: 有变化，刷新集合列表');
-      await loadCollections();
-      if (currentCollectionId.value != null && !isRemoteCollection(currentCollectionId.value!)) {
-        await loadCurrentCollectionItems();
-      }
-    }
   }
 
   Future<void> loadFolders() async {

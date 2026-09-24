@@ -21,6 +21,7 @@ class PictureLibraryToolbar extends StatelessWidget {
     required this.onCreateFolder,
     required this.onScanFolder,
     required this.onImportFolder,
+    required this.onRescanCollection,
     required this.onRefresh,
     required this.onClearLibrary,
     required this.onCreateSmartFolder,
@@ -34,6 +35,7 @@ class PictureLibraryToolbar extends StatelessWidget {
   final VoidCallback onCreateFolder;
   final VoidCallback onScanFolder;
   final VoidCallback onImportFolder;
+  final VoidCallback onRescanCollection;
   final VoidCallback onRefresh;
   final VoidCallback onClearLibrary;
   final VoidCallback onCreateSmartFolder;
@@ -140,6 +142,16 @@ class PictureLibraryToolbar extends StatelessWidget {
                           icon: const Icon(Icons.folder_open_outlined),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onImportFolder,
+                        ),
+                      ),
+                      Tooltip(
+                        message: inDetail
+                            ? '重新扫描当前集合目录（增量同步新增/删除文件）'
+                            : '重新扫描选中集合目录（长按选中，增量同步新增/删除文件）',
+                        child: DesktopHeadToolsButton(
+                          icon: const Icon(Icons.folder_zip_outlined),
+                          size: AppTheme.metrics.kSpace40,
+                          onTap: onRescanCollection,
                         ),
                       ),
                       Tooltip(

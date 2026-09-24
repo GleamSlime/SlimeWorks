@@ -210,6 +210,7 @@ class _CollectionPictureScreenState
       onCreateFolder: () => _showCreateFolderDialog(),
       onScanFolder: () => _handleFolderAction(scanMode: true),
       onImportFolder: () => _handleFolderAction(scanMode: false),
+      onRescanCollection: () => viewModel.rescanCollection(),
       onRefresh: () async => viewModel.refreshAll(),
       onClearLibrary: () => _confirmClearLibrary(),
       onCreateSmartFolder: () => _showCreateSmartFolderDialog(),

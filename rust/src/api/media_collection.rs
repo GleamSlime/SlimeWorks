@@ -165,6 +165,13 @@ pub fn import_media_folder(folder_path: String) -> anyhow::Result<MediaCollectio
     Ok(convert_collection(collection))
 }
 
+/// 重新扫描已导入集合的物理目录，增量同步磁盘变动（不做"已导入"拦截）。
+pub fn rescan_media_folder(folder_path: String) -> anyhow::Result<MediaCollection> {
+    let collection = media_collection::rescan_media_folder(folder_path)
+        .map_err(|error| anyhow::anyhow!(error))?;
+    Ok(convert_collection(collection))
+}
+
 pub fn scan_media_folders(folder_path: String) -> anyhow::Result<Vec<MediaCollection>> {
     let collections = media_collection::scan_media_folders(folder_path)
         .map_err(|error| anyhow::anyhow!(error))?;

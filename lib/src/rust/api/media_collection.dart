@@ -64,6 +64,12 @@ Future<MediaCollection> importMediaFolder({required String folderPath}) =>
       folderPath: folderPath,
     );
 
+/// 重新扫描已导入集合的物理目录，增量同步磁盘变动（不做"已导入"拦截）。
+Future<MediaCollection> rescanMediaFolder({required String folderPath}) =>
+    RustLib.instance.api.crateApiMediaCollectionRescanMediaFolder(
+      folderPath: folderPath,
+    );
+
 Future<List<MediaCollection>> scanMediaFolders({required String folderPath}) =>
     RustLib.instance.api.crateApiMediaCollectionScanMediaFolders(
       folderPath: folderPath,
