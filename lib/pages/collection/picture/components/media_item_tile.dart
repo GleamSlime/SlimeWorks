@@ -99,16 +99,28 @@ class _MediaItemTileState extends State<MediaItemTile> {
         if (mounted) setState(() {});
       });
     }
-    // 视频 tile：立即后台加载帧，提供默认封面（不等待 hover）
-    if (_isVideo && widget.onRequestScrubFrames != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadScrubFrames());
-    }
     // 音频 tile：立即后台提取嵌入封面
     if (_isAudio && widget.onRequestAudioCover != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAudioCover());
     }
     // 远程图片：预取缩略图并启动 2s 兜底计时
     WidgetsBinding.instance.addPostFrameCallback((_) => _prepareCoverFallback());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 视频 scrub 预生成受「预生成视频悬停帧」开关控制（默认开）。
+    // 不放 initState：MediaPrefsService 为异步 init，首帧构建时可能仍是字段默认值，
+    // 且依赖建立后的重建会重新走这里，用户切开关后 tile 能实际生效。
+    _maybePreloadScrub();
+  }
+
+  void _maybePreloadScrub() {
+    if (!_isVideo || widget.onRequestScrubFrames == null) return;
+    final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
+    if (prefs != null && !prefs.videoScrubPreload.value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadScrubFrames());
   }
 
   @override

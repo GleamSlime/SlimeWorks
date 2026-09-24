@@ -487,6 +487,39 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
 
         SizedBox(height: AppTheme.metrics.kSpace16),
 
+        // ── 视频 scrub 帧预生成 ────────────────────────────────────────────
+        _SettingsCard(
+          theme: theme,
+          child: Obx(() {
+            final on = _prefs.videoScrubPreload.value;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('预生成视频悬停帧', style: theme.textTheme.titleSmall),
+                      SizedBox(height: AppTheme.metrics.kSpace4),
+                      Text(
+                        '开启后视频缩略图出现在列表时即后台抽取全套悬停预览帧（每张 3~8 帧 ffmpeg），'
+                        '悬停秒开。关闭后仅在悬停时才抽帧，导入/浏览含大量视频的资源库时 CPU 占用明显更低，'
+                        '代价是首次悬停会有短暂等待；未悬停的视频使用默认封面帧。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withAlpha(150),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(value: on, onChanged: (v) => _prefs.setVideoScrubPreload(v)),
+              ],
+            );
+          }),
+        ),
+
+        SizedBox(height: AppTheme.metrics.kSpace16),
+
         // ── 并发量 ─────────────────────────────────────────────────────────
         _SettingsCard(
           theme: theme,
@@ -520,7 +553,8 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace4),
                 Text(
-                  '同时解析的视频封面数量。值越大封面生成越快，但 CPU 占用也越高。',
+                  '同时解析的封面/悬停帧数量（图片缩略图、视频抽帧、音频封面共用）。'
+                  '值越大生成越快，但 CPU 占用也越高。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(150),
                   ),

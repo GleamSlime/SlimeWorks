@@ -56,12 +56,17 @@ class MediaPrefsService {
   static const _keyCacheLimitBytes = 'media_cache_limit_bytes';
   static const _keyPrivacyMode = 'media_privacy_mode';
   static const _keyPrivacyBlurSigma = 'media_privacy_blur_sigma';
+  static const _keyVideoScrubPreload = 'media_video_scrub_preload';
 
   /// 质量等级 1-5 (默认 3)。
   final quality = 3.obs;
 
-  /// 封面生成并发量 1-20 (默认 2)。
-  final concurrency = 2.obs;
+  /// 封面生成并发量 1-20 (默认 8)。位图/视频/音频封面与 scrub 帧共享此 ffmpeg 信号量。
+  final concurrency = 8.obs;
+
+  /// 视频 scrub 帧预生成（默认开）。开启时 tile 挂载即后台抽全套帧；
+  /// 关闭后仅在悬停时抽取，未悬停的视频用默认封面帧代替。
+  final videoScrubPreload = true.obs;
 
   /// 「节点可用图片清晰度」的特殊档位：跟随「本地缩略图质量」，含原图(0)时也用原图。
   static const followLocalWidth = -1;
@@ -154,12 +159,13 @@ class MediaPrefsService {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     quality.value = (prefs.getInt(_keyQuality) ?? 3).clamp(1, 5);
-    concurrency.value = (prefs.getInt(_keyConcurrency) ?? 2).clamp(1, 20);
+    concurrency.value = (prefs.getInt(_keyConcurrency) ?? 8).clamp(1, 20);
     remoteCoverWidth.value = prefs.getInt(_keyRemoteCoverWidth) ?? 240;
     remoteImageWidth.value = prefs.getInt(_keyRemoteImageWidth) ?? 0;
     localPreviewWidth.value = prefs.getInt(_keyLocalPreviewWidth) ?? 480;
     cacheLimitBytes.value = prefs.getInt(_keyCacheLimitBytes) ?? (1 * 1024 * 1024 * 1024);
     privacyMode.value = prefs.getBool(_keyPrivacyMode) ?? false;
+    videoScrubPreload.value = prefs.getBool(_keyVideoScrubPreload) ?? true;
     privacyBlurSigma.value = (prefs.getDouble(_keyPrivacyBlurSigma) ?? 15.0).clamp(5.0, 40.0);
     final depthStr = prefs.getString(_keyFileCheckDepth) ?? 'coverOnly';
     fileCheckDepth.value = FileCheckDepth.values.firstWhere(
@@ -212,6 +218,13 @@ class MediaPrefsService {
     privacyMode.value = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyPrivacyMode, v);
+  }
+
+  /// 设置视频 scrub 帧预生成开关。
+  Future<void> setVideoScrubPreload(bool v) async {
+    videoScrubPreload.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyVideoScrubPreload, v);
   }
 
   Future<void> setPrivacyBlurSigma(double v) async {

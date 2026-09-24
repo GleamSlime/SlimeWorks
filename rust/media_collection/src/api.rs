@@ -50,9 +50,9 @@ pub fn ffprobe_cmd() -> String {
 }
 
 /// 全局 ffmpeg 子进程并发上限（由 Flutter 端通过 register_ffmpeg_concurrency 设置）。
-/// 默认 2，所有启动 ffmpeg/ffprobe 的函数（ensure_cover_thumbnail / extract_video_scrub_frames 等）
+/// 默认 8，所有启动 ffmpeg/ffprobe 的函数（ensure_cover_thumbnail / extract_video_scrub_frames 等）
 /// 共享此信号量，确保同一时刻 ffmpeg 进程数不超过此值。
-static FFMPEG_CONCURRENCY: std::sync::RwLock<usize> = std::sync::RwLock::new(2);
+static FFMPEG_CONCURRENCY: std::sync::RwLock<usize> = std::sync::RwLock::new(8);
 
 /// 并发信号量：计数器 + 条件变量。OnceLock 保证只初始化一次，
 /// 内部 Mutex/Condvar 本身线程安全，无需外层 RwLock。
@@ -76,7 +76,7 @@ pub fn register_ffmpeg_concurrency(limit: usize) {
 }
 
 fn max_concurrent_ffmpeg() -> usize {
-    FFMPEG_CONCURRENCY.read().map(|g| *g).unwrap_or(2)
+    FFMPEG_CONCURRENCY.read().map(|g| *g).unwrap_or(8)
 }
 
 fn acquire_thumb_permit() {
