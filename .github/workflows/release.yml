@@ -362,9 +362,6 @@ jobs:
         working-directory: ios
         run: pod install --repo-update
 
-      - name: Flutter iOS 构建（no-codesign）
-        run: flutter build ios --release --no-codesign
-
       - name: 验证证书可用性
         env:
           IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
@@ -401,7 +398,15 @@ jobs:
           #   CODE_SIGN_STYLE=Automatic / CODE_SIGN_IDENTITY="Apple Development" / DEVELOPMENT_TEAM
           # 会覆盖 -xcconfig，导致仍按 automatic + 开发证书签名而失败。
           # PROVISIONING_PROFILE_SPECIFIER 用 profile 的 UUID（与文件名一致，匹配最稳）。
+          # 后台 CPU 监控：每 60 秒打印一次占用最高的进程，
+          # 用于判断卡住时是真在编译（clang/swift 高 CPU）还是死锁（全员 0%）
+          ( while true; do
+              echo "===== $(date '+%H:%M:%S') CPU 快照 ====="
+              ps aux | sort -nrk 3 | head -8
+              sleep 60
+            done ) & MON_PID=$!
           mkdir -p build
+          set +e
           xcodebuild archive \
             -workspace Runner.xcworkspace \
             -scheme Runner \
@@ -411,7 +416,16 @@ jobs:
             "CODE_SIGN_STYLE=Manual" \
             "CODE_SIGN_IDENTITY=${SIGNING_IDENTITY}" \
             "DEVELOPMENT_TEAM=${IOS_TEAM_ID}" \
-            "PROVISIONING_PROFILE_SPECIFIER=${PP_UUID}"
+            "PROVISIONING_PROFILE_SPECIFIER=${PP_UUID}" \
+            "CLANG_ENABLE_EXPLICIT_MODULES=NO" \
+            "SWIFT_ENABLE_EXPLICIT_MODULES=NO"
+          ARCHIVE_EXIT=$?
+          kill $MON_PID 2>/dev/null || true
+          set -e
+          if [ $ARCHIVE_EXIT -ne 0 ]; then
+            echo "❌ xcodebuild archive 失败，退出码 $ARCHIVE_EXIT"
+            exit $ARCHIVE_EXIT
+          fi
 
       - name: 生成 ExportOptions.plist
         env:
