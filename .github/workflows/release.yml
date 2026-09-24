@@ -223,6 +223,11 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep -i "iphoneos" || true
 
+      - name: 关闭 Spotlight 索引（防 mds 索引 DerivedData 导致 xcodebuild 假死）
+        run: |
+          sudo mdutil -a -i off 2>&1 || true
+          sudo defaults write /.Spotlight-V100/VolumeConfiguration Exclusions -array "/Users/runner" 2>&1 || true
+
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -382,6 +387,8 @@ jobs:
           security find-certificate -a build.keychain | grep -E '"labl"|"cnam"' || true
 
       - name: Xcode archive（生成 .xcarchive）
+        # 挂起保护：正常冷编译约 20~40 分钟，超 45 分钟按失败处理，避免烧满 6 小时
+        timeout-minutes: 45
         working-directory: ios
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
