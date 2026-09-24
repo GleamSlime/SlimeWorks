@@ -41,7 +41,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
       final results = await media_api.checkPathsExist(paths: [coverPath]);
       _lostCollections[collection.id] = !results.first;
       _checkTimestamps[collection.id] = DateTime.now().millisecondsSinceEpoch;
-      _asyncCoverVersion.value++;
+      _notifyCoverChanged();
     } catch (e) {
       _logger.error('[CoverCheck] 刷新集合丢失状态失败: ${collection.id} err=$e');
     }
@@ -67,7 +67,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
       if (items.isEmpty) {
         _lostCollections[collection.id] = true;
         _checkTimestamps[collection.id] = DateTime.now().millisecondsSinceEpoch;
-        _asyncCoverVersion.value++;
+        _notifyCoverChanged();
         return;
       }
       final paths = items.map((i) => i.filePath).toList();
@@ -75,7 +75,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
       final allLost = results.every((exists) => !exists);
       _lostCollections[collection.id] = allLost;
       _checkTimestamps[collection.id] = DateTime.now().millisecondsSinceEpoch;
-      _asyncCoverVersion.value++;
+      _notifyCoverChanged();
     } catch (e) {
       _logger.error('[CoverCheck] 深度检查集合丢失状态失败: ${collection.id} err=$e');
     }
@@ -95,7 +95,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
   /// 异步刷新文件夹丢失状态：遍历直接子集合的封面/全量文件状态。
   Future<void> _refreshFolderLostCache(media_api.MediaFolder folder) async {
     // 让出当前帧：此函数由 checkFolderLost 在 build 期间同步触发，
-    // 若函数体也同步执行，_asyncCoverVersion.value++ 会与 Obx 重建冲突。
+    // 若函数体也同步执行，_notifyCoverChanged() 会与 Obx 重建冲突。
     // await null 将函数体调度到当前帧结束后执行，符合"异步刷新"的设计意图。
     await null;
     final cacheKey = 'folder:${folder.id}';
@@ -127,7 +127,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
       }
       _lostFolders[folder.id] = true;
       _checkTimestamps[cacheKey] = DateTime.now().millisecondsSinceEpoch;
-      _asyncCoverVersion.value++;
+      _notifyCoverChanged();
     } catch (e) {
       _logger.error('[CoverCheck] 刷新文件夹丢失状态失败: ${folder.id} err=$e');
     }
@@ -147,7 +147,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
   /// 异步刷新智能文件夹丢失状态：遍历匹配集合的封面/全量文件状态。
   Future<void> _refreshSmartFolderLostCache(SmartFolder sf) async {
     // 让出当前帧：此函数由 checkSmartFolderLost 在 build 期间同步触发，
-    // 若函数体也同步执行，_asyncCoverVersion.value++ 会与 Obx 重建冲突。
+    // 若函数体也同步执行，_notifyCoverChanged() 会与 Obx 重建冲突。
     await null;
     final cacheKey = 'sf:${sf.id}';
     final deep = mediaPrefs.fileCheckDepth.value == FileCheckDepth.deep;
@@ -176,7 +176,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
       }
       _lostSmartFolders[sf.id] = true;
       _checkTimestamps[cacheKey] = DateTime.now().millisecondsSinceEpoch;
-      _asyncCoverVersion.value++;
+      _notifyCoverChanged();
     } catch (e) {
       _logger.error('[CoverCheck] 刷新智能文件夹丢失状态失败: ${sf.id} err=$e');
     }
@@ -200,7 +200,7 @@ extension CoverCheckExt on MediaLibraryViewModel {
       final results = await media_api.checkPathsExist(paths: [item.filePath]);
       _lostItems[cacheKey] = !results.first;
       _itemCheckTimestamps[cacheKey] = DateTime.now().millisecondsSinceEpoch;
-      _asyncCoverVersion.value++;
+      _notifyCoverChanged();
     } catch (e) {
       _logger.error('[CoverCheck] 刷新条目丢失状态失败: ${item.id} err=$e');
     }

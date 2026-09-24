@@ -99,6 +99,18 @@ class WindowsBackdrop {
     return applied;
   }
 
+  /// 按当前已生效的材质原样重挂一次。
+  ///
+  /// window_manager 落窗口底色时会用老 Accent 策略盖掉 DWM 材质，底色落地后
+  /// 需要调这个把材质抢回来；从没挂上过（[applied] 为 none）就什么都不做。
+  static Future<void> reapply() async {
+    final kind = applied;
+    if (kind == BackdropKind.none) {
+      return;
+    }
+    await apply(kind);
+  }
+
   /// 把结论同步给 provider：侧栏等组件都在 Obx 里取值，靠它才能当场重画。
   static void _syncGlassFlag() {
     if (getIt.isRegistered<DesktopScreenProvider>()) {

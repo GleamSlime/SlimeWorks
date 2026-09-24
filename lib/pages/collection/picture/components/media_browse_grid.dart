@@ -239,9 +239,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     final sfCard = SmartFolderCard(
       smartFolder: sf,
       coverSource: vm.buildSmartFolderCoverSource(sf),
-      matchCount: vm.mergedCollections
-          .where((c) => vm.collectionMatchesSmartFolder(sf, c))
-          .length,
+      matchCount: vm.collectionsMatchingSmartFolder(sf).length,
       isSelected: vm.selectedIds.contains(sf.id),
       nodeName: nodeName,
       isLost: vm.checkSmartFolderLost(sf),
@@ -479,12 +477,17 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           final item = items[index];
           // 前 40 项加入场动画，超出部分跳过以免卡顿
           final delay = index < 40 ? index * 15 : 0;
-          return Cue.onMount(
-            motion: const .smooth(),
-            child: Actor(
-              delay: Duration(milliseconds: delay),
-              acts: [const .fadeIn(), const .slideY(from: 0.12)],
-              child: _buildCard(context, item),
+          // 以集合/文件夹 id 作为 Element key：排序或拖拽重排后卡片按身份复用，
+          // 否则按索引匹配会让选中态、封面等 State 错位到别的卡片上。
+          return KeyedSubtree(
+            key: ValueKey(item.id),
+            child: Cue.onMount(
+              motion: const .smooth(),
+              child: Actor(
+                delay: Duration(milliseconds: delay),
+                acts: [const .fadeIn(), const .slideY(from: 0.12)],
+                child: _buildCard(context, item),
+              ),
             ),
           );
         },

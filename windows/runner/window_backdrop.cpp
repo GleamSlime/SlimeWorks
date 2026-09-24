@@ -44,6 +44,12 @@ bool GetSystemBuild(DWORD* major, DWORD* build) {
 
 // 用户可以在「设置 → 个性化 → 颜色 → 透明效果」里把系统材质整个关掉。
 // 关掉之后再去申请只会拿到一块纯色底，不如直接按“不支持”处理。
+//
+// 值名是 EnableTransparency：Win10 时代叫 EnableMIPThreshold，后来又叫过
+// EnableTransparencyEffects，但 Win11（至少到 26xxx）实际写回的是
+// EnableTransparency。之前只读 Effects 那个名字，永远读不到、永远按“开启”
+// 处理，用户真关掉时材质其实没画，界面却把窗口底留成了透明——穿透但不模糊。
+// 这里按新旧名字依次读，取第一个读得到的。
 bool AreTransparencyEffectsEnabled() {
   const wchar_t* key_path =
       L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
@@ -54,19 +60,26 @@ bool AreTransparencyEffectsEnabled() {
     return true;
   }
 
-  DWORD enabled = 1;
-  DWORD value_size = sizeof(enabled);
-  DWORD value_type = 0;
-  LSTATUS status = ::RegQueryValueExW(key, L"EnableTransparencyEffects", nullptr,
-                                      &value_type,
-                                      reinterpret_cast<LPBYTE>(&enabled),
-                                      &value_size);
-  ::RegCloseKey(key);
-
-  if (status != ERROR_SUCCESS || value_type != REG_DWORD) {
-    return true;
+  const wchar_t* value_names[] = {L"EnableTransparency",
+                                  L"EnableTransparencyEffects"};
+  bool enabled = true;
+  bool found = false;
+  for (const wchar_t* value_name : value_names) {
+    DWORD value = 1;
+    DWORD value_size = sizeof(value);
+    DWORD value_type = 0;
+    LSTATUS status =
+        ::RegQueryValueExW(key, value_name, nullptr, &value_type,
+                           reinterpret_cast<LPBYTE>(&value), &value_size);
+    if (status == ERROR_SUCCESS && value_type == REG_DWORD) {
+      enabled = value != 0;
+      found = true;
+      break;
+    }
   }
-  return enabled != 0;
+  ::RegCloseKey(key);
+  // 一个名字都没读到就按系统默认（开启）处理。
+  return found ? enabled : true;
 }
 
 // 把想要的材质写进 DWM 并回读确认。
@@ -85,6 +98,53 @@ bool SetBackdropAttribute(HWND hwnd, int backdrop) {
   }
   // 读不回来就当作设置成功，不要把能力误判成没有。
   return true;
+}
+
+// —— 老 Accent 策略与 DWM 背景材质互斥 ——
+//
+// window_manager 落透明底色时用的是 Win10 时代的 SetWindowCompositionAttribute
+// （Accent / TRANSPARENTGRADIENT）。只要 Accent 策略还挂在窗口上，Win11 的
+// DWMWA_SYSTEMBACKDROP_TYPE 材质就不会被绘制——症状是窗口「穿透但不模糊」。
+// 挂材质前必须先把 Accent 置为 DISABLED，这一步抄的是 flutter_acrylic 的做法
+// （https://github.com/alexmercerind/flutter_acrylic，windows 插件源文件）。
+// SetWindowCompositionAttribute 是未导出文档的 API，按惯例从 user32 动态取。
+
+constexpr int kWindowCompositionAttributeAccentPolicy = 19;
+constexpr int kAccentDisabled = 0;
+constexpr int kAccentTransientWindowForCompatibility = 2;
+
+struct AccentPolicy {
+  int accent_state;
+  int flags;
+  DWORD color;
+  int animation_id;
+};
+
+struct WindowCompositionAttribData {
+  int attribute;
+  void* data;
+  unsigned long size;
+};
+
+typedef BOOL(WINAPI* SetWindowCompositionAttribFunc)(
+    HWND, WindowCompositionAttribData*);
+
+bool DisableAccentPolicy(HWND hwnd) {
+  HMODULE user32 = ::GetModuleHandleW(L"user32.dll");
+  if (user32 == nullptr) {
+    return false;
+  }
+  SetWindowCompositionAttribFunc set_attribute =
+      reinterpret_cast<SetWindowCompositionAttribFunc>(
+          ::GetProcAddress(user32, "SetWindowCompositionAttribute"));
+  if (set_attribute == nullptr) {
+    return false;
+  }
+  AccentPolicy accent = {kAccentDisabled,
+                         kAccentTransientWindowForCompatibility, 0, 0};
+  WindowCompositionAttribData data = {
+      kWindowCompositionAttributeAccentPolicy, &accent, sizeof(accent)};
+  return set_attribute(hwnd, &data) != FALSE;
 }
 
 }  // namespace
@@ -115,6 +175,14 @@ WindowsBackdropKind ApplyWindowsBackdrop(HWND hwnd, WindowsBackdropKind kind) {
   if (!capability.transparent_effects_enabled) {
     return WindowsBackdropKind::None;
   }
+
+  // 先清掉可能存在的 Accent 策略，材质才可能被绘制（原因见 DisableAccentPolicy）。
+  DisableAccentPolicy(hwnd);
+  // 标题栏底色置为「透明」哨兵值（DWMWA_CAPTION_COLOR = 35, RGB(0,0,0) 的
+  // 特殊值 0xFFFFFFFE），让标题栏区域也让材质透出来，flutter_acrylic 同款处理。
+  DWORD caption_color_none = 0xFFFFFFFE;
+  ::DwmSetWindowAttribute(hwnd, 35, &caption_color_none,
+                          sizeof(caption_color_none));
 
   bool applied = false;
   if (capability.public_backdrop_supported) {

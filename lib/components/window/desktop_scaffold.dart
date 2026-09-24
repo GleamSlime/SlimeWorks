@@ -40,10 +40,10 @@ class DesktopScaffold extends StatefulWidget {
 
     // 先探一次系统材质：窗口底色要不要留透明，取决于材质有没有真的挂上。
     // 必须在下面拼 WindowOptions 之前 await 完，否则首帧会先实心再闪成磨砂。
-    await WindowsBackdrop.probe();
-
-    // 必须在下面拼 WindowOptions 之前探完：窗口底色要不要留透明，取决于材质有没有挂上。
-    await WindowsBackdrop.probe();
+    // 申请压克力而非 Mica：压克力会对窗口背后的桌面做实时高斯模糊，才是磨砂质感；
+    // Mica 只是壁纸的静态着色，看起来更像直接透过去。系统拒绝时原生回退为 none，
+    // 界面按 WindowGlass 的判断退回实心底。
+    await WindowsBackdrop.probe(requested: BackdropKind.acrylic);
 
     double initWidth = positionService.windowWidth.clamp(_minWidth, double.infinity);
     double initHeight = positionService.windowHeight.clamp(_minHeight, double.infinity);
@@ -74,6 +74,12 @@ class DesktopScaffold extends StatefulWidget {
       // await windowManager.show();
       // await windowManager.focus();
     });
+
+    // 窗口底色落地之后必须把材质重新挂一遍：window_manager 的透明底色走的是
+    // 老 Accent 策略（SetWindowCompositionAttribute / TRANSPARENTGRADIENT），
+    // 它会盖掉先挂上的 DWM 背景材质——症状就是窗口「穿透但不模糊」。
+    // 顺序是 探材质 → 拼 WindowOptions → waitUntilReadyToShow 落 Accent → 重挂材质。
+    await WindowsBackdrop.reapply();
   }
 
   @override

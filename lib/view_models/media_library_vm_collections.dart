@@ -1088,7 +1088,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// 清除某集合相关的本地图片内存缓存（Flutter imageCache + viewmodel 封面缓存）。
   void _invalidateCollectionMediaCache(String collectionId) {
     _collectionVideoThumbnails.remove(collectionId);
-    _asyncCoverVersion.value++;
+    _notifyCoverChanged();
     // 清除 Flutter 网络图片内存缓存（集合的远程封面 URL 均在其中）
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
