@@ -212,10 +212,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 选择最新 Xcode（latest-stable）
+      - name: 选择 Xcode 版本（A/B 验证：latest-stable=26.3 两次不同阶段假死，改试 16.4）
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: 16.4
+          # xcode-version: latest-stable
 
       # 打印实际版本：Podfile 已按 Xcode 26/27 把部署目标统一到 15.0，版本不符能一眼看出
       - name: 确认 Xcode 版本
@@ -413,6 +414,13 @@ jobs:
               ps aux | sort -nrk 3 | head -8
               echo "--- 链接/编译进程状态（STAT 含 U/R 为可疑，%CPU=0 且长期不变=挂起）---"
               ps -axo pid,stat,%cpu,time,comm | grep -E "ld$|clang|dsymutil|swift" | grep -v grep | head -10 || true
+              echo "--- xcodebuild 进程树（它和它的直接子进程，判断在等谁）---"
+              XPID=$(pgrep -x xcodebuild | head -1) || true
+              if [ -n "$XPID" ]; then
+                ps -axo pid,ppid,stat,%cpu,time,comm | awk -v p="$XPID" '$1==p || $2==p' || true
+              fi
+              echo "--- Flutter/Dart/脚本进程 ---"
+              pgrep -fl "flutter|dart|xcode_backend" | head -5 || true
               df -h /System/Volumes/Data | tail -1
               sleep 60
             done ) & MON_PID=$!
