@@ -39,6 +39,11 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# 源码含中文注释（UTF-8 无 BOM），需告知 MSVC 以 UTF-8 解析，避免 C4819 被 /WX 当作错误
+if(MSVC)
+  add_compile_options(/utf-8)
+endif()
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

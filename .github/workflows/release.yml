@@ -400,9 +400,13 @@ jobs:
           # PROVISIONING_PROFILE_SPECIFIER 用 profile 的 UUID（与文件名一致，匹配最稳）。
           # 后台 CPU 监控：每 60 秒打印一次占用最高的进程，
           # 用于判断卡住时是真在编译（clang/swift 高 CPU）还是死锁（全员 0%）
+          # 附带磁盘余量检查：macOS runner 磁盘打满会让链接阶段假死
           ( while true; do
               echo "===== $(date '+%H:%M:%S') CPU 快照 ====="
               ps aux | sort -nrk 3 | head -8
+              echo "--- 链接/编译进程状态（STAT 含 U/R 为可疑，%CPU=0 且长期不变=挂起）---"
+              ps -axo pid,stat,%cpu,time,comm | grep -E "ld$|clang|dsymutil|swift" | grep -v grep | head -10 || true
+              df -h /System/Volumes/Data | tail -1
               sleep 60
             done ) & MON_PID=$!
           mkdir -p build

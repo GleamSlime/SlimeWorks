@@ -342,7 +342,6 @@ slime_works/
 ├── integration_test/             # 集成测试
 ├── rust_builder/                 # Rust 构建插件
 ├── .env                          # 环境变量
-├── .fvmrc                        # FVM 版本配置
 ├── pubspec.yaml                  # Flutter 项目配置
 └── flutter_rust_bridge.yaml      # FRB 配置
 
