@@ -35,6 +35,61 @@ enum PlayerPlayMode {
   const PlayerPlayMode(this.label, this.icon);
 }
 
+/// ASMR 树节点（目录或音轨）
+class _AsmrTreeNode {
+  final String type;
+  final String title;
+  final String? downloadUrl;
+  final String? streamUrl;
+  final int? sizeBytes;
+  final double? durationSec;
+  final bool selected;
+  final List<_AsmrTreeNode>? children;
+
+  const _AsmrTreeNode({
+    required this.type,
+    required this.title,
+    this.downloadUrl,
+    this.streamUrl,
+    this.sizeBytes,
+    this.durationSec,
+    required this.selected,
+    this.children,
+  });
+
+  /// 是否为音轨文件
+  bool get isAudio => type == 'audio';
+
+  /// 音轨播放地址（优先流地址，其次下载地址）
+  String? get url => streamUrl ?? downloadUrl;
+
+  /// 音轨时长（毫秒）
+  int? get durationMs => durationSec != null ? (durationSec! * 1000).round() : null;
+}
+
+/// ASMR 作品信息（标题 + 封面 + 完整树结构）
+class _AsmrWorkInfo {
+  final String title;
+  final String? coverUrl;
+  final List<_AsmrTreeNode> tree;
+
+  const _AsmrWorkInfo({required this.title, this.coverUrl, required this.tree});
+
+  /// 展开树中所有音轨
+  List<_AsmrTreeNode> get tracks {
+    final result = <_AsmrTreeNode>[];
+    void walk(List<_AsmrTreeNode> nodes) {
+      for (final n in nodes) {
+        if (n.isAudio && n.url != null) result.add(n);
+        if (n.children != null) walk(n.children!);
+      }
+    }
+
+    walk(tree);
+    return result;
+  }
+}
+
 /// 音乐播放器 ViewModel
 class MusicPlayerViewModel extends BaseViewModel {
   final NodeSettingsService _nodeService = getIt<NodeSettingsService>();
@@ -389,8 +444,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     // 不 dispose Player，不替换 Player，只重新订阅
     _isDisposed = false;
     _isSwitching = false;
-    _playerReady = _player.state.playing ||
-        _player.state.duration.inMilliseconds > 0;
+    _playerReady = _player.state.playing || _player.state.duration.inMilliseconds > 0;
     _initPlayer();
 
     // 从 Player 同步当前状态，避免热重载后 UI 状态不同步
@@ -654,10 +708,7 @@ class MusicPlayerViewModel extends BaseViewModel {
         int computed = 0;
         for (final item in items) {
           try {
-            await music_api.extractWaveform(
-              audioFilePath: item.filePath,
-              samples: 200,
-            );
+            await music_api.extractWaveform(audioFilePath: item.filePath, samples: 200);
             computed++;
           } catch (_) {}
         }
@@ -811,12 +862,14 @@ class MusicPlayerViewModel extends BaseViewModel {
   /// 创建跳过 SSL 证书验证并使用系统代理的 Dio 实例
   Dio _createInsecureDio() {
     final proxy = _getSystemProxy();
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 20),
-      headers: {'User-Agent': 'Mozilla/5.0'},
-      responseType: ResponseType.json,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 20),
+        headers: {'User-Agent': 'Mozilla/5.0'},
+        responseType: ResponseType.json,
+      ),
+    );
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
@@ -882,10 +935,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       final loginResp = await dio.post<dynamic>(
         '$_asmrApiBase/api/auth/me',
         data: {'name': 'guest', 'password': 'guest'},
-        options: Options(headers: {
-          'authorization': '',
-          'Content-Type': 'application/json',
-        }),
+        options: Options(headers: {'authorization': '', 'Content-Type': 'application/json'}),
       );
       final token = (loginResp.data as Map<String, dynamic>)['token'] as String?;
       if (token == null || token.isEmpty) {
@@ -913,9 +963,7 @@ class MusicPlayerViewModel extends BaseViewModel {
         options: Options(headers: authHeader),
       );
       final tracksList = tracksResp.data as List<dynamic>;
-      final tree = tracksList
-          .map((n) => _buildAsmrNode(n as Map<String, dynamic>))
-          .toList();
+      final tree = tracksList.map((n) => _buildAsmrNode(n as Map<String, dynamic>)).toList();
       _logger.info('[播放器] ASMR $workCode 标题=$title, 封面=${coverUrl != null}');
       return AsmrWorkInfo(title: title, coverUrl: coverUrl, tree: tree);
     } catch (e) {
@@ -977,11 +1025,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   }
 
   /// 下载本地模式：把所选格式的音频下载到系统「下载/asmr/RJ{work}」，再扫描入库
-  Future<String?> _downloadAndImport(
-    AsmrWorkInfo info,
-    String url,
-    Set<String> formats,
-  ) async {
+  Future<String?> _downloadAndImport(AsmrWorkInfo info, String url, Set<String> formats) async {
     importingStatus.value = '正在创建ASMR目录结构...';
     final asmrFolder = _findOrCreateAsmrFolder();
     if (asmrFolder == null) {
@@ -1003,10 +1047,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
 
     importingStatus.value = '正在创建播放列表「${info.title}」...';
-    final playlist = music_api.createPlaylistInFolder(
-      name: info.title,
-      folderId: asmrFolder.id,
-    );
+    final playlist = music_api.createPlaylistInFolder(name: info.title, folderId: asmrFolder.id);
 
     // 统计总字节数用于整体进度
     final totalBytes = entries.fold<int>(0, (s, e) => s + (e.size > 0 ? e.size : 0));
@@ -1036,10 +1077,7 @@ class MusicPlayerViewModel extends BaseViewModel {
 
     importingProgress.value = -1;
     importingStatus.value = '正在扫描入库...';
-    final items = await music_api.importMusicFolder(
-      playlistId: playlist.id,
-      folderPath: root,
-    );
+    final items = await music_api.importMusicFolder(playlistId: playlist.id, folderPath: root);
 
     importingStatus.value = '已下载并导入 ${items.length} 首';
     _logger.info('[播放器] ASMR下载入库完成: ${info.title}, ${items.length}首');
@@ -1056,25 +1094,21 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
 
     importingStatus.value = '正在创建播放列表「${info.title}」...';
-    final playlist = music_api.createPlaylistInFolder(
-      name: info.title,
-      folderId: asmrFolder.id,
-    );
+    final playlist = music_api.createPlaylistInFolder(name: info.title, folderId: asmrFolder.id);
 
     importingStatus.value = '正在导入 ${info.tracks.length} 首音轨...';
     final remoteItems = info.tracks
         .where((a) => a.playUrl != null)
-        .map((a) => music_api.RemoteMusicItem(
-              title: a.title,
-              url: a.playUrl!,
-              durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
-              trackNumber: null,
-            ))
+        .map(
+          (a) => music_api.RemoteMusicItem(
+            title: a.title,
+            url: a.playUrl!,
+            durationMs: a.durationMs != null ? BigInt.from(a.durationMs!) : null,
+            trackNumber: null,
+          ),
+        )
         .toList();
-    await music_api.addRemoteMusicItems(
-      playlistId: playlist.id,
-      items: remoteItems,
-    );
+    await music_api.addRemoteMusicItems(playlistId: playlist.id, items: remoteItems);
 
     importingStatus.value = '已导入 ${remoteItems.length} 首音轨';
     return playlist.id;
@@ -1100,12 +1134,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     final lower = node.title.toLowerCase();
     final matched = formats.any((f) => lower.endsWith('.${f.toLowerCase()}'));
     if (!matched) return;
-    out.add((
-      relDir: baseDir,
-      title: node.title,
-      url: url,
-      size: node.sizeBytes ?? 0,
-    ));
+    out.add((relDir: baseDir, title: node.title, url: url, size: node.sizeBytes ?? 0));
   }
 
   /// 系统下载目录
@@ -1530,10 +1559,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     isWaveformLoading.value = true;
     Future(() async {
       try {
-        final data = await music_api.extractWaveform(
-          audioFilePath: audioFilePath,
-          samples: 1000,
-        );
+        final data = await music_api.extractWaveform(audioFilePath: audioFilePath, samples: 1000);
         currentWaveform.value = data.toList();
         _logger.info('[播放器] 加载波形: ${data.length} 个采样点');
       } catch (e) {
@@ -1618,11 +1644,7 @@ class MusicPlayerViewModel extends BaseViewModel {
         return;
       }
 
-      final languagePair = TranslationLanguagePair(
-        from: '日文',
-        to: '中文',
-        displayName: '日文 → 中文',
-      );
+      final languagePair = TranslationLanguagePair(from: '日文', to: '中文', displayName: '日文 → 中文');
 
       // 批量翻译歌词标题
       final titles = currentLyrics.map((t) => t.title).toList();
@@ -1653,10 +1675,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   /// 识别单个音频文件
   void transcribeItem(music_api.MusicItem item) {
     final queue = getIt<TranscriptionTaskQueue>();
-    queue.enqueue(
-      audioFilePath: item.filePath,
-      displayName: item.title,
-    );
+    queue.enqueue(audioFilePath: item.filePath, displayName: item.title);
   }
 
   /// 批量识别当前列表所有音频
@@ -1664,10 +1683,7 @@ class MusicPlayerViewModel extends BaseViewModel {
     if (currentItems.isEmpty) return;
     final queue = getIt<TranscriptionTaskQueue>();
     for (final item in currentItems) {
-      queue.enqueue(
-        audioFilePath: item.filePath,
-        displayName: item.title,
-      );
+      queue.enqueue(audioFilePath: item.filePath, displayName: item.title);
     }
   }
 }
@@ -1707,6 +1723,7 @@ class AsmrTreeNode {
         walk(c);
       }
     }
+
     walk(this);
     return result;
   }
@@ -1727,6 +1744,7 @@ class AsmrTreeNode {
         walk(c);
       }
     }
+
     walk(this);
     return result;
   }

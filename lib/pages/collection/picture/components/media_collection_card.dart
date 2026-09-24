@@ -31,6 +31,7 @@ class MediaCollectionCard extends StatefulWidget {
     required this.onMove,
     required this.onOpenFolder,
     required this.onToggleFavorite,
+    this.onSimilarSearch,
     this.onOpenConfigDir,
     this.onDeleteFolder,
     this.onPullToLocal,
@@ -56,6 +57,9 @@ class MediaCollectionCard extends StatefulWidget {
   final VoidCallback onMove;
   final VoidCallback onOpenFolder;
   final VoidCallback onToggleFavorite;
+
+  /// 相似查找回调，为 null 时不显示「相似查找」菜单项。
+  final VoidCallback? onSimilarSearch;
 
   /// 打开集合配置目录（.SlimeWorks）回调，为 null 时不显示该菜单项（远程集合无本地目录）。
   final VoidCallback? onOpenConfigDir;
@@ -307,6 +311,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
               ? Icons.favorite_rounded
               : Icons.favorite_border_rounded,
         ),
+        if (widget.onSimilarSearch != null)
+          const PopupMenuItem<String>(value: 'similar', child: Text('相似查找')),
         if (widget.isRemote && widget.onPullToLocal != null)
           GlassMenuItem<String>(
             value: 'pull_to_local',
@@ -355,6 +361,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       widget.onOpenConfigDir?.call();
     } else if (action == 'favorite') {
       widget.onToggleFavorite();
+    } else if (action == 'similar') {
+      widget.onSimilarSearch?.call();
     } else if (action == 'pull_to_local') {
       widget.onPullToLocal?.call();
     } else if (action == 'delete') {
