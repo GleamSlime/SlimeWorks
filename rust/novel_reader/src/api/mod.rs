@@ -957,11 +957,11 @@ pub fn scan_novels_folder_batched(
 /// 推导（macOS 上大小写不敏感，正是用户真实小说库）。
 ///
 /// 因此所有落库用例必须：
-/// 1. 在**首次** DB 初始化之前，把 `HOME` 重定向到进程唯一临时目录（OnceLock 保证只设一次）；
+/// 1. 在**首次** DB 初始化之前，把 `HOME` 重定向到固定名临时目录（OnceLock 保证只设一次，开跑前清旧）；
 /// 2. 由 `DB_TEST_LOCK` 全局串行，避免共享内存库/表路由互踩；
 /// 3. 每个用例开头调用 `assert_db_isolated()` 做运行时自校验。
 #[cfg(test)]
-pub(super) mod test_env {
+pub(crate) mod test_env {
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -978,8 +978,7 @@ pub(super) mod test_env {
 
     /// 隔离后的运行环境（HOME + DB 文件路径）
     pub struct DbTestEnv {
-        /// 隔离 HOME 根目录。static OnceLock 永不 drop，
-        /// 目录交由系统临时目录回收策略处理，测试期间绝不触碰真实用户目录。
+        /// 隔离 HOME 根目录（固定名临时目录，下次运行开跑前清旧重建）
         pub home: PathBuf,
         /// 隔离后的小说库 redb 文件绝对路径
         pub db_path: String,
@@ -989,10 +988,14 @@ pub(super) mod test_env {
     pub fn db_test_env() -> &'static DbTestEnv {
         static ENV: OnceLock<DbTestEnv> = OnceLock::new();
         ENV.get_or_init(|| {
-            let home = std::env::temp_dir().join(format!(
-                "novel_db_test_home_{}",
-                std::process::id()
-            ));
+            // 固定目录名 + 开跑前清旧：每次运行都从空目录开始，跑完至多一份残留，
+            // 不会按 pid 在临时目录里无限累积（写入后归零的目录级保障）
+            let home = std::env::temp_dir().join("novel_db_test_home");
+            assert_eq!(
+                home.parent(),
+                Some(std::env::temp_dir().as_path()),
+                "清理目标必须恰好位于系统临时目录下，防误删"
+            );
             let _ = std::fs::remove_dir_all(&home);
             std::fs::create_dir_all(&home).expect("创建隔离 HOME 失败");
             // edition 2021：set_var 是安全接口；只在 OnceLock 初始化闭包里调用一次，
@@ -1035,16 +1038,28 @@ pub(super) mod test_env {
         );
     }
 
-    /// 在系统临时目录（隔离 HOME 之外）为某个用例准备一棵独立目录树
-    pub fn case_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "novel_api_test_{}_{}",
-            tag,
-            std::process::id()
-        ));
+    /// 用例目录树守卫：测试函数结束（含 panic  unwind）时自动整树删除，
+    /// 实现「写入后删除、跑完归零」
+    pub struct CaseDir(PathBuf);
+    impl std::ops::Deref for CaseDir {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+    impl Drop for CaseDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// 在系统临时目录（隔离 HOME 之外）为某个用例准备一棵独立目录树。
+    /// 固定名（tag 全局唯一，不再拼 pid），开跑前清旧 + 用例结束自动删除
+    pub fn case_dir(tag: &str) -> CaseDir {
+        let dir = std::env::temp_dir().join(format!("novel_api_test_{}", tag));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("创建用例目录失败");
-        dir
+        CaseDir(dir)
     }
 
     /// 写入任意文本文件

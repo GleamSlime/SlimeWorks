@@ -206,11 +206,8 @@ mod api_tests {
     /// 用临时 redb 文件初始化全局存储（只执行一次）
     fn ensure_storage() {
         INIT.call_once(|| {
-            let db_path = std::env::temp_dir().join(format!(
-                "sentry_log_api_test_{}.db",
-                std::process::id()
-            ));
-            // 清掉上次运行残留，避免旧数据污染断言
+            // 固定文件名：残留至多一份且每次运行开跑前清旧（写入后归零）
+            let db_path = std::env::temp_dir().join("sentry_log_api_test.db");
             let _ = std::fs::remove_file(&db_path);
             let _ = std::fs::remove_file(format!("{}-wal", db_path.display()));
             sentry_log_init(db_path.to_string_lossy().into_owned())

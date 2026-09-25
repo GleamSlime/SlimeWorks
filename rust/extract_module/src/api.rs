@@ -267,4 +267,155 @@ mod tests {
     fn format_file_size_tb() {
         assert_eq!(extract_format_file_size(1024u64 * 1024 * 1024 * 1024), "1.00 TB");
     }
+
+    // ── 密码表 DB 往返测试 ─────────────────────────────────────────────────
+    //
+    // 红线：绝不触碰用户真实密码库。extract_init_password_table 的 db_path
+    // 为显式注入参数（不经过 $HOME 推导），因此直接传入系统临时目录下的
+    // 一次性文件路径即可完全隔离；又因 db_module 的表绑定路由是进程级全局，
+    // 全部密码用例必须串行执行。
+
+    /// 串行锁：db_module 全局路由 + extract_passwords 表单实例
+    static PWD_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 进程内只初始化一次的隔离测试库环境
+    fn pwd_env() -> &'static std::path::PathBuf {
+        static DB_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
+        DB_PATH.get_or_init(|| {
+            // 固定目录名 + 开跑前清旧：每次运行从空库开始，不在临时目录按
+            // pid/时间戳累积残留（写入后归零）
+            let dir = std::env::temp_dir().join("extract_pwd_test");
+            assert_eq!(
+                dir.parent(),
+                Some(std::env::temp_dir().as_path()),
+                "清理目标必须恰好位于系统临时目录下，防误删"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("创建测试临时目录失败");
+            let path = dir.join("extract_passwords.db");
+            // 防御性断言：测试库必须位于系统临时目录，绝不允许是用户数据目录
+            assert!(path.starts_with(std::env::temp_dir()), "隔离路径异常: {path:?}");
+            extract_init_password_table(path.to_string_lossy().into_owned());
+            // 二次 init 走幂等分支（同路径重复绑定 + 迁移标记已置位），不得报错也不得清数据
+            extract_init_password_table(path.to_string_lossy().into_owned());
+            path
+        })
+    }
+
+    /// 取串行锁并确保隔离库已初始化
+    fn lock_pwd_serial() -> std::sync::MutexGuard<'static, ()> {
+        let guard = PWD_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        pwd_env();
+        guard
+    }
+
+    fn list_entries() -> Vec<PasswordEntry> {
+        serde_json::from_str::<Vec<PasswordEntry>>(&extract_list_passwords_json())
+            .expect("list_json 必须是合法的 PasswordEntry 数组")
+    }
+
+    /// 同一毫秒内的连续 add 可能撞 id（timestamp_millis 作键），测试主动隔开
+    fn ensure_unique_add() {
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+
+    /// 新增→列表→改备注→删除 的完整往返
+    #[test]
+    fn password_table_add_list_update_remove_roundtrip() {
+        let _guard = lock_pwd_serial();
+        let before = list_entries().len();
+
+        ensure_unique_add();
+        let added_json = extract_add_password("pwd-abc".to_string(), Some("首条备注".to_string()));
+        let added: PasswordEntry = serde_json::from_str(&added_json).expect("add 返回合法 JSON");
+        assert_eq!(added.password, "pwd-abc");
+        assert_eq!(added.remark.as_deref(), Some("首条备注"));
+        assert!(!added.id.is_empty());
+        // created_at 应为毫秒级时间戳（与当前时刻相差 < 60s）
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        assert!((now_ms - added.created_at).abs() < 60_000);
+
+        let entries = list_entries();
+        assert_eq!(entries.len(), before + 1);
+        let stored = entries.iter().find(|e| e.id == added.id).expect("列表应含新条目");
+        assert_eq!(stored.password, "pwd-abc");
+
+        // 更新备注成功：id/password/created_at 均不变，只有 remark 变
+        assert!(extract_update_password_remark(
+            added.id.clone(),
+            Some("改过的备注".to_string())
+        ));
+        let updated = list_entries().into_iter().find(|e| e.id == added.id).unwrap();
+        assert_eq!(updated.remark.as_deref(), Some("改过的备注"));
+        assert_eq!(updated.password, "pwd-abc");
+        assert_eq!(updated.created_at, added.created_at);
+
+        // 备注可置空（Option<String> → None）
+        assert!(extract_update_password_remark(added.id.clone(), None));
+        let nulled = list_entries().into_iter().find(|e| e.id == added.id).unwrap();
+        assert_eq!(nulled.remark, None);
+
+        // 删除：成功一次，重复删除返回 false
+        assert!(extract_remove_password(added.id.clone()));
+        assert_eq!(list_entries().len(), before);
+        assert!(!extract_remove_password(added.id.clone()));
+    }
+
+    /// 特殊字符/Unicode 密码与备注经 JSON 序列化后原样取回
+    #[test]
+    fn password_table_preserves_special_characters() {
+        let _guard = lock_pwd_serial();
+        ensure_unique_add();
+        let tricky = "密码 p@ss & = ? / \\ \" ' 中文 emoji 🎉 空格 制表\t换行\n";
+        let json = extract_add_password(tricky.to_string(), Some("备注 \" 引号 & \\".to_string()));
+        let entry: PasswordEntry = serde_json::from_str(&json).unwrap();
+
+        let stored = list_entries()
+            .into_iter()
+            .find(|e| e.id == entry.id)
+            .expect("特殊字符条目应能取回");
+        assert_eq!(stored.password, tricky);
+        assert_eq!(stored.remark.as_deref(), Some("备注 \" 引号 & \\"));
+
+        assert!(extract_remove_password(entry.id));
+    }
+
+    /// 不存在的 id：update_remark / remove 都必须返回 false 且不影响列表
+    #[test]
+    fn password_table_missing_id_operations_return_false() {
+        let _guard = lock_pwd_serial();
+        let before = list_entries().len();
+        assert!(!extract_update_password_remark("no-such-id".to_string(), Some("x".to_string())));
+        assert!(!extract_update_password_remark("".to_string(), None));
+        assert!(!extract_remove_password("no-such-id".to_string()));
+        assert_eq!(list_entries().len(), before, "失败操作不应改动数据");
+    }
+
+    /// add 允许 remark 为空；空密码原样存储（业务上由上层校验，这里只测往返保真）
+    #[test]
+    fn password_table_empty_remark_and_empty_password_roundtrip() {
+        let _guard = lock_pwd_serial();
+        ensure_unique_add();
+        let json = extract_add_password("".to_string(), None);
+        let entry: PasswordEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(entry.password, "");
+        assert_eq!(entry.remark, None);
+
+        let stored = list_entries().into_iter().find(|e| e.id == entry.id).unwrap();
+        assert_eq!(stored.password, "");
+        assert_eq!(stored.remark, None);
+        let id = entry.id.clone();
+        assert!(extract_remove_password(id.clone()));
+        assert_eq!(list_entries().iter().filter(|e| e.id == id).count(), 0);
+    }
+
+    /// 库文件确实生成在隔离临时目录（防止误写用户目录的最后防线）
+    #[test]
+    fn password_db_stays_inside_temp_dir() {
+        let _guard = lock_pwd_serial();
+        let path = pwd_env();
+        assert!(path.starts_with(std::env::temp_dir()));
+        assert!(!path.to_string_lossy().contains("SlimeWorks"));
+        assert!(path.exists() || path.parent().unwrap().exists(), "隔离目录应已创建");
+    }
 }

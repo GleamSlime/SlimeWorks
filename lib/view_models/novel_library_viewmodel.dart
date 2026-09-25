@@ -163,9 +163,12 @@ class NovelLibraryViewModel extends BaseViewModel {
   (String nodeId, String folderId)? _parseRemoteFolderSyntheticId(String syntheticId) {
     if (!isRemoteFolderId(syntheticId)) return null;
     final parts = syntheticId.split(':');
-    if (parts.length < 4) return null;
-    final nodeId = parts[2];
-    final folderId = parts.sublist(3).join(':');
+    // 合成格式 'remote-folder:<nodeId>:<folderId>'：节点 ID 固定在第 1 段，
+    // 目录 ID 自第 2 段起可含冒号（原先误取 parts[2] 且要求 ≥4 段，导致远程目录点开恒空）
+    if (parts.length < 3) return null;
+    final nodeId = parts[1];
+    final folderId = parts.sublist(2).join(':');
+    if (nodeId.isEmpty || folderId.isEmpty) return null;
     return (nodeId, folderId);
   }
 

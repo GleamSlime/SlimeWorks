@@ -3007,12 +3007,9 @@ mod tests {
 
     /// 在临时目录下搭一棵独立的集合目录树，返回 (集合根目录, 其父目录)。
     /// 父目录里放一个兄弟目录，用来断言清理绝不会波及上级。
+    /// 固定名（case 全局唯一，不再拼 pid）+ 开跑前清旧 + 用例结尾删除归零
     fn make_collection_tree(case: &str) -> (std::path::PathBuf, std::path::PathBuf) {
-        let parent = std::env::temp_dir().join(format!(
-            "slime_sw_cleanup_{}_{}",
-            std::process::id(),
-            case
-        ));
+        let parent = std::env::temp_dir().join(format!("slime_sw_cleanup_{}", case));
         let root = parent.join("vol01");
         let _ = std::fs::remove_dir_all(&parent);
         std::fs::create_dir_all(parent.join("sibling")).unwrap();
@@ -3079,10 +3076,8 @@ mod tests {
 
     #[test]
     fn cleanup_is_noop_when_collection_dir_missing() {
-        let parent = std::env::temp_dir().join(format!(
-            "slime_sw_cleanup_{}_missing",
-            std::process::id()
-        ));
+        // 固定名，任何用例都不会创建该目录
+        let parent = std::env::temp_dir().join("slime_sw_cleanup_missing");
         // 目录压根不存在时不应 panic，也不应凭空造出父目录
         cleanup_empty_collection_dir(&parent.join("vol01"));
         assert!(!parent.exists());
@@ -3102,9 +3097,10 @@ mod tests {
     static DB_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     struct DbTestEnv {
-        /// 持有隔离 HOME 的 TempDir 所有权。static OnceLock 永不 drop，
-        /// 目录由系统临时目录回收策略处理，测试期间绝不触碰真实用户目录。
-        _home: tempfile::TempDir,
+        /// 隔离 HOME 路径（固定名临时目录，每次运行开跑前清旧重建，避免按
+        /// 随机后缀在系统临时目录里无限累积）
+        #[allow(dead_code)]
+        home_path: std::path::PathBuf,
         #[allow(dead_code)]
         db_path: String,
     }
@@ -3113,11 +3109,14 @@ mod tests {
     fn db_test_env() -> &'static DbTestEnv {
         static ENV: OnceLock<DbTestEnv> = OnceLock::new();
         ENV.get_or_init(|| {
-            let home = tempfile::Builder::new()
-                .prefix("media_db_test_home_")
-                .tempdir()
-                .expect("创建隔离 HOME 失败");
-            let home_path = home.path().to_path_buf();
+            let home_path = std::env::temp_dir().join("media_db_test_home");
+            assert_eq!(
+                home_path.parent(),
+                Some(std::env::temp_dir().as_path()),
+                "清理目标必须恰好位于系统临时目录下，防误删"
+            );
+            let _ = std::fs::remove_dir_all(&home_path);
+            std::fs::create_dir_all(&home_path).expect("创建隔离 HOME 失败");
             // edition 2021：set_var 是安全接口；只在 OnceLock 初始化闭包里调用一次，
             // 之后 HOME 永不再变化，DB 用例又全部串行，不存在反复改环境变量的竞态
             std::env::set_var("HOME", &home_path);
@@ -3130,7 +3129,7 @@ mod tests {
                 "DB 路径必须位于隔离 HOME 内，绝不触碰真实用户库: {db_path}"
             );
             DbTestEnv {
-                _home: home,
+                home_path,
                 db_path,
             }
         })
@@ -3161,13 +3160,10 @@ mod tests {
         );
     }
 
-    /// 在系统临时目录（非隔离 HOME）下建一棵独立媒体目录树，返回其根目录
+    /// 在系统临时目录（非隔离 HOME）下建一棵独立媒体目录树，返回其根目录。
+    /// 固定名（case 全局唯一，不再拼 pid）+ 开跑前清旧 + 用例结尾 remove_dir_all 归零
     fn fake_media_root(case: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "slime_mc_{}_{}",
-            std::process::id(),
-            case
-        ));
+        let root = std::env::temp_dir().join(format!("slime_mc_{}", case));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
@@ -3674,11 +3670,8 @@ mod tests {
 
     #[test]
     fn config_dir_search_skips_hidden_and_respects_depth() {
-        // 根目录不存在：find/ensure 都是 None
-        let missing = std::env::temp_dir().join(format!(
-            "slime_mc_{}_cfg_missing",
-            std::process::id()
-        ));
+        // 根目录不存在：find/ensure 都是 None（固定名，任何用例都不会创建它）
+        let missing = std::env::temp_dir().join("slime_mc_cfg_missing");
         assert!(find_collection_config_dir(missing.to_string_lossy().into_owned()).is_none());
         assert!(ensure_collection_config_dir(missing.to_string_lossy().into_owned()).is_none());
 

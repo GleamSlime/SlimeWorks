@@ -837,6 +837,9 @@ mod tests {
 
     /// 创建唯一临时目录
     fn make_temp_dir(tag: &str) -> PathBuf {
+        // 先把进程 HOME 拉进隔离临时目录：get_chapter_content 会把 epub_css 缓存
+        // 写到 get_app_data_dir() 下，若不隔离将污染（并永久残留于）真实用户目录
+        crate::api::test_env::db_test_env();
         let dir = std::env::temp_dir().join(format!(
             "novel_reader_epub_{}_{}",
             tag,
@@ -844,6 +847,26 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).expect("创建临时目录失败");
         dir
+    }
+
+    /// 计算 get_chapter_content 写入的 epub_css 缓存目录（novel_id = 路径 md5）
+    fn css_cache_dir(path: &std::path::Path) -> PathBuf {
+        crate::api::get_app_data_dir()
+            .join("epub_css")
+            .join(format!("{:x}", md5::compute(path.to_string_lossy().as_bytes())))
+    }
+
+    /// 写入后归零：断言 CSS 缓存目录位于隔离 HOME 内，随后删除并确认不再残留
+    fn delete_css_cache_and_assert_zero(path: &std::path::Path) {
+        let css_dir = css_cache_dir(path);
+        let home = crate::api::test_env::db_test_env().home.clone();
+        assert!(
+            css_dir.starts_with(&home),
+            "缓存目录必须位于隔离 HOME 内: {css_dir:?}"
+        );
+        assert!(css_dir.exists(), "get_chapter_content 应创建 CSS 缓存目录");
+        std::fs::remove_dir_all(&css_dir).expect("删除 CSS 缓存目录失败");
+        assert!(!css_dir.exists(), "删除后不应残留任何缓存（写入即归零）");
     }
 
     #[test]
@@ -900,6 +923,9 @@ mod tests {
         let c1 = EpubParser::get_chapter_content(&path, 1).expect("读取第 1 章应成功");
         assert!(c1.contains("正文内容二"));
 
+        // 写入后删除归零：清掉本用例产生的 CSS 缓存目录
+        delete_css_cache_and_assert_zero(&path);
+
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -916,6 +942,9 @@ mod tests {
             "越界应报 not found，实际: {}",
             err
         );
+
+        // 越界路径仍会先行创建 CSS 缓存目录：同样删除归零
+        delete_css_cache_and_assert_zero(&path);
 
         std::fs::remove_dir_all(&dir).ok();
     }

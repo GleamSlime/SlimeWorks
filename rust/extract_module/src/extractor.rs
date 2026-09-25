@@ -848,8 +848,7 @@ mod zip_tests {
 
     #[test]
     fn zip_directory_skips_cache_and_preserves_structure() {
-        let base = std::env::temp_dir().join(format!("sw_zip_{}_rt", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
+        let base = tmp_base("sw_zip_rt");
         let src = base.join("src/vol01");
         write_file(&src.join("001.jpg"), "one");
         write_file(&src.join("pages/002.jpg"), "two");
@@ -909,8 +908,7 @@ mod zip_tests {
     /// 文本 + 二进制 + 深层嵌套目录都要覆盖，证明上传链路不丢任何字节。
     #[test]
     fn zip_extract_roundtrip_preserves_every_byte() {
-        let base = std::env::temp_dir().join(format!("sw_zip_{}_rt2", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
+        let base = tmp_base("sw_zip_rt2");
         let src = base.join("src");
 
         write_file(&src.join("note.txt"), "你好，SlimeWorks");
@@ -955,8 +953,7 @@ mod scan_size_tests {
 
     #[test]
     fn scan_archives_finds_nested_archives_and_ignores_others() {
-        let base = std::env::temp_dir().join(format!("sw_scan_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
+        let base = tmp_base("sw_scan");
 
         touch(&base.join("a.zip"), b"zip-bytes");
         // 深层嵌套目录里的压缩包必须被递归发现
@@ -1003,8 +1000,7 @@ mod scan_size_tests {
 
     #[test]
     fn get_dir_size_sums_all_nested_files() {
-        let base = std::env::temp_dir().join(format!("sw_dsize_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
+        let base = tmp_base("sw_dsize");
 
         touch(&base.join("x.txt"), b"12345"); // 5 字节
         touch(&base.join("sub/y.bin"), &[0u8; 7]); // 7 字节
@@ -1015,9 +1011,7 @@ mod scan_size_tests {
 
     #[test]
     fn get_dir_size_empty_dir_and_missing_path() {
-        let base = std::env::temp_dir().join(format!("sw_dsize_empty_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base).unwrap();
+        let base = tmp_base("sw_dsize_empty");
         // 空目录大小为 0
         assert_eq!(get_dir_size(base.to_str().unwrap()).unwrap(), 0);
         // 不存在的路径按 0 处理（调用方用它做展示，不应因缺目录而失败）
@@ -1041,8 +1035,7 @@ mod scan_size_tests {
     #[test]
     fn extract_archive_tar_gz_roundtrip() {
         // tar.gz 走 extract_tar_gz 分支：手工构造压缩包再解压比对
-        let base = std::env::temp_dir().join(format!("sw_targz_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
+        let base = tmp_base("sw_targz");
         let src = base.join("src");
         touch(&src.join("hello.txt"), b"tar-gz-payload");
         touch(&src.join("sub/nested.txt"), b"nested-bytes");
@@ -1071,4 +1064,44 @@ mod scan_size_tests {
 
         let _ = fs::remove_dir_all(&base);
     }
+}
+
+/// 测试公共：TMPDIR 下固定名用例目录守卫。
+/// 创建前清旧、用例结束（含 panic unwind）随 Drop 整树删除，实现「写入后删除、跑完归零」
+#[cfg(test)]
+mod tmp_guard {
+    use std::path::PathBuf;
+
+    pub struct TmpBase(pub PathBuf);
+
+    impl std::ops::Deref for TmpBase {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+    impl AsRef<std::path::Path> for TmpBase {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TmpBase {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+}
+
+/// 便捷入口：在系统临时目录创建（先清旧）固定名用例目录，结束自动删除
+#[cfg(test)]
+pub(crate) fn tmp_base(name: &str) -> tmp_guard::TmpBase {
+    assert!(
+        !name.contains(std::path::MAIN_SEPARATOR),
+        "用例目录名必须是不含路径分隔符的单段名"
+    );
+    let dir = std::env::temp_dir().join(name);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("创建用例临时目录失败");
+    tmp_guard::TmpBase(dir)
 }

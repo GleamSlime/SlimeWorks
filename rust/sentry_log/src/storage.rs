@@ -417,11 +417,40 @@ impl SentryLogStorage {
 mod tests {
     use super::*;
 
-    fn create_temp_storage() -> SentryLogStorage {
-        let temp_dir = std::env::temp_dir().join("sentry_log_test");
-        let db_path = temp_dir.join(format!("test_{}.db", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&temp_dir).ok();
-        SentryLogStorage::new(&db_path).unwrap()
+    /// 用例临时库守卫：持有存储并连带其专属子目录，用例结束（含 panic）时
+    /// 随 Drop 删除本子目录，实现「写入后删除、跑完归零」
+    struct TempStorage {
+        case_dir: std::path::PathBuf,
+        storage: SentryLogStorage,
+    }
+    impl std::ops::Deref for TempStorage {
+        type Target = SentryLogStorage;
+        fn deref(&self) -> &SentryLogStorage {
+            &self.storage
+        }
+    }
+    impl Drop for TempStorage {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.case_dir);
+            // 根目录仅在已空（所有用例都归零）时删除，绝不误伤并发用例
+            if let Some(root) = self.case_dir.parent() {
+                let _ = std::fs::remove_dir(root);
+            }
+        }
+    }
+
+    fn create_temp_storage() -> TempStorage {
+        // 每个用例独占一个 uuid 子目录（并发用例互不干扰），结束即删
+        let case_dir = std::env::temp_dir().join(format!(
+            "sentry_log_test/{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(&case_dir).ok();
+        let db_path = case_dir.join("test.db");
+        TempStorage {
+            storage: SentryLogStorage::new(&db_path).unwrap(),
+            case_dir,
+        }
     }
 
     fn create_test_event(event_id: &str, level: SentryLevel, message: &str) -> SentryEvent {

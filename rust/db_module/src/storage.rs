@@ -264,7 +264,26 @@ mod tests {
     static SEQ: AtomicU64 = AtomicU64::new(0);
 
     /// 为每个测试用例创建独立的临时数据库路径，返回 (根目录, 数据库文件路径)
-    fn temp_db_paths(tag: &str) -> (PathBuf, PathBuf) {
+    /// 临时根目录守卫：用例结束（含显式删除后 Drop）自动整树删除，写入即归零
+    struct TempRoot(PathBuf);
+    impl std::ops::Deref for TempRoot {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+    impl AsRef<std::path::Path> for TempRoot {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TempRoot {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn temp_db_paths(tag: &str) -> (TempRoot, PathBuf) {
         let seq = SEQ.fetch_add(1, Ordering::SeqCst);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -279,7 +298,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).expect("应能创建临时测试目录");
         let db_path = root.join("test.db");
-        (root, db_path)
+        (TempRoot(root), db_path)
     }
 
     #[test]

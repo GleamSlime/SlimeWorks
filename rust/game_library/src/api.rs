@@ -1887,12 +1887,37 @@ mod tests {
             .block_on(f)
     }
 
+    /// 上一个用例的临时库目录：下一个用例建库前链式删除；
+    /// 进程内首次建库时先清扫上一轮运行留下的 gamelib_test_*（写入后归零）。
+    /// 依赖前提：所有调用都在 API_TEST_LOCK 串行保护之下
+    static PREV_DB_DIR: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+    static FIRST_SWEEP: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
     /// 初始化一个全新的临时数据库文件并写入全局连接（须在持锁状态下调用）
     fn init_temp_db() {
+        FIRST_SWEEP.get_or_init(|| {
+            if let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) {
+                for entry in rd.flatten() {
+                    let path = entry.path();
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if name.starts_with("gamelib_test_") && path.is_dir() {
+                        let _ = std::fs::remove_dir_all(&path);
+                    }
+                }
+            }
+        });
+        let prev = PREV_DB_DIR
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(prev_dir) = prev {
+            let _ = std::fs::remove_dir_all(prev_dir);
+        }
         let dir = std::env::temp_dir().join(format!("gamelib_test_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("创建临时目录失败");
         let path = dir.join("library.db");
         game_library_init(path.to_string_lossy().into_owned()).expect("初始化游戏库失败");
+        *PREV_DB_DIR.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir);
     }
 
     /// 构造一个仅用于测试的 Game 实体

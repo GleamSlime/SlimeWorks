@@ -47,7 +47,7 @@ void main() {
       final entry = entryWithMarker(vm, marker);
       expect(entry.source, 'dart');
       expect(entry.level, 'ERROR');
-      expect(entry.rawTimestamp, '2024-01-02 03:04:05:000');
+      expect(entry.rawTimestamp, '2024-01-02 03:04:05:00'); // 实测 flustars 毫秒段只出两位
       expect(entry.timestamp, DateTime(2024, 1, 2, 3, 4, 5));
       expect(entry.message, marker);
       expect(entry.rawLine, raw);

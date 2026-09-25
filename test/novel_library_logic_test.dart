@@ -94,10 +94,10 @@ Map<String, dynamic> payload(
   return <String, dynamic>{
     'id': id,
     'title': title,
-    if (folderId != null) 'folder_id': folderId,
-    if (folderName != null) 'folder_name': folderName,
-    if (folderTitle != null) 'folder_title': folderTitle,
-    if (chapterCount != null) chapterCountKey: chapterCount,
+    'folder_id': ?folderId,
+    'folder_name': ?folderName,
+    'folder_title': ?folderTitle,
+    chapterCountKey: ?chapterCount,
   };
 }
 
@@ -167,12 +167,9 @@ void main() {
       expect(vm.isRemoteFolderId('remote-folder:'), isTrue); // 仅前缀也算远程形态
     });
 
-    test('远程目录分组：常规合成 ID 因解析段标偏移而恒为空（缺陷证据）', () async {
-      // _parseRemoteFolderSyntheticId 取 parts[2] 当 nodeId，但合成 ID
-      // 'remote-folder:<nodeId>:<folderId>' 的 nodeId 在 parts[1]，且段数判定为 <4：
-      // 常规远程目录（folder 段不含冒号）解析直接判无效 → 落本地分支 → 0 本；
-      // 带冒号的深层 folderId 则 nodeId 错位也取不到书。
-      // 本用例锁定现状，修复实现时此用例应随之失败提醒更新。
+    test('远程目录分组：常规合成 ID 按 节点段+目录段 正确命中', () async {
+      // 修复后 _parseRemoteFolderSyntheticId 取 parts[1] 为 nodeId、
+      // parts[2..] 重联为 folderId，与 _buildRemoteFolderSyntheticId 对称
       await mountNodeAndRefresh(
         novels: [
           payload('n1', folderId: 'sub:deep'),
@@ -180,27 +177,24 @@ void main() {
           payload('n3', folderId: 'other'),
         ],
       );
-      expect(vm.getFolderNovelCount('remote-folder:node-a:sub:deep'), 0);
-      expect(vm.getFolderNovelCount('remote-folder:node-a:other'), 0);
+      expect(vm.getFolderNovelCount('remote-folder:node-a:sub:deep'), 2);
+      expect(vm.getFolderNovelCount('remote-folder:node-a:other'), 1);
+      // 节点段不匹配 → 不命中
       expect(vm.getFolderNovelCount('remote-folder:node-b:sub:deep'), 0);
     });
 
-    test('解析分支即便命中节点段，目录尾段也与原始 folderId 错位（分组恒空）', () async {
-      // 令 folder_id 以 '<nodeId>:' 开头：合成卡片 ID
-      // 'remote-folder:node-a:node-a:f1' 解析出 nodeId='node-a'（段标恰好碰对），
-      // 但目录段被截成 'f1'，与书籍原始 folderId 'node-a:f1' 不再相等 → 0 本。
-      // 结论：_parseRemoteFolderSyntheticId 段标偏移使远程分组分支不可能命中，
-      // 远程目录卡片点开后书籍列表恒为空 —— 锁定现状作缺陷证据。
+    test('目录段以节点名开头时仍按原始 folderId 精确匹配；远程解析短路本地分支', () async {
       await mountNodeAndRefresh(novels: [payload('n1', folderId: 'node-a:f1')]);
-      expect(vm.getFolderNovelCount('remote-folder:node-a:node-a:f1'), 0);
-      // 本地书籍同样不受该分支影响
+      expect(vm.getFolderNovelCount('remote-folder:node-a:node-a:f1'), 1);
+      // 解析成功即短路本地分支：本地同名 folderId 的书不参与远程目录分组，
+      // 命中数仍只来自远程 n1
       vm.novels.assignAll([novel('l1', folderId: 'node-a:f1')]);
-      expect(vm.getFolderNovelCount('remote-folder:node-a:node-a:f1'), 0);
+      expect(vm.getFolderNovelCount('remote-folder:node-a:node-a:f1'), 1);
     });
 
     test('无法解析的远程目录 ID（缺目录段）落到本地分组分支返回 0', () async {
       await mountNodeAndRefresh(novels: [payload('n1', folderId: 'f1')]);
-      // 'remote-folder:node-a' 只有 3 段，_parseRemoteFolderSyntheticId 判无效，
+      // 'remote-folder:node-a' 只有 2 段（节点段后无目录段），解析判无效，
       // 于是按本地分支查 novels.folderId == 'remote-folder:node-a' → 0 本
       expect(vm.getFolderNovelCount('remote-folder:node-a'), 0);
     });

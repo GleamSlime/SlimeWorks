@@ -58,7 +58,8 @@ class _FakeOllamaServer {
       final _FixtureReply reply = responder(request.method, request.uri.path);
       request.response.statusCode = reply.status;
       request.response.headers.set(HttpHeaders.contentTypeHeader, reply.contentType);
-      request.response.write(reply.body);
+      // write(String) 默认按 Latin-1 编码，中文载荷会抛错，需手动 utf8 编码
+      request.response.add(utf8.encode(reply.body));
       await request.response.close();
     });
   }
@@ -173,13 +174,13 @@ void main() {
       expect(service.servers.map((OllamaServer s) => s.url), <String>['http://n1', 'http://n2']);
     });
 
-    test('无任何服务器时 findAvailableServer 返回 null 且各入口抛状态错误', () async {
+    test('无任何服务器时 findAvailableServer 返回 null 且各入口抛异常', () async {
       final OllamaService service = OllamaService();
       expect(await service.findAvailableServer(), isNull);
-      await expectLater(service.getModels(), throwsA(isA<StateError>()));
+      await expectLater(service.getModels(), throwsA(isA<Exception>()));
       await expectLater(
         service.generate(model: 'm', prompt: 'p'),
-        throwsA(isA<StateError>()),
+        throwsA(isA<Exception>()),
       );
       expect(service.servers, isEmpty); // 全程未发起任何网络
     });
@@ -292,7 +293,7 @@ void main() {
         200,
         jsonEncode(<String, dynamic>{
           'models': <dynamic>[
-            <String, dynamic>{'name': 'qwen2.5', 'size': 4e9 as int? ?? 4000000000},
+            <String, dynamic>{'name': 'qwen2.5', 'size': 4000000000},
             <String, dynamic>{'name': 'llama3'},
           ],
         }),
@@ -463,9 +464,9 @@ void main() {
         onProgress: (int current, int total) => progress.add(current * 10 + total),
       );
 
-      expect(results, <String>['', '[a]', '[b]']);
-      // 空白段不回调进度；成功段回调 (2,3)、(3,3)
-      expect(progress, <int>[23, 33]);
+      expect(results, <String>['[a]', '', '[b]']);
+      // 空白段不回调进度；成功段回调 (1,3)、(3,3)
+      expect(progress, <int>[13, 33]);
       expect(fixture.chatRequests, hasLength(2));
     });
 

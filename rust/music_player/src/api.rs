@@ -1283,9 +1283,10 @@ mod tests {
     static SEQ: AtomicUsize = AtomicUsize::new(0);
 
     struct DbTestEnv {
-        /// 持有隔离 HOME 的 TempDir 所有权。static OnceLock 永不 drop，
-        /// 目录由系统临时目录回收策略处理，测试期间绝不触碰真实用户目录。
-        _home: tempfile::TempDir,
+        /// 隔离 HOME 路径（固定名临时目录，每次运行开跑前清旧重建，避免按
+        /// 随机后缀在系统临时目录里无限累积）
+        #[allow(dead_code)]
+        home_path: PathBuf,
         #[allow(dead_code)]
         db_path: String,
     }
@@ -1294,11 +1295,14 @@ mod tests {
     fn db_test_env() -> &'static DbTestEnv {
         static ENV: OnceLock<DbTestEnv> = OnceLock::new();
         ENV.get_or_init(|| {
-            let home = tempfile::Builder::new()
-                .prefix("music_db_test_home_")
-                .tempdir()
-                .expect("创建隔离 HOME 失败");
-            let home_path = home.path().to_path_buf();
+            let home_path = std::env::temp_dir().join("music_db_test_home");
+            assert_eq!(
+                home_path.parent(),
+                Some(std::env::temp_dir().as_path()),
+                "清理目标必须恰好位于系统临时目录下，防误删"
+            );
+            let _ = std::fs::remove_dir_all(&home_path);
+            std::fs::create_dir_all(&home_path).expect("创建隔离 HOME 失败");
             // edition 2021：set_var 是安全接口；只在 OnceLock 初始化闭包里调用一次，
             // 之后 HOME 永不再变化，DB 用例又全部串行，不存在反复改环境变量的竞态
             std::env::set_var("HOME", &home_path);
@@ -1325,7 +1329,7 @@ mod tests {
                 db_module::db_delete(table.clone(), "__bootstrap__".into()).unwrap();
             }
             DbTestEnv {
-                _home: home,
+                home_path,
                 db_path,
             }
         })
