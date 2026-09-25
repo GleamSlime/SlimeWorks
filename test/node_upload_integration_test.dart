@@ -131,31 +131,46 @@ void main() {
       );
     });
 
-    test('熔断位存在时在发请求之前就抛，reset 后恢复可上传', () async {
+    test('熔断且节点仍不可达时上传前即抛，reset 后恢复可上传', () async {
       final service = await createService();
       mountNode(service, apiBaseUrl: server.baseUrl);
       final zipPath = '${tempDir.path}/b.zip';
       await File(zipPath).writeAsBytes(Uint8List.fromList(<int>[9, 8, 7]));
 
-      // 熔断（把地址临时改到无人监听端口探测），再指回活节点：熔断位是按 id 记的
+      // 熔断（地址被临时改到无人监听端口），并保持不可达：复探也救不回来
       await breakNode(service, 'node-a');
-      service.remoteNodes[nodeIdIndex(service, 'node-a')] =
-          service.remoteNodes[nodeIdIndex(service, 'node-a')].copyWith(apiBaseUrl: server.baseUrl);
-
       await expectLater(
         service.uploadArchiveToNode(nodeId: 'node-a', zipPath: zipPath, destDir: '/dest'),
         throwsA(
           isA<StateError>().having((e) => e.message, 'message', contains('节点已熔断')),
         ),
       );
-      // 关键：拦截发生在建连之前，所以假节点一个请求都没收到
+      // 关键：复探只打 /node/call，归档端点一个请求都没收到
       expect(server.requestCount(path: _kArchivePath), 0);
 
       service.resetNodeCircuitBreaker('node-a');
+      service.remoteNodes[nodeIdIndex(service, 'node-a')] =
+          service.remoteNodes[nodeIdIndex(service, 'node-a')].copyWith(apiBaseUrl: server.baseUrl);
       await service.uploadArchiveToNode(nodeId: 'node-a', zipPath: zipPath, destDir: '/dest');
       expect(server.requestCount(path: _kArchivePath), 1);
       expect(server.lastRequest.bodyBytes, Uint8List.fromList(<int>[9, 8, 7]));
-      // 成功上传后熔断位被清、节点标记在线
+    });
+
+    test('熔断位是缓存：节点恢复后上传自己就把熔断解除了', () async {
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      final zipPath = '${tempDir.path}/c.zip';
+      await File(zipPath).writeAsBytes(Uint8List.fromList(<int>[1, 2, 3]));
+
+      await breakNode(service, 'node-a');
+      // 熔断位按 id 记录，与地址无关：把地址指回活节点即视为节点已恢复
+      service.remoteNodes[nodeIdIndex(service, 'node-a')] =
+          service.remoteNodes[nodeIdIndex(service, 'node-a')].copyWith(apiBaseUrl: server.baseUrl);
+
+      // 不调 resetNodeCircuitBreaker：上传前的确认档复探应当场解除熔断
+      await service.uploadArchiveToNode(nodeId: 'node-a', zipPath: zipPath, destDir: '/dest');
+
+      expect(server.requestCount(path: _kArchivePath), 1);
       expect(service.isNodeCircuitBreaked('node-a'), isFalse);
       expect(service.nodeConnectivity['node-a'], isTrue);
       expect(service.nodeConnectivityError['node-a'], isEmpty);

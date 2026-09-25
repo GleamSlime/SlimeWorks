@@ -153,6 +153,34 @@ lazy_static::lazy_static! {
 /// 最大并发连接数，防止 FD 耗尽
 const MAX_CONNECTIONS: usize = 30;
 static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+/// 因并发打满而拒绝连接的次数（只用于日志节流）
+static BUSY_REJECTIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// 并发打满时回一个 503，而不是静默断开。
+///
+/// 静默 RST 在客户端看来和「节点死了」完全一样，会让一次偶发的连接数峰值
+/// 直接把节点判成熔断；回 503 则是「我在线，只是忙」，探测据此解除熔断。
+fn reject_busy(stream: &mut TcpStream) {
+    let count = BUSY_REJECTIONS.fetch_add(1, Ordering::Relaxed) + 1;
+    if count == 1 || count % 50 == 0 {
+        println!(
+            "[node-conn] 并发已满(>={})，第 {} 次回 503",
+            MAX_CONNECTIONS, count
+        );
+    }
+    let body = types::NodeResponse::error(format!(
+        "node busy: {} concurrent connections",
+        MAX_CONNECTIONS
+    ))
+    .to_json();
+    let header = format!(
+        "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: {}\r\nRetry-After: 1\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = stream.write_all(header.as_bytes());
+    let _ = stream.write_all(body.as_bytes());
+    let _ = stream.flush();
+}
 
 // ── 辅助 ─────────────────────────────────────────────────────────────────────
 
@@ -273,15 +301,23 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             let req_str = String::from_utf8_lossy(&body).to_string();
             match serde_json::from_str::<types::NodeRequest>(&req_str) {
                 Ok(node_req) => {
-                    // 复用全局共享的 tokio runtime，避免每次请求创建/销毁 runtime
-                    let result = shared_runtime().block_on(handlers::dispatch_action(
-                        &node_req.action,
-                        node_req.params,
-                        &config,
-                    ));
-                    match result {
-                        Ok(data) => (200, types::NodeResponse::success(data).to_json()),
-                        Err(e) => (500, types::NodeResponse::error(e).to_json()),
+                    // ping 就地回答，绝不排进共享 runtime 的队列：客户端拿它判定节点存活，
+                    // 一旦排在缩略图生成/目录导入后面，探测超时就等于「节点死了」，
+                    // 结果是节点一忙就被错误熔断。
+                    if node_req.action == "ping" {
+                        let data = serde_json::json!({ "pong": true });
+                        (200, types::NodeResponse::success(data).to_json())
+                    } else {
+                        // 复用全局共享的 tokio runtime，避免每次请求创建/销毁 runtime
+                        let result = shared_runtime().block_on(handlers::dispatch_action(
+                            &node_req.action,
+                            node_req.params,
+                            &config,
+                        ));
+                        match result {
+                            Ok(data) => (200, types::NodeResponse::success(data).to_json()),
+                            Err(e) => (500, types::NodeResponse::error(e).to_json()),
+                        }
                     }
                 }
                 Err(e) => (
@@ -797,7 +833,7 @@ pub fn start_node_server(
             .spawn(move || {
                 while running.load(Ordering::SeqCst) {
                     match listener.accept() {
-                        Ok((stream, _addr)) => {
+                        Ok((mut stream, _addr)) => {
                             if !running.load(Ordering::SeqCst) {
                                 break;
                             }
@@ -806,7 +842,7 @@ pub fn start_node_server(
                             if ACTIVE_CONNECTIONS.fetch_add(1, Ordering::Relaxed) >= MAX_CONNECTIONS
                             {
                                 ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
-                                drop(stream);
+                                reject_busy(&mut stream);
                                 continue;
                             }
                             let spawn_result = std::thread::Builder::new()
@@ -1021,5 +1057,52 @@ mod tests {
             .starts_with("HTTP/1.1 401"));
         // /health 免鉴权：客户端要靠它区分"不在线"和"码不对"
         assert!(send("GET /health HTTP/1.1\r\nHost: x\r\n\r\n").starts_with("HTTP/1.1 200"));
+    }
+
+    /// ping 是连通性探测用的，必须在连接线程就地回答（不进共享 runtime 队列），
+    /// 并且照样受授权码保护。
+    #[test]
+    fn ping_is_answered_inline_and_still_requires_auth() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let send = |request: &str| -> String {
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+            stream.write_all(request.as_bytes()).expect("write");
+            let mut response = String::new();
+            stream.read_to_string(&mut response).expect("read");
+            response
+        };
+
+        let body = r#"{"action":"ping","params":{}}"#;
+        assert!(send(&format!(
+            "POST /node/call HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        ))
+        .starts_with("HTTP/1.1 401"));
+
+        let response = send(&format!(
+            "POST /node/call HTTP/1.1\r\nHost: x\r\nX-SW-Auth: {}\r\nContent-Length: {}\r\n\r\n{}",
+            digest,
+            body.len(),
+            body
+        ));
+        assert!(response.starts_with("HTTP/1.1 200"), "响应: {response}");
+        assert!(response.contains("\"pong\":true"), "响应: {response}");
     }
 }

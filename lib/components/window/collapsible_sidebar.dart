@@ -606,7 +606,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                               BlendMode.srcIn,
                                             )
                                           : ColorFilter.mode(
-                                              theme.iconTheme.color?.withAlpha(179) ?? Colors.black,
+                                              theme.textTheme.bodyLarge?.color ?? Colors.black,
                                               BlendMode.srcIn,
                                             ),
                                     ),
@@ -670,7 +670,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                                 : FontWeight.w500,
                                             color: isSelected
                                                 ? theme.colorScheme.primary
-                                                : theme.textTheme.bodyMedium?.color,
+                                                : theme.textTheme.bodyLarge?.color,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                           softWrap: false,

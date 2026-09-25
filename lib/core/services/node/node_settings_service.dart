@@ -67,7 +67,10 @@ class NodeSettingsService extends GetxService {
 
   /// 熔断前确认用的超时档。200ms 是给"空闲节点"用的：节点正在批量生成缩略图
   /// 或解压刚上传的归档时，ping 完全可能压线超时，据此熔断会把健康节点判死。
-  static const Duration _probePatientTimeout = Duration(seconds: 3);
+  static const Duration _probeConfirmTimeout = Duration(milliseconds: 1500);
+
+  /// 节点回「并发已满」(503/429) 时的重试次数：连接是通的，只是服务端在背压。
+  static const int _nodeBusyRetries = 2;
 
   /// 授权码摘要的请求头名（需与 Rust `node_server::AUTH_HEADER` 一致）。
   static const String _authHeaderName = 'X-SW-Auth';
@@ -147,6 +150,9 @@ class NodeSettingsService extends GetxService {
 
   /// 熔断节点集合：本次运行期间验证失败的节点，不再自动请求。
   final Set<String> _circuitBreakedNodes = <String>{};
+
+  /// 熔断解除复探的进行中Future（按节点去重），避免一屏请求各自打一次 ping。
+  final Map<String, Future<_ProbeResult>> _nodeBreakChecks = <String, Future<_ProbeResult>>{};
 
   /// 已缩放图片的内存缓存（key = cacheKey，LRU 淘汰，总字节上限 80MB）。
   final Map<String, Uint8List> _resizedBytesCache = {};
@@ -305,18 +311,16 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
-    // 两个地址在 200ms 档都没回：节点可能只是忙（批量生成缩略图、正在解压刚上传的归档），
-    // 判熔断前用宽松超时再确认一次，否则一次抖动就要用户手动重试。
-    final lanAlive = await _probeNodeUrl(node.lanApiBaseUrl, timeout: _probePatientTimeout);
-    final wanAlive = lanAlive == _ProbeResult.ok
-        ? _ProbeResult.unreachable
-        : await _probeNodeUrl(node.apiBaseUrl, timeout: _probePatientTimeout);
-    if (lanAlive == _ProbeResult.ok || wanAlive == _ProbeResult.ok) {
+    // 两个地址在快速档都没回：先别判死。节点可能只是忙（正在解压刚上传的归档、
+    // 批量生成缩略图），也可能只是 Wi-Fi 抖了一下——一次抖动就熔断要用户手动重试，代价太不对称。
+    // 确认档只放宽到 1.5s 并只跑一轮，避免把启动/保存路径拖成秒级阻塞。
+    final confirmed = await _reprobeNode(node);
+    if (confirmed == _ProbeResult.ok) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
       return;
     }
-    if (lanAlive == _ProbeResult.unauthorized || wanAlive == _ProbeResult.unauthorized) {
+    if (confirmed == _ProbeResult.unauthorized) {
       nodeConnectivity[nodeId] = false;
       nodeConnectivityError[nodeId] = '授权码错误，请核对节点授权码';
       return;
@@ -325,7 +329,9 @@ class NodeSettingsService extends GetxService {
     nodeConnectivity[nodeId] = false;
     nodeConnectivityError[nodeId] = '节点不可达';
     _circuitBreakedNodes.add(nodeId);
-    _logger.info('节点已熔断: ${node.name}（快速+宽松探测均无响应 | LAN=${node.lanApiBaseUrl} WAN=${node.apiBaseUrl}）');
+    _logger.info(
+      '节点已熔断: ${node.name}（快速档+确认档均无响应 | LAN=${node.lanApiBaseUrl} WAN=${node.apiBaseUrl}）',
+    );
   }
 
   Future<_ProbeResult> _probeNodeUrl(String? baseUrl, {required Duration timeout}) async {
@@ -344,8 +350,17 @@ class NodeSettingsService extends GetxService {
         );
         return _ProbeResult.ok;
       } on DioException catch (e) {
-        if (e.response?.statusCode == 401) {
+        final status = e.response?.statusCode;
+        if (status == 401) {
           return _ProbeResult.unauthorized;
+        }
+        // 拿到 HTTP 状态码就说明进程在线：熔断判的是「可达性」，
+        // 节点忙到回 429/503 也绝不能算死节点。
+        if (status != null) {
+          if (status == 503 || status == 429) {
+            _logger.info('节点在线但繁忙(HTTP $status): $baseUrl');
+          }
+          return _ProbeResult.ok;
         }
         continue;
       } catch (_) {
@@ -353,6 +368,38 @@ class NodeSettingsService extends GetxService {
       }
     }
     return _ProbeResult.unreachable;
+  }
+
+  /// 确认档复探：把节点已知的所有地址（生效/LAN/WAN）都问一遍，只要不是全部无响应就给出结论。
+  Future<_ProbeResult> _reprobeNode(NodeEndpoint node) async {
+    for (final base in {node.effectiveApiBaseUrl, node.lanApiBaseUrl, node.apiBaseUrl}) {
+      final result = await _probeNodeUrl(base, timeout: _probeConfirmTimeout);
+      if (result != _ProbeResult.unreachable) return result;
+    }
+    return _ProbeResult.unreachable;
+  }
+
+  /// 熔断位只是探测留下的缓存，真实业务请求值得一次确认档的复探：
+  /// 节点活着就当场解除，不必让用户跑去设置页手动重试。
+  /// 同节点的并发请求共用这一次复探，避免一屏封面刷出十几个 ping。
+  Future<void> _ensureNodeReachable(NodeEndpoint node) async {
+    if (!_circuitBreakedNodes.contains(node.id)) return;
+    final alive = await (_nodeBreakChecks[node.id] ??= _reprobeNode(node).whenComplete(() {
+      // 必须用块体：箭头写法会把 remove() 返回的那个 Future（正是本 Future）
+      // 当成 whenComplete 的后续去等，自锁后永不完成。
+      _nodeBreakChecks.remove(node.id);
+    }));
+    if (alive == _ProbeResult.ok) {
+      _circuitBreakedNodes.remove(node.id);
+      nodeConnectivity[node.id] = true;
+      nodeConnectivityError[node.id] = '';
+      _logger.info('节点复探成功，已自动解除熔断: ${node.name}');
+      return;
+    }
+    if (alive == _ProbeResult.unauthorized) {
+      nodeConnectivityError[node.id] = '授权码错误，请核对节点授权码';
+    }
+    throw StateError('节点已熔断: ${node.name}，请在设置中手动重试');
   }
 
   Future<void> updateLocalSettings({
@@ -786,9 +833,7 @@ class NodeSettingsService extends GetxService {
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
-    if (_circuitBreakedNodes.contains(nodeId)) {
-      throw StateError('节点已熔断: $nodeId，请在设置中手动重试');
-    }
+    await _ensureNodeReachable(node);
     final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
     final url =
         '$normalized/node/upload/archive?dest=${Uri.encodeComponent(destDir)}';
@@ -830,9 +875,9 @@ class NodeSettingsService extends GetxService {
     required String localPath,
     String? collectionId,
   }) async {
-    if (_circuitBreakedNodes.contains(nodeId)) {
-      throw StateError('节点已熔断: $nodeId，请在设置中手动重试');
-    }
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    await _ensureNodeReachable(node);
     final uploadUrl = buildNodeUploadUrl(nodeId);
     final file = File(localPath);
     final filename = localPath.split('/').last;
@@ -1086,9 +1131,7 @@ class NodeSettingsService extends GetxService {
     required Map<String, dynamic> params,
   }) async {
     // 熔断检查：本次运行期间不再自动请求已熔断节点
-    if (_circuitBreakedNodes.contains(node.id)) {
-      throw StateError('节点已熔断: ${node.name}，请在设置中手动重试');
-    }
+    await _ensureNodeReachable(node);
     final sanitizedParams = _sanitizeJsonMap(params);
     final requestPayload = <String, dynamic>{'action': action, 'params': sanitizedParams};
     final callKey = _buildNodeCallKey(node.id, action, sanitizedParams);
@@ -1117,9 +1160,11 @@ class NodeSettingsService extends GetxService {
     final txBytes = _estimatePayloadBytes(requestPayload);
     Object? lastError;
     StackTrace? lastStackTrace;
+    int busyRetries = 0;
 
     for (int index = 0; index < candidateUrls.length; index++) {
       final url = candidateUrls[index];
+      final isLast = index == candidateUrls.length - 1;
       try {
         final response = await _dio.post<Map<String, dynamic>>(
           url,
@@ -1137,9 +1182,18 @@ class NodeSettingsService extends GetxService {
         }
         throw Exception((body['error'] ?? '节点返回失败').toString());
       } catch (e, st) {
+        // 节点回「并发已满」（503/429）说明连接是通的，只是服务端在背压：
+        // 等一小会儿重来一次，否则一次偶发的并发峰值就变成用户可见的失败。
+        if (e is DioException && _isNodeBusyError(e) && busyRetries < _nodeBusyRetries) {
+          busyRetries++;
+          _logger.info('节点繁忙(HTTP ${e.response?.statusCode})，第 $busyRetries 次重试: ${node.name} $action');
+          await Future<void>.delayed(Duration(milliseconds: 150 * busyRetries));
+          index--; // 重试同一地址
+          continue;
+        }
         lastError = e;
         lastStackTrace = st;
-        if (index >= candidateUrls.length - 1 || !_shouldTryFallbackUrl(e)) {
+        if (isLast || !_shouldTryFallbackUrl(e)) {
           break;
         }
       }
@@ -1166,7 +1220,6 @@ class NodeSettingsService extends GetxService {
       if (!probeOk) {
         _circuitBreakedNodes.add(node.id);
         nodeConnectivityError[node.id] = '节点已熔断（多次超时），请在设置中手动重试';
-        _logger.info('节点已熔断: ${node.name}');
       }
     }
 
@@ -1182,7 +1235,7 @@ class NodeSettingsService extends GetxService {
     }
     candidateUrls.addAll(_candidateNodeCallUrls(node.apiBaseUrl));
     if (candidateUrls.isEmpty) return false;
-    const timeout = _probePatientTimeout;
+    const timeout = _probeConfirmTimeout;
     for (final url in candidateUrls) {
       try {
         await _probeDio.post<dynamic>(
@@ -1241,6 +1294,12 @@ class NodeSettingsService extends GetxService {
         error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
         error.type == DioExceptionType.sendTimeout;
+  }
+
+  /// 节点在说「我忙」（并发打满时回 503，限流回 429）：连接是通的，节点也是活的。
+  bool _isNodeBusyError(DioException error) {
+    final status = error.response?.statusCode;
+    return status == 503 || status == 429;
   }
 
   String _baseUrlFromNodeCallUrl(String url) {
@@ -1477,6 +1536,14 @@ class NodeSettingsService extends GetxService {
       return Options(
         sendTimeout: const Duration(seconds: 20),
         receiveTimeout: const Duration(seconds: 30),
+      );
+    }
+    // 远程拖拽导入：节点要遍历整棵目录并逐条入库，大目录远超默认 12s，
+    // 按默认超时会让客户端先放弃（节点其实还在导）。
+    if (action == 'import_media_folder') {
+      return Options(
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(minutes: 10),
       );
     }
     return null;

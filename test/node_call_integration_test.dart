@@ -201,6 +201,28 @@ void main() {
       expect(server.requests.length, before);
     });
 
+    test('熔断+活节点：真实请求会自己把熔断解掉', () async {
+      final service = await createService();
+      final deadPort = await freeLoopbackPort();
+      mountNode(service, apiBaseUrl: 'http://127.0.0.1:$deadPort');
+      await service.checkNodeConnectivity('node-a');
+      expect(service.isNodeCircuitBreaked('node-a'), isTrue);
+
+      // 只把地址改回活节点，不手动 reset：下一次业务请求的复探应当场解除熔断
+      service.remoteNodes[0] = service.remoteNodes[0].copyWith(apiBaseUrl: server.baseUrl);
+      server.responder = (req) => req.action == 'ping'
+          ? FakeNodeReply.successData(<String, dynamic>{'pong': true})
+          : FakeNodeReply.successData(<dynamic>[
+              <String, dynamic>{'id': 'n1'}
+            ]);
+
+      final response = await service.callNodeAction(nodeId: 'node-a', action: 'list_novels');
+      expect(response['success'], isTrue);
+      expect(service.isNodeCircuitBreaked('node-a'), isFalse);
+      expect(service.nodeConnectivity['node-a'], isTrue);
+      expect(requestFor(server, 'list_novels'), isNotNull);
+    });
+
     test('401 不熔断，错误文案为授权码错误', () async {
       final service = await createService();
       mountNode(service, apiBaseUrl: server.baseUrl, authCode: 'WRONG-CODE');
@@ -219,6 +241,67 @@ void main() {
       );
       expect(service.isNodeCircuitBreaked('node-a'), isFalse);
       expect(service.nodeConnectivityError['node-a'], '授权码错误，请核对节点授权码');
+    });
+  });
+
+  // ── 并发打满时的背压（节点回 503） ────────────────────────────────────────
+
+  group('节点并发满（HTTP 503）', () {
+    /// 每次都回 503 的节点：模拟连接数打满
+    void replyBusyAlways() {
+      server.responder = (req) => FakeNodeReply(
+        statusCode: HttpStatus.serviceUnavailable,
+        json: <String, dynamic>{'success': false, 'error': 'node busy'},
+      );
+    }
+
+    test('业务调用先 503 后成功：重试吃掉背压，用户侧不报错', () async {
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      server.responder = (req) => server.requestCount(path: _kCallPath) <= 2
+          ? FakeNodeReply(
+              statusCode: HttpStatus.serviceUnavailable,
+              json: <String, dynamic>{'success': false, 'error': 'node busy'},
+            )
+          : FakeNodeReply.successData(<String, dynamic>{'ok': true});
+
+      final response = await service.callNodeAction(nodeId: 'node-a', action: 'list_novels');
+
+      expect(response['data'], <String, dynamic>{'ok': true});
+      // 1 次首发 + 2 次重试
+      expect(server.requestCount(path: _kCallPath), 3);
+      expect(service.isNodeCircuitBreaked('node-a'), isFalse);
+    });
+
+    test('重试用尽仍 503：抛出但不熔断（节点是在线的）', () async {
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      replyBusyAlways();
+
+      await expectLater(
+        service.callNodeAction(nodeId: 'node-a', action: 'list_novels'),
+        throwsA(
+          isA<DioException>().having(
+            (e) => e.response?.statusCode,
+            'statusCode',
+            HttpStatus.serviceUnavailable,
+          ),
+        ),
+      );
+      expect(server.requestCount(path: _kCallPath), 3);
+      expect(service.isNodeCircuitBreaked('node-a'), isFalse);
+    });
+
+    test('连通性探测拿到 503 判为在线', () async {
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      replyBusyAlways();
+
+      await service.checkNodeConnectivity('node-a');
+
+      expect(service.isNodeCircuitBreaked('node-a'), isFalse);
+      expect(service.nodeConnectivity['node-a'], isTrue);
+      expect(service.nodeConnectivityError['node-a'], isEmpty);
     });
   });
 
