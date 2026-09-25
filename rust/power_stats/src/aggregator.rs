@@ -292,3 +292,294 @@ pub fn compute_summary(samples: &[PowerSample], meter_id: &str, meter_name: &str
         sample_count: samples.len() as u64,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 基准时间戳：20000 * 86400，同时对 86400 / 3600 / 60 对齐，
+    /// 便于精确断言桶边界（不受本地时区偏移影响的对齐性只看秒数）
+    const BASE: i64 = 1_728_000_000;
+
+    /// 构造一个采样点（yuan 默认与 kwh 相同，price 默认 1.0）
+    fn s(ts: i64, kwh: f64) -> PowerSample {
+        PowerSample {
+            timestamp: ts,
+            remaining_kwh: kwh,
+            remaining_yuan: kwh,
+            price: 1.0,
+        }
+    }
+
+    /// 构造带独立 yuan / price 的采样点
+    fn sy(ts: i64, kwh: f64, yuan: f64, price: f64) -> PowerSample {
+        PowerSample {
+            timestamp: ts,
+            remaining_kwh: kwh,
+            remaining_yuan: yuan,
+            price,
+        }
+    }
+
+    fn approx(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    // ── aggregate ──────────────────────────────────────────────────────────
+
+    /// 空样本：全部字段应为零值且不 panic
+    #[test]
+    fn aggregate_empty_samples_returns_zeroed_stats() {
+        let got = aggregate(&[], "1day", 1.0);
+        assert_eq!(got.range, "1day");
+        assert!(got.buckets.is_empty());
+        assert!(approx(got.total_consumption, 0.0));
+        assert!(approx(got.total_cost, 0.0));
+        assert!(approx(got.avg_balance, 0.0));
+        assert!(approx(got.current_balance, 0.0));
+        assert!(approx(got.current_kwh, 0.0));
+        assert_eq!(got.sample_count, 0);
+    }
+
+    /// 单样本：hour 范围应生成 61 个桶（含末点所在桶），唯一有余额的是最后一个桶
+    #[test]
+    fn aggregate_single_sample_makes_all_buckets_and_zero_consumption() {
+        let samples = vec![sy(BASE, 10.0, 8.5, 2.0)];
+        let got = aggregate(&samples, "hour", 2.0);
+        // start = BASE-3600，桶宽 60，cursor <= last_ts ⇒ 60 + 1 个桶
+        assert_eq!(got.buckets.len(), 61);
+        assert_eq!(got.sample_count, 1);
+        // 只有一个点时没有相邻差值可累加 ⇒ 无耗电
+        assert!(approx(got.total_consumption, 0.0));
+        assert!(approx(got.total_cost, 0.0));
+        // 前 60 个空桶继承范围前余额（无样本 ⇒ 0.0）
+        for b in &got.buckets[..60] {
+            assert!(approx(b.balance_yuan, 0.0));
+            assert!(approx(b.balance_kwh, 0.0));
+            assert!(approx(b.consumption_kwh, 0.0));
+        }
+        let last = got.buckets.last().unwrap();
+        assert_eq!(last.timestamp, BASE);
+        assert!(approx(last.balance_kwh, 10.0));
+        assert!(approx(last.balance_yuan, 8.5));
+        assert!(approx(got.current_kwh, 10.0));
+        assert!(approx(got.current_balance, 8.5));
+        // avg_balance = 8.5 / 61
+        assert!(approx(got.avg_balance, 8.5 / 61.0));
+    }
+
+    /// 区间边界：恰好在 start_ts 的样本算范围内，start_ts 前 1 秒的样本只作为基准余额
+    /// 注：范围以最后一个采样点为锚（start_ts = last_ts - range_secs）
+    #[test]
+    fn aggregate_range_boundary_is_inclusive_at_start_and_uses_prev_baseline() {
+        // last_ts = BASE ⇒ start_ts = BASE-3600
+        let samples = vec![
+            s(BASE - 3601, 20.0), // 范围外（start_ts 前 1 秒）：仅作为初始余额基准
+            s(BASE - 3600, 18.0), // 恰好落在边界 ⇒ 范围内，第 0 桶
+            s(BASE, 18.0),        // 末点：余额不变 ⇒ 与上一点差值为 0，不触发跨桶分摊
+        ];
+        let got = aggregate(&samples, "hour", 1.0);
+        assert_eq!(got.sample_count, 2, "边界样本应计入范围内");
+        // 第 0 桶：基准 20 → 18 只累加下降部分 ⇒ 2
+        let b0 = &got.buckets[0];
+        assert_eq!(b0.timestamp, BASE - 3600);
+        assert!(approx(b0.consumption_kwh, 2.0));
+        assert!(approx(b0.balance_kwh, 18.0));
+        // 其余桶无消耗
+        assert!(got.buckets[1..].iter().all(|b| approx(b.consumption_kwh, 0.0)));
+        assert!(approx(got.total_consumption, 2.0));
+        assert!(approx(got.current_kwh, 18.0));
+    }
+
+    /// 电价计算：每桶 cost_yuan 与总 total_cost 都等于消耗 × 单价
+    #[test]
+    fn aggregate_applies_price_to_bucket_and_total_cost() {
+        let price = 0.85;
+        let samples = vec![
+            s(BASE - 3601, 20.0),
+            s(BASE - 3600, 18.0),
+            s(BASE, 18.0),
+        ];
+        let got = aggregate(&samples, "hour", price);
+        assert!(approx(got.buckets[0].cost_yuan, 2.0 * price));
+        assert!(approx(got.total_cost, 2.0 * price));
+        // 所有桶的成本之和应与总成本一致（无跨桶分摊时）
+        let sum: f64 = got.buckets.iter().map(|b| b.cost_yuan).sum();
+        assert!((sum - got.total_cost).abs() < 1e-9);
+        // 每个桶都满足 cost = consumption * price
+        for b in &got.buckets {
+            assert!(approx(b.cost_yuan, b.consumption_kwh * price));
+        }
+    }
+
+    /// 跨空桶分摊：两点相隔 30 个桶时，中间空桶按 diff/30 分摊
+    /// 注：末桶同时保留「相邻差值」与「分摊份额」，这是当前实现的叠加行为
+    #[test]
+    fn aggregate_backfills_consumption_across_empty_buckets() {
+        // last_ts = BASE-1800 ⇒ start_ts = BASE-5400，共 61 个桶；
+        // s1 落第 30 桶，s2 落第 60 桶
+        let samples = vec![s(BASE - 3600, 30.0), s(BASE - 1800, 24.0)];
+        let got = aggregate(&samples, "hour", 1.0);
+        assert_eq!(got.buckets.len(), 61);
+        assert!(approx(got.buckets[30].consumption_kwh, 0.0), "首点所在桶无相邻差值");
+        let share = 6.0 / 30.0;
+        for idx in 31..60 {
+            assert!(
+                approx(got.buckets[idx].consumption_kwh, share),
+                "桶 {idx} 应分摊 {share}，实际 {}",
+                got.buckets[idx].consumption_kwh
+            );
+        }
+        // 末桶：相邻差值 6 + 分摊份额 0.2（现行为，含叠加）
+        assert!(approx(got.buckets[60].consumption_kwh, 6.0 + share));
+        // 分摊范围之外的空桶保持为 0
+        assert!(approx(got.buckets[10].consumption_kwh, 0.0));
+        // 总消耗 = 6 + 分摊叠加 6 = 12
+        assert!((got.total_consumption - 12.0).abs() < 1e-9);
+        // 分摊后每桶仍满足 cost = consumption * price（price=1）
+        for b in &got.buckets {
+            assert!(approx(b.cost_yuan, b.consumption_kwh));
+        }
+    }
+
+    /// 充值上升不计入耗电：同桶内 10→15→12 只累加下降的 3
+    #[test]
+    fn aggregate_ignores_recharge_increases() {
+        // 三点同落最后一个 60 秒桶内（避免触发跨桶分摊）
+        let samples = vec![
+            s(BASE - 3, 10.0),
+            s(BASE - 2, 15.0), // 充值：上升，忽略
+            s(BASE - 1, 12.0), // 下降 3
+        ];
+        let got = aggregate(&samples, "hour", 1.0);
+        let last_bucket = got.buckets.last().unwrap();
+        assert!(approx(last_bucket.consumption_kwh, 3.0));
+        assert!(approx(got.total_consumption, 3.0));
+        // 余额取最后一点
+        assert!(approx(got.current_kwh, 12.0));
+    }
+
+    /// 未知 range 回退到 hour 配置（60 秒桶 / 3600 秒范围）
+    #[test]
+    fn aggregate_unknown_range_falls_back_to_hour_config() {
+        let samples = vec![s(BASE - 3600, 5.0), s(BASE, 4.0)];
+        let got = aggregate(&samples, "nonsense", 1.0);
+        assert_eq!(got.range, "nonsense");
+        assert_eq!(got.buckets.len(), 61, "未知 range 应回退成 hour 的 61 个 60 秒桶");
+    }
+
+    /// 7days 范围：桶宽 86400 ⇒ 8 个桶；跨天下降应被分摊
+    #[test]
+    fn aggregate_day_range_bucket_count() {
+        let samples = vec![s(BASE - 7 * 86_400, 50.0), s(BASE, 43.0)];
+        let got = aggregate(&samples, "7days", 1.0);
+        assert_eq!(got.buckets.len(), 8);
+        assert_eq!(got.buckets[1].timestamp - got.buckets[0].timestamp, 86_400);
+        // 差值 7 分摊到桶 1..=7（每桶 1.0），桶 7 额外带相邻差值 7
+        for idx in 1..7 {
+            assert!(approx(got.buckets[idx].consumption_kwh, 1.0));
+        }
+        assert!(approx(got.buckets[7].consumption_kwh, 8.0));
+        assert_eq!(got.sample_count, 2);
+    }
+
+    // ── compute_summary ────────────────────────────────────────────────────
+
+    /// 空样本：price 回退 1.0，各项统计为 0，last_update 为空串
+    #[test]
+    fn compute_summary_empty_samples() {
+        let got = compute_summary(&[], "m1", "表一");
+        assert_eq!(got.meter_id, "m1");
+        assert_eq!(got.meter_name, "表一");
+        assert!(approx(got.price, 1.0), "无样本时单价应回退为 1.0");
+        assert!(approx(got.current_kwh, 0.0));
+        assert!(approx(got.current_yuan, 0.0));
+        assert!(approx(got.hour_consumption, 0.0));
+        assert!(approx(got.thirty_day_consumption, 0.0));
+        assert!(approx(got.hour_cost, 0.0));
+        assert_eq!(got.sample_count, 0);
+        assert!(got.last_update.is_empty());
+    }
+
+    /// 单样本：不足两点无相邻差值，余额与时间取该样本
+    #[test]
+    fn compute_summary_single_sample_has_no_consumption() {
+        let samples = vec![sy(BASE, 7.5, 6.2, 1.2)];
+        let got = compute_summary(&samples, "m2", "表二");
+        assert!(approx(got.current_kwh, 7.5));
+        assert!(approx(got.current_yuan, 6.2));
+        assert!(approx(got.price, 1.2));
+        assert_eq!(got.sample_count, 1);
+        for cons in [
+            got.minute_consumption,
+            got.hour_consumption,
+            got.day_consumption,
+            got.week_consumption,
+            got.fifteen_day_consumption,
+            got.sixteen_day_consumption,
+            got.thirty_day_consumption,
+        ] {
+            assert!(approx(cons, 0.0));
+        }
+        // last_update 形如 YYYY-MM-DD HH:MM:SS（本地时区，只校验长度与分隔符）
+        assert_eq!(got.last_update.len(), 19, "last_update = {}", got.last_update);
+        assert_eq!(&got.last_update[4..5], "-");
+        assert_eq!(&got.last_update[10..11], " ");
+    }
+
+    /// 时间窗口边界：minute / hour / day 三档分别取对应基准点
+    #[test]
+    fn compute_summary_window_boundaries() {
+        let price = 1.5;
+        let samples = vec![
+            sy(BASE - 7200, 100.0, 100.0, price),
+            sy(BASE - 3601, 90.0, 90.0, price), // hour 窗口外的最后一个基准
+            sy(BASE - 3600, 80.0, 80.0, price), // 恰好在 hour 窗口边界内
+            sy(BASE, 70.0, 70.0, price),
+        ];
+        let got = compute_summary(&samples, "m3", "表三");
+        // minute 窗口：基准 = BASE-3600 的 80 ⇒ 80-70 = 10
+        assert!(approx(got.minute_consumption, 10.0));
+        // hour 窗口：基准 = BASE-3601 的 90 ⇒ (90-80) + (80-70) = 20
+        assert!(approx(got.hour_consumption, 20.0));
+        // day 窗口：无更早样本 ⇒ (100-90)+(90-80)+(80-70) = 30
+        assert!(approx(got.day_consumption, 30.0));
+        assert!(approx(got.week_consumption, 30.0));
+        assert!(approx(got.fifteen_day_consumption, 30.0));
+        assert!(approx(got.sixteen_day_consumption, 30.0));
+        assert!(approx(got.thirty_day_consumption, 30.0));
+        // 费用 = 消耗 × 最后一个样本的单价
+        assert!(approx(got.price, price));
+        assert!(approx(got.hour_cost, 20.0 * price));
+        assert!(approx(got.day_cost, 30.0 * price));
+        assert!(approx(got.week_cost, 30.0 * price));
+        assert!(approx(got.fifteen_day_cost, 30.0 * price));
+        assert!(approx(got.thirty_day_cost, 30.0 * price));
+        assert_eq!(got.sample_count, 4);
+    }
+
+    /// 充值上升在汇总里同样被忽略
+    #[test]
+    fn compute_summary_ignores_recharge() {
+        let samples = vec![
+            sy(BASE - 120, 5.0, 5.0, 1.0),
+            sy(BASE - 60, 8.0, 8.0, 1.0), // 充值 +3
+            sy(BASE, 6.0, 6.0, 1.0),      // 耗电 -2
+        ];
+        let got = compute_summary(&samples, "m4", "表四");
+        assert!(approx(got.hour_consumption, 2.0));
+        assert!(approx(got.hour_cost, 2.0));
+        assert!(approx(got.current_kwh, 6.0));
+    }
+
+    /// 样本不足两点时 consumption_in_range 直接返回 0（通过 summary 间接覆盖）
+    #[test]
+    fn compute_summary_two_samples_only_counts_single_diff() {
+        let samples = vec![sy(BASE - 100, 12.0, 12.0, 1.0), sy(BASE, 9.0, 9.0, 1.0)];
+        let got = compute_summary(&samples, "m5", "表五");
+        assert!(approx(got.minute_consumption, 3.0));
+        assert!(approx(got.hour_consumption, 3.0));
+        // 超出窗口范围（day 窗口起点 = BASE-86400 之前无点，两点均在窗口内）⇒ 仍是 3
+        assert!(approx(got.day_consumption, 3.0));
+    }
+}

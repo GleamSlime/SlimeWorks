@@ -314,3 +314,131 @@ pub async fn lan_transfer_get_trusted_devices() -> Result<Vec<String>> {
         Err(anyhow::anyhow!("Manager not started"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// MANAGER 为进程级全局状态，涉及它的用例必须串行执行
+    static API_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_serial() -> std::sync::MutexGuard<'static, ()> {
+        API_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// lan_transfer_init 是空实现，同步调用应始终成功
+    #[test]
+    fn lan_transfer_init_sync_is_noop_ok() {
+        crate::api::lan_transfer_init().expect("lan_transfer_init 应返回 Ok");
+    }
+
+    /// 未 start 先调用各业务 API：统一返回 "Manager not started"
+    /// stop 例外：未启动时调用也应安全幂等
+    #[tokio::test]
+    async fn api_calls_before_start_return_not_started_error() {
+        let _guard = lock_serial();
+        // 确保干净状态（stop 在未启动时也应返回 Ok，顺带覆盖该幂等分支）
+        crate::api::lan_transfer_stop().await.expect("未启动时 stop 应幂等成功");
+
+        let cases: Vec<(&str, Result<String>)> = vec![
+            (
+                "get_local_device",
+                crate::api::lan_transfer_get_local_device(0).await.map(|s| s),
+            ),
+            ("get_devices", crate::api::lan_transfer_get_devices().await.map(|v| v.join(","))),
+            (
+                "send_text",
+                crate::api::lan_transfer_send_text(
+                    "127.0.0.1".into(),
+                    0,
+                    "dev".into(),
+                    "hi".into(),
+                )
+                .await
+                .map(|s| s),
+            ),
+            (
+                "send_file",
+                crate::api::lan_transfer_send_file("127.0.0.1".into(), 0, "dev".into(), "/x".into())
+                    .await
+                    .map(|s| s),
+            ),
+            ("get_transfers", crate::api::lan_transfer_get_transfers().await.map(|v| v.join(","))),
+            (
+                "get_trusted_devices",
+                crate::api::lan_transfer_get_trusted_devices().await.map(|v| v.join(",")),
+            ),
+        ];
+        for (name, res) in cases {
+            let err = res.unwrap_err();
+            assert!(err.to_string().contains("Manager not started"), "{name}: {err}");
+        }
+        // 返回类型非 String 的接口逐个断言
+        assert!(crate::api::lan_transfer_accept("t1".into())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Manager not started"));
+        assert!(crate::api::lan_transfer_reject("t1".into())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Manager not started"));
+        assert!(crate::api::lan_transfer_cancel("t1".into())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Manager not started"));
+        assert!(crate::api::lan_transfer_add_trusted("id".into(), "name".into())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Manager not started"));
+        assert!(crate::api::lan_transfer_remove_trusted("id".into())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Manager not started"));
+        assert!(crate::api::lan_transfer_is_trusted("id".into())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Manager not started"));
+    }
+
+    /// 双 init：MANAGER 已存在时 lan_transfer_start 走幂等早退分支，
+    /// 不重复创建设备 ID 文件、不重新绑定端口（save_dir 保持空白即证明未深入执行）
+    #[tokio::test]
+    async fn double_start_returns_ok_without_reinitializing() {
+        let _guard = lock_serial();
+        crate::api::lan_transfer_stop().await.unwrap();
+
+        // 注入一个「已创建但未 start」的 manager（port=0 ⇒ 临时端口，不占用真实端口，
+        // 也不调用 manager.start()，因此不触发 mDNS 广播/浏览）
+        let manager = LanTransferManager::new(0).await.expect("测试注入 manager 应成功");
+        *MANAGER.write().await = Some(manager);
+
+        // save_dir 指向不存在的空目录：若走了完整初始化流程，
+        // load_or_create_device_id 会在其中写入 device_id.txt
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let save_dir = std::env::temp_dir()
+            .join(format!("lan_transfer_api_test_{}_{}", std::process::id(), nanos));
+        let save_dir_str = save_dir.to_str().unwrap().to_string();
+
+        let res = crate::api::lan_transfer_start(0, save_dir_str.clone(), vec![]).await;
+        assert!(res.is_ok(), "双 init 应幂等返回 Ok: {:?}", res);
+        assert!(
+            !save_dir.join("device_id.txt").exists(),
+            "早退分支不得执行设备 ID 持久化"
+        );
+        assert!(!save_dir.exists() || std::fs::read_dir(&save_dir).unwrap().count() == 0);
+
+        // 清理：stop 时 manager 从未 start（is_running=false），应安全幂等
+        crate::api::lan_transfer_stop().await.unwrap();
+        assert!(MANAGER.read().await.is_none());
+        let _ = std::fs::remove_dir_all(&save_dir);
+    }
+}

@@ -1301,3 +1301,161 @@ mod folder_target_tests {
         assert!(candidates.is_empty());
     }
 }
+
+// ── dispatch_action 分发层测试（仅覆盖不触碰 media_collection / novel 真实 DB 的分支）──
+#[cfg(test)]
+mod dispatch_action_tests {
+    use super::*;
+
+    /// 构造测试用节点配置（全部显式赋值，避免依赖 Default 细节）
+    fn test_config() -> NodeServerConfig {
+        NodeServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 19999,
+            name: "单元测试节点".to_string(),
+            auth_code_hash: None,
+        }
+    }
+
+    /// 同步驱动 async dispatch_action：复用 node_server 的全局共享 runtime
+    fn call(action: &str, params: Value) -> Result<Value, String> {
+        super::super::shared_runtime()
+            .block_on(dispatch_action(action, params, &test_config()))
+    }
+
+    /// 生成本次测试专属临时目录（唯一后缀，避免并发测试互相踩踏）
+    fn fresh_temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "slime_handlers_test_{}_{}",
+            tag,
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    // ── 状态查询类（纯内存分支） ────────────────────────────────────────────
+
+    #[test]
+    fn ping_returns_pong() {
+        // ping 不依赖任何外部状态，仅验证 success 包装格式
+        assert_eq!(call("ping", Value::Null), Ok(json!({"pong": true})));
+    }
+
+    #[test]
+    fn get_status_echoes_config_name_and_port() {
+        // get_status 直接回显传入的 config，验证分发层能把配置透传进包装 JSON
+        let result = call("get_status", Value::Null).expect("get_status 应成功");
+        assert_eq!(result["name"], json!("单元测试节点"));
+        assert_eq!(result["port"], json!(19999));
+        assert_eq!(result["version"], json!("1.0"));
+    }
+
+    #[test]
+    fn get_thumb_progress_returns_string_counters() {
+        // 只读全局进度计数器（不落盘不查库）；不断言具体值，
+        // 因为同进程其他测试可能并发触碰缩略图计数。
+        let result = call("get_thumb_progress", Value::Null).expect("thumb progress 应成功");
+        let total = result["total"].as_str().expect("total 应为字符串");
+        let completed = result["completed"].as_str().expect("completed 应为字符串");
+        assert!(total.parse::<u64>().is_ok());
+        assert!(completed.parse::<u64>().is_ok());
+    }
+
+    // ── 未知 action 与参数校验分支 ─────────────────────────────────────────
+
+    #[test]
+    fn unknown_action_returns_unsupported_error() {
+        // 未知 action 走 match 兜底分支，错误文案含原 action 名
+        let err = call("no_such_action", json!({"foo": 1})).unwrap_err();
+        assert!(err.contains("不支持的动作"), "实际错误: {}", err);
+        assert!(err.contains("no_such_action"));
+    }
+
+    #[test]
+    fn search_all_novels_with_empty_keyword_short_circuits() {
+        // keyword 为空时在触达 novel DB 之前短路返回空数组（可安全断言）
+        assert_eq!(
+            call("search_all_novels", json!({"keyword": ""})).unwrap(),
+            json!([])
+        );
+        // 缺参数（None as_str → ""）同样短路
+        assert_eq!(
+            call("search_all_novels", json!({})).unwrap(),
+            json!([])
+        );
+    }
+
+    #[test]
+    fn resolve_folder_upload_target_requires_folder_id() {
+        // 缺 folder_id / 全空白时先报参数错，不会走到 DB 查询
+        let missing = call("resolve_folder_upload_target", json!({})).unwrap_err();
+        assert_eq!(missing, "缺少 folder_id");
+        let blank = call("resolve_folder_upload_target", json!({"folder_id": "   "}))
+            .unwrap_err();
+        assert_eq!(blank, "缺少 folder_id");
+    }
+
+    #[test]
+    fn update_novel_cover_base64_param_validation_before_any_db_write() {
+        // novel_id / image_base64 为空的校验发生在解码与写盘之前
+        let err = call("update_novel_cover_base64", json!({"novel_id": "", "image_base64": "aGk="}))
+            .unwrap_err();
+        assert!(err.contains("novel_id or image_base64 is empty"), "实际: {}", err);
+        let err = call("update_novel_cover_base64", json!({"novel_id": "n1"})).unwrap_err();
+        assert!(err.contains("novel_id or image_base64 is empty"));
+
+        // 非法 Base64：解码错误在触达 novel DB 之前返回（不会写入临时文件之后更新库）
+        let err = call(
+            "update_novel_cover_base64",
+            json!({"novel_id": "n1", "image_base64": "!!!不是合法base64!!!"}),
+        )
+        .unwrap_err();
+        assert!(err.contains("Base64 解码失败"), "实际: {}", err);
+    }
+
+    // ── list_directories：纯文件系统分支（不查库） ─────────────────────────
+
+    #[test]
+    fn list_directories_nonexistent_path_returns_empty_array() {
+        // 不存在的路径短路返回空数组（Ok 包装而非 Err）
+        let result = call(
+            "list_directories",
+            json!({"path": "/definitely/not/exist/slime_works_test"}),
+        )
+        .expect("不存在路径应返回 Ok 空数组");
+        assert_eq!(result, json!([]));
+    }
+
+    #[test]
+    fn list_directories_returns_sorted_dirs_only() {
+        // 真实临时目录：只列子目录、按字符串升序
+        let root = fresh_temp_dir("list_dirs");
+        let beta = root.join("beta");
+        let alpha = root.join("Alpha");
+        fs::create_dir_all(&beta).unwrap();
+        fs::create_dir_all(&alpha).unwrap();
+        fs::write(root.join("a_file.txt"), b"x").unwrap();
+
+        let result = call("list_directories", json!({"path": root.to_string_lossy()}))
+            .expect("list_directories 应成功");
+        let list = result.as_array().expect("应返回数组");
+        assert_eq!(
+            list,
+            &vec![
+                json!(alpha.to_string_lossy()),
+                json!(beta.to_string_lossy()),
+            ]
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn list_directories_missing_path_defaults_to_root() {
+        // 缺 path 参数时默认 "/"：目录存在，应返回数组（内容不做断言，跨平台不稳定）
+        let result = call("list_directories", json!({})).expect("默认路径应成功");
+        assert!(result.is_array());
+    }
+}

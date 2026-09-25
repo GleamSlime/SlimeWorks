@@ -1253,3 +1253,897 @@ pub fn increment_folder_play_count(folder_id: String) -> Result<bool, String> {
 pub fn scan_path_mapping(dir_path: String) -> Result<PathMappingNode, String> {
     scanner::scan_path_mapping(&dir_path).map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    //! api.rs DB 层单元测试。
+    //! 安全隔离：所有 DB 用例通过 DbTestEnv 在首次 initialize_db 之前把 HOME
+    //! 重定向到进程唯一临时目录，music_player.db 只会在隔离 HOME 内被创建/打开，
+    //! 真实用户曲库（~/Library/Application Support/SlimeWorks）从头到尾不被触碰；
+    //! 运行时另有断言校验 DB 路径确实位于隔离 HOME 内（双保险）。
+
+    use super::*;
+    use crate::types::PathMappingNodeType;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
+    // ════════════════════════════ DB 隔离环境 ════════════════════════════
+    //
+    // 直接借鉴 media_collection/src/api.rs 的 DbTestEnv / DB_TEST_LOCK 范式：
+    // default_db_path() 完全由 $HOME 推导（macOS:
+    // ~/Library/Application Support/SlimeWorks/music_player.db），且 db_module 的
+    // 实例表/表路由是进程级静态。因此必须在首次 initialize_db 之前把 HOME 重定向
+    // 到独立临时目录；所有走 DB / 进程全局内存缓存的用例统一持 DB_TEST_LOCK
+    // 串行执行，避免共享表与缓存互踩。
+
+    /// DB 用例全局串行锁
+    static DB_TEST_LOCK: Mutex<()> = Mutex::new(());
+    /// 用例唯一序号（配合 pid 生成不冲突的 tag）
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+
+    struct DbTestEnv {
+        /// 持有隔离 HOME 的 TempDir 所有权。static OnceLock 永不 drop，
+        /// 目录由系统临时目录回收策略处理，测试期间绝不触碰真实用户目录。
+        _home: tempfile::TempDir,
+        #[allow(dead_code)]
+        db_path: String,
+    }
+
+    /// 初始化（且只初始化一次）隔离 DB 环境
+    fn db_test_env() -> &'static DbTestEnv {
+        static ENV: OnceLock<DbTestEnv> = OnceLock::new();
+        ENV.get_or_init(|| {
+            let home = tempfile::Builder::new()
+                .prefix("music_db_test_home_")
+                .tempdir()
+                .expect("创建隔离 HOME 失败");
+            let home_path = home.path().to_path_buf();
+            // edition 2021：set_var 是安全接口；只在 OnceLock 初始化闭包里调用一次，
+            // 之后 HOME 永不再变化，DB 用例又全部串行，不存在反复改环境变量的竞态
+            std::env::set_var("HOME", &home_path);
+            initialize_db().expect("隔离 HOME 下 initialize_db 应成功");
+            // initialize_db 必须幂等
+            initialize_db().expect("initialize_db 应幂等");
+            let db_path = default_db_path();
+            assert!(
+                db_path.starts_with(home_path.to_string_lossy().as_ref()),
+                "DB 路径必须位于隔离 HOME 内，绝不触碰真实用户库: {db_path}"
+            );
+            // db_module 的首个全局实例路径也必须落在隔离 HOME 内（双保险）
+            let first = db_module::db_get_path().expect("db_get_path 应可用");
+            assert!(
+                first.starts_with(home_path.to_string_lossy().as_ref()),
+                "db_module 全局首实例必须位于隔离 HOME 内: {first}"
+            );
+            // redb 语义：表只有被首次写入后才在文件中存在，纯新库上先读会报
+            // TableNotFound（生产代码边界行为）。这里以「探针写入再删除」把全部
+            // 表物化，保证各用例无论执行顺序如何都确定性可跑
+            //（真实用户库里各表早已被首写建立，不存在该窗口）。
+            for table in music_table_names() {
+                db_module::db_set(table.clone(), "__bootstrap__".into(), "1".into()).unwrap();
+                db_module::db_delete(table.clone(), "__bootstrap__".into()).unwrap();
+            }
+            DbTestEnv {
+                _home: home,
+                db_path,
+            }
+        })
+    }
+
+    /// 取 DB 串行锁，并在持锁状态下确保隔离环境已初始化
+    fn lock_db_test_serial() -> std::sync::MutexGuard<'static, ()> {
+        let guard = DB_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        db_test_env();
+        guard
+    }
+
+    // ── 通用辅助 ──────────────────────────────────────────────────────────
+
+    /// 进程内唯一 tag，避免用例间 id/名称互踩
+    fn unique_tag() -> String {
+        format!(
+            "{}-{}",
+            std::process::id(),
+            SEQ.fetch_add(1, AtomicOrdering::SeqCst)
+        )
+    }
+
+    /// 直读底层 redb 表：按 key 取回原始 JSON 字符串（media_collection 测试同款先例）
+    fn db_row(table: String, key: &str) -> Option<String> {
+        db_module::db_get(table, key.to_string()).unwrap()
+    }
+
+    /// 在系统临时目录（非隔离 HOME）下建独立用例目录
+    fn case_dir(name: &str) -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix(&format!("music_api_{}_{tag}_", name, tag = std::process::id()))
+            .tempdir()
+            .expect("创建用例临时目录失败")
+    }
+
+    /// 写入一个假音频文件（15 字节，lofty 解析失败时元数据回退为默认值）
+    fn write_audio(dir: &Path, name: &str) -> PathBuf {
+        let p = dir.join(name);
+        fs::write(&p, b"fake audio data").expect("写入测试音频文件失败");
+        p
+    }
+
+    /// 清空全部进程级内存缓存，模拟「应用重启后重新从 DB 加载」
+    fn invalidate_all_caches() {
+        *playlists_cache().lock().unwrap() = Vec::new();
+        *music_items_cache().lock().unwrap() = None;
+        *play_records_cache().lock().unwrap() = Vec::new();
+        *eq_presets_cache().lock().unwrap() = Vec::new();
+        *folders_cache().lock().unwrap() = Vec::new();
+    }
+
+    // ── initialize_db / 表绑定 ────────────────────────────────────────────
+
+    #[test]
+    fn initialize_db_is_isolated_idempotent_and_binds_all_tables() {
+        let _serial = lock_db_test_serial();
+        let env = db_test_env();
+        // DB 文件确实创建于隔离 HOME 之下
+        assert!(Path::new(&env.db_path).exists(), "music_player.db 应已落盘");
+        // 全部音乐表（含 whisper_config）都已绑定：注册 + 直读直写往返
+        for table in music_table_names() {
+            db_module::db_register_table(table.clone()).expect("表注册应成功");
+            let key = format!("__route_probe__{table}");
+            db_module::db_set(table.clone(), key.clone(), "1".into()).unwrap();
+            assert_eq!(
+                db_row(table.clone(), &key).as_deref(),
+                Some("1"),
+                "表 {table} 应已绑定到隔离 DB 并可直接读写"
+            );
+            db_module::db_delete(table.clone(), key).unwrap();
+        }
+        // 一次性散落数据迁移标记已写入（migrate_scattered_music_data 执行过）
+        assert_eq!(
+            db_row(meta_table(), "scatter_merged_v1").as_deref(),
+            Some("1"),
+            "迁移标记 scatter_merged_v1 应已落库"
+        );
+    }
+
+    // ── 播放列表 CRUD ─────────────────────────────────────────────────────
+
+    #[test]
+    fn playlist_crud_roundtrip_api_and_db() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let name = format!("歌单 {tag}");
+
+        let pl = create_playlist(name.clone()).unwrap();
+        assert!(!pl.id.is_empty());
+        assert_eq!(pl.item_count, 0);
+        assert!(!pl.is_default);
+        assert!(pl.folder_id.is_none());
+
+        // API 侧可见
+        let all = get_all_playlists().unwrap();
+        assert!(all.iter().any(|p| p.id == pl.id && p.name == name));
+
+        // 直读 music_playlists 表验证真正落库
+        let raw = db_row(playlist_table(), &pl.id).expect("播放列表应已落库");
+        let stored: Playlist = serde_json::from_str(&raw).unwrap();
+        assert_eq!(stored.name, name);
+        assert!(stored.created_at <= stored.updated_at);
+
+        // 改名同步落库
+        rename_playlist(pl.id.clone(), format!("改名 {tag}")).unwrap();
+        let stored: Playlist =
+            serde_json::from_str(&db_row(playlist_table(), &pl.id).unwrap()).unwrap();
+        assert_eq!(stored.name, format!("改名 {tag}"));
+        assert!(get_all_playlists()
+            .unwrap()
+            .iter()
+            .any(|p| p.id == pl.id && p.name == format!("改名 {tag}")));
+
+        // 非法 id 错误分支
+        assert!(rename_playlist(format!("ghost-{tag}"), "x".into()).is_err());
+
+        // 删除后 API 与底层表都查不到
+        assert!(delete_playlist(pl.id.clone()).unwrap());
+        assert!(get_all_playlists().unwrap().iter().all(|p| p.id != pl.id));
+        assert!(db_row(playlist_table(), &pl.id).is_none());
+    }
+
+    #[test]
+    fn ensure_default_playlist_is_idempotent() {
+        let _serial = lock_db_test_serial();
+        let first = ensure_default_playlist().unwrap();
+        assert!(first.is_default);
+        assert_eq!(first.name, "默认列表");
+        // 二次调用应复用同一条记录，不重复创建
+        let second = ensure_default_playlist().unwrap();
+        assert_eq!(first.id, second.id);
+        // 落库校验：DB 里的 JSON is_default=true
+        let stored: Playlist =
+            serde_json::from_str(&db_row(playlist_table(), &first.id).unwrap()).unwrap();
+        assert!(stored.is_default);
+        // 全量列表里只应有一个默认列表
+        let defaults = get_all_playlists()
+            .unwrap()
+            .into_iter()
+            .filter(|p| p.is_default)
+            .count();
+        assert_eq!(defaults, 1);
+    }
+
+    #[test]
+    fn create_playlist_in_folder_links_folder_id() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let folder = create_folder(format!("归属目录 {tag}"), None).unwrap();
+        let pl =
+            create_playlist_in_folder(format!("夹内歌单 {tag}"), Some(folder.id.clone())).unwrap();
+        assert_eq!(pl.folder_id.as_deref(), Some(folder.id.as_str()));
+
+        // 落库 JSON 带 folder_id
+        let stored: Playlist =
+            serde_json::from_str(&db_row(playlist_table(), &pl.id).unwrap()).unwrap();
+        assert_eq!(stored.folder_id.as_deref(), Some(folder.id.as_str()));
+
+        // 按目录过滤可见；根级过滤不含它
+        let in_folder = get_playlists_by_folder(Some(folder.id.clone())).unwrap();
+        assert!(in_folder.iter().any(|p| p.id == pl.id));
+        let at_root = get_playlists_by_folder(None).unwrap();
+        assert!(at_root.iter().all(|p| p.id != pl.id));
+
+        // 清理
+        let _ = delete_playlist(pl.id);
+        let _ = delete_folder(folder.id);
+    }
+
+    // ── 目录树 ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn folder_tree_levels_and_errors() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let l1 = create_folder(format!("一级 {tag}"), None).unwrap();
+        assert_eq!(l1.level, 1);
+        assert!(l1.parent_id.is_none());
+        let l2 = create_folder(format!("二级 {tag}"), Some(l1.id.clone())).unwrap();
+        assert_eq!(l2.level, 2);
+        let l3 = create_folder(format!("三级 {tag}"), Some(l2.id.clone())).unwrap();
+        assert_eq!(l3.level, 3);
+
+        // 第四级：超过最大深度应报错
+        let deep = create_folder("四级".into(), Some(l3.id.clone()));
+        assert!(deep.is_err());
+        assert!(deep.unwrap_err().contains("最大目录深度"));
+
+        // 父目录不存在
+        assert!(create_folder("x".into(), Some(format!("ghost-{tag}"))).is_err());
+
+        // 子目录查询过滤
+        let subs_of_l1 = get_sub_folders(Some(l1.id.clone())).unwrap();
+        assert!(subs_of_l1.iter().any(|f| f.id == l2.id));
+        assert!(subs_of_l1
+            .iter()
+            .all(|f| f.parent_id.as_deref() == Some(l1.id.as_str())));
+        assert!(get_sub_folders(Some(l3.id.clone())).unwrap().is_empty());
+
+        // 根级目录里包含 l1
+        assert!(get_all_folders().unwrap().iter().any(|f| f.id == l1.id));
+
+        // 落库校验 + 重命名
+        let stored: Folder = serde_json::from_str(&db_row(folder_table(), &l3.id).unwrap()).unwrap();
+        assert_eq!(stored.level, 3);
+        assert_eq!(stored.play_count, 0);
+        assert!(rename_folder(l2.id.clone(), format!("二级改名 {tag}")).unwrap());
+        let stored: Folder = serde_json::from_str(&db_row(folder_table(), &l2.id).unwrap()).unwrap();
+        assert_eq!(stored.name, format!("二级改名 {tag}"));
+        // 非法 id 错误分支
+        assert!(rename_folder(format!("ghost-{tag}"), "x".into()).is_err());
+
+        // 清理
+        let _ = delete_folder(l1.id);
+    }
+
+    #[test]
+    fn delete_folder_cascades_children_playlists_and_items() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("cascade_{tag}"));
+        let l1 = create_folder(format!("根 {tag}"), None).unwrap();
+        let l2 = create_folder(format!("子 {tag}"), Some(l1.id.clone())).unwrap();
+        let l3 = create_folder(format!("孙 {tag}"), Some(l2.id.clone())).unwrap();
+        let pl =
+            create_playlist_in_folder(format!("孙级歌单 {tag}"), Some(l3.id.clone())).unwrap();
+        let item = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "cascade.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        // 前置：全部数据均已落库
+        assert!(db_row(folder_table(), &l1.id).is_some());
+        assert!(db_row(folder_table(), &l3.id).is_some());
+        assert!(db_row(playlist_table(), &pl.id).is_some());
+        assert!(db_row(item_table(), &item.id).is_some());
+
+        // 级联删除：子孙目录、关联播放列表、播放列表内条目全部消失
+        assert!(delete_folder(l1.id.clone()).unwrap());
+        for fid in [&l1.id, &l2.id, &l3.id] {
+            assert!(db_row(folder_table(), fid).is_none(), "目录 {fid} 应被级联删除");
+        }
+        assert!(db_row(playlist_table(), &pl.id).is_none(), "关联播放列表应被级联删除");
+        assert!(db_row(item_table(), &item.id).is_none(), "播放列表条目应被级联删除");
+        invalidate_all_caches();
+        let ids: Vec<String> = get_all_folders().unwrap().into_iter().map(|f| f.id).collect();
+        assert!(!ids.contains(&l2.id) && !ids.contains(&l3.id));
+        assert!(get_all_playlists().unwrap().iter().all(|p| p.id != pl.id));
+    }
+
+    #[test]
+    fn update_folder_and_increment_play_count_persist() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let f = create_folder(format!("信息目录 {tag}"), None).unwrap();
+
+        assert!(update_folder(
+            f.id.clone(),
+            Some(format!("改名 {tag}")),
+            Some("/tmp/cover.jpg".into()),
+            Some("流行,华语".into()),
+            Some("某歌手".into()),
+        )
+        .unwrap());
+        // 直读底层表验证字段
+        let stored: Folder = serde_json::from_str(&db_row(folder_table(), &f.id).unwrap()).unwrap();
+        assert_eq!(stored.name, format!("改名 {tag}"));
+        assert_eq!(stored.cover_path.as_deref(), Some("/tmp/cover.jpg"));
+        assert_eq!(stored.tags.as_deref(), Some("流行,华语"));
+        assert_eq!(stored.author.as_deref(), Some("某歌手"));
+        // update_folder 清空缓存后，重新查询应拿到新值
+        assert!(get_all_folders()
+            .unwrap()
+            .iter()
+            .any(|x| x.id == f.id && x.name == format!("改名 {tag}")));
+
+        // 播放次数累加两次
+        assert!(increment_folder_play_count(f.id.clone()).unwrap());
+        assert!(increment_folder_play_count(f.id.clone()).unwrap());
+        let stored: Folder = serde_json::from_str(&db_row(folder_table(), &f.id).unwrap()).unwrap();
+        assert_eq!(stored.play_count, 2);
+
+        // 非法 id 错误分支
+        assert!(
+            update_folder(format!("ghost-{tag}"), Some("x".into()), None, None, None).is_err()
+        );
+        assert!(increment_folder_play_count(format!("ghost-{tag}")).is_err());
+
+        let _ = delete_folder(f.id);
+    }
+
+    // ── 音乐条目导入 / 顺序 ───────────────────────────────────────────────
+
+    #[test]
+    fn import_music_folder_persists_ordered_items() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("dir_import_{tag}"));
+        write_audio(dir.path(), "a.mp3");
+        let sub = dir.path().join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        write_audio(&sub, "b.flac");
+        fs::write(dir.path().join("note.txt"), b"not audio").unwrap();
+        // 隐藏目录里的音频必须被跳过
+        let hidden = dir.path().join(".hidden");
+        fs::create_dir_all(&hidden).unwrap();
+        write_audio(&hidden, "ghost.mp3");
+
+        let pl = create_playlist(format!("目录导入 {tag}")).unwrap();
+        let items =
+            import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+
+        // 只收 2 个音频文件；order 从 0 开始连续编号
+        assert_eq!(items.len(), 2, "应扫描到 a.mp3 与 sub/b.flac");
+        assert!(items.iter().all(|i| i.file_path.find(".hidden").is_none()));
+        let mut orders: Vec<i32> = items.iter().map(|i| i.order).collect();
+        orders.sort();
+        assert_eq!(orders, vec![0, 1]);
+
+        // 每条都真实落库，playlist_id 正确
+        for item in &items {
+            let stored: MusicItem =
+                serde_json::from_str(&db_row(item_table(), &item.id).expect("条目应落库")).unwrap();
+            assert_eq!(stored.playlist_id, pl.id);
+            assert_eq!(stored.file_size, 15);
+        }
+
+        // get_playlist_items 按 order 升序返回
+        let listed = get_playlist_items(pl.id.clone()).unwrap();
+        assert_eq!(listed.len(), 2);
+        assert!(listed.windows(2).all(|w| w[0].order <= w[1].order));
+
+        // 播放列表 item_count 同步为 2
+        let p: Playlist = serde_json::from_str(&db_row(playlist_table(), &pl.id).unwrap()).unwrap();
+        assert_eq!(p.item_count, 2);
+
+        // 目录不存在 → 错误分支
+        assert!(import_music_folder(pl.id.clone(), format!("/nonexistent/{tag}")).is_err());
+
+        // 清理
+        let _ = delete_playlist(pl.id);
+    }
+
+    #[test]
+    fn import_music_folder_merges_cue_metadata() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("cue_merge_{tag}"));
+        write_audio(dir.path(), "album.mp3");
+        fs::write(
+            dir.path().join("album.cue"),
+            "TITLE \"测试专辑\"\nPERFORMER \"整体艺术家\"\nFILE \"album.mp3\" WAVE\n  TRACK 01 AUDIO\n    TITLE \"第一首\"\n    PERFORMER \"歌手A\"\n    INDEX 01 00:00:00\n  TRACK 02 AUDIO\n    TITLE \"第二首\"\n    INDEX 01 03:30:00\n",
+        )
+        .unwrap();
+
+        let pl = create_playlist(format!("CUE 导入 {tag}")).unwrap();
+        let items =
+            import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        // 标题/专辑/艺术家来自 CUE 首轨合并，has_cue 置真
+        assert_eq!(item.title, "第一首");
+        assert_eq!(item.album.as_deref(), Some("测试专辑"));
+        assert_eq!(item.artist.as_deref(), Some("歌手A"));
+        assert!(item.has_cue);
+        // 合并结果已持久化
+        let stored: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &item.id).unwrap()).unwrap();
+        assert_eq!(stored.title, "第一首");
+
+        // scan_cue_files 目录级解析
+        let sheets = scan_cue_files(dir.path().to_string_lossy().as_ref());
+        assert_eq!(sheets.len(), 1);
+        assert_eq!(sheets[0].tracks.len(), 2);
+        assert_eq!(sheets[0].tracks[1].start_ms, 210000);
+        // 不存在的目录返回空集合
+        assert!(scan_cue_files(&format!("/nonexistent/{tag}")).is_empty());
+        // parse_cue 非法路径报错
+        assert!(parse_cue(format!("/nonexistent/{tag}.cue")).is_err());
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    #[test]
+    fn import_single_file_appends_order_and_updates_errors_delete_roundtrip() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("single_{tag}"));
+        let pl = create_playlist(format!("单曲导入 {tag}")).unwrap();
+
+        let it1 = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "one.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        let it2 = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "two.m4a").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        // 逐首导入 order 依次追加（max_order+1）
+        assert_eq!(it1.order, 0);
+        assert_eq!(it2.order, 1);
+        assert_eq!(it1.title, "one");
+        assert!(!it1.is_favorite);
+
+        // 错误分支：文件不存在 / 非音频扩展名
+        assert!(import_music_file(pl.id.clone(), format!("/nonexistent/{tag}.mp3")).is_err());
+        let txt = dir.path().join("readme.txt");
+        fs::write(&txt, b"x").unwrap();
+        assert!(import_music_file(pl.id.clone(), txt.to_string_lossy().into_owned()).is_err());
+
+        // update_music_item：字段级更新并落库
+        assert!(update_music_item(
+            it1.id.clone(),
+            Some("新标题".into()),
+            Some("新艺术家".into()),
+            Some("新专辑".into()),
+            Some(true),
+        )
+        .unwrap());
+        let stored: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &it1.id).unwrap()).unwrap();
+        assert_eq!(stored.title, "新标题");
+        assert_eq!(stored.artist.as_deref(), Some("新艺术家"));
+        assert_eq!(stored.album.as_deref(), Some("新专辑"));
+        assert!(stored.is_favorite);
+        // 非法 id 错误分支
+        assert!(
+            update_music_item(format!("ghost-{tag}"), Some("x".into()), None, None, None).is_err()
+        );
+
+        // delete_music_item：底层表行消失
+        assert!(delete_music_item(it2.id.clone()).unwrap());
+        assert!(db_row(item_table(), &it2.id).is_none());
+        assert_eq!(get_playlist_items(pl.id.clone()).unwrap().len(), 1);
+
+        // import_music_paths 混合输入：有效文件 + 目录 + 无效项全部容忍
+        let sub = dir.path().join("subdir");
+        fs::create_dir_all(&sub).unwrap();
+        write_audio(&sub, "three.wav");
+        let added = import_music_paths(
+            pl.id.clone(),
+            vec![
+                write_audio(dir.path(), "four.opus").to_string_lossy().into_owned(),
+                sub.to_string_lossy().into_owned(),
+                txt.to_string_lossy().into_owned(),
+                format!("/nonexistent/{tag}.mp3"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(added.len(), 2, "1 个直传文件 + 目录内 1 个，应成功导入 2 项");
+
+        // clear_playlist_items：清空条目但保留播放列表本体
+        let cleared = clear_playlist_items(pl.id.clone()).unwrap();
+        assert_eq!(cleared, 3, "it1 + four + three 共 3 条被清空");
+        assert!(get_playlist_items(pl.id.clone()).unwrap().is_empty());
+        assert!(db_row(playlist_table(), &pl.id).is_some());
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    #[test]
+    fn save_playlist_order_persists_reordered_values() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("order_{tag}"));
+        let pl = create_playlist(format!("曲序 {tag}")).unwrap();
+        let mut ids = Vec::new();
+        for name in ["x.mp3", "y.mp3", "z.mp3"] {
+            let item = import_music_file(
+                pl.id.clone(),
+                write_audio(dir.path(), name).to_string_lossy().into_owned(),
+            )
+            .unwrap();
+            ids.push(item.id);
+        }
+
+        // 倒序保存：曲序 0/1/2 重排并落库
+        save_playlist_order(pl.id.clone(), vec![ids[2].clone(), ids[0].clone(), ids[1].clone()])
+            .unwrap();
+        let listed = get_playlist_items(pl.id.clone()).unwrap();
+        assert_eq!(
+            listed.iter().map(|i| i.id.clone()).collect::<Vec<_>>(),
+            vec![ids[2].clone(), ids[0].clone(), ids[1].clone()]
+        );
+        for (expected_order, item) in listed.iter().enumerate() {
+            let stored: MusicItem =
+                serde_json::from_str(&db_row(item_table(), &item.id).unwrap()).unwrap();
+            assert_eq!(stored.order, expected_order as i32);
+        }
+
+        // 非法 id 不报错但被跳过（当前实现：跳过项仍占用序号位次）
+        save_playlist_order(
+            pl.id.clone(),
+            vec![ids[0].clone(), format!("ghost-{tag}"), ids[1].clone()],
+        )
+        .unwrap();
+        let stored0: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &ids[0]).unwrap()).unwrap();
+        let stored1: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &ids[1]).unwrap()).unwrap();
+        assert_eq!(stored0.order, 0);
+        assert_eq!(stored1.order, 2, "被跳过的幽灵 id 仍消耗一个位次");
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    #[test]
+    fn add_remote_music_items_batches_and_appends_order() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let pl = create_playlist(format!("远程 {tag}")).unwrap();
+
+        let batch = add_remote_music_items(
+            pl.id.clone(),
+            vec![
+                RemoteMusicItem {
+                    title: "流一".into(),
+                    url: "https://example.com/a.mp3".into(),
+                    duration_ms: Some(1000),
+                    track_number: Some(1),
+                },
+                RemoteMusicItem {
+                    title: "流二".into(),
+                    url: "https://example.com/b.mp3".into(),
+                    duration_ms: None,
+                    track_number: None,
+                },
+            ],
+        )
+        .unwrap();
+        assert_eq!(batch.len(), 2);
+        assert_eq!(batch[0].order, 0);
+        assert_eq!(batch[1].order, 1);
+        assert_eq!(batch[0].file_path, "https://example.com/a.mp3");
+        assert_eq!(batch[0].file_size, 0);
+
+        // 再追加一条：order 从既有最大值 +1 连续
+        let more = add_remote_music_items(
+            pl.id.clone(),
+            vec![RemoteMusicItem {
+                title: "流三".into(),
+                url: "https://example.com/c.mp3".into(),
+                duration_ms: None,
+                track_number: None,
+            }],
+        )
+        .unwrap();
+        assert_eq!(more[0].order, 2);
+
+        // 批量写入已落库 + item_count 同步为 3
+        let stored: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &more[0].id).unwrap()).unwrap();
+        assert_eq!(stored.title, "流三");
+        let p: Playlist = serde_json::from_str(&db_row(playlist_table(), &pl.id).unwrap()).unwrap();
+        assert_eq!(p.item_count, 3);
+
+        // 空数组：不改动任何数据
+        assert!(add_remote_music_items(pl.id.clone(), Vec::new()).unwrap().is_empty());
+        let p: Playlist = serde_json::from_str(&db_row(playlist_table(), &pl.id).unwrap()).unwrap();
+        assert_eq!(p.item_count, 3);
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    // ── 播放记录 / 收藏 ───────────────────────────────────────────────────
+
+    #[test]
+    fn record_play_accumulates_count_and_recent_ordering() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("record_{tag}"));
+        let pl = create_playlist(format!("记录 {tag}")).unwrap();
+        let item = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "play.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        let r1 = record_play(item.id.clone()).unwrap();
+        assert_eq!(r1.play_count, 1);
+        assert_eq!(r1.music_id, item.id);
+        let r2 = record_play(item.id.clone()).unwrap();
+        // 再次播放：复用同一条记录，计数累加、时间刷新
+        assert_eq!(r2.id, r1.id);
+        assert_eq!(r2.play_count, 2);
+        assert!(r2.played_at >= r1.played_at);
+
+        // 直读底层表：以记录 id 为 key 的 JSON 已累加
+        let stored: PlayRecord =
+            serde_json::from_str(&db_row(record_table(), &r2.id).unwrap()).unwrap();
+        assert_eq!(stored.play_count, 2);
+        assert_eq!(stored.music_id, item.id);
+
+        // 最近播放按时间倒序
+        let recent = get_recent_played(200).unwrap();
+        assert!(recent.windows(2).all(|w| w[0].played_at >= w[1].played_at));
+        let mine: Vec<&PlayRecord> = recent.iter().filter(|r| r.music_id == item.id).collect();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].play_count, 2);
+        // limit=0 截断为空
+        assert!(get_recent_played(0).unwrap().is_empty());
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    #[test]
+    fn toggle_favorite_is_invertible_and_idempotent_pair() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("fav_{tag}"));
+        let pl = create_playlist(format!("收藏 {tag}")).unwrap();
+        let item = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "fav.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        // 第一次 toggle 置真，第二次回到假：成对操作幂等
+        assert!(toggle_favorite(item.id.clone()).unwrap());
+        let stored: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &item.id).unwrap()).unwrap();
+        assert!(stored.is_favorite);
+        assert!(get_favorite_items().unwrap().iter().any(|i| i.id == item.id));
+
+        assert!(!toggle_favorite(item.id.clone()).unwrap());
+        let stored: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &item.id).unwrap()).unwrap();
+        assert!(!stored.is_favorite);
+        assert!(get_favorite_items().unwrap().iter().all(|i| i.id != item.id));
+
+        // 非法 id 错误分支
+        assert!(toggle_favorite(format!("ghost-{tag}")).is_err());
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    // ── 均衡器预设 ────────────────────────────────────────────────────────
+
+    #[test]
+    fn eq_presets_builtin_read_custom_write_delete() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let presets = get_eq_presets().unwrap();
+        for id in [
+            "eq_flat",
+            "eq_bass_boost",
+            "eq_treble_boost",
+            "eq_vocal",
+            "eq_rock",
+            "eq_classical",
+        ] {
+            assert!(presets.iter().any(|p| p.id == id), "内置预设 {id} 应存在");
+            // 内置预设全部落库且 is_builtin=true
+            let stored: EqualizerPreset =
+                serde_json::from_str(&db_row(eq_preset_table(), id).expect("内置预设应落库"))
+                    .unwrap();
+            assert!(stored.is_builtin);
+            assert_eq!(stored.bands.len(), 10);
+        }
+
+        // 频段数非法 → 拒绝
+        assert!(save_eq_preset(format!("坏预设 {tag}"), vec![0.0; 9]).is_err());
+
+        // 保存自定义预设：返回 + 落库 + API 可见
+        let custom = save_eq_preset(format!("自定义 {tag}"), vec![1.0; 10]).unwrap();
+        assert!(!custom.is_builtin);
+        let stored: EqualizerPreset =
+            serde_json::from_str(&db_row(eq_preset_table(), &custom.id).unwrap()).unwrap();
+        assert_eq!(stored.name, format!("自定义 {tag}"));
+        assert!(get_eq_presets().unwrap().iter().any(|p| p.id == custom.id));
+
+        // 内置预设禁止删除
+        assert!(delete_eq_preset("eq_flat".into()).is_err());
+
+        // 删除自定义预设：DB 行消失
+        assert!(delete_eq_preset(custom.id.clone()).unwrap());
+        assert!(db_row(eq_preset_table(), &custom.id).is_none());
+        assert!(get_eq_presets().unwrap().iter().all(|p| p.id != custom.id));
+    }
+
+    // ── 损坏数据容错 ──────────────────────────────────────────────────────
+
+    #[test]
+    fn corrupt_json_rows_are_skipped_not_panicked() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let pl = create_playlist(format!("容错 {tag}")).unwrap();
+
+        // 直接向底层表塞损坏 JSON
+        db_module::db_set(playlist_table(), format!("corrupt_pl_{tag}"), "{ 不是JSON".into())
+            .unwrap();
+        db_module::db_set(item_table(), format!("corrupt_item_{tag}"), "[1,2,3".into()).unwrap();
+
+        // 强制走 DB 重载：损坏行被静默过滤，正常行不受影响，不 panic
+        invalidate_all_caches();
+        let playlists = get_all_playlists().unwrap();
+        assert!(playlists.iter().all(|p| p.id != format!("corrupt_pl_{tag}")));
+        assert!(playlists.iter().any(|p| p.id == pl.id));
+
+        let items = get_all_music_items().unwrap();
+        assert!(items.iter().all(|i| i.id != format!("corrupt_item_{tag}")));
+
+        // 清理损坏行，恢复缓存
+        db_module::db_delete(playlist_table(), format!("corrupt_pl_{tag}")).unwrap();
+        db_module::db_delete(item_table(), format!("corrupt_item_{tag}")).unwrap();
+        invalidate_all_caches();
+        let _ = delete_playlist(pl.id);
+    }
+
+    // ── 重启持久化 ────────────────────────────────────────────────────────
+
+    #[test]
+    fn data_survives_full_cache_reset_like_restart() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("restart_{tag}"));
+
+        // 造齐五类数据：目录、播放列表、条目、播放记录、自定义 EQ
+        let folder = create_folder(format!("重启目录 {tag}"), None).unwrap();
+        let pl =
+            create_playlist_in_folder(format!("重启歌单 {tag}"), Some(folder.id.clone())).unwrap();
+        let item = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "alive.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        toggle_favorite(item.id.clone()).unwrap();
+        let record = record_play(item.id.clone()).unwrap();
+        let preset = save_eq_preset(format!("重启预设 {tag}"), vec![2.0; 10]).unwrap();
+
+        // 清空全部进程级缓存，模拟应用重启后冷启动
+        invalidate_all_caches();
+
+        assert!(get_all_folders().unwrap().iter().any(|f| f.id == folder.id));
+        let loaded_pl = get_all_playlists()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.id == pl.id)
+            .expect("播放列表应跨缓存重建存在");
+        assert_eq!(loaded_pl.folder_id.as_deref(), Some(folder.id.as_str()));
+        let loaded_items = get_all_music_items().unwrap();
+        let loaded_item = loaded_items
+            .iter()
+            .find(|i| i.id == item.id)
+            .expect("音乐条目应持久化");
+        assert!(loaded_item.is_favorite, "收藏状态应从 DB 恢复");
+        assert_eq!(get_playlist_items(pl.id.clone()).unwrap().len(), 1);
+        assert!(get_recent_played(500).unwrap().iter().any(|r| r.id == record.id));
+        assert!(get_eq_presets().unwrap().iter().any(|p| p.id == preset.id));
+
+        // 清理
+        let _ = delete_playlist(pl.id);
+        let _ = delete_folder(folder.id);
+        let _ = delete_eq_preset(preset.id);
+    }
+
+    // ── 路径映射（scanner.scan_path_mapping 的 api 转发）──────────────────
+
+    #[test]
+    fn scan_path_mapping_builds_classified_tree() {
+        // 纯文件系统用例，不触碰 DB，无需串行锁
+        let tag = unique_tag();
+        let dir = case_dir(&format!("pathmap_{tag}"));
+        let sub = dir.path().join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        write_audio(&sub, "inner.flac");
+        write_audio(dir.path(), "a.mp3");
+        fs::write(dir.path().join("b.cue"), b"FILE \"a.mp3\" WAVE").unwrap();
+        fs::write(dir.path().join("c.jpg"), b"fake jpeg").unwrap();
+        fs::write(dir.path().join("d.txt"), b"plain").unwrap();
+        fs::write(dir.path().join(".DS_Store"), b"hidden").unwrap();
+
+        let root = scan_path_mapping(dir.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(root.name, dir.path().file_name().unwrap().to_str().unwrap());
+        assert!(matches!(root.node_type, PathMappingNodeType::Directory));
+        assert!(root.file_size.is_none(), "目录节点不应带文件大小");
+        assert!(root.has_audio, "子树含音频，has_audio 应向上冒泡");
+        assert_eq!(root.folder_id, None);
+
+        // 排序规则：目录在前，文件按名排序；隐藏文件被跳过
+        let names: Vec<&str> = root.children.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, vec!["sub", "a.mp3", "b.cue", "c.jpg", "d.txt"]);
+
+        // 子树结构：sub > inner.flac
+        let sub_node = &root.children[0];
+        assert!(sub_node.has_audio);
+        assert_eq!(sub_node.children.len(), 1);
+        assert_eq!(sub_node.children[0].name, "inner.flac");
+        assert!(matches!(
+            sub_node.children[0].node_type,
+            PathMappingNodeType::AudioFile
+        ));
+
+        // 各文件类型分类正确 + file_size 落地
+        let a = &root.children[1];
+        assert!(matches!(a.node_type, PathMappingNodeType::AudioFile));
+        assert_eq!(a.file_size, Some(15));
+        assert!(a.has_audio);
+        assert!(matches!(root.children[2].node_type, PathMappingNodeType::CueFile));
+        assert!(!root.children[2].has_audio, "CUE 文件本身不算音频");
+        assert!(matches!(root.children[3].node_type, PathMappingNodeType::ImageFile));
+        assert!(matches!(root.children[4].node_type, PathMappingNodeType::OtherFile));
+
+        // 纯空目录（无音频）has_audio=false
+        let empty_dir = case_dir(&format!("pathmap_empty_{tag}"));
+        let empty_root =
+            scan_path_mapping(empty_dir.path().to_string_lossy().into_owned()).unwrap();
+        assert!(!empty_root.has_audio);
+        assert!(empty_root.children.is_empty());
+
+        // 错误分支：不存在的路径 / 传入文件而非目录
+        assert!(scan_path_mapping(format!("/nonexistent/{tag}")).is_err());
+        let a_file = dir.path().join("a.mp3");
+        assert!(scan_path_mapping(a_file.to_string_lossy().into_owned()).is_err());
+    }
+}
+

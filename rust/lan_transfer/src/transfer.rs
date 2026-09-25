@@ -1178,3 +1178,137 @@ fn is_video(filename: &str) -> bool {
         "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" | "webm"
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// write_frame/read_frame 签名固定为 TcpStream，无法注入 memory stream，
+    /// 用 127.0.0.1 环回建立一对真实连接做纯进程内协议往返测试
+    async fn duplex_streams() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind 环回应成功");
+        let addr = listener.local_addr().unwrap();
+        let accept = tokio::spawn(async move { listener.accept().await.map(|(s, _)| s) });
+        let client = TcpStream::connect(addr).await.expect("connect 环回应成功");
+        let server = accept.await.unwrap().expect("accept 应成功");
+        (client, server)
+    }
+
+    /// 正常帧往返：文本、二进制、256KB 大块（CHUNK_SIZE）均能原样读回
+    #[tokio::test]
+    async fn frame_roundtrip_normal_payloads() {
+        let (mut a, mut b) = duplex_streams().await;
+        // 普通文本帧
+        write_frame(&mut a, b"hello").await.unwrap();
+        assert_eq!(read_frame(&mut b, usize::MAX).await.unwrap(), b"hello");
+        // 全字节值二进制帧
+        let mut binary: Vec<u8> = (0..=255u8).collect();
+        let doubled = binary.clone();
+        binary.extend_from_slice(&doubled);
+        write_frame(&mut a, &binary).await.unwrap();
+        assert_eq!(read_frame(&mut b, usize::MAX).await.unwrap(), binary);
+        // 大块帧：恰好 CHUNK_SIZE（256KB）
+        let big = vec![7u8; CHUNK_SIZE];
+        write_frame(&mut a, &big).await.unwrap();
+        assert_eq!(read_frame(&mut b, usize::MAX).await.unwrap(), big);
+        // 连续多帧保持顺序
+        write_frame(&mut a, b"one").await.unwrap();
+        write_frame(&mut a, b"two").await.unwrap();
+        assert_eq!(read_frame(&mut b, usize::MAX).await.unwrap(), b"one");
+        assert_eq!(read_frame(&mut b, usize::MAX).await.unwrap(), b"two");
+    }
+
+    /// 帧头是 4 字节大端长度（网络序），可被对端原样解析
+    #[tokio::test]
+    async fn frame_header_is_big_endian_length() {
+        let (mut a, mut b) = duplex_streams().await;
+        write_frame(&mut a, &[0u8; 5]).await.unwrap();
+        let mut raw = [0u8; 9]; // 4B 头 + 5B 载荷
+        b.read_exact(&mut raw).await.unwrap();
+        assert_eq!(&raw[..4], &[0, 0, 0, 5], "长度头必须是大端 u32");
+    }
+
+    /// len=0 帧表示 EOF：read_frame 返回空 Vec 而不是阻塞等待载荷
+    #[tokio::test]
+    async fn frame_zero_length_is_eof_marker() {
+        let (mut a, mut b) = duplex_streams().await;
+        write_frame(&mut a, b"").await.unwrap();
+        assert!(read_frame(&mut b, usize::MAX).await.unwrap().is_empty());
+        // 直接手写 4 字节零头（不经 write_frame）同样被识别为 EOF
+        use tokio::io::AsyncWriteExt;
+        a.write_all(&0u32.to_be_bytes()).await.unwrap();
+        a.flush().await.unwrap();
+        assert!(read_frame(&mut b, usize::MAX).await.unwrap().is_empty());
+    }
+
+    /// 超大长度帧：声明长度超过 max_size 时立即报错，且不按声明长度预分配内存；
+    /// 长度恰好等于 max_size 时放行（严格大于才拒绝）
+    #[tokio::test]
+    async fn frame_oversize_length_rejected_before_alloc() {
+        let (mut a, mut b) = duplex_streams().await;
+        // 声称 4GB 载荷但一个字节都不发：若实现先分配再校验会 OOM/卡死
+        a.write_all(&u32::MAX.to_be_bytes()).await.unwrap();
+        a.flush().await.unwrap();
+        let err = read_frame(&mut b, 1024).await.unwrap_err().to_string();
+        assert!(err.contains("帧太大"), "err = {err}");
+        assert!(err.contains("4294967295") && err.contains("1024"), "err = {err}");
+        // 边界：len == max_size 不拒绝，正常读取完整帧
+        a.write_all(&5u32.to_be_bytes()).await.unwrap();
+        a.write_all(b"abcde").await.unwrap();
+        a.flush().await.unwrap();
+        assert_eq!(read_frame(&mut b, 5).await.unwrap(), b"abcde");
+        // len == max_size + 1 拒绝
+        a.write_all(&6u32.to_be_bytes()).await.unwrap();
+        a.flush().await.unwrap();
+        assert!(read_frame(&mut b, 5).await.unwrap_err().to_string().contains("帧太大"));
+    }
+
+    /// 截断的载荷：写端在发完帧头+部分载荷后关闭 ⇒ read_exact 报 EOF
+    #[tokio::test]
+    async fn frame_truncated_payload_errors() {
+        let (mut a, mut b) = duplex_streams().await;
+        a.write_all(&100u32.to_be_bytes()).await.unwrap(); // 声称 100 字节
+        a.write_all(b"only 28 bytes here, ha!").await.unwrap(); // 实际 25 字节
+        a.flush().await.unwrap();
+        drop(a); // 关闭连接 ⇒ 载荷截断
+        let err = read_frame(&mut b, usize::MAX).await.unwrap_err().to_string();
+        assert!(
+            err.to_lowercase().contains("early eof") || err.to_lowercase().contains("failed to fill whole buffer"),
+            "err = {err}"
+        );
+    }
+
+    /// 截断的帧头：只写 2 字节就关闭 ⇒ 连长度头都读不满，报错而不是当成 EOF 帧
+    #[tokio::test]
+    async fn frame_truncated_header_errors() {
+        let (mut a, mut b) = duplex_streams().await;
+        a.write_all(&[0u8, 4]).await.unwrap(); // 帧头只发一半
+        a.flush().await.unwrap();
+        drop(a);
+        let err = read_frame(&mut b, usize::MAX).await.unwrap_err().to_string();
+        assert!(
+            err.to_lowercase().contains("early eof") || err.to_lowercase().contains("failed to fill whole buffer"),
+            "err = {err}"
+        );
+    }
+
+    /// send_msg/recv_msg：TransferMessage JSON 帧往返 + 空帧被识别为连接关闭
+    #[tokio::test]
+    async fn msg_roundtrip_and_empty_frame_error() {
+        let (mut a, mut b) = duplex_streams().await;
+        let msg = TransferMessage {
+            message_type: MessageType::DeviceAnnouncement,
+            payload: "{\"device_id\":\"dev-1\"}".to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+        };
+        send_msg(&mut a, &msg).await.unwrap();
+        let got = recv_msg(&mut b).await.unwrap();
+        assert!(matches!(got.message_type, MessageType::DeviceAnnouncement));
+        assert_eq!(got.payload, msg.payload);
+        assert_eq!(got.timestamp, msg.timestamp);
+        // 空帧（EOF 标记）⇒ recv_msg 明确报错而不是返回垃圾
+        write_frame(&mut a, b"").await.unwrap();
+        let err = recv_msg(&mut b).await.unwrap_err().to_string();
+        assert!(err.contains("空消息帧"), "err = {err}");
+    }
+}

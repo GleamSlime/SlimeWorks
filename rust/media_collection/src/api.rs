@@ -3087,4 +3087,716 @@ mod tests {
         cleanup_empty_collection_dir(&parent.join("vol01"));
         assert!(!parent.exists());
     }
+
+    // ════════════════════════════ DB 隔离环境 ════════════════════════════
+    //
+    // default_db_path() 完全由 $HOME 推导（macOS: ~/Library/Application Support/SlimeWorks/media.db），
+    // 且 db_module 的实例表/表路由是进程级静态。这里在所有 DB 用例第一次触发
+    // initialize_db 之前，把 HOME 重定向到独立临时目录：
+    // - 媒体表全部绑定到临时目录下的 redb 文件，真实用户库文件从头到尾不会被打开；
+    // - OnceLock 之后取 db_path 自校验确实位于临时 HOME 内，双保险；
+    // - 所有走 DB / 进程全局静态（ffmpeg 路径、PID 表、内存任务表）的用例统一持
+    //   DB_TEST_LOCK 串行执行，避免共享表与内存缓存互踩。
+
+    /// DB 用例全局串行锁
+    static DB_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    struct DbTestEnv {
+        /// 持有隔离 HOME 的 TempDir 所有权。static OnceLock 永不 drop，
+        /// 目录由系统临时目录回收策略处理，测试期间绝不触碰真实用户目录。
+        _home: tempfile::TempDir,
+        #[allow(dead_code)]
+        db_path: String,
+    }
+
+    /// 初始化（且只初始化一次）隔离 DB 环境
+    fn db_test_env() -> &'static DbTestEnv {
+        static ENV: OnceLock<DbTestEnv> = OnceLock::new();
+        ENV.get_or_init(|| {
+            let home = tempfile::Builder::new()
+                .prefix("media_db_test_home_")
+                .tempdir()
+                .expect("创建隔离 HOME 失败");
+            let home_path = home.path().to_path_buf();
+            // edition 2021：set_var 是安全接口；只在 OnceLock 初始化闭包里调用一次，
+            // 之后 HOME 永不再变化，DB 用例又全部串行，不存在反复改环境变量的竞态
+            std::env::set_var("HOME", &home_path);
+            initialize_db().expect("隔离 HOME 下 initialize_db 应成功");
+            // initialize_db 必须幂等
+            initialize_db().expect("initialize_db 应幂等");
+            let db_path = default_db_path();
+            assert!(
+                db_path.starts_with(home_path.to_string_lossy().as_ref()),
+                "DB 路径必须位于隔离 HOME 内，绝不触碰真实用户库: {db_path}"
+            );
+            DbTestEnv {
+                _home: home,
+                db_path,
+            }
+        })
+    }
+
+    /// 取 DB 串行锁，并在持锁状态下确保隔离环境已初始化
+    fn lock_db_test_serial() -> std::sync::MutexGuard<'static, ()> {
+        let guard = DB_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        db_test_env();
+        guard
+    }
+
+    /// 生成一张可解码的位图（未压缩 BMP，约 300KB）：
+    /// 满足 scanner 的 ≥10KB / ≥100x100 阈值，且 image crate 一定能解码，
+    /// 缩略图生成（ffmpeg 成功或纯 Rust 回退）不依赖 ffmpeg 是否存在
+    fn write_test_image(path: &Path) {
+        let img = image::RgbImage::from_fn(320, 240, |x, y| {
+            image::Rgb([
+                (x as u32 * 73 ^ y as u32 * 151) as u8,
+                (x as u32 * 17 + y as u32 * 91) as u8,
+                (x as u32 * 223 ^ y as u32 * 3) as u8,
+            ])
+        });
+        img.save(path).expect("写入测试图片失败");
+        assert!(
+            std::fs::metadata(path).unwrap().len() >= 10 * 1024 + 1,
+            "测试图片必须超过 scanner 的 10KB 过滤阈值"
+        );
+    }
+
+    /// 在系统临时目录（非隔离 HOME）下建一棵独立媒体目录树，返回其根目录
+    fn fake_media_root(case: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "slime_mc_{}_{}",
+            std::process::id(),
+            case
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn db_row(table: String, key: &str) -> Option<String> {
+        db_module::db_get(table, key.to_string()).unwrap()
+    }
+
+    fn row_count_for_collection(table: String, collection_id: &str) -> usize {
+        let marker = format!("\"collection_id\":\"{}\"", collection_id);
+        db_module::db_list_all(table)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| r.value.contains(&marker))
+            .count()
+    }
+
+    // ── 文件夹 CRUD 落库 ───────────────────────────────────────────────────
+
+    #[test]
+    fn db_folder_crud_persists_to_real_table() {
+        let _serial = lock_db_test_serial();
+        let tag = format!("folder_{}", std::process::id());
+
+        // 空名字/纯空白拒绝
+        assert!(create_media_folder("   ".to_string()).is_err());
+
+        let root = create_media_folder(format!("根目录 {tag}")).unwrap();
+        let child = create_child_media_folder(format!("子目录 {tag}"), root.id.clone()).unwrap();
+        assert_eq!(child.parent_id.as_deref(), Some(root.id.as_str()));
+
+        // 内存列表可见 + 独立子节点查询
+        let children = get_child_media_folders(root.id.clone()).unwrap();
+        assert!(children.iter().any(|f| f.id == child.id));
+
+        // 真正落库：直接从 media_folders 表读回 JSON 并反解
+        let raw = db_row(folder_table_name(), &root.id).expect("根文件夹应已落库");
+        let stored: MediaFolder = serde_json::from_str(&raw).unwrap();
+        assert_eq!(stored.name, format!("根目录 {tag}"));
+
+        // 改名：DB 侧应同步更新
+        assert!(rename_media_folder(child.id.clone(), format!("改名 {tag}")).unwrap());
+        let raw = db_row(folder_table_name(), &child.id).unwrap();
+        let stored: MediaFolder = serde_json::from_str(&raw).unwrap();
+        assert_eq!(stored.name, format!("改名 {tag}"));
+        // 不存在的 id → false
+        assert!(!rename_media_folder("no_such_folder".into(), "x".into()).unwrap());
+
+        // 删除父目录：子目录应上挂（parent 变 None）且 DB 同步
+        assert!(delete_media_folder(root.id.clone()).unwrap());
+        assert!(db_row(folder_table_name(), &root.id).is_none());
+        let raw = db_row(folder_table_name(), &child.id).expect("子目录不应被连带删除");
+        let stored: MediaFolder = serde_json::from_str(&raw).unwrap();
+        assert!(stored.parent_id.is_none());
+        assert!(!delete_media_folder(root.id.clone()).unwrap());
+
+        // 清理本用例数据
+        let _ = delete_media_folder(child.id);
+    }
+
+    #[test]
+    fn db_smart_folder_crud_persists_to_db() {
+        let _serial = lock_db_test_serial();
+        let tag = format!("sf_{}", std::process::id());
+
+        let sf = create_smart_folder(
+            format!("智能夹 {tag}"),
+            "关键词".into(),
+            vec!["k1".into()],
+            "fileName".into(),
+            "images".into(),
+            vec!["folder_1".into()],
+        )
+        .unwrap();
+        assert!(sf.id.starts_with("smart-folder:"));
+        assert_eq!(sf.regex_target, SmartFolderRegexTarget::FileName);
+        assert_eq!(sf.file_type_filter, SmartFolderFileType::Images);
+
+        // 落库校验：smart_folders 表可直接读回
+        let raw = db_row(smart_folder_table_name(), &sf.id).expect("智能文件夹应落库");
+        let stored: SmartFolder = serde_json::from_str(&raw).unwrap();
+        assert_eq!(stored.name, format!("智能夹 {tag}"));
+
+        // 更新后 DB 同步；名称空白拒绝；不存在报错
+        assert!(create_smart_folder("  ".into(), String::new(), vec![], String::new(), String::new(), vec![]).is_err());
+        let updated = update_smart_folder(
+            sf.id.clone(),
+            format!("改名 {tag}"),
+            ".*".into(),
+            vec![],
+            "collectionName".into(),
+            "all".into(),
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(updated.file_type_filter, SmartFolderFileType::All);
+        let raw = db_row(smart_folder_table_name(), &sf.id).unwrap();
+        assert!(raw.contains(&format!("改名 {tag}")));
+        assert!(update_smart_folder("no_such_id".into(), "x".into(), String::new(), vec![], String::new(), String::new(), vec![]).is_err());
+
+        assert!(get_all_smart_folders().unwrap().iter().any(|s| s.id == sf.id));
+        assert!(delete_smart_folder(sf.id.clone()).unwrap());
+        assert!(!delete_smart_folder(sf.id.clone()).unwrap());
+        assert!(db_row(smart_folder_table_name(), &sf.id).is_none());
+    }
+
+    // ── 集合排序 / 收藏 持久化 ────────────────────────────────────────────
+
+    #[test]
+    fn db_collection_order_roundtrip_delete_and_corruption() {
+        let _serial = lock_db_test_serial();
+        let key = format!("order_case_{}", std::process::id());
+
+        // 未写入时为空列表
+        assert_eq!(get_collection_order(key.clone()).unwrap(), Vec::<String>::new());
+
+        // 保存 → 读回 + 确认落库
+        save_collection_order(key.clone(), vec!["a".into(), "b".into()]).unwrap();
+        assert_eq!(
+            get_collection_order(key.clone()).unwrap(),
+            vec!["a".to_string(), "b".to_string()]
+        );
+        let raw = db_row(collection_order_table_name(), &key)
+            .expect("排序应落在 media_collection_orders 表");
+        let stored_ids: Vec<String> = serde_json::from_str(&raw).unwrap();
+        assert_eq!(stored_ids, vec!["a".to_string(), "b".to_string()]);
+
+        // 全量列表接口应包含本条
+        let all = get_all_collection_orders().unwrap();
+        assert!(all.iter().any(|(k, ids)| k == &key && ids.len() == 2));
+
+        // 损坏 JSON 容错：读取侧回退空列表而不是报错
+        db_module::db_set(collection_order_table_name(), key.clone(), "{坏数据".into()).unwrap();
+        assert_eq!(get_collection_order(key.clone()).unwrap(), Vec::<String>::new());
+
+        // 空列表 = 删除语义
+        save_collection_order(key.clone(), vec![]).unwrap();
+        assert!(db_row(collection_order_table_name(), &key).is_none());
+    }
+
+    #[test]
+    fn db_favorite_collection_ids_persist() {
+        let _serial = lock_db_test_serial();
+        let id = format!("fav_{}", std::process::id());
+        save_favorite_collection_ids(vec![id.clone()]).unwrap();
+        assert_eq!(get_favorite_collection_ids().unwrap(), vec![id.clone()]);
+        assert!(db_row(favorites_table_name(), "favorites")
+            .unwrap()
+            .contains(&id));
+        // 空列表清掉记录
+        save_favorite_collection_ids(vec![]).unwrap();
+        assert!(db_row(favorites_table_name(), "favorites").is_none());
+        assert!(get_favorite_collection_ids().unwrap().is_empty());
+    }
+
+    // ── 导入/重扫/删除 主链路（走真实 DB + 文件落盘）──────────────────────
+
+    #[test]
+    fn db_import_rescan_delete_full_cycle() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("import_cycle");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("sub/b.bmp"));
+        std::fs::write(root.join("readme.txt"), b"not media").unwrap();
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned())
+            .expect("导入应成功");
+        assert_eq!(collection.item_count, 2, "只应统计受支持的媒体文件");
+        assert_eq!(
+            collection.title,
+            root.file_name().unwrap().to_string_lossy(),
+            "默认标题取集合目录名"
+        );
+        assert_eq!(collection.folder_path, folder_path.to_string_lossy());
+        assert!(collection.cover_path.is_some(), "首个图片应被选为封面");
+
+        // 集合与条目均已落库
+        assert!(db_row(collection_table_name(), &collection.id)
+            .expect("集合应落 media_collections 表")
+            .contains("import_cycle"));
+        assert_eq!(
+            row_count_for_collection(item_table_name(), &collection.id),
+            2,
+            "两条条目应落 media_items 表"
+        );
+
+        // 导入链路应已预生成封面邻近缓存（不依赖 ffmpeg：Rust 回退兜底）
+        let cache = adjacent_cache_path(Path::new(&collection.cover_path.clone().unwrap()), 320)
+            .unwrap();
+        assert!(
+            is_valid_cache_hit(&cache),
+            "导入后封面缩略图应已写入: {}",
+            cache.display()
+        );
+
+        // 统计组装
+        let stats = get_all_collection_stats()
+            .unwrap()
+            .into_iter()
+            .find(|s| s.collection_id == collection.id)
+            .expect("stats 应包含本集合");
+        assert_eq!(stats.file_paths.len(), 2);
+        let expected_size: u64 = stats
+            .file_paths
+            .iter()
+            .map(|p| std::fs::metadata(p).unwrap().len())
+            .sum();
+        assert_eq!(stats.total_size, expected_size);
+        let counts = get_all_collection_counts()
+            .unwrap()
+            .into_iter()
+            .find(|c| c.collection_id == collection.id)
+            .expect("counts 应包含本集合");
+        assert_eq!(counts.item_count, 2);
+        assert_eq!(counts.total_size, expected_size);
+
+        // 重复导入被拦截
+        let err = import_media_folder(folder_path.to_string_lossy().into_owned())
+            .expect_err("重复导入应报错");
+        assert!(err.contains("已导入"), "got: {err}");
+
+        // 重扫：同 id 覆盖，新增文件被拾取且不产生重复条目
+        write_test_image(&root.join("c.bmp"));
+        let rescanned =
+            rescan_media_folder(folder_path.to_string_lossy().into_owned()).expect("重扫应成功");
+        assert_eq!(rescanned.id, collection.id, "重扫应复用既有集合 id");
+        assert_eq!(rescanned.item_count, 3);
+        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 3);
+        let items = get_media_collection_items(collection.id.clone()).unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(
+            items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(),
+            vec!["a", "c", "b"],
+            "条目应按扫描排序后的 order 稳定输出（根目录文件先于子目录）"
+        );
+
+        // 删除集合：内存 + 两张表 + 关联缩略图任务全部清理
+        assert!(delete_media_collection(collection.id.clone()).unwrap());
+        assert!(db_row(collection_table_name(), &collection.id).is_none());
+        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 0);
+        assert!(!delete_media_collection("no_such_collection".into()).unwrap());
+        let pending = get_all_pending_thumbnail_tasks().unwrap();
+        assert!(
+            !pending.iter().any(|t| t.file_path.starts_with(&root.to_string_lossy().into_owned())
+                || t.file_path.starts_with(
+                    &std::fs::canonicalize(&root).unwrap().to_string_lossy().into_owned()
+                )),
+            "删除集合后不应残留该目录的缩略图任务: {pending:?}"
+        );
+        assert!(
+            get_all_collection_stats()
+                .unwrap()
+                .iter()
+                .all(|s| s.collection_id != collection.id),
+            "stats 不应再包含已删集合"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn db_scan_media_folders_imports_each_media_dir() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("scan_root");
+        std::fs::create_dir_all(root.join("volA")).unwrap();
+        std::fs::create_dir_all(root.join("volB/nested")).unwrap();
+        std::fs::create_dir_all(root.join("notes")).unwrap();
+        write_test_image(&root.join("volA/a.bmp"));
+        write_test_image(&root.join("volB/b1.bmp"));
+        write_test_image(&root.join("volB/b2.bmp"));
+        std::fs::write(root.join("notes/readme.txt"), b"x").unwrap();
+
+        // 递归=false：只有直接含媒体的目录各自成集合；notes 与空根目录被排除
+        let collections = scan_media_folders(root.to_string_lossy().into_owned()).unwrap();
+        let titles: Vec<&str> = collections.iter().map(|c| c.title.as_str()).collect();
+        assert!(titles.contains(&"volA") && titles.contains(&"volB"), "got: {titles:?}");
+        assert!(!titles.contains(&"notes"));
+        let vol_b = collections.iter().find(|c| c.title == "volB").unwrap();
+        assert_eq!(vol_b.item_count, 2);
+
+        // 已导入的目录再扫一遍：全部跳过，返回空列表
+        let again = scan_media_folders(root.to_string_lossy().into_owned()).unwrap();
+        assert!(again.is_empty(), "重复扫描应跳过所有已导入目录");
+
+        for c in collections {
+            assert!(delete_media_collection(c.id).unwrap());
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 本地文件删除（走 DB 拿条目 + 纯文件断言）──────────────────────────
+
+    #[test]
+    fn db_delete_collection_local_files_removes_only_media_and_caches() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("local_files");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("sub/b.bmp"));
+        std::fs::write(root.join("stray.txt"), b"keep me").unwrap();
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection =
+            import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+
+        let deleted = delete_collection_local_files(collection.id.clone()).unwrap();
+        assert_eq!(deleted, 2, "只应删除媒体文件");
+        assert!(!root.join("a.bmp").exists());
+        assert!(!root.join("sub").exists(), "空壳子目录应被收掉");
+        assert!(
+            !root.join(".SlimeWorks").exists(),
+            "资源旁缓存目录应一并清理"
+        );
+        assert!(root.join("stray.txt").exists(), "非媒体残留文件不得误删");
+        assert!(root.exists(), "目录非空时不得删除集合根目录");
+        assert!(
+            root.parent().unwrap().exists(),
+            "清理绝不向上传播到父目录"
+        );
+
+        // 本函数刻意不动数据库：集合与条目记录仍在库里（后续由 delete_media_collection 收口）
+        assert!(db_row(collection_table_name(), &collection.id).is_some());
+        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 2);
+
+        assert!(delete_media_collection(collection.id).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── clear_all_local_media：表清空 + 资源缓存清理，绝不动原始媒体 ──────
+
+    #[test]
+    fn db_clear_all_local_media_keeps_original_files() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("clear_all");
+        write_test_image(&root.join("a.bmp"));
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection =
+            import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+
+        // 模拟历史残留的资源缓存文件（另有导入链路生成的封面缓存同目录）
+        let tmp_dir = root.join(".SlimeWorks").join("tmp");
+        std::fs::create_dir_all(&tmp_dir).unwrap();
+        std::fs::write(tmp_dir.join("stale.jpg_w200.jpg"), b"stale").unwrap();
+        // 顺带制造一些其他表数据
+        let folder = create_media_folder(format!("clear_probe_{}", std::process::id())).unwrap();
+        save_collection_order("clear_probe_key".into(), vec!["x".into()]).unwrap();
+
+        let (tables, files) = clear_all_local_media(false, true).unwrap();
+        assert_eq!(tables, 7, "应清空 7 张业务表（保留 media_meta）");
+        assert!(files >= 2, "stale + 封面缓存至少清掉 2 个文件, got {files}");
+
+        // 原始媒体文件必须原样保留
+        assert!(root.join("a.bmp").exists(), "清库绝不删除用户原始媒体文件");
+        assert!(!tmp_dir.join("stale.jpg_w200.jpg").exists());
+        assert!(tmp_dir.exists(), "只清缓存内容，保留 tmp 目录本身");
+
+        // 各表与内存缓存均已清空
+        assert!(db_row(collection_table_name(), &collection.id).is_none());
+        assert!(db_row(folder_table_name(), &folder.id).is_none());
+        assert!(db_row(collection_order_table_name(), "clear_probe_key").is_none());
+        assert!(get_all_media_collections().unwrap().is_empty());
+        assert!(get_all_media_folders().unwrap().is_empty());
+        assert!(get_all_pending_thumbnail_tasks().unwrap().is_empty());
+
+        // 清库后"已导入"拦截同步失效：同一目录可再次导入
+        let reimported = import_media_folder(folder_path.to_string_lossy().into_owned())
+            .expect("清库后应允许重新导入");
+        assert_ne!(reimported.id, collection.id);
+        assert!(delete_media_collection(reimported.id).unwrap());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 缩略图任务持久化（失败重投链路）───────────────────────────────────
+
+    #[test]
+    fn db_failed_thumbnail_task_persists_and_completes() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("thumb_task");
+        // 内容是垃圾数据的 .jpg：ffmpeg 与纯 Rust 解码都必然失败，结果不依赖 ffmpeg
+        let bogus = root.join("bogus.jpg");
+        std::fs::write(&bogus, b"this is definitely not a jpeg").unwrap();
+        let bogus_str = bogus.to_string_lossy().into_owned();
+
+        assert!(ensure_cover_thumbnail(bogus_str.clone(), 320).is_none());
+
+        // 失败任务应持久化为 failed + 重试计数自增
+        let pending = get_all_pending_thumbnail_tasks().unwrap();
+        let task = pending
+            .iter()
+            .find(|t| t.file_path == bogus_str && t.width == 320)
+            .expect("失败任务应留在 media_thumbnail_tasks 表");
+        assert_eq!(task.status, "failed");
+        assert_eq!(task.retries, 1);
+        assert_eq!(thumb_retry_count(&thumb_task_key(&bogus_str, 320)), 1);
+
+        // 再试一次：重试计数应连续累加（内存表跨调用保持）
+        assert!(ensure_cover_thumbnail(bogus_str.clone(), 320).is_none());
+        let pending = get_all_pending_thumbnail_tasks().unwrap();
+        let task = pending
+            .iter()
+            .find(|t| t.file_path == bogus_str && t.width == 320)
+            .unwrap();
+        assert_eq!(task.retries, 2);
+
+        // 任务记录在表里真实存在（非仅内存）
+        assert!(db_row(thumbnail_task_table_name(), &thumb_task_key(&bogus_str, 320)).is_some());
+
+        // 成功语义：删除记录 + 忘掉重试计数（磁盘缓存即真相）
+        complete_thumbnail_task(&bogus_str, 320, true);
+        assert!(db_row(thumbnail_task_table_name(), &thumb_task_key(&bogus_str, 320)).is_none());
+        assert_eq!(thumb_retry_count(&thumb_task_key(&bogus_str, 320)), 0);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── ensure_cover_thumbnail：不依赖 ffmpeg 的分支 ──────────────────────
+
+    #[test]
+    fn cover_thumb_cache_hit_returns_without_touching_db() {
+        // 本用例走的是 mark_thumbnail_task_running 之前的提前返回分支，不触碰 DB
+        let root = fake_media_root("thumb_hit");
+        let src = root.join("cover_src.bmp");
+        write_test_image(&src);
+        // 预先塞一个非空邻近缓存 → 应直接命中并原样返回
+        let cached = adjacent_cache_path(&src, 250).unwrap();
+        std::fs::create_dir_all(cached.parent().unwrap()).unwrap();
+        std::fs::write(&cached, b"cached-bytes").unwrap();
+        assert_eq!(
+            ensure_cover_thumbnail(src.to_string_lossy().into_owned(), 250),
+            Some(cached.to_string_lossy().into_owned())
+        );
+        // 命中时不得改写缓存内容
+        assert_eq!(std::fs::read(&cached).unwrap(), b"cached-bytes");
+
+        // 不支持的扩展名在入口就被拒绝（返回 None，不建任何缓存目录）
+        let txt = root.join("note.txt");
+        std::fs::write(&txt, b"x").unwrap();
+        assert!(ensure_cover_thumbnail(txt.to_string_lossy().into_owned(), 320).is_none());
+        assert!(!root.join("sub").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn is_valid_cache_hit_semantics() {
+        let root = fake_media_root("cache_hit");
+        // 不存在 → false
+        assert!(!is_valid_cache_hit(&root.join("missing.jpg")));
+        // 非空文件 → true
+        let ok = root.join("ok.jpg");
+        std::fs::write(&ok, b"x").unwrap();
+        assert!(is_valid_cache_hit(&ok));
+        // 零字节残留 → false 且当场删除，给重新生成让路
+        let zero = root.join("zero.jpg");
+        std::fs::write(&zero, b"").unwrap();
+        assert!(!is_valid_cache_hit(&zero));
+        assert!(!zero.exists(), "零字节缓存残留应被删除");
+        // 目录不是有效命中
+        assert!(!is_valid_cache_hit(&root));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 节点内存缩略图缓存（纯内存，不落盘，不依赖 ffmpeg）───────────────
+
+    #[test]
+    fn generate_thumbnail_bytes_plain_image_and_memory_cache() {
+        let root = fake_media_root("node_thumb");
+        let img = root.join("plain.bmp");
+        write_test_image(&img);
+        let img_str = img.to_string_lossy().into_owned();
+        let key = format!("{}|200", img_str);
+
+        // 首次：唯一路径必然未命中内存缓存，走纯 Rust 缩放（BMP 属位图，不经过 ffmpeg）
+        let bytes = generate_thumbnail_bytes(img_str.clone(), 200).expect("应能生成缩略图字节");
+        assert!(bytes.len() > 2 && bytes[0] == 0xFF && bytes[1] == 0xD8, "输出应是 JPEG 字节流");
+
+        // 用哨兵值污染内存缓存：再次调用应原样返回哨兵 → 证明命中走的是内存缓存
+        let probe = b"__mem_cache_probe__".to_vec();
+        node_thumb_put(&key, probe.clone());
+        assert_eq!(generate_thumbnail_bytes(img_str.clone(), 200).unwrap(), probe);
+        // 不同宽度是另一个 key，不受哨兵影响
+        assert_ne!(
+            generate_thumbnail_bytes(img_str.clone(), 99).unwrap(),
+            probe
+        );
+
+        // 全程不落盘：内存缓存路径绝不能在资源旁建 .SlimeWorks
+        assert!(
+            !root.join(".SlimeWorks").exists(),
+            "节点内存缓存不得向资源目录写任何文件"
+        );
+
+        // 不支持的扩展名 → None
+        assert!(generate_thumbnail_bytes(root.join("x.txt").to_string_lossy().into_owned(), 200)
+            .is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── find / ensure_collection_config_dir 边界补充 ──────────────────────
+
+    #[test]
+    fn config_dir_search_skips_hidden_and_respects_depth() {
+        // 根目录不存在：find/ensure 都是 None
+        let missing = std::env::temp_dir().join(format!(
+            "slime_mc_{}_cfg_missing",
+            std::process::id()
+        ));
+        assert!(find_collection_config_dir(missing.to_string_lossy().into_owned()).is_none());
+        assert!(ensure_collection_config_dir(missing.to_string_lossy().into_owned()).is_none());
+
+        let root = fake_media_root("cfg_search");
+        // 藏在隐藏目录里的 .SlimeWorks：BFS 不进入隐藏目录 → 找不到
+        std::fs::create_dir_all(root.join(".hidden/.SlimeWorks")).unwrap();
+        assert!(find_collection_config_dir(root.to_string_lossy().into_owned()).is_none());
+        // ensure 找不到现成的就在根目录新建
+        let ensured = ensure_collection_config_dir(root.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(ensured, root.join(".SlimeWorks").to_string_lossy());
+        assert!(Path::new(&ensured).is_dir());
+        // 已有根级命中时 ensure 不再重复创建、也不改变位置
+        assert_eq!(
+            ensure_collection_config_dir(root.to_string_lossy().into_owned()).unwrap(),
+            ensured
+        );
+        let _ = std::fs::remove_dir_all(&root);
+
+        // 深度边界：MAX_DEPTH=8 → 第 7 层可见、第 8 层不可见
+        let root2 = fake_media_root("cfg_depth");
+        let mut at_depth7 = root2.clone();
+        for i in 0..7 {
+            at_depth7 = at_depth7.join(format!("d{}", i));
+        }
+        std::fs::create_dir_all(at_depth7.join(".SlimeWorks")).unwrap();
+        assert!(find_collection_config_dir(root2.to_string_lossy().into_owned()).is_some());
+        let root3 = fake_media_root("cfg_depth_overflow");
+        let mut deep = root3.clone();
+        for i in 0..8 {
+            deep = deep.join(format!("d{}", i));
+        }
+        std::fs::create_dir_all(deep.join(".SlimeWorks")).unwrap();
+        assert!(
+            find_collection_config_dir(root3.to_string_lossy().into_owned()).is_none(),
+            "超过 MAX_DEPTH 的分支应按未命中处理"
+        );
+        let _ = std::fs::remove_dir_all(&root2);
+        let _ = std::fs::remove_dir_all(&root3);
+    }
+
+    // ── check_paths_exist / cleanup_dir_contents ──────────────────────────
+
+    #[test]
+    fn check_paths_exist_mixes_existing_and_missing() {
+        let root = fake_media_root("paths_exist");
+        let file = root.join("f.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let dir = root.join("d");
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = check_paths_exist(vec![
+            file.to_string_lossy().into_owned(),
+            dir.to_string_lossy().into_owned(),
+            root.join("missing").to_string_lossy().into_owned(),
+            String::new(),
+        ]);
+        assert_eq!(result, vec![true, true, false, false]);
+        assert!(check_paths_exist(vec![]).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cleanup_dir_contents_removes_entries_but_keeps_dir() {
+        let root = fake_media_root("cleanup_contents");
+        std::fs::create_dir_all(root.join("sub/inner")).unwrap();
+        std::fs::write(root.join("a.jpg"), b"x").unwrap();
+        std::fs::write(root.join("sub/b.jpg"), b"x").unwrap();
+        // 一个目录条目 + 一个文件条目，各计 1
+        assert_eq!(cleanup_dir_contents(&root), 2);
+        assert!(root.exists(), "目录本身必须保留");
+        assert!(!root.join("sub").exists(), "子目录应被递归删除");
+        // 空目录再清 → 0；不存在的路径 → 0
+        assert_eq!(cleanup_dir_contents(&root), 0);
+        assert_eq!(cleanup_dir_contents(&root.join("nope")), 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── ffmpeg 全局路径注册 / 进程清理 ────────────────────────────────────
+
+    #[test]
+    fn ffmpeg_path_registration_roundtrip_with_restore() {
+        // 与其他用例串行，避免中途改全局路径影响并发缩略图链路
+        let _serial = lock_db_test_serial();
+        let original = ffmpeg_cmd();
+        let probe = format!("/tmp/fake_ffmpeg_{}", std::process::id());
+        register_ffmpeg_path(probe.clone());
+        assert_eq!(ffmpeg_cmd(), probe);
+        // 还原，避免污染同进程其他用例
+        register_ffmpeg_path(original.clone());
+        assert_eq!(ffmpeg_cmd(), original);
+        // ffprobe 独立注册互不串台
+        let ffprobe_original = ffprobe_cmd();
+        register_ffprobe_path("/tmp/fake_ffprobe".into());
+        assert_eq!(ffprobe_cmd(), "/tmp/fake_ffprobe");
+        assert_ne!(ffmpeg_cmd(), ffprobe_cmd());
+        register_ffprobe_path(ffprobe_original);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn kill_all_terminates_tracked_child_process() {
+        use std::os::unix::process::ExitStatusExt;
+        let _serial = lock_db_test_serial();
+        // 起一个真实子进程并登记 PID，验证 kill_all 会终止它并清空跟踪列表
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("应能启动 sleep 子进程");
+        let pid = child.id();
+        assert!(pid > 0);
+        track_ffmpeg_pid(pid);
+        kill_all_ffmpeg_processes();
+        let status = child.wait().expect("等待被杀子进程回收");
+        assert!(
+            status.signal().is_some(),
+            "跟踪列表中的 PID 应被 SIGKILL 终止"
+        );
+        // 跟踪列表已清空：再调一次是安全空操作
+        kill_all_ffmpeg_processes();
+        assert!(FFMPEG_PIDS.read().unwrap().is_empty());
+    }
 }
