@@ -1,180 +1,153 @@
-# `史莱姆工坊` SlimeWorks
+<div align="center">
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Windows|macOS|Linux|iOS|Android-blue?style=flat-square" alt="多平台支持">
-  <img src="https://img.shields.io/badge/Status-开发中-yellow?style=flat-square" alt="开发状态">
-  <img src="https://img.shields.io/badge/Version-v0.1.0_preview-orange?style=flat-square" alt="版本">
-  <p align="center">
-    <strong>✨ 工坊 ✨</strong>
-  </p>
-</p>
+<img src="assets/logo.png" alt="史莱姆工坊 Logo" width="120" />
 
-## 开发
+# 史莱姆工坊 · SlimeWorks
 
-- rustc 1.92.0 (ded5c06cf 2025-12-08)
-- Flutter version 3.41.0-0.0.pre
-- Dart version 3.11.0
+**一座属于自己的数字内容工坊。**
 
-- MacOS 26.2 25C56 darwin-arm64
+图片与影音、小说与漫画、游戏与音乐——所有珍视的内容，都值得一个温柔而有序的家。
 
-## 约束
+[![Platform](https://img.shields.io/badge/平台-macOS%20·%20Windows%20·%20iOS%20·%20Android-blue?style=flat-square)](#平台支持)
+[![Version](https://img.shields.io/badge/版本-v1.0.0-orange?style=flat-square)](https://github.com/GleamSlime/SlimeWorks/releases)
+[![Status](https://img.shields.io/badge/状态-持续迭代中-brightgreen?style=flat-square)](#开发路线)
 
-### 状态管理
+</div>
 
-- UI/页面状态 使用GetX
-- 业务逻辑Service、Rust FFI桥接层（全局单例）、配置、数据库 使用GetIt
+---
 
-### 路由管理
+## ✨ 项目简介
 
-- 使用 TypedGoRoute 类型安全路由 注册和管理
+史莱姆工坊（SlimeWorks）是一款**跨平台个人数字内容管理应用**，让图片影音、小说、漫画、游戏与音乐在同一处安家。
 
-## 打包
+它以「节点」为骨架，让多台设备彼此发现、互相服务——无论是在书房的电脑前，还是躺在床上的手机边，你的内容库始终是同一座连贯的图书馆、影音室与游戏厅。
 
-### MacOS
+六种内容形态，每一种都被打磨成完整的产品体验；AI 翻译与语音识别、局域网互传、自动更新等能力，则把它们串联为一个有机整体。
 
-```shell
-flutter build macos --release
-```
+## 🧩 功能模块
 
-### IOS
+### 🖼️ 媒体库 — 图片、视频与音频的收藏馆
 
-```shell
-flutter build ipa
-cargo build --target aarch64-apple-ios-sim
+- 一键扫描本地目录，自动识别图片、视频与音频，以瀑布流或网格温柔呈现；
+- 缩略图清晰度五档可调，加载轻快、浏览顺滑；
+- **智能文件夹**按文件名规则自动归集内容，收藏、封面与多选管理一应俱全；
+- 多设备联合浏览：本机与远程内容的集合在同一界面汇合，大图与视频即点即看、无需等待。
 
-open build/ios/archive/Runner.xcarchive
-```
-IOS打包：flutter build ipa --release --tree-shake-icons --obfuscate --split-debug-info=./symbols --dart-define=APP_ENV=production
-IOS发蒲公英：python3 ./scripts/publish_ios.py --use-xcodebuild
+[→ 模块文档](docs/media_library.md)
 
-### Android
+### 📚 书库与阅读器 — 让长文安静下来
 
-```shell
-cargo build --target aarch64-linux-android
-```
-安卓发布：python3 ./scripts/publish.py -desc="增加应用稳定性" 
+- 支持 **TXT 与 EPUB** 双格式，乱码自动识别，大部头打开也毫无压力；
+- 文件夹分组、标签自动整理、排序与阅读进度无缝续读；
+- 全文搜索快至瞬间命中，几万本章籍也能一眼寻得；
+- 沉浸式阅读器：字号、行距、背景随心调节，章节收藏一键直达；
+- **AI 翻译**：选好模型与语言方向，译文如流般逐字浮现，生肉小说就地熟化。
 
-### 可用指令
+[→ 模块文档](docs/novel_library.md)
 
-```shell
-# 生成FRB
-$ flutter_rust_bridge_codegen generate
- 
-# rust开发阶段：监听rs并启动ui，修改rs时杀死进程重启
-$ cd rust && cargo watch -s "cargo build && flutter run -d macos"
+### 🎮 游戏库 — 每一小时游玩都被记住
 
-# FlutterGen
-$ flutter pub run build_runner build
-$ flutter pub run build_runner watch
-$ flutter pub run build_runner clean && flutter pub run build_runner build --delete-conflicting-outputs # 清理缓存并生成
+- 手动录入或整目录批量导入，封面与介绍自动从各大资料站补全；
+- 启动即计时：游玩时长、会话记录、进度备注全程自动留存；
+- 分类管理与统计面板，今日玩了什么、玩多久，一目了然；
+- 支持备份导出与导入，游戏记忆随身携带。
 
-# 序列化
-$ flutter packages pub run build_runner build --delete-conflicting-outputs
-```
+[→ 模块文档](docs/game_library.md)
 
-## 自动化测试
+### 📖 Manga 漫画 — 完整的阅读与下载闭环
 
-### Flutter 单元测试
+- 推荐、排行、搜索、详情、收藏与评论，追番所需的一切都在这里；
+- 阅读器沉浸模式专为长夜准备，搜索历史与屏蔽词让找书更心无旁骛；
+- **下载管理器**离线追番，观看记录自动留存；
+- 多条访问通道智能分流并支持一键测速，哪里最快就走哪里。
 
-```shell
-# 运行全部 Flutter 单元测试
-flutter test
+[→ 模块文档](docs/manga.md)
 
-# 运行指定测试文件
-flutter test test/smart_folder_test.dart
-flutter test test/dashboard_test.dart
+### 🎵 音乐播放器 — 黑胶转动的听觉角落
 
-# 运行集成测试（需要连接设备或模拟器）
-flutter test integration_test/simple_test.dart
+- 黑胶唱片动效、波形进度条与沉浸式全屏播放，音乐也值得仪式感；
+- **十段均衡器**与预设，调出属于你的声音形状；
+- 内嵌封面自动提取，CUE 分轨无损呈现整张专辑；
+- 集成**语音识别**能力：ASMR 与有声内容可自动转录并生成时间轴。
 
-# 生成覆盖率报告（需 lcov）
-flutter test --coverage
-genhtml coverage/lcov.info -o coverage/html
-open coverage/html/index.html
-```
+[→ 模块文档](docs/music_player.md)
 
-**测试文件说明：**
+### 🔗 节点服务器 — 多设备内容的分布式底座
 
-| 文件 | 覆盖范围 | 用例数 |
-|------|----------|--------|
-| `test/smart_folder_test.dart` | `SmartFolder` 序列化/反序列化、`copyWith`、`matchesFileNames`、枚举标签、迁移兼容性 | 21 |
-| `test/dashboard_test.dart` | 媒体类型识别逻辑、速度格式化、历史缓冲区边界 | 13 |
+- 桌面端一键开启本机节点，手机与远程设备即刻接入，内容跨端同屏；
+- **授权码机制**把守每一扇远程的门，未经邀请的连接寸步难行；
+- 故障节点自动熔断跳过，手动重试即刻恢复，多设备体验始终流畅；
+- 实时流量统计：每一条内容的跨端旅程，都清晰可见。
 
-### Rust 单元测试
+### 🛠️ 实用工具箱
 
-```shell
-# 运行 media_collection crate 全部测试
-cd rust/media_collection && cargo test
+| 工具 | 能力 |
+|------|------|
+| **解压专家** | 常见压缩格式批量并行解压，进度可视、随时取消，密码统一管理 |
+| **NCM 解密** | 网易云加密歌曲批量还原，成功与失败清晰回报 |
+| **日志中心** | 应用日志集中检索、多维统计与导出，远程设备日志也能汇聚一处 |
+| **抓包代理** | 网页流量捕获，视频、图片与接口数据轻松存档（桌面端） |
+| **动态域名** | 家庭 IP 变更后自动更新解析记录，家门永远为内容敞开 |
+| **电力统计** | 用电数据定时汇总，每日消耗曲线尽收眼底 |
+| **局域网互传** | 同网设备自动发现，文件与文本即选即发，全程无需第三方服务器 |
 
-# 运行 lan_transfer crate 全部测试
-cd rust/lan_transfer && cargo test
+[→ 互传文档](docs/lan_transfer.md) · [→ 设置文档](docs/settings.md)
 
-# 运行所有 Rust crate 测试（推荐 CI 使用）
-cd rust && cargo test --workspace
+### 📊 概览仪表盘
 
-# 运行并显示详细输出
-cd rust && cargo test --workspace -- --nocapture
+启动即见工坊的实时脉搏：处理器、内存与网络状况逐秒滚动呈现，峰值、均值尽收眼底；常用功能以渐变小卡片一键直达。
 
-# 仅运行某个测试函数（支持模糊匹配）
-cd rust/media_collection && cargo test default_title
-```
+### ⚙️ 体验细节
 
-**测试文件说明：**
+- **主题系统**：跟随系统 / 亮 / 暗三态，十种预设主题色与字号缩放，实时预览；
+- **响应式布局**：宽屏是侧边栏的从容，窄屏是底部导航的轻巧，窗口收窄即刻切换；
+- **自动更新**：桌面端静默检查、闲时下载，绝不打扰正在专注的你；
+- **系统托盘与窗口记忆**，功能模块按需插拔、即装即用。
 
-| 文件 | 覆盖范围 | 用例数 |
-|------|----------|--------|
-| `rust/media_collection/src/types.rs` | `MediaKind` 扩展名映射、大小写不敏感、serde 往返 | 7 |
-| `rust/media_collection/src/scanner.rs` | 文件识别、隐藏路径过滤、目录扫描、媒体项收集 | 13 |
-| `rust/media_collection/src/api.rs` | `default_collection_title`、`pick_cover_path`、`normalize_folder_path` 边界 | 8 |
-| `rust/lan_transfer/src/types.rs` | `DeviceInfo`/`TransferType`/`TransferStatus` serde 往返 | 6 |
+## 💻 平台支持
 
-### CI 一键执行
+| 平台 | 状态 | 获取方式 |
+|------|:----:|----------|
+| macOS | ✅ | 官网 Release 下载 DMG，支持应用内自动更新 |
+| Windows | ✅ | 官网 Release 下载安装包，支持应用内自动更新 |
+| iOS | ✅ | 蒲公英分发，扫码即得最新版本 |
+| Android | ✅ | 蒲公英分发 APK |
+| Linux | 🚧 | 适配进行中，暂未开放下载 |
 
-```shell
-# Flutter + Rust 全量测试（在项目根目录执行）
-flutter test && cd rust && cargo test --workspace
-```
+## 📥 获取与安装
 
-## 发布
+1. 前往 [Releases](https://github.com/GleamSlime/SlimeWorks/releases) 下载对应桌面平台的安装包；
+2. 移动端用户可在应用内「设置 → 节点设置」体验跨设备能力，测试版经由蒲公英分发；
+3. 首次启动后，建议在「设置」中挑选主题色并开启本机节点，解锁多设备协同。
 
-### 一键发布到蒲公英（Android）
+## 📖 文档导航
 
-```shell
-# 默认构建并上传 Android APK
-python3 auto.py -desc="1. 新增xxx功能\n2. 修复xxx问题"
-```
+完整的使用与设计说明收录于 [docs/](docs/README.md)：
 
-### 一键发布到蒲公英（iOS）
+| 文档 | 主题 |
+|------|------|
+| [docs/overview.md](docs/overview.md) | 概览仪表盘 |
+| [docs/media_library.md](docs/media_library.md) | 媒体库 |
+| [docs/novel_library.md](docs/novel_library.md) | 书库与阅读 |
+| [docs/game_library.md](docs/game_library.md) | 游戏库 |
+| [docs/manga.md](docs/manga.md) | Manga 漫画 |
+| [docs/music_player.md](docs/music_player.md) | 音乐播放器 |
+| [docs/lan_transfer.md](docs/lan_transfer.md) | 局域网互传 |
+| [docs/settings.md](docs/settings.md) | 设置项详解 |
 
-使用 `publish_ios.py` 脚本。蒲公英密钥用环境变量提供（本仓库公开，密钥不入库）：
+## 🗺️ 开发路线
 
-```bash
-export PGYER_USER_KEY=...   # 蒲公英 User Key（https://www.pgyer.com/account/api）
-export PGYER_API_KEY=...    # 蒲公英 API Key（同一页面）
-```
+- [x] 六大内容模块（媒体 / 书库 / 游戏 / Manga / 音乐 / 日志）全量落地
+- [x] 多设备节点协同：授权、熔断与实时流量统计
+- [x] AI 能力接入：小说翻译与语音转录分轨
+- [x] 桌面端应用内自动更新
+- [ ] 远程访问安全加固（加密传输与鉴权收敛）
+- [ ] 笔记、数据源等新模块逐步解锁
+- [ ] Linux 版开放下载
 
-签名相关的 `TEAM_ID` / `BUNDLE_ID` 仍写在脚本顶部（留空则自动签名 / 用工程默认值）。
+## 💜 关于
 
-```shell
-# 构建并上传（flutter build ipa，失败自动切换到 xcodebuild）
-python3 publish_ios.py -desc="1. 新功能\n2. Bug 修复"
+史莱姆工坊由 [GleamSlime](https://github.com/GleamSlime) 独立设计与开发，
+源于一个朴素愿望：**让散落各设备的数字生活，回到同一张温暖的桌面上。**
 
-# 仅上传已有 IPA，不重新构建
-python3 publish_ios.py --ipa-only -desc="热修复"
-
-# 强制使用 xcodebuild archive 流程
-python3 publish_ios.py --use-xcodebuild --team-id XXXXXXXXXX -desc="正式版"
-
-# 仅构建不上传
-python3 publish_ios.py --build-only
-
-# 自定义 IPA 路径上传
-python3 publish_ios.py --ipa-only --ipa-path build/ios/ipa/MyApp.ipa
-
-# 打包 IPA 并使用 XCode 编译
-python3 ./scripts/publish_ios.py --use-xcodebuild 
-```
-
-> 注意：iOS 构建需要 Mac 环境、有效开发者证书，且证书须信任当前机器。  
-> Team ID 可在 [Apple Developer > Membership](https://developer.apple.com/account/) 页面查看。
-
+如果它帮到了你，欢迎点个 ⭐ 或提交 Issue 分享你的用法。
