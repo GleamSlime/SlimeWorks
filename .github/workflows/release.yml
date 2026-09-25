@@ -71,8 +71,10 @@ jobs:
         run: flutter test --exclude-tags golden
 
   # ===== test-rust：Rust 单元测试，暂只观测不拦门 =====
-  # 本机 `cargo test --workspace` 卡在 whisper-rs-sys（bindgen 找不到 libclang，
-  # 需设 LIBCLANG_PATH），这套用例还没拿到跑通的实证，所以先不放进 needs 链里，
+  # whisper-rs-sys 的 build script 用 bindgen，必须能拿到 libclang；cargokit 只在
+  # Windows 桌面构建时注入 LIBCLANG_PATH，所以裸跑 cargo test 要自己解析并导出。
+  # 路径不能写死（runner 上 Xcode 目录带版本号），从 xcode-select -p 现取。
+  # 这套用例仍未拿到 CI 跑通的实证，所以先不放进 needs 链里，
   # 免得一条没验证过的测试线把全平台出包堵死。连续绿了再改成拦门。
   test-rust:
     runs-on: macos-15
@@ -94,9 +96,28 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: 定位 libclang（bindgen 依赖）
+        run: |
+          CANDIDATES=()
+          if DEV_DIR=$(xcode-select -p 2>/dev/null); then
+            CANDIDATES+=("$DEV_DIR/Toolchains/XcodeDefault.xctoolchain/usr/lib")
+          fi
+          CANDIDATES+=("/Library/Developer/CommandLineTools/usr/lib")
+          FOUND=""
+          for d in "${CANDIDATES[@]}"; do
+            if ls "$d"/libclang*.dylib >/dev/null 2>&1; then FOUND="$d"; break; fi
+          done
+          if [ -z "$FOUND" ]; then
+            echo "❌ 未找到 libclang.dylib"
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "(无 Xcode.app)"
+            exit 1
+          fi
+          echo "LIBCLANG_PATH=$FOUND" >> "$GITHUB_ENV"
+          echo "✅ LIBCLANG_PATH=$FOUND"
+
       - name: cargo test --workspace
         working-directory: rust
-        run: cargo test --workspace
+        run: cargo test --workspace --no-fail-fast
 
   build-macos:
     needs: [detect-version, test]
