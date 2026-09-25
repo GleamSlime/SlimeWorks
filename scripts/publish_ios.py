@@ -30,11 +30,13 @@ import time
 import argparse
 import requests
 
-# ── 请在此处填写你的密钥 ──────────────────────────────────────────────────
-PGYER_USER_KEY = "26d5078bcd28443c3554aae6a0812ee2"          # 蒲公英 User Key（https://www.pgyer.com/account/api）
-PGYER_API_KEY  = "23fcb3ecd9274b169866fcb9d621e061"          # 蒲公英 API Key
-TEAM_ID        = ""          # Apple Developer Team ID（留空则自动签名）
-BUNDLE_ID      = ""          # Bundle Identifier（留空则使用项目默认值）
+# ── 密钥从环境变量读取（本仓库是公开仓库，密钥不得入库）────────────────────
+#   export PGYER_USER_KEY=...   # User Key（https://www.pgyer.com/account/api）
+#   export PGYER_API_KEY=...    # API Key （同一页面）
+PGYER_USER_KEY = os.environ.get("PGYER_USER_KEY", "")
+PGYER_API_KEY  = os.environ.get("PGYER_API_KEY", "")
+TEAM_ID        = os.environ.get("APPLE_TEAM_ID", "")     # Apple Developer Team ID（留空则自动签名）
+BUNDLE_ID      = os.environ.get("APPLE_BUNDLE_ID", "")   # Bundle Identifier（留空则使用项目默认值）
 IPA_PATH       = "build/ios/ipa/史莱姆工坊.ipa"  # IPA 输出路径
 # ─────────────────────────────────────────────────────────────────────────
 
@@ -108,7 +110,7 @@ def _upload_with_progress(url: str, files: dict, data: dict, headers: dict, time
 def upload_to_pgyer(ipa_path: str, description: str) -> bool:
     """上传 IPA 到蒲公英"""
     if not PGYER_USER_KEY or not PGYER_API_KEY:
-        print("\033[0;31;40m 错误：请先在脚本顶部填写 PGYER_USER_KEY 和 PGYER_API_KEY\033[0m")
+        print("\033[0;31;40m 错误：请先设置环境变量 PGYER_USER_KEY 和 PGYER_API_KEY\033[0m")
         return False
     if not os.path.exists(ipa_path):
         print(f"\033[0;31;40m 错误：找不到 IPA 文件：{ipa_path}\033[0m")

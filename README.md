@@ -146,14 +146,14 @@ python3 auto.py -desc="1. 新增xxx功能\n2. 修复xxx问题"
 
 ### 一键发布到蒲公英（iOS）
 
-使用 `publish_ios.py` 脚本，**首次使用前须填写脚本顶部的四个配置项**：
+使用 `publish_ios.py` 脚本。蒲公英密钥用环境变量提供（本仓库公开，密钥不入库）：
 
+```bash
+export PGYER_USER_KEY=...   # 蒲公英 User Key（https://www.pgyer.com/account/api）
+export PGYER_API_KEY=...    # 蒲公英 API Key（同一页面）
 ```
-PGYER_USER_KEY  — 蒲公英 User Key（https://www.pgyer.com/account/api）
-PGYER_API_KEY   — 蒲公英 API Key
-TEAM_ID         — Apple Developer Team ID（留空则自动签名）
-BUNDLE_ID       — Bundle Identifier（留空则使用项目默认值）
-```
+
+签名相关的 `TEAM_ID` / `BUNDLE_ID` 仍写在脚本顶部（留空则自动签名 / 用工程默认值）。
 
 ```shell
 # 构建并上传（flutter build ipa，失败自动切换到 xcodebuild）
