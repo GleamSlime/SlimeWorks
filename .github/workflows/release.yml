@@ -297,8 +297,14 @@ jobs:
           # SHA-256 可与本机 `shasum -a 256 ios-dist.p12` 直接对比，确认传上去的是哪一份
           echo "certificate.p12 SHA-256=$(shasum -a 256 certificate.p12 | awk '{print $1}')"
           security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          # 允许 codesign 访问证书私钥（macOS 13+ 使用 set-key-partition-list）
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          # 允许 codesign 非交互访问私钥。分区列表必须带 codesign:，
+          # 少了它 codesign 会弹 SecurityAgent 授权框，CI 无人值守 = 永久挂死。
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          # 关掉 keychain 自动锁定：新建的 keychain 默认 lock-on-sleep timeout=300s，
+          # 编译空闲超过 5 分钟就回锁，下一个 codesign 同样弹框挂死。
+          # 实测（security show-keychain-info）：不带任何参数调用 = no-timeout。
+          security set-keychain-settings build.keychain
+          security show-keychain-info build.keychain 2>&1 || true
           # 立即验证证书导入是否成功
           echo "=== 导入后 keychain 中的所有证书 ==="
           security find-certificate -a build.keychain || true
@@ -401,9 +407,37 @@ jobs:
         run: |
           # 解锁 keychain 确保私钥可访问
           security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings build.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$IOS_KEYCHAIN_PASSWORD" build.keychain
           # 列出可用 codesigning 身份，辅助诊断
           echo "=== Available signing identities ==="
           security find-identity -p codesigning -v build.keychain || true
+          # codesign 预检：私钥不可非交互使用时，codesign 会挂在一个无法应答的授权框上
+          # （表现为 xcodebuild 0% CPU 卡到 action timeout，实测浪费过 45 分钟）。
+          # 先签一个空壳可执行文件探一次：只有"超时不返回"才判失败并立即退出，
+          # 返回非零码只告警不中断（Distribution 证书签 CLI 二进制偶发报错不该挡射出包）。
+          printf 'int main(void){return 0;}\n' > /tmp/sigcheck.c
+          clang -arch arm64 /tmp/sigcheck.c -o /tmp/sigcheck 2>/dev/null || echo "⚠️ 预检二进制编译失败，跳过预检"
+          if [ -f /tmp/sigcheck ]; then
+            codesign --force --sign "$SIGNING_IDENTITY" /tmp/sigcheck >/tmp/sigcheck.log 2>&1 &
+            CS_PID=$!
+            WAITED=0
+            while kill -0 $CS_PID 2>/dev/null; do
+              if [ "$WAITED" -ge 120 ]; then
+                echo "❌ codesign 预检 120 秒未返回 → 私钥被 GUI 授权框挡住，继续跑也一定会挂死"
+                echo "--- 当前 keychain 设置 ---"; security show-keychain-info build.keychain 2>&1 || true
+                echo "--- SecurityAgent 进程 ---"; pgrep -fl SecurityAgent || echo "(无)"
+                kill -9 $CS_PID 2>/dev/null || true
+                exit 1
+              fi
+              sleep 5; WAITED=$((WAITED + 5))
+            done
+            if wait $CS_PID; then
+              echo "✅ codesign 预检通过（私钥可非交互使用）"
+            else
+              echo "⚠️ codesign 预检返回非零，仅告警："; cat /tmp/sigcheck.log
+            fi
+          fi
           # 签名参数必须走 xcodebuild 命令行覆盖（优先级最高）。
           # 用 -xcconfig 无效：ios/Runner.xcodeproj 的 target 级设置
           #   CODE_SIGN_STYLE=Automatic / CODE_SIGN_IDENTITY="Apple Development" / DEVELOPMENT_TEAM
