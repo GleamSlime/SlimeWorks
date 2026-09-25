@@ -192,3 +192,159 @@ pub fn sentry_log_clear_project_events(project_id: String) -> Result<u64, String
         .clear_project_events(&project_id)
         .map_err(|e| format!("清空项目事件失败: {}", e))
 }
+
+/// 协议入口（store_raw_event / store_envelope）测试：
+/// api 层持有全局 OnceLock 单例，整个测试进程只能初始化一次，
+/// 因此各用例通过独立项目 ID 隔离数据，统一读取回 storage.rs 的查询接口。
+#[cfg(test)]
+mod api_tests {
+    use super::*;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    /// 用临时 redb 文件初始化全局存储（只执行一次）
+    fn ensure_storage() {
+        INIT.call_once(|| {
+            let db_path = std::env::temp_dir().join(format!(
+                "sentry_log_api_test_{}.db",
+                std::process::id()
+            ));
+            // 清掉上次运行残留，避免旧数据污染断言
+            let _ = std::fs::remove_file(&db_path);
+            let _ = std::fs::remove_file(format!("{}-wal", db_path.display()));
+            sentry_log_init(db_path.to_string_lossy().into_owned())
+                .expect("初始化测试用 Sentry 存储失败");
+        });
+    }
+
+    fn unique_id(prefix: &str) -> String {
+        format!("{prefix}{}", uuid::Uuid::new_v4().simple())
+    }
+
+    fn query_project(project_id: &str) -> SentryLogQueryResult {
+        sentry_log_query(SentryLogFilter {
+            project_id: Some(project_id.to_string()),
+            ..Default::default()
+        })
+        .expect("查询失败")
+    }
+
+    #[test]
+    fn store_raw_event_roundtrip() {
+        ensure_storage();
+        let project = unique_id("api-rt-");
+        let event_id = unique_id("evt");
+        let json = format!(
+            r#"{{"event_id":"{event_id}","message":"协议入口事件","level":"warning","timestamp":"2024-05-01T00:00:00Z"}}"#
+        );
+        sentry_log_store_raw_event(project.clone(), json).unwrap();
+
+        // 经 storage.rs 的查询接口读回
+        let result = query_project(&project);
+        assert_eq!(result.total, 1);
+        assert_eq!(result.events[0].event_id, event_id);
+        assert_eq!(result.events[0].message.as_deref(), Some("协议入口事件"));
+        assert_eq!(result.events[0].level, Some(SentryLevel::warning));
+
+        // 单条读取也必须命中
+        let found = sentry_log_get_event(event_id.clone()).unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().event_id, event_id);
+    }
+
+    #[test]
+    fn store_raw_event_fills_defaults() {
+        ensure_storage();
+        let project = unique_id("api-def-");
+        // 只有 event_id 空串与 message：id/时间戳/级别都应由入口自动补齐
+        let json = r#"{"event_id":"","message":"缺省填充"}"#;
+        sentry_log_store_raw_event(project.clone(), json.to_string()).unwrap();
+
+        let result = query_project(&project);
+        assert_eq!(result.total, 1);
+        let event = &result.events[0];
+        assert!(!event.event_id.is_empty(), "空 event_id 必须补 uuid");
+        assert!(event.timestamp.is_some(), "缺 timestamp 必须补当前时间");
+        assert_eq!(event.level, Some(SentryLevel::error), "缺 level 默认 error");
+    }
+
+    #[test]
+    fn store_raw_event_rejects_bad_json() {
+        ensure_storage();
+        let project = unique_id("api-bad-");
+        let err = sentry_log_store_raw_event(project, "这不是JSON{{{".to_string())
+            .expect_err("坏 JSON 必须报错");
+        assert!(err.contains("解析Sentry事件JSON失败"), "got: {err}");
+    }
+
+    #[test]
+    fn store_envelope_multi_item_roundtrip() {
+        ensure_storage();
+        let project = unique_id("api-env-");
+        let e1 = format!(
+            r#"{{"event_id":"{}","message":"Envelope事件一","level":"info"}}"#,
+            unique_id("evt")
+        );
+        let e2 = format!(
+            r#"{{"event_id":"{}","message":"Envelope事件二","level":"fatal"}}"#,
+            unique_id("evt")
+        );
+        // 标准 Sentry envelope：header 行 + (item头 + payload) × N，
+        // transaction 与 event 都必须入库
+        let envelope = format!(
+            "{{\"event_id\":\"env-h\"}}\n{{\"type\":\"event\",\"length\":{}}}\n{e1}\n{{\"type\":\"transaction\",\"length\":{}}}\n{e2}\n",
+            e1.len(),
+            e2.len()
+        );
+        sentry_log_store_envelope(project.clone(), envelope).unwrap();
+
+        let result = query_project(&project);
+        assert_eq!(result.total, 2, "两个 item 都应入库");
+        let messages: Vec<&str> = result
+            .events
+            .iter()
+            .map(|e| e.message.as_deref().unwrap_or(""))
+            .collect();
+        assert!(messages.contains(&"Envelope事件一"), "got: {messages:?}");
+        assert!(messages.contains(&"Envelope事件二"), "got: {messages:?}");
+    }
+
+    #[test]
+    fn store_envelope_rejects_bad_header() {
+        ensure_storage();
+        // 头行不是合法 JSON：必须整体报错（对应 Sentry 端点回 400）
+        let err = sentry_log_store_envelope(
+            unique_id("api-env-bad-"),
+            "坏头!!!\n{}\npayload\n".to_string(),
+        )
+        .expect_err("坏 header 必须报错");
+        assert!(err.contains("解析Envelope头失败"), "got: {err}");
+    }
+
+    #[test]
+    fn store_envelope_empty_body_handled() {
+        ensure_storage();
+        // 空 body：header 行解析失败，同样走报错分支而不是 panic
+        assert!(sentry_log_store_envelope(unique_id("api-env-empty-"), String::new()).is_err());
+        // 只有 header、没有 item：协议上合法，应 Ok 且不入库任何事件
+        let project = unique_id("api-env-hdronly-");
+        sentry_log_store_envelope(project.clone(), "{\"event_id\":\"x\"}".to_string()).unwrap();
+        assert_eq!(query_project(&project).total, 0);
+    }
+
+    #[test]
+    fn store_envelope_skips_unparseable_item() {
+        ensure_storage();
+        let project = unique_id("api-env-itembad-");
+        let bad_payload = "完全不是事件JSON";
+        // item 头合法但 payload 是坏数据：入口吞掉单条错误（与线上行为一致），
+        // 不允许把整个 envelope 请求打崩，也不允许写入半条事件
+        let envelope = format!(
+            "{{\"sent_at\":\"2024-01-01T00:00:00Z\"}}\n{{\"type\":\"event\",\"length\":{}}}\n{bad_payload}\n",
+            bad_payload.len()
+        );
+        sentry_log_store_envelope(project.clone(), envelope).unwrap();
+        assert_eq!(query_project(&project).total, 0);
+    }
+}

@@ -112,6 +112,16 @@ impl EpubParser {
             .join(&novel_id);
         let _ = fs::create_dir_all(&css_dir);
 
+        // 越界防护：epub crate 的 set_current_chapter 对非法索引仅返回 false，
+        // 不会改变 current，会导致静默返回第 0 章内容。这里显式校验 spine 边界并报错。
+        if chapter_index >= doc.spine.len() {
+            return Err(anyhow::anyhow!(
+                "Chapter {} not found (spine has {} chapters)",
+                chapter_index,
+                doc.spine.len()
+            ));
+        }
+
         // 读取章节内容
         doc.set_current_chapter(chapter_index);
         let (content_bytes, _mime) = doc
@@ -681,5 +691,311 @@ impl EpubParser {
             custom_order: None,
             notes: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use zip::write::FileOptions;
+    use zip::CompressionMethod;
+
+    /// 构造测试用最小 epub 的选项
+    struct EpubBuildOptions {
+        /// dc:title 内容，None 表示完全不写 title 字段
+        title: Option<&'static str>,
+        /// 是否写入 dc:creator
+        with_creator: bool,
+        /// 是否写入 NCX 目录（toc）
+        with_toc: bool,
+    }
+
+    impl Default for EpubBuildOptions {
+        fn default() -> Self {
+            Self {
+                title: Some("测试书籍"),
+                with_creator: true,
+                with_toc: true,
+            }
+        }
+    }
+
+    /// 用 zip 写入库程序化构造一个最小合法 EPUB2 文件（epub 本质是 zip）
+    fn build_minimal_epub(dir: &Path, file_name: &str, opts: &EpubBuildOptions) -> PathBuf {
+        let path = dir.join(file_name);
+        let file = File::create(&path).expect("创建 epub 文件失败");
+        let mut writer = zip::ZipWriter::new(file);
+        let stored = FileOptions::default().compression_method(CompressionMethod::Stored);
+
+        // mimetype（规范要求为首个条目）
+        writer.start_file("mimetype", stored).unwrap();
+        writer.write_all(b"application/epub+zip").unwrap();
+
+        // META-INF/container.xml 指向 OPF
+        writer.start_file("META-INF/container.xml", stored).unwrap();
+        writer
+            .write_all(
+                br#"<?xml version="1.0" encoding="UTF-8"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+            )
+            .unwrap();
+
+        // OPF：元数据 + manifest + spine
+        let title_xml = match opts.title {
+            Some(t) => format!("<dc:title>{}</dc:title>", t),
+            None => String::new(),
+        };
+        let creator_xml = if opts.with_creator {
+            "<dc:creator>测试作者</dc:creator>"
+        } else {
+            ""
+        };
+        let ncx_item = if opts.with_toc {
+            r#"<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>"#
+        } else {
+            ""
+        };
+        let spine_attrs = if opts.with_toc {
+            r#"toc="ncx" progression="ltr""#
+        } else {
+            r#"progression="ltr""#
+        };
+        let opf = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    {}
+    {}
+    <dc:identifier id="bookid">urn:uuid:1a2b3c4d-0000-4000-8000-000000000001</dc:identifier>
+    <dc:language>zh-CN</dc:language>
+    <meta name="generator" content="test"/>
+  </metadata>
+  <manifest>
+    {}
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine {}>
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"#,
+            title_xml, creator_xml, ncx_item, spine_attrs
+        );
+        writer.start_file("OEBPS/content.opf", stored).unwrap();
+        writer.write_all(opf.as_bytes()).unwrap();
+
+        // NCX 目录
+        if opts.with_toc {
+            let ncx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:1a2b3c4d-0000-4000-8000-000000000001"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>测试目录</text></docTitle>
+  <navMap>
+    <navPoint id="np1" playOrder="1">
+      <navLabel><text>第一章 开端</text></navLabel>
+      <content src="chapter1.xhtml"/>
+    </navPoint>
+    <navPoint id="np2" playOrder="2">
+      <navLabel><text>第二章 结局</text></navLabel>
+      <content src="chapter2.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>"#;
+            writer.start_file("OEBPS/toc.ncx", stored).unwrap();
+            writer.write_all(ncx.as_bytes()).unwrap();
+        }
+
+        // 两个 XHTML 章节
+        let ch1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title></head>
+<body><h1>第一章 开端</h1><p>正文内容一：风起于青萍之末。</p></body></html>"#;
+        let ch2 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第二章</title></head>
+<body><h1>第二章 结局</h1><p>正文内容二：一切归于平静。</p></body></html>"#;
+        writer.start_file("OEBPS/chapter1.xhtml", stored).unwrap();
+        writer.write_all(ch1.as_bytes()).unwrap();
+        writer.start_file("OEBPS/chapter2.xhtml", stored).unwrap();
+        writer.write_all(ch2.as_bytes()).unwrap();
+
+        writer.finish().expect("写入 epub zip 失败");
+        path
+    }
+
+    /// 创建唯一临时目录
+    fn make_temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "novel_reader_epub_{}_{}",
+            tag,
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("创建临时目录失败");
+        dir
+    }
+
+    #[test]
+    fn test_parse_chapters_from_spine_and_toc() {
+        // 标准 epub：应从 spine 得到 2 章，标题来自 NCX，内容为延迟加载（None）
+        let dir = make_temp_dir("parse");
+        let path = build_minimal_epub(&dir, "book.epub", &EpubBuildOptions::default());
+
+        let content = EpubParser::parse(&path).expect("epub 解析应成功");
+        assert_eq!(content.chapters.len(), 2, "应从 spine 解析出 2 章");
+        assert_eq!(content.chapters[0].title, "第一章 开端");
+        assert_eq!(content.chapters[1].title, "第二章 结局");
+        assert_eq!(content.chapters[0].index, 0);
+        assert_eq!(content.chapters[1].index, 1);
+        // parse 不加载正文，内容延迟由 get_chapter_content 提供
+        assert!(content.chapters[0].content.is_none(), "章节内容应延迟加载");
+        assert!(content.chapters[0].id.contains("::res::ch1"));
+        assert_eq!(content.novel_id.len(), 32, "novel_id 应为 md5 十六进制");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_parse_without_toc_falls_back_to_resource_id() {
+        // 无 NCX 目录时，章节标题应回退为 spine 的 resource id
+        let dir = make_temp_dir("notoc");
+        let opts = EpubBuildOptions {
+            with_toc: false,
+            ..EpubBuildOptions::default()
+        };
+        let path = build_minimal_epub(&dir, "notoc.epub", &opts);
+
+        let content = EpubParser::parse(&path).expect("无 NCX 的 epub 也应能解析");
+        assert_eq!(content.chapters.len(), 2);
+        assert_eq!(content.chapters[0].title, "ch1", "无 toc 时标题回退为 idref");
+        assert_eq!(content.chapters[1].title, "ch2");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_get_chapter_content_valid_index() {
+        // 正常索引：应返回包含正文的 HTML 内容
+        let dir = make_temp_dir("content");
+        let path = build_minimal_epub(&dir, "book.epub", &EpubBuildOptions::default());
+
+        let c0 = EpubParser::get_chapter_content(&path, 0).expect("读取第 0 章应成功");
+        assert!(
+            c0.contains("正文内容一"),
+            "第 0 章内容应含正文，实际: {}",
+            c0.chars().take(200).collect::<String>()
+        );
+
+        let c1 = EpubParser::get_chapter_content(&path, 1).expect("读取第 1 章应成功");
+        assert!(c1.contains("正文内容二"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_get_chapter_content_out_of_range() {
+        // 越界索引：应返回错误（epub crate 对越界 set_current_chapter 返回 false，
+        // get_current 返回 None），不应 panic
+        let dir = make_temp_dir("oor");
+        let path = build_minimal_epub(&dir, "book.epub", &EpubBuildOptions::default());
+
+        let err = EpubParser::get_chapter_content(&path, 99).unwrap_err();
+        assert!(
+            err.to_string().contains("not found"),
+            "越界应报 not found，实际: {}",
+            err
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_extract_metadata_full() {
+        // 完整元数据：title/creator 均存在
+        let dir = make_temp_dir("meta");
+        let path = build_minimal_epub(&dir, "book.epub", &EpubBuildOptions::default());
+
+        let meta = EpubParser::extract_metadata(&path).expect("元数据提取应成功");
+        assert_eq!(meta.title, "测试书籍");
+        assert_eq!(meta.author.as_deref(), Some("测试作者"));
+        assert_eq!(meta.format, crate::types::NovelFormat::Epub);
+        assert_eq!(meta.file_size, std::fs::metadata(&path).unwrap().len());
+        assert_eq!(meta.id.len(), 32);
+        // 测试 epub 不含图片，封面应为 None
+        assert!(meta.cover_path.is_none(), "无图片时不应有封面");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_extract_metadata_missing_creator() {
+        // 缺少 dc:creator：author 应为 None，其余字段正常
+        let dir = make_temp_dir("nocreator");
+        let opts = EpubBuildOptions {
+            with_creator: false,
+            ..EpubBuildOptions::default()
+        };
+        let path = build_minimal_epub(&dir, "nocreator.epub", &opts);
+
+        let meta = EpubParser::extract_metadata(&path).expect("缺 creator 也应容错");
+        assert_eq!(meta.title, "测试书籍");
+        assert!(meta.author.is_none(), "缺 creator 时 author 应为 None");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_extract_metadata_missing_title_falls_back_to_filename() {
+        // 缺少 dc:title：标题应回退为文件名（去扩展名）
+        let dir = make_temp_dir("notitle");
+        let opts = EpubBuildOptions {
+            title: None,
+            ..EpubBuildOptions::default()
+        };
+        let path = build_minimal_epub(&dir, "回退书名.epub", &opts);
+
+        let meta = EpubParser::extract_metadata(&path).expect("缺 title 也应容错");
+        assert_eq!(meta.title, "回退书名", "标题应回退为文件 stem");
+        assert_eq!(meta.author.as_deref(), Some("测试作者"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_inline_css_styles() {
+        // CSS 类样式应被内联到对应 class 的标签上
+        let html = r#"<p class="note">文本</p><div>无 class</div>"#;
+        let css = ".note { text-indent: 2em; margin: 0 }";
+        let out = EpubParser::inline_css_styles(html, css);
+        assert!(out.contains("style=\"text-indent: 2em; margin: 0\""));
+        assert!(out.contains("<div>无 class</div>"), "无 class 标签不受影响");
+
+        // class 无对应规则时保持原样
+        let out2 = EpubParser::inline_css_styles(r#"<p class="other">x</p>"#, css);
+        assert_eq!(out2, r#"<p class="other">x</p>"#);
+    }
+
+    #[test]
+    fn test_parse_invalid_file_returns_error() {
+        // 非 zip / 损坏文件：解析应返回错误而非 panic
+        let dir = make_temp_dir("bad");
+        let path = dir.join("broken.epub");
+        std::fs::write(&path, "这不是一个合法的 epub/zip 文件").unwrap();
+
+        assert!(EpubParser::parse(&path).is_err(), "损坏文件应报错");
+        assert!(EpubParser::extract_metadata(&path).is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

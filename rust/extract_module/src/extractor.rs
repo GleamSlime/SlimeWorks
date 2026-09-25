@@ -825,6 +825,14 @@ mod tests {
 mod zip_tests {
     use super::*;
 
+    /// zip_directory_to_tmp 的落盘名只带毫秒时间戳，同毫秒并发执行的两个打包
+    /// 测试会互相覆盖同一个 /tmp/sw_upload_*.zip，因此所有调用点必须串行。
+    static ZIP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_zip_tmp() -> std::sync::MutexGuard<'static, ()> {
+        ZIP_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn write_file(path: &Path, content: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, content).unwrap();
@@ -851,6 +859,8 @@ mod zip_tests {
         write_file(&src.join(".DS_Store"), "junk");
         fs::create_dir_all(src.join("empty_dir")).unwrap();
 
+        // 与其他打包测试串行，避免毫秒级时间戳重名互相覆盖
+        let _guard = lock_zip_tmp();
         let zip_path = zip_directory_to_tmp(src.to_str().unwrap(), "vol01").unwrap();
         let names = zip_entry_names(&zip_path);
         assert!(names.contains(&"vol01/001.jpg".to_string()), "got: {names:?}");
@@ -893,5 +903,172 @@ mod zip_tests {
         assert!(zip_directory_to_tmp("/tmp", "a/b").is_err());
         assert!(zip_directory_to_tmp("/tmp", "  ").is_err());
         assert!(zip_directory_to_tmp("/nonexistent_sw_dir_xyz", "ok").is_err());
+    }
+
+    /// 端到端字节级往返：多文件目录 → 打包 → 解压 → 逐文件内容比对。
+    /// 文本 + 二进制 + 深层嵌套目录都要覆盖，证明上传链路不丢任何字节。
+    #[test]
+    fn zip_extract_roundtrip_preserves_every_byte() {
+        let base = std::env::temp_dir().join(format!("sw_zip_{}_rt2", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let src = base.join("src");
+
+        write_file(&src.join("note.txt"), "你好，SlimeWorks");
+        // 二进制载荷：0x00~0xFF 全字节点，压缩/解压任何一处丢字节都会暴露
+        let binary: Vec<u8> = (0u16..256).map(|i| i as u8).collect();
+        fs::create_dir_all(src.join("sub/deep")).unwrap();
+        fs::write(src.join("sub/data.bin"), &binary).unwrap();
+        write_file(&src.join("sub/deep/deeper.txt"), "deep-content");
+
+        // 与其他打包测试串行，避免毫秒级时间戳重名互相覆盖
+        let _guard = lock_zip_tmp();
+        let zip_path = zip_directory_to_tmp(src.to_str().unwrap(), "pkg").unwrap();
+        // 走节点端同一条解压路径
+        let out = base.join("out");
+        extract_archive(&zip_path, out.to_str().unwrap(), None, &|_| {}).unwrap();
+
+        assert_eq!(
+            fs::read(out.join("pkg/note.txt")).unwrap(),
+            "你好，SlimeWorks".as_bytes()
+        );
+        assert_eq!(fs::read(out.join("pkg/sub/data.bin")).unwrap(), binary);
+        assert_eq!(
+            fs::read(out.join("pkg/sub/deep/deeper.txt")).unwrap(),
+            b"deep-content"
+        );
+
+        let _ = fs::remove_file(&zip_path);
+        let _ = fs::remove_dir_all(&base);
+    }
+}
+
+#[cfg(test)]
+mod scan_size_tests {
+    use super::*;
+
+    fn touch(path: &Path, bytes: &[u8]) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+
+    // ── scan_archives ──────────────────────────────────────────────────────
+
+    #[test]
+    fn scan_archives_finds_nested_archives_and_ignores_others() {
+        let base = std::env::temp_dir().join(format!("sw_scan_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+
+        touch(&base.join("a.zip"), b"zip-bytes");
+        // 深层嵌套目录里的压缩包必须被递归发现
+        touch(&base.join("sub/b.tar.gz"), b"targz");
+        touch(&base.join("sub/deep/c.7z"), b"7z7z");
+        // 非压缩包文件一律忽略
+        touch(&base.join("notes.txt"), b"txt");
+        touch(&base.join("sub/photo.jpg"), b"jpg");
+        touch(&base.join("archive-backup.rar"), b"rar");
+
+        let found = scan_archives(base.to_str().unwrap()).unwrap();
+        let names: Vec<&str> = found.iter().map(|a| a.file_name.as_str()).collect();
+        // rar 虽在扫描名单内（后续解压不支持），这里只验证"发现"行为
+        assert_eq!(names.len(), 4, "应发现 4 个压缩包（含嵌套目录）, got: {names:?}");
+        assert!(names.contains(&"a.zip"), "got: {names:?}");
+        assert!(names.contains(&"b.tar.gz"), "got: {names:?}");
+        assert!(names.contains(&"c.7z"), "got: {names:?}");
+        assert!(names.contains(&"archive-backup.rar"), "got: {names:?}");
+        assert!(!names.contains(&"notes.txt"), "非压缩包不得混入: {names:?}");
+        assert!(!names.contains(&"photo.jpg"), "非压缩包不得混入: {names:?}");
+
+        // 嵌套目录的完整路径 + 文件大小必须如实上报
+        let b = found.iter().find(|a| a.file_name == "b.tar.gz").unwrap();
+        assert!(b.path.ends_with("sub/b.tar.gz"), "got: {}", b.path);
+        assert_eq!(b.file_size, 5);
+
+        // 结果按路径排序，保证 UI 展示稳定
+        let mut sorted = found.iter().map(|a| a.path.clone()).collect::<Vec<_>>();
+        sorted.sort();
+        assert_eq!(found.iter().map(|a| a.path.clone()).collect::<Vec<_>>(), sorted);
+
+        // 空目录返回空集合而不是报错
+        let empty = base.join("empty_dir");
+        fs::create_dir_all(&empty).unwrap();
+        assert!(scan_archives(empty.to_str().unwrap()).unwrap().is_empty());
+
+        // 目录不存在必须报错
+        assert!(scan_archives("/nonexistent_sw_dir_xyz").is_err());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    // ── get_dir_size ───────────────────────────────────────────────────────
+
+    #[test]
+    fn get_dir_size_sums_all_nested_files() {
+        let base = std::env::temp_dir().join(format!("sw_dsize_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+
+        touch(&base.join("x.txt"), b"12345"); // 5 字节
+        touch(&base.join("sub/y.bin"), &[0u8; 7]); // 7 字节
+        touch(&base.join("sub/deep/z.dat"), b"0123456789"); // 10 字节
+
+        assert_eq!(get_dir_size(base.to_str().unwrap()).unwrap(), 22);
+    }
+
+    #[test]
+    fn get_dir_size_empty_dir_and_missing_path() {
+        let base = std::env::temp_dir().join(format!("sw_dsize_empty_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        // 空目录大小为 0
+        assert_eq!(get_dir_size(base.to_str().unwrap()).unwrap(), 0);
+        // 不存在的路径按 0 处理（调用方用它做展示，不应因缺目录而失败）
+        assert_eq!(get_dir_size("/nonexistent_sw_dir_xyz").unwrap(), 0);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    // ── extract_archive 补充路径 ───────────────────────────────────────────
+
+    #[test]
+    fn extract_archive_rejects_unknown_format_and_rar() {
+        // 无法识别的扩展名必须报错，而不是静默产出空目录
+        let result = extract_archive("/tmp/whatever.txt", "/tmp", None, &|_| {});
+        assert!(result.is_err());
+        // RAR 走的是明确的不支持分支
+        let rar = extract_archive("/tmp/archive.rar", "/tmp", None, &|_| {});
+        assert!(rar.is_err());
+        assert!(rar.unwrap_err().to_string().contains("RAR"));
+    }
+
+    #[test]
+    fn extract_archive_tar_gz_roundtrip() {
+        // tar.gz 走 extract_tar_gz 分支：手工构造压缩包再解压比对
+        let base = std::env::temp_dir().join(format!("sw_targz_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let src = base.join("src");
+        touch(&src.join("hello.txt"), b"tar-gz-payload");
+        touch(&src.join("sub/nested.txt"), b"nested-bytes");
+
+        let archive = base.join("pack.tar.gz");
+        {
+            let file = File::create(&archive).unwrap();
+            let gz = flate2::write::GzEncoder::new(
+                file,
+                flate2::Compression::default(),
+            );
+            let mut builder = tar::Builder::new(gz);
+            builder.append_dir_all("", &src).unwrap();
+            let gz = builder.into_inner().unwrap();
+            gz.finish().unwrap();
+        }
+
+        let out = base.join("out");
+        extract_archive(archive.to_str().unwrap(), out.to_str().unwrap(), None, &|pct| {
+            // 成功路径必须以 1.0 收尾
+            assert_eq!(pct, 1.0);
+        })
+        .unwrap();
+        assert_eq!(fs::read(out.join("hello.txt")).unwrap(), b"tar-gz-payload");
+        assert_eq!(fs::read(out.join("sub/nested.txt")).unwrap(), b"nested-bytes");
+
+        let _ = fs::remove_dir_all(&base);
     }
 }

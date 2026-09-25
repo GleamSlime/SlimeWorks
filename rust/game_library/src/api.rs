@@ -1856,3 +1856,843 @@ fn download_file_sync(url: &str, save_path: &str) -> Result<()> {
     std::io::copy(&mut resp, &mut file).context("写入文件失败")?;
     Ok(())
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 单元测试
+//
+// 说明：本模块 CRUD 函数全部经由全局 DB_CONN（game_library_init 设置），
+// cargo test 默认多线程并行执行各 #[test]，因此：
+// 1. 所有依赖全局连接的用例用 API_TEST_LOCK 串行化；
+// 2. 每个用例在持锁状态下初始化自己专属的临时库文件，互不污染；
+// 3. 联网抓取（moegirl/2dfan/Steam）与 launch_game 不在此测试范围。
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    /// 全局 DB_CONN 串行化锁：防止 cargo test 多线程并行操作同一连接
+    static API_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock_api() -> MutexGuard<'static, ()> {
+        API_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// 不依赖 tokio macros feature 的简易 block_on（被测函数内部无真实挂起点）
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("构建 tokio 运行时失败")
+            .block_on(f)
+    }
+
+    /// 初始化一个全新的临时数据库文件并写入全局连接（须在持锁状态下调用）
+    fn init_temp_db() {
+        let dir = std::env::temp_dir().join(format!("gamelib_test_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("创建临时目录失败");
+        let path = dir.join("library.db");
+        game_library_init(path.to_string_lossy().into_owned()).expect("初始化游戏库失败");
+    }
+
+    /// 构造一个仅用于测试的 Game 实体
+    fn make_game(id: &str, name: &str) -> Game {
+        Game {
+            id: id.to_string(),
+            name: name.to_string(),
+            cover_path: String::new(),
+            company: String::new(),
+            summary: String::new(),
+            rating: 0.0,
+            release_date: String::new(),
+            path: String::new(),
+            status: "not_started".to_string(),
+            created_at: 0,
+            updated_at: 0,
+            last_played_at: None,
+            total_play_time_sec: 0,
+            tags: vec![],
+            exe_paths: vec![],
+            game_dir: String::new(),
+        }
+    }
+
+    /// 构造一条游玩会话（id 留空由服务端生成）
+    fn make_session(game_id: &str, start: i64, duration: i64) -> PlaySession {
+        PlaySession {
+            id: String::new(),
+            game_id: game_id.to_string(),
+            start_time: start,
+            end_time: start + duration,
+            duration_sec: duration,
+        }
+    }
+
+    // ── 游戏 CRUD 完整往返 ────────────────────────────────────────────────
+
+    #[test]
+    fn game_crud_round_trip() {
+        let _guard = lock_api();
+        init_temp_db();
+        assert!(game_library_is_ready(), "init 后应处于就绪状态");
+
+        // 1. 空 id 新增 → 服务端应生成 UUID
+        let mut new_game = make_game("", "星河叙事曲");
+        new_game.cover_path = "/covers/star.png".to_string();
+        new_game.company = "Studio Alpha".to_string();
+        new_game.summary = "一部视觉小说".to_string();
+        new_game.rating = 8.5;
+        new_game.release_date = "2021-06-01".to_string();
+        new_game.path = "/games/star/game.exe".to_string();
+        new_game.status = "playing".to_string();
+        new_game.tags = vec!["剧情".to_string(), "R18".to_string()];
+        new_game.exe_paths = vec!["/games/star/game.exe".to_string()];
+        new_game.game_dir = "/games/star".to_string();
+        let added = block_on(game_library_add_game(new_game)).expect("新增游戏失败");
+        assert!(!added.id.trim().is_empty(), "空 id 应由服务端生成 UUID");
+        assert!(added.created_at > 0, "created_at 应由服务端填充当前时间");
+        assert_eq!(added.updated_at, added.created_at);
+
+        // 2. 按 id 查询 → 全字段往返一致（含 tags/exe_paths JSON 列表）
+        let fetched = block_on(game_library_get_game_by_id(added.id.clone()))
+            .expect("查询游戏失败")
+            .expect("新增的游戏应能查到");
+        assert_eq!(fetched.name, "星河叙事曲");
+        assert_eq!(fetched.cover_path, "/covers/star.png");
+        assert_eq!(fetched.company, "Studio Alpha");
+        assert_eq!(fetched.summary, "一部视觉小说");
+        assert_eq!(fetched.rating, 8.5);
+        assert_eq!(fetched.release_date, "2021-06-01");
+        assert_eq!(fetched.status, "playing");
+        assert_eq!(fetched.tags, vec!["剧情".to_string(), "R18".to_string()]);
+        assert_eq!(fetched.exe_paths, vec!["/games/star/game.exe".to_string()]);
+        assert_eq!(fetched.game_dir, "/games/star");
+        // 无游玩记录时：last_played_at 为 None、总时长为 0
+        assert_eq!(fetched.last_played_at, None);
+        assert_eq!(fetched.total_play_time_sec, 0);
+
+        // 3. 显式 id 新增 → 保留原 id
+        let explicit = block_on(game_library_add_game(make_game("game-fixed-001", "固定ID游戏")))
+            .expect("显式 id 新增失败");
+        assert_eq!(explicit.id, "game-fixed-001");
+
+        // 4. 更新字段 → 查询反映新值，created_at 不变
+        let mut updated = fetched.clone();
+        updated.name = "星河叙事曲 全年龄版".to_string();
+        updated.rating = 9.0;
+        updated.status = "completed".to_string();
+        updated.tags = vec!["剧情".to_string()];
+        updated.game_dir = "/games/star2".to_string();
+        block_on(game_library_update_game(updated)).expect("更新游戏失败");
+        let refetched = block_on(game_library_get_game_by_id(added.id.clone()))
+            .expect("查询失败")
+            .expect("更新后仍可查到");
+        assert_eq!(refetched.name, "星河叙事曲 全年龄版");
+        assert_eq!(refetched.rating, 9.0);
+        assert_eq!(refetched.status, "completed");
+        assert_eq!(refetched.tags, vec!["剧情".to_string()]);
+        assert_eq!(refetched.game_dir, "/games/star2");
+        assert_eq!(
+            refetched.created_at, fetched.created_at,
+            "更新不应改动 created_at"
+        );
+        assert!(refetched.updated_at >= fetched.updated_at);
+
+        // 5. 更新不存在的 id → 不报错（UPDATE 影响 0 行），也不产生新数据
+        block_on(game_library_update_game(make_game(
+            "game-not-exist-999",
+            "幽灵游戏",
+        )))
+        .expect("更新不存在 id 应静默成功");
+        assert!(block_on(game_library_get_game_by_id(
+            "game-not-exist-999".to_string()
+        ))
+        .expect("查询失败")
+        .is_none());
+
+        // 6. 列表查询：包含全部已录入游戏
+        let games = block_on(game_library_get_games()).expect("列表查询失败");
+        let ids: Vec<&str> = games.iter().map(|g| g.id.as_str()).collect();
+        assert!(ids.contains(&added.id.as_str()), "列表应包含第一个游戏");
+        assert!(ids.contains(&"game-fixed-001"), "列表应包含第二个游戏");
+
+        // 7. 查询不存在的 id → Ok(None)
+        assert!(block_on(game_library_get_game_by_id(
+            "no-such-id".to_string()
+        ))
+        .expect("查询失败")
+        .is_none());
+
+        // 8. 删除不存在的 id → 不报错
+        block_on(game_library_delete_game("no-such-id".to_string()))
+            .expect("删除不存在 id 应静默成功");
+
+        // 9. 删除已存在游戏 → 查询消失
+        block_on(game_library_delete_game("game-fixed-001".to_string()))
+            .expect("删除游戏失败");
+        assert!(block_on(game_library_get_game_by_id(
+            "game-fixed-001".to_string()
+        ))
+        .expect("查询失败")
+        .is_none());
+    }
+
+    // ── 删除游戏的级联清理 ────────────────────────────────────────────────
+
+    #[test]
+    fn delete_game_cascades_related_rows() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        let victim = block_on(game_library_add_game(make_game(
+            "victim-game",
+            "将被删除",
+        )))
+        .expect("新增游戏失败");
+        let survivor = block_on(game_library_add_game(make_game(
+            "survivor-game",
+            "保留游戏",
+        )))
+        .expect("新增游戏失败");
+
+        // 关联数据：游玩记录（远古时间戳）、分类、进度
+        block_on(game_library_add_play_session(make_session(
+            &victim.id,
+            1500000000,
+            60,
+        )))
+        .expect("写入游玩会话失败");
+        block_on(game_library_add_play_session(make_session(
+            &survivor.id,
+            1500000001,
+            90,
+        )))
+        .expect("写入游玩会话失败");
+        let cat = block_on(game_library_upsert_category(Category {
+            id: "cascade-cat".to_string(),
+            name: "级联分类".to_string(),
+            emoji: "🗂".to_string(),
+            is_system: false,
+            game_count: 0,
+            created_at: 0,
+        }))
+        .expect("建分类失败");
+        block_on(game_library_add_game_to_category(
+            victim.id.clone(),
+            cat.id.clone(),
+        ))
+        .expect("关联分类失败");
+        block_on(game_library_upsert_progress(GameProgress {
+            id: String::new(),
+            game_id: victim.id.clone(),
+            chapter: "第1章".to_string(),
+            route: "A线".to_string(),
+            note: String::new(),
+            updated_at: 0,
+        }))
+        .expect("写入进度失败");
+
+        // 前置确认：三类关联数据都在
+        assert!(!block_on(game_library_get_play_sessions(victim.id.clone()))
+            .expect("查会话失败")
+            .is_empty());
+        assert!(!block_on(game_library_get_game_categories(victim.id.clone()))
+            .expect("查分类失败")
+            .is_empty());
+        assert!(!block_on(game_library_get_progress(victim.id.clone()))
+            .expect("查进度失败")
+            .is_empty());
+
+        // 删除并验证级联清理
+        block_on(game_library_delete_game(victim.id.clone())).expect("删除游戏失败");
+        assert!(block_on(game_library_get_play_sessions(victim.id.clone()))
+            .expect("查会话失败")
+            .is_empty(),
+            "删除游戏后其游玩记录应被清除");
+        assert!(block_on(game_library_get_game_categories(victim.id.clone()))
+            .expect("查分类失败")
+            .is_empty(),
+            "删除游戏后其分类关联应被清除");
+        assert!(block_on(game_library_get_progress(victim.id.clone()))
+            .expect("查进度失败")
+            .is_empty(),
+            "删除游戏后其进度记录应被清除");
+
+        // 其他游戏数据不受影响
+        assert_eq!(
+            block_on(game_library_get_play_sessions(survivor.id.clone()))
+                .expect("查会话失败")
+                .len(),
+            1,
+            "无关游戏的游玩记录不应被误删"
+        );
+    }
+
+    // ── 分类 CRUD 与游戏-分类关联 ─────────────────────────────────────────
+
+    #[test]
+    fn category_crud_and_game_category_linking() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        block_on(game_library_add_game(make_game("cat-link-game", "分类测试游戏")))
+            .expect("新增游戏失败");
+
+        // 1. 显式 id upsert 新分类
+        let c1 = block_on(game_library_upsert_category(Category {
+            id: "cat-visual".to_string(),
+            name: "视觉小说".to_string(),
+            emoji: "📖".to_string(),
+            is_system: false,
+            game_count: 0,
+            created_at: 0,
+        }))
+        .expect("新增分类失败");
+        assert_eq!(c1.id, "cat-visual");
+
+        // 2. 空 id upsert → 生成 UUID
+        let c2 = block_on(game_library_upsert_category(Category {
+            id: "  ".to_string(),
+            name: "随机ID分类".to_string(),
+            emoji: String::new(),
+            is_system: false,
+            game_count: 0,
+            created_at: 0,
+        }))
+        .expect("空 id 建分类失败");
+        assert!(!c2.id.trim().is_empty(), "空 id 应生成 UUID");
+
+        // 3. 同 id 再次 upsert → 改名而非重复插入
+        block_on(game_library_upsert_category(Category {
+            id: "cat-visual".to_string(),
+            name: "GalGame".to_string(),
+            emoji: "💃".to_string(),
+            is_system: false,
+            game_count: 0,
+            created_at: 0,
+        }))
+        .expect("更新分类失败");
+        let cats = block_on(game_library_get_categories()).expect("查分类列表失败");
+        let visual = cats
+            .iter()
+            .find(|c| c.id == "cat-visual")
+            .expect("分类应存在");
+        assert_eq!(visual.name, "GalGame", "upsert 同 id 应更新名称");
+        assert_eq!(
+            cats.iter().filter(|c| c.id == "cat-visual").count(),
+            1,
+            "upsert 不应产生重复行"
+        );
+
+        // 4. 关联游戏 + 重复关联应被 INSERT OR IGNORE 吞掉，game_count 保持 1
+        block_on(game_library_add_game_to_category(
+            "cat-link-game".to_string(),
+            "cat-visual".to_string(),
+        ))
+        .expect("关联分类失败");
+        block_on(game_library_add_game_to_category(
+            "cat-link-game".to_string(),
+            "cat-visual".to_string(),
+        ))
+        .expect("重复关联失败（应被忽略）");
+        let cats = block_on(game_library_get_categories()).expect("查分类列表失败");
+        let visual = cats.iter().find(|c| c.id == "cat-visual").expect("存在");
+        assert_eq!(visual.game_count, 1, "重复关联不应增加游戏计数");
+
+        // 5. 按游戏查关联分类
+        let game_cats = block_on(game_library_get_game_categories(
+            "cat-link-game".to_string(),
+        ))
+        .expect("查游戏分类失败");
+        assert!(game_cats.iter().any(|c| c.id == "cat-visual"));
+        // 未关联任何分类的游戏 → 空列表
+        assert!(block_on(game_library_get_game_categories("cat-unknown".to_string()))
+            .expect("查游戏分类失败")
+            .is_empty());
+
+        // 6. 解除关联
+        block_on(game_library_remove_game_from_category(
+            "cat-link-game".to_string(),
+            "cat-visual".to_string(),
+        ))
+        .expect("解除关联失败");
+        assert!(block_on(game_library_get_game_categories(
+            "cat-link-game".to_string()
+        ))
+        .expect("查游戏分类失败")
+        .is_empty());
+        // 重复解除不报错（DELETE 0 行）
+        block_on(game_library_remove_game_from_category(
+            "cat-link-game".to_string(),
+            "cat-visual".to_string(),
+        ))
+        .expect("重复解除关联应静默成功");
+
+        // 7. 删除普通分类 / 删除不存在分类；系统分类禁止删除
+        block_on(game_library_delete_category(c2.id.clone())).expect("删除分类失败");
+        let cats = block_on(game_library_get_categories()).expect("查分类列表失败");
+        assert!(!cats.iter().any(|c| c.id == c2.id), "已删除分类不应出现");
+        block_on(game_library_delete_category("cat-not-exist".to_string()))
+            .expect("删除不存在分类应静默成功");
+        let sys_delete = block_on(game_library_delete_category(
+            SYSTEM_FAVORITES_ID.to_string(),
+        ));
+        assert!(sys_delete.is_err(), "系统分类不允许删除");
+    }
+
+    // ── 收藏（系统分类）切换 ──────────────────────────────────────────────
+
+    #[test]
+    fn favorite_toggle_uses_system_category() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        block_on(game_library_add_game(make_game("fav-game", "收藏测试")))
+            .expect("新增游戏失败");
+
+        // 初始未收藏
+        assert!(
+            !block_on(game_library_is_favorite("fav-game".to_string()))
+                .expect("查询收藏状态失败"),
+            "新游戏默认不应是收藏"
+        );
+
+        // 收藏 → is_favorite 为 true，且出现在游戏分类里
+        block_on(game_library_toggle_favorite("fav-game".to_string(), true))
+            .expect("收藏失败");
+        assert!(block_on(game_library_is_favorite("fav-game".to_string()))
+            .expect("查询失败"));
+        let game_cats = block_on(game_library_get_game_categories("fav-game".to_string()))
+            .expect("查游戏分类失败");
+        assert!(
+            game_cats.iter().any(|c| c.id == SYSTEM_FAVORITES_ID),
+            "收藏后应关联系统分类"
+        );
+
+        // 重复收藏不报错（INSERT OR IGNORE）
+        block_on(game_library_toggle_favorite("fav-game".to_string(), true))
+            .expect("重复收藏应静默成功");
+
+        // 取消收藏
+        block_on(game_library_toggle_favorite("fav-game".to_string(), false))
+            .expect("取消收藏失败");
+        assert!(
+            !block_on(game_library_is_favorite("fav-game".to_string()))
+                .expect("查询失败")
+        );
+
+        // 不存在的游戏：查询返回 false 而非报错
+        assert!(
+            !block_on(game_library_is_favorite("no-such-game".to_string()))
+                .expect("查询不存在游戏收藏状态失败")
+        );
+    }
+
+    // ── 游玩记录与 stats 时间窗口聚合 ─────────────────────────────────────
+
+    #[test]
+    fn play_sessions_and_stats_time_window() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        block_on(game_library_add_game(make_game("stats-g1", "统计游戏一")))
+            .expect("新增游戏失败");
+        block_on(game_library_add_game(make_game("stats-g2", "统计游戏二")))
+            .expect("新增游戏失败");
+
+        // 全部用固定远古时间戳（2020-09-13，UTC 同一天），避免污染今日/本周统计。
+        // 窗口 [1600000000, 1600003600]：
+        //   窗口内 G1：1600000000(7s 边界含) + 1600000100(600s) + 1600001000(1200s)
+        //             + 1600003600(11s 边界含) = 1818s
+        //   窗口外 G1：1599999999(9999s 早于窗口) + 1600003601(8888s 晚于窗口)
+        //   窗口内 G2：1600002000(300s)
+        let (w_start, w_end) = (1_600_000_000i64, 1_600_003_600i64);
+        let g1_sessions = [
+            (w_start, 7i64),
+            (1_600_000_100, 600),
+            (1_600_001_000, 1200),
+            (w_end, 11),
+            (1_599_999_999, 9999),
+            (1_600_003_601, 8888),
+        ];
+        for (start, dur) in g1_sessions {
+            block_on(game_library_add_play_session(make_session("stats-g1", start, dur)))
+                .expect("写入 G1 会话失败");
+        }
+        block_on(game_library_add_play_session(make_session("stats-g2", 1_600_002_000, 300)))
+            .expect("写入 G2 会话失败");
+
+        // 1. 会话列表：全部返回（不分窗口）且按 start_time 降序
+        let sessions = block_on(game_library_get_play_sessions("stats-g1".to_string()))
+            .expect("查游玩记录失败");
+        assert_eq!(sessions.len(), 6, "G1 应有 6 条会话");
+        for pair in sessions.windows(2) {
+            assert!(
+                pair[0].start_time >= pair[1].start_time,
+                "游玩记录应按开始时间降序"
+            );
+        }
+        assert_eq!(sessions[0].start_time, 1_600_003_601);
+        assert_eq!(sessions.last().expect("非空").start_time, 1_599_999_999);
+        // 无会话的游戏 → 空列表
+        assert!(block_on(game_library_get_play_sessions("stats-none".to_string()))
+            .expect("查询失败")
+            .is_empty());
+
+        // 2. stats 窗口聚合：求和只含 [w_start, w_end]（含边界）
+        let stats = block_on(game_library_get_stats(w_start, w_end)).expect("统计失败");
+        assert_eq!(stats.total_play_time_sec, 1818 + 300, "窗口总时长应为 2118s");
+        assert_eq!(stats.session_count, 5, "窗口内会话数应为 5");
+
+        // 3. 时间轴：全部落在 UTC 2020-09-13 一天
+        assert_eq!(stats.timeline.len(), 1, "窗口内会话同属一天");
+        assert_eq!(stats.timeline[0].date, "2020-09-13");
+        assert_eq!(stats.timeline[0].duration_sec, 2118);
+
+        // 4. 游戏维度：按总时长降序 G1 > G2
+        assert_eq!(stats.per_game.len(), 2);
+        assert_eq!(stats.per_game[0].game_id, "stats-g1");
+        assert_eq!(stats.per_game[0].game_name, "统计游戏一");
+        assert_eq!(stats.per_game[0].total_sec, 1818);
+        assert_eq!(stats.per_game[1].game_id, "stats-g2");
+        assert_eq!(stats.per_game[1].total_sec, 300);
+
+        // 5. 今日/本周：目前应为 0；写入一条「现在」的会话后应各为 100
+        assert_eq!(stats.today_play_time_sec, 0, "远古数据不应计入今日");
+        assert_eq!(stats.week_play_time_sec, 0, "远古数据不应计入本周");
+        let now = chrono::Utc::now().timestamp();
+        block_on(game_library_add_play_session(make_session("stats-g1", now, 100)))
+            .expect("写入当前会话失败");
+        let stats2 = block_on(game_library_get_stats(w_start, w_end)).expect("统计失败");
+        assert_eq!(stats2.today_play_time_sec, 100, "当前会话应计入今日");
+        assert_eq!(stats2.week_play_time_sec, 100, "当前会话应计入本周");
+        // 当前会话在远古窗口之外，不影响窗口统计
+        assert_eq!(stats2.total_play_time_sec, 2118);
+        assert_eq!(stats2.session_count, 5);
+
+        // 6. 空窗口：全零且时间轴/游戏维度为空
+        let empty = block_on(game_library_get_stats(1, 2)).expect("统计失败");
+        assert_eq!(empty.total_play_time_sec, 0);
+        assert_eq!(empty.session_count, 0);
+        assert!(empty.timeline.is_empty());
+        assert!(empty.per_game.is_empty());
+
+        // 7. 游戏详情聚合：总时长 = 全部会话求和，last_played_at = 最大 end_time
+        let g1 = block_on(game_library_get_game_by_id("stats-g1".to_string()))
+            .expect("查询失败")
+            .expect("游戏存在");
+        assert_eq!(g1.total_play_time_sec, 7 + 600 + 1200 + 11 + 9999 + 8888 + 100);
+        // last_played_at = 全部会话最大 end_time；now+100 远大于 2020 年的 1600012489
+        assert_eq!(g1.last_played_at, Some(now + 100));
+    }
+
+    // ── 首页数据 ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn home_page_data_aggregates() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        // 空库：无最近游玩、全零
+        let empty = block_on(game_library_get_home_page_data()).expect("查首页数据失败");
+        assert!(empty.last_played_game.is_none(), "空库应无最近游玩游戏");
+        assert_eq!(empty.total_games, 0);
+        assert_eq!(empty.total_play_time_sec, 0);
+
+        block_on(game_library_add_game(make_game("home-g1", "首页游戏一")))
+            .expect("新增失败");
+        block_on(game_library_add_game(make_game("home-g2", "首页游戏二")))
+            .expect("新增失败");
+        // 两条会话都用固定远古时间戳（避免跨 UTC 午夜时今日统计抖动）：
+        // g1 结束时间晚于 g2 → 最近游玩应为 g1
+        block_on(game_library_add_play_session(make_session("home-g1", 1_600_002_000, 50)))
+            .expect("写入会话失败");
+        block_on(game_library_add_play_session(make_session("home-g2", 1_600_000_000, 30)))
+            .expect("写入会话失败");
+
+        let home = block_on(game_library_get_home_page_data()).expect("查首页数据失败");
+        assert_eq!(home.total_games, 2);
+        assert_eq!(home.total_play_time_sec, 80, "总时长应为全部会话求和");
+        assert_eq!(home.today_play_time_sec, 0, "远古数据不应计入今日");
+        assert_eq!(home.week_play_time_sec, 0, "远古数据不应计入本周");
+        let last = home.last_played_game.expect("应有最近游玩游戏");
+        assert_eq!(last.id, "home-g1", "最近游玩应为结束时间最晚的游戏");
+    }
+
+    // ── 游戏进度 upsert ───────────────────────────────────────────────────
+
+    #[test]
+    fn progress_upsert_round_trip() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        block_on(game_library_add_game(make_game("prog-game", "进度游戏")))
+            .expect("新增失败");
+
+        // 空 id → 生成
+        let p1 = block_on(game_library_upsert_progress(GameProgress {
+            id: String::new(),
+            game_id: "prog-game".to_string(),
+            chapter: "第1章".to_string(),
+            route: "共通线".to_string(),
+            note: "开场".to_string(),
+            updated_at: 0,
+        }))
+        .expect("写入进度失败");
+        assert!(!p1.id.trim().is_empty(), "空 id 应生成 UUID");
+        assert!(p1.updated_at > 0, "updated_at 应由服务端填充");
+
+        // 同 id 再次 upsert → 更新而非追加
+        block_on(game_library_upsert_progress(GameProgress {
+            id: p1.id.clone(),
+            game_id: "prog-game".to_string(),
+            chapter: "第3章".to_string(),
+            route: "真结局线".to_string(),
+            note: "关键选项".to_string(),
+            updated_at: 0,
+        }))
+        .expect("更新进度失败");
+        let list = block_on(game_library_get_progress("prog-game".to_string()))
+            .expect("查进度失败");
+        assert_eq!(list.len(), 1, "同 id upsert 不应产生第二行");
+        assert_eq!(list[0].chapter, "第3章");
+        assert_eq!(list[0].route, "真结局线");
+        assert_eq!(list[0].note, "关键选项");
+
+        // 无进度的游戏 → 空列表
+        assert!(block_on(game_library_get_progress("prog-none".to_string()))
+            .expect("查进度失败")
+            .is_empty());
+    }
+
+    // ── 设置默认值与持久化 ────────────────────────────────────────────────
+
+    #[test]
+    fn settings_defaults_and_round_trip() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        // 未保存过时返回默认设置
+        let defaults = block_on(game_library_get_settings()).expect("读默认设置失败");
+        assert!(defaults.auto_track_play_time);
+        assert_eq!(defaults.default_sort, "updatedAt_desc");
+        assert!(defaults.auto_save);
+        assert!(defaults.enable_desktop_launch);
+        assert!(!defaults.use_open_on_macos);
+
+        // 保存自定义设置 → 读回一致；再次保存 → 覆盖而非报错
+        let custom = GameLibrarySettings {
+            auto_track_play_time: false,
+            default_sort: "name_asc".to_string(),
+            auto_save: false,
+            enable_desktop_launch: true,
+            use_open_on_macos: true,
+        };
+        block_on(game_library_save_settings(custom.clone())).expect("保存设置失败");
+        let loaded = block_on(game_library_get_settings()).expect("读设置失败");
+        assert!(!loaded.auto_track_play_time);
+        assert_eq!(loaded.default_sort, "name_asc");
+        assert!(!loaded.auto_save);
+        assert!(loaded.use_open_on_macos);
+
+        let override_settings = GameLibrarySettings {
+            default_sort: "rating_desc".to_string(),
+            ..custom.clone()
+        };
+        block_on(game_library_save_settings(override_settings)).expect("覆盖设置失败");
+        let reloaded = block_on(game_library_get_settings()).expect("读设置失败");
+        assert_eq!(reloaded.default_sort, "rating_desc", "重复保存应覆盖旧值");
+    }
+
+    // ── 批量导入去重 check_paths_exist ────────────────────────────────────
+
+    #[test]
+    fn check_paths_exist_matches_case_and_trim() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        // tempdir 中构造混合路径：两个已录入（一存于 path、一存于 game_dir）、其余不存在
+        let dir = std::env::temp_dir().join(format!("gamelib_paths_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("创建临时目录失败");
+        let known_exe = dir.join("Alpha/game.exe");
+        let known_dir = dir.join("BetaDir");
+        let unknown_exe = dir.join("Missing/game.exe");
+
+        let mut g1 = make_game("path-g1", "路径游戏一");
+        g1.path = known_exe.to_string_lossy().into_owned();
+        g1.game_dir = known_dir.to_string_lossy().into_owned();
+        block_on(game_library_add_game(g1)).expect("新增失败");
+
+        // 1. 大小写不同也应命中（内部按 trim+lowercase 比较）
+        let query_upper = known_exe.to_string_lossy().to_uppercase();
+        let existing = block_on(game_library_check_paths_exist(vec![
+            query_upper.clone(),
+            format!("  {}  ", unknown_exe.to_string_lossy()), // 带空白的不存在路径
+            "".to_string(),                                    // 空串应跳过
+            "   ".to_string(),                                 // 纯空白应跳过
+        ]))
+        .expect("check_paths_exist 失败");
+        assert_eq!(
+            existing,
+            vec![query_upper.clone()],
+            "只应返回命中的原始输入；game_dir 也应参与匹配"
+        );
+
+        // 2. game_dir 命中：返回原始输入串（保留大小写）
+        let existing2 = block_on(game_library_check_paths_exist(vec![known_dir
+            .to_string_lossy()
+            .into_owned()]))
+        .expect("check_paths_exist 失败");
+        assert_eq!(existing2.len(), 1, "game_dir 应被视为已录入");
+
+        // 3. 混合：存在 + 不存在 + 重复
+        let existing3 = block_on(game_library_check_paths_exist(vec![
+            known_exe.to_string_lossy().into_owned(),
+            unknown_exe.to_string_lossy().into_owned(),
+            known_exe.to_string_lossy().into_owned(),
+        ]))
+        .expect("check_paths_exist 失败");
+        assert_eq!(
+            existing3,
+            vec![
+                known_exe.to_string_lossy().into_owned(),
+                known_exe.to_string_lossy().into_owned()
+            ],
+            "重复输入应分别命中，未录入路径不应出现"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── 未初始化时的错误路径与关闭 ────────────────────────────────────────
+
+    #[test]
+    fn queries_fail_after_close_and_reinit_recovers() {
+        let _guard = lock_api();
+        init_temp_db();
+        assert!(game_library_is_ready());
+
+        // 关闭全局连接后，所有经 with_conn 的查询应报「未初始化」错误
+        game_library_close();
+        assert!(!game_library_is_ready(), "close 后应未就绪");
+        let err = block_on(game_library_get_games()).expect_err("未就绪时查询应失败");
+        assert!(
+            err.to_string().contains("未初始化"),
+            "错误信息应提示未初始化，实际: {err}"
+        );
+        let add_err = block_on(game_library_add_game(make_game("x", "y")))
+            .expect_err("未就绪时新增应失败");
+        assert!(add_err.to_string().contains("未初始化"));
+
+        // 重新 init 后恢复可用
+        init_temp_db();
+        assert!(block_on(game_library_get_games()).is_ok(), "重新初始化后应恢复");
+    }
+
+    // ── derive_game_name 纯函数边界（不依赖全局连接） ─────────────────────
+
+    #[test]
+    fn derive_game_name_covers_path_shapes() {
+        // 空输入
+        assert_eq!(game_library_derive_game_name(String::new()), "");
+        assert_eq!(game_library_derive_game_name("   ".to_string()), "");
+
+        // macOS .app 包（去后缀）
+        assert_eq!(
+            game_library_derive_game_name("/Applications/Sample Game.app".to_string()),
+            "Sample Game"
+        );
+        // .app 大小写混合：strip_suffix 依次尝试 .app/.App
+        assert_eq!(
+            game_library_derive_game_name("/apps/Test.App".to_string()),
+            "Test"
+        );
+        // .app 内含下划线（清理为空格）
+        assert_eq!(
+            game_library_derive_game_name("/Users/me/Games/My_Game.app".to_string()),
+            "My Game"
+        );
+        // Windows 反斜杠的 .app 也会被归一化
+        assert_eq!(
+            game_library_derive_game_name("C:\\Apps\\My Game.app".to_string()),
+            "My Game"
+        );
+
+        // Windows 反斜杠 exe：取父目录名
+        assert_eq!(
+            game_library_derive_game_name("C:\\Games\\Rance\\game.exe".to_string()),
+            "Rance"
+        );
+        // 父目录名含版本号小数点：'.' 被清理为空格
+        assert_eq!(
+            game_library_derive_game_name("D:\\Publisher\\Title v1.2\\Game.exe".to_string()),
+            "Title v1 2"
+        );
+        // 父目录名含括号/方括号：替换为空格并压缩
+        assert_eq!(
+            game_library_derive_game_name(
+                "/games/My Game (2024) [CN]/game.exe".to_string()
+            ),
+            "My Game 2024 CN"
+        );
+        // 中文全角括号
+        assert_eq!(
+            game_library_derive_game_name("/games/名作（完全版）/game.exe".to_string()),
+            "名作 完全版"
+        );
+
+        // 多级 unix 目录：取倒数第二段
+        assert_eq!(
+            game_library_derive_game_name("/data/games/sub/title/game.bin.x86_64".to_string()),
+            "title"
+        );
+
+        // 单段文件名（无父目录）：降级为「文件名去可执行后缀」
+        assert_eq!(game_library_derive_game_name("game.exe".to_string()), "game");
+        assert_eq!(
+            game_library_derive_game_name("MyGame.x86_64".to_string()),
+            "MyGame"
+        );
+        assert_eq!(game_library_derive_game_name("start.bat".to_string()), "start");
+
+        // 无后缀且只有一段（隐藏文件形态）：'.' 与 '_' 均被清理
+        assert_eq!(
+            game_library_derive_game_name("/.hidden_game".to_string()),
+            "hidden game"
+        );
+        // 隐藏目录作为父目录：前导点被清理
+        assert_eq!(
+            game_library_derive_game_name("/home/u/.hidden/game.exe".to_string()),
+            "hidden"
+        );
+
+        // 目录本身（无文件段）：仍按「父目录」规则，取到的是上一级
+        // ——该行为反映当前实现：/games/my_rpg 的「父目录」是 games
+        assert_eq!(
+            game_library_derive_game_name("/games/my_rpg".to_string()),
+            "games"
+        );
+
+        // 首尾空白先被 trim
+        assert_eq!(
+            game_library_derive_game_name("  /apps/Trim.app  ".to_string()),
+            "Trim"
+        );
+    }
+
+    // ── JSON 列表解析辅助函数 ─────────────────────────────────────────────
+
+    #[test]
+    fn json_list_helpers_handle_broken_input() {
+        // 合法 JSON 往返
+        let list = vec!["a".to_string(), "中文 b".to_string()];
+        let json = to_json_str(&list);
+        assert_eq!(parse_json_str_list(&json), list);
+        // 损坏 JSON / 非字符串数组 → 空列表而非 panic
+        assert!(parse_json_str_list("{ 坏数据 }").is_empty());
+        assert!(parse_json_str_list("").is_empty());
+        assert!(parse_json_str_list("[1, 2]").is_empty(), "非字符串数组按空处理");
+        // 空列表序列化为 "[]"
+        assert_eq!(to_json_str(&[]), "[]");
+    }
+}

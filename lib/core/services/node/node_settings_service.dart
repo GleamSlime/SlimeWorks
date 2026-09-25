@@ -56,11 +56,18 @@ class NodeSettingsService extends GetxService {
 
   final Dio _probeDio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(milliseconds: 200),
-      receiveTimeout: const Duration(milliseconds: 200),
-      sendTimeout: const Duration(milliseconds: 200),
+      connectTimeout: _probeFastTimeout,
+      receiveTimeout: _probeFastTimeout,
+      sendTimeout: _probeFastTimeout,
     ),
   );
+
+  /// 常规连通性探测的超时档：图快，启动阶段多个节点并发探测也不拖慢页面。
+  static const Duration _probeFastTimeout = Duration(milliseconds: 200);
+
+  /// 熔断前确认用的超时档。200ms 是给"空闲节点"用的：节点正在批量生成缩略图
+  /// 或解压刚上传的归档时，ping 完全可能压线超时，据此熔断会把健康节点判死。
+  static const Duration _probePatientTimeout = Duration(seconds: 3);
 
   /// 授权码摘要的请求头名（需与 Rust `node_server::AUTH_HEADER` 一致）。
   static const String _authHeaderName = 'X-SW-Auth';
@@ -277,14 +284,14 @@ class NodeSettingsService extends GetxService {
     }
     _circuitBreakedNodes.remove(nodeId);
 
-    final lanResult = await _probeNodeUrl(node.lanApiBaseUrl);
+    final lanResult = await _probeNodeUrl(node.lanApiBaseUrl, timeout: _probeFastTimeout);
     if (lanResult == _ProbeResult.ok) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
       return;
     }
 
-    final wanResult = await _probeNodeUrl(node.apiBaseUrl);
+    final wanResult = await _probeNodeUrl(node.apiBaseUrl, timeout: _probeFastTimeout);
     if (wanResult == _ProbeResult.ok) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
@@ -298,12 +305,30 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
+    // 两个地址在 200ms 档都没回：节点可能只是忙（批量生成缩略图、正在解压刚上传的归档），
+    // 判熔断前用宽松超时再确认一次，否则一次抖动就要用户手动重试。
+    final lanAlive = await _probeNodeUrl(node.lanApiBaseUrl, timeout: _probePatientTimeout);
+    final wanAlive = lanAlive == _ProbeResult.ok
+        ? _ProbeResult.unreachable
+        : await _probeNodeUrl(node.apiBaseUrl, timeout: _probePatientTimeout);
+    if (lanAlive == _ProbeResult.ok || wanAlive == _ProbeResult.ok) {
+      nodeConnectivity[nodeId] = true;
+      nodeConnectivityError[nodeId] = '';
+      return;
+    }
+    if (lanAlive == _ProbeResult.unauthorized || wanAlive == _ProbeResult.unauthorized) {
+      nodeConnectivity[nodeId] = false;
+      nodeConnectivityError[nodeId] = '授权码错误，请核对节点授权码';
+      return;
+    }
+
     nodeConnectivity[nodeId] = false;
     nodeConnectivityError[nodeId] = '节点不可达';
     _circuitBreakedNodes.add(nodeId);
+    _logger.info('节点已熔断: ${node.name}（快速+宽松探测均无响应 | LAN=${node.lanApiBaseUrl} WAN=${node.apiBaseUrl}）');
   }
 
-  Future<_ProbeResult> _probeNodeUrl(String? baseUrl) async {
+  Future<_ProbeResult> _probeNodeUrl(String? baseUrl, {required Duration timeout}) async {
     if (baseUrl == null || baseUrl.isEmpty) return _ProbeResult.unreachable;
     final urls = _candidateNodeCallUrls(baseUrl);
     for (final url in urls) {
@@ -311,6 +336,11 @@ class NodeSettingsService extends GetxService {
         await _probeDio.post<dynamic>(
           url,
           data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+          options: Options(
+            connectTimeout: timeout,
+            receiveTimeout: timeout,
+            sendTimeout: timeout,
+          ),
         );
         return _ProbeResult.ok;
       } on DioException catch (e) {
@@ -782,6 +812,11 @@ class NodeSettingsService extends GetxService {
       if (body['success'] != true) {
         throw Exception((body['error'] ?? '归档上传失败').toString());
       }
+      // 一次完整的归档上传是最硬的存活证明：清掉熔断位，否则大文件传输期间
+      // 一次抖动的 ping 就会让紧随其后的 import_media_folder 被直接拒掉。
+      _circuitBreakedNodes.remove(nodeId);
+      nodeConnectivity[nodeId] = true;
+      nodeConnectivityError[nodeId] = '';
     } on DioException catch (e) {
       _logger.error('归档上传失败: $nodeId | $zipPath', error: e);
       rethrow;
@@ -1146,23 +1181,34 @@ class NodeSettingsService extends GetxService {
       candidateUrls.addAll(_candidateNodeCallUrls(node.lanApiBaseUrl!));
     }
     candidateUrls.addAll(_candidateNodeCallUrls(node.apiBaseUrl));
-    final url = candidateUrls.firstOrNull;
-    if (url == null) return false;
-    try {
-      await _probeDio.post<dynamic>(
-        url,
-        data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
-      );
-      return true;
-    } on DioException catch (e) {
-      // 只有连接层失败才判定为不可达
-      return e.type != DioExceptionType.connectionTimeout &&
-          e.type != DioExceptionType.connectionError &&
-          e.type != DioExceptionType.receiveTimeout &&
-          e.type != DioExceptionType.sendTimeout;
-    } catch (_) {
-      return false;
+    if (candidateUrls.isEmpty) return false;
+    const timeout = _probePatientTimeout;
+    for (final url in candidateUrls) {
+      try {
+        await _probeDio.post<dynamic>(
+          url,
+          data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+          options: Options(
+            connectTimeout: timeout,
+            receiveTimeout: timeout,
+            sendTimeout: timeout,
+          ),
+        );
+        return true;
+      } on DioException catch (e) {
+        // 只有连接层失败才算这个地址不可达，HTTP 层错误说明节点还活着
+        if (e.type != DioExceptionType.connectionTimeout &&
+            e.type != DioExceptionType.connectionError &&
+            e.type != DioExceptionType.receiveTimeout &&
+            e.type != DioExceptionType.sendTimeout) {
+          return true;
+        }
+      } catch (_) {
+        // 换下一个候选地址继续探
+      }
     }
+    _logger.info('节点已熔断: ${node.name}（请求超时且 ${candidateUrls.length} 个候选地址均无响应）');
+    return false;
   }
 
   String _buildNodeCallKey(String nodeId, String action, Map<String, dynamic> params) {

@@ -122,74 +122,17 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
   }
 
   Future<void> _showNodeEditor({NodeEndpoint? initial}) async {
-    final nameCtrl = TextEditingController(text: initial?.name ?? '');
-    final apiCtrl = TextEditingController(text: initial?.apiBaseUrl ?? 'http://127.0.0.1:17888');
-    final lanApiCtrl = TextEditingController(text: initial?.lanApiBaseUrl ?? '');
-    final authCodeCtrl = TextEditingController(text: initial?.authCode ?? '');
-    final m = AppTheme.metrics;
-
-    final confirmed = await showDialog<bool>(
+    // 表单 controller 交给弹窗自己的 State 管理：showDialog 返回时退场动画还在跑，
+    // 这时在外面 dispose 会让仍在重建的 TextField 撞上「used after being disposed」。
+    final result = await showDialog<_NodeEditorValue>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(initial == null ? '添加节点' : '编辑节点'),
-        content: SizedBox(
-          width: scaleW(420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '节点名'),
-              ),
-              SizedBox(height: m.kSpace12),
-              TextField(
-                controller: apiCtrl,
-                decoration: const InputDecoration(
-                  labelText: '外网API',
-                  hintText: 'http://公网IP:17888',
-                ),
-              ),
-              SizedBox(height: m.kSpace12),
-              TextField(
-                controller: lanApiCtrl,
-                decoration: const InputDecoration(
-                  labelText: '内网API（可选，优先使用）',
-                  hintText: 'http://192.168.x.x:17888',
-                ),
-              ),
-              SizedBox(height: m.kSpace12),
-              TextField(
-                controller: authCodeCtrl,
-                obscureText: true,
-                style: const TextStyle(fontFamily: 'monospace'),
-                decoration: const InputDecoration(
-                  labelText: '授权码（节点侧提供）',
-                  hintText: '与对端「本机授权码」一致',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
-        ],
-      ),
+      builder: (_) => _NodeEditorDialog(initial: initial),
     );
-
-    if (confirmed != true || _service == null) {
+    if (result == null || _service == null) {
       return;
     }
 
-    final name = nameCtrl.text.trim();
-    final api = apiCtrl.text.trim();
-    final lanApi = lanApiCtrl.text.trim();
-    final authCode = authCodeCtrl.text.trim();
-    nameCtrl.dispose();
-    apiCtrl.dispose();
-    lanApiCtrl.dispose();
-    authCodeCtrl.dispose();
-    if (api.isEmpty) {
+    if (result.apiBaseUrl.isEmpty) {
       _showSnack('外网API 不能为空');
       return;
     }
@@ -197,19 +140,19 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     try {
       if (initial == null) {
         await _service!.addRemoteNode(
-          name: name,
-          apiBaseUrl: api,
-          lanApiBaseUrl: lanApi.isEmpty ? null : lanApi,
-          authCode: authCode,
+          name: result.name,
+          apiBaseUrl: result.apiBaseUrl,
+          lanApiBaseUrl: result.lanApiBaseUrl.isEmpty ? null : result.lanApiBaseUrl,
+          authCode: result.authCode,
         );
       } else {
         await _service!.updateRemoteNode(
           initial.copyWith(
-            name: name.isEmpty ? initial.name : name,
-            apiBaseUrl: api,
-            lanApiBaseUrl: lanApi.isEmpty ? null : lanApi,
-            authCode: authCode,
-            clearLanApiBaseUrl: lanApi.isEmpty,
+            name: result.name.isEmpty ? initial.name : result.name,
+            apiBaseUrl: result.apiBaseUrl,
+            lanApiBaseUrl: result.lanApiBaseUrl.isEmpty ? null : result.lanApiBaseUrl,
+            authCode: result.authCode,
+            clearLanApiBaseUrl: result.lanApiBaseUrl.isEmpty,
           ),
         );
       }
@@ -595,6 +538,121 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 节点编辑弹窗回传的表单值（已去首尾空白）。
+class _NodeEditorValue {
+  const _NodeEditorValue({
+    required this.name,
+    required this.apiBaseUrl,
+    required this.lanApiBaseUrl,
+    required this.authCode,
+  });
+
+  final String name;
+  final String apiBaseUrl;
+  final String lanApiBaseUrl;
+  final String authCode;
+}
+
+/// 添加/编辑远程节点弹窗：表单 controller 由本 State 持有并释放。
+///
+/// 外层 await 在 pop 当帧就返回，而退场动画期间 TextField 仍在重建，
+/// 在外层 dispose 会触发「A TextEditingController was used after being disposed」。
+class _NodeEditorDialog extends StatefulWidget {
+  const _NodeEditorDialog({this.initial});
+
+  final NodeEndpoint? initial;
+
+  @override
+  State<_NodeEditorDialog> createState() => _NodeEditorDialogState();
+}
+
+class _NodeEditorDialogState extends State<_NodeEditorDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _apiCtrl;
+  late final TextEditingController _lanApiCtrl;
+  late final TextEditingController _authCodeCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    _nameCtrl = TextEditingController(text: initial?.name ?? '');
+    _apiCtrl = TextEditingController(text: initial?.apiBaseUrl ?? 'http://127.0.0.1:17888');
+    _lanApiCtrl = TextEditingController(text: initial?.lanApiBaseUrl ?? '');
+    _authCodeCtrl = TextEditingController(text: initial?.authCode ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _apiCtrl.dispose();
+    _lanApiCtrl.dispose();
+    _authCodeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(
+      _NodeEditorValue(
+        name: _nameCtrl.text.trim(),
+        apiBaseUrl: _apiCtrl.text.trim(),
+        lanApiBaseUrl: _lanApiCtrl.text.trim(),
+        authCode: _authCodeCtrl.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return AlertDialog(
+      title: Text(widget.initial == null ? '添加节点' : '编辑节点'),
+      content: SizedBox(
+        width: scaleW(420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(labelText: '节点名'),
+            ),
+            SizedBox(height: m.kSpace12),
+            TextField(
+              controller: _apiCtrl,
+              decoration: const InputDecoration(
+                labelText: '外网API',
+                hintText: 'http://公网IP:17888',
+              ),
+            ),
+            SizedBox(height: m.kSpace12),
+            TextField(
+              controller: _lanApiCtrl,
+              decoration: const InputDecoration(
+                labelText: '内网API（可选，优先使用）',
+                hintText: 'http://192.168.x.x:17888',
+              ),
+            ),
+            SizedBox(height: m.kSpace12),
+            TextField(
+              controller: _authCodeCtrl,
+              obscureText: true,
+              style: const TextStyle(fontFamily: 'monospace'),
+              decoration: const InputDecoration(
+                labelText: '授权码（节点侧提供）',
+                hintText: '与对端「本机授权码」一致',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
+        FilledButton(onPressed: _submit, child: const Text('保存')),
+      ],
     );
   }
 }

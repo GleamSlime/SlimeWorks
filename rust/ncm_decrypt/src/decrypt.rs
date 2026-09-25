@@ -509,3 +509,261 @@ mod tests {
         }
     }
 }
+
+/// 合成用例：不依赖本机真实曲库，在测试内用同 crate 的 AES/RC4 逻辑
+/// 构造微型合法 .ncm 字节，覆盖解密、落盘与错误分支。
+#[cfg(test)]
+mod synthetic_tests {
+    use super::*;
+    use aes::cipher::BlockEncrypt;
+
+    /// PKCS7 填充（与解密端 unpad_pkcs7 对称）
+    fn pkcs7_pad(data: &[u8]) -> Vec<u8> {
+        let pad = 16 - (data.len() % 16);
+        let mut out = data.to_vec();
+        out.resize(data.len() + pad, pad as u8);
+        out
+    }
+
+    /// AES-128-ECB 加密（生产代码只解密，这里反向构造合法密文用）
+    fn aes_ecb_encrypt(key: &[u8; 16], data: &[u8]) -> Vec<u8> {
+        let cipher = Aes128::new_from_slice(key).expect("AES key 长度错误");
+        let mut result = Vec::with_capacity(data.len());
+        for chunk in data.chunks(16) {
+            assert_eq!(chunk.len(), 16, "ECB 加密输入必须是整块");
+            let mut block = [0u8; 16];
+            block.copy_from_slice(chunk);
+            cipher.encrypt_block((&mut block).into());
+            result.extend_from_slice(&block);
+        }
+        result
+    }
+
+    /// RC4 音频 key（16 字节即可，真实长度也不固定）
+    const SYNTH_RC4_KEY: &[u8] = b"0123456789abcdef";
+
+    /// 构造一个结构完整、可被本模块解开的微型 .ncm 文件。
+    /// 返回 (ncm 字节, 原始明文字节) 供解密后比对。
+    fn build_synthetic_ncm(audio: &[u8], cover: Option<&[u8]>) -> Vec<u8> {
+        // ===== Key blob：neteasecloudmusic + rc4key，PKCS7 填充后 AES 加密再 XOR 0x64 =====
+        let mut key_plain_vec = b"neteasecloudmusic".to_vec();
+        key_plain_vec.extend_from_slice(SYNTH_RC4_KEY);
+        let key_cipher = aes_ecb_encrypt(&CORE_KEY, &pkcs7_pad(&key_plain_vec));
+        let key_blob: Vec<u8> = key_cipher.iter().map(|b| b ^ 0x64).collect();
+
+        // ===== 元数据：music: + JSON，AES 加密后 base64，加 22 字节前导再 XOR 0x63 =====
+        let json = r#"{"format":"mp3","musicName":"合成测试曲","artist":[["测试歌手","0"]],"album":"合成专辑"}"#;
+        let mut meta_plain = b"music:".to_vec();
+        meta_plain.extend_from_slice(json.as_bytes());
+        let meta_cipher = aes_ecb_encrypt(&META_KEY, &pkcs7_pad(&meta_plain));
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&meta_cipher);
+        let mut meta_payload = b"163 key(Don't modify):".to_vec();
+        meta_payload.extend_from_slice(b64.as_bytes());
+        let meta_blob: Vec<u8> = meta_payload.iter().map(|b| b ^ 0x63).collect();
+
+        // ===== 音频：RC4 修改流是按字节异或的对称变换，加密=解密 =====
+        let encrypted_audio = decrypt_audio(audio, SYNTH_RC4_KEY);
+
+        let (image_space, image_size, cover_bytes) = match cover {
+            Some(c) => (c.len() as u32, c.len() as u32, c.to_vec()),
+            None => (0, 0, Vec::new()),
+        };
+
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&NCM_MAGIC);
+        buf.extend_from_slice(&[0x00, 0x00]); // 8 字节魔数后的 2 字节间隔
+        buf.extend_from_slice(&(key_blob.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&key_blob);
+        buf.extend_from_slice(&(meta_blob.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&meta_blob);
+        buf.extend_from_slice(&[0u8; 5]); // CRC 占位（解析器只跳过）
+        buf.extend_from_slice(&image_space.to_le_bytes());
+        buf.extend_from_slice(&image_size.to_le_bytes());
+        buf.extend_from_slice(&cover_bytes);
+        buf.extend_from_slice(&encrypted_audio);
+        buf
+    }
+
+    fn temp_ncm_path(label: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "sw_ncm_{}_{}",
+            std::process::id(),
+            label
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("song.ncm");
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn cleanup(path: &std::path::Path) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    /// NcmDecryptedData 未实现 Debug，无法直接 unwrap_err，这里手工取错误
+    fn decrypt_err(path: &std::path::Path) -> anyhow::Error {
+        match decrypt_ncm_file(path.to_str().unwrap()) {
+            Err(e) => e,
+            Ok(_) => panic!("预期解密失败的输入却成功了"),
+        }
+    }
+
+    #[test]
+    fn decrypt_synthetic_ncm_roundtrip() {
+        let audio: Vec<u8> = b"ID3".iter().copied().chain(0u8..64).collect();
+        let cover = vec![0xFFu8, 0xD8, 0x12, 0x34, 0x56, 0xD9];
+        let ncm = build_synthetic_ncm(&audio, Some(&cover));
+        let path = temp_ncm_path("roundtrip", &ncm);
+
+        let decrypted = decrypt_ncm_file(path.to_str().unwrap()).unwrap();
+        // 音频字节必须逐字节还原
+        assert_eq!(decrypted.audio_data, audio);
+        // 元数据链路：JSON 解析出标题/艺术家/专辑/格式
+        assert_eq!(decrypted.format, "mp3");
+        assert_eq!(decrypted.title.as_deref(), Some("合成测试曲"));
+        assert_eq!(decrypted.artist.as_deref(), Some("测试歌手"));
+        assert_eq!(decrypted.album.as_deref(), Some("合成专辑"));
+        assert_eq!(decrypted.cover_data.as_deref(), Some(&cover[..]));
+        assert!(decrypted
+            .metadata_json
+            .as_deref()
+            .unwrap()
+            .contains("合成测试曲"));
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn run_decrypt_writes_audio_and_cleans_source() {
+        let audio = vec![0xFFu8, 0xFB, 0x90, 0x00, 7, 8, 9, 10];
+        let ncm = build_synthetic_ncm(&audio, None);
+        let path = temp_ncm_path("run", &ncm);
+        let dir = path.parent().unwrap();
+
+        // 默认不删源文件：同目录落盘 .mp3，字节与合成前完全一致
+        let config = NcmDecryptConfig {
+            source_dir: dir.to_str().unwrap().to_string(),
+            delete_after_decrypt: false,
+        };
+        let result = run_decrypt(&config, &|_| {});
+        assert!(result.success, "error: {:?}", result.error_message);
+        assert_eq!((result.total_files, result.success_count, result.failed_count), (1, 1, 0));
+        let mp3 = dir.join("song.mp3");
+        assert_eq!(std::fs::read(&mp3).unwrap(), audio);
+        // 无封面时不应产出 jpg
+        assert!(!dir.join("song.jpg").exists());
+
+        // 开启删源后再跑一轮：源 .ncm 被删除
+        let config_delete = NcmDecryptConfig {
+            source_dir: dir.to_str().unwrap().to_string(),
+            delete_after_decrypt: true,
+        };
+        let result2 = run_decrypt(&config_delete, &|_| {});
+        assert!(result2.success);
+        assert!(!path.exists(), "delete_after_decrypt 应删除源文件");
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn bad_magic_is_rejected() {
+        let ncm = build_synthetic_ncm(b"some-audio-bytes", None);
+        let mut broken = ncm.clone();
+        broken[0] = b'X'; // 破坏 CTENFDAM 首字节
+        let path = temp_ncm_path("bad_magic", &broken);
+        let err = decrypt_err(&path);
+        assert!(err.to_string().contains("文件头不匹配"), "got: {err}");
+
+        // 小于 16 字节的碎片直接按"太小"拒绝
+        let tiny_path = temp_ncm_path("too_small", &ncm[..10]);
+        let err2 = decrypt_err(&tiny_path);
+        assert!(err2.to_string().contains("文件太小"), "got: {err2}");
+
+        cleanup(&path);
+        cleanup(&tiny_path);
+    }
+
+    #[test]
+    fn truncated_file_is_rejected() {
+        let ncm = build_synthetic_ncm(&[1u8; 48], None);
+        // 截断到只剩 key_len 字段和 6 字节数据、放不下完整 key：必须报"Key 数据异常"
+        let cut = &ncm[..20];
+        let path = temp_ncm_path("truncated", cut);
+        let err = decrypt_err(&path);
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Key 数据异常") || msg.contains("数据不足"),
+            "got: {msg}"
+        );
+
+        // 音频段被完全截掉（offset 已到文件尾）：报"无音频数据"
+        // 构造一个 meta/crc/image 都完整但音频为空的非法文件更容易触发前面的
+        // 长度校验，因此这里只保证不 panic 且返回 Err
+        let no_audio = &ncm[..ncm.len() - 48];
+        let path2 = temp_ncm_path("no_audio", no_audio);
+        assert!(decrypt_ncm_file(path2.to_str().unwrap()).is_err());
+
+        cleanup(&path);
+        cleanup(&path2);
+    }
+
+    // ── 纯函数补充：unpad_pkcs7 / detect_audio_format ─────────────────────
+
+    #[test]
+    fn unpad_pkcs7_cases() {
+        // 空输入原样返回
+        assert_eq!(unpad_pkcs7(vec![]), Vec::<u8>::new());
+        // 标准填充：3 字节数据 + 13 个 0x0D
+        let mut padded = b"abc".to_vec();
+        padded.extend(std::iter::repeat(0x0D).take(13));
+        assert_eq!(unpad_pkcs7(padded), b"abc".to_vec());
+        // 满块填充：数据本身占满 16 字节，额外一块 16 个 0x10
+        let mut full = vec![0xABu8; 16];
+        full.extend(std::iter::repeat(0x10).take(16));
+        assert_eq!(unpad_pkcs7(full), vec![0xABu8; 16]);
+        // pad 字节不一致：视为非法，原样返回而不是误删数据
+        let mut bogus = vec![1u8; 15];
+        bogus.push(9);
+        assert_eq!(unpad_pkcs7(bogus.clone()), bogus);
+        // pad 值越界（>16）：同样原样返回
+        let loud: Vec<u8> = vec![0u8; 15].into_iter().chain(std::iter::once(17u8)).collect();
+        assert_eq!(unpad_pkcs7(loud.clone()), loud);
+    }
+
+    #[test]
+    fn detect_audio_format_cases() {
+        // ID3v2 头 → mp3
+        assert_eq!(detect_audio_format(b"ID3\x04\x00\x00\x00"), "mp3");
+        // 帧同步头（0xFF Ex）→ mp3
+        assert_eq!(detect_audio_format(&[0xFF, 0xFB, 0x90, 0x00]), "mp3");
+        // fLaC 魔数 → flac
+        assert_eq!(detect_audio_format(b"fLaC\x00\x00\x00\x22"), "flac");
+        // 未知头部按现行策略默认 mp3（与真实解密链路行为一致）
+        assert_eq!(detect_audio_format(&[0x00, 0x01, 0x02, 0x03]), "mp3");
+        // 超短数据不越界
+        assert_eq!(detect_audio_format(&[0xFF]), "mp3");
+    }
+
+    #[test]
+    fn parse_metadata_variants() {
+        // 完整字段
+        let (fmt, title, artist, album) = parse_metadata(
+            r#"{"format":"flac","musicName":"曲名","artist":[["A","1"],["B","2"]],"album":"专"}"#,
+        );
+        assert_eq!(fmt, "flac");
+        assert_eq!(title.as_deref(), Some("曲名"));
+        assert_eq!(artist.as_deref(), Some("A / B"));
+        assert_eq!(album.as_deref(), Some("专"));
+        // 非法 JSON：整体回退默认值而不是报错
+        let (fmt2, title2, artist2, album2) = parse_metadata("{坏数据");
+        assert_eq!(fmt2, "mp3");
+        assert_eq!(title2, None);
+        assert_eq!(artist2, None);
+        assert_eq!(album2, None);
+        // 字符串数组形式的 artist 也要能拼出来
+        let (_, _, artist3, _) = parse_metadata(r#"{"artist":["C","D"]}"#);
+        assert_eq!(artist3.as_deref(), Some("C / D"));
+    }
+}

@@ -502,3 +502,256 @@ pub fn serve_media_file_with_range(
     ];
     Ok((status.to_string(), headers, buffer))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyper::{Body, Request};
+
+    /// 构造带唯一后缀的临时媒体目录（与 handlers.rs 测试同一套路：
+    /// 纯文件级依赖，不碰 db_module 全局绑定）
+    fn test_dir(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "sw_media_{}_{}",
+            std::process::id(),
+            label
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// query 参数值走 form 解码，用官方 Serializer 做百分号编码最稳妥
+    fn media_uri(path: &str) -> String {
+        let mut ser = url::form_urlencoded::Serializer::new(String::new());
+        ser.append_pair("path", path);
+        format!("/node/media?{}", ser.finish())
+    }
+
+    fn path_query(path: &str) -> String {
+        let mut ser = url::form_urlencoded::Serializer::new(String::new());
+        ser.append_pair("path", path);
+        ser.finish()
+    }
+
+    fn block_on<F: std::future::Future<Output = R>, R>(f: F) -> R {
+        // 复用节点服务器全局 runtime（spawn_blocking 需要它）
+        super::super::shared_runtime().block_on(f)
+    }
+
+    /// handle_media_request 返回 Result<_, Infallible>，测试里统一拆掉
+    fn media_request(uri: &str, range: Option<&str>) -> Response<Body> {
+        let mut builder = Request::builder().method("GET").uri(uri);
+        if let Some(r) = range {
+            builder = builder.header("range", r);
+        }
+        let req = builder.body(Body::empty()).unwrap();
+        block_on(handle_media_request(req)).unwrap()
+    }
+
+    fn body_bytes(resp: Response<Body>) -> Vec<u8> {
+        block_on(hyper::body::to_bytes(resp.into_body()))
+            .unwrap()
+            .to_vec()
+    }
+
+    fn sample_payload() -> Vec<u8> {
+        (0u32..300).map(|i| (i % 251) as u8).collect()
+    }
+
+    // ── handle_media_request：hyper 全路径 ────────────────────────────────
+
+    #[test]
+    fn media_request_hit_returns_full_content() {
+        let dir = test_dir("hit");
+        let file = dir.join("a.jpg");
+        let payload = sample_payload();
+        fs::write(&file, &payload).unwrap();
+
+        let resp = media_request(&media_uri(file.to_str().unwrap()), None);
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("Content-Type").unwrap().to_str().unwrap(),
+            "image/jpeg"
+        );
+        assert_eq!(body_bytes(resp), payload);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn media_request_miss_returns_404() {
+        // 不存在的文件必须 404，而不是 500 或空 200
+        let resp = media_request(&media_uri("/tmp/sw_no_such_media_file.jpg"), None);
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert_eq!(body_bytes(resp), b"file not found".to_vec());
+    }
+
+    #[test]
+    fn media_request_missing_path_param_returns_400() {
+        let resp = media_request("/node/media?width=100", None);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let resp2 = media_request("/node/media?path=", None);
+        assert_eq!(resp2.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn media_request_range_returns_partial_slice() {
+        let dir = test_dir("range");
+        let file = dir.join("b.jpg");
+        let payload = sample_payload();
+        fs::write(&file, &payload).unwrap();
+
+        let resp = media_request(&media_uri(file.to_str().unwrap()), Some("bytes=10-19"));
+        assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            resp.headers()
+                .get("Content-Range")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes 10-19/300"
+        );
+        assert_eq!(body_bytes(resp), payload[10..20].to_vec());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn media_request_av_without_range_returns_first_chunk() {
+        // 视频文件无 Range 时主动回 206 首切片，促使播放器走流式拉取
+        let dir = test_dir("av_first");
+        let file = dir.join("c.mp4");
+        let payload = vec![42u8; 100];
+        fs::write(&file, &payload).unwrap();
+
+        let resp = media_request(&media_uri(file.to_str().unwrap()), None);
+        assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            resp.headers()
+                .get("Content-Range")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes 0-99/100"
+        );
+        assert_eq!(body_bytes(resp), payload);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn media_request_out_of_bounds_range_is_clamped_not_panicked() {
+        // clamp_range 的不变式回归：起点越界曾被 u64 减法回绕成超大分配
+        let dir = test_dir("clamp");
+        let file = dir.join("d.jpg");
+        let payload = sample_payload();
+        fs::write(&file, &payload).unwrap();
+
+        let resp = media_request(&media_uri(file.to_str().unwrap()), Some("bytes=1000-2000"));
+        assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            resp.headers()
+                .get("Content-Range")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes 299-299/300"
+        );
+        assert_eq!(body_bytes(resp).len(), 1);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── handle_media_query：query-string 轻量入口 ─────────────────────────
+
+    #[test]
+    fn media_query_hit_and_miss() {
+        let dir = test_dir("q");
+        let file = dir.join("e.bin");
+        let payload = b"query-payload-bytes".to_vec();
+        fs::write(&file, &payload).unwrap();
+
+        // 命中：返回完整文件字节
+        let got = block_on(handle_media_query(&path_query(file.to_str().unwrap()))).unwrap();
+        assert_eq!(got, payload);
+
+        // 未命中：报 file not found（上层据此回 404）
+        let err = block_on(handle_media_query(&path_query("/tmp/sw_no_such_media_query.jpg")))
+            .expect_err("未命中必须报错");
+        assert!(err.contains("file not found"), "got: {err}");
+
+        // 缺 path 参数
+        assert_eq!(
+            block_on(handle_media_query("width=100")).unwrap_err(),
+            "missing path"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── serve_media_file_with_range：无 hyper 的原生 TCP 路径 ─────────────
+
+    #[test]
+    fn serve_with_range_hit_miss_and_bad_header() {
+        let dir = test_dir("served");
+        let file = dir.join("f.mp3");
+        let payload = sample_payload();
+        fs::write(&file, &payload).unwrap();
+        let path = file.to_str().unwrap();
+
+        // 命中 + Range：状态行/头部/字节三处都必须对齐
+        let (status, headers, body) = serve_media_file_with_range(path, Some("bytes=5-14")).unwrap();
+        assert_eq!(status, "206 Partial Content");
+        let get = |k: &str| {
+            headers
+                .iter()
+                .find(|(name, _)| name == k)
+                .map(|(_, v)| v.clone())
+        };
+        assert_eq!(get("Content-Type").as_deref(), Some("audio/mpeg"));
+        assert_eq!(get("Content-Range").as_deref(), Some("bytes 5-14/300"));
+        assert_eq!(get("Content-Length").as_deref(), Some("10"));
+        assert_eq!(body, payload[5..15].to_vec());
+
+        // 命中无 Range：整文件首切片语义，仍回 206
+        let (status2, headers2, body2) = serve_media_file_with_range(path, None).unwrap();
+        assert_eq!(status2, "206 Partial Content");
+        assert_eq!(
+            headers2
+                .iter()
+                .find(|(n, _)| n == "Content-Range")
+                .unwrap()
+                .1,
+            "bytes 0-299/300"
+        );
+        assert_eq!(body2, payload);
+
+        // 未命中：Err(file not found)，对应连接层 404
+        let miss = serve_media_file_with_range("/tmp/sw_no_such_served_file.mp3", None)
+            .expect_err("未命中必须报错");
+        assert!(miss.contains("file not found"), "got: {miss}");
+
+        // 非法 Range 头：明确报错而不是静默回全文件
+        assert!(serve_media_file_with_range(path, Some("garbage")).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── 纯函数：内容类型猜测 ──────────────────────────────────────────────
+
+    #[test]
+    fn guess_content_type_basics() {
+        assert_eq!(guess_media_content_type("/x/a.JPG"), "image/jpeg");
+        assert_eq!(guess_media_content_type("/x/a.png"), "image/png");
+        assert_eq!(guess_media_content_type("/x/a.mkv"), "video/x-matroska");
+        assert_eq!(guess_media_content_type("/x/a.flac"), "audio/flac");
+        assert_eq!(guess_media_content_type("/x/a.unknown_ext"), "application/octet-stream");
+    }
+
+    // ── 缩略图进度计数：不触媒体生成也要成对 ─────────────────────────────
+
+    #[test]
+    fn bulk_thumbnail_empty_input_is_noop() {
+        // 空列表必须直接返回，不给 runtime 白起线程、不动计数器
+        let (before_total, before_completed) = thumb_generation_progress();
+        spawn_bulk_thumbnail_generation(vec![]);
+        let (after_total, after_completed) = thumb_generation_progress();
+        assert_eq!((before_total, before_completed), (after_total, after_completed));
+    }
+}

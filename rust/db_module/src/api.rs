@@ -276,3 +276,243 @@ pub fn db_merge_tables(
     }
     Ok(copied)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::DbStorage;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// 全局自增序号 + 纳秒时间戳，保证测试内表名/路径唯一。
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_tag() -> String {
+        let seq = SEQ.fetch_add(1, Ordering::SeqCst);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        format!("{}{}_{}", std::process::id(), seq, nanos)
+    }
+
+    /// 说明：api.rs 依赖进程级全局静态（DB_INSTANCES / TABLE_ROUTES），且 redb
+    /// 对打开中的数据库文件持有文件锁、缓存实例没有对外关闭/剔除接口。
+    /// 因此各测试用例使用唯一表名 + 独立临时数据库文件避免互相干扰；
+    /// 而必须共享同一目标文件路径的多个合并场景（默认补齐 / overwrite /
+    /// 源不存在 / 源表不存在）会命中同一全局实例缓存，无法并行执行，
+    /// 全部合并进同一个 #[test] 函数内串行验证。
+    fn temp_root(tag: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("db_module_api_test_{}", tag));
+        std::fs::create_dir_all(&root).expect("应能创建测试临时目录");
+        root
+    }
+
+    #[test]
+    fn test_db_bind_table_idempotent_and_conflict() {
+        let tag = unique_tag();
+        let root = temp_root(&tag);
+        let table = format!("bind_tbl_{}", tag);
+        let p1 = root.join("p1.db");
+        let p2 = root.join("p2.db");
+        let s1 = p1.to_str().unwrap().to_string();
+        let s2 = p2.to_str().unwrap().to_string();
+
+        // 首次绑定：绑定后应能正常读写
+        db_bind_table(table.clone(), s1.clone()).expect("首次绑定应成功");
+        db_set(table.clone(), "k".into(), "v1".into()).expect("绑定后 db_set 应成功");
+        assert_eq!(
+            db_get(table.clone(), "k".into()).unwrap(),
+            Some("v1".to_string()),
+            "绑定后写入的数据应能读回"
+        );
+
+        // 重复绑定同一文件：应幂等成功，且数据不受影响
+        db_bind_table(table.clone(), s1.clone()).expect("重复绑定同一文件应幂等成功");
+        assert_eq!(
+            db_get(table.clone(), "k".into()).unwrap(),
+            Some("v1".to_string()),
+            "幂等重绑后原数据应仍可读"
+        );
+
+        // 绑定到其他文件：应报冲突错误
+        let err = db_bind_table(table.clone(), s2.clone())
+            .expect_err("绑定到另一个数据库文件应报冲突错误");
+        assert!(
+            err.contains("already bound"),
+            "冲突错误信息应包含 'already bound'，实际: {}",
+            err
+        );
+
+        // 冲突绑定失败后路由保持不变，仍指向 p1
+        assert_eq!(
+            db_get(table.clone(), "k".into()).unwrap(),
+            Some("v1".to_string()),
+            "绑定冲突不应改变已有路由"
+        );
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn test_db_unbound_table_operations_error() {
+        let table = format!("unbound_tbl_{}", unique_tag());
+
+        // 未绑定的表：所有路由型接口应报 "not bound" 错误
+        let results: Vec<(String, DbResult<()>)> = vec![
+            ("db_get".to_string(), db_get(table.clone(), "k".into()).map(|_| ())),
+            (
+                "db_set".to_string(),
+                db_set(table.clone(), "k".into(), "v".into()),
+            ),
+            ("db_delete".to_string(), db_delete(table.clone(), "k".into()).map(|_| ())),
+            ("db_list_keys".to_string(), db_list_keys(table.clone()).map(|_| ())),
+            ("db_list_all".to_string(), db_list_all(table.clone()).map(|_| ())),
+            (
+                "db_batch_set".to_string(),
+                db_batch_set(
+                    table.clone(),
+                    vec![DbRecord {
+                        key: "k".into(),
+                        value: "v".into(),
+                    }],
+                ),
+            ),
+            (
+                "db_batch_write".to_string(),
+                db_batch_write(table.clone(), vec![], vec!["k".into()]).map(|_| ()),
+            ),
+            ("db_count".to_string(), db_count(table.clone()).map(|_| ())),
+            ("db_clear_table".to_string(), db_clear_table(table.clone())),
+        ];
+
+        for (name, result) in results {
+            let err = result.err().unwrap_or_else(|| panic!("{} 对未绑定表应返回错误", name));
+            assert!(
+                err.contains("not bound"),
+                "{} 的错误信息应包含 'not bound'，实际: {}",
+                name,
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn test_db_merge_tables_all_scenarios() {
+        // 本函数串行覆盖 db_merge_tables 的全部场景，原因见上方注释：
+        // 各场景共享 dst_path 的全局缓存实例，无法拆分并行。
+        let tag = unique_tag();
+        let root = temp_root(&tag);
+        let table = format!("merge_tbl_{}", tag);
+        let src_path = root.join("src.db");
+        let dst_path = root.join("dst.db");
+        let src_str = src_path.to_str().unwrap().to_string();
+        let dst_str = dst_path.to_str().unwrap().to_string();
+
+        // 1. 预置源库：直接用临时 DbStorage 写入后 drop 释放文件锁，
+        //    避免与后续 db_merge_tables 内部 get_or_open 的实例缓存冲突。
+        {
+            let src = DbStorage::new(&src_path).expect("应能打开源库文件");
+            let leaked: &'static str = Box::leak(table.clone().into_boxed_str());
+            src.register_table(leaked).expect("源库表注册应成功");
+            src
+                .batch_set(
+                    &table,
+                    &[
+                        ("k1".to_string(), "src_v1".to_string()),
+                        ("k2".to_string(), "src_v2".to_string()),
+                    ],
+                )
+                .expect("源库预置数据应成功");
+            drop(src);
+        }
+
+        // 2. 表绑定到目标库并预置 k2（用于验证默认补齐模式不覆盖已有 key）
+        db_bind_table(table.clone(), dst_str.clone()).expect("表绑定到目标库应成功");
+        db_set(table.clone(), "k2".into(), "dst_v2".into())
+            .expect("目标库预置 k2 应成功");
+
+        // 3. 默认补齐模式：仅复制缺失的 k1，已有 k2 保持不变
+        let copied = db_merge_tables(src_str.clone(), dst_str.clone(), vec![table.clone()], false)
+            .expect("默认补齐合并应成功");
+        assert_eq!(copied, 1, "补齐模式应仅复制 1 条缺失记录（k1）");
+        assert_eq!(
+            db_get(table.clone(), "k1".into()).unwrap(),
+            Some("src_v1".to_string()),
+            "缺失的 k1 应从源库补齐"
+        );
+        assert_eq!(
+            db_get(table.clone(), "k2".into()).unwrap(),
+            Some("dst_v2".to_string()),
+            "默认补齐模式不得覆盖目标库已有的 k2"
+        );
+
+        // 4. 再次补齐：源键已全部存在，应复制 0 条
+        let copied = db_merge_tables(src_str.clone(), dst_str.clone(), vec![table.clone()], false)
+            .expect("二次补齐合并应成功");
+        assert_eq!(copied, 0, "无缺失 key 时补齐模式应复制 0 条");
+
+        // 5. overwrite=true：全量覆盖目标已有记录
+        let copied = db_merge_tables(src_str.clone(), dst_str.clone(), vec![table.clone()], true)
+            .expect("覆盖模式合并应成功");
+        assert_eq!(copied, 2, "覆盖模式应复制源表全部 2 条记录");
+        assert_eq!(
+            db_get(table.clone(), "k2".into()).unwrap(),
+            Some("src_v2".to_string()),
+            "overwrite=true 应使用源库值覆盖目标 k2"
+        );
+
+        // 6. 源文件不存在：跳过并返回 0，且不报错
+        let missing_src = root.join("not_exist.db");
+        let copied = db_merge_tables(
+            missing_src.to_str().unwrap().to_string(),
+            dst_str.clone(),
+            vec![table.clone()],
+            false,
+        )
+        .expect("源文件不存在时合并不应报错");
+        assert_eq!(copied, 0, "源文件不存在时应跳过并返回 0");
+        assert!(
+            !missing_src.exists(),
+            "源文件不存在时不应创建源文件"
+        );
+
+        // 7. 源与目标为同一路径：直接返回 0
+        let copied = db_merge_tables(
+            dst_str.clone(),
+            dst_str.clone(),
+            vec![table.clone()],
+            true,
+        )
+        .expect("同源同目标合并不应报错");
+        assert_eq!(copied, 0, "源路径等于目标路径时应返回 0");
+
+        // 8. 源文件存在但不含该表：视为源表不存在，跳过并返回 0
+        let src_no_table = root.join("src_no_table.db");
+        {
+            let s = DbStorage::new(&src_no_table).expect("应能打开无目标表的源库");
+            let other: &'static str =
+                Box::leak(format!("other_tbl_{}", tag).into_boxed_str());
+            s.register_table(other).unwrap();
+            s.set(other, "x", "y").expect("无关表数据写入应成功");
+            drop(s);
+        }
+        let copied = db_merge_tables(
+            src_no_table.to_str().unwrap().to_string(),
+            dst_str.clone(),
+            vec![table.clone()],
+            false,
+        )
+        .expect("源表不存在时合并不应报错");
+        assert_eq!(copied, 0, "源文件存在但源表不存在时应跳过并返回 0");
+
+        // 9. 空表列表：返回 0
+        let copied =
+            db_merge_tables(src_str.clone(), dst_str.clone(), vec![], false).expect("空表列表合并不应报错");
+        assert_eq!(copied, 0, "表列表为空时应返回 0");
+
+        // 注意：dst 实例被全局缓存持有（文件锁不释放），清理尽力而为
+        std::fs::remove_dir_all(root).ok();
+    }
+}
