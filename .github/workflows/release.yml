@@ -343,6 +343,10 @@ jobs:
           PP_NAME=$(plutil -extract Name raw -o - /tmp/profile.plist)
           # 打印过期时间：profile 过期是 CI 上最常见的静默签名失败原因之一
           PP_EXPIRY=$(plutil -extract ExpirationDate raw -o - /tmp/profile.plist 2>/dev/null || echo "(该 profile 无 ExpirationDate)")
+          # 打印 profile 授权的能力清单：app 的 entitlements 必须是它的子集，
+          # 缺哪个键 archive 就会报 "X capabilities are present in the app's entitlements, but not in the profile"
+          echo "=== Profile 授权的 Entitlements keys ==="
+          plutil -extract Entitlements xml1 -o - /tmp/profile.plist | grep -E "<key>" || echo "(无 Entitlements)"
           rm -f /tmp/profile.plist
           if [ -z "$PP_UUID" ]; then
             echo "❌ 未能从 profile 中提取 UUID，请检查 IOS_PROVISIONING_PROFILE 是否为单行连续 base64、且是 .mobileprovision 文件"
@@ -405,6 +409,19 @@ jobs:
           #   CODE_SIGN_STYLE=Automatic / CODE_SIGN_IDENTITY="Apple Development" / DEVELOPMENT_TEAM
           # 会覆盖 -xcconfig，导致仍按 automatic + 开发证书签名而失败。
           # PROVISIONING_PROFILE_SPECIFIER 用 profile 的 UUID（与文件名一致，匹配最稳）。
+          # 显式钉死 entitlements：工程里没有 Runner.entitlements，Xcode 会自行合成，
+          # 结果多出一个 aps-environment（Push），而两个 Ad Hoc profile 都不含该授权 →
+          # archive 报 "Push Notifications capabilities are present in the app's entitlements,
+          # but not in the profile"。
+          # 本工程没有任何 APNs/推送代码，给一份空 entitlements 即可消除这个不确定性。
+          cat > Runner/CIAdHoc.entitlements << 'EOLEOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          </dict>
+          </plist>
+          EOLEOF
           # 后台 CPU 监控：每 60 秒打印一次占用最高的进程，
           # 用于判断卡住时是真在编译（clang/swift 高 CPU）还是死锁（全员 0%）
           # 附带磁盘余量检查：macOS runner 磁盘打满会让链接阶段假死
@@ -435,6 +452,7 @@ jobs:
             "CODE_SIGN_IDENTITY=${SIGNING_IDENTITY}" \
             "DEVELOPMENT_TEAM=${IOS_TEAM_ID}" \
             "PROVISIONING_PROFILE_SPECIFIER=${PP_UUID}" \
+            "CODE_SIGN_ENTITLEMENTS=Runner/CIAdHoc.entitlements" \
             "CLANG_ENABLE_EXPLICIT_MODULES=NO" \
             "SWIFT_ENABLE_EXPLICIT_MODULES=NO"
           ARCHIVE_EXIT=$?
