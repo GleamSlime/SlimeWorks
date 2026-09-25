@@ -1,3 +1,7 @@
+// 打上 golden 标签：CI 用 `flutter test --exclude-tags golden` 跳过像素比对
+@Tags(['golden'])
+library;
+
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';

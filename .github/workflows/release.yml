@@ -40,8 +40,66 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "📋 版本: $VERSION, 构建号: $BUILD_NUMBER, Tag: $TAG"
 
+  # ===== test：Flutter 单元测试，出包前置闸门 =====
+  # golden（像素比对）用例在这里排除：基准 PNG 是本机 macOS 渲染出来的，Linux runner
+  # 的字体光栅化不同，像素必然对不上。这些用例的定位是"本机离屏肉眼验收"
+  # （见 test/design_system_render_test.dart 顶部注释），不适合当 CI 断言。
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: master
+
+      - name: Flutter 依赖 + 代码生成
+        run: |
+          flutter pub get
+          flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 创建 .env 文件（占位）
+        run: |
+          cat > .env << 'ENVEOF'
+          PICACG_API_KEY=ci-placeholder
+          PICACG_SIGN_KEY=ci-placeholder
+          ENVEOF
+
+      - name: Flutter 单元测试
+        run: flutter test --exclude-tags golden
+
+  # ===== test-rust：Rust 单元测试，暂只观测不拦门 =====
+  # 本机 `cargo test --workspace` 卡在 whisper-rs-sys（bindgen 找不到 libclang，
+  # 需设 LIBCLANG_PATH），这套用例还没拿到跑通的实证，所以先不放进 needs 链里，
+  # 免得一条没验证过的测试线把全平台出包堵死。连续绿了再改成拦门。
+  test-rust:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: cargo test --workspace
+        working-directory: rust
+        run: cargo test --workspace
+
   build-macos:
-    needs: detect-version
+    needs: [detect-version, test]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +178,7 @@ jobs:
           retention-days: 7
 
   build-windows:
-    needs: detect-version
+    needs: [detect-version, test]
     runs-on: windows-2022
     steps:
       - name: 配置 Git 支持 Unicode
@@ -207,7 +265,7 @@ jobs:
   # 本 job 不被 release / publish-pgyer 依赖，iOS 失败不会阻塞桌面端与安卓发布
 
   build-ios:
-    needs: detect-version
+    needs: [detect-version, test]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -590,7 +648,7 @@ jobs:
           retention-days: 7
 
   build-android:
-    needs: detect-version
+    needs: [detect-version, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -654,7 +712,7 @@ jobs:
           retention-days: 7
 
   publish-pgyer:
-    needs: [detect-version, build-android]
+    needs: [detect-version, test, build-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -688,7 +746,7 @@ jobs:
           fi
 
   release:
-    needs: [detect-version, build-macos, build-windows, build-android]
+    needs: [detect-version, test, build-macos, build-windows, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -716,23 +774,59 @@ jobs:
           fi
           echo "file_size=$FILE_SIZE" >> "$GITHUB_OUTPUT"
 
+      - name: 生成 Release 正文（本次推送的提交清单）
+        run: |
+          VERSION="${{ needs.detect-version.outputs.version }}"
+          BUILD="${{ needs.detect-version.outputs.build_number }}"
+          SHA="${{ github.sha }}"
+          BEFORE="${{ github.event.before || '' }}"
+          # 提交范围优先取"本次推送"（push 事件自带的 before SHA）；
+          # 取不到（新分支首推 / 强推 / 手动触发）就退回上一个 tag，再退回当前单个提交。
+          if [ -n "$BEFORE" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            RANGE="${BEFORE}..${SHA}"
+            SOURCE="本次推送"
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 "${SHA}^" 2>/dev/null || true)
+            if [ -n "$PREV_TAG" ]; then
+              RANGE="${PREV_TAG}..${SHA}"
+              SOURCE="自 ${PREV_TAG} 起"
+            else
+              RANGE="$SHA"
+              SOURCE="当前提交"
+            fi
+          fi
+          TOTAL=$(git rev-list --count --no-merges "$RANGE" 2>/dev/null || echo 0)
+          {
+            echo "## SlimeWorks v${VERSION}"
+            echo
+            echo "构建号：${BUILD}"
+            echo
+            echo "### 提交记录（${SOURCE}，${TOTAL} 个非合并提交）"
+            echo
+            if [ "$TOTAL" = "0" ]; then
+              echo "_没有新提交（本次多为文档或构建配置改动）。_"
+            else
+              git log --no-merges --reverse --pretty='- `%h` %s' "$RANGE" | head -80
+              if [ "$TOTAL" -gt 80 ]; then
+                echo "- …另有 $((TOTAL - 80)) 个提交未列出"
+              fi
+            fi
+            echo
+            echo '### 下载'
+            echo
+            echo '- **macOS**：`.dmg`，拖进「应用程序」'
+            echo '- **Windows**：`.exe` 安装包'
+            echo '- **Android**：`.apk`（蒲公英同步有包）'
+            echo '- **iOS**：`.ipa`（Ad Hoc，测试机 UDID 需已登记进描述文件）'
+          } > release_body.md
+          cat release_body.md
+
       - name: 创建或更新 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.detect-version.outputs.tag }}
           name: "SlimeWorks v${{ needs.detect-version.outputs.version }}"
-          body: |
-            ## SlimeWorks v${{ needs.detect-version.outputs.version }}
-
-            Build: ${{ needs.detect-version.outputs.build_number }}
-
-            ### Downloads
-            - **macOS**: Download `.dmg`, drag to Applications
-            - **Windows**: Download `.exe` installer
-            - **Android**: Download `.apk` (also available on PGYER)
-
-            ---
-            *Built by GitHub Actions*
+          body_path: release_body.md
           files: |
             dist/**/*.dmg
             dist/**/*.exe
