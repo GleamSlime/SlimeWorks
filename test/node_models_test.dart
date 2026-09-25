@@ -124,6 +124,55 @@ void main() {
       expect(updated.apiBaseUrl, endpoint.apiBaseUrl);
     });
 
+    // ── 授权码 ──────────────────────────────────────────────────────────────
+
+    test('authCode 默认空串且不写入 JSON', () {
+      const endpoint = NodeEndpoint(id: 'n', name: 'n', apiBaseUrl: 'http://x');
+      expect(endpoint.authCode, '');
+      expect(endpoint.toJson().containsKey('authCode'), isFalse);
+    });
+
+    test('authCode toJson/fromJson 往返一致', () {
+      const endpoint = NodeEndpoint(
+        id: 'n2',
+        name: '带授权码',
+        apiBaseUrl: 'http://x',
+        authCode: 'ABCD-1234',
+      );
+      final restored = NodeEndpoint.fromJson(endpoint.toJson());
+      expect(restored.authCode, 'ABCD-1234');
+    });
+
+    test('历史 JSON 无 authCode 字段时降级为空（不校验）', () {
+      final endpoint = NodeEndpoint.fromJson(<String, dynamic>{
+        'id': 'n3',
+        'name': '旧数据',
+        'apiBaseUrl': 'http://x',
+      });
+      expect(endpoint.authCode, '');
+    });
+
+    test('fromJson 会 trim 授权码空白', () {
+      final endpoint = NodeEndpoint.fromJson(<String, dynamic>{
+        'id': 'n4',
+        'name': '带空白',
+        'apiBaseUrl': 'http://x',
+        'authCode': '  ABCD-1234  ',
+      });
+      expect(endpoint.authCode, 'ABCD-1234');
+    });
+
+    test('copyWith 可更新授权码', () {
+      const endpoint = NodeEndpoint(
+        id: 'n5',
+        name: '换码',
+        apiBaseUrl: 'http://x',
+        authCode: 'OLD-CODE',
+      );
+      expect(endpoint.copyWith(authCode: 'NEW-CODE').authCode, 'NEW-CODE');
+      expect(endpoint.copyWith(name: '改名').authCode, 'OLD-CODE');
+    });
+
     test('toJson 输出所有字段', () {
       const endpoint = NodeEndpoint(
         id: 'node-006',

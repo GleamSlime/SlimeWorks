@@ -169,8 +169,9 @@ Rust 节点服务器的 `/node/media` 路由完整支持 HTTP Range 请求，供
 | `list_media_collections` | 获取所有集合（含统计） |
 | `list_media_folders` | 获取所有文件夹 |
 | `get_media_collection_items` | 获取集合内文件列表 |
-| `import_media_folder` | 导入文件夹创建集合 |
+| `import_media_folder` | 导入文件夹创建集合；`base_folder_id` 指定归档起始文件夹 |
 | `scan_media_folders` | 扫描目录 |
+| `resolve_folder_upload_target` | 由文件夹内已有集合的磁盘位置反推上传落点 |
 | `list_directories` | 列举一级子目录 |
 | `rename_media_collection` | 重命名集合 |
 | `delete_media_collection` | 删除集合（保留文件） |
@@ -181,6 +182,22 @@ Rust 节点服务器的 `/node/media` 路由完整支持 HTTP Range 请求，供
 | `rename_media_folder` | 重命名文件夹 |
 | `delete_media_folder` | 删除文件夹 |
 | `update_collection_cover_base64` | 更新集合封面 |
+
+### 远程文件夹拖拽导入（上传 → 解压 → 节点导入）
+
+桌面端在**远程节点的文件夹内**拖入本地目录/文件时，按与本地拖入等价的「导入」计算
+（`MediaLibraryViewModel.importPathsToNodeFolder`），区别只在传输环节：
+
+1. **落点**：`resolve_folder_upload_target` 用该文件夹下已有集合 `folder_path` 的父目录反推磁盘目录；
+   文件夹还没有集合、或集合散落在多个父目录（歧义）时不猜，弹 `NodeDirectoryPicker` 让用户手选。
+2. **传输**：目录整棵 `zip_directory_to_tmp` 打包 → `POST /node/upload/archive?dest=<落点>` 流式上传
+   （请求体不落 Dart 内存、节点侧 `io::copy` 直写临时文件）→ 节点解压到 `<落点>/<目录名>`；
+   松散文件按其父目录归组后整目录上传（与本地「拖文件=导入其父目录」一致）。
+3. **导入**：`import_media_folder(folder_path=<落点>/<目录名>, base_folder_id=<当前远程文件夹>)`，
+   集合直接归档进当前远程文件夹，落位与本地导入一致；`item_count` 为 0 的空集合自动删除。
+4. **收尾**：删除本地临时 zip → `refreshRemoteLibrary()` → 汇总成功/失败/已导入跳过提示。
+
+上传端点的安全边界与残留风险见 `node_server_security.md`。
 
 ## ViewModel 关键状态
 

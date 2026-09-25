@@ -7,6 +7,9 @@ class NodeEndpoint {
   final bool supportsMove;
   final bool supportsCoverUpdate;
 
+  /// 连接该节点使用的授权码明文；请求时以 sha256 摘要放入 `X-SW-Auth` 请求头。
+  final String authCode;
+
   const NodeEndpoint({
     required this.id,
     required this.name,
@@ -15,6 +18,7 @@ class NodeEndpoint {
     this.enabled = true,
     this.supportsMove = true,
     this.supportsCoverUpdate = true,
+    this.authCode = '',
   });
 
   String get effectiveApiBaseUrl => lanApiBaseUrl?.isNotEmpty == true ? lanApiBaseUrl! : apiBaseUrl;
@@ -28,6 +32,7 @@ class NodeEndpoint {
       'enabled': enabled,
       'supportsMove': supportsMove,
       'supportsCoverUpdate': supportsCoverUpdate,
+      if (authCode.isNotEmpty) 'authCode': authCode,
     };
   }
 
@@ -42,6 +47,7 @@ class NodeEndpoint {
       supportsMove: json['supportsMove'] is bool ? json['supportsMove'] as bool : true,
       supportsCoverUpdate:
           json['supportsCoverUpdate'] is bool ? json['supportsCoverUpdate'] as bool : true,
+      authCode: (json['authCode'] ?? '').toString().trim(),
     );
   }
 
@@ -53,6 +59,7 @@ class NodeEndpoint {
     bool? enabled,
     bool? supportsMove,
     bool? supportsCoverUpdate,
+    String? authCode,
     bool clearLanApiBaseUrl = false,
   }) {
     return NodeEndpoint(
@@ -63,6 +70,7 @@ class NodeEndpoint {
       enabled: enabled ?? this.enabled,
       supportsMove: supportsMove ?? this.supportsMove,
       supportsCoverUpdate: supportsCoverUpdate ?? this.supportsCoverUpdate,
+      authCode: authCode ?? this.authCode,
     );
   }
 }

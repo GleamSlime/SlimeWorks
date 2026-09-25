@@ -179,11 +179,18 @@ pub async fn dispatch_action(
             let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
             let generate_thumbnails = params["generate_thumbnails"].as_bool().unwrap_or(false);
             let preserve_structure = params["preserve_structure"].as_bool().unwrap_or(false);
+            // 归档目标文件夹（库内 ID）：客户端在某个远程文件夹内导入时带上，
+            // 集合就落在该文件夹下，而不是节点库根目录。
+            let base_folder_id = params["base_folder_id"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
             // 按原始目录导入：扫描子目录集合，并按目录层级创建文件夹归档
             if preserve_structure {
                 let collections = media_api::scan_media_folders(folder_path.clone())
                     .map_err(|e| format!("导入媒体文件夹失败: {}", e))?;
-                let imported = import_collections_with_structure(&folder_path, collections)?;
+                let imported =
+                    import_collections_with_structure(&folder_path, collections, &base_folder_id)?;
                 if generate_thumbnails {
                     spawn_import_thumbnail_generation(&imported);
                 }
@@ -191,7 +198,7 @@ pub async fn dispatch_action(
                     "id": "",
                     "title": "",
                     "folder_path": folder_path,
-                    "folder_id": Value::Null,
+                    "folder_id": base_folder_id,
                     "cover_path": Value::Null,
                     "item_count": imported.len().to_string(),
                     "created_at": chrono::Utc::now().timestamp(),
@@ -200,6 +207,12 @@ pub async fn dispatch_action(
             }
             let collection = media_api::import_media_folder(folder_path)
                 .map_err(|e| format!("导入媒体文件夹失败: {}", e))?;
+            let mut folder_id = collection.folder_id.clone();
+            if let Some(pid) = &base_folder_id {
+                media_api::move_media_collection_to_folder(collection.id.clone(), Some(pid.clone()))
+                    .map_err(|e| format!("移动集合失败: {}", e))?;
+                folder_id = Some(pid.clone());
+            }
             if generate_thumbnails {
                 spawn_import_thumbnail_generation(std::slice::from_ref(&collection));
             }
@@ -207,7 +220,7 @@ pub async fn dispatch_action(
                 "id": collection.id,
                 "title": collection.title,
                 "folder_path": collection.folder_path,
-                "folder_id": collection.folder_id,
+                "folder_id": folder_id,
                 "cover_path": collection.cover_path,
                 "item_count": collection.item_count.to_string(),
                 "created_at": collection.created_at.timestamp(),
@@ -251,6 +264,21 @@ pub async fn dispatch_action(
         }
 
         // ── 目录扫描 ─────────────────────────────────────────────────────────
+        // 反推「把本地目录拖进远程文件夹」时的落点：MediaFolder 只有库内 ID，没有磁盘路径，
+        // 因此从该文件夹下已有集合的磁盘位置反推（集合目录的父目录 = 文件夹目录）。
+        "resolve_folder_upload_target" => {
+            let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
+            if folder_id.trim().is_empty() {
+                return Err("缺少 folder_id".to_string());
+            }
+            let (target_dir, candidates) = resolve_folder_target_dir(&folder_id)?;
+            Ok(json!({
+                "target_dir": target_dir,
+                // 候选父目录：target_dir 为空时（空文件夹/歧义）供客户端走目录浏览器兜底
+                "candidates": candidates,
+            }))
+        }
+
         "list_directories" => {
             let path = params["path"].as_str().unwrap_or("/");
             let dir_path = Path::new(path);
@@ -991,10 +1019,12 @@ pub async fn dispatch_action(
 }
 
 /// 按原始目录结构导入：按集合目录相对导入根目录的层级创建（或复用）文件夹，
-/// 并将集合移入对应文件夹；返回归档后的集合列表。
+/// 并将集合移入对应文件夹；[base_folder_id] 为层级挂载的起始父文件夹，
+/// 集合目录不在根目录之下时直接挂到起始文件夹下；返回归档后的集合列表。
 fn import_collections_with_structure(
     root: &str,
     collections: Vec<media_collection::MediaCollection>,
+    base_folder_id: &Option<String>,
 ) -> Result<Vec<media_collection::MediaCollection>, String> {
     let root_norm = root.trim_end_matches(['/', '\\']);
     let mut folder_cache: std::collections::HashMap<String, String> =
@@ -1007,7 +1037,7 @@ fn import_collections_with_structure(
             .trim_end_matches(['/', '\\'])
             .strip_prefix(root_norm)
             .map(|r| r.trim_start_matches(['/', '\\']).to_string());
-        let mut parent_id: Option<String> = None;
+        let mut parent_id: Option<String> = base_folder_id.clone();
         if let Some(rel) = rel {
             let mut acc = String::new();
             for segment in rel.split(['/', '\\']).filter(|s| !s.is_empty()) {
@@ -1057,6 +1087,57 @@ fn find_or_create_folder(name: &str, parent_id: &Option<String>) -> Result<Strin
             .map_err(|e| format!("创建文件夹失败: {}", e))?,
     };
     Ok(folder.id)
+}
+
+/// 由文件夹下已有集合的磁盘位置反推「上传落点」。
+///
+/// `MediaFolder` 只有库内 ID，没有磁盘路径，所以唯一的线索是：
+/// 该文件夹下每个集合的 `folder_path` 的**父目录**就是这个文件夹在磁盘上的目录。
+///
+/// 返回 `(落点, 候选目录)`：
+/// - 落点非空 = 该文件夹的集合都在同一个父目录，可以直接用；
+/// - 落点为空 = 文件夹还没有集合、或集合散落在多个父目录（歧义），
+///   此时把候选目录交给客户端，由它走节点目录浏览器让用户手选。
+fn resolve_folder_target_dir(folder_id: &str) -> Result<(String, Vec<String>), String> {
+    let collections = media_api::get_all_media_collections()
+        .map_err(|e| format!("获取媒体集合失败: {}", e))?;
+    Ok(pick_folder_target_dir(folder_id, &collections))
+}
+
+/// `resolve_folder_target_dir` 的纯函数部分（不碰数据库，便于测试）。
+fn pick_folder_target_dir(
+    folder_id: &str,
+    collections: &[media_collection::MediaCollection],
+) -> (String, Vec<String>) {
+    /// 收集去重后的父目录，保持出现顺序
+    fn push_unique(list: &mut Vec<String>, value: String) {
+        if !value.is_empty() && !list.contains(&value) {
+            list.push(value);
+        }
+    }
+
+    let mut own_parents: Vec<String> = Vec::new();
+    let mut all_parents: Vec<String> = Vec::new();
+    for collection in collections {
+        let Some(parent) = Path::new(&collection.folder_path).parent() else {
+            continue;
+        };
+        let parent = parent.to_string_lossy().to_string();
+        push_unique(&mut all_parents, parent.clone());
+        if collection.folder_id.as_deref() == Some(folder_id) {
+            push_unique(&mut own_parents, parent);
+        }
+    }
+
+    // 只有一个父目录才算无歧义；多个父目录时宁可让用户确认，也不猜一个写进去
+    if own_parents.len() == 1 {
+        let target = own_parents.remove(0);
+        return (target, Vec::new());
+    }
+    if own_parents.len() > 1 {
+        return (String::new(), own_parents);
+    }
+    (String::new(), all_parents)
 }
 
 /// 导入后全量生成缩略图：收集集合内全部媒体文件，后台线程逐个生成并计入进度统计。
@@ -1155,4 +1236,68 @@ fn write_temp_image(bytes: &[u8], ext: &str) -> Result<String, String> {
     let file_path = temp_dir.join(format!("cover.{}", ext));
     fs::write(&file_path, bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
     Ok(file_path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod folder_target_tests {
+    use super::*;
+    use chrono::TimeZone;
+    use media_collection::MediaCollection;
+
+    fn collection(id: &str, folder_path: &str, folder_id: Option<&str>) -> MediaCollection {
+        let ts = chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        MediaCollection {
+            id: id.to_string(),
+            title: id.to_string(),
+            folder_path: folder_path.to_string(),
+            folder_id: folder_id.map(|s| s.to_string()),
+            cover_path: None,
+            item_count: 0,
+            created_at: ts,
+            updated_at: ts,
+        }
+    }
+
+    #[test]
+    fn single_parent_dir_is_the_target() {
+        let collections = vec![
+            collection("c1", "/library/Lori/AlbumA", Some("f1")),
+            collection("c2", "/library/Lori/AlbumB", Some("f1")),
+            collection("c3", "/library/Other/AlbumC", Some("f2")),
+        ];
+        let (target, candidates) = pick_folder_target_dir("f1", &collections);
+        assert_eq!(target, "/library/Lori");
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn ambiguous_folder_returns_candidates_and_no_target() {
+        let collections = vec![
+            collection("c1", "/diskA/Lori/AlbumA", Some("f1")),
+            collection("c2", "/diskB/Lori/AlbumB", Some("f1")),
+        ];
+        let (target, candidates) = pick_folder_target_dir("f1", &collections);
+        assert_eq!(target, "");
+        assert_eq!(candidates, vec!["/diskA/Lori".to_string(), "/diskB/Lori".to_string()]);
+    }
+
+    #[test]
+    fn empty_folder_falls_back_to_all_library_roots() {
+        let collections = vec![
+            collection("c1", "/library/A/x", Some("f1")),
+            collection("c2", "/media/B/y", Some("f2")),
+        ];
+        let (target, candidates) = pick_folder_target_dir("f-empty", &collections);
+        assert_eq!(target, "");
+        // 没有该文件夹的集合时，给出所有集合的父目录供用户手选
+        assert_eq!(candidates, vec!["/library/A".to_string(), "/media/B".to_string()]);
+    }
+
+    #[test]
+    fn collection_without_parent_is_skipped() {
+        let collections = vec![collection("c1", "orphan", Some("f1"))];
+        let (target, candidates) = pick_folder_target_dir("f1", &collections);
+        assert_eq!(target, "");
+        assert!(candidates.is_empty());
+    }
 }

@@ -542,6 +542,89 @@ pub fn run_extract(
     }
 }
 
+/// 把 `src_dir` 整棵目录树打包成 zip 写入系统临时目录，返回 zip 的绝对路径。
+///
+/// 压缩包内所有条目都以 `entry_root` 为顶层目录名，节点端把包解压到目标目录下即可
+/// 原样还原层级。刻意跳过 `.SlimeWorks`（本应用生成的邻近缩略图缓存）与 `.DS_Store`：
+/// 把派生缓存搬给对方节点既白占带宽，又可能让对端把缓存文件当资源导入。
+pub fn zip_directory_to_tmp(src_dir: &str, entry_root: &str) -> Result<String> {
+    let root = Path::new(src_dir);
+    anyhow::ensure!(root.is_dir(), "源目录不存在或不是目录: {}", src_dir);
+    let entry_root = entry_root.trim().trim_matches('/');
+    anyhow::ensure!(
+        !entry_root.is_empty() && !entry_root.contains('/') && entry_root != "..",
+        "压缩包顶层目录名不合法: {}",
+        entry_root
+    );
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let zip_path = std::env::temp_dir().join(format!("sw_upload_{stamp}.zip"));
+    let file =
+        File::create(&zip_path).with_context(|| format!("创建压缩包失败: {}", zip_path.display()))?;
+
+    let mut writer = zip::ZipWriter::new(std::io::BufWriter::new(file));
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    // 顶层目录本身也要写进去：节点端解压后才有清晰的单根目录，
+    // 不会把散落文件直接摊进目标目录
+    writer.add_directory(entry_root.to_string(), options)?;
+    zip_tree(&mut writer, root, entry_root, options, 0)?;
+    // finish() 会消费 writer 并交还缓冲层；显式 into_inner() 才能拿到 flush 的 IO 错误，
+    // 否则缓冲写失败会被 Drop 静默吞掉，留下一个损坏的 zip 继续往上传
+    let buffered = writer.finish().context("写入压缩包索引失败")?;
+    buffered
+        .into_inner()
+        .map_err(|e| anyhow::anyhow!("刷新压缩包缓冲失败: {}", e))?;
+
+    Ok(zip_path.to_string_lossy().into_owned())
+}
+
+/// 递归把 `dir` 下的内容写入压缩包，条目名前缀为 `prefix`。
+/// 限深只为防御异常深的目录树（以及被误配成的自引用软链结构）。
+fn zip_tree<'a, W: std::io::Write + std::io::Seek>(
+    writer: &mut zip::ZipWriter<W>,
+    dir: &Path,
+    prefix: &str,
+    options: zip::write::FileOptions<'a, ()>,
+    depth: usize,
+) -> Result<()> {
+    const MAX_DEPTH: usize = 32;
+    if depth >= MAX_DEPTH {
+        sw_info!("[zip_directory] 目录层级超过 {} 层，后续内容跳过: {}", MAX_DEPTH, dir.display());
+        return Ok(());
+    }
+    let mut sub_dirs = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("读取目录失败: {}", dir.display()))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == ".SlimeWorks" || name == ".DS_Store" {
+            continue;
+        }
+        let path = entry.path();
+        // file_type() 不跟随软链，软链一律跳过：目录环会在递归里失控，
+        // 而且对端拿到的也只是个指向它自己机器上不存在路径的链接
+        if entry.file_type()?.is_symlink() {
+            continue;
+        }
+        let item_prefix = format!("{prefix}/{name}");
+        if path.is_dir() {
+            writer.add_directory(&item_prefix, options)?;
+            sub_dirs.push((path, item_prefix));
+        } else if let Ok(mut content) = fs::File::open(&path) {
+            writer.start_file(&item_prefix, options)?;
+            std::io::copy(&mut content, writer)
+                .with_context(|| format!("写入压缩包失败: {}", path.display()))?;
+        }
+    }
+    for (sub_dir, sub_prefix) in sub_dirs {
+        zip_tree(writer, &sub_dir, &sub_prefix, options, depth + 1)?;
+    }
+    Ok(())
+}
+
 pub fn get_dir_size(path: &str) -> Result<u64> {
     let p = Path::new(path);
     if !p.exists() {
@@ -735,5 +818,80 @@ mod tests {
         assert!(is_cancelled());
         reset_cancel();
         assert!(!is_cancelled());
+    }
+}
+
+#[cfg(test)]
+mod zip_tests {
+    use super::*;
+
+    fn write_file(path: &Path, content: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    fn zip_entry_names(zip_path: &str) -> Vec<String> {
+        let file = File::open(zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        (0..archive.len())
+            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn zip_directory_skips_cache_and_preserves_structure() {
+        let base = std::env::temp_dir().join(format!("sw_zip_{}_rt", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let src = base.join("src/vol01");
+        write_file(&src.join("001.jpg"), "one");
+        write_file(&src.join("pages/002.jpg"), "two");
+        // 本应用生成的邻近缩略图缓存，绝不能被搬去对端节点
+        write_file(&src.join(".SlimeWorks/tmp/001.jpg_w320.jpg"), "cache");
+        write_file(&src.join("pages/.SlimeWorks/tmp/002.jpg_w320.jpg"), "cache");
+        write_file(&src.join(".DS_Store"), "junk");
+        fs::create_dir_all(src.join("empty_dir")).unwrap();
+
+        let zip_path = zip_directory_to_tmp(src.to_str().unwrap(), "vol01").unwrap();
+        let names = zip_entry_names(&zip_path);
+        assert!(names.contains(&"vol01/001.jpg".to_string()), "got: {names:?}");
+        assert!(
+            names.contains(&"vol01/pages/002.jpg".to_string()),
+            "子目录层级必须保留, got: {names:?}"
+        );
+        assert!(
+            names.iter().any(|n| n == "vol01/empty_dir/"),
+            "空目录也要进包, got: {names:?}"
+        );
+        assert!(
+            names.iter().all(|n| !n.contains(".SlimeWorks")),
+            ".SlimeWorks 不得进包, got: {names:?}"
+        );
+        assert!(
+            names.iter().all(|n| !n.ends_with(".DS_Store")),
+            ".DS_Store 不得进包, got: {names:?}"
+        );
+
+        // 节点端拿到包后就是走这条路解压，回读一致才说明可以直接导入
+        let out = base.join("out");
+        extract_archive(&zip_path, out.to_str().unwrap(), None, &|_| {}).unwrap();
+        assert_eq!(fs::read_to_string(out.join("vol01/001.jpg")).unwrap(), "one");
+        assert_eq!(
+            fs::read_to_string(out.join("vol01/pages/002.jpg")).unwrap(),
+            "two"
+        );
+        assert!(out.join("vol01/empty_dir").is_dir());
+        assert!(!out.join("vol01/.SlimeWorks").exists());
+
+        let _ = fs::remove_file(&zip_path);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn zip_directory_rejects_unsafe_arguments() {
+        // 顶层名带斜杠或 .. 会把条目写到目标目录之外，必须在打包前就拒掉
+        assert!(zip_directory_to_tmp("/tmp", "../escape").is_err());
+        assert!(zip_directory_to_tmp("/tmp", "a/b").is_err());
+        assert!(zip_directory_to_tmp("/tmp", "  ").is_err());
+        assert!(zip_directory_to_tmp("/nonexistent_sw_dir_xyz", "ok").is_err());
     }
 }

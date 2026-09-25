@@ -113,8 +113,9 @@ void main() {
       expect(orig, isNotEmpty);
     });
 
-    test('所有 value >= 0', () {
+    test('除"随本地"哨兵外 value >= 0', () {
       for (final p in MediaPrefsService.remoteCoverWidthPresets) {
+        if (p.value == MediaPrefsService.followLocalWidth) continue;
         expect(p.value, greaterThanOrEqualTo(0));
       }
     });

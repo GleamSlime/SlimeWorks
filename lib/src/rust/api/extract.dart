@@ -42,3 +42,13 @@ void extractCancel() => RustLib.instance.api.crateApiExtractExtractCancel();
 
 String extractFormatFileSize({required BigInt bytes}) =>
     RustLib.instance.api.crateApiExtractExtractFormatFileSize(bytes: bytes);
+
+/// 把本地目录整棵打包成临时 zip，返回 zip 绝对路径（上传到远程节点用）。
+/// 打包是重 IO + CPU 操作，移入 spawn_blocking，避免卡住 Dart 侧。
+Future<String> zipDirectoryToTmp({
+  required String srcDir,
+  required String entryRoot,
+}) => RustLib.instance.api.crateApiExtractZipDirectoryToTmp(
+  srcDir: srcDir,
+  entryRoot: entryRoot,
+);

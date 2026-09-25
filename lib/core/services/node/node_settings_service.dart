@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:dio/dio.dart';
 import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:get_it/get_it.dart';
@@ -24,6 +26,8 @@ class NodeSettingsService extends GetxService {
   static const String _keyLocalEnabled = 'node_local_enabled';
   static const String _keyLocalName = 'node_local_name';
   static const String _keyLocalPort = 'node_local_port';
+  /// 本机节点授权码（明文存本地偏好，只把 sha256 摘要发给节点）
+  static const String _keyLocalAuthCode = 'node_local_auth_code';
   static const int _defaultRemoteNodePort = 17888;
 
   final Loggers _logger = Loggers(name: 'NodeSettings');
@@ -58,6 +62,73 @@ class NodeSettingsService extends GetxService {
     ),
   );
 
+  /// 授权码摘要的请求头名（需与 Rust `node_server::AUTH_HEADER` 一致）。
+  static const String _authHeaderName = 'X-SW-Auth';
+
+  /// 媒体流 URL 携带摘要的查询参数名（需与 Rust `node_server::AUTH_QUERY_PARAM` 一致）。
+  static const String _authQueryParamName = 'sw_auth';
+
+  /// 本机节点授权码明文；空串表示不启用校验。
+  final RxString localNodeAuthCode = ''.obs;
+
+  void _attachAuthInterceptor() {
+    final interceptor = _NodeAuthInterceptor(_authDigestForUrl);
+    _dio.interceptors.add(interceptor);
+    _probeDio.interceptors.add(interceptor);
+  }
+
+  /// 按请求 URL 找到对应节点，返回其授权码摘要；无授权码时返回 null。
+  String? _authDigestForUrl(String url) {
+    final code = authCodeForUrl(url);
+    if (code == null || code.isEmpty) {
+      return null;
+    }
+    return authCodeDigest(code);
+  }
+
+  /// 授权码明文 → sha256 十六进制摘要（与节点侧存储/比对的形态一致）。
+  static String authCodeDigest(String authCode) {
+    return sha256.convert(utf8.encode(authCode.trim())).toString();
+  }
+
+  /// 找出 [url] 归属的节点并取其授权码（内网地址优先，取最长匹配）。
+  String? authCodeForUrl(String url) {
+    String? best;
+    int bestLength = 0;
+    for (final node in remoteNodes) {
+      if (!node.enabled || node.authCode.isEmpty) {
+        continue;
+      }
+      for (final base in <String>{
+        _normalizeBaseUrl(node.effectiveApiBaseUrl),
+        _normalizeBaseUrl(node.apiBaseUrl),
+        _normalizeBaseUrl(node.lanApiBaseUrl ?? ''),
+      }) {
+        if (base.isEmpty || !url.startsWith(base)) {
+          continue;
+        }
+        if (base.length > bestLength) {
+          bestLength = base.length;
+          best = node.authCode;
+        }
+      }
+    }
+    return best;
+  }
+
+  /// 供无法注入请求头的调用方（图片/视频 URL）使用的请求头集合。
+  Map<String, String> nodeAuthHeaders(String nodeId) {
+    final code = getNodeById(nodeId)?.authCode ?? '';
+    if (code.isEmpty) {
+      return const <String, String>{};
+    }
+    return <String, String>{_authHeaderName: authCodeDigest(code)};
+  }
+
+  /// 是否为节点返回的 401（授权码缺失/错误）。
+  static bool _isUnauthorizedError(Object error) =>
+      error is DioException && error.response?.statusCode == 401;
+
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
   DateTime? _trafficWindowStartAt;
@@ -85,6 +156,7 @@ class NodeSettingsService extends GetxService {
     }
 
     _prefs = await SharedPreferences.getInstance();
+    _attachAuthInterceptor();
     await _load();
     await _refreshLocalApiList();
 
@@ -123,6 +195,7 @@ class NodeSettingsService extends GetxService {
     required String name,
     required String apiBaseUrl,
     String? lanApiBaseUrl,
+    String? authCode,
   }) async {
     final normalized = _normalizeBaseUrl(apiBaseUrl);
     final normalizedLan = lanApiBaseUrl != null && lanApiBaseUrl.trim().isNotEmpty
@@ -136,6 +209,7 @@ class NodeSettingsService extends GetxService {
       enabled: true,
       supportsMove: true,
       supportsCoverUpdate: true,
+      authCode: authCode?.trim() ?? '',
     );
     remoteNodes.add(endpoint);
     await _save();
@@ -203,17 +277,24 @@ class NodeSettingsService extends GetxService {
     }
     _circuitBreakedNodes.remove(nodeId);
 
-    final lanOk = await _probeNodeUrl(node.lanApiBaseUrl);
-    if (lanOk) {
+    final lanResult = await _probeNodeUrl(node.lanApiBaseUrl);
+    if (lanResult == _ProbeResult.ok) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
       return;
     }
 
-    final wanOk = await _probeNodeUrl(node.apiBaseUrl);
-    if (wanOk) {
+    final wanResult = await _probeNodeUrl(node.apiBaseUrl);
+    if (wanResult == _ProbeResult.ok) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
+      return;
+    }
+
+    // 401 说明节点在线、只是码不对：不熔断，改完授权码刷新即可恢复
+    if (lanResult == _ProbeResult.unauthorized || wanResult == _ProbeResult.unauthorized) {
+      nodeConnectivity[nodeId] = false;
+      nodeConnectivityError[nodeId] = '授权码错误，请核对节点授权码';
       return;
     }
 
@@ -222,8 +303,8 @@ class NodeSettingsService extends GetxService {
     _circuitBreakedNodes.add(nodeId);
   }
 
-  Future<bool> _probeNodeUrl(String? baseUrl) async {
-    if (baseUrl == null || baseUrl.isEmpty) return false;
+  Future<_ProbeResult> _probeNodeUrl(String? baseUrl) async {
+    if (baseUrl == null || baseUrl.isEmpty) return _ProbeResult.unreachable;
     final urls = _candidateNodeCallUrls(baseUrl);
     for (final url in urls) {
       try {
@@ -231,12 +312,17 @@ class NodeSettingsService extends GetxService {
           url,
           data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
         );
-        return true;
+        return _ProbeResult.ok;
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401) {
+          return _ProbeResult.unauthorized;
+        }
+        continue;
       } catch (_) {
         continue;
       }
     }
-    return false;
+    return _ProbeResult.unreachable;
   }
 
   Future<void> updateLocalSettings({
@@ -247,11 +333,16 @@ class NodeSettingsService extends GetxService {
     localNodeEnabled.value = enabled;
     localNodeName.value = nodeName.trim().isEmpty ? '本机节点' : nodeName.trim();
     localNodePort.value = port;
+    // 授权码只由生成/重置产生：为空时补一个，保证设置页总有可分享的码
+    if (localNodeAuthCode.value.isEmpty) {
+      localNodeAuthCode.value = generateLocalAuthCode();
+    }
 
     await _save();
 
     if (enabled) {
-      await startLocalNodeServer();
+      // 端口/授权码变更必须重建监听，否则旧进程仍按老配置校验
+      await restartLocalNodeServer();
     } else {
       await stopLocalNodeServer();
     }
@@ -259,10 +350,41 @@ class NodeSettingsService extends GetxService {
     await _refreshLocalApiList();
   }
 
+  /// 生成随机授权码：16 位十六进制，分段只影响观感、不影响比对。
+  String generateLocalAuthCode() {
+    final random = Random.secure();
+    final buffer = StringBuffer();
+    for (int i = 0; i < 16; i++) {
+      buffer.write(random.nextInt(16).toRadixString(16).toUpperCase());
+    }
+    final hex = buffer.toString();
+    return '${hex.substring(0, 4)}-${hex.substring(4, 8)}-${hex.substring(8, 12)}-${hex.substring(12)}';
+  }
+
+  /// 换发新的授权码并让节点立即按新码校验（旧码即刻失效）。
+  Future<void> regenerateLocalAuthCode() async {
+    localNodeAuthCode.value = generateLocalAuthCode();
+    await _save();
+    if (localNodeEnabled.value) {
+      await restartLocalNodeServer();
+    }
+    _logger.info('本机节点授权码已重置');
+  }
+
+  Future<void> restartLocalNodeServer() async {
+    await stopLocalNodeServer();
+    await startLocalNodeServer();
+  }
+
   Future<void> startLocalNodeServer() async {
     if (Platform.isAndroid || Platform.isIOS) {
       _logger.info('移动端不支持启动本地节点服务，已跳过');
       return;
+    }
+
+    if (localNodeAuthCode.value.isEmpty) {
+      localNodeAuthCode.value = generateLocalAuthCode();
+      await _save();
     }
 
     // 检查 Rust 服务器是否已在运行
@@ -272,11 +394,12 @@ class NodeSettingsService extends GetxService {
     }
 
     try {
-      // 调用 Rust 启动节点服务器
+      // 调用 Rust 启动节点服务器（授权码明文交给 Rust，Rust 只保存其 sha256 摘要）
       http_bridge_api.startNodeServer(
         host: '0.0.0.0',
         port: localNodePort.value,
         name: localNodeName.value,
+        authCode: localNodeAuthCode.value,
       );
       _logger.info('节点服务已启动 (Rust): ${localNodePort.value}');
     } catch (e, st) {
@@ -438,6 +561,7 @@ class NodeSettingsService extends GetxService {
     required String folderPath,
     bool generateThumbnails = false,
     bool preserveStructure = false,
+    String? baseFolderId,
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
@@ -451,6 +575,7 @@ class NodeSettingsService extends GetxService {
         'folder_path': folderPath,
         'generate_thumbnails': generateThumbnails,
         'preserve_structure': preserveStructure,
+        'base_folder_id': baseFolderId,
       },
     );
 
@@ -577,6 +702,12 @@ class NodeSettingsService extends GetxService {
     if (isCover) {
       params['mode'] = 'cover';
     }
+    // 图片/视频 URL 直接交给 Image.network 与播放器，拿不到自定义请求头，
+    // 因此这里把摘要放进查询参数（节点侧 sw_auth 与 X-SW-Auth 等价放行）。
+    final digest = _authDigestForUrl(normalized);
+    if (digest != null) {
+      params[_authQueryParamName] = digest;
+    }
     final uri = Uri.parse('$normalized/node/media').replace(queryParameters: params);
     return uri.toString();
   }
@@ -586,6 +717,75 @@ class NodeSettingsService extends GetxService {
     if (node == null) throw StateError('节点不存在: $nodeId');
     final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
     return '$normalized/node/upload';
+  }
+
+  /// 反推「把本地目录拖进远程文件夹」时，该文件夹在节点磁盘上的落点。
+  ///
+  /// 节点的 `MediaFolder` 只有库内 ID、没有磁盘路径，因此由节点侧从该文件夹下
+  /// 已有集合的目录反推。返回 `(targetDir, candidates)`：
+  /// - `targetDir` 非空 = 唯一确定，可直接上传；
+  /// - `targetDir` 为空 = 文件夹还没集合或跨多个目录，`candidates` 供目录浏览器兜底。
+  Future<({String targetDir, List<String> candidates})> resolveNodeUploadTarget({
+    required String nodeId,
+    required String folderId,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'resolve_folder_upload_target',
+      params: <String, dynamic>{'folder_id': folderId},
+    );
+    final data = response['data'];
+    if (data is! Map) {
+      return (targetDir: '', candidates: const <String>[]);
+    }
+    final candidates = (data['candidates'] as List?)?.map((e) => e.toString()).toList() ??
+        const <String>[];
+    return (targetDir: (data['target_dir'] ?? '').toString(), candidates: candidates);
+  }
+
+  /// 把本地 zip 归档上传到节点的 [destDir] 并在节点侧解压。
+  ///
+  /// 走的是原始字节流（非 multipart）：节点端 `upload_handler` 用 `io::copy` 流式落盘，
+  /// 所以必须显式给 Content-Length，且请求体不能进 Dart 内存。
+  Future<void> uploadArchiveToNode({
+    required String nodeId,
+    required String zipPath,
+    required String destDir,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    if (_circuitBreakedNodes.contains(nodeId)) {
+      throw StateError('节点已熔断: $nodeId，请在设置中手动重试');
+    }
+    final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
+    final url =
+        '$normalized/node/upload/archive?dest=${Uri.encodeComponent(destDir)}';
+    final file = File(zipPath);
+    final length = await file.length();
+    final txBytes = length;
+    try {
+      final resp = await _dio.post<dynamic>(
+        url,
+        data: file.openRead(),
+        options: Options(
+          contentType: 'application/octet-stream',
+          headers: <String, dynamic>{Headers.contentLengthHeader: length},
+          // 大目录在家庭宽带上是分钟级操作，超时按最坏情况给
+          sendTimeout: const Duration(minutes: 30),
+          receiveTimeout: const Duration(minutes: 5),
+        ),
+      );
+      final body = resp.data is Map ? Map<String, dynamic>.from(resp.data as Map) : <String, dynamic>{};
+      _recordAppTraffic(txBytes: txBytes, rxBytes: 256);
+      if (body['success'] != true) {
+        throw Exception((body['error'] ?? '归档上传失败').toString());
+      }
+    } on DioException catch (e) {
+      _logger.error('归档上传失败: $nodeId | $zipPath', error: e);
+      rethrow;
+    }
   }
 
   /// 上传本地文件到远程节点的媒体库。
@@ -912,7 +1112,7 @@ class NodeSettingsService extends GetxService {
 
     final error = lastError ?? Exception('节点请求失败');
     nodeConnectivity[node.id] = false;
-    nodeConnectivityError[node.id] = error.toString();
+    nodeConnectivityError[node.id] = _isUnauthorizedError(error) ? '授权码错误，请核对节点授权码' : error.toString();
     _logger.error(
       '节点请求失败: ${node.name} $action | URLs=${candidateUrls.join(' , ')}',
       error: error,
@@ -1118,6 +1318,14 @@ class NodeSettingsService extends GetxService {
     localNodeEnabled.value = prefs.getBool(_keyLocalEnabled) ?? false;
     localNodeName.value = prefs.getString(_keyLocalName) ?? '本机节点';
     localNodePort.value = prefs.getInt(_keyLocalPort) ?? 17888;
+    // 首次使用（或历史版本升级）时自动生成授权码，保证设置页总有一个可分享的码
+    final storedCode = prefs.getString(_keyLocalAuthCode) ?? '';
+    if (storedCode.isEmpty) {
+      localNodeAuthCode.value = generateLocalAuthCode();
+      await prefs.setString(_keyLocalAuthCode, localNodeAuthCode.value);
+    } else {
+      localNodeAuthCode.value = storedCode;
+    }
 
     final raw = prefs.getString(_keyRemoteNodes);
     if (raw == null || raw.isEmpty) {
@@ -1154,6 +1362,7 @@ class NodeSettingsService extends GetxService {
     await prefs.setBool(_keyLocalEnabled, localNodeEnabled.value);
     await prefs.setString(_keyLocalName, localNodeName.value);
     await prefs.setInt(_keyLocalPort, localNodePort.value);
+    await prefs.setString(_keyLocalAuthCode, localNodeAuthCode.value);
     await prefs.setString(_keyRemoteNodes, jsonEncode(remoteNodes.map((n) => n.toJson()).toList()));
   }
 
@@ -1225,5 +1434,25 @@ class NodeSettingsService extends GetxService {
       );
     }
     return null;
+  }
+}
+
+/// 节点连通性探测结果：区分"不在线"和"在线但授权码不对"。
+enum _ProbeResult { ok, unauthorized, unreachable }
+
+/// 给所有发往已配置节点的请求补上 `X-SW-Auth: sha256(授权码)`。
+class _NodeAuthInterceptor extends Interceptor {
+  _NodeAuthInterceptor(this._digestForUrl);
+
+  final String? Function(String url) _digestForUrl;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final digest = _digestForUrl(options.uri.toString());
+    final alreadySet = options.headers.keys.any((k) => k.toLowerCase() == 'x-sw-auth');
+    if (digest != null && !alreadySet) {
+      options.headers[NodeSettingsService._authHeaderName] = digest;
+    }
+    handler.next(options);
   }
 }

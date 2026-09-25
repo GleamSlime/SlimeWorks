@@ -54,3 +54,14 @@ pub fn extract_cancel() {
 pub fn extract_format_file_size(bytes: u64) -> String {
     extract_module::extract_format_file_size(bytes)
 }
+
+/// 把本地目录整棵打包成临时 zip，返回 zip 绝对路径（上传到远程节点用）。
+/// 打包是重 IO + CPU 操作，移入 spawn_blocking，避免卡住 Dart 侧。
+pub async fn zip_directory_to_tmp(
+    src_dir: String,
+    entry_root: String,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || extract_module::zip_directory_to_tmp(src_dir, entry_root))
+        .await
+        .map_err(|e| format!("打包任务调度失败: {}", e))?
+}

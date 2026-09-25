@@ -16,8 +16,10 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/natural_compare.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
+import 'package:slime_works/components/dialogs/node_directory_picker.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
+import 'package:slime_works/src/rust/api/extract.dart' as extract_api;
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 
 part 'media_library_vm_remote.dart';

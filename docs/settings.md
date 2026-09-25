@@ -79,6 +79,7 @@ AppTheme.fontScaleObs.value = 1.2;
 | 启用本地节点 | `node_local_enabled` | `false` |
 | 节点名称 | `node_local_name` | `'本机节点'` |
 | 监听端口 | `node_local_port` | `17888` |
+| 本机授权码 | `node_local_auth_code` | 首次加载自动生成 |
 
 启动/停止流程：
 ```dart
@@ -87,18 +88,33 @@ await http_bridge_api.startNodeServer(
   host: '0.0.0.0',
   port: localNodePort.value,
   name: localNodeName.value,
+  authCode: localNodeAuthCode.value, // 空串 = 不启用授权校验
 );
-// → Rust crate::node_server::start_node_server(host, port, name)
+// → Rust crate::node_server::start_node_server(host, port, name, auth_code)
+//   Rust 侧只保存 sha256(auth_code)，端口/授权码变更需 restartLocalNodeServer() 重建监听
 ```
 
 本地节点 HTTP 服务提供以下路由（由 Rust `node_server` 模块实现）：
 
 | 路由 | 方法 | 说明 |
 |------|------|------|
-| `/health` | GET | 健康检查，返回节点名称和端口 |
+| `/health` | GET | 健康检查，返回节点名称和端口（免授权） |
 | `/node/call` | POST | 功能调用分发（`{ action, params }` JSON Body） |
 | `/node/media` | GET | 媒体文件服务（支持 Range 请求） |
 | `/node/upload` | POST | 文件上传（`multipart/form-data`） |
+| `/node/upload/archive` | POST | 归档上传（请求体为 zip 原始字节，`?dest=` 指定已存在的绝对目录，节点流式落盘后解压） |
+
+### 授权码（节点连接凭据）
+
+节点配置授权码后，除 `/health` 与 `OPTIONS` 预检外的请求一律要求凭据，缺失/错误直接 401（且在读 body 之前拒绝）：
+
+- 请求头 `X-SW-Auth: sha256(授权码)`，由 Dio 拦截器 `_NodeAuthInterceptor` 按 URL 匹配节点自动注入；
+- `/node/media` 额外接受 `?sw_auth=<sha256(授权码)>`，因为图片/视频 URL 会直接交给 `Image.network` 与播放器，无法带自定义请求头；
+- 设置页开启本机节点后显示「本机授权码」，复制按钮写入剪切板、重置按钮换发新码；
+- 远程节点编辑器新增「授权码」字段，填对端显示的同一段明文即可；
+- 401 显示为「授权码错误，请核对节点授权码」，不触发熔断（节点本身是在线的）。
+
+详见 `docs/node_server_security.md` §6。
 
 ### 远程节点
 
@@ -111,6 +127,7 @@ class NodeEndpoint {
   bool enabled;        // 是否启用
   bool supportsMove;   // 是否支持集合移动
   bool supportsCoverUpdate;  // 是否支持封面更新
+  String authCode;     // 对端授权码明文（'' = 该节点不校验）
 }
 ```
 

@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1850040901;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -234172523;
 
 // Section: executor
 
@@ -10475,10 +10475,15 @@ fn wire__crate__api__http_bridge__start_node_server_impl(
             let api_host = <String>::sse_decode(&mut deserializer);
             let api_port = <u16>::sse_decode(&mut deserializer);
             let api_name = <String>::sse_decode(&mut deserializer);
+            let api_auth_code = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, String>((move || {
-                let output_ok =
-                    crate::api::http_bridge::start_node_server(api_host, api_port, api_name)?;
+                let output_ok = crate::api::http_bridge::start_node_server(
+                    api_host,
+                    api_port,
+                    api_name,
+                    api_auth_code,
+                )?;
                 Ok(output_ok)
             })())
         },
@@ -12233,6 +12238,45 @@ fn wire__crate__api__websocket__ws_server_stop_impl(
                         let api_server_guard = api_server_guard.unwrap();
                         let output_ok =
                             crate::api::websocket::ws_server_stop(&*api_server_guard).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__extract__zip_directory_to_tmp_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "zip_directory_to_tmp",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_src_dir = <String>::sse_decode(&mut deserializer);
+            let api_entry_root = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::extract::zip_directory_to_tmp(api_src_dir, api_entry_root)
+                                .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -14634,6 +14678,9 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         332 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
         333 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
+        334 => {
+            wire__crate__api__extract__zip_directory_to_tmp_impl(port, ptr, rust_vec_len, data_len)
+        }
         _ => unreachable!(),
     }
 }

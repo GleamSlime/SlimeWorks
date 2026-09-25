@@ -63,9 +63,16 @@ pub fn init_http_bridge() -> Result<bool, String> {
 /// - host: 监听地址，通常为 "0.0.0.0"
 /// - port: 监听端口，默认 17888
 /// - name: 节点名称
+/// - auth_code: 授权码明文，空串表示不启用校验；非空时除 /health 外的请求都必须
+///   带 `X-SW-Auth: <sha256(授权码)>`，服务端只保留摘要
 #[frb(sync)]
-pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), String> {
-    crate::node_server::start_node_server(host, port, name)
+pub fn start_node_server(
+    host: String,
+    port: u16,
+    name: String,
+    auth_code: String,
+) -> Result<(), String> {
+    crate::node_server::start_node_server(host, port, name, auth_code)
 }
 
 /// 停止本地节点服务器

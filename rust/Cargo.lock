@@ -3140,6 +3140,7 @@ dependencies = [
  "sentry_log",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "slime_logger",
  "symphonia",
  "sysinfo",

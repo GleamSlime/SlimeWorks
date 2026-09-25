@@ -86,7 +86,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1850040901;
+  int get rustContentHash => -234172523;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1103,6 +1103,7 @@ abstract class RustLibApi extends BaseApi {
     required String host,
     required int port,
     required String name,
+    required String authCode,
   });
 
   String crateApiCaptureStopCaptureProxy({String? installDir});
@@ -1258,6 +1259,11 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiWebsocketWsServerStart({required WsServer server});
 
   Future<void> crateApiWebsocketWsServerStop({required WsServer server});
+
+  Future<String> crateApiExtractZipDirectoryToTmp({
+    required String srcDir,
+    required String entryRoot,
+  });
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_FFmpegManager;
@@ -10312,6 +10318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String host,
     required int port,
     required String name,
+    required String authCode,
   }) {
     return handler.executeSync(
       SyncTask(
@@ -10320,6 +10327,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(host, serializer);
           sse_encode_u_16(port, serializer);
           sse_encode_String(name, serializer);
+          sse_encode_String(authCode, serializer);
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -10331,7 +10339,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiHttpBridgeStartNodeServerConstMeta,
-        argValues: [host, port, name],
+        argValues: [host, port, name, authCode],
         apiImpl: this,
       ),
     );
@@ -10340,7 +10348,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiHttpBridgeStartNodeServerConstMeta =>
       const TaskConstMeta(
         debugName: "start_node_server",
-        argNames: ["host", "port", "name"],
+        argNames: ["host", "port", "name", "authCode"],
       );
 
   @override
@@ -11724,6 +11732,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiWebsocketWsServerStopConstMeta =>
       const TaskConstMeta(debugName: "ws_server_stop", argNames: ["server"]);
+
+  @override
+  Future<String> crateApiExtractZipDirectoryToTmp({
+    required String srcDir,
+    required String entryRoot,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(srcDir, serializer);
+          sse_encode_String(entryRoot, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 334,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiExtractZipDirectoryToTmpConstMeta,
+        argValues: [srcDir, entryRoot],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiExtractZipDirectoryToTmpConstMeta =>
+      const TaskConstMeta(
+        debugName: "zip_directory_to_tmp",
+        argNames: ["srcDir", "entryRoot"],
+      );
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_FFmpegManager => wire

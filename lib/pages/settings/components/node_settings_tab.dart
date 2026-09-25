@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
@@ -82,10 +83,49 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     }
   }
 
+  /// 复制本机授权码到剪切板，供在另一台设备的「远程节点」里粘贴。
+  Future<void> _copyLocalAuthCode() async {
+    final code = _service?.localNodeAuthCode.value ?? '';
+    if (code.isEmpty) {
+      _showSnack('授权码为空，请先保存本机节点设置');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: code));
+    _showSnack('授权码已复制到剪切板');
+  }
+
+  Future<void> _regenerateLocalAuthCode() async {
+    final service = _service;
+    if (service == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重置授权码'),
+        content: const Text('重置后旧授权码立即失效，所有已配置该节点的客户端都需要重新填写。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('重置')),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await service.regenerateLocalAuthCode();
+      _showSnack('已生成新授权码');
+    } catch (e) {
+      _showSnack('重置授权码失败: $e');
+    }
+  }
+
   Future<void> _showNodeEditor({NodeEndpoint? initial}) async {
     final nameCtrl = TextEditingController(text: initial?.name ?? '');
     final apiCtrl = TextEditingController(text: initial?.apiBaseUrl ?? 'http://127.0.0.1:17888');
     final lanApiCtrl = TextEditingController(text: initial?.lanApiBaseUrl ?? '');
+    final authCodeCtrl = TextEditingController(text: initial?.authCode ?? '');
     final m = AppTheme.metrics;
 
     final confirmed = await showDialog<bool>(
@@ -117,6 +157,16 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                   hintText: 'http://192.168.x.x:17888',
                 ),
               ),
+              SizedBox(height: m.kSpace12),
+              TextField(
+                controller: authCodeCtrl,
+                obscureText: true,
+                style: const TextStyle(fontFamily: 'monospace'),
+                decoration: const InputDecoration(
+                  labelText: '授权码（节点侧提供）',
+                  hintText: '与对端「本机授权码」一致',
+                ),
+              ),
             ],
           ),
         ),
@@ -134,6 +184,11 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     final name = nameCtrl.text.trim();
     final api = apiCtrl.text.trim();
     final lanApi = lanApiCtrl.text.trim();
+    final authCode = authCodeCtrl.text.trim();
+    nameCtrl.dispose();
+    apiCtrl.dispose();
+    lanApiCtrl.dispose();
+    authCodeCtrl.dispose();
     if (api.isEmpty) {
       _showSnack('外网API 不能为空');
       return;
@@ -145,6 +200,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
           name: name,
           apiBaseUrl: api,
           lanApiBaseUrl: lanApi.isEmpty ? null : lanApi,
+          authCode: authCode,
         );
       } else {
         await _service!.updateRemoteNode(
@@ -152,6 +208,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
             name: name.isEmpty ? initial.name : name,
             apiBaseUrl: api,
             lanApiBaseUrl: lanApi.isEmpty ? null : lanApi,
+            authCode: authCode,
             clearLanApiBaseUrl: lanApi.isEmpty,
           ),
         );
@@ -269,6 +326,50 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                       decoration: const InputDecoration(labelText: '节点端口'),
                       onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
                     ),
+                    // 开启节点后展示本机授权码：其他设备添加节点时需要它
+                    if (service.localNodeEnabled.value) ...[
+                      SizedBox(height: m.kSpace12),
+                      Row(
+                        children: [
+                          Text('本机授权码', style: Theme.of(context).textTheme.titleSmall),
+                          SizedBox(width: m.kSpace8),
+                          Expanded(
+                            child: SelectableText(
+                              service.localNodeAuthCode.value.isEmpty
+                                  ? '未设置'
+                                  : service.localNodeAuthCode.value,
+                              style: TextStyle(
+                                fontSize: m.fontSize13,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'monospace',
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _copyLocalAuthCode,
+                            icon: const Icon(Icons.copy_rounded),
+                            iconSize: m.iconSize16,
+                            tooltip: '复制授权码到剪切板',
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          IconButton(
+                            onPressed: _regenerateLocalAuthCode,
+                            icon: const Icon(Icons.autorenew_rounded),
+                            iconSize: m.iconSize16,
+                            tooltip: '重置授权码（旧码立即失效）',
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '其他设备添加本节点时填写它；请求头 X-SW-Auth 携带其 sha256 摘要',
+                        style: TextStyle(
+                          fontSize: m.fontSize12,
+                          color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                        ),
+                      ),
+                    ],
                     SizedBox(height: m.kSpace12),
                     Align(
                       alignment: Alignment.centerRight,
@@ -451,9 +552,19 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                                       '内网: ${node.lanApiBaseUrl}',
                                       style: TextStyle(fontSize: m.fontSize12, color: Colors.teal),
                                     ),
+                                  // 连通失败时给出原因（授权码错误 / 不可达 / 已禁用）
+                                  if (ok == false)
+                                    Text(
+                                      service.nodeConnectivityError[node.id] ?? '',
+                                      style: TextStyle(
+                                        fontSize: m.fontSize12,
+                                        color: Theme.of(context).colorScheme.error,
+                                      ),
+                                    ),
                                 ],
                               ),
-                              isThreeLine: true,
+                              // 内容行数会随错误提示变化，交由 ListTile 自适应高度
+                              isThreeLine: false,
                               leading: Switch(
                                 value: node.enabled,
                                 onChanged: (v) => service.setRemoteNodeEnabled(node.id, v),

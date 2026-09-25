@@ -209,6 +209,13 @@ pub fn extract_cancel() {
     extractor::request_cancel();
 }
 
+/// 把本地目录整棵打包成系统临时目录下的 zip，返回 zip 的绝对路径。
+/// 用于「拖目录到远程节点文件夹」链路：客户端打包→上传→节点解压→导入。
+pub fn zip_directory_to_tmp(src_dir: String, entry_root: String) -> Result<String, String> {
+    extractor::zip_directory_to_tmp(&src_dir, &entry_root)
+        .map_err(|e| format!("打包目录失败: {}", e))
+}
+
 pub fn extract_format_file_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = 1024 * KB;

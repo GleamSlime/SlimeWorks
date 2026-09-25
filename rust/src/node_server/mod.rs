@@ -5,10 +5,14 @@ mod media_handler;
 /// 提供本地节点 HTTP 服务，支持以下路由：
 /// - POST /node/call - 动作分发（调用 media_collection / novel_reader FFI 函数）
 /// - GET  /node/media - 媒体文件服务（含图片缩放、Range 请求）
+/// - POST /node/upload/archive - 目录归档上传（流式落盘 + 解压，见 upload_handler）
 /// - POST /node/upload - 文件上传
 /// - GET  /health - 健康检查
+///
+/// 除 `/health` 与 CORS 预检外，所有路由都要求授权码摘要（见 `AUTH_HEADER`）。
 mod router;
 mod types;
+mod upload_handler;
 
 pub use handlers::dispatch_action;
 pub use media_handler::*;
@@ -55,6 +59,9 @@ pub struct NodeServerConfig {
     pub host: String,
     pub port: u16,
     pub name: String,
+    /// 授权码的 SHA-256 摘要（小写十六进制）。`None` 表示该节点未启用授权校验。
+    /// 只存摘要不存明文：明文没有理由留在节点进程内存和日志里。
+    pub auth_code_hash: Option<String>,
 }
 
 impl Default for NodeServerConfig {
@@ -63,7 +70,71 @@ impl Default for NodeServerConfig {
             host: "0.0.0.0".to_string(),
             port: 17888,
             name: "本机节点".to_string(),
+            auth_code_hash: None,
         }
+    }
+}
+
+/// 客户端约定的授权请求头名。值 = 授权码明文的 SHA-256 十六进制摘要，
+/// 明文永不上线，抓包者拿到的摘要也无法反推回授权码。
+pub const AUTH_HEADER: &str = "x-sw-auth";
+
+/// 把明文授权码归一成待校验摘要。空串/全空白一律按"未启用"处理，
+/// 否则会出现"配置留空 == 只接受空摘要"这种谁都能过的假安全状态。
+pub fn auth_code_hash(auth_code: &str) -> Option<String> {
+    let trimmed = auth_code.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(sha256_hex(trimmed))
+}
+
+fn sha256_hex(input: &str) -> String {
+    use sha2::Digest as _;
+    sha2::Sha256::digest(input.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// 媒体流摘要的查询参数名。
+///
+/// 图片 `<img>`/视频 Range 播放这类 URL 由 Flutter 直接交给解码器，拿不到注入自定义
+/// 请求头的机会，因此同一份 sha256 摘要允许以 `?sw_auth=<hex>` 形式提供。
+/// API 调用（`/node/call`、`/node/upload`）仍走 `X-SW-Auth` 请求头。
+pub const AUTH_QUERY_PARAM: &str = "sw_auth";
+
+fn query_value<'a>(path: &'a str, key: &str) -> Option<&'a str> {
+    let (_, query) = path.split_once('?')?;
+    query.split('&').find_map(|pair| {
+        let mut halves = pair.splitn(2, '=');
+        match (halves.next(), halves.next()) {
+            (Some(k), Some(v)) if k == key => Some(v),
+            _ => None,
+        }
+    })
+}
+
+/// 请求是否通过授权校验。
+///
+/// 两条刻意放行：`/health`（客户端要靠它区分"节点不在线"和"授权码不对"，
+/// 锁死就没法给出可操作的错误提示）、`OPTIONS`（CORS 预检，真正的请求随后仍会被拒）。
+fn is_authorized(
+    config: &NodeServerConfig,
+    header_value: Option<&str>,
+    method: &str,
+    path: &str,
+) -> bool {
+    let route = path.split('?').next().unwrap_or(path);
+    if route == "/health" || method.eq_ignore_ascii_case("OPTIONS") {
+        return true;
+    }
+    let provided = header_value.or_else(|| query_value(path, AUTH_QUERY_PARAM));
+    match (&config.auth_code_hash, provided) {
+        // 节点未配置授权码：保持旧行为，不校验
+        (None, _) => true,
+        (Some(expected), Some(provided)) => provided.trim().eq_ignore_ascii_case(expected),
+        (Some(_), None) => false,
     }
 }
 
@@ -134,6 +205,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     // 读 headers
     let mut content_length: usize = 0;
     let mut range_header: Option<String> = None;
+    let mut auth_header: Option<String> = None;
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
@@ -148,7 +220,36 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             content_length = line[15..].trim().parse().unwrap_or(0);
         } else if lower.starts_with("range:") {
             range_header = Some(line[6..].trim().to_string());
+        } else if lower.starts_with("x-sw-auth:") {
+            auth_header = Some(line[10..].trim().to_string());
         }
+    }
+
+    // ── 授权校验 ─────────────────────────────────────────────────────────────
+    // 刻意放在读 body 之前：未授权的请求连 body 都不必进内存，顺带堵掉
+    // "用超大 Content-Length 打爆节点内存"这条最省事的打法。
+    if !is_authorized(&config, auth_header.as_deref(), &method, &path) {
+        let deny = types::NodeResponse::error("未授权：缺少或错误的 X-SW-Auth 请求头".to_string())
+            .to_json();
+        let _ = stream.write_all(
+            format!(
+                "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+                deny.len(),
+                deny
+            )
+            .as_bytes(),
+        );
+        return;
+    }
+
+    // ── 归档上传分流 ─────────────────────────────────────────────────────────
+    // 必须走独立通道：下面的通用 body 读取是 `vec![0u8; content_length]`，
+    // 一个几百 MB 的目录归档会直接把节点内存打爆。
+    let route = path.split('?').next().unwrap_or(&path).to_string();
+    if method == "POST" && route == "/node/upload/archive" {
+        let query = path.splitn(2, '?').nth(1).unwrap_or("").to_string();
+        upload_handler::handle_archive_upload(stream, &mut reader, &query, content_length);
+        return;
     }
 
     // 读 body
@@ -590,6 +691,7 @@ fn status_text(code: u16) -> &'static str {
         200 => "200 OK",
         204 => "204 No Content",
         400 => "400 Bad Request",
+        401 => "401 Unauthorized",
         404 => "404 Not Found",
         500 => "500 Internal Server Error",
         _ => "200 OK",
@@ -641,7 +743,16 @@ fn parse_sentry_log_filter(query: &str) -> sentry_log::types::SentryLogFilter {
 
 // ── 公开 API ─────────────────────────────────────────────────────────────────
 
-pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), String> {
+/// 启动节点服务器。
+///
+/// `auth_code` 为空串时不启用授权校验（兼容未配置的旧部署）；非空时除 `/health`
+/// 与 CORS 预检外的所有路由都要求 `X-SW-Auth` 头等于该授权码的 SHA-256 摘要。
+pub fn start_node_server(
+    host: String,
+    port: u16,
+    name: String,
+    auth_code: String,
+) -> Result<(), String> {
     let mut guard = NODE_SERVER
         .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
@@ -661,7 +772,22 @@ pub fn start_node_server(host: String, port: u16, name: String) -> Result<(), St
         .map_err(|e| format!("绑定端口 {} 失败: {}", port, e))?;
 
     let running = Arc::new(AtomicBool::new(true));
-    let config = Arc::new(NodeServerConfig { host, port, name });
+    let auth_code_hash = auth_code_hash(&auth_code);
+    let config = Arc::new(NodeServerConfig {
+        host,
+        port,
+        name,
+        auth_code_hash: auth_code_hash.clone(),
+    });
+    // 只报"是否启用"，绝不打印摘要本身：日志里的摘要等价于口令
+    println!(
+        "[node-server] auth check {}",
+        if auth_code_hash.is_some() {
+            "enabled (sha256 header)"
+        } else {
+            "disabled (no auth code configured)"
+        }
+    );
 
     {
         let running = Arc::clone(&running);
@@ -753,4 +879,147 @@ pub fn is_node_server_running() -> bool {
                 .map_or(false, |h| h.running.load(Ordering::SeqCst))
         })
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_with_code(auth_code: &str) -> NodeServerConfig {
+        NodeServerConfig {
+            auth_code_hash: auth_code_hash(auth_code),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn auth_code_hash_matches_known_sha256_vector() {
+        // 与 `printf test | shasum -a 256` 的输出对齐，确保线上摘要可对账
+        assert_eq!(
+            auth_code_hash("test").as_deref(),
+            Some("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+        );
+    }
+
+    #[test]
+    fn blank_auth_code_disables_check() {
+        // 配置留空必须是"不校验"，而不是"只接受空摘要"
+        assert_eq!(auth_code_hash(""), None);
+        assert_eq!(auth_code_hash("   "), None);
+        assert!(is_authorized(
+            &NodeServerConfig::default(),
+            None,
+            "POST",
+            "/node/call"
+        ));
+    }
+
+    #[test]
+    fn trimming_and_case_of_header_value_are_tolerated() {
+        let config = config_with_code("test");
+        let correct = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+        assert!(is_authorized(&config, Some(correct), "POST", "/node/call"));
+        assert!(is_authorized(&config, Some(&correct.to_uppercase()), "POST", "/node/call"));
+        assert!(is_authorized(&config, Some(&format!("  {correct} ")), "POST", "/node/call"));
+        // 前后空白参与明文哈希：授权码本身不会带空白
+        assert_eq!(config_with_code("  test  ").auth_code_hash, config.auth_code_hash);
+    }
+
+    #[test]
+    fn missing_or_wrong_header_is_rejected() {
+        let config = config_with_code("slime-node");
+        assert!(!is_authorized(&config, None, "POST", "/node/call"));
+        assert!(!is_authorized(&config, Some(""), "POST", "/node/call"));
+        assert!(!is_authorized(
+            &config,
+            Some("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"),
+            "POST",
+            "/node/call"
+        ));
+        // 带 query 的路径同样受保护（路径比对只看 ? 之前）
+        assert!(!is_authorized(
+            &config,
+            None,
+            "GET",
+            "/node/media?path=/tmp/a.jpg&width=320"
+        ));
+    }
+
+    #[test]
+    fn health_and_preflight_stay_open() {
+        let config = config_with_code("slime-node");
+        assert!(is_authorized(&config, None, "GET", "/health"));
+        assert!(is_authorized(&config, None, "OPTIONS", "/node/call"));
+    }
+
+    #[test]
+    fn media_url_may_carry_digest_as_query_param() {
+        let config = config_with_code("slime-node");
+        let digest = config.auth_code_hash.clone().unwrap();
+        // 图片/视频流拿不到请求头，允许 ?sw_auth=<摘要>
+        assert!(is_authorized(
+            &config,
+            None,
+            "GET",
+            &format!("/node/media?path=/tmp/a.jpg&sw_auth={digest}")
+        ));
+        assert!(!is_authorized(
+            &config,
+            None,
+            "GET",
+            "/node/media?path=/tmp/a.jpg&sw_auth=deadbeef"
+        ));
+        // 摘要与其他 query 参数的顺序无关
+        assert!(query_value(&format!("/x?sw_auth={digest}&p=1"), AUTH_QUERY_PARAM).is_some());
+        assert!(query_value("/x?p=1", AUTH_QUERY_PARAM).is_none());
+    }
+
+    /// 走真 socket 的握手测试：请求头是手写解析（`line[10..]` 这类切片），
+    /// 只用纯函数断言证明不了它切对了。
+    #[test]
+    fn socket_handshake_accepts_header_and_query_digest() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        // detached：accept 循环不阻塞测试结束，进程退出时随之回收
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        // 未知路由：授权通过后会是 404，未授权则是 401 —— 用状态码区分两道关卡
+        let send = |request: &str| -> String {
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+            stream.write_all(request.as_bytes()).expect("write");
+            let mut response = String::new();
+            stream.read_to_string(&mut response).expect("read");
+            response
+        };
+
+        assert!(send("GET /node/nope HTTP/1.1\r\nHost: x\r\n\r\n").starts_with("HTTP/1.1 401"));
+        assert!(send(&format!(
+            "GET /node/nope HTTP/1.1\r\nHost: x\r\nX-SW-Auth: {digest}\r\n\r\n"
+        ))
+        .starts_with("HTTP/1.1 404"));
+        // 请求头名大小写不敏感（HTTP 语义）
+        assert!(send(&format!(
+            "GET /node/nope HTTP/1.1\r\nHost: x\r\nx-sw-auth: {digest}\r\n\r\n"
+        ))
+        .starts_with("HTTP/1.1 404"));
+        assert!(send(&format!("GET /node/nope?sw_auth={digest} HTTP/1.1\r\nHost: x\r\n\r\n"))
+            .starts_with("HTTP/1.1 404"));
+        assert!(send("GET /node/nope?sw_auth=deadbeef HTTP/1.1\r\nHost: x\r\n\r\n")
+            .starts_with("HTTP/1.1 401"));
+        // /health 免鉴权：客户端要靠它区分"不在线"和"码不对"
+        assert!(send("GET /health HTTP/1.1\r\nHost: x\r\n\r\n").starts_with("HTTP/1.1 200"));
+    }
 }

@@ -324,8 +324,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           folderPath: normalized,
           generateThumbnails: generateThumbnails,
           preserveStructure: preserveStructure,
+          // 按目录结构导入时节点只回一个计数，靠它把整批集合挂到当前文件夹下
+          baseFolderId: resolvedTargetRawId,
         );
         final rawId = payload == null ? null : _stringOrNull(payload['id']);
+        // 单集合场景再移一次：旧版节点不认识 base_folder_id，这里是兼容兜底
         if (resolvedTargetRawId != null && rawId != null && rawId.isNotEmpty) {
           await nodeSettingsService.moveNodeMediaCollectionToFolder(
             nodeId: nodeId,
@@ -550,6 +553,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// 处理桌面端拖入的文件或文件夹路径列表。
   /// - 目录 → 调用 scanMediaFolders，递归发现子目录，每个子目录创建一个集合
   /// - 文件 → 去重后按父目录分组，对每个父目录调用 importMediaFolder
+  /// - 当前处于远程节点文件夹 → 转 [importPathsToNodeFolder]（先上传再让节点导入）
   /// [generateThumbnails]：全部扫描入库后批量入队缩略图任务（与点击导入一致）
   /// [preserveStructure]：按原始目录层级归档（与点击导入一致）；false 时为同名包裹文件夹
   Future<void> importDroppedPaths(
@@ -559,6 +563,25 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }) async {
     if (paths.isEmpty) return;
     if (isScanning.value) return;
+
+    // 当前上下文是远程节点文件夹：先上传到节点再让节点自己导入
+    final dropFolderId = effectiveFolderId;
+    if (dropFolderId != null && isRemoteFolder(dropFolderId)) {
+      final nodeId = getRemoteFolderNodeId(dropFolderId);
+      final rawFolderId = getRemoteRawFolderId(dropFolderId);
+      if (nodeId == null || rawFolderId == null) {
+        showSnack('错误', '远程文件夹映射缺失，无法导入');
+        return;
+      }
+      await importPathsToNodeFolder(
+        nodeId: nodeId,
+        rawFolderId: rawFolderId,
+        paths: paths,
+        generateThumbnails: generateThumbnails,
+        preserveStructure: preserveStructure,
+      );
+      return;
+    }
 
     isScanning.value = true;
     scanStatusText.value = '正在分析拖入文件...';
@@ -712,6 +735,184 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       showSnack('提示', '$skippedDuplicate 个文件夹已导入，无需重复操作');
     } else {
       showSnack('失败', '导入失败，请检查文件夹是否含有支持的媒体文件');
+    }
+  }
+
+  /// 把本地拖入的目录/文件上传进远程节点，并在节点侧按导入流程入库。
+  ///
+  /// 传输链路：本地目录整棵 zip → 节点 `/node/upload/archive` 流式落盘并解压到
+  /// 「当前远程文件夹对应的磁盘目录」→ 节点 `import_media_folder`（带 base_folder_id，
+  /// 归档进当前文件夹）→ 删除本地临时 zip。
+  /// 松散文件按其父目录归组（与本地导入一致：整目录入库）。
+  Future<void> importPathsToNodeFolder({
+    required String nodeId,
+    required String rawFolderId,
+    required List<String> paths,
+    bool generateThumbnails = false,
+    bool preserveStructure = false,
+  }) async {
+    isScanning.value = true;
+    scanStatusText.value = '正在确认节点上传目录...';
+
+    final targetDir = await _resolveNodeUploadTarget(nodeId: nodeId, rawFolderId: rawFolderId);
+    if (targetDir.isEmpty) {
+      // 反推失败或用户在目录浏览器里取消：不猜落点，直接结束
+      scanStatusText.value = '';
+      isScanning.value = false;
+      return;
+    }
+
+    final dirPaths = <String>{};
+    for (final path in paths) {
+      final entity = FileSystemEntity.typeSync(path);
+      if (entity == FileSystemEntityType.directory) {
+        dirPaths.add(path);
+      } else if (entity == FileSystemEntityType.file) {
+        dirPaths.add(File(path).parent.path);
+      }
+    }
+    if (dirPaths.isEmpty) {
+      scanStatusText.value = '';
+      isScanning.value = false;
+      showSnack('提示', '未检测到有效路径');
+      return;
+    }
+
+    int success = 0;
+    int fail = 0;
+    int skippedDuplicate = 0;
+    int noValidMedia = 0;
+    int index = 0;
+    for (final dir in dirPaths) {
+      index++;
+      final dirName = _pathBaseName(dir);
+      final stage = '$dirName ($index/${dirPaths.length})';
+      String? zipPath;
+      try {
+        scanStatusText.value = '打包: $stage';
+        zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir, entryRoot: dirName);
+
+        scanStatusText.value = '上传: $stage';
+        await nodeSettingsService.uploadArchiveToNode(
+          nodeId: nodeId,
+          zipPath: zipPath,
+          destDir: targetDir,
+        );
+
+        scanStatusText.value = '节点导入: $stage';
+        final payload = await nodeSettingsService.importNodeMediaFolder(
+          nodeId: nodeId,
+          folderPath: _joinNodePath(targetDir, dirName),
+          generateThumbnails: generateThumbnails,
+          preserveStructure: preserveStructure,
+          baseFolderId: rawFolderId,
+        );
+        // item_count：单集合模式是文件数，按目录结构模式是集合数；0 都表示没有有效媒体
+        final importedCount = payload == null ? null : _parseIntLike(payload['item_count']);
+        if (importedCount == 0) {
+          final emptyRawId = _stringOrNull(payload?['id']);
+          if (emptyRawId != null && emptyRawId.isNotEmpty) {
+            // 媒体全被尺寸过滤掉的空集合不留库里（与本地导入一致）
+            await nodeSettingsService.deleteNodeMediaCollection(
+              nodeId: nodeId,
+              collectionId: emptyRawId,
+            );
+          }
+          noValidMedia++;
+          _logger.info('[拖拽] 远程目录无有效媒体，已跳过: $dirName');
+        } else {
+          success++;
+        }
+      } catch (e) {
+        final errorMsg = e.toString();
+        if (errorMsg.contains('已导入') || errorMsg.contains('already imported')) {
+          skippedDuplicate++;
+          _logger.info('[拖拽] 远程目录已导入，跳过: $dir');
+        } else {
+          fail++;
+          _logger.error('[拖拽] 远程导入失败: $dir => $e');
+        }
+      } finally {
+        _deleteQuietly(zipPath);
+      }
+    }
+
+    scanStatusText.value = '';
+    isScanning.value = false;
+    await refreshRemoteLibrary();
+    final currentId = currentCollectionId.value;
+    if (currentId != null && isRemoteCollection(currentId)) {
+      await loadCurrentCollectionItems();
+    }
+
+    final skippedMsg = skippedDuplicate > 0 ? '（$skippedDuplicate 个已导入跳过）' : '';
+    if (success > 0 && fail == 0) {
+      showSnack('成功', '已上传并导入 $success 个文件夹$skippedMsg');
+    } else if (success > 0) {
+      showSnack('部分完成', '成功 $success 个，失败 $fail 个$skippedMsg');
+    } else if (skippedDuplicate > 0) {
+      showSnack('提示', '$skippedDuplicate 个文件夹已导入，无需重复操作');
+    } else if (noValidMedia > 0) {
+      showSnack('提示', '已上传 $noValidMedia 个目录，但未发现有效媒体文件');
+    } else {
+      showSnack('失败', '上传导入失败，请检查节点连接与磁盘空间');
+    }
+  }
+
+  /// 反推节点上传落点：由该远程文件夹下已有集合的磁盘位置推出；
+  /// 推不出（无集合或集合散落多个父目录）时弹节点目录浏览器让用户手选。
+  /// 返回空串 = 用户取消或无法弹窗。
+  Future<String> _resolveNodeUploadTarget({
+    required String nodeId,
+    required String rawFolderId,
+  }) async {
+    final resolved = await nodeSettingsService.resolveNodeUploadTarget(
+      nodeId: nodeId,
+      folderId: rawFolderId,
+    );
+    final inferred = resolved.targetDir.trim();
+    if (inferred.isNotEmpty) return inferred;
+
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      showSnack('错误', '无法确定节点上传目录，请在节点上手动导入');
+      return '';
+    }
+    final candidates = resolved.candidates;
+    // 异步间隙后主页面可能已销毁，mounted 为假就不再弹目录浏览器
+    if (!context.mounted) return '';
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (_) => NodeDirectoryPicker(
+        nodeId: nodeId,
+        nodeSettingsService: nodeSettingsService,
+        initialPath: candidates.isNotEmpty ? candidates.first : '/',
+      ),
+    );
+    return picked?.trim() ?? '';
+  }
+
+  /// 取路径最后一段目录名（同时兼容 Windows 与 POSIX 分隔符，容忍结尾分隔符）。
+  String _pathBaseName(String path) {
+    final normalized = path.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    final index = normalized.lastIndexOf('/');
+    return index < 0 ? normalized : normalized.substring(index + 1);
+  }
+
+  /// 拼接节点侧路径：落点可能是 Windows 路径，'/' 在 Win32 与 Rust 的 Path 中同样有效，
+  /// 因此统一用 '/' 拼接，避免在客户端猜测节点操作系统。
+  String _joinNodePath(String dir, String name) {
+    final base = dir.replaceAll(RegExp(r'[/\\]+$'), '');
+    return '$base/$name';
+  }
+
+  /// 删除本地临时 zip：上传完就没用了，失败也不影响导入结果。
+  void _deleteQuietly(String? path) {
+    if (path == null || path.isEmpty) return;
+    try {
+      File(path).deleteSync();
+    } catch (_) {
+      // 临时文件删不掉交给系统清理，不打断导入流程
     }
   }
 

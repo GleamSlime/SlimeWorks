@@ -125,3 +125,60 @@
   game_library N+1 与 WAL、`reqwest::Client` 复用。
 
 安全侧仍待处理的本质问题只有一句话：**任何能连到该端口的人 = 你的媒体库读 + 大部分模块写**。
+唯一已经落地的是授权码校验（见 §6），它把「能连就能读」改成了「没有授权码就读不到」。
+
+---
+
+## 6. 已落地：节点授权码（L2 的简化版）
+
+L2 的完整配对/签名尚未实现，先落了成本最低的一档：**共享授权码**。
+
+- **生成/存储**：`NodeSettingsService` 在首次加载时用 `Random.secure()` 生成 16 位十六进制授权码
+  （形如 `ABCD-1234-...`，分 4 段），存 SharedPreferences 键 `node_local_auth_code`；
+  设置页开启本机节点后展示该码，复制按钮写入剪切板，重置按钮换发新码并重建监听。
+- **传输形态**：明文只在生成/复制时出现。运行时发送与存储的都是它的 sha256 摘要：
+  Rust `NodeServerConfig` 只保留 `auth_code_hash`（`rust/src/node_server/mod.rs`），
+  启动日志只打印"是否启用校验"，不落摘要。摘要必须与 Dart 侧 `NodeSettingsService.authCodeDigest`
+  一致，`test/node_auth_code_test.dart` 用 sha256 标准向量钉住这一点。
+- **请求头**：`X-SW-Auth: <sha256(授权码)>`，由 Dio 拦截器 `_NodeAuthInterceptor` 按请求 URL 匹配节点后注入，
+  覆盖 `/node/call`、`/node/upload` 与连通性探测。
+- **媒体 URL 例外**：图片/视频 URL 会直接交给 `Image.network` 与播放器，拿不到自定义请求头，
+  因此 `/node/media` 额外接受同一份摘要以 `?sw_auth=<hex>` 提供（`AUTH_QUERY_PARAM`）。
+  摘要出现在 URL 里意味着它会进入访问日志/代理日志，属已知取舍；
+  若要收紧，需要把媒体取回改走带请求头的 Dio 缓存层。
+- **放行面**：`/health` 与 `OPTIONS` 预检保持免鉴权——客户端要靠 `/health` 区分"节点不在线"和
+  "授权码不对"，否则只能报"不可达"。
+- **校验位置**：401 在读取请求体之前返回，未授权请求的 body 不进内存，顺带堵掉
+  超大 `Content-Length` 打爆节点内存这条最省事的打法（对应 L3 的请求体上限项，仍未做）。
+- **兼容**：授权码为空 = 不校验，旧部署与未配置的节点行为不变；401 在 UI 上显示为
+  「授权码错误，请核对节点授权码」，且不触发熔断（节点是在线的）。
+
+仍不解决的问题：摘要即凭据（拿到码即等同拿到库），无设备维度、无重放保护、无 TLS，
+明文 HTTP 下抓取包仍可复用该摘要。要按 §3 L2 升级为配对 + HMAC 签名。
+
+---
+
+## 7. 已落地：归档上传端点 `POST /node/upload/archive`
+
+给「在远程文件夹内拖入本地目录」用的传输通道（`rust/src/node_server/upload_handler.rs`）。
+
+- **协议**：请求体是 zip 的**原始字节流**（非 multipart），`?dest=<绝对路径>`；
+  节点用 `io::copy` 流式写入 `std::env::temp_dir()/sw_upload_<millis>.zip`，收满后调
+  `extract_module::extractor::extract_archive` 解压到 `dest`，最后无论成败删除临时 zip。
+  这样大目录不会像通用 body 路径那样 `vec![0u8; content_length]` 全量进内存。
+- **配额**：`MAX_UPLOAD_BYTES = 8 GiB`，超出返回 413；实收字节与 `Content-Length` 不符按 400 处理并清理。
+- **鉴权**：与普通路由同一道门——401 在读体之前返回，没有授权码连不上上传。
+- **落点校验**：`validate_dest` 只接受非空、无 NUL、**绝对路径**且**当前已存在**的目录，
+  节点不会因为一个请求就在磁盘上凭空建目录树。正常客户端的 `dest` 来自节点自己回传的
+  `resolve_folder_upload_target`（库内集合的磁盘父目录）或节点目录浏览器，路径不出节点。
+- **解压穿越**：zip 条目走 `enclosed_name()`，`../` 与绝对路径条目被丢弃；
+  客户端打包侧 `zip_directory_to_tmp` 也拒绝含分隔符/`..` 的 `entry_root`（有测试钉住）。
+
+残留风险（本轮按约定只记录不改码）：
+
+1. `dest` 仍是**调用方给的绝对路径**：拿到授权码 = 能往节点机器上任意已存在目录写文件，
+   没有"只能写进媒体库根目录之下"的白名单（对应 §3 L3）。
+2. 落点存在性检查与写入之间有 TOCTOU 窗口；解压本身也会覆盖同名文件。
+3. 只有单次体积上限，没有按节点/按天的存储配额，也没有速率限制。
+4. 请求体按嗅探出的格式分派（zip/7z/tar…），非 zip 格式的穿越防护依赖各 crate 的默认行为。
+
