@@ -7,6 +7,7 @@ import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 
@@ -66,14 +67,29 @@ class _DesktopShell extends StatelessWidget {
         children: [
           sidebar,
           Expanded(
-            child: _ContentSurface(
-              alpha: contentAlpha,
-              child: Column(
-                children: [
-                  const DesktopTopBar(),
-                  Expanded(child: child),
-                ],
-              ),
+            // 侧栏把手压在内容区左缘上：侧栏内部有滚动条，Row 里内容区又后画
+            child: Stack(
+              children: [
+                // 内容区必须 Positioned.fill：Stack 给非定位子件的是松约束，
+                // 宽度就会按内容自己收缩，不再是铺满这一格
+                Positioned.fill(
+                  child: _ContentSurface(
+                    alpha: contentAlpha,
+                    child: Column(
+                      children: [
+                        const DesktopTopBar(),
+                        Expanded(child: child),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: const SidebarResizeStrip(),
+                ),
+              ],
             ),
           ),
         ],
@@ -118,9 +134,9 @@ class MobileLayout extends StatelessWidget {
             AnimatedScale(
               scale: sidebarExpandScale,
               duration: sidebarExpandScale == 1.0 || sidebarExpandScale == 0.9
-                  ? const Duration(milliseconds: 200)
+                  ? AppMotion.base
                   : Duration.zero,
-              curve: Curves.easeOutCubic,
+              curve: AppMotion.decelerate,
               child: child,
             ),
             // 侧边栏悬浮层（由 CollapsibleSidebar 自行管理展开/收起）

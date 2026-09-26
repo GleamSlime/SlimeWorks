@@ -13,6 +13,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 const Loggers _logger = Loggers(name: '屏蔽词');
 
 // ==================== 数据模型 ====================
@@ -240,12 +242,12 @@ class _BlockWordsDialogState extends State<_BlockWordsDialog> with SingleTickerP
               padding: EdgeInsets.fromLTRB(metrics.kSpace20, metrics.kSpace20, metrics.kSpace8, 0),
               child: Row(
                 children: [
-                  const Icon(Icons.block_outlined),
+                  DrawIcon(StrokeIcons.block),
                   SizedBox(width: metrics.kSpace8),
                   Text('屏蔽词管理', style: theme.textTheme.titleMedium),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: DrawIcon(StrokeIcons.close),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -350,7 +352,7 @@ class _WordListTab extends StatelessWidget {
               ),
               SizedBox(width: metrics.kSpace8),
               IconButton.filled(
-                icon: const Icon(Icons.add),
+                icon: DrawIcon(StrokeIcons.add),
                 onPressed: onAdd,
                 visualDensity: VisualDensity.compact,
               ),
@@ -376,7 +378,7 @@ class _WordListTab extends StatelessWidget {
                       dense: true,
                       title: Text(word, style: theme.textTheme.bodyMedium),
                       trailing: IconButton(
-                        icon: Icon(Icons.close, size: scaleW(16), color: theme.colorScheme.error),
+                        icon: DrawIcon(StrokeIcons.close, size: scaleW(16), color: theme.colorScheme.error),
                         onPressed: () => onRemove(word),
                       ),
                       contentPadding: EdgeInsets.zero,

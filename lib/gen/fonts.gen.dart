@@ -11,4 +11,7 @@
 abstract final class FontFamily {
   /// Font family: FZLanTingYuanS-EB-GB
   static const String fZLanTingYuanSEBGB = 'FZLanTingYuanS-EB-GB';
+
+  /// Font family: Inter
+  static const String inter = 'Inter';
 }

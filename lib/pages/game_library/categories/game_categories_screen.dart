@@ -6,6 +6,8 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_categories_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GameCategoriesScreen extends BasePage<GameLibraryCategoriesViewModel> {
   const GameCategoriesScreen({super.key});
@@ -28,7 +30,7 @@ class _GameCategoriesScreenState
       actions: <Widget>[
         FilledButton.icon(
           onPressed: _showCreateDialog,
-          icon: const Icon(Icons.create_new_folder_outlined),
+          icon: DrawIcon(StrokeIcons.createNewFolder),
           label: const Text('新增分类'),
         ),
       ],
@@ -37,7 +39,7 @@ class _GameCategoriesScreenState
         child: TextField(
           decoration: const InputDecoration(
             hintText: '搜索分类',
-            prefixIcon: Icon(Icons.search),
+            prefixIcon: DrawIcon(StrokeIcons.search),
             isDense: true,
           ),
           onChanged: (String value) => viewModel.searchQuery.value = value,
@@ -72,7 +74,7 @@ class _GameCategoriesScreenState
                   GameCategoryDetailRoute(categoryId: category.id).push<void>(context);
                 },
                 trailing: category.isSystem
-                    ? const Icon(Icons.lock_outline)
+                    ? DrawIcon(StrokeIcons.lockOutline)
                     : PopupMenuButton<String>(
                         onSelected: (String value) {
                           if (value == 'edit') {
@@ -86,12 +88,12 @@ class _GameCategoriesScreenState
                           GlassMenuItem<String>(
                             value: 'edit',
                             label: '编辑',
-                            icon: Icons.edit_outlined,
+                            icon: StrokeIcons.edit,
                           ),
                           GlassMenuItem<String>(
                             value: 'delete',
                             label: '删除',
-                            icon: Icons.delete_outline_rounded,
+                            icon: StrokeIcons.deleteOutline,
                             destructive: true,
                           ),
                         ],

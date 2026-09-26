@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_zone.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -60,7 +63,7 @@ class _HoverableState extends State<Hoverable> {
         ? (widget.hoverColor ?? s.surfaceHover)
         : Colors.transparent;
 
-    return MouseRegion(
+    final surface = MouseRegion(
       cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: _interactive ? (_) => setState(() => _hovered = true) : null,
       onExit: _interactive ? (_) => setState(() => _hovered = false) : null,
@@ -100,6 +103,10 @@ class _HoverableState extends State<Hoverable> {
         ),
       ),
     );
+
+    // 事件源放在 Hoverable 上：卡片/列表行里图标往往只占 16px，点在文字上时
+    // 也该让整行的图标一起描一次，否则读起来像"按了没反应"。
+    return StrokeZone(enabled: _interactive, child: surface);
   }
 }
 
@@ -191,7 +198,7 @@ class StatCard extends StatelessWidget {
 
   /// 数值下方的一行补充说明
   final String? hint;
-  final IconData? icon;
+  final StrokeIcon? icon;
 
   /// 语义着色（成功/警告/危险…）；为 null 时用中性色
   final AppStatusRole? tone;
@@ -223,7 +230,7 @@ class StatCard extends StatelessWidget {
                 color: (tone?.container ?? s.surfaceHover),
                 borderRadius: m.radius8,
               ),
-              child: Icon(icon, size: m.iconSize16, color: accent),
+              child: DrawIcon(icon!, size: m.iconSize16, color: accent),
             ),
             SizedBox(width: m.kSpace12),
           ],

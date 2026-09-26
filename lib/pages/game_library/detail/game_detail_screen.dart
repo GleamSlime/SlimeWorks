@@ -16,6 +16,9 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_detail_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class GameDetailScreen extends BasePage<GameLibraryDetailViewModel> {
   const GameDetailScreen({super.key, required this.gameId});
@@ -104,7 +107,7 @@ class _GameDetailScreenState
       title: '游戏详情',
       forceLocalChrome: true,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: DrawIcon(StrokeIcons.arrowBack),
         onPressed: () => context.pop(),
       ),
     );
@@ -277,8 +280,7 @@ class _GameDetailScreenState
         ),
       ),
       child: Center(
-        child: Icon(
-          Icons.sports_esports_outlined,
+        child: DrawIcon(StrokeIcons.sportsEsports,
           size: AppTheme.metrics.iconSize48,
           color: Theme.of(context).colorScheme.primary.withAlpha(160),
         ),
@@ -332,7 +334,7 @@ class _GameDetailScreenState
                 ),
               ),
               onPressed: () => _launchGame(game),
-              icon: Icon(Icons.play_arrow, size: AppTheme.metrics.iconSize18),
+              icon: DrawIcon(StrokeIcons.playArrow, size: AppTheme.metrics.iconSize18),
               label: const Text('启动游戏'),
             );
           }
@@ -355,7 +357,7 @@ class _GameDetailScreenState
                   ),
                 ),
                 onPressed: () => _launchGame(game),
-                icon: Icon(Icons.play_arrow, size: AppTheme.metrics.iconSize18),
+                icon: DrawIcon(StrokeIcons.playArrow, size: AppTheme.metrics.iconSize18),
                 label: const Text('启动游戏'),
               ),
               Container(
@@ -375,10 +377,10 @@ class _GameDetailScreenState
                     value: p,
                     child: Row(
                       children: <Widget>[
-                        Icon(
+                        DrawIcon(
                           isDefault
-                              ? Icons.star_rounded
-                              : Icons.play_arrow_outlined,
+                              ? StrokeIcons.star
+                              : StrokeIcons.playArrow,
                           size: AppTheme.metrics.iconSize16,
                           color: isDefault ? Colors.amber : null,
                         ),
@@ -398,8 +400,7 @@ class _GameDetailScreenState
                       right: Radius.circular(20),
                     ),
                   ),
-                  child: Icon(
-                    Icons.arrow_drop_down,
+                  child: DrawIcon(StrokeIcons.arrowDropDown,
                     color: cs.onPrimary,
                     size: AppTheme.metrics.iconSize20,
                   ),
@@ -432,7 +433,7 @@ class _GameDetailScreenState
         // 收藏 Pill
         _StatusPill(
           label: viewModel.isFavorite ? '已收藏' : '收藏',
-          icon: viewModel.isFavorite ? Icons.favorite : Icons.favorite_border,
+          icon: viewModel.isFavorite ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
           active: viewModel.isFavorite,
           activeColor: Colors.pink,
           onTap: () => viewModel.toggleFavorite(!viewModel.isFavorite),
@@ -441,18 +442,18 @@ class _GameDetailScreenState
     );
   }
 
-  IconData _statusIcon(GameStatus s) {
+  StrokeIcon _statusIcon(GameStatus s) {
     switch (s) {
       case GameStatus.notStarted:
-        return Icons.schedule_outlined;
+        return StrokeIcons.schedule;
       case GameStatus.playing:
-        return Icons.sports_esports_outlined;
+        return StrokeIcons.sportsEsports;
       case GameStatus.completed:
-        return Icons.emoji_events_outlined;
+        return StrokeIcons.emojiEvents;
       case GameStatus.onHold:
-        return Icons.pause_circle_outline;
+        return StrokeIcons.pauseCircleOutline;
       case GameStatus.dropped:
-        return Icons.cancel_outlined;
+        return StrokeIcons.cancel;
     }
   }
 
@@ -621,7 +622,7 @@ class _GameDetailScreenState
                 final DateTime start = end.subtract(const Duration(hours: 1));
                 await viewModel.addManualSession(start: start, end: end);
               },
-              icon: Icon(Icons.add, size: AppTheme.metrics.iconSize16),
+              icon: DrawIcon(StrokeIcons.add, size: AppTheme.metrics.iconSize16),
               label: const Text('追加记录'),
             ),
           ],
@@ -655,7 +656,7 @@ class _GameDetailScreenState
                 ),
               ),
               child: ListTile(
-                leading: const Icon(Icons.history),
+                leading: DrawIcon(StrokeIcons.history),
                 title: Text('${session.startTime} → ${session.endTime}'),
                 trailing: Text(viewModel.formatDuration(session.durationSec)),
               ),
@@ -715,11 +716,11 @@ class _GameDetailScreenState
             ),
           ),
           child: ListTile(
-            leading: const Icon(Icons.warning_amber_outlined),
+            leading: DrawIcon(StrokeIcons.warningAmber),
             title: const Text('萌娘百科加载失败'),
             subtitle: Text(error, style: Theme.of(context).textTheme.bodySmall),
             trailing: IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: DrawIcon(StrokeIcons.refresh),
               tooltip: '重试',
               onPressed: viewModel.retryMoegirl,
             ),
@@ -746,8 +747,7 @@ class _GameDetailScreenState
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Icon(
-                    Icons.menu_book_outlined,
+                  DrawIcon(StrokeIcons.menuBook,
                     size: AppTheme.metrics.iconSize18,
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace8),
@@ -772,8 +772,7 @@ class _GameDetailScreenState
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          Icon(
-                            Icons.open_in_new,
+                          DrawIcon(StrokeIcons.openInNew,
                             size: AppTheme.metrics.iconSize14,
                             color: Theme.of(context).colorScheme.primary,
                           ),
@@ -931,7 +930,7 @@ class _GameDetailScreenState
           decoration: InputDecoration(
             labelText: '启动路径',
             border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.folder_outlined),
+            prefixIcon: DrawIcon(StrokeIcons.folder),
             filled: true,
             fillColor: Theme.of(
               context,
@@ -982,7 +981,7 @@ class _GameDetailScreenState
         SizedBox(height: AppTheme.metrics.kSpace20),
         FilledButton.icon(
           onPressed: _saveEdit,
-          icon: const Icon(Icons.save_outlined),
+          icon: DrawIcon(StrokeIcons.save),
           label: const Text('保存修改'),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -996,7 +995,7 @@ class _GameDetailScreenState
               ).showSnackBar(const SnackBar(content: Text('元数据已刷新')));
             }
           },
-          icon: const Icon(Icons.cloud_download_outlined),
+          icon: DrawIcon(StrokeIcons.cloudDownload),
           label: const Text('从网络刷新元数据'),
         ),
       ],
@@ -1107,8 +1106,7 @@ class _GameDetailScreenState
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Icon(
-                          Icons.folder_open_outlined,
+                        DrawIcon(StrokeIcons.folderOpen,
                           size: AppTheme.metrics.iconSize18,
                         ),
                         SizedBox(width: AppTheme.metrics.kSpace8),
@@ -1183,7 +1181,7 @@ class _GameDetailScreenState
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Icon(Icons.play_arrow),
+                              : DrawIcon(StrokeIcons.playArrow),
                           label: Text(
                             running
                                 ? '游戏运行中...'
@@ -1207,7 +1205,7 @@ class _GameDetailScreenState
                             _openContainingFolder(openPath);
                           }
                         },
-                        icon: const Icon(Icons.folder_open_outlined),
+                        icon: DrawIcon(StrokeIcons.folderOpen),
                       ),
                       // 展开/收起可执行文件列表
                       if (exePaths.isNotEmpty) ...<Widget>[
@@ -1220,7 +1218,7 @@ class _GameDetailScreenState
                           icon: AnimatedRotation(
                             turns: _exeListExpanded ? 0.5 : 0,
                             duration: const Duration(milliseconds: 200),
-                            child: const Icon(Icons.expand_more),
+                            child: DrawIcon(StrokeIcons.expandMore),
                           ),
                         ),
                       ],
@@ -1292,16 +1290,14 @@ class _GameDetailScreenState
                                       if (!running)
                                         IconButton(
                                           tooltip: '直接启动此文件',
-                                          icon: Icon(
-                                            Icons.play_circle_outline,
+                                          icon: DrawIcon(StrokeIcons.playCircleOutline,
                                             size: AppTheme.metrics.iconSize20,
                                           ),
                                           onPressed: () => _launchWithExe(g, p),
                                         ),
                                       IconButton(
                                         tooltip: '移除此启动项',
-                                        icon: Icon(
-                                          Icons.close,
+                                        icon: DrawIcon(StrokeIcons.close,
                                           size: AppTheme.metrics.iconSize18,
                                           color: Theme.of(
                                             context,
@@ -1343,8 +1339,7 @@ class _GameDetailScreenState
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Icon(
-                              Icons.save_outlined,
+                            DrawIcon(StrokeIcons.save,
                               size: AppTheme.metrics.iconSize18,
                             ),
                             SizedBox(width: AppTheme.metrics.kSpace8),
@@ -1364,8 +1359,7 @@ class _GameDetailScreenState
                             SizedBox(width: AppTheme.metrics.kSpace8),
                             TextButton.icon(
                               onPressed: () => _openContainingFolder(savePath),
-                              icon: Icon(
-                                Icons.open_in_new,
+                              icon: DrawIcon(StrokeIcons.openInNew,
                                 size: AppTheme.metrics.iconSize16,
                               ),
                               label: const Text('打开'),
@@ -1389,7 +1383,7 @@ class _GameDetailScreenState
                         );
                       }
                     },
-                    icon: const Icon(Icons.add_alarm),
+                    icon: DrawIcon(StrokeIcons.addAlarm),
                     label: const Text('追加 1 小时记录'),
                   ),
                 ],
@@ -1430,7 +1424,7 @@ class _GameDetailScreenState
                           'https://zh.moegirl.org.cn/${Uri.encodeComponent(g.name)}';
                       Process.run('open', <String>[url]);
                     },
-                    icon: const Icon(Icons.open_in_browser),
+                    icon: DrawIcon(StrokeIcons.openInBrowser),
                     label: Text('在萌娘百科查看「${g.name}」'),
                   ),
                 ],
@@ -1476,7 +1470,7 @@ class _GameDetailScreenState
                     'https://2dfan.com/subjects/search?keyword=${Uri.encodeComponent(g.name)}';
                 Process.run('open', <String>[url]);
               },
-              icon: const Icon(Icons.search),
+              icon: DrawIcon(StrokeIcons.search),
               label: Text('在 2DFan 搜索「${g.name}」'),
             ),
             SizedBox(height: AppTheme.metrics.kSpace10),
@@ -1503,7 +1497,7 @@ class _GameDetailScreenState
                                   color: Colors.white,
                                 ),
                               )
-                            : const Icon(Icons.download_outlined),
+                            : DrawIcon(StrokeIcons.download),
                         label: Text(processing ? '处理中...' : '一键下载存档'),
                       ),
                       SizedBox(width: AppTheme.metrics.kSpace8),
@@ -1535,8 +1529,7 @@ class _GameDetailScreenState
                                       strokeWidth: 1.5,
                                     ),
                                   )
-                                : Icon(
-                                    Icons.expand_more,
+                                : DrawIcon(StrokeIcons.expandMore,
                                     size: AppTheme.metrics.iconSize18,
                                   ),
                           ),
@@ -1834,7 +1827,7 @@ class _GameDetailScreenState
           decoration: InputDecoration(
             labelText: '当前章节',
             border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.book_outlined),
+            prefixIcon: DrawIcon(StrokeIcons.book),
             filled: true,
             fillColor: Theme.of(
               context,
@@ -1847,7 +1840,7 @@ class _GameDetailScreenState
           decoration: InputDecoration(
             labelText: '当前路线',
             border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.alt_route_outlined),
+            prefixIcon: DrawIcon(StrokeIcons.altRoute),
             filled: true,
             fillColor: Theme.of(
               context,
@@ -1883,7 +1876,7 @@ class _GameDetailScreenState
               ).showSnackBar(const SnackBar(content: Text('进度已保存')));
             }
           },
-          icon: const Icon(Icons.save_outlined),
+          icon: DrawIcon(StrokeIcons.save),
           label: const Text('保存进度'),
         ),
       ],
@@ -1923,7 +1916,7 @@ class _StatusPill extends StatelessWidget {
   });
 
   final String label;
-  final IconData icon;
+  final StrokeIcon icon;
   final bool active;
   final VoidCallback onTap;
   final Color? activeColor;
@@ -1959,7 +1952,7 @@ class _StatusPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: AppTheme.metrics.iconSize15, color: fg),
+            DrawIcon(icon, size: AppTheme.metrics.iconSize15, color: fg),
             if (active) ...<Widget>[
               SizedBox(width: AppTheme.metrics.kSpace4),
               Text(

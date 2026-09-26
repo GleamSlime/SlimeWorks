@@ -6,6 +6,9 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 typedef NodeAvailabilityChecker = Future<bool> Function(String baseUrl);
 
@@ -32,17 +35,17 @@ class NodeSwitcherButton extends StatelessWidget {
     final accent = theme.colorScheme.primary;
 
     String label;
-    IconData iconData;
+    StrokeIcon iconData;
     Color dotColor;
     if (isLocal) {
       label = '本机';
-      iconData = Icons.computer_rounded;
+      iconData = StrokeIcons.computer;
       dotColor = LightColors.green;
     } else {
       final node = nodeService.getNodeById(currentNodeId);
       final ok = nodeService.nodeConnectivity[currentNodeId] == true;
       label = node?.name ?? '未知';
-      iconData = Icons.dns_rounded;
+      iconData = StrokeIcons.dns;
       dotColor = ok ? LightColors.green : LightColors.red;
     }
 
@@ -85,7 +88,7 @@ class NodeSwitcherButton extends StatelessWidget {
                 ),
               ),
               SizedBox(width: m.kSpace6),
-              Icon(iconData, size: m.iconSize14, color: isLocal ? theme.hintColor : accent),
+              DrawIcon(iconData, size: m.iconSize14, color: isLocal ? theme.hintColor : accent),
               SizedBox(width: m.kSpace4),
               Text(
                 label,
@@ -96,8 +99,7 @@ class NodeSwitcherButton extends StatelessWidget {
                 ),
               ),
               SizedBox(width: m.kSpace2),
-              Icon(
-                Icons.unfold_more_rounded,
+              DrawIcon(StrokeIcons.unfoldMore,
                 size: m.iconSize12,
                 color: theme.hintColor.withAlpha(120),
               ),
@@ -147,7 +149,7 @@ class NodeSwitcherButton extends StatelessWidget {
                         color: accent.withAlpha(20),
                         borderRadius: m.radius8,
                       ),
-                      child: Icon(Icons.hub_rounded, size: m.iconSize14, color: accent),
+                      child: DrawIcon(StrokeIcons.hub, size: m.iconSize14, color: accent),
                     ),
                     SizedBox(width: m.kSpace10),
                     Expanded(
@@ -180,8 +182,7 @@ class NodeSwitcherButton extends StatelessWidget {
                         onTap: () => Navigator.of(sheetCtx).pop(),
                         child: Padding(
                           padding: EdgeInsets.all(m.kSpace4),
-                          child: Icon(
-                            Icons.close_rounded,
+                          child: DrawIcon(StrokeIcons.close,
                             size: m.iconSize18,
                             color: theme.hintColor,
                           ),
@@ -208,7 +209,7 @@ class NodeSwitcherButton extends StatelessWidget {
                         id: '',
                         label: '本机',
                         subtitle: '使用本地数据',
-                        icon: Icons.computer_rounded,
+                        icon: StrokeIcons.computer,
                         isSelected: currentNodeId.isEmpty,
                         isAvailable: true,
                         accent: accent,
@@ -242,7 +243,7 @@ class NodeSwitcherButton extends StatelessWidget {
                           id: node.id,
                           label: node.name,
                           subtitle: ok ? '连接正常' : '不可达',
-                          icon: Icons.dns_rounded,
+                          icon: StrokeIcons.dns,
                           isSelected: currentNodeId == node.id,
                           isAvailable: ok,
                           accent: accent,
@@ -298,7 +299,7 @@ class _NodePanelItem extends StatelessWidget {
   final String id;
   final String label;
   final String subtitle;
-  final IconData icon;
+  final StrokeIcon icon;
   final bool isSelected;
   final bool isAvailable;
   final Color accent;
@@ -347,8 +348,7 @@ class _NodePanelItem extends StatelessWidget {
                       : (isDark ? DarkColors.white10 : LightColors.black5),
                   borderRadius: m.radius10,
                 ),
-                child: Icon(
-                  icon,
+                child: DrawIcon(icon,
                   size: m.iconSize18,
                   color: isSelected
                       ? accent
@@ -403,7 +403,7 @@ class _NodePanelItem extends StatelessWidget {
               ),
               if (isSelected) ...[
                 SizedBox(width: m.kSpace6),
-                Icon(Icons.check_circle_rounded, size: m.iconSize18, color: accent),
+                DrawIcon(StrokeIcons.checkCircle, size: m.iconSize18, color: accent),
               ],
             ],
           ),
@@ -482,8 +482,7 @@ class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerPro
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.info_outline_rounded,
+                  DrawIcon(StrokeIcons.infoOutline,
                     size: m.iconSize18,
                     color: theme.colorScheme.primary,
                   ),

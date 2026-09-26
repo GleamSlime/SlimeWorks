@@ -4,8 +4,10 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/animations/state_transition_animation.dart';
 import 'package:slime_works/components/dropdown/gooey_dropdown_shader.dart';
 import 'package:slime_works/core/index.dart';
-import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
 
 class LibraryBookAppendButton extends StatefulWidget {
   final void Function()? onTap;
@@ -40,8 +42,8 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
                 color: Theme.of(context).textTheme.bodyMedium?.color,
                 fontWeight: FontWeight.w500,
               ),
-              svg: Assets.image.svg.libraryImport,
-              svgSize: AppTheme.metrics.fontSize15,
+              icon: StrokeIcons.assetLibraryImport,
+              iconSize: AppTheme.metrics.fontSize15,
               loading: loading,
               height: AppTheme.metrics.kSpace40,
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
@@ -87,13 +89,13 @@ class _MessageContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _ImportOptionItem(
-              icon: Icons.insert_drive_file_outlined,
+              icon: StrokeIcons.insertDriveFile,
               label: '添加单个文件',
               onTap: viewModel.addSingleNovel,
             ),
             const Divider(),
             _ImportOptionItem(
-              icon: Icons.folder_outlined,
+              icon: StrokeIcons.folder,
               label: '扫描文件夹',
               onTap: viewModel.scanFolder,
             ),
@@ -105,7 +107,7 @@ class _MessageContent extends StatelessWidget {
 }
 
 class _ImportOptionItem extends StatefulWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final Future<void> Function() onTap;
 
@@ -149,7 +151,7 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
           ),
           child: Row(
             children: [
-              Icon(
+              DrawIcon(
                 widget.icon,
                 size: AppTheme.metrics.fontSize18,
                 color: Theme.of(context).textTheme.bodyMedium?.color,

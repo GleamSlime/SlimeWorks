@@ -5,6 +5,9 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/app_log_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class AppLogTerminal extends StatefulWidget {
   final AppLogViewModel viewModel;
@@ -116,7 +119,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
         runSpacing: m.kSpace6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Icon(Icons.terminal_rounded, size: m.iconSize18, color: primaryColor),
+          DrawIcon(StrokeIcons.terminal, size: m.iconSize18, color: primaryColor),
           Container(
             padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace2),
             decoration: BoxDecoration(color: primaryColor.withAlpha(15), borderRadius: m.radius4),
@@ -153,8 +156,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                     fontSize: m.fontSize11,
                     color: isDark ? DarkColors.white40 : LightColors.black40,
                   ),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
+                  prefixIcon: DrawIcon(StrokeIcons.search,
                     size: m.iconSize14,
                     color: isDark ? DarkColors.white40 : LightColors.black40,
                   ),
@@ -226,13 +228,13 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
             ),
           ),
           _ActionButton(
-            icon: Icons.refresh_rounded,
+            icon: StrokeIcons.refresh,
             tooltip: '刷新',
             isDark: isDark,
             onPressed: () => vm.loadLogs(),
           ),
           _ActionButton(
-            icon: Icons.clear_all_rounded,
+            icon: StrokeIcons.clearAll,
             tooltip: '清除筛选',
             isDark: isDark,
             onPressed: () {
@@ -606,8 +608,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                 stops: const [0.0, 0.5, 1.0],
               ),
             ),
-            child: Icon(
-              Icons.terminal_rounded,
+            child: DrawIcon(StrokeIcons.terminal,
               size: scaleW(36),
               color: primaryColor.withAlpha(60),
             ),
@@ -633,7 +634,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
 }
 
 class _ActionButton extends StatefulWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String tooltip;
   final bool isDark;
   final VoidCallback onPressed;
@@ -673,7 +674,7 @@ class _ActionButtonState extends State<_ActionButton> {
           child: AnimatedScale(
             scale: _hovered ? 1.1 : 1.0,
             duration: const Duration(milliseconds: 150),
-            child: Icon(
+            child: DrawIcon(
               widget.icon,
               size: m.iconSize16,
               color: widget.isDark ? DarkColors.white80 : LightColors.black80,

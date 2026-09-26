@@ -20,6 +20,9 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_search_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MangaSearchScreen extends BasePage<MangaSearchViewModel> {
   const MangaSearchScreen({super.key, this.keyword = '', this.category = ''});
@@ -90,7 +93,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
     return ScreenChromeData(
       forceLocalChrome: true,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: DrawIcon(StrokeIcons.arrowBack),
         onPressed: () {
           if (context.canPop()) context.pop();
         },
@@ -113,10 +116,10 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
           () => IconButton(
             tooltip: '分类过滤',
             icon: viewModel.selectedCategories.isEmpty
-                ? const Icon(Icons.filter_list_outlined)
+                ? DrawIcon(StrokeIcons.filterList)
                 : Badge(
                     label: Text('${viewModel.selectedCategories.length}'),
-                    child: const Icon(Icons.filter_list),
+                    child: DrawIcon(StrokeIcons.filterList),
                   ),
             onPressed: () => _showCategoryFilter(context),
           ),
@@ -135,7 +138,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
             },
           ),
         ),
-        IconButton(icon: const Icon(Icons.search), onPressed: _doSearch),
+        IconButton(icon: DrawIcon(StrokeIcons.search), onPressed: _doSearch),
       ],
     );
   }
@@ -284,8 +287,7 @@ class _SearchInputField extends StatelessWidget {
           listenable: controller,
           builder: (_, _) => controller.text.isNotEmpty
               ? IconButton(
-                  icon: Icon(
-                    Icons.close,
+                  icon: DrawIcon(StrokeIcons.close,
                     size: scaleW(18),
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
@@ -332,8 +334,7 @@ class _SearchHistorySection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.history,
+                DrawIcon(StrokeIcons.history,
                   size: scaleW(16),
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
@@ -351,8 +352,7 @@ class _SearchHistorySection extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.delete_sweep_outlined,
+                      DrawIcon(StrokeIcons.deleteSweep,
                         size: scaleW(14),
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
                       ),
@@ -422,8 +422,7 @@ class _HistoryTag extends StatelessWidget {
             SizedBox(width: metrics.kSpace4),
             GestureDetector(
               onTap: onDelete,
-              child: Icon(
-                Icons.close,
+              child: DrawIcon(StrokeIcons.close,
                 size: scaleW(12),
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
               ),
@@ -446,19 +445,19 @@ class _SortButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<MangaSortOrder>(
       tooltip: '排序方式',
-      icon: const Icon(Icons.sort),
+      icon: DrawIcon(StrokeIcons.sort),
       initialValue: current,
       onSelected: onChanged,
       itemBuilder: (_) => [
-        _buildItem(MangaSortOrder.dateDescending, '最新发布', Icons.new_releases_outlined),
-        _buildItem(MangaSortOrder.dateAscending, '最旧发布', Icons.history_outlined),
-        _buildItem(MangaSortOrder.likeDescending, '最多点赞', Icons.favorite_border),
-        _buildItem(MangaSortOrder.viewDescending, '最多浏览', Icons.visibility_outlined),
+        _buildItem(MangaSortOrder.dateDescending, '最新发布', StrokeIcons.newReleases),
+        _buildItem(MangaSortOrder.dateAscending, '最旧发布', StrokeIcons.history),
+        _buildItem(MangaSortOrder.likeDescending, '最多点赞', StrokeIcons.favoriteBorder),
+        _buildItem(MangaSortOrder.viewDescending, '最多浏览', StrokeIcons.visibility),
       ],
     );
   }
 
-  PopupMenuItem<MangaSortOrder> _buildItem(MangaSortOrder value, String label, IconData icon) {
+  PopupMenuItem<MangaSortOrder> _buildItem(MangaSortOrder value, String label, StrokeIcon icon) {
     return GlassMenuItem<MangaSortOrder>(
       value: value,
       label: label,

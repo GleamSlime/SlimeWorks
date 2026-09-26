@@ -6,6 +6,9 @@ import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 发送操作底栏（如果对端不在线则会进入离线排队）
 class TransferActions extends StatefulWidget {
@@ -148,8 +151,7 @@ class _TransferActionsState extends State<TransferActions> {
                                           : (isDark ? DarkColors.white10 : LightColors.black10),
                                       borderRadius: AppTheme.metrics.radius10,
                                     ),
-                                    child: Icon(
-                                      Icons.send_rounded,
+                                    child: DrawIcon(StrokeIcons.send,
                                       size: scaleW(20),
                                       color: hasText
                                           ? primaryColor
@@ -175,7 +177,7 @@ class _TransferActionsState extends State<TransferActions> {
                   children: [
                     // 文本展开/收起
                     _buildActionIcon(
-                      icon: Icons.text_fields,
+                      icon: StrokeIcons.textFields,
                       label: '文本',
                       isActive: _textFieldExpanded,
                       onPressed: () => setState(() => _textFieldExpanded = !_textFieldExpanded),
@@ -183,21 +185,21 @@ class _TransferActionsState extends State<TransferActions> {
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     _buildActionIcon(
-                      icon: Icons.photo,
+                      icon: StrokeIcons.photo,
                       label: '图片',
                       onPressed: _pickAndSendImage,
                       isDark: isDark,
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     _buildActionIcon(
-                      icon: Icons.video_library_outlined,
+                      icon: StrokeIcons.videoLibrary,
                       label: '视频',
                       onPressed: _pickAndSendVideo,
                       isDark: isDark,
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     _buildActionIcon(
-                      icon: Icons.insert_drive_file_outlined,
+                      icon: StrokeIcons.insertDriveFile,
                       label: '文件',
                       onPressed: _pickAndSendFile,
                       isDark: isDark,
@@ -214,7 +216,7 @@ class _TransferActionsState extends State<TransferActions> {
 
   /// 构建操作图标按鈕
   Widget _buildActionIcon({
-    required IconData icon,
+    required StrokeIcon icon,
     required String label,
     required VoidCallback onPressed,
     required bool isDark,
@@ -235,8 +237,7 @@ class _TransferActionsState extends State<TransferActions> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
+              DrawIcon(icon,
                 size: scaleW(20),
                 color: isActive
                     ? primaryColor

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -30,7 +33,7 @@ class SectionHeader extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final Widget? leading;
-  final IconData? icon;
+  final StrokeIcon? icon;
 
   /// dense 用于卡片内部的小标题，regular 用于页面分节
   final bool dense;
@@ -56,7 +59,13 @@ class SectionHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: dense ? m.iconSize14 : m.iconSize16, color: s.textTertiary),
+          DrawIcon(
+            icon!,
+            size: dense ? m.iconSize14 : m.iconSize16,
+            color: s.textTertiary,
+            // 小节标题在页面上成排出现，只播入场；跟着点击重播会满屏乱闪
+            trigger: StrokeTrigger.appear,
+          ),
           SizedBox(width: m.kSpace8),
         ],
         if (leading != null) ...[leading!, SizedBox(width: m.kSpace8)],
@@ -92,8 +101,8 @@ class SectionHeader extends StatelessWidget {
                 duration: AppMotion.base,
                 curve: AppMotion.standard,
                 turns: expanded ? 0 : -0.25,
-                child: Icon(
-                  Icons.expand_more,
+                child: DrawIcon(
+                  StrokeIcons.expandMore,
                   size: m.iconSize18,
                   color: s.textTertiary,
                 ),

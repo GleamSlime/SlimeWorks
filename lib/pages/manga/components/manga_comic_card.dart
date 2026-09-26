@@ -6,6 +6,9 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 漫画网格卡片
 class MangaComicCard extends StatefulWidget {
@@ -223,8 +226,7 @@ class _ComicCoverImage extends StatelessWidget {
       errorBuilder: (_, e, _) => Container(
         color: isDark ? DarkColors.background3 : LightColors.background2,
         child: Center(
-          child: Icon(
-            Icons.broken_image_outlined,
+          child: DrawIcon(StrokeIcons.brokenImage,
             size: AppTheme.metrics.iconSize32,
             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25),
           ),
@@ -327,13 +329,13 @@ class MangaComicListTile extends StatelessWidget {
                   Row(
                     children: [
                       _StatChip(
-                        icon: Icons.photo_library_outlined,
+                        icon: StrokeIcons.photoLibrary,
                         label: '${comic.epsCount}章',
                         theme: theme,
                       ),
                       SizedBox(width: metrics.kSpace6),
                       _StatChip(
-                        icon: Icons.favorite_border,
+                        icon: StrokeIcons.favoriteBorder,
                         label: '${comic.likesCount}',
                         theme: theme,
                       ),
@@ -373,7 +375,7 @@ class MangaComicListTile extends StatelessWidget {
 class _StatChip extends StatelessWidget {
   const _StatChip({required this.icon, required this.label, required this.theme});
 
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final ThemeData theme;
 
@@ -382,8 +384,7 @@ class _StatChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
+        DrawIcon(icon,
           size: AppTheme.metrics.iconSize12,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
         ),

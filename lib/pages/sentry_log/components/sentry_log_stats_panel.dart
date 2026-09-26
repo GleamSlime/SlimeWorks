@@ -5,6 +5,9 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 日志统计面板组件
 class SentryLogStatsPanel extends StatelessWidget {
@@ -46,8 +49,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Icon(
-                  Icons.bar_chart_rounded,
+                child: DrawIcon(StrokeIcons.barChart,
                   size: m.iconSize32,
                   color: theme.colorScheme.primary.withAlpha(100),
                 ),
@@ -139,7 +141,7 @@ class SentryLogStatsPanel extends StatelessWidget {
             theme,
             m,
             isDark,
-            icon: Icons.crisis_alert_rounded,
+            icon: StrokeIcons.crisisAlert,
             label: '总事件数',
             value: _formatNumber(totalEvents),
             accentColor: const Color(0xFFE53935),
@@ -151,7 +153,7 @@ class SentryLogStatsPanel extends StatelessWidget {
             theme,
             m,
             isDark,
-            icon: Icons.folder_outlined,
+            icon: StrokeIcons.folder,
             label: '接入项目',
             value: projectCount.toString(),
             accentColor: const Color(0xFF1E88E5),
@@ -166,7 +168,7 @@ class SentryLogStatsPanel extends StatelessWidget {
     ThemeData theme,
     ThemeMetrics m,
     bool isDark, {
-    required IconData icon,
+    required StrokeIcon icon,
     required String label,
     required String value,
     required Color accentColor,
@@ -196,7 +198,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(icon, color: accentColor, size: m.iconSize20),
+              child: DrawIcon(icon, color: accentColor, size: m.iconSize20),
             ),
             SizedBox(width: m.kSpace12),
             Expanded(
@@ -448,8 +450,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Icon(
-                        Icons.dns_outlined,
+                      child: DrawIcon(StrokeIcons.dns,
                         size: m.iconSize16,
                         color: theme.colorScheme.primary,
                       ),
@@ -464,8 +465,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      icon: Icon(
-                        Icons.delete_sweep_outlined,
+                      icon: DrawIcon(StrokeIcons.deleteSweep,
                         size: m.iconSize16,
                         color: Colors.red.shade300,
                       ),
@@ -521,7 +521,7 @@ class SentryLogStatsPanel extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: m.radius12),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: m.iconSize20),
+            DrawIcon(StrokeIcons.warningAmber, color: Colors.orange.shade700, size: m.iconSize20),
             SizedBox(width: m.kSpace8),
             const Text('确认清空'),
           ],

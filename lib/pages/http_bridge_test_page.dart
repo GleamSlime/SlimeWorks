@@ -5,6 +5,8 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/src/rust/api/http_bridge.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 const Loggers _logger = Loggers(name: 'HTTP桥测试');
 
 
@@ -196,7 +198,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
         title: 'HTTP Bridge 测试工具',
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline),
+            icon: DrawIcon(StrokeIcons.helpOutline),
             tooltip: '帮助',
             onPressed: () => _showHelp(),
           ),
@@ -252,7 +254,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
             decoration: const InputDecoration(
               labelText: '模块名称',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.category),
+              prefixIcon: DrawIcon(StrokeIcons.category),
             ),
             items: _registeredModules.map((module) {
               return DropdownMenuItem(value: module, child: Text(module));
@@ -276,7 +278,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                   decoration: const InputDecoration(
                     labelText: '函数名称',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.functions),
+                    prefixIcon: DrawIcon(StrokeIcons.functions),
                   ),
                   items: _registeredFunctions.map((func) {
                     return DropdownMenuItem(value: func, child: Text(func));
@@ -301,7 +303,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               Expanded(child: Text('参数 (JSON)', style: Theme.of(context).textTheme.titleMedium)),
               TextButton.icon(
                 onPressed: _formatJson,
-                icon: Icon(Icons.auto_fix_high, size: AppTheme.metrics.iconSize18),
+                icon: DrawIcon(StrokeIcons.autoFixHigh, size: AppTheme.metrics.iconSize18),
                 label: const Text('格式化'),
               ),
             ],
@@ -337,7 +339,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                     height: AppTheme.metrics.kSpace16,
                     child: const CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.send),
+                : DrawIcon(StrokeIcons.send),
             label: Text(_isLoading ? '发送中...' : '发送请求'),
             style: ElevatedButton.styleFrom(
               padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace16),
@@ -365,7 +367,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 ),
               ),
               if (_response.isNotEmpty || _errorMessage != null)
-                IconButton(icon: const Icon(Icons.clear), tooltip: '清除', onPressed: _clearResponse),
+                IconButton(icon: DrawIcon(StrokeIcons.clear), tooltip: '清除', onPressed: _clearResponse),
             ],
           ),
           SizedBox(height: AppTheme.metrics.kSpace16),
@@ -380,7 +382,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.timer, size: AppTheme.metrics.iconSize16),
+                  DrawIcon(StrokeIcons.timer, size: AppTheme.metrics.iconSize16),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Text(
                     '响应时间: $_responseTime ms',
@@ -405,7 +407,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.error, color: Theme.of(context).colorScheme.error),
+                      DrawIcon(StrokeIcons.error, color: Theme.of(context).colorScheme.error),
                       SizedBox(width: AppTheme.metrics.kSpace8),
                       Text(
                         '错误',
@@ -457,8 +459,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.http,
+                    DrawIcon(StrokeIcons.http,
                       size: AppTheme.metrics.iconSize64,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

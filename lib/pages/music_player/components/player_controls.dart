@@ -5,6 +5,8 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 播放控制按钮组
 class PlayerControls extends StatelessWidget {
@@ -82,7 +84,7 @@ class PlayerControls extends StatelessWidget {
               // 播放模式
               IconButton(
                 onPressed: viewModel.cyclePlayMode,
-                icon: Icon(mode.icon, size: m.iconSize20),
+                icon: DrawIcon(mode.icon, size: m.iconSize20),
                 tooltip: mode.label,
                 color: mode != PlayerPlayMode.sequential ? s.accent : null,
               ),
@@ -90,15 +92,15 @@ class PlayerControls extends StatelessWidget {
               // 上一曲
               IconButton(
                 onPressed: viewModel.playPrevious,
-                icon: const Icon(Icons.skip_previous_rounded),
+                icon: DrawIcon(StrokeIcons.skipPrevious),
                 iconSize: m.iconSize28,
               ),
               SizedBox(width: m.kSpace8),
               // 播放/暂停
               IconButton(
                 onPressed: viewModel.togglePlayPause,
-                icon: Icon(
-                  playing ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded,
+                icon: DrawIcon(
+                  playing ? StrokeIcons.pauseCircleFilled : StrokeIcons.playCircleFilled,
                 ),
                 iconSize: m.iconSize40,
                 color: s.accent,
@@ -107,7 +109,7 @@ class PlayerControls extends StatelessWidget {
               // 下一曲
               IconButton(
                 onPressed: viewModel.playNext,
-                icon: const Icon(Icons.skip_next_rounded),
+                icon: DrawIcon(StrokeIcons.skipNext),
                 iconSize: m.iconSize28,
               ),
               SizedBox(width: m.kSpace8),
@@ -117,8 +119,8 @@ class PlayerControls extends StatelessWidget {
                 final isFav = item?.isFavorite ?? false;
                 return IconButton(
                   onPressed: item != null ? () => viewModel.toggleFavorite(item.id) : null,
-                  icon: Icon(
-                    isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  icon: DrawIcon(
+                    isFav ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
                     size: m.iconSize20,
                     // 收藏是"选中"，用强调色；原来的 Colors.redAccent 不在状态色体系里。
                     color: isFav ? s.accent : null,
@@ -142,17 +144,17 @@ class PlayerControls extends StatelessWidget {
         children: [
           IconButton(
             onPressed: viewModel.playPrevious,
-            icon: Icon(Icons.skip_previous_rounded, size: scaleW(38)),
+            icon: DrawIcon(StrokeIcons.skipPrevious, size: scaleW(38)),
             color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.togglePlayPause,
-            icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: m.iconSize48),
+            icon: DrawIcon(playing ? StrokeIcons.pause : StrokeIcons.playArrow, size: m.iconSize48),
             color: iconColor,
           ),
           IconButton(
             onPressed: viewModel.playNext,
-            icon: Icon(Icons.skip_next_rounded, size: scaleW(38)),
+            icon: DrawIcon(StrokeIcons.skipNext, size: scaleW(38)),
             color: iconColor,
           ),
         ],

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 雷达扫描动画组件
 class ScanningAnimation extends StatefulWidget {
@@ -55,8 +57,7 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
                 shape: BoxShape.circle,
                 color: (isDark ? DarkColors.primary : LightColors.primary).withValues(alpha: 0.15),
               ),
-              child: Icon(
-                Icons.wifi_tethering,
+              child: DrawIcon(StrokeIcons.wifiTethering,
                 size: scaleW(28),
                 color: isDark ? DarkColors.primary : LightColors.primary,
               ),

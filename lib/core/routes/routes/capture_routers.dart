@@ -10,7 +10,7 @@ class CaptureRoute extends AppRouteData with $CaptureRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCapture;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCapture;
 
   @override
   String get sidebarGroupId => 'core';

@@ -11,7 +11,7 @@ class GooeyDemoRoute extends AppRouteData with $GooeyDemoRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuAbout;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuAbout;
 
   static const Permission routePermission = Permission.accessDemo;
 
@@ -33,7 +33,7 @@ class ViewModelDemoRoute extends AppRouteData with $ViewModelDemoRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuAbout;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuAbout;
 
   static const Permission routePermission = Permission.accessDemo;
 

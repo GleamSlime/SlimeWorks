@@ -1,5 +1,7 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 捕获控制面板
 class CaptureControlPanel extends StatelessWidget {
@@ -100,8 +102,8 @@ class CaptureControlPanel extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  isCertInstalled ? Icons.verified : Icons.warning_amber,
+                                DrawIcon(
+                                  isCertInstalled ? StrokeIcons.verified : StrokeIcons.warningAmber,
                                   size: AppTheme.metrics.iconSize16,
                                   color: isCertInstalled ? Colors.green : Colors.orange,
                                 ),
@@ -130,24 +132,24 @@ class CaptureControlPanel extends StatelessWidget {
                     alignment: isNarrow ? WrapAlignment.end : WrapAlignment.end,
                     children: [
                       IconButton.outlined(
-                        icon: const Icon(Icons.settings),
+                        icon: DrawIcon(StrokeIcons.settings),
                         onPressed: onSettings,
                         tooltip: '设置',
                       ),
                       IconButton.outlined(
-                        icon: const Icon(Icons.refresh),
+                        icon: DrawIcon(StrokeIcons.refresh),
                         onPressed: onRefresh,
                         tooltip: '刷新数据',
                       ),
                       IconButton.outlined(
-                        icon: const Icon(Icons.delete_outline),
+                        icon: DrawIcon(StrokeIcons.deleteOutline),
                         onPressed: onClearData,
                         tooltip: '清除所有数据',
                       ),
                       if (!isCertInstalled)
                         FilledButton.tonalIcon(
                           onPressed: onInstallCertificate,
-                          icon: const Icon(Icons.security),
+                          icon: DrawIcon(StrokeIcons.security),
                           label: const Text('安装CA证书'),
                           style: FilledButton.styleFrom(
                             padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20, vertical: AppTheme.metrics.kSpace16),
@@ -155,7 +157,7 @@ class CaptureControlPanel extends StatelessWidget {
                         ),
                       FilledButton.tonalIcon(
                         onPressed: onToggleCapture,
-                        icon: Icon(isCapturing ? Icons.stop : Icons.play_arrow),
+                        icon: DrawIcon(isCapturing ? StrokeIcons.stop : StrokeIcons.playArrow),
                         label: Text(isCapturing ? '停止捕获' : '开始捕获'),
                         style: FilledButton.styleFrom(
                           backgroundColor: isCapturing ? Colors.red : Colors.green,
@@ -231,7 +233,7 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.settings_ethernet, size: AppTheme.metrics.iconSize20),
+                      DrawIcon(StrokeIcons.settingsEthernet, size: AppTheme.metrics.iconSize20),
                       SizedBox(width: AppTheme.metrics.kSpace8),
                       const Text('代理端口:'),
                       SizedBox(width: AppTheme.metrics.kSpace12),
@@ -258,7 +260,7 @@ class _CaptureSettingsDialogState extends State<CaptureSettingsDialog> {
                   SizedBox(height: AppTheme.metrics.kSpace16),
                   Row(
                     children: [
-                      Icon(Icons.video_settings, size: AppTheme.metrics.iconSize20),
+                      DrawIcon(StrokeIcons.videoSettings, size: AppTheme.metrics.iconSize20),
                       SizedBox(width: AppTheme.metrics.kSpace8),
                       const Text('录制格式:'),
                       SizedBox(width: AppTheme.metrics.kSpace12),

@@ -5,6 +5,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 日志筛选栏组件
 class SentryLogFilterBar extends StatelessWidget {
@@ -104,7 +106,7 @@ class SentryLogFilterBar extends StatelessWidget {
               borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
             ),
           ),
-          icon: Icon(Icons.unfold_more, size: m.iconSize16, color: theme.hintColor),
+          icon: DrawIcon(StrokeIcons.unfoldMore, size: m.iconSize16, color: theme.hintColor),
           style: theme.textTheme.bodySmall,
           items: items,
           onChanged: (value) {
@@ -207,7 +209,7 @@ class SentryLogFilterBar extends StatelessWidget {
           decoration: InputDecoration(
             hintText: '环境',
             hintStyle: TextStyle(color: theme.hintColor),
-            prefixIcon: Icon(Icons.language_rounded, size: m.iconSize16, color: theme.hintColor),
+            prefixIcon: DrawIcon(StrokeIcons.language, size: m.iconSize16, color: theme.hintColor),
             contentPadding: EdgeInsets.symmetric(vertical: m.kSpace4),
             filled: true,
             fillColor: isDark ? DarkColors.background2 : LightColors.background2,
@@ -223,7 +225,7 @@ class SentryLogFilterBar extends StatelessWidget {
                       viewModel.selectedEnvironment.value = '';
                       onFilterChanged();
                     },
-                    child: Icon(Icons.close, size: m.iconSize14, color: theme.hintColor),
+                    child: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: theme.hintColor),
                   )
                 : null,
             isDense: true,
@@ -247,7 +249,7 @@ class SentryLogFilterBar extends StatelessWidget {
             hintStyle: TextStyle(color: theme.hintColor),
             prefixIcon: Padding(
               padding: EdgeInsets.only(left: m.kSpace8, right: m.kSpace4),
-              child: Icon(Icons.search_rounded, size: m.iconSize18, color: theme.hintColor),
+              child: DrawIcon(StrokeIcons.search, size: m.iconSize18, color: theme.hintColor),
             ),
             contentPadding: EdgeInsets.symmetric(vertical: m.kSpace4),
             filled: true,
@@ -266,7 +268,7 @@ class SentryLogFilterBar extends StatelessWidget {
                     },
                     child: Padding(
                       padding: EdgeInsets.only(right: m.kSpace8),
-                      child: Icon(Icons.close, size: m.iconSize14, color: theme.hintColor),
+                      child: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: theme.hintColor),
                     ),
                   )
                 : null,
@@ -347,7 +349,7 @@ class _FilterButtonWidgetState extends State<_FilterButtonWidget> {
                 scale: _hovered ? 1.1 : 1.0,
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
-                child: Icon(Icons.tune_rounded, size: m.iconSize16, color: Colors.white),
+                child: DrawIcon(StrokeIcons.tune, size: m.iconSize16, color: Colors.white),
               ),
               SizedBox(width: m.kSpace4),
               Text(

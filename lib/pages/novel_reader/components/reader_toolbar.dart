@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/pages/novel_reader/components/translation_config_panel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 阅读器工具栏组件
 class ReaderToolbar extends StatelessWidget {
@@ -38,7 +40,7 @@ class ReaderToolbar extends StatelessWidget {
       children: [
         // 章节列表切换
         IconButton(
-          icon: const Icon(Icons.menu_book),
+          icon: DrawIcon(StrokeIcons.menuBook),
           tooltip: '章节列表',
           onPressed: controller.toggleChapterList,
         ),
@@ -47,7 +49,7 @@ class ReaderToolbar extends StatelessWidget {
         // 上一章
         Obx(
           () => IconButton(
-            icon: const Icon(Icons.chevron_left),
+            icon: DrawIcon(StrokeIcons.chevronLeft),
             tooltip: '上一章',
             onPressed: controller.hasPreviousChapter() ? controller.previousChapter : null,
           ),
@@ -73,7 +75,7 @@ class ReaderToolbar extends StatelessWidget {
         // 下一章
         Obx(
           () => IconButton(
-            icon: const Icon(Icons.chevron_right),
+            icon: DrawIcon(StrokeIcons.chevronRight),
             tooltip: '下一章',
             onPressed: controller.hasNextChapter() ? controller.nextChapter : null,
           ),
@@ -105,28 +107,28 @@ class ReaderToolbar extends StatelessWidget {
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 IconButton(
-                  icon: Icon(Icons.arrow_upward, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.arrowUpward, size: AppTheme.metrics.iconSize20),
                   tooltip: '上一个结果',
                   onPressed: controller.previousSearchResult,
                 ),
                 IconButton(
-                  icon: Icon(Icons.list, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.list, size: AppTheme.metrics.iconSize20),
                   tooltip: '结果列表',
                   onPressed: controller.openSearchResultsList,
                 ),
                 IconButton(
-                  icon: Icon(Icons.arrow_downward, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.arrowDownward, size: AppTheme.metrics.iconSize20),
                   tooltip: '下一个结果',
                   onPressed: controller.nextSearchResult,
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.close, size: AppTheme.metrics.iconSize20),
                   tooltip: '清除搜索',
                   onPressed: controller.clearSearch,
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 IconButton(
-                  icon: Icon(Icons.folder_open, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.folderOpen, size: AppTheme.metrics.iconSize20),
                   tooltip: '在文件管理器中显示',
                   onPressed: controller.revealFileInFolder,
                 ),
@@ -150,8 +152,8 @@ class ReaderToolbar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: Icon(
-                        isEnabled ? Icons.translate : Icons.translate_outlined,
+                      icon: DrawIcon(
+                        isEnabled ? StrokeIcons.translate : StrokeIcons.translate,
                         color: isEnabled ? Colors.blue : null,
                       ),
                       tooltip: isEnabled ? '关闭自动翻译' : '开启翻译',
@@ -180,7 +182,7 @@ class ReaderToolbar extends StatelessWidget {
                 return IconButton(
                   icon: Badge(
                     label: Text('${controller.failedTranslations.length}'),
-                    child: const Icon(Icons.refresh, color: Colors.orange),
+                    child: DrawIcon(StrokeIcons.refresh, color: Colors.orange),
                   ),
                   tooltip: '重试失败的翻译 (${controller.failedTranslations.length}个)',
                   onPressed: controller.retryAllFailedTranslations,
@@ -189,17 +191,17 @@ class ReaderToolbar extends StatelessWidget {
               // Debug: 复制原始HTML按钮（仅在Debug模式显示）
               if (kDebugMode)
                 IconButton(
-                  icon: const Icon(Icons.code, color: Colors.orange),
+                  icon: DrawIcon(StrokeIcons.code, color: Colors.orange),
                   tooltip: 'Debug: 复制原始HTML',
                   onPressed: controller.copyOriginalHtmlToClipboard,
                 ),
               IconButton(
-                icon: const Icon(Icons.search),
+                icon: DrawIcon(StrokeIcons.search),
                 tooltip: '搜索',
                 onPressed: controller.showSearchDialog,
               ),
               IconButton(
-                icon: const Icon(Icons.folder_open),
+                icon: DrawIcon(StrokeIcons.folderOpen),
                 tooltip: '在文件管理器中显示',
                 onPressed: controller.revealFileInFolder,
               ),
@@ -209,7 +211,7 @@ class ReaderToolbar extends StatelessWidget {
 
         // 字体大小调节
         IconButton(
-          icon: const Icon(Icons.text_decrease),
+          icon: DrawIcon(StrokeIcons.textDecrease),
           tooltip: '减小字体',
           onPressed: controller.decreaseFontSize,
         ),
@@ -227,7 +229,7 @@ class ReaderToolbar extends StatelessWidget {
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.text_increase),
+          icon: DrawIcon(StrokeIcons.textIncrease),
           tooltip: '增大字体',
           onPressed: controller.increaseFontSize,
         ),
@@ -235,7 +237,7 @@ class ReaderToolbar extends StatelessWidget {
         SizedBox(width: AppTheme.metrics.kSpace8),
         // 更多选项菜单
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert),
+          icon: DrawIcon(StrokeIcons.moreVert),
           tooltip: '更多选项',
           onSelected: (value) {
             if (value == 'delete') {
@@ -246,7 +248,7 @@ class ReaderToolbar extends StatelessWidget {
             GlassMenuItem<String>(
               value: 'delete',
               label: '删除书本',
-              icon: Icons.delete_outline_rounded,
+              icon: StrokeIcons.deleteOutline,
               destructive: true,
             ),
           ],
@@ -263,14 +265,14 @@ class ReaderToolbar extends StatelessWidget {
         Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.menu_book),
+              icon: DrawIcon(StrokeIcons.menuBook),
               tooltip: '章节列表',
               onPressed: controller.toggleChapterList,
               iconSize: 20,
             ),
             Obx(
               () => IconButton(
-                icon: const Icon(Icons.chevron_left),
+                icon: DrawIcon(StrokeIcons.chevronLeft),
                 tooltip: '上一章',
                 onPressed: controller.hasPreviousChapter() ? controller.previousChapter : null,
                 iconSize: 20,
@@ -301,14 +303,14 @@ class ReaderToolbar extends StatelessWidget {
             ),
             Obx(
               () => IconButton(
-                icon: const Icon(Icons.chevron_right),
+                icon: DrawIcon(StrokeIcons.chevronRight),
                 tooltip: '下一章',
                 onPressed: controller.hasNextChapter() ? controller.nextChapter : null,
                 iconSize: 20,
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.search),
+              icon: DrawIcon(StrokeIcons.search),
               tooltip: '搜索',
               onPressed: controller.showSearchDialog,
               iconSize: 20,
@@ -324,8 +326,8 @@ class ReaderToolbar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: Icon(
-                      isEnabled ? Icons.translate : Icons.translate_outlined,
+                    icon: DrawIcon(
+                      isEnabled ? StrokeIcons.translate : StrokeIcons.translate,
                       color: isEnabled ? Colors.blue : null,
                     ),
                     tooltip: isEnabled ? '关闭自动翻译' : '开启翻译',
@@ -355,7 +357,7 @@ class ReaderToolbar extends StatelessWidget {
               return IconButton(
                 icon: Badge(
                   label: Text('${controller.failedTranslations.length}'),
-                  child: const Icon(Icons.refresh, color: Colors.orange),
+                  child: DrawIcon(StrokeIcons.refresh, color: Colors.orange),
                 ),
                 tooltip: '重试失败的翻译',
                 onPressed: controller.retryAllFailedTranslations,
@@ -365,13 +367,13 @@ class ReaderToolbar extends StatelessWidget {
             // Debug: 复制原始HTML按钮（仅在Debug模式显示）
             if (kDebugMode)
               IconButton(
-                icon: const Icon(Icons.code, color: Colors.orange),
+                icon: DrawIcon(StrokeIcons.code, color: Colors.orange),
                 tooltip: 'Debug: 复制原始HTML',
                 onPressed: controller.copyOriginalHtmlToClipboard,
                 iconSize: 20,
               ),
             IconButton(
-              icon: const Icon(Icons.folder_open),
+              icon: DrawIcon(StrokeIcons.folderOpen),
               tooltip: '在文件管理器中显示',
               onPressed: controller.revealFileInFolder,
               iconSize: 20,
@@ -404,28 +406,28 @@ class ReaderToolbar extends StatelessWidget {
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   IconButton(
-                    icon: const Icon(Icons.arrow_upward),
+                    icon: DrawIcon(StrokeIcons.arrowUpward),
                     onPressed: controller.previousSearchResult,
                     iconSize: 16,
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.list),
+                    icon: DrawIcon(StrokeIcons.list),
                     onPressed: controller.openSearchResultsList,
                     iconSize: 16,
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.arrow_downward),
+                    icon: DrawIcon(StrokeIcons.arrowDownward),
                     onPressed: controller.nextSearchResult,
                     iconSize: 16,
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: DrawIcon(StrokeIcons.close),
                     onPressed: controller.clearSearch,
                     iconSize: 16,
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),

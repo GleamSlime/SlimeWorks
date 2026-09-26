@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/src/rust/api/whisper.dart' as whisper_api;
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 播放器设置标签页（Whisper 模型管理）
 class MusicPlayerSettingsTab extends StatefulWidget {
@@ -202,7 +204,7 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
                 color: Theme.of(context).colorScheme.primary.withAlpha(20),
                 borderRadius: AppTheme.metrics.radius6,
               ),
-              child: Icon(Icons.graphic_eq_outlined, size: AppTheme.metrics.iconSize12, color: Theme.of(context).colorScheme.primary),
+              child: DrawIcon(StrokeIcons.graphicEq, size: AppTheme.metrics.iconSize12, color: Theme.of(context).colorScheme.primary),
             ),
             SizedBox(width: AppTheme.metrics.kSpace8),
             Text(
@@ -241,10 +243,10 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
           ListTile(
             selected: isSelected,
             selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
-            leading: Icon(
+            leading: DrawIcon(
               isSelected
-                  ? Icons.radio_button_checked_rounded
-                  : Icons.radio_button_unchecked_rounded,
+                  ? StrokeIcons.radioButtonChecked
+                  : StrokeIcons.radioButtonUnchecked,
               color: isSelected ? Theme.of(context).colorScheme.primary : null,
             ),
             title: Row(
@@ -331,14 +333,13 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
           if (isSelected)
             Padding(
               padding: EdgeInsets.only(right: AppTheme.metrics.kSpace8),
-              child: Icon(
-                Icons.check_circle_rounded,
+              child: DrawIcon(StrokeIcons.checkCircle,
                 color: Theme.of(context).colorScheme.primary,
                 size: 20,
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            icon: DrawIcon(StrokeIcons.deleteOutline, size: 18),
             onPressed: () => _deleteModel(model.presetName),
             tooltip: '删除模型',
           ),
@@ -347,7 +348,7 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     }
 
     return IconButton(
-      icon: const Icon(Icons.download_rounded, size: 20),
+      icon: DrawIcon(StrokeIcons.download, size: 20),
       onPressed: () => _downloadModel(model.presetName, model.approxSizeMb),
       tooltip: '下载模型',
     );

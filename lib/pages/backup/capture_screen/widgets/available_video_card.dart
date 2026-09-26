@@ -3,6 +3,8 @@ import 'package:slime_works/pages/backup/capture_screen/models/recording_task.da
 import 'package:slime_works/pages/backup/capture_screen/widgets/stat_widgets.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 可录制视频卡片
 class AvailableVideoCard extends StatelessWidget {
@@ -63,7 +65,7 @@ class AvailableVideoCard extends StatelessWidget {
                   if (!isNarrow) SizedBox(width: AppTheme.metrics.kSpace12),
                   if (!isNarrow)
                     IconButton(
-                      icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
+                      icon: DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize20),
                       onPressed: onCopy,
                       tooltip: '复制链接',
                     ),
@@ -71,7 +73,7 @@ class AvailableVideoCard extends StatelessWidget {
                     Align(
                       alignment: Alignment.centerRight,
                       child: IconButton(
-                        icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
+                        icon: DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize20),
                         onPressed: onCopy,
                         tooltip: '复制链接',
                       ),
@@ -97,10 +99,10 @@ class AvailableVideoCard extends StatelessWidget {
                 video.thumbnail,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  return Icon(Icons.videocam, size: AppTheme.metrics.iconSize32);
+                  return DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32);
                 },
               )
-            : Icon(Icons.videocam, size: AppTheme.metrics.iconSize32),
+            : DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32),
       ),
     );
   }
@@ -121,15 +123,15 @@ class AvailableVideoCard extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: [
-            InfoChip(icon: Icons.aspect_ratio, label: video.resolution, color: Colors.blue),
+            InfoChip(icon: StrokeIcons.aspectRatio, label: video.resolution, color: Colors.blue),
             InfoChip(
-              icon: Icons.speed,
+              icon: StrokeIcons.speed,
               label: video.frameRate,
               color: (Theme.of(context).brightness == Brightness.dark)
                   ? DarkColors.success
                   : LightColors.success,
             ),
-            InfoChip(icon: Icons.signal_cellular_alt, label: video.bitrate, color: Colors.orange),
+            InfoChip(icon: StrokeIcons.signalCellularAlt, label: video.bitrate, color: Colors.orange),
           ],
         ),
         SizedBox(height: AppTheme.metrics.kSpace8),

@@ -9,6 +9,8 @@ import 'package:slime_works/pages/collection/picture/components/masonry_media_gr
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 媒体集合详情层：显示当前打开集合内的瀑布流媒体网格。
 ///
@@ -96,8 +98,7 @@ class CollectionDetailSection extends StatelessWidget {
                     color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: AppTheme.metrics.radius16,
                   ),
-                  child: Icon(
-                    Icons.collections_outlined,
+                  child: DrawIcon(StrokeIcons.collections,
                     size: scaleW(36),
                     color: Theme.of(context).colorScheme.primary,
                   ),

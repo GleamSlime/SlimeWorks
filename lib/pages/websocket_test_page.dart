@@ -12,6 +12,8 @@ import 'package:slime_works/core/services/websocket_manager.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class WebSocketTestPage extends StatefulWidget {
   const WebSocketTestPage({super.key});
@@ -383,7 +385,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                                 ),
                                 SizedBox(width: AppTheme.metrics.kSpace8),
                                 IconButton(
-                                  icon: Icon(Icons.refresh, size: AppTheme.metrics.iconSize16),
+                                  icon: DrawIcon(StrokeIcons.refresh, size: AppTheme.metrics.iconSize16),
                                   onPressed: _updateClients,
                                   tooltip: '刷新列表',
                                 ),
@@ -431,8 +433,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                                           style: TextStyle(fontSize: AppTheme.metrics.fontSize10),
                                         ),
                                         trailing: IconButton(
-                                          icon: Icon(
-                                            Icons.close,
+                                          icon: DrawIcon(StrokeIcons.close,
                                             size: AppTheme.metrics.iconSize16,
                                           ),
                                           onPressed: () => _disconnectClientById(client.id),

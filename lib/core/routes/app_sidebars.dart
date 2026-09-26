@@ -9,6 +9,8 @@ import 'package:slime_works/core/routes/app_routes.dart';
 List<SidebarGroup> buildSidebarGroupsFromRoutes() {
   final isMobilePlatform = Platform.isAndroid || Platform.isIOS;
 
+  // 侧栏只认这一份名单：showInSidebar 的含义是"能从侧栏点到"，
+  // 顶层项和展开后的子项都算，具体站哪一层由 sidebarParent 决定。
   final shellRoutes = <AppRouteData>[
     const DashboardRoute(),
     const CaptureRoute(),
@@ -24,15 +26,50 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const GameLibraryRoute(),
     const AboutRoute(),
     const SettingsRoute(),
+
+    const GameCategoriesRoute(),
+    const GameStatsRoute(),
+    const GameSettingsRoute(),
+    const MangaHistoryRoute(),
   ];
 
-  final groupMap = <String, List<AppRouteData>>{};
-  for (final route in shellRoutes) {
-    if (!route.showInSidebar) continue;
-    // 移动端隐藏仅桌面端可用的模块
-    if (isMobilePlatform && route.desktopOnly) continue;
+  bool visible(AppRouteData route) {
+    if (route.desktopOnly && isMobilePlatform) return false;
+    if (route.permission != null && !RoleManager.canAccess(route.permission!)) return false;
+    return true;
+  }
+
+  // 顶层 = 进侧栏且没有父级；有父级的按 sidebarParent 归到父项下面。
+  // 层级只从路由元数据读一份：侧栏和面包屑各写一遍迟早对不上。
+  final parents = shellRoutes.where(
+    (r) => r.showInSidebar && r.sidebarParent == null && visible(r),
+  );
+  // 父级没进侧栏（被权限挡了、或者压根没列进来）时，子项退回顶层。
+  // 静默丢掉的话症状是"某个页面从侧栏消失了"，很难往层级元数据上想。
+  final parentLocations = parents.map((r) => r.location).toSet();
+  final topLevel = shellRoutes.where(
+    (r) =>
+        r.showInSidebar &&
+        visible(r) &&
+        (r.sidebarParent == null || !parentLocations.contains(r.sidebarParent)),
+  );
+
+  List<SidebarMenuItem> childrenOf(AppRouteData parent) => shellRoutes
+      .where(
+        (r) =>
+            r.sidebarParent == parent.location &&
+            r.showInSidebar &&
+            visible(r),
+      )
+      .map((r) => SidebarMenuItem(route: r))
+      .toList();
+
+  final groupMap = <String, List<SidebarMenuItem>>{};
+  for (final route in topLevel) {
     final groupId = route.sidebarGroupId ?? 'default';
-    groupMap.putIfAbsent(groupId, () => []).add(route);
+    groupMap.putIfAbsent(groupId, () => []).add(
+      SidebarMenuItem(route: route, children: childrenOf(route).isEmpty ? null : childrenOf(route)),
+    );
   }
 
   final groupConfigs = <String, _GroupConfig>{
@@ -43,7 +80,6 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
       sort: 20,
       permission: Permission.accessCollection,
     ),
-    'manga': _GroupConfig(id: 'manga', sort: 40, permission: Permission.accessManga),
     'music': _GroupConfig(id: 'music', sort: 42, permission: Permission.accessCollection),
     'tools': _GroupConfig(id: 'tools', title: '工具', sort: 45, permission: Permission.accessTools),
     'bottom': _GroupConfig(id: 'bottom', sort: 90, permission: Permission.accessSettings),
@@ -60,7 +96,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
         title: config.title,
         sort: config.sort,
         permission: config.permission,
-        items: entry.value.map((route) => SidebarMenuItem(route: route)).toList(),
+        items: entry.value,
       ),
     );
   }

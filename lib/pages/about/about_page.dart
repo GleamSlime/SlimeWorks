@@ -11,6 +11,9 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
 import 'package:slime_works/gen/assets.gen.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -147,14 +150,14 @@ class AboutPage extends StatelessWidget {
       child: Column(
         children: [
           _InfoRow(
-            icon: Icons.info_outline,
+            icon: StrokeIcons.infoOutline,
             label: '版本',
             value: '${AppInfoService.version} (${AppInfoService.buildNumber})',
           ),
           Divider(height: 1, color: theme.dividerColor),
-          _InfoRow(icon: Icons.phone_android_outlined, label: '平台', value: _platformName()),
+          _InfoRow(icon: StrokeIcons.phoneAndroid, label: '平台', value: _platformName()),
           Divider(height: 1, color: theme.dividerColor),
-          _InfoRow(icon: Icons.code_outlined, label: '框架', value: 'Flutter ${_flutterVersion()}'),
+          _InfoRow(icon: StrokeIcons.code, label: '框架', value: 'Flutter ${_flutterVersion()}'),
         ],
       ),
     );
@@ -210,7 +213,7 @@ class AboutPage extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: m.kSpace10),
         child: Row(
           children: [
-            Icon(Icons.autorenew_rounded, size: m.iconSize20, color: brandColor),
+            DrawIcon(StrokeIcons.autorenew, size: m.iconSize20, color: brandColor),
             SizedBox(width: m.kSpace12),
             Expanded(
               child: Column(
@@ -258,8 +261,7 @@ class AboutPage extends StatelessWidget {
             if (info != null) ...[
               Row(
                 children: [
-                  Icon(
-                    Icons.new_releases_rounded,
+                  DrawIcon(StrokeIcons.newReleases,
                     size: m.iconSize16,
                     color: theme.colorScheme.primary,
                   ),
@@ -289,8 +291,7 @@ class AboutPage extends StatelessWidget {
             ],
             Row(
               children: [
-                Icon(
-                  Icons.system_update_alt_rounded,
+                DrawIcon(StrokeIcons.systemUpdateAlt,
                   size: m.iconSize20,
                   color: theme.colorScheme.primary,
                 ),
@@ -321,7 +322,7 @@ class AboutPage extends StatelessWidget {
                             color: theme.colorScheme.onPrimary,
                           ),
                         )
-                      : Icon(Icons.refresh_rounded, size: m.iconSize16),
+                      : DrawIcon(StrokeIcons.refresh, size: m.iconSize16),
                   label: Text(
                     checking ? '检查中...' : '检查更新',
                     style: TextStyle(fontSize: m.fontSize13),
@@ -409,18 +410,18 @@ class AboutPage extends StatelessWidget {
       child: Column(
         children: [
           _LinkRow(
-            icon: Icons.language_outlined,
+            icon: StrokeIcons.language,
             label: '官方网站',
             value: 'gleamslime.com',
             onTap: () {},
           ),
           Divider(height: 1, color: theme.dividerColor),
-          _LinkRow(icon: Icons.code_outlined, label: 'GitHub', value: '查看源代码', onTap: () {}),
+          _LinkRow(icon: StrokeIcons.code, label: 'GitHub', value: '查看源代码', onTap: () {}),
           Divider(height: 1, color: theme.dividerColor),
-          _LinkRow(icon: Icons.bug_report_outlined, label: '问题反馈', value: '提交 Issue', onTap: () {}),
+          _LinkRow(icon: StrokeIcons.bugReport, label: '问题反馈', value: '提交 Issue', onTap: () {}),
           Divider(height: 1, color: theme.dividerColor),
           _LinkRow(
-            icon: Icons.description_outlined,
+            icon: StrokeIcons.description,
             label: '开源许可',
             value: '查看第三方许可',
             onTap: () {
@@ -501,7 +502,7 @@ class _AboutCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final String value;
 
@@ -514,7 +515,7 @@ class _InfoRow extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
       child: Row(
         children: [
-          Icon(icon, size: AppTheme.metrics.fontSize18, color: theme.colorScheme.primary),
+          DrawIcon(icon, size: AppTheme.metrics.fontSize18, color: theme.colorScheme.primary),
           SizedBox(width: AppTheme.metrics.kSpace12),
           Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
           Text(
@@ -530,7 +531,7 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _LinkRow extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final String value;
   final VoidCallback onTap;
@@ -552,7 +553,7 @@ class _LinkRow extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
         child: Row(
           children: [
-            Icon(icon, size: AppTheme.metrics.fontSize18, color: theme.colorScheme.primary),
+            DrawIcon(icon, size: AppTheme.metrics.fontSize18, color: theme.colorScheme.primary),
             SizedBox(width: AppTheme.metrics.kSpace12),
             Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
             Text(
@@ -560,8 +561,7 @@ class _LinkRow extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary),
             ),
             SizedBox(width: AppTheme.metrics.kSpace4),
-            Icon(
-              Icons.chevron_right,
+            DrawIcon(StrokeIcons.chevronRight,
               size: AppTheme.metrics.fontSize15,
               color: theme.colorScheme.onSurface.withAlpha(80),
             ),

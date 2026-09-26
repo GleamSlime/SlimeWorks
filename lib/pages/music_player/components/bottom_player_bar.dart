@@ -9,6 +9,8 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/widgets/app_chips.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 底部悬浮播放控制栏（网易音乐风格）
 ///
@@ -176,8 +178,7 @@ class BottomPlayerBar extends StatelessWidget {
         color: s.surfaceSunken,
         borderRadius: AppTheme.metrics.radius6,
       ),
-      child: Icon(
-        Icons.music_note_rounded,
+      child: DrawIcon(StrokeIcons.musicNote,
         size: size * 0.45,
         color: s.textTertiary,
       ),
@@ -198,7 +199,7 @@ class BottomPlayerBar extends StatelessWidget {
         // 播放模式
         IconButton(
           onPressed: viewModel.cyclePlayMode,
-          icon: Icon(mode.icon, size: m.iconSize18),
+          icon: DrawIcon(mode.icon, size: m.iconSize18),
           tooltip: mode.label,
           padding: EdgeInsets.zero,
           constraints: BoxConstraints(
@@ -211,7 +212,7 @@ class BottomPlayerBar extends StatelessWidget {
         // 上一曲
         IconButton(
           onPressed: viewModel.playPrevious,
-          icon: const Icon(Icons.skip_previous_rounded),
+          icon: DrawIcon(StrokeIcons.skipPrevious),
           iconSize: m.iconSize22,
           padding: EdgeInsets.zero,
           constraints: BoxConstraints(
@@ -223,8 +224,8 @@ class BottomPlayerBar extends StatelessWidget {
         // 播放/暂停
         IconButton(
           onPressed: viewModel.togglePlayPause,
-          icon: Icon(
-            playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          icon: DrawIcon(
+            playing ? StrokeIcons.pause : StrokeIcons.playArrow,
           ),
           iconSize: scaleW(26),
           // 底色必须走 styleFrom 而不是外面套一个圆形 Container：Container 在
@@ -241,7 +242,7 @@ class BottomPlayerBar extends StatelessWidget {
         // 下一曲
         IconButton(
           onPressed: viewModel.playNext,
-          icon: const Icon(Icons.skip_next_rounded),
+          icon: DrawIcon(StrokeIcons.skipNext),
           iconSize: m.iconSize22,
           padding: EdgeInsets.zero,
           constraints: BoxConstraints(
@@ -256,8 +257,8 @@ class BottomPlayerBar extends StatelessWidget {
           final isFav = item?.isFavorite ?? false;
           return IconButton(
             onPressed: item != null ? () => viewModel.toggleFavorite(item.id) : null,
-            icon: Icon(
-              isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            icon: DrawIcon(
+              isFav ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
               size: m.iconSize18,
             ),
             padding: EdgeInsets.zero,
@@ -292,7 +293,7 @@ class BottomPlayerBar extends StatelessWidget {
         SizedBox(width: m.kSpace4),
         // 歌词
         Obx(() => ToolIconButton(
-          icon: Icons.lyrics_outlined,
+          icon: StrokeIcons.lyrics,
           tooltip: '歌词',
           selected: viewModel.showLyricsPanel.value,
           onPressed: viewModel.toggleLyricsPanel,
@@ -303,7 +304,7 @@ class BottomPlayerBar extends StatelessWidget {
         SizedBox(width: m.kSpace4),
         // 播放列表
         ToolIconButton(
-          icon: Icons.queue_music_rounded,
+          icon: StrokeIcons.queueMusic,
           tooltip: '播放列表',
           onPressed: () {
             // 切换侧边栏可见性（由主页面处理）
@@ -327,12 +328,12 @@ class _VolumePopup extends StatelessWidget {
     return PopupMenuButton<void>(
       icon: Obx(() {
         final v = viewModel.volume.value;
-        return Icon(
+        return DrawIcon(
           v == 0
-              ? Icons.volume_off_rounded
+              ? StrokeIcons.volumeOff
               : v < 50
-              ? Icons.volume_down_rounded
-              : Icons.volume_up_rounded,
+              ? StrokeIcons.volumeDown
+              : StrokeIcons.volumeUp,
           size: m.iconSize20,
           color: s.textTertiary,
         );
@@ -350,10 +351,10 @@ class _VolumePopup extends StatelessWidget {
           height: scaleW(34),
           child: Obx(() => Row(
             children: [
-              Icon(
+              DrawIcon(
                 viewModel.volume.value == 0
-                    ? Icons.volume_off_rounded
-                    : Icons.volume_down_rounded,
+                    ? StrokeIcons.volumeOff
+                    : StrokeIcons.volumeDown,
                 size: m.iconSize18,
                 color: s.textTertiary,
               ),

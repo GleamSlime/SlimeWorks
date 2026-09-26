@@ -14,6 +14,8 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GameLibraryScreen extends BasePage<GameLibraryViewModel> {
   const GameLibraryScreen({super.key});
@@ -50,18 +52,18 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
       actions: <Widget>[
         OutlinedButton.icon(
           onPressed: _batchImport,
-          icon: const Icon(Icons.drive_folder_upload_outlined),
+          icon: DrawIcon(StrokeIcons.driveFolderUpload),
           label: const Text('批量导入'),
         ),
-        FilledButton.icon(onPressed: _showAddDialog, icon: const Icon(Icons.add), label: const Text('添加游戏')),
+        FilledButton.icon(onPressed: _showAddDialog, icon: DrawIcon(StrokeIcons.add), label: const Text('添加游戏')),
         IconButton(
           onPressed: () => const GameCategoriesRoute().go(context),
-          icon: const Icon(Icons.folder_copy_outlined),
+          icon: DrawIcon(StrokeIcons.folderCopy),
           tooltip: '分类管理',
         ),
         IconButton(
           onPressed: () => const GameStatsRoute().go(context),
-          icon: const Icon(Icons.query_stats),
+          icon: DrawIcon(StrokeIcons.queryStats),
           tooltip: '统计',
         ),
       ],
@@ -74,7 +76,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
               child: TextField(
                 decoration: const InputDecoration(
                   hintText: '搜索游戏 / 公司 / 标签',
-                  prefixIcon: Icon(Icons.search),
+                  prefixIcon: DrawIcon(StrokeIcons.search),
                   isDense: true,
                 ),
                 onChanged: (String value) => viewModel.searchQuery.value = value,
@@ -150,7 +152,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                     const Spacer(),
                     TextButton.icon(
                       onPressed: viewModel.selectAll,
-                      icon: Icon(Icons.select_all, size: AppTheme.metrics.iconSize18),
+                      icon: DrawIcon(StrokeIcons.selectAll, size: AppTheme.metrics.iconSize18),
                       label: Text(
                         viewModel.selectedIds.length == viewModel.filteredGames.length
                             ? '取消全选'
@@ -160,7 +162,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     OutlinedButton.icon(
                       onPressed: () => _batchRefreshMetadata(),
-                      icon: Icon(Icons.cloud_download_outlined, size: AppTheme.metrics.iconSize18),
+                      icon: DrawIcon(StrokeIcons.cloudDownload, size: AppTheme.metrics.iconSize18),
                       label: const Text('刷新元数据'),
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
@@ -169,13 +171,13 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                         backgroundColor: Theme.of(context).colorScheme.error,
                       ),
                       onPressed: () => _confirmBatchDelete(),
-                      icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
+                      icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize18),
                       label: const Text('批量删除'),
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     IconButton(
                       onPressed: viewModel.clearSelection,
-                      icon: const Icon(Icons.close),
+                      icon: DrawIcon(StrokeIcons.close),
                       tooltip: '取消选择',
                     ),
                   ],
@@ -337,8 +339,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[
-                              Icon(
-                                Icons.inventory_2_outlined,
+                              DrawIcon(StrokeIcons.inventory2,
                                 size: AppTheme.metrics.iconSize64,
                                 color: Theme.of(context).colorScheme.primary,
                               ),
@@ -490,7 +491,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                                 }
                               }
                             },
-                            icon: const Icon(Icons.folder_open),
+                            icon: DrawIcon(StrokeIcons.folderOpen),
                           ),
                         ],
                       ),
@@ -652,7 +653,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                   .map((String p) {
                     final String name = p.split(Platform.pathSeparator).last;
                     return ListTile(
-                      leading: const Icon(Icons.play_arrow_outlined),
+                      leading: DrawIcon(StrokeIcons.playArrow),
                       title: Text(name),
                       subtitle: Text(
                         p,
@@ -799,36 +800,36 @@ class _GameCardState extends State<_GameCard> {
           value: 'select',
           label: widget.isSelected ? '取消选择' : '选择',
           icon: widget.isSelected
-              ? Icons.check_box_rounded
-              : Icons.check_box_outline_blank_rounded,
+              ? StrokeIcons.checkBox
+              : StrokeIcons.checkBoxOutlineBlank,
         ),
         const PopupMenuDivider(),
         GlassMenuItem<String>(
           value: 'launch',
           label: '启动游戏',
-          icon: Icons.play_circle_outline_rounded,
+          icon: StrokeIcons.playCircleOutline,
         ),
         const PopupMenuDivider(),
         GlassMenuItem<String>(
           value: 'favorite',
           label: widget.isFavorite ? '取消收藏' : '添加收藏',
-          icon: widget.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          icon: widget.isFavorite ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
         ),
         GlassMenuItem<String>(
           value: 'refresh_meta',
           label: '刷新元数据',
-          icon: Icons.cloud_download_outlined,
+          icon: StrokeIcons.cloudDownload,
         ),
         GlassMenuItem<String>(
           value: 'open_folder',
           label: '打开所在文件夹',
-          icon: Icons.folder_open_rounded,
+          icon: StrokeIcons.folderOpen,
         ),
         const PopupMenuDivider(),
         GlassMenuItem<String>(
           value: 'delete',
           label: '删除',
-          icon: Icons.delete_outline_rounded,
+          icon: StrokeIcons.deleteOutline,
           destructive: true,
         ),
       ],
@@ -918,7 +919,7 @@ class _GameCardState extends State<_GameCard> {
                                 color: Theme.of(context).colorScheme.primary,
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.check, color: Colors.white, size: AppTheme.metrics.iconSize16),
+                              child: DrawIcon(StrokeIcons.check, color: Colors.white, size: AppTheme.metrics.iconSize16),
                             ),
                           ),
                         // 右上角收藏/菜单
@@ -931,7 +932,7 @@ class _GameCardState extends State<_GameCard> {
                                 color: Colors.black38,
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.more_vert, color: Colors.white, size: AppTheme.metrics.iconSize18),
+                              child: DrawIcon(StrokeIcons.moreVert, color: Colors.white, size: AppTheme.metrics.iconSize18),
                             ),
                             onSelected: (String value) {
                               switch (value) {
@@ -954,23 +955,23 @@ class _GameCardState extends State<_GameCard> {
                                 value: 'favorite',
                                 label: widget.isFavorite ? '取消收藏' : '添加收藏',
                                 icon: widget.isFavorite
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
+                                    ? StrokeIcons.favorite
+                                    : StrokeIcons.favoriteBorder,
                               ),
                               GlassMenuItem<String>(
                                 value: 'launch',
                                 label: '启动游戏',
-                                icon: Icons.play_circle_outline_rounded,
+                                icon: StrokeIcons.playCircleOutline,
                               ),
                               GlassMenuItem<String>(
                                 value: 'open_folder',
                                 label: '打开所在文件夹',
-                                icon: Icons.folder_open_rounded,
+                                icon: StrokeIcons.folderOpen,
                               ),
                               GlassMenuItem<String>(
                                 value: 'delete',
                                 label: '删除',
-                                icon: Icons.delete_outline_rounded,
+                                icon: StrokeIcons.deleteOutline,
                                 destructive: true,
                               ),
                             ],
@@ -1054,7 +1055,7 @@ class _GameCardState extends State<_GameCard> {
                           Row(
                             children: <Widget>[
                               if (widget.game.rating > 0) ...<Widget>[
-                                Icon(Icons.star_rounded, size: AppTheme.metrics.iconSize12, color: Colors.amber),
+                                DrawIcon(StrokeIcons.star, size: AppTheme.metrics.iconSize12, color: Colors.amber),
                                 SizedBox(width: AppTheme.metrics.kSpace2),
                                 Text(
                                   widget.game.rating.toStringAsFixed(1),
@@ -1072,7 +1073,7 @@ class _GameCardState extends State<_GameCard> {
                                 ),
                               ),
                               if (widget.isFavorite)
-                                Icon(Icons.favorite, size: AppTheme.metrics.iconSize12, color: Colors.pink),
+                                DrawIcon(StrokeIcons.favorite, size: AppTheme.metrics.iconSize12, color: Colors.pink),
                             ],
                           ),
                         ],
@@ -1124,8 +1125,7 @@ class _GameCardState extends State<_GameCard> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(
-              Icons.sports_esports_outlined,
+            DrawIcon(StrokeIcons.sportsEsports,
               size: AppTheme.metrics.iconSize32,
               color: Theme.of(context).colorScheme.primary,
             ),

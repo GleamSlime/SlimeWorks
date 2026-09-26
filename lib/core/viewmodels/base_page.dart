@@ -10,6 +10,8 @@ import 'base_viewmodel.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 const Loggers _logger = Loggers(name: '网络监听');
 
 
@@ -123,8 +125,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
+            DrawIcon(StrokeIcons.errorOutline,
               size: AppTheme.metrics.iconSize64,
               color: Theme.of(context).colorScheme.error,
             ),
@@ -139,7 +140,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
             SizedBox(height: AppTheme.metrics.kSpace24),
             ElevatedButton.icon(
               onPressed: _retryInitialization,
-              icon: const Icon(Icons.refresh),
+              icon: DrawIcon(StrokeIcons.refresh),
               label: const Text('重试'),
             ),
           ],

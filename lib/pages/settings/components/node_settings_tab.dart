@@ -7,6 +7,9 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class NodeSettingsTab extends StatefulWidget {
   const NodeSettingsTab({super.key});
@@ -163,7 +166,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     }
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildSectionTitle(String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -175,7 +178,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
             color: theme.colorScheme.primary.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
         ),
         SizedBox(width: m.kSpace8),
         Text(
@@ -209,7 +212,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionTitle('本机节点', Icons.dns_outlined),
+              _buildSectionTitle('本机节点', StrokeIcons.dns),
               SizedBox(height: m.kSpace12),
               Container(
                 width: double.infinity,
@@ -233,8 +236,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                             color: brandColor.withAlpha(25),
                             borderRadius: m.radius8,
                           ),
-                          child: Icon(
-                            Icons.computer_outlined,
+                          child: DrawIcon(StrokeIcons.computer,
                             size: m.iconSize16,
                             color: brandColor,
                           ),
@@ -291,14 +293,14 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                           ),
                           IconButton(
                             onPressed: _copyLocalAuthCode,
-                            icon: const Icon(Icons.copy_rounded),
+                            icon: DrawIcon(StrokeIcons.copy),
                             iconSize: m.iconSize16,
                             tooltip: '复制授权码到剪切板',
                             visualDensity: VisualDensity.compact,
                           ),
                           IconButton(
                             onPressed: _regenerateLocalAuthCode,
-                            icon: const Icon(Icons.autorenew_rounded),
+                            icon: DrawIcon(StrokeIcons.autorenew),
                             iconSize: m.iconSize16,
                             tooltip: '重置授权码（旧码立即失效）',
                             visualDensity: VisualDensity.compact,
@@ -338,7 +340,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                           padding: EdgeInsets.only(bottom: m.kSpace4),
                           child: Row(
                             children: [
-                              Icon(Icons.link_rounded, size: m.iconSize12, color: brandColor),
+                              DrawIcon(StrokeIcons.link, size: m.iconSize12, color: brandColor),
                               SizedBox(width: m.kSpace6),
                               SelectableText(
                                 api,
@@ -357,17 +359,17 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
               SizedBox(height: m.kSpace24),
               Row(
                 children: [
-                  _buildSectionTitle('远程节点', Icons.cloud_outlined),
+                  _buildSectionTitle('远程节点', StrokeIcons.cloud),
                   Spacer(),
                   IconButton(
                     onPressed: service.refreshNodeConnectivity,
-                    icon: const Icon(Icons.sync),
+                    icon: DrawIcon(StrokeIcons.sync),
                     tooltip: '刷新连通状态',
                     iconSize: m.iconSize18,
                   ),
                   IconButton(
                     onPressed: () => _showNodeEditor(),
-                    icon: const Icon(Icons.add),
+                    icon: DrawIcon(StrokeIcons.add),
                     tooltip: '添加节点',
                     iconSize: m.iconSize18,
                   ),
@@ -394,8 +396,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                           color: brandColor.withAlpha(20),
                           borderRadius: m.radius10,
                         ),
-                        child: Icon(
-                          Icons.cloud_off_outlined,
+                        child: DrawIcon(StrokeIcons.cloudOff,
                           size: m.iconSize20,
                           color: brandColor,
                         ),
@@ -516,12 +517,12 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.edit_outlined),
+                                    icon: DrawIcon(StrokeIcons.edit),
                                     onPressed: () => _showNodeEditor(initial: node),
                                     iconSize: m.iconSize18,
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline),
+                                    icon: DrawIcon(StrokeIcons.deleteOutline),
                                     onPressed: () => service.removeRemoteNode(node.id),
                                     iconSize: m.iconSize18,
                                   ),

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_zone.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -44,7 +48,7 @@ class StatusChip extends StatelessWidget {
 
   final String label;
   final Tone tone;
-  final IconData? icon;
+  final StrokeIcon? icon;
 
   /// 仅用一个圆点表示状态，不带图标
   final bool showDot;
@@ -86,7 +90,13 @@ class StatusChip extends StatelessWidget {
               SizedBox(width: m.kSpace6),
             ],
             if (icon != null) ...[
-              Icon(icon, size: dense ? m.iconSize12 : m.iconSize13, color: fg),
+              // 状态胶囊在列表里成排出现，只播入场，不跟点击重播
+              DrawIcon(
+                icon!,
+                size: dense ? m.iconSize12 : m.iconSize13,
+                color: fg,
+                trigger: StrokeTrigger.appear,
+              ),
               SizedBox(width: m.kSpace4),
             ],
             Text(
@@ -159,7 +169,11 @@ class TagChip extends StatelessWidget {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onRemoved,
-                child: Icon(Icons.close, size: m.iconSize12, color: s.textTertiary),
+                child: DrawIcon(
+                  StrokeIcons.close,
+                  size: m.iconSize12,
+                  color: s.textTertiary,
+                ),
               ),
             ],
           ],
@@ -363,7 +377,7 @@ class ToolIconButton extends StatelessWidget {
     this.color,
   });
 
-  final IconData icon;
+  final StrokeIcon icon;
   final VoidCallback? onPressed;
   final String? tooltip;
   final bool selected;
@@ -376,7 +390,7 @@ class ToolIconButton extends StatelessWidget {
     final m = AppTheme.metrics;
     final btn = IconButton(
       onPressed: onPressed,
-      icon: Icon(
+      icon: DrawIcon(
         icon,
         size: size ?? m.iconSize18,
         color: onPressed == null
@@ -388,6 +402,10 @@ class ToolIconButton extends StatelessWidget {
         padding: EdgeInsets.all(m.kSpace6),
       ),
     );
-    return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
+    final zone = StrokeZone(
+      // 工具按钮是"指针在不在"比"点没点"更值得反馈的一类：悬停即描一次
+      child: btn,
+    );
+    return tooltip == null ? zone : Tooltip(message: tooltip!, child: zone);
   }
 }

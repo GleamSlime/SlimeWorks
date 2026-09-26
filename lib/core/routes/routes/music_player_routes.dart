@@ -11,7 +11,7 @@ class MusicPlayerRoute extends AppRouteData with $MusicPlayerRoute {
 
   // 使用媒体库图标，运行 build_runner 后可改为 menuMusicPlayer
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
 
   @override
   String get sidebarGroupId => 'music';

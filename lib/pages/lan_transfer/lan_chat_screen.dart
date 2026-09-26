@@ -6,6 +6,8 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/lan_transfer/components/transfer_actions.dart';
 import 'package:slime_works/pages/lan_transfer/components/transfer_chat.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 与指定设备的局域网传输聊天页面。
 /// 通过 [LanChatRoute] TypedGoRoute 进入，不再依赖 Navigator.push。
@@ -54,8 +56,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
         leading: IconButton(
           padding: EdgeInsets.zero,
           constraints: BoxConstraints(minWidth: scaleW(32), minHeight: scaleW(32)),
-          icon: Icon(
-            Icons.arrow_back_ios_new,
+          icon: DrawIcon(StrokeIcons.arrowBackIosNew,
             size: scaleW(18),
             color: isDark ? DarkColors.white80 : LightColors.black80,
           ),

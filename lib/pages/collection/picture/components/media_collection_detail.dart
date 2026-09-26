@@ -9,6 +9,8 @@ import 'package:slime_works/pages/collection/picture/components/masonry_media_gr
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 媒体集合详情视图（集合内的媒体列表）
 ///
@@ -104,8 +106,7 @@ class MediaCollectionDetailView extends StatelessWidget {
                     color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: AppTheme.metrics.radius16,
                   ),
-                  child: Icon(
-                    Icons.collections_outlined,
+                  child: DrawIcon(StrokeIcons.collections,
                     size: scaleW(36),
                     color: Theme.of(context).colorScheme.primary,
                   ),

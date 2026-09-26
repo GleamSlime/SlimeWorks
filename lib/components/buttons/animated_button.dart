@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/animations/state_transition_animation.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class AnimatedButton extends StatelessWidget {
   final void Function()? onTap;
 
   // All params forwarded to StateTransitionAnimation
-  final String? svg;
+  final StrokeIcon? icon;
   final String? label;
-  final String? hoverSvg;
+  final StrokeIcon? hoverIcon;
   final bool enableScaleAnimation;
   final Duration animationDuration;
 
@@ -16,25 +17,25 @@ class AnimatedButton extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final BoxDecoration? decoration;
   final TextStyle? textStyle;
-  final double? svgSize;
-  final Color? svgColor;
+  final double? iconSize;
+  final Color? iconColor;
   final double? spacing;
   final bool? loading;
 
   const AnimatedButton({
     super.key,
     this.onTap,
-    this.svg,
+    this.icon,
     this.label,
-    this.hoverSvg,
+    this.hoverIcon,
     this.enableScaleAnimation = true,
     this.animationDuration = const Duration(milliseconds: 400),
     this.height,
     this.padding,
     this.decoration,
     this.textStyle,
-    this.svgSize,
-    this.svgColor,
+    this.iconSize,
+    this.iconColor,
     this.spacing,
     this.loading = false,
   });
@@ -52,18 +53,18 @@ class AnimatedButton extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: _handleTap,
         child: StateTransitionAnimation(
-          svg: svg,
+          icon: icon,
           label: label,
-          hoverSvg: hoverSvg,
+          hoverIcon: hoverIcon,
           enableScaleAnimation: enableScaleAnimation,
           animationDuration: animationDuration,
           height: height,
           padding: padding,
           decoration: decoration,
           textStyle: textStyle,
-          svgSize: svgSize,
+          iconSize: iconSize,
           spacing: spacing,
-          svgColor: svgColor,
+          iconColor: iconColor,
           loading: loading,
         ),
       ),

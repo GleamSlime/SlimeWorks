@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 显示登录对话框
 ///
@@ -112,8 +114,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                         color: theme.colorScheme.primary.withValues(alpha: 0.12),
                         borderRadius: metrics.radius10,
                       ),
-                      child: Icon(
-                        Icons.auto_stories,
+                      child: DrawIcon(StrokeIcons.autoStories,
                         size: AppTheme.metrics.iconSize22,
                         color: theme.colorScheme.primary,
                       ),
@@ -135,7 +136,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: DrawIcon(StrokeIcons.close),
                       onPressed: () => Navigator.of(context).pop(false),
                       tooltip: '取消',
                     ),
@@ -147,7 +148,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                   controller: _emailController,
                   decoration: const InputDecoration(
                     labelText: '邮箱 / 账号',
-                    prefixIcon: Icon(Icons.person_outline),
+                    prefixIcon: DrawIcon(StrokeIcons.personOutline),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
@@ -159,9 +160,9 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                   controller: _passwordController,
                   decoration: InputDecoration(
                     labelText: '密码',
-                    prefixIcon: const Icon(Icons.lock_outline),
+                    prefixIcon: DrawIcon(StrokeIcons.lockOutline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      icon: DrawIcon(_obscurePassword ? StrokeIcons.visibilityOff : StrokeIcons.visibility),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
@@ -176,7 +177,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                   decoration: const InputDecoration(
                     labelText: '代理地址（可选）',
                     hintText: '如: http://127.0.0.1:7890',
-                    prefixIcon: Icon(Icons.router_outlined),
+                    prefixIcon: DrawIcon(StrokeIcons.router),
                   ),
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _onLogin(),
@@ -196,7 +197,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, size: AppTheme.metrics.iconSize16, color: theme.colorScheme.error),
+                        DrawIcon(StrokeIcons.errorOutline, size: AppTheme.metrics.iconSize16, color: theme.colorScheme.error),
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         Expanded(
                           child: Text(

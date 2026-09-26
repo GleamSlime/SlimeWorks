@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 const Loggers _logger = Loggers(name: '书籍卡片');
 
 
@@ -147,8 +149,7 @@ class NovelCard extends StatelessWidget {
                           SizedBox(height: AppTheme.metrics.kSpace6),
                           Row(
                             children: [
-                              Icon(
-                                Icons.person_outline,
+                              DrawIcon(StrokeIcons.personOutline,
                                 size: AppTheme.metrics.iconSize12,
                                 color: Theme.of(context).hintColor,
                               ),
@@ -198,7 +199,7 @@ class NovelCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize20),
+                      icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize20),
                       color: Colors.red[400],
                       tooltip: '删除',
                       onPressed: () => _showDeleteDialog(),
@@ -233,7 +234,7 @@ class NovelCard extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Icon(Icons.menu_book, size: AppTheme.metrics.iconSize64, color: Colors.white70),
+        child: DrawIcon(StrokeIcons.menuBook, size: AppTheme.metrics.iconSize64, color: Colors.white70),
       ),
     );
   }
@@ -244,7 +245,7 @@ class NovelCard extends StatelessWidget {
       AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            DrawIcon(StrokeIcons.warningAmber, color: Colors.orange),
             SizedBox(width: AppTheme.metrics.kSpace8),
             const Text('确认删除'),
           ],

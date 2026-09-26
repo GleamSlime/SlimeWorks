@@ -1,6 +1,8 @@
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class SettingsTabPlaceholder extends StatelessWidget {
   final String title;
@@ -33,8 +35,7 @@ class SettingsTabPlaceholder extends StatelessWidget {
                 color: brandColor.withAlpha(25),
                 borderRadius: m.radius12,
               ),
-              child: Icon(
-                Icons.construction_rounded,
+              child: DrawIcon(StrokeIcons.construction,
                 color: brandColor,
                 size: m.iconSize24,
               ),

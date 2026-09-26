@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 typedef NodeSelectorAvailabilityChecker = Future<bool> Function(String baseUrl);
 
@@ -44,7 +47,7 @@ class NodeInlineSelector extends StatelessWidget {
             nodeId: '',
             label: '本机',
             subtitle: localNodeEnabled ? '本机节点服务运行中' : '本机节点未启用',
-            icon: Icons.computer,
+            icon: StrokeIcons.computer,
             isSelected: selectedNodeId.isEmpty,
             isAvailable: true,
           ),
@@ -56,7 +59,7 @@ class NodeInlineSelector extends StatelessWidget {
                 nodeId: node.id,
                 label: node.name,
                 subtitle: '${node.effectiveApiBaseUrl}${ok ? '' : ' (不可达)'}',
-                icon: Icons.dns_outlined,
+                icon: StrokeIcons.dns,
                 isSelected: selectedNodeId == node.id,
                 isAvailable: ok,
               );
@@ -79,7 +82,7 @@ class NodeInlineSelector extends StatelessWidget {
     required String nodeId,
     required String label,
     required String subtitle,
-    required IconData icon,
+    required StrokeIcon icon,
     required bool isSelected,
     required bool isAvailable,
   }) {
@@ -135,8 +138,7 @@ class NodeInlineSelector extends StatelessWidget {
                           : LightColors.black5),
                 borderRadius: m.radius8,
               ),
-              child: Icon(
-                icon,
+              child: DrawIcon(icon,
                 size: m.iconSize16,
                 color: isSelected ? accent : (isAvailable ? theme.hintColor : theme.disabledColor),
               ),
@@ -165,7 +167,7 @@ class NodeInlineSelector extends StatelessWidget {
                 ],
               ),
             ),
-            if (isSelected) Icon(Icons.check_circle, size: m.iconSize18, color: accent),
+            if (isSelected) DrawIcon(StrokeIcons.check, size: m.iconSize18, color: accent),
           ],
         ),
       ),

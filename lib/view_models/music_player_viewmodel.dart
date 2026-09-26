@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -20,18 +19,20 @@ import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 part 'music_player_vm_remote.dart';
 
 /// 播放模式
 enum PlayerPlayMode {
-  sequential('顺序播放', Icons.repeat_rounded),
-  loop('列表循环', Icons.repeat_rounded),
-  singleLoop('单曲循环', Icons.repeat_one_rounded),
-  shuffle('随机播放', Icons.shuffle_rounded);
+  sequential('顺序播放', StrokeIcons.repeat),
+  loop('列表循环', StrokeIcons.repeat),
+  singleLoop('单曲循环', StrokeIcons.repeatOne),
+  shuffle('随机播放', StrokeIcons.shuffle);
 
   final String label;
-  final IconData icon;
+  final StrokeIcon icon;
   const PlayerPlayMode(this.label, this.icon);
 }
 

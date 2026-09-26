@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 图片库操作工具栏。
 ///
@@ -123,7 +125,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                       Tooltip(
                         message: '新建文件夹',
                         child: DesktopHeadToolsButton(
-                          icon: const Icon(Icons.create_new_folder_outlined),
+                          icon: DrawIcon(StrokeIcons.createNewFolder),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onCreateFolder,
                         ),
@@ -131,7 +133,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                       Tooltip(
                         message: '扫描文件夹',
                         child: DesktopHeadToolsButton(
-                          icon: const Icon(Icons.travel_explore_outlined),
+                          icon: DrawIcon(StrokeIcons.travelExplore),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onScanFolder,
                         ),
@@ -139,7 +141,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                       Tooltip(
                         message: '导入文件夹',
                         child: DesktopHeadToolsButton(
-                          icon: const Icon(Icons.folder_open_outlined),
+                          icon: DrawIcon(StrokeIcons.folderOpen),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onImportFolder,
                         ),
@@ -149,7 +151,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                             ? '重新扫描当前集合目录（增量同步新增/删除文件）'
                             : '重新扫描选中集合目录（长按选中，增量同步新增/删除文件）',
                         child: DesktopHeadToolsButton(
-                          icon: const Icon(Icons.folder_zip_outlined),
+                          icon: DrawIcon(StrokeIcons.folderZip),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onRescanCollection,
                         ),
@@ -157,7 +159,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                       Tooltip(
                         message: '清空媒体库',
                         child: DesktopHeadToolsButton(
-                          icon: const Icon(Icons.delete_sweep_outlined),
+                          icon: DrawIcon(StrokeIcons.deleteSweep),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onClearLibrary,
                         ),
@@ -165,7 +167,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                       Tooltip(
                         message: '新建智能文件夹',
                         child: DesktopHeadToolsButton(
-                          icon: const Icon(Icons.auto_awesome_outlined),
+                          icon: DrawIcon(StrokeIcons.autoAwesome),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onCreateSmartFolder,
                         ),
@@ -173,10 +175,10 @@ class PictureLibraryToolbar extends StatelessWidget {
                       Tooltip(
                         message: viewModel.showFavoritesOnly.value ? '显示全部' : '只显示收藏',
                         child: DesktopHeadToolsButton(
-                          icon: Icon(
+                          icon: DrawIcon(
                             viewModel.showFavoritesOnly.value
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
+                                ? StrokeIcons.favorite
+                                : StrokeIcons.favoriteBorder,
                             color: viewModel.showFavoritesOnly.value ? Colors.redAccent : null,
                           ),
                           size: AppTheme.metrics.kSpace40,
@@ -193,7 +195,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                     icon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.sort_rounded, size: scaleW(18)),
+                        DrawIcon(StrokeIcons.sort, size: scaleW(18)),
                         SizedBox(width: AppTheme.metrics.kSpace4),
                         ConstrainedBox(
                           constraints: BoxConstraints(maxWidth: scaleW(72)),
@@ -220,10 +222,10 @@ class PictureLibraryToolbar extends StatelessWidget {
                   Tooltip(
                     message: viewModel.showMediaOverlay.value ? '隐藏叠加信息' : '显示叠加信息',
                     child: DesktopHeadToolsButton(
-                      icon: Icon(
+                      icon: DrawIcon(
                         viewModel.showMediaOverlay.value
-                            ? Icons.layers_rounded
-                            : Icons.layers_clear_rounded,
+                            ? StrokeIcons.layers
+                            : StrokeIcons.layersClear,
                         color: viewModel.showMediaOverlay.value
                             ? Theme.of(context).colorScheme.primary
                             : null,
@@ -239,20 +241,19 @@ class PictureLibraryToolbar extends StatelessWidget {
                     Tooltip(
                       message: '上传文件到当前集合',
                       child: IconButton(
-                        icon: const Icon(Icons.upload_rounded),
+                        icon: DrawIcon(StrokeIcons.upload),
                         iconSize: scaleW(18),
                         padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                         constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
                         onPressed: onUpload,
                       ),
                     ),
-                  Icon(
-                    Icons.grid_view_rounded,
+                  DrawIcon(StrokeIcons.gridView,
                     size: scaleW(16),
                     color: Theme.of(context).hintColor,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.remove_rounded),
+                    icon: DrawIcon(StrokeIcons.remove),
                     iconSize: scaleW(16),
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
@@ -261,7 +262,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                   ),
                   Text('$columnCount 列', style: Theme.of(context).textTheme.bodySmall),
                   IconButton(
-                    icon: const Icon(Icons.add_rounded),
+                    icon: DrawIcon(StrokeIcons.add),
                     iconSize: scaleW(16),
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                     constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
@@ -273,7 +274,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                     tooltip: '排序',
                     icon: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: [Icon(Icons.sort_rounded, size: scaleW(18))],
+                      children: [DrawIcon(StrokeIcons.sort, size: scaleW(18))],
                     ),
                     onSelected: (v) => viewModel.itemSortOrder.value = v,
                     itemBuilder: (_) => MediaItemSortOrder.values
@@ -292,10 +293,10 @@ class PictureLibraryToolbar extends StatelessWidget {
                   Tooltip(
                     message: viewModel.useMasonryGrid.value ? '切换为网格布局' : '切换为瀑布流布局',
                     child: DesktopHeadToolsButton(
-                      icon: Icon(
+                      icon: DrawIcon(
                         viewModel.useMasonryGrid.value
-                            ? Icons.view_comfy_rounded
-                            : Icons.grid_view_rounded,
+                            ? StrokeIcons.viewComfy
+                            : StrokeIcons.gridView,
                         color: viewModel.useMasonryGrid.value
                             ? Theme.of(context).colorScheme.primary
                             : null,
@@ -306,7 +307,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                   ),
                 // 刷新/同步按钮（始终显示）
                 DesktopHeadToolsButton(
-                  icon: const Icon(Icons.refresh),
+                  icon: DrawIcon(StrokeIcons.refresh),
                   size: AppTheme.metrics.kSpace40,
                   onTap: onRefresh,
                 ),
@@ -358,7 +359,7 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
         return Tooltip(
           message: '搜索',
           child: DesktopHeadToolsButton(
-            icon: const Icon(Icons.search_rounded),
+            icon: DrawIcon(StrokeIcons.search),
             size: AppTheme.metrics.kSpace40,
             onTap: () {
               widget.viewModel.isSearchActive.value = true;
@@ -398,7 +399,7 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
           Tooltip(
             message: '清除搜索',
             child: DesktopHeadToolsButton(
-              icon: const Icon(Icons.close_rounded),
+              icon: DrawIcon(StrokeIcons.close),
               size: AppTheme.metrics.kSpace40,
               onTap: () {
                 _controller.clear();
@@ -465,8 +466,7 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
                   borderRadius: AppTheme.metrics.radius999,
                   child: Padding(
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                    child: Icon(
-                      Icons.cancel_outlined,
+                    child: DrawIcon(StrokeIcons.cancel,
                       size: AppTheme.metrics.iconSize16,
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -502,8 +502,7 @@ class _ThumbPausedIndicator extends StatelessWidget {
               borderRadius: AppTheme.metrics.radius999,
               child: Padding(
                 padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                child: Icon(
-                  Icons.play_circle_outline_rounded,
+                child: DrawIcon(StrokeIcons.playCircleOutline,
                   size: AppTheme.metrics.iconSize16,
                   color: Theme.of(context).colorScheme.primary,
                 ),

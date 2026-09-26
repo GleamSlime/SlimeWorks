@@ -10,6 +10,8 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_home_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GameLibraryHomeScreen extends BasePage<GameLibraryHomeViewModel> {
   const GameLibraryHomeScreen({super.key});
@@ -32,7 +34,7 @@ class _GameLibraryHomeScreenState
       actions: <Widget>[
         IconButton(
           onPressed: () => const GameLibraryRoute().go(context),
-          icon: const Icon(Icons.library_books_outlined),
+          icon: DrawIcon(StrokeIcons.libraryBooks),
           tooltip: '游戏库',
         ),
       ],
@@ -122,7 +124,7 @@ class _GameLibraryHomeScreenState
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          Icon(Icons.schedule, size: AppTheme.metrics.iconSize20, color: Colors.white70),
+                          DrawIcon(StrokeIcons.schedule, size: AppTheme.metrics.iconSize20, color: Colors.white70),
                           SizedBox(width: AppTheme.metrics.kSpace8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,8 +229,7 @@ class _GameLibraryHomeScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          Icon(
-                            Icons.sports_esports_outlined,
+                          DrawIcon(StrokeIcons.sportsEsports,
                             size: AppTheme.metrics.iconSize64,
                             color: Colors.white38,
                           ),
@@ -254,7 +255,7 @@ class _GameLibraryHomeScreenState
                               foregroundColor: Colors.black87,
                             ),
                             onPressed: () => const GameLibraryRoute().go(context),
-                            icon: const Icon(Icons.library_books),
+                            icon: DrawIcon(StrokeIcons.libraryBooks),
                             label: const Text('浏览游戏库'),
                           ),
                         ],
@@ -275,7 +276,7 @@ class _GameLibraryHomeScreenState
                         onPressed: () async {
                           await viewModel.launchGame(lastGame);
                         },
-                        icon: const Icon(Icons.play_arrow),
+                        icon: DrawIcon(StrokeIcons.playArrow),
                         label: const Text('继续游玩', style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ),
@@ -294,7 +295,7 @@ class _GameLibraryHomeScreenState
       return DecoratedBox(
         decoration: BoxDecoration(color: Colors.white12, borderRadius: AppTheme.metrics.radius14),
         child: Center(
-          child: Icon(Icons.image_not_supported_outlined, color: Colors.white38, size: AppTheme.metrics.iconSize40),
+          child: DrawIcon(StrokeIcons.imageNotSupported, color: Colors.white38, size: AppTheme.metrics.iconSize40),
         ),
       );
     }
@@ -306,7 +307,7 @@ class _GameLibraryHomeScreenState
             const DecoratedBox(decoration: BoxDecoration(color: Colors.white12)),
         errorWidget: (_, _, _) => const DecoratedBox(
           decoration: BoxDecoration(color: Colors.white12),
-          child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38)),
+          child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
         ),
       );
     }
@@ -316,7 +317,7 @@ class _GameLibraryHomeScreenState
     }
     return const DecoratedBox(
       decoration: BoxDecoration(color: Colors.white12),
-      child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38)),
+      child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
     );
   }
 

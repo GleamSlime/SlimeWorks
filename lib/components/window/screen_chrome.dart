@@ -94,6 +94,7 @@ class _ScreenChromeState extends State<ScreenChrome> {
 
     final bool hasAppBar =
         data.hasLeading ||
+        data.hasBreadcrumb ||
         data.title != null ||
         data.titleWidget != null ||
         data.hasActions ||
@@ -101,10 +102,14 @@ class _ScreenChromeState extends State<ScreenChrome> {
 
     PreferredSizeWidget? appBar;
     if (hasAppBar) {
+      // 移动端不铺整条面包屑：窄屏上"← 当前项"就够了，层级由返回手势承担
+      final title = data.hasBreadcrumb
+          ? Text(data.breadcrumb!.last.label)
+          : (data.titleWidget ?? (data.title != null ? Text(data.title!) : null));
       appBar = AppBar(
         leading: data.hasLeading ? data.leading : null,
         automaticallyImplyLeading: !data.hasLeading,
-        title: data.titleWidget ?? (data.title != null ? Text(data.title!) : null),
+        title: title,
         actions: data.hasActions ? data.actions : null,
         bottom: data.hasToolbar
             ? PreferredSize(

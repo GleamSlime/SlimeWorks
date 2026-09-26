@@ -6,6 +6,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 音乐列表条目
 class MusicListItem extends StatelessWidget {
@@ -62,8 +64,7 @@ class MusicListItem extends StatelessWidget {
               padding: EdgeInsets.only(right: m.kSpace4),
               child: Tooltip(
                 message: '有 CUE 歌词',
-                child: Icon(
-                  Icons.subtitles_rounded,
+                child: DrawIcon(StrokeIcons.subtitles,
                   size: m.iconSize14,
                   color: s.textTertiary,
                 ),
@@ -78,8 +79,8 @@ class MusicListItem extends StatelessWidget {
             ),
           // 收藏按钮
           IconButton(
-            icon: Icon(
-              item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            icon: DrawIcon(
+              item.isFavorite ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
               size: m.iconSize18,
             ),
             onPressed: onFavoriteTap,
@@ -96,8 +97,7 @@ class MusicListItem extends StatelessWidget {
           PopupMenuButton<String>(
             // 行尾三个控件要有主次：菜单按钮是常规操作，压到次级灰，
             // 否则它比收藏那颗心还抢眼（golden 里实测就是反过来的）。
-            icon: Icon(
-              Icons.more_vert_rounded,
+            icon: DrawIcon(StrokeIcons.moreVert,
               size: AppTheme.metrics.iconSize18,
               color: s.textSecondary,
             ),
@@ -119,7 +119,7 @@ class MusicListItem extends StatelessWidget {
                 GlassMenuItem(
                   value: 'transcribe',
                   label: '语音识别',
-                  icon: Icons.graphic_eq_rounded,
+                  icon: StrokeIcons.graphicEq,
                 ),
               ];
               // 仅本地文件可「在资源管理器打开」
@@ -129,7 +129,7 @@ class MusicListItem extends StatelessWidget {
                   GlassMenuItem(
                     value: 'reveal',
                     label: '在资源管理器打开',
-                    icon: Icons.folder_open_rounded,
+                    icon: StrokeIcons.folderOpen,
                   ),
                 );
               }
@@ -138,7 +138,7 @@ class MusicListItem extends StatelessWidget {
                 GlassMenuItem(
                   value: 'delete',
                   label: '删除',
-                  icon: Icons.delete_outline_rounded,
+                  icon: StrokeIcons.deleteOutline,
                   destructive: true,
                 ),
               );
@@ -180,8 +180,7 @@ class MusicListItem extends StatelessWidget {
         color: s.surfaceSunken,
         borderRadius: AppTheme.metrics.radius4,
       ),
-      child: Icon(
-        Icons.music_note_rounded,
+      child: DrawIcon(StrokeIcons.musicNote,
         size: size * 0.5,
         color: s.textTertiary,
       ),

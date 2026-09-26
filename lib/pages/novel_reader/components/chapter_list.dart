@@ -2,6 +2,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 章节列表组件
 class ChapterList extends StatefulWidget {
@@ -71,7 +73,7 @@ class _ChapterListState extends State<ChapterList> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.list, size: AppTheme.metrics.iconSize20),
+                  DrawIcon(StrokeIcons.list, size: AppTheme.metrics.iconSize20),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Text(
                     '章节列表',
@@ -159,8 +161,7 @@ class _ChapterListState extends State<ChapterList> {
                               if (isCurrent)
                                 Container(
                                   margin: EdgeInsets.only(left: AppTheme.metrics.kSpace8),
-                                  child: Icon(
-                                    Icons.play_arrow,
+                                  child: DrawIcon(StrokeIcons.playArrow,
                                     size: AppTheme.metrics.iconSize20,
                                     color: Theme.of(context).primaryColor,
                                   ),

@@ -19,6 +19,9 @@ import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_comic_detail_viewmodel.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MangaComicDetailScreen extends BasePage<MangaComicDetailViewModel> {
   const MangaComicDetailScreen({super.key, required this.comicId});
@@ -49,7 +52,7 @@ class _MangaComicDetailScreenState
       title: comic?.title ?? '漫画详情',
       forceLocalChrome: true,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: DrawIcon(StrokeIcons.arrowBack),
         onPressed: () {
           if (context.canPop()) {
             context.pop();
@@ -67,8 +70,8 @@ class _MangaComicDetailScreenState
                 final entry = dl.entries[comic.id];
                 final hasDownloads = entry != null && entry.totalEps > 0;
                 return IconButton(
-                  icon: Icon(
-                    hasDownloads ? Icons.download_done : Icons.download_outlined,
+                  icon: DrawIcon(
+                    hasDownloads ? StrokeIcons.downloadDone : StrokeIcons.download,
                     color: hasDownloads ? Colors.green : null,
                   ),
                   tooltip: '下载',
@@ -79,8 +82,8 @@ class _MangaComicDetailScreenState
               /// 收藏按鈕（使用 Obx 监听 RxBool 实时更新）
               Obx(
                 () => IconButton(
-                  icon: Icon(
-                    viewModel.isFavourite.value ? Icons.favorite : Icons.favorite_border,
+                  icon: DrawIcon(
+                    viewModel.isFavourite.value ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
                     color: viewModel.isFavourite.value ? Colors.red : null,
                   ),
                   tooltip: viewModel.isFavourite.value ? '取消收藏' : '收藏',
@@ -155,7 +158,7 @@ class _MangaComicDetailScreenState
                     child: MangaImageView(
                       image: comic.thumb,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, e, _) => const Icon(Icons.broken_image_outlined),
+                      errorBuilder: (_, e, _) => DrawIcon(StrokeIcons.brokenImage),
                     ),
                   ),
                 ),
@@ -186,9 +189,9 @@ class _MangaComicDetailScreenState
                                           image: comic.creator!.avatar!,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, _, _) =>
-                                              Icon(Icons.person, size: AppTheme.metrics.iconSize16),
+                                              DrawIcon(StrokeIcons.person, size: AppTheme.metrics.iconSize16),
                                         )
-                                      : Icon(Icons.person, size: AppTheme.metrics.iconSize16),
+                                      : DrawIcon(StrokeIcons.person, size: AppTheme.metrics.iconSize16),
                                 ),
                               ),
                               SizedBox(width: metrics.kSpace8),
@@ -231,19 +234,19 @@ class _MangaComicDetailScreenState
                           _buildInfoChip(
                             context,
                             '${comic.epsCount} 章',
-                            Icons.photo_library_outlined,
+                            StrokeIcons.photoLibrary,
                           ),
-                          _buildInfoChip(context, '${comic.pagesCount} 页', Icons.image_outlined),
+                          _buildInfoChip(context, '${comic.pagesCount} 页', StrokeIcons.image),
                           _buildInfoChip(
                             context,
                             _formatViewsCount(comic.viewsCount),
-                            Icons.remove_red_eye_outlined,
+                            StrokeIcons.removeRedEye,
                           ),
                           if (comic.finished)
                             _buildInfoChip(
                               context,
                               '完结',
-                              Icons.check_circle_outline,
+                              StrokeIcons.checkCircleOutline,
                               highlight: true,
                             ),
                         ],
@@ -297,7 +300,7 @@ class _MangaComicDetailScreenState
                 // 点赞
                 Obx(
                   () => _ActionButton(
-                    icon: vm.isLiked.value ? Icons.star : Icons.star_border,
+                    icon: vm.isLiked.value ? StrokeIcons.star : StrokeIcons.starBorder,
                     label: '${vm.likesCount.value}',
                     active: vm.isLiked.value,
                     activeColor: Colors.amber,
@@ -307,7 +310,7 @@ class _MangaComicDetailScreenState
                 // 收藏
                 Obx(
                   () => _ActionButton(
-                    icon: vm.isFavourite.value ? Icons.favorite : Icons.favorite_border,
+                    icon: vm.isFavourite.value ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
                     label: '收藏',
                     active: vm.isFavourite.value,
                     activeColor: Theme.of(context).colorScheme.error,
@@ -316,7 +319,7 @@ class _MangaComicDetailScreenState
                 ),
                 // 评论
                 _ActionButton(
-                  icon: Icons.comment_outlined,
+                  icon: StrokeIcons.comment,
                   label: '${comic.commentsCount}',
                   onTap: () => _showCommentsSheet(context),
                 ),
@@ -353,8 +356,7 @@ class _MangaComicDetailScreenState
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.bookmark,
+                      DrawIcon(StrokeIcons.bookmark,
                         size: AppTheme.metrics.iconSize18,
                         color: theme.colorScheme.primary,
                       ),
@@ -367,8 +369,7 @@ class _MangaComicDetailScreenState
                           ),
                         ),
                       ),
-                      Icon(
-                        Icons.arrow_forward_ios,
+                      DrawIcon(StrokeIcons.arrowForwardIos,
                         size: AppTheme.metrics.iconSize14,
                         color: theme.colorScheme.primary,
                       ),
@@ -474,7 +475,7 @@ class _MangaComicDetailScreenState
                   final count = entry?.episodes.values.where((e) => e.isCompleted).length ?? 0;
                   if (count == 0) return const SizedBox.shrink();
                   return OutlinedButton.icon(
-                    icon: Icon(Icons.download_done, size: AppTheme.metrics.iconSize16),
+                    icon: DrawIcon(StrokeIcons.downloadDone, size: AppTheme.metrics.iconSize16),
                     label: Text('已下载 $count 话'),
                     onPressed: () => const MangaDownloadsRoute().push(context),
                   );
@@ -483,7 +484,7 @@ class _MangaComicDetailScreenState
                 Obx(() {
                   if (vm.recommendations.isEmpty) return const SizedBox.shrink();
                   return OutlinedButton.icon(
-                    icon: Icon(Icons.recommend_outlined, size: AppTheme.metrics.iconSize16),
+                    icon: DrawIcon(StrokeIcons.recommend, size: AppTheme.metrics.iconSize16),
                     label: Text('相关推荐 ${vm.recommendations.length}'),
                     onPressed: () => _showRecommendationsSheet(context, vm),
                   );
@@ -546,8 +547,7 @@ class _MangaComicDetailScreenState
                     epsTitle: ep.title,
                   ).push(context),
                   icon: isDownloaded
-                      ? Icon(
-                          Icons.check_circle,
+                      ? DrawIcon(StrokeIcons.check,
                           size: AppTheme.metrics.iconSize14,
                           color: (Theme.of(context).brightness == Brightness.dark)
                               ? DarkColors.success
@@ -643,7 +643,7 @@ class _MangaComicDetailScreenState
   Widget _buildInfoChip(
     BuildContext context,
     String label,
-    IconData icon, {
+    StrokeIcon icon, {
     bool highlight = false,
   }) {
     final theme = Theme.of(context);
@@ -660,7 +660,7 @@ class _MangaComicDetailScreenState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: AppTheme.metrics.iconSize12, color: fgColor),
+          DrawIcon(icon, size: AppTheme.metrics.iconSize12, color: fgColor),
           SizedBox(width: metrics.kSpace3),
           Text(
             label,
@@ -828,7 +828,7 @@ class _ActionButton extends StatelessWidget {
     this.activeColor,
   });
 
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final VoidCallback onTap;
   final bool active;
@@ -855,7 +855,7 @@ class _ActionButton extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: AppTheme.metrics.iconSize22, color: color),
+            DrawIcon(icon, size: AppTheme.metrics.iconSize22, color: color),
             SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               label,
@@ -1184,9 +1184,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                       ? MangaImageView(
                                           image: c.user.avatar!,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => const Icon(Icons.person),
+                                          errorBuilder: (_, _, _) => DrawIcon(StrokeIcons.person),
                                         )
-                                      : const Icon(Icons.person),
+                                      : DrawIcon(StrokeIcons.person),
                                 ),
                               ),
                               SizedBox(width: AppTheme.metrics.kSpace8),
@@ -1200,8 +1200,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                     SizedBox(height: AppTheme.metrics.kSpace4),
                                     Row(
                                       children: [
-                                        Icon(
-                                          Icons.thumb_up_outlined,
+                                        DrawIcon(StrokeIcons.thumbUp,
                                           size: AppTheme.metrics.iconSize12,
                                           color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                                         ),

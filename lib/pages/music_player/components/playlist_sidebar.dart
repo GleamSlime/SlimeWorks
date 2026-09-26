@@ -15,6 +15,9 @@ import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 播放列表侧边栏（桌面端左侧）
 class PlaylistSidebar extends StatelessWidget {
@@ -49,13 +52,13 @@ class PlaylistSidebar extends StatelessWidget {
                 const Spacer(),
                 // 新建子目录
                 ToolIconButton(
-                  icon: Icons.create_new_folder_outlined,
+                  icon: StrokeIcons.createNewFolder,
                   onPressed: () => _showCreateFolderDialog(context),
                   tooltip: '新建子目录',
                 ),
                 // 新建播放列表
                 ToolIconButton(
-                  icon: Icons.add_rounded,
+                  icon: StrokeIcons.add,
                   onPressed: () => _showCreatePlaylistDialog(context),
                   tooltip: '新建播放列表',
                 ),
@@ -78,21 +81,20 @@ class PlaylistSidebar extends StatelessWidget {
               if (mappings.isEmpty && subFolders.isEmpty && folderPlaylists.isEmpty) {
                 return EmptyState(
                   title: '暂无内容',
-                  icon: Icons.folder_open_rounded,
+                  icon: StrokeIcons.folderOpen,
                   compact: true,
                   action: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       TextButton.icon(
-                        icon: Icon(
-                          Icons.create_new_folder_outlined,
+                        icon: DrawIcon(StrokeIcons.createNewFolder,
                           size: AppTheme.metrics.iconSize16,
                         ),
                         label: const Text('新建子目录'),
                         onPressed: () => _showCreateFolderDialog(context),
                       ),
                       TextButton.icon(
-                        icon: Icon(Icons.add_rounded, size: AppTheme.metrics.iconSize16),
+                        icon: DrawIcon(StrokeIcons.add, size: AppTheme.metrics.iconSize16),
                         label: const Text('新建播放列表'),
                         onPressed: () => _showCreatePlaylistDialog(context),
                       ),
@@ -161,8 +163,7 @@ class PlaylistSidebar extends StatelessWidget {
           for (int i = 0; i < breadcrumbs.length; i++) ...[
             Padding(
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
-              child: Icon(
-                Icons.chevron_right_rounded,
+              child: DrawIcon(StrokeIcons.chevronRight,
                 size: AppTheme.metrics.iconSize14,
                 color: AppSemantic.of(context).textTertiary,
               ),
@@ -281,8 +282,7 @@ class _FolderTile extends StatelessWidget {
     final m = AppTheme.metrics;
     return ListTile(
       dense: true,
-      leading: Icon(
-        Icons.folder_rounded,
+      leading: DrawIcon(StrokeIcons.folder,
         size: m.iconSize18,
         // 目录比播放列表低一档权重：同一层里靠饱和度区分，而不是靠字号。
         color: s.accent.withValues(alpha: 0.7),
@@ -294,7 +294,7 @@ class _FolderTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert_rounded, size: m.iconSize16),
+        icon: DrawIcon(StrokeIcons.moreVert, size: m.iconSize16),
         onSelected: (action) {
           switch (action) {
             case 'rename':
@@ -312,17 +312,17 @@ class _FolderTile extends StatelessWidget {
           GlassMenuItem(
             value: 'transcribe',
             label: '批量语音识别',
-            icon: Icons.graphic_eq_rounded,
+            icon: StrokeIcons.graphicEq,
           ),
           GlassMenuItem(
             value: 'rename',
             label: '重命名',
-            icon: Icons.drive_file_rename_outline_rounded,
+            icon: StrokeIcons.driveFileRenameOutline,
           ),
           GlassMenuItem(
             value: 'delete',
             label: '删除',
-            icon: Icons.delete_outline_rounded,
+            icon: StrokeIcons.deleteOutline,
             destructive: true,
           ),
         ],
@@ -399,8 +399,8 @@ class _PlaylistTile extends StatelessWidget {
       selected: isSelected,
       // 选中底用 accentContainer 而不是 primary@10% 手搓：这是全站的"选中"语言。
       selectedTileColor: s.accentContainer,
-      leading: Icon(
-        playlist.isDefault ? Icons.queue_music_rounded : Icons.playlist_play_rounded,
+      leading: DrawIcon(
+        playlist.isDefault ? StrokeIcons.queueMusic : StrokeIcons.playlistPlay,
         size: m.iconSize18,
         color: isSelected ? s.accent : null,
       ),
@@ -418,7 +418,7 @@ class _PlaylistTile extends StatelessWidget {
         style: AppTextStyles.caption(context),
       ),
       trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert_rounded, size: m.iconSize16),
+        icon: DrawIcon(StrokeIcons.moreVert, size: m.iconSize16),
         onSelected: (action) {
           switch (action) {
             case 'rename':
@@ -433,13 +433,13 @@ class _PlaylistTile extends StatelessWidget {
           GlassMenuItem(
             value: 'rename',
             label: '重命名',
-            icon: Icons.drive_file_rename_outline_rounded,
+            icon: StrokeIcons.driveFileRenameOutline,
           ),
           if (!playlist.isDefault)
             GlassMenuItem(
               value: 'delete',
               label: '删除',
-              icon: Icons.delete_outline_rounded,
+              icon: StrokeIcons.deleteOutline,
               destructive: true,
             ),
         ],
@@ -507,14 +507,13 @@ class _PathMappingTileState extends State<_PathMappingTile> {
             ),
             child: Row(
               children: [
-                Icon(
-                  _isExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+                DrawIcon(
+                  _isExpanded ? StrokeIcons.expandMore : StrokeIcons.chevronRight,
                   size: m.iconSize18,
                   color: s.textTertiary,
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
-                Icon(
-                  Icons.link_rounded,
+                DrawIcon(StrokeIcons.link,
                   size: m.iconSize16,
                   color: node.hasAudio ? s.accent : s.textTertiary,
                 ),
@@ -552,7 +551,7 @@ class _PathMappingTileState extends State<_PathMappingTile> {
                   ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert_rounded, size: m.iconSize14, color: s.textTertiary),
+                  icon: DrawIcon(StrokeIcons.moreVert, size: m.iconSize14, color: s.textTertiary),
                   padding: EdgeInsets.zero,
                   constraints: BoxConstraints(
                     minWidth: m.kSpace24,
@@ -576,17 +575,17 @@ class _PathMappingTileState extends State<_PathMappingTile> {
                     GlassMenuItem(
                       value: 'open_folder',
                       label: '打开文件夹所在位置',
-                      icon: Icons.folder_open_rounded,
+                      icon: StrokeIcons.folderOpen,
                     ),
                     GlassMenuItem(
                       value: 'refresh',
                       label: '刷新映射',
-                      icon: Icons.refresh_rounded,
+                      icon: StrokeIcons.refresh,
                     ),
                     GlassMenuItem(
                       value: 'remove',
                       label: '移除映射',
-                      icon: Icons.link_off_rounded,
+                      icon: StrokeIcons.linkOff,
                       destructive: true,
                     ),
                   ],
@@ -649,15 +648,15 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
             child: Row(
               children: [
                 if (isDir)
-                  Icon(
-                    _isExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+                  DrawIcon(
+                    _isExpanded ? StrokeIcons.expandMore : StrokeIcons.chevronRight,
                     size: AppTheme.metrics.iconSize14,
                     color: AppSemantic.of(context).textTertiary,
                   )
                 else
                   SizedBox(width: AppTheme.metrics.iconSize14),
                 SizedBox(width: AppTheme.metrics.kSpace4),
-                Icon(icon, size: AppTheme.metrics.iconSize14, color: iconColor),
+                DrawIcon(icon, size: AppTheme.metrics.iconSize14, color: iconColor),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Expanded(
                   child: Text(
@@ -696,18 +695,18 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
     );
   }
 
-  IconData _getIcon(music_api.PathMappingNodeInfo node) {
+  StrokeIcon _getIcon(music_api.PathMappingNodeInfo node) {
     switch (node.nodeType) {
       case music_api.PathMappingNodeType.directory:
-        return Icons.folder_rounded;
+        return StrokeIcons.folder;
       case music_api.PathMappingNodeType.audioFile:
-        return Icons.audiotrack_rounded;
+        return StrokeIcons.audiotrack;
       case music_api.PathMappingNodeType.imageFile:
-        return Icons.image_rounded;
+        return StrokeIcons.image;
       case music_api.PathMappingNodeType.cueFile:
-        return Icons.description_rounded;
+        return StrokeIcons.description;
       case music_api.PathMappingNodeType.otherFile:
-        return Icons.insert_drive_file_rounded;
+        return StrokeIcons.insertDriveFile;
     }
   }
 
@@ -780,8 +779,7 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
               padding: EdgeInsets.all(m.kSpace8),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.image_rounded,
+                  DrawIcon(StrokeIcons.image,
                     size: m.iconSize16,
                     color: AppSemantic.of(context).info.color,
                   ),
@@ -795,7 +793,7 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.close_rounded, size: m.iconSize18),
+                    icon: DrawIcon(StrokeIcons.close, size: m.iconSize18),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -835,8 +833,7 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
                 padding: EdgeInsets.all(m.kSpace8),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.description_rounded,
+                    DrawIcon(StrokeIcons.description,
                       size: m.iconSize16,
                       color: AppSemantic.of(context).warning.color,
                     ),
@@ -850,7 +847,7 @@ class _PathMappingChildTileState extends State<_PathMappingChildTile> {
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.close_rounded, size: m.iconSize18),
+                      icon: DrawIcon(StrokeIcons.close, size: m.iconSize18),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],

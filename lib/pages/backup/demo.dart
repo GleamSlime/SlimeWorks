@@ -2,6 +2,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GooeyDropdownDemo extends StatefulWidget {
   const GooeyDropdownDemo({super.key});
@@ -154,7 +156,7 @@ class _GooeyDropdownDemoState extends State<GooeyDropdownDemo> with SingleTicker
                       width: 56,
                       height: 56,
                       decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
-                      child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+                      child: DrawIcon(StrokeIcons.chatBubbleOutline, color: Colors.white),
                     ),
                   ),
                 ),

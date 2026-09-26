@@ -9,6 +9,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 聊天风格传输记录视图（微信/QQ 气泡样式）
 /// - 左侧：对方发来的消息/文件
@@ -172,7 +175,7 @@ class _TransferChatViewState extends State<TransferChatView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.keyboard_double_arrow_down, size: scaleW(16), color: Colors.white),
+                    DrawIcon(StrokeIcons.keyboardDoubleArrowDown, size: scaleW(16), color: Colors.white),
                     SizedBox(width: AppTheme.metrics.kSpace4),
                     Text(
                       '返回底部',
@@ -236,8 +239,7 @@ class _TransferChatViewState extends State<TransferChatView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.chat_bubble_outline,
+          DrawIcon(StrokeIcons.chatBubbleOutline,
             size: scaleW(48),
             color: isDark ? DarkColors.white20 : LightColors.black20,
           ),
@@ -385,7 +387,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                               onTap: widget.onRetry,
                               child: Padding(
                                 padding: EdgeInsets.only(right: AppTheme.metrics.kSpace4),
-                                child: Icon(Icons.refresh, size: scaleW(14), color: Colors.orange),
+                                child: DrawIcon(StrokeIcons.refresh, size: scaleW(14), color: Colors.orange),
                               ),
                             ),
                           if (isSelf) _buildStatusIcon(),
@@ -425,7 +427,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             : (isDark ? DarkColors.background3 : LightColors.background3),
         shape: BoxShape.circle,
       ),
-      child: Icon(
+      child: DrawIcon(
         _deviceIcon(widget.item.senderDeviceName),
         size: scaleW(18),
         color: isSelf
@@ -529,8 +531,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                   ),
                   Positioned.fill(
                     child: Center(
-                      child: Icon(
-                        Icons.play_circle_outline,
+                      child: DrawIcon(StrokeIcons.playCircleOutline,
                         size: scaleW(48),
                         color: Colors.white70,
                       ),
@@ -570,7 +571,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(iconData, size: scaleW(28), color: textColor.withValues(alpha: 0.8)),
+            DrawIcon(iconData, size: scaleW(28), color: textColor.withValues(alpha: 0.8)),
             SizedBox(width: AppTheme.metrics.kSpace8),
             Flexible(
               child: Column(
@@ -644,8 +645,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.broken_image_outlined,
+          DrawIcon(StrokeIcons.brokenImage,
             size: scaleW(20),
             color: textColor.withValues(alpha: 0.5),
           ),
@@ -666,7 +666,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
   Widget _buildStatusIcon() {
     final item = widget.item;
     return switch (item.status) {
-      TransferStatus.completed => Icon(Icons.done_all, size: scaleW(14), color: Colors.lightBlue),
+      TransferStatus.completed => DrawIcon(StrokeIcons.doneAll, size: scaleW(14), color: Colors.lightBlue),
       TransferStatus.failed => GestureDetector(
         onTap: () {
           final errMsg = (item.errorMessage != null && item.errorMessage!.isNotEmpty)
@@ -681,19 +681,16 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             colorText: Colors.white,
           );
         },
-        child: Icon(
-          Icons.error_outline,
+        child: DrawIcon(StrokeIcons.errorOutline,
           size: scaleW(14),
           color: Theme.of(context).colorScheme.error,
         ),
       ),
-      TransferStatus.rejected => Icon(
-        Icons.block,
+      TransferStatus.rejected => DrawIcon(StrokeIcons.block,
         size: scaleW(14),
         color: Theme.of(context).colorScheme.error,
       ),
-      TransferStatus.cancelled => Icon(
-        Icons.cancel_outlined,
+      TransferStatus.cancelled => DrawIcon(StrokeIcons.cancel,
         size: scaleW(14),
         color: Theme.of(context).colorScheme.outline,
       ),
@@ -707,7 +704,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
         height: scaleW(14),
         child: const CircularProgressIndicator(strokeWidth: 1.5, color: Colors.orange),
       ),
-      _ => Icon(Icons.schedule, size: scaleW(14), color: Theme.of(context).colorScheme.outline),
+      _ => DrawIcon(StrokeIcons.schedule, size: scaleW(14), color: Theme.of(context).colorScheme.outline),
     };
   }
 
@@ -762,7 +759,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             if (canCopy)
               _menuItem(
                 ctx,
-                icon: Icons.copy,
+                icon: StrokeIcons.copy,
                 label: '复制文本',
                 color: isDark ? DarkColors.white80 : LightColors.black80,
                 onTap: () {
@@ -776,7 +773,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             if (canOpen)
               _menuItem(
                 ctx,
-                icon: Icons.ios_share,
+                icon: StrokeIcons.iosShare,
                 label: '用其他应用打开',
                 color: isDark ? DarkColors.white80 : LightColors.black80,
                 onTap: () {
@@ -793,7 +790,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             if (canCancel)
               _menuItem(
                 ctx,
-                icon: Icons.cancel_outlined,
+                icon: StrokeIcons.cancel,
                 label: '取消传输',
                 color: Colors.orange,
                 onTap: () {
@@ -804,7 +801,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             if (hasFile)
               _menuItem(
                 ctx,
-                icon: Icons.delete_sweep_outlined,
+                icon: StrokeIcons.deleteSweep,
                 label: '删除记录和文件',
                 color: Theme.of(context).colorScheme.error,
                 onTap: () {
@@ -814,7 +811,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
               ),
             _menuItem(
               ctx,
-              icon: Icons.delete_outline,
+              icon: StrokeIcons.deleteOutline,
               label: '删除记录',
               color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5),
               onTap: () {
@@ -831,13 +828,13 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
 
   Widget _menuItem(
     BuildContext ctx, {
-    required IconData icon,
+    required StrokeIcon icon,
     required String label,
     required Color color,
     required VoidCallback onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: color),
+      leading: DrawIcon(icon, color: color),
       title: Text(label, style: TextStyle(color: color)),
       onTap: onTap,
     );
@@ -858,23 +855,23 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  IconData _typeIcon(TransferType type) {
+  StrokeIcon _typeIcon(TransferType type) {
     return switch (type) {
-      TransferType.text => Icons.text_snippet_outlined,
-      TransferType.image => Icons.image_outlined,
-      TransferType.video => Icons.video_file_outlined,
-      TransferType.file => Icons.insert_drive_file_outlined,
+      TransferType.text => StrokeIcons.textSnippet,
+      TransferType.image => StrokeIcons.image,
+      TransferType.video => StrokeIcons.videoFile,
+      TransferType.file => StrokeIcons.insertDriveFile,
     };
   }
 
-  IconData _deviceIcon(String name) {
+  StrokeIcon _deviceIcon(String name) {
     final lower = name.toLowerCase();
-    if (lower.contains('iphone') || lower.contains('ios')) return Icons.phone_iphone;
-    if (lower.contains('ipad')) return Icons.tablet_mac;
-    if (lower.contains('mac')) return Icons.laptop_mac;
-    if (lower.contains('android')) return Icons.phone_android;
-    if (lower.contains('windows')) return Icons.desktop_windows;
-    return Icons.devices;
+    if (lower.contains('iphone') || lower.contains('ios')) return StrokeIcons.phoneIphone;
+    if (lower.contains('ipad')) return StrokeIcons.tabletMac;
+    if (lower.contains('mac')) return StrokeIcons.laptopMac;
+    if (lower.contains('android')) return StrokeIcons.phoneAndroid;
+    if (lower.contains('windows')) return StrokeIcons.desktopWindows;
+    return StrokeIcons.devices;
   }
 }
 
@@ -933,13 +930,13 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
               children: [
                 IconButton(
                   color: Colors.white,
-                  icon: const Icon(Icons.arrow_back_ios_new),
+                  icon: DrawIcon(StrokeIcons.arrowBackIosNew),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const Spacer(),
                 IconButton(
                   color: Colors.white,
-                  icon: const Icon(Icons.more_horiz),
+                  icon: DrawIcon(StrokeIcons.moreHoriz),
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,
@@ -952,7 +949,7 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ListTile(
-                              leading: const Icon(Icons.download_outlined),
+                              leading: DrawIcon(StrokeIcons.download),
                               title: const Text('保存到相册'),
                               onTap: () async {
                                 Navigator.of(ctx).pop();
@@ -960,7 +957,7 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.share_outlined),
+                              leading: DrawIcon(StrokeIcons.share),
                               title: const Text('分享到...'),
                               onTap: () {
                                 Navigator.of(ctx).pop();
@@ -1068,13 +1065,13 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
               children: [
                 IconButton(
                   color: Colors.white,
-                  icon: const Icon(Icons.arrow_back_ios_new),
+                  icon: DrawIcon(StrokeIcons.arrowBackIosNew),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const Spacer(),
                 IconButton(
                   color: Colors.white,
-                  icon: const Icon(Icons.more_horiz),
+                  icon: DrawIcon(StrokeIcons.moreHoriz),
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,
@@ -1087,7 +1084,7 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ListTile(
-                              leading: const Icon(Icons.download_outlined),
+                              leading: DrawIcon(StrokeIcons.download),
                               title: const Text('保存到相册'),
                               onTap: () async {
                                 Navigator.of(ctx).pop();
@@ -1098,7 +1095,7 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.share_outlined),
+                              leading: DrawIcon(StrokeIcons.share),
                               title: const Text('分享到...'),
                               onTap: () {
                                 Navigator.of(ctx).pop();
@@ -1123,7 +1120,7 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
                 onPressed: () => setState(
                   () => _controller.value.isPlaying ? _controller.pause() : _controller.play(),
                 ),
-                child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+                child: DrawIcon(_controller.value.isPlaying ? StrokeIcons.pause : StrokeIcons.playArrow),
               ),
             ),
         ],

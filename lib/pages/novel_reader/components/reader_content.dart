@@ -9,6 +9,8 @@ import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 final _logger = Loggers(name: '阅读器');
 
@@ -506,7 +508,7 @@ class _ReaderContentState extends State<ReaderContent> {
                             _showPlainTextMode = !_showPlainTextMode;
                           });
                         },
-                        icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
+                        icon: DrawIcon(_showPlainTextMode ? StrokeIcons.visibility : StrokeIcons.code),
                         label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
                       ),
                       if (kDebugMode) SizedBox(width: AppTheme.metrics.kSpace8),
@@ -518,7 +520,7 @@ class _ReaderContentState extends State<ReaderContent> {
                             });
                             _logger.info('[Reader][PlainDebug] forced plain mode by debug button');
                           },
-                          icon: const Icon(Icons.bug_report),
+                          icon: DrawIcon(StrokeIcons.bugReport),
                           label: const Text('强制纯文本'),
                         ),
                     ],
@@ -869,7 +871,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     if (controller.hasPreviousChapter())
                       TextButton.icon(
                         onPressed: controller.previousChapter,
-                        icon: const Icon(Icons.chevron_left),
+                        icon: DrawIcon(StrokeIcons.chevronLeft),
                         label: const Text('上一章'),
                       ),
                     if (controller.hasPreviousChapter() && controller.hasNextChapter())
@@ -877,7 +879,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     if (controller.hasNextChapter())
                       TextButton.icon(
                         onPressed: controller.nextChapter,
-                        icon: const Icon(Icons.chevron_right),
+                        icon: DrawIcon(StrokeIcons.chevronRight),
                         label: const Text('下一章'),
                       ),
                   ],
@@ -988,7 +990,7 @@ class _ReaderContentState extends State<ReaderContent> {
                               _showPlainTextMode = !_showPlainTextMode;
                             });
                           },
-                          icon: Icon(_showPlainTextMode ? Icons.visibility : Icons.code),
+                          icon: DrawIcon(_showPlainTextMode ? StrokeIcons.visibility : StrokeIcons.code),
                           label: Text(_showPlainTextMode ? '显示 HTML 视图' : '显示纯文本（可选择）'),
                         ),
                       ],
@@ -1042,7 +1044,7 @@ class _ReaderContentState extends State<ReaderContent> {
                       if (controller.hasPreviousChapter())
                         TextButton.icon(
                           onPressed: controller.previousChapter,
-                          icon: const Icon(Icons.chevron_left),
+                          icon: DrawIcon(StrokeIcons.chevronLeft),
                           label: const Text('上一章'),
                         ),
                       if (controller.hasPreviousChapter() && controller.hasNextChapter())
@@ -1050,7 +1052,7 @@ class _ReaderContentState extends State<ReaderContent> {
                       if (controller.hasNextChapter())
                         TextButton.icon(
                           onPressed: controller.nextChapter,
-                          icon: const Icon(Icons.chevron_right),
+                          icon: DrawIcon(StrokeIcons.chevronRight),
                           label: const Text('下一章'),
                         ),
                     ],
@@ -1844,8 +1846,7 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
                   right: AppTheme.metrics.kSpace4,
                   top: AppTheme.metrics.kSpace2,
                 ),
-                child: Icon(
-                  Icons.refresh,
+                child: DrawIcon(StrokeIcons.refresh,
                   size: widget.fontSize * 0.9,
                   color: _isHovering ? const Color(0xFF007AFF) : Colors.grey,
                 ),

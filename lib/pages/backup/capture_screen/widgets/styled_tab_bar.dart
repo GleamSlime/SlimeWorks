@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
 
 class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
   final TabController controller;
@@ -46,7 +48,7 @@ class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(tab.icon, size: AppTheme.metrics.iconSize20),
+            DrawIcon(tab.icon, size: AppTheme.metrics.iconSize20),
             SizedBox(width: AppTheme.metrics.kSpace8),
             Text(tab.label, style: TextStyle(fontSize: AppTheme.metrics.fontSize13, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface)),
             if (tab.badge != null) ...[
@@ -68,7 +70,7 @@ class StyledTabBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class StyledTab {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final int? badge;
   final Color? badgeColor;

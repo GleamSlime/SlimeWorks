@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ncm_decrypt_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class NcmFolderPickerDialog extends StatefulWidget {
   const NcmFolderPickerDialog({super.key});
@@ -48,7 +50,7 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
                 SizedBox(width: m.kSpace8),
                 OutlinedButton.icon(
                   onPressed: _isScanning ? null : _pickFolder,
-                  icon: Icon(Icons.folder_open, size: m.iconSize18),
+                  icon: DrawIcon(StrokeIcons.folderOpen, size: m.iconSize18),
                   label: const Text('浏览'),
                 ),
               ],
@@ -101,7 +103,7 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
                       padding: EdgeInsets.symmetric(vertical: m.kSpace2),
                       child: Row(
                         children: [
-                          Icon(Icons.audio_file, size: m.iconSize16, color: theme.hintColor),
+                          DrawIcon(StrokeIcons.audioFile, size: m.iconSize16, color: theme.hintColor),
                           SizedBox(width: m.kSpace8),
                           Expanded(
                             child: Text(

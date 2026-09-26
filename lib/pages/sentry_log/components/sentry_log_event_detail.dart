@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class SentryLogEventDetail extends StatelessWidget {
   final Map<String, dynamic> event;
@@ -43,7 +46,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.bug_report_rounded,
+                        StrokeIcons.bugReport,
                         '异常信息',
                         const Color(0xFFE53935),
                       ),
@@ -55,7 +58,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.timeline_rounded,
+                        StrokeIcons.timeline,
                         '面包屑',
                         const Color(0xFF1E88E5),
                       ),
@@ -67,7 +70,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.label_rounded,
+                        StrokeIcons.label,
                         '标签',
                         const Color(0xFFFB8C00),
                       ),
@@ -79,7 +82,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.data_object_rounded,
+                        StrokeIcons.dataObject,
                         '额外数据',
                         const Color(0xFF43A047),
                       ),
@@ -91,7 +94,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.person_rounded,
+                        StrokeIcons.person,
                         '用户信息',
                         const Color(0xFF8E24AA),
                       ),
@@ -103,7 +106,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.http_rounded,
+                        StrokeIcons.http,
                         '请求信息',
                         const Color(0xFF00897B),
                       ),
@@ -115,7 +118,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       _buildSectionTitle(
                         theme,
                         m,
-                        Icons.devices_rounded,
+                        StrokeIcons.devices,
                         '上下文',
                         const Color(0xFF546E7A),
                       ),
@@ -126,7 +129,7 @@ class SentryLogEventDetail extends StatelessWidget {
                     _buildSectionTitle(
                       theme,
                       m,
-                      Icons.code_rounded,
+                      StrokeIcons.code,
                       '原始数据',
                       theme.colorScheme.primary,
                     ),
@@ -173,7 +176,7 @@ class SentryLogEventDetail extends StatelessWidget {
               borderRadius: m.radius8,
               border: Border.all(color: levelColor.withAlpha(50), width: 0.5),
             ),
-            child: Icon(_getLevelIcon(level), color: levelColor, size: m.iconSize18),
+            child: DrawIcon(_getLevelIcon(level), color: levelColor, size: m.iconSize18),
           ),
           SizedBox(width: m.kSpace12),
           Expanded(
@@ -216,7 +219,7 @@ class SentryLogEventDetail extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: Icon(Icons.close_rounded, size: m.iconSize20, color: theme.hintColor),
+            icon: DrawIcon(StrokeIcons.close, size: m.iconSize20, color: theme.hintColor),
             onPressed: () => Navigator.pop(context),
             visualDensity: VisualDensity.compact,
           ),
@@ -228,13 +231,13 @@ class SentryLogEventDetail extends StatelessWidget {
   Widget _buildSectionTitle(
     ThemeData theme,
     ThemeMetrics m,
-    IconData icon,
+    StrokeIcon icon,
     String title,
     Color color,
   ) {
     return Row(
       children: [
-        Icon(icon, size: m.iconSize14, color: color),
+        DrawIcon(icon, size: m.iconSize14, color: color),
         SizedBox(width: m.kSpace6),
         Text(
           title,
@@ -439,7 +442,7 @@ class SentryLogEventDetail extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(_getBreadcrumbIcon(type), size: m.iconSize12, color: theme.hintColor),
+                DrawIcon(_getBreadcrumbIcon(type), size: m.iconSize12, color: theme.hintColor),
                 SizedBox(width: m.kSpace6),
                 Expanded(
                   child: Column(
@@ -555,7 +558,7 @@ class SentryLogEventDetail extends StatelessWidget {
           CircleAvatar(
             radius: m.kSpace16,
             backgroundColor: const Color(0xFF8E24AA).withAlpha(25),
-            child: Icon(Icons.person_rounded, size: m.iconSize16, color: const Color(0xFF8E24AA)),
+            child: DrawIcon(StrokeIcons.person, size: m.iconSize16, color: const Color(0xFF8E24AA)),
           ),
           SizedBox(width: m.kSpace12),
           Expanded(
@@ -686,8 +689,7 @@ class SentryLogEventDetail extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.copy_rounded,
+                        DrawIcon(StrokeIcons.copy,
                           size: m.iconSize12,
                           color: theme.colorScheme.primary,
                         ),
@@ -760,35 +762,35 @@ class SentryLogEventDetail extends StatelessWidget {
     return '未知事件';
   }
 
-  IconData _getLevelIcon(String level) {
+  StrokeIcon _getLevelIcon(String level) {
     switch (level.toLowerCase()) {
       case 'fatal':
-        return Icons.new_releases_rounded;
+        return StrokeIcons.newReleases;
       case 'error':
-        return Icons.error_rounded;
+        return StrokeIcons.error;
       case 'warning':
-        return Icons.warning_rounded;
+        return StrokeIcons.warning;
       case 'info':
-        return Icons.info_rounded;
+        return StrokeIcons.info;
       case 'debug':
-        return Icons.bug_report_rounded;
+        return StrokeIcons.bugReport;
       default:
-        return Icons.info_rounded;
+        return StrokeIcons.info;
     }
   }
 
-  IconData _getBreadcrumbIcon(String type) {
+  StrokeIcon _getBreadcrumbIcon(String type) {
     switch (type) {
       case 'navigation':
-        return Icons.navigation_rounded;
+        return StrokeIcons.navigation;
       case 'http':
-        return Icons.http_rounded;
+        return StrokeIcons.http;
       case 'console':
-        return Icons.terminal_rounded;
+        return StrokeIcons.terminal;
       case 'user':
-        return Icons.touch_app_rounded;
+        return StrokeIcons.touchApp;
       default:
-        return Icons.circle_rounded;
+        return StrokeIcons.circle;
     }
   }
 }

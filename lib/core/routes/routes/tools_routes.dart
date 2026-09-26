@@ -50,7 +50,7 @@ class SentryLogRoute extends AppRouteData with $SentryLogRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuLog;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuLog;
 
   @override
   String get sidebarGroupId => 'tools';
@@ -79,7 +79,7 @@ class AliyunDdnsRoute extends AppRouteData with $AliyunDdnsRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuAli;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuAli;
 
   @override
   String get sidebarGroupId => 'tools';
@@ -142,7 +142,7 @@ class ToolsRoute extends AppRouteData with $ToolsRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuTools;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuTools;
 
   @override
   String get sidebarGroupId => 'tools';
@@ -169,7 +169,7 @@ class NcmDecryptRoute extends AppRouteData with $NcmDecryptRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuTools;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuTools;
 
   @override
   String get sidebarGroupId => 'tools';
@@ -198,7 +198,7 @@ class PowerStatsRoute extends AppRouteData with $PowerStatsRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuBill;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuBill;
 
   @override
   String get sidebarGroupId => 'tools';

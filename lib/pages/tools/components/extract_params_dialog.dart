@@ -7,6 +7,8 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/pages/tools/components/extract_card.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class ExtractParamsDialog extends StatefulWidget {
   const ExtractParamsDialog({super.key});
@@ -163,8 +165,8 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
         ),
         child: Row(
           children: [
-            Icon(
-              isDragging ? Icons.folder_open_outlined : Icons.folder_outlined,
+            DrawIcon(
+              isDragging ? StrokeIcons.folderOpen : StrokeIcons.folder,
               size: m.iconSize18,
               color: isDragging ? theme.colorScheme.primary : theme.hintColor,
             ),
@@ -266,7 +268,7 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
       decoration: InputDecoration(
         hintText: '输入解压密码（可选）',
         suffixIcon: PopupMenuButton<String>(
-          icon: Icon(Icons.vpn_key_outlined, size: AppTheme.metrics.iconSize18),
+          icon: DrawIcon(StrokeIcons.vpnKey, size: AppTheme.metrics.iconSize18),
           itemBuilder: (_) => service.passwords.isEmpty
               ? [const PopupMenuItem(value: '', child: Text('暂无保存的密码'))]
               : service.passwords
@@ -324,8 +326,8 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
         ),
         child: Row(
           children: [
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+            DrawIcon(
+              isSelected ? StrokeIcons.radioButtonChecked : StrokeIcons.radioButtonUnchecked,
               size: m.iconSize18,
               color: isSelected ? theme.colorScheme.primary : theme.hintColor,
             ),

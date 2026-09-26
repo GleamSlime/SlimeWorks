@@ -13,6 +13,8 @@ import 'package:slime_works/pages/collection/library/components/library_book_inf
 import 'package:slime_works/pages/collection/library/components/remote_novel_reader_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class LibraryBookCard extends StatefulWidget {
   final NovelMetadata metadata;
@@ -78,33 +80,33 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         GlassMenuItem<String>(
           value: 'info',
           label: '书籍信息',
-          icon: Icons.info_outline_rounded,
+          icon: StrokeIcons.infoOutline,
         ),
         GlassMenuItem<String>(
           value: 'rename',
           label: '重命名',
-          icon: Icons.edit_outlined,
+          icon: StrokeIcons.edit,
         ),
         GlassMenuItem<String>(
           value: 'cover',
           label: '编辑封面',
-          icon: Icons.image_outlined,
+          icon: StrokeIcons.image,
         ),
         GlassMenuItem<String>(
           value: 'favorite',
           label: meta.isFavorite ? '取消收藏' : '加入收藏',
-          icon: meta.isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+          icon: meta.isFavorite ? StrokeIcons.star : StrokeIcons.starBorder,
         ),
         GlassMenuItem<String>(
           value: 'move',
           label: '移动到文件夹',
-          icon: Icons.drive_file_move_rounded,
+          icon: StrokeIcons.driveFileMove,
         ),
         const PopupMenuDivider(),
         GlassMenuItem<String>(
           value: 'delete',
           label: '删除',
-          icon: Icons.delete_outline_rounded,
+          icon: StrokeIcons.deleteOutline,
           destructive: true,
         ),
       ],
@@ -197,7 +199,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
               onPressed: () => Navigator.of(ctx2).pop('__ROOT__'),
               child: Row(
                 children: [
-                  const Icon(Icons.home_outlined),
+                  DrawIcon(StrokeIcons.home),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   const Text('移回根目录'),
                 ],
@@ -210,7 +212,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                   onPressed: () => Navigator.of(ctx2).pop(f.id),
                   child: Row(
                     children: [
-                      const Icon(Icons.folder_outlined),
+                      DrawIcon(StrokeIcons.folder),
                       SizedBox(width: AppTheme.metrics.kSpace8),
                       Text(f.name),
                     ],
@@ -454,10 +456,10 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   color: _hovering
                                       ? Colors.black.withAlpha(150)
                                       : Colors.transparent,
-                                  child: Icon(
+                                  child: DrawIcon(
                                     widget.metadata.isFavorite
-                                        ? Icons.star_sharp
-                                        : Icons.star_border_sharp,
+                                        ? StrokeIcons.star
+                                        : StrokeIcons.starBorder,
                                     color: widget.metadata.isFavorite
                                         ? Colors.amber
                                         : Colors.white70,
@@ -731,8 +733,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                     border: Border.all(color: Colors.white, width: 2),
                                   ),
                                   child: widget.isSelected
-                                      ? Icon(
-                                          Icons.check,
+                                      ? DrawIcon(StrokeIcons.check,
                                           size: appMetrics.fontSize13,
                                           color: Colors.white,
                                         )
@@ -851,8 +852,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                     color: Colors.black.withAlpha(120),
                     borderRadius: AppTheme.metrics.radius999,
                   ),
-                  child: Icon(
-                    Icons.lock_outline,
+                  child: DrawIcon(StrokeIcons.lockOutline,
                     size: AppTheme.metrics.iconSize16,
                     color: Colors.white70,
                   ),
@@ -873,7 +873,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
       child: Container(
         color: Theme.of(context).colorScheme.outline,
         child: Center(
-          child: Icon(Icons.book, size: scaleW(40), color: Colors.white70),
+          child: DrawIcon(StrokeIcons.book, size: scaleW(40), color: Colors.white70),
         ),
       ),
     );

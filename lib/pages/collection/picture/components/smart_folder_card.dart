@@ -10,6 +10,8 @@ import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class SmartFolderCard extends StatelessWidget {
   const SmartFolderCard({
@@ -63,32 +65,32 @@ class SmartFolderCard extends StatelessWidget {
           GlassMenuItem<String>(
             value: 'rename',
             label: '重命名',
-            icon: Icons.drive_file_rename_outline_rounded,
+            icon: StrokeIcons.driveFileRenameOutline,
           ),
         if (onEdit != null)
           GlassMenuItem<String>(
             value: 'edit',
             label: '编辑智能文件夹',
-            icon: Icons.auto_awesome_rounded,
+            icon: StrokeIcons.autoAwesome,
           ),
         if (onTransfer != null)
           GlassMenuItem<String>(
             value: 'transfer',
             label: '转移集合到...',
-            icon: Icons.drive_folder_upload_rounded,
+            icon: StrokeIcons.driveFolderUpload,
           ),
         if (PlatformUtil.isMobile)
           GlassMenuItem<String>(
             value: 'select',
             label: '进入多选',
-            icon: Icons.checklist_rounded,
+            icon: StrokeIcons.checklist,
           ),
         if (onDelete != null) ...[
           const PopupMenuDivider(),
           GlassMenuItem<String>(
             value: 'delete',
             label: '删除智能文件夹',
-            icon: Icons.delete_outline_rounded,
+            icon: StrokeIcons.deleteOutline,
             destructive: true,
           ),
         ],
@@ -201,8 +203,7 @@ class SmartFolderCard extends StatelessWidget {
                                 color: Colors.black.withAlpha(120),
                                 borderRadius: AppTheme.metrics.radius999,
                               ),
-                              child: Icon(
-                                Icons.lock_outline,
+                              child: DrawIcon(StrokeIcons.lockOutline,
                                 size: AppTheme.metrics.iconSize16,
                                 color: Colors.white70,
                               ),
@@ -226,8 +227,7 @@ class SmartFolderCard extends StatelessWidget {
                   );
                 }
                 return Center(
-                  child: Icon(
-                    Icons.auto_awesome_outlined,
+                  child: DrawIcon(StrokeIcons.autoAwesome,
                     size: scaleW(54),
                     color: theme.colorScheme.tertiary.withAlpha(180),
                   ),
@@ -329,8 +329,7 @@ class SmartFolderCard extends StatelessWidget {
                           SizedBox(height: appMetrics.kSpace4),
                           Row(
                             children: [
-                              Icon(
-                                Icons.auto_awesome_outlined,
+                              DrawIcon(StrokeIcons.autoAwesome,
                                 size: scaleW(12),
                                 color: Colors.white.withAlpha(180),
                               ),
@@ -345,8 +344,7 @@ class SmartFolderCard extends StatelessWidget {
                               ),
                               if (smartFolder.regexPattern.isNotEmpty) ...[
                                 SizedBox(width: appMetrics.kSpace8),
-                                Icon(
-                                  Icons.code_rounded,
+                                DrawIcon(StrokeIcons.code,
                                   size: scaleW(12),
                                   color: Colors.white.withAlpha(180),
                                 ),
@@ -398,8 +396,7 @@ class _SmartPlaceholder extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Icon(
-          Icons.auto_awesome_outlined,
+        child: DrawIcon(StrokeIcons.autoAwesome,
           size: AppTheme.metrics.iconSize48,
           color: theme.colorScheme.tertiary.withAlpha(150),
         ),

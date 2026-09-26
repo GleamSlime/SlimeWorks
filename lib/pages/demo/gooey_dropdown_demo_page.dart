@@ -2,6 +2,9 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/dropdown/gooey_dropdown_shader.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// GooeyDropdownShader 使用示例页面
 class GooeyDropdownDemoPage extends StatelessWidget {
@@ -28,7 +31,7 @@ class GooeyDropdownDemoPage extends StatelessWidget {
                   borderRadius: AppTheme.metrics.radius25,
                   boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
                 ),
-                child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+                child: DrawIcon(StrokeIcons.chatBubbleOutline, color: Colors.white),
               ),
               cardOffset: 30,
               direction: DropdownDirection.left,
@@ -41,7 +44,7 @@ class GooeyDropdownDemoPage extends StatelessWidget {
 
             // 示例2：自定义样式
             GooeyDropdownShader(
-              button: const Icon(Icons.menu, color: Colors.white),
+              button: DrawIcon(StrokeIcons.menu, color: Colors.white),
               content: const _MenuContent(),
               buttonSize: const Size(48, 48),
               cardSize: const Size(280, 240),
@@ -104,9 +107,9 @@ class _MessageContent extends StatelessWidget {
             style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize15, fontWeight: FontWeight.bold, decoration: TextDecoration.none),
           ),
           SizedBox(height: AppTheme.metrics.kSpace8),
-          const _MessageRow(avatar: Icons.person, name: 'Alice', message: 'Hey, how are you?'),
-          const _MessageRow(avatar: Icons.person_outline, name: 'Bob', message: 'Meeting at 3pm'),
-          const _MessageRow(avatar: Icons.group, name: 'Team Chat', message: 'New updates available'),
+          const _MessageRow(avatar: StrokeIcons.person, name: 'Alice', message: 'Hey, how are you?'),
+          const _MessageRow(avatar: StrokeIcons.personOutline, name: 'Bob', message: 'Meeting at 3pm'),
+          const _MessageRow(avatar: StrokeIcons.group, name: 'Team Chat', message: 'New updates available'),
         ],
       ),
     );
@@ -114,7 +117,7 @@ class _MessageContent extends StatelessWidget {
 }
 
 class _MessageRow extends StatelessWidget {
-  final IconData avatar;
+  final StrokeIcon avatar;
   final String name;
   final String message;
 
@@ -132,7 +135,7 @@ class _MessageRow extends StatelessWidget {
             CircleAvatar(
               radius: 16,
               backgroundColor: Colors.white24,
-              child: Icon(avatar, size: AppTheme.metrics.iconSize18, color: Colors.white),
+              child: DrawIcon(avatar, size: AppTheme.metrics.iconSize18, color: Colors.white),
             ),
             SizedBox(width: AppTheme.metrics.kSpace10),
             SizedBox(
@@ -172,10 +175,10 @@ class _MenuContent extends StatelessWidget {
       color: Colors.transparent,
       child: Column(
         children: [
-          _MenuItem(icon: Icons.settings, label: 'Settings'),
-          _MenuItem(icon: Icons.person, label: 'Profile'),
-          _MenuItem(icon: Icons.help, label: 'Help'),
-          _MenuItem(icon: Icons.logout, label: 'Logout'),
+          _MenuItem(icon: StrokeIcons.settings, label: 'Settings'),
+          _MenuItem(icon: StrokeIcons.person, label: 'Profile'),
+          _MenuItem(icon: StrokeIcons.help, label: 'Help'),
+          _MenuItem(icon: StrokeIcons.logout, label: 'Logout'),
         ],
       ),
     );
@@ -183,7 +186,7 @@ class _MenuContent extends StatelessWidget {
 }
 
 class _MenuItem extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
 
   const _MenuItem({required this.icon, required this.label});
@@ -199,7 +202,7 @@ class _MenuItem extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize20),
+              DrawIcon(icon, color: Colors.white, size: AppTheme.metrics.iconSize20),
               SizedBox(width: AppTheme.metrics.kSpace12),
               SizedBox(
                 width: 140,

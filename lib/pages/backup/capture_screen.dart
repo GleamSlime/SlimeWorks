@@ -12,6 +12,9 @@ import 'package:slime_works/pages/backup/capture_screen/models/recording_task.da
 import 'package:slime_works/pages/backup/capture_screen/widgets/dialogs.dart';
 import 'package:slime_works/pages/backup/capture_screen/widgets/list_builders.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 const Loggers _logger = Loggers(name: '截图');
 
 /// 数据捕获页面
@@ -495,8 +498,8 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            _isCertInstalled ? Icons.verified : Icons.warning_amber,
+                          DrawIcon(
+                            _isCertInstalled ? StrokeIcons.verified : StrokeIcons.warningAmber,
                             size: AppTheme.metrics.iconSize16,
                             color: _isCertInstalled ? Colors.green : Colors.orange,
                           ),
@@ -522,7 +525,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                   children: [
                     // 刷新按钮
                     IconButton.outlined(
-                      icon: const Icon(Icons.refresh),
+                      icon: DrawIcon(StrokeIcons.refresh),
                       onPressed: () async {
                         await _loadCapturedData();
                         _checkCertificateStatus();
@@ -534,7 +537,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
 
                     // 清除按钮
                     IconButton.outlined(
-                      icon: const Icon(Icons.delete_outline),
+                      icon: DrawIcon(StrokeIcons.deleteOutline),
                       onPressed: _clearData,
                       tooltip: '清除所有数据',
                     ),
@@ -545,7 +548,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                     if (!_isCertInstalled)
                       FilledButton.tonalIcon(
                         onPressed: _installCertificate,
-                        icon: const Icon(Icons.security),
+                        icon: DrawIcon(StrokeIcons.security),
                         label: const Text('安装CA证书'),
                         style: FilledButton.styleFrom(
                           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20, vertical: AppTheme.metrics.kSpace16),
@@ -557,7 +560,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                     // 开始/停止按钮
                     FilledButton.tonalIcon(
                       onPressed: _toggleCapture,
-                      icon: Icon(_isCapturing ? Icons.stop : Icons.play_arrow),
+                      icon: DrawIcon(_isCapturing ? StrokeIcons.stop : StrokeIcons.playArrow),
                       label: Text(_isCapturing ? '停止捕获' : '开始捕获'),
                       style: FilledButton.styleFrom(
                         backgroundColor: _isCapturing ? Colors.red : Colors.green,
@@ -585,7 +588,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(Icons.settings_ethernet, size: AppTheme.metrics.iconSize20),
+                        DrawIcon(StrokeIcons.settingsEthernet, size: AppTheme.metrics.iconSize20),
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         const Text('代理端口:'),
                         SizedBox(width: AppTheme.metrics.kSpace12),
@@ -618,7 +621,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(Icons.video_settings, size: AppTheme.metrics.iconSize20),
+                        DrawIcon(StrokeIcons.videoSettings, size: AppTheme.metrics.iconSize20),
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         const Text('录制格式:'),
                         SizedBox(width: AppTheme.metrics.kSpace12),
@@ -666,11 +669,11 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         controller: _tabController,
         isScrollable: false,
         tabs: const [
-          Tab(icon: Icon(Icons.file_download), text: '捕获列表'),
-          Tab(icon: Icon(Icons.video_library), text: '录制管理'),
-          Tab(icon: Icon(Icons.video_collection), text: '视频'),
-          Tab(icon: Icon(Icons.image), text: '图片'),
-          Tab(icon: Icon(Icons.code), text: '脚本'),
+          Tab(icon: DrawIcon(StrokeIcons.fileDownload), text: '捕获列表'),
+          Tab(icon: DrawIcon(StrokeIcons.videoLibrary), text: '录制管理'),
+          Tab(icon: DrawIcon(StrokeIcons.videoCollection), text: '视频'),
+          Tab(icon: DrawIcon(StrokeIcons.image), text: '图片'),
+          Tab(icon: DrawIcon(StrokeIcons.code), text: '脚本'),
         ],
       ),
     );
@@ -709,10 +712,10 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                     }
                   });
                 },
-                icon: Icon(
+                icon: DrawIcon(
                   _availableVideos.every((v) => v.isSelected)
-                      ? Icons.check_box
-                      : Icons.check_box_outline_blank,
+                      ? StrokeIcons.checkBox
+                      : StrokeIcons.checkBoxOutlineBlank,
                 ),
                 label: Text(_availableVideos.every((v) => v.isSelected) ? '取消全选' : '全选'),
               ),
@@ -722,7 +725,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
               // 开始录制按钮
               FilledButton.icon(
                 onPressed: _availableVideos.any((v) => v.isSelected) ? _startRecording : null,
-                icon: const Icon(Icons.fiber_manual_record),
+                icon: DrawIcon(StrokeIcons.fiberManualRecord),
                 label: const Text('开始录制'),
                 style: FilledButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.error,
@@ -736,7 +739,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         // 视频列表
         Expanded(
           child: _availableVideos.isEmpty
-              ? _buildEmptyState('暂无捕获到的视频流', Icons.videocam_off)
+              ? _buildEmptyState('暂无捕获到的视频流', StrokeIcons.videocamOff)
               : ListView.builder(
                   padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                   itemCount: _availableVideos.length,
@@ -790,10 +793,10 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                           File(video.thumbnail),
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return Icon(Icons.videocam, size: AppTheme.metrics.iconSize32);
+                            return DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32);
                           },
                         )
-                      : Icon(Icons.videocam, size: AppTheme.metrics.iconSize32),
+                      : DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32),
                 ),
               ),
 
@@ -818,19 +821,19 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       runSpacing: 4,
                       children: [
                         InfoChip(
-                          icon: Icons.aspect_ratio,
+                          icon: StrokeIcons.aspectRatio,
                           label: video.resolution,
                           color: Colors.blue,
                         ),
                         InfoChip(
-                          icon: Icons.speed,
+                          icon: StrokeIcons.speed,
                           label: video.frameRate,
                           color: (Theme.of(context).brightness == Brightness.dark)
                               ? DarkColors.success
                               : LightColors.success,
                         ),
                         InfoChip(
-                          icon: Icons.signal_cellular_alt,
+                          icon: StrokeIcons.signalCellularAlt,
                           label: video.bitrate,
                           color: Colors.orange,
                         ),
@@ -853,7 +856,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
 
               // 操作按钮
               IconButton(
-                icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
+                icon: DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize20),
                 onPressed: () => _copyToClipboard(video.url),
                 tooltip: '复制链接',
               ),
@@ -890,7 +893,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       color: (Theme.of(context).brightness == Brightness.dark)
                           ? DarkColors.success
                           : LightColors.success,
-                      icon: Icons.check_circle,
+                      icon: StrokeIcons.check,
                     ),
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace12),
@@ -899,7 +902,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       label: '录制异常',
                       value: _errorCount.toString(),
                       color: Theme.of(context).colorScheme.error,
-                      icon: Icons.error,
+                      icon: StrokeIcons.error,
                     ),
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace12),
@@ -908,7 +911,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       label: '录制中',
                       value: _recordingCount.toString(),
                       color: Colors.orange,
-                      icon: Icons.fiber_manual_record,
+                      icon: StrokeIcons.fiberManualRecord,
                     ),
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace12),
@@ -917,7 +920,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       label: '录制大小',
                       value: '${(_totalRecordingSize / (1024 * 1024)).toStringAsFixed(1)} MB',
                       color: Colors.blue,
-                      icon: Icons.storage,
+                      icon: StrokeIcons.storage,
                     ),
                   ),
                 ],
@@ -927,7 +930,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                 SizedBox(height: AppTheme.metrics.kSpace12),
                 Row(
                   children: [
-                    Icon(Icons.info_outline, size: AppTheme.metrics.iconSize20, color: Colors.orange),
+                    DrawIcon(StrokeIcons.infoOutline, size: AppTheme.metrics.iconSize20, color: Colors.orange),
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     Text(
                       '已选择 ${_recordingTasks.where((t) => t.isSelected).length} 个任务',
@@ -936,7 +939,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                     const Spacer(),
                     FilledButton.icon(
                       onPressed: _batchDelete,
-                      icon: Icon(Icons.delete, size: AppTheme.metrics.iconSize18),
+                      icon: DrawIcon(StrokeIcons.delete, size: AppTheme.metrics.iconSize18),
                       label: const Text('批量删除'),
                       style: FilledButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.error,
@@ -953,7 +956,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
         // 录制任务列表
         Expanded(
           child: _recordingTasks.isEmpty
-              ? _buildEmptyState('暂无录制任务', Icons.videocam_off)
+              ? _buildEmptyState('暂无录制任务', StrokeIcons.videocamOff)
               : ListView.builder(
                   padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                   itemCount: _recordingTasks.length,
@@ -1010,10 +1013,10 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                               task.thumbnail,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
-                                return Icon(Icons.videocam, size: AppTheme.metrics.iconSize32);
+                                return DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32);
                               },
                             )
-                          : Icon(Icons.videocam, size: AppTheme.metrics.iconSize32),
+                          : DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32),
                     ),
                   ),
 
@@ -1026,8 +1029,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                           borderRadius: AppTheme.metrics.radius8,
                         ),
                         child: Center(
-                          child: Icon(
-                            Icons.fiber_manual_record,
+                          child: DrawIcon(StrokeIcons.fiberManualRecord,
                             color: Theme.of(context).colorScheme.error,
                             size: AppTheme.metrics.iconSize32,
                           ),
@@ -1070,19 +1072,19 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       runSpacing: 4,
                       children: [
                         InfoChip(
-                          icon: Icons.aspect_ratio,
+                          icon: StrokeIcons.aspectRatio,
                           label: task.resolution,
                           color: Colors.blue,
                         ),
                         InfoChip(
-                          icon: Icons.speed,
+                          icon: StrokeIcons.speed,
                           label: task.frameRate,
                           color: (Theme.of(context).brightness == Brightness.dark)
                               ? DarkColors.success
                               : LightColors.success,
                         ),
                         InfoChip(
-                          icon: Icons.signal_cellular_alt,
+                          icon: StrokeIcons.signalCellularAlt,
                           label: task.bitrate,
                           color: Colors.orange,
                         ),
@@ -1124,8 +1126,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                     if (task.status == RecordingStatus.completed) ...[
                       Row(
                         children: [
-                          Icon(
-                            Icons.access_time,
+                          DrawIcon(StrokeIcons.accessTime,
                             size: AppTheme.metrics.iconSize14,
                             color: Theme.of(context).colorScheme.outline,
                           ),
@@ -1138,8 +1139,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                             ),
                           ),
                           SizedBox(width: AppTheme.metrics.kSpace12),
-                          Icon(
-                            Icons.storage,
+                          DrawIcon(StrokeIcons.storage,
                             size: AppTheme.metrics.iconSize14,
                             color: Theme.of(context).colorScheme.outline,
                           ),
@@ -1152,8 +1152,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                             ),
                           ),
                           SizedBox(width: AppTheme.metrics.kSpace12),
-                          Icon(
-                            Icons.calendar_today,
+                          DrawIcon(StrokeIcons.calendarToday,
                             size: AppTheme.metrics.iconSize14,
                             color: Theme.of(context).colorScheme.outline,
                           ),
@@ -1182,8 +1181,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.error_outline,
+                            DrawIcon(StrokeIcons.errorOutline,
                               size: AppTheme.metrics.iconSize14,
                               color: Theme.of(context).colorScheme.error,
                             ),
@@ -1213,7 +1211,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
               Column(
                 children: [
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert),
+                    icon: DrawIcon(StrokeIcons.moreVert),
                     tooltip: '更多操作',
                     onSelected: (value) {
                       switch (value) {
@@ -1238,13 +1236,13 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                       PopupMenuItem(
                         value: 'edit',
                         child: Row(
-                          children: [Icon(Icons.edit, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('修改名称')],
+                          children: [DrawIcon(StrokeIcons.edit, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('修改名称')],
                         ),
                       ),
                       PopupMenuItem(
                         value: 'copy',
                         child: Row(
-                          children: [Icon(Icons.copy, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('复制链接')],
+                          children: [DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('复制链接')],
                         ),
                       ),
                       if (task.status == RecordingStatus.completed)
@@ -1252,7 +1250,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                           value: 'open',
                           child: Row(
                             children: [
-                              Icon(Icons.folder_open, size: AppTheme.metrics.iconSize18),
+                              DrawIcon(StrokeIcons.folderOpen, size: AppTheme.metrics.iconSize18),
                               SizedBox(width: AppTheme.metrics.kSpace8),
                               const Text('打开文件夹'),
                             ],
@@ -1264,7 +1262,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                           value: 'rerecord',
                           child: Row(
                             children: [
-                              Icon(Icons.refresh, size: AppTheme.metrics.iconSize18),
+                              DrawIcon(StrokeIcons.refresh, size: AppTheme.metrics.iconSize18),
                               SizedBox(width: AppTheme.metrics.kSpace8),
                               const Text('重新录制'),
                             ],
@@ -1275,8 +1273,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.delete,
+                            DrawIcon(StrokeIcons.delete,
                               size: AppTheme.metrics.iconSize18,
                               color: Theme.of(context).colorScheme.error,
                             ),
@@ -1302,28 +1299,28 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   /// 构建状态徽章组件
   Widget _buildStatusBadgeWidget(RecordingStatus status) {
     Color color;
-    IconData icon;
+    StrokeIcon icon;
     String text;
 
     switch (status) {
       case RecordingStatus.idle:
         color = Colors.grey;
-        icon = Icons.pending;
+        icon = StrokeIcons.pending;
         text = '待录制';
         break;
       case RecordingStatus.recording:
         color = Colors.orange;
-        icon = Icons.fiber_manual_record;
+        icon = StrokeIcons.fiberManualRecord;
         text = '录制中';
         break;
       case RecordingStatus.completed:
         color = Colors.green;
-        icon = Icons.check_circle;
+        icon = StrokeIcons.check;
         text = '已完成';
         break;
       case RecordingStatus.error:
         color = Colors.red;
-        icon = Icons.error;
+        icon = StrokeIcons.error;
         text = '录制异常';
         break;
     }
@@ -1336,9 +1333,9 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
     return _buildItemList(
       items: _videos,
       emptyMessage: '暂无捕获的视频链接',
-      emptyIcon: Icons.videocam_off,
+      emptyIcon: StrokeIcons.videocamOff,
       itemBuilder: (url) =>
-          _buildUrlCard(url: url, icon: Icons.video_library, color: Colors.purple),
+          _buildUrlCard(url: url, icon: StrokeIcons.videoLibrary, color: Colors.purple),
     );
   }
 
@@ -1347,8 +1344,8 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
     return _buildItemList(
       items: _images,
       emptyMessage: '暂无捕获的图片链接',
-      emptyIcon: Icons.image_not_supported,
-      itemBuilder: (url) => _buildUrlCard(url: url, icon: Icons.image, color: Colors.pink),
+      emptyIcon: StrokeIcons.imageNotSupported,
+      itemBuilder: (url) => _buildUrlCard(url: url, icon: StrokeIcons.image, color: Colors.pink),
     );
   }
 
@@ -1360,7 +1357,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
     ];
 
     return allScripts.isEmpty
-        ? _buildEmptyState('暂无捕获的脚本文件', Icons.code_off)
+        ? _buildEmptyState('暂无捕获的脚本文件', StrokeIcons.codeOff)
         : ListView.builder(
             padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
             itemCount: allScripts.length,
@@ -1371,7 +1368,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
               } else {
                 return _buildUrlCard(
                   url: script['data'] as String,
-                  icon: Icons.javascript,
+                  icon: StrokeIcons.javascript,
                   color: (Theme.of(context).brightness == Brightness.dark)
                       ? DarkColors.success
                       : LightColors.success,
@@ -1385,7 +1382,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   Widget _buildItemList({
     required List<String> items,
     required String emptyMessage,
-    required IconData emptyIcon,
+    required StrokeIcon emptyIcon,
     required Widget Function(String) itemBuilder,
   }) {
     if (items.isEmpty) {
@@ -1400,7 +1397,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   }
 
   /// 构建空状态组件
-  Widget _buildEmptyState(String message, IconData icon) {
+  Widget _buildEmptyState(String message, StrokeIcon icon) {
     return EmptyState(
       message: message,
       icon: icon,
@@ -1411,7 +1408,7 @@ class _CaptureScreenState extends State<CaptureScreen> with SingleTickerProvider
   }
 
   /// 构建URL卡片
-  Widget _buildUrlCard({required String url, required IconData icon, required Color color}) {
+  Widget _buildUrlCard({required String url, required StrokeIcon icon, required Color color}) {
     return UrlCard(url: url, icon: icon, color: color, onCopy: () => _copyToClipboard(url));
   }
 

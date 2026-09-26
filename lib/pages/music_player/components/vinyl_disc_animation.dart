@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 唱片本体的质感色
 ///
@@ -179,8 +181,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
   Widget _buildDefaultCover(double size) {
     return Container(
       color: _discPlaceholderColor,
-      child: Icon(
-        Icons.music_note_rounded,
+      child: DrawIcon(StrokeIcons.musicNote,
         size: size * 0.4,
         color: Colors.white.withValues(alpha: 0.5),
       ),

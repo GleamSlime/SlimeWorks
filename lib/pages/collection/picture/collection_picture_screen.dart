@@ -24,6 +24,8 @@ import 'package:slime_works/pages/collection/picture/components/media_selection_
 import 'package:slime_works/pages/collection/picture/components/picture_library_toolbar.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 const Loggers _logger = Loggers(name: '图片浏览');
 
@@ -241,7 +243,7 @@ class _CollectionPictureScreenState
             ? SizedBox(
                 width: AppTheme.metrics.kSpace48,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
+                  icon: DrawIcon(StrokeIcons.arrowBack),
                   onPressed: () {
                     if (inDetail) {
                       _exitCollection();
@@ -300,8 +302,7 @@ class _CollectionPictureScreenState
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.close_rounded,
+                  DrawIcon(StrokeIcons.close,
                     size: AppTheme.metrics.iconSize18,
                     color: scheme.onPrimaryContainer,
                   ),
@@ -494,8 +495,7 @@ class _CollectionPictureScreenState
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    Icons.folder_open_rounded,
+                                  DrawIcon(StrokeIcons.folderOpen,
                                     size: AppTheme.metrics.iconSize64,
                                     color: Theme.of(context).colorScheme.primary,
                                   ),
@@ -553,7 +553,7 @@ class _CollectionPictureScreenState
                   child: IgnorePointer(
                     ignoring: !showBack,
                     child: DesktopHeadToolsButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
+                      icon: DrawIcon(StrokeIcons.arrowBack),
                       size: AppTheme.metrics.kSpace40,
                       onTap: () {
                         if (_viewerActive) {
@@ -581,14 +581,13 @@ class _CollectionPictureScreenState
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.grid_view_rounded,
+                    DrawIcon(StrokeIcons.gridView,
                       size: scaleW(16),
                       color: Theme.of(context).hintColor,
                     ),
                     SizedBox(width: appMetrics.kSpace4),
                     IconButton(
-                      icon: const Icon(Icons.remove_rounded),
+                      icon: DrawIcon(StrokeIcons.remove),
                       iconSize: scaleW(16),
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
@@ -599,7 +598,7 @@ class _CollectionPictureScreenState
                     ),
                     Text('$_detailColumnCount 列', style: Theme.of(context).textTheme.bodySmall),
                     IconButton(
-                      icon: const Icon(Icons.add_rounded),
+                      icon: DrawIcon(StrokeIcons.add),
                       iconSize: scaleW(16),
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
@@ -617,7 +616,7 @@ class _CollectionPictureScreenState
                   icon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sort_rounded, size: scaleW(18)),
+                      DrawIcon(StrokeIcons.sort, size: scaleW(18)),
                       SizedBox(width: appMetrics.kSpace4),
                       ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: scaleW(72)),
@@ -705,7 +704,7 @@ class _CollectionPictureScreenState
                       icon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.sort_rounded, size: scaleW(18)),
+                          DrawIcon(StrokeIcons.sort, size: scaleW(18)),
                           SizedBox(width: appMetrics.kSpace4),
                           ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: scaleW(72)),
@@ -755,7 +754,7 @@ class _CollectionPictureScreenState
           ),
           // Regular folder trail
           for (int index = 0; index < trail.length; index++) ...[
-            Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+            DrawIcon(StrokeIcons.chevronRight, size: scaleW(18)),
             TextButton(
               onPressed: () => _enterFolder(trail[index].id),
               child: Text(trail[index].name),
@@ -763,16 +762,16 @@ class _CollectionPictureScreenState
           ],
           // 同名集合分组标题段（虚拟分组，面包屑末段，不可点击）
           if (viewModel.currentDupGroupTitle != null) ...[
-            Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+            DrawIcon(StrokeIcons.chevronRight, size: scaleW(18)),
             Text(viewModel.currentDupGroupTitle!, style: Theme.of(context).textTheme.labelMedium),
           ],
           // Smart folder in trail (always root-level, no further sub-path)
           if (smartFolder != null) ...[
-            Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+            DrawIcon(StrokeIcons.chevronRight, size: scaleW(18)),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.auto_awesome_outlined, size: scaleW(14)),
+                DrawIcon(StrokeIcons.autoAwesome, size: scaleW(14)),
                 SizedBox(width: appMetrics.kSpace4),
                 Text(smartFolder.name, style: Theme.of(context).textTheme.labelMedium),
               ],
@@ -959,7 +958,7 @@ class _CollectionPictureScreenState
                       Tooltip(
                         message: '浏览节点目录',
                         child: IconButton(
-                          icon: const Icon(Icons.folder_open_rounded),
+                          icon: DrawIcon(StrokeIcons.folderOpen),
                           onPressed: () async {
                             final currentPath = controller.text.trim();
                             final picked = await showDialog<String>(
@@ -1668,8 +1667,7 @@ class _CollectionPictureScreenState
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox(width: AppTheme.metrics.kSpace16 * entry.$2),
-                          Icon(
-                            Icons.folder_rounded,
+                          DrawIcon(StrokeIcons.folder,
                             size: scaleW(16),
                             color: Theme.of(context).hintColor,
                           ),
@@ -1999,7 +1997,7 @@ class _KeywordInputListState extends State<_KeywordInputList> {
               for (int i = 0; i < widget.keywords.length; i++)
                 Chip(
                   label: Text(widget.keywords[i]),
-                  deleteIcon: Icon(Icons.close, size: AppTheme.metrics.iconSize16),
+                  deleteIcon: DrawIcon(StrokeIcons.close, size: AppTheme.metrics.iconSize16),
                   onDeleted: () => _removeKeyword(i),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2024,7 +2022,7 @@ class _KeywordInputListState extends State<_KeywordInputList> {
             ),
             SizedBox(width: appMetrics.kSpace4),
             IconButton(
-              icon: Icon(Icons.add_circle_outline, size: AppTheme.metrics.iconSize20),
+              icon: DrawIcon(StrokeIcons.addCircleOutline, size: AppTheme.metrics.iconSize20),
               onPressed: _addKeyword,
               padding: EdgeInsets.zero,
               constraints: BoxConstraints(

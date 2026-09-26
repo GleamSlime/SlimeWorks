@@ -6,6 +6,8 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GameCategoryDetailScreen extends BasePage<GameLibraryViewModel> {
   const GameCategoryDetailScreen({super.key, required this.categoryId});
@@ -35,7 +37,7 @@ class _GameCategoryDetailScreenState
       title: '分类详情',
       forceLocalChrome: true,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: DrawIcon(StrokeIcons.arrowBack),
         onPressed: () => context.pop(),
       ),
     );

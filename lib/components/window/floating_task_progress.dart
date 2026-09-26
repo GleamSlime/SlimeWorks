@@ -3,8 +3,11 @@ import 'package:get/get.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/widgets/glass_surface.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 应用边缘悬浮任务进度指示器
 ///
@@ -35,6 +38,7 @@ class FloatingTaskProgress extends StatelessWidget {
       }
 
       final progress = total == 0 ? 0.0 : completed / total;
+    final s = AppSemantic.of(context);
 
       return Positioned(
         right: AppTheme.metrics.kSpace16,
@@ -54,10 +58,9 @@ class FloatingTaskProgress extends StatelessWidget {
                 // 标题行
                 Row(
                   children: [
-                    Icon(
-                      Icons.record_voice_over_rounded,
+                    DrawIcon(StrokeIcons.recordVoiceOver,
                       size: 16,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: s.accent,
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace6),
                     Expanded(
@@ -71,7 +74,7 @@ class FloatingTaskProgress extends StatelessWidget {
                     Text(
                       '$completed/$total',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).hintColor,
+                            color: s.textTertiary,
                           ),
                     ),
                   ],
@@ -83,11 +86,9 @@ class FloatingTaskProgress extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: hasActive ? progress : 1.0,
                     minHeight: 4,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    backgroundColor: s.surfaceSunken,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      hasActive
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.green,
+                      hasActive ? s.accent : s.success.color,
                     ),
                   ),
                 ),
@@ -100,7 +101,7 @@ class FloatingTaskProgress extends StatelessWidget {
                         child: Text(
                           current.displayName,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).hintColor,
+                                color: s.textTertiary,
                               ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -112,7 +113,7 @@ class FloatingTaskProgress extends StatelessWidget {
                           return Text(
                             '${(p * 100).toStringAsFixed(0)}%',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
+                                  color: s.accent,
                                 ),
                           );
                         }
@@ -131,9 +132,9 @@ class FloatingTaskProgress extends StatelessWidget {
                           child: LinearProgressIndicator(
                             value: p,
                             minHeight: 2,
-                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            backgroundColor: s.surfaceSunken,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                              s.accent.withValues(alpha: 0.6),
                             ),
                           ),
                         ),
@@ -156,6 +157,7 @@ class FloatingTaskProgress extends StatelessWidget {
   }
 
   Widget _buildSummary(BuildContext context, List<TranscriptionTask> tasks) {
+    final s = AppSemantic.of(context);
     final completed = tasks.where((t) => t.state.value == TranscriptionTaskState.completed).length;
     final failed = tasks.where((t) => t.state.value == TranscriptionTaskState.failed).length;
 
@@ -165,7 +167,7 @@ class FloatingTaskProgress extends StatelessWidget {
           Text(
             '成功 $completed 首',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.green,
+                  color: s.success.color,
                 ),
           ),
         if (completed > 0 && failed > 0)
@@ -174,7 +176,7 @@ class FloatingTaskProgress extends StatelessWidget {
           Text(
             '失败 $failed 首',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
+                  color: s.danger.color,
                 ),
           ),
       ],

@@ -3,6 +3,9 @@ import 'package:slime_works/pages/backup/capture_screen/models/recording_task.da
 import 'package:slime_works/pages/backup/capture_screen/widgets/stat_widgets.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 录制任务卡片
 class RecordingTaskCard extends StatelessWidget {
@@ -99,10 +102,10 @@ class RecordingTaskCard extends StatelessWidget {
                     task.thumbnail,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return Icon(Icons.videocam, size: AppTheme.metrics.iconSize32);
+                      return DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32);
                     },
                   )
-                : Icon(Icons.videocam, size: AppTheme.metrics.iconSize32),
+                : DrawIcon(StrokeIcons.videocam, size: AppTheme.metrics.iconSize32),
           ),
         ),
         if (task.status == RecordingStatus.recording)
@@ -113,8 +116,7 @@ class RecordingTaskCard extends StatelessWidget {
                 borderRadius: AppTheme.metrics.radius8,
               ),
               child: Center(
-                child: Icon(
-                  Icons.fiber_manual_record,
+                child: DrawIcon(StrokeIcons.fiberManualRecord,
                   color: Theme.of(context).colorScheme.error,
                   size: AppTheme.metrics.iconSize32,
                 ),
@@ -151,15 +153,15 @@ class RecordingTaskCard extends StatelessWidget {
           spacing: 8,
           runSpacing: 4,
           children: [
-            InfoChip(icon: Icons.aspect_ratio, label: task.resolution, color: Colors.blue),
+            InfoChip(icon: StrokeIcons.aspectRatio, label: task.resolution, color: Colors.blue),
             InfoChip(
-              icon: Icons.speed,
+              icon: StrokeIcons.speed,
               label: task.frameRate,
               color: (Theme.of(context).brightness == Brightness.dark)
                   ? DarkColors.success
                   : LightColors.success,
             ),
-            InfoChip(icon: Icons.signal_cellular_alt, label: task.bitrate, color: Colors.orange),
+            InfoChip(icon: StrokeIcons.signalCellularAlt, label: task.bitrate, color: Colors.orange),
           ],
         ),
         SizedBox(height: AppTheme.metrics.kSpace8),
@@ -192,7 +194,7 @@ class RecordingTaskCard extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.access_time, size: AppTheme.metrics.iconSize14, color: Theme.of(context).colorScheme.outline),
+                  DrawIcon(StrokeIcons.accessTime, size: AppTheme.metrics.iconSize14, color: Theme.of(context).colorScheme.outline),
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   Text(
                     '时长: ${task.duration}',
@@ -203,7 +205,7 @@ class RecordingTaskCard extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.storage, size: AppTheme.metrics.iconSize14, color: Theme.of(context).colorScheme.outline),
+                  DrawIcon(StrokeIcons.storage, size: AppTheme.metrics.iconSize14, color: Theme.of(context).colorScheme.outline),
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   Text(
                     '大小: ${task.fileSizeStr}',
@@ -225,7 +227,7 @@ class RecordingTaskCard extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.error_outline, size: AppTheme.metrics.iconSize14, color: Theme.of(context).colorScheme.error),
+                DrawIcon(StrokeIcons.errorOutline, size: AppTheme.metrics.iconSize14, color: Theme.of(context).colorScheme.error),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Expanded(
                   child: Text(
@@ -245,7 +247,7 @@ class RecordingTaskCard extends StatelessWidget {
 
   Widget _buildActions(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert),
+      icon: DrawIcon(StrokeIcons.moreVert),
       tooltip: '更多操作',
       onSelected: (value) {
         switch (value) {
@@ -269,30 +271,30 @@ class RecordingTaskCard extends StatelessWidget {
       itemBuilder: (context) => [
         PopupMenuItem(
           value: 'edit',
-          child: Row(children: [Icon(Icons.edit, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('修改名称')]),
+          child: Row(children: [DrawIcon(StrokeIcons.edit, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('修改名称')]),
         ),
         PopupMenuItem(
           value: 'copy',
-          child: Row(children: [Icon(Icons.copy, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('复制链接')]),
+          child: Row(children: [DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('复制链接')]),
         ),
         if (task.status == RecordingStatus.completed)
           PopupMenuItem(
             value: 'open',
             child: Row(
-              children: [Icon(Icons.folder_open, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('打开文件夹')],
+              children: [DrawIcon(StrokeIcons.folderOpen, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('打开文件夹')],
             ),
           ),
         if (task.status == RecordingStatus.completed || task.status == RecordingStatus.error)
           PopupMenuItem(
             value: 'rerecord',
-            child: Row(children: [Icon(Icons.refresh, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('重新录制')]),
+            child: Row(children: [DrawIcon(StrokeIcons.refresh, size: AppTheme.metrics.iconSize18), SizedBox(width: AppTheme.metrics.kSpace8), const Text('重新录制')]),
           ),
         const PopupMenuDivider(),
         PopupMenuItem(
           value: 'delete',
           child: Row(
             children: [
-              Icon(Icons.delete, size: AppTheme.metrics.iconSize18, color: Theme.of(context).colorScheme.error),
+              DrawIcon(StrokeIcons.delete, size: AppTheme.metrics.iconSize18, color: Theme.of(context).colorScheme.error),
               SizedBox(width: AppTheme.metrics.kSpace8),
               Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
@@ -304,28 +306,28 @@ class RecordingTaskCard extends StatelessWidget {
 
   Widget _buildStatusBadge(RecordingStatus status, BuildContext context) {
     Color color;
-    IconData icon;
+    StrokeIcon icon;
     String text;
 
     switch (status) {
       case RecordingStatus.idle:
         color = Colors.grey;
-        icon = Icons.pending;
+        icon = StrokeIcons.pending;
         text = '待录制';
         break;
       case RecordingStatus.recording:
         color = Colors.orange;
-        icon = Icons.fiber_manual_record;
+        icon = StrokeIcons.fiberManualRecord;
         text = '录制中';
         break;
       case RecordingStatus.completed:
         color = Colors.green;
-        icon = Icons.check_circle;
+        icon = StrokeIcons.check;
         text = '已完成';
         break;
       case RecordingStatus.error:
         color = Colors.red;
-        icon = Icons.error;
+        icon = StrokeIcons.error;
         text = '录制异常';
         break;
     }
@@ -340,7 +342,7 @@ class RecordingTaskCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          DrawIcon(icon, size: AppTheme.metrics.iconSize14, color: color),
           SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             text,

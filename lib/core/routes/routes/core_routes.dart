@@ -10,7 +10,7 @@ class DashboardRoute extends AppRouteData with $DashboardRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuDistributed;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuDistributed;
 
   @override
   String get sidebarGroupId => 'core';
@@ -39,10 +39,13 @@ class AboutRoute extends AppRouteData with $AboutRoute {
       fontSize: AppTheme.metrics.fontSize10,
       color: Theme.of(context).colorScheme.tertiary,
     ),
+    // 侧栏行尾挂的是字号族内容，字号比例拉大后要能省略而不是顶破整行
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
   );
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuAbout;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuAbout;
 
   @override
   String get sidebarGroupId => 'bottom';
@@ -65,7 +68,7 @@ class SettingsRoute extends AppRouteData with $SettingsRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuSetting;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuSetting;
 
   @override
   String get sidebarGroupId => 'bottom';

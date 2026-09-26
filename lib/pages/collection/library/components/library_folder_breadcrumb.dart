@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 文件夹内导航面包屑
 class FolderBreadcrumb extends StatelessWidget {
@@ -23,8 +25,7 @@ class FolderBreadcrumb extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.chevron_left,
+                DrawIcon(StrokeIcons.chevronLeft,
                   size: appMetrics.fontSize18,
                   color: theme.colorScheme.primary,
                 ),
@@ -39,7 +40,7 @@ class FolderBreadcrumb extends StatelessWidget {
             ),
           ),
           SizedBox(width: appMetrics.kSpace8),
-          Icon(Icons.chevron_right, size: appMetrics.fontSize13, color: theme.hintColor),
+          DrawIcon(StrokeIcons.chevronRight, size: appMetrics.fontSize13, color: theme.hintColor),
           SizedBox(width: appMetrics.kSpace8),
           Text(
             folderName,

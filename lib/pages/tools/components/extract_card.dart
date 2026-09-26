@@ -4,6 +4,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/pages/tools/components/extract_params_dialog.dart';
 import 'package:slime_works/pages/tools/components/extract_progress_dialog.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class ExtractCard extends StatefulWidget {
   const ExtractCard({super.key});
@@ -35,8 +37,7 @@ class _ExtractCardState extends State<ExtractCard> {
                   color: theme.colorScheme.primary.withAlpha(25),
                   borderRadius: m.radius12,
                 ),
-                child: Icon(
-                  Icons.folder_zip_outlined,
+                child: DrawIcon(StrokeIcons.folderZip,
                   color: theme.colorScheme.primary,
                   size: m.iconSize24,
                 ),

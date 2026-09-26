@@ -12,6 +12,8 @@ import 'package:slime_works/pages/collection/picture/components/media_library_it
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder_card.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 媒体库浏览网格（首页 / 文件夹内列表）
 ///
@@ -431,8 +433,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
                     ).colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: appMetrics.radius16,
                   ),
-                  child: Icon(
-                    Icons.perm_media_outlined,
+                  child: DrawIcon(StrokeIcons.permMedia,
                     size: scaleW(36),
                     color: Theme.of(context).colorScheme.primary,
                   ),

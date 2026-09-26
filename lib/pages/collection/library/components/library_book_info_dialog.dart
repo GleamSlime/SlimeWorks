@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class LibraryBookInfoDialog extends StatefulWidget {
   final NovelMetadata metadata;
@@ -129,8 +131,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
             height: double.infinity,
           )
         : Center(
-            child: Icon(
-              Icons.menu_book_rounded,
+            child: DrawIcon(StrokeIcons.menuBook,
               size: AppTheme.metrics.iconSize64,
               color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
             ),
@@ -149,7 +150,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.edit, color: Colors.white, size: AppTheme.metrics.iconSize28),
+                    DrawIcon(StrokeIcons.edit, color: Colors.white, size: AppTheme.metrics.iconSize28),
                     SizedBox(height: AppTheme.metrics.kSpace4),
                     Text('更换封面', style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize11)),
                   ],
@@ -316,7 +317,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : Icon(Icons.save_rounded, size: AppTheme.metrics.iconSize16),
+                          : DrawIcon(StrokeIcons.save, size: AppTheme.metrics.iconSize16),
                       label: const Text('保存'),
                     ),
                   ] else ...[
@@ -327,7 +328,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     FilledButton.icon(
                       onPressed: () => setState(() => _editing = true),
-                      icon: Icon(Icons.edit_rounded, size: AppTheme.metrics.iconSize16),
+                      icon: DrawIcon(StrokeIcons.edit, size: AppTheme.metrics.iconSize16),
                       label: const Text('编辑'),
                     ),
                   ],

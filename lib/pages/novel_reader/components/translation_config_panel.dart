@@ -7,6 +7,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 翻译配置面板
 class TranslationConfigPanel extends StatefulWidget {
@@ -135,7 +137,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('翻译配置', style: Theme.of(context).textTheme.titleLarge),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
           SizedBox(height: appMetrics.spacingLarge),
@@ -232,7 +234,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
           Row(
             children: [
               TextButton.icon(
-                icon: const Icon(Icons.refresh),
+                icon: DrawIcon(StrokeIcons.refresh),
                 label: const Text('刷新模型列表'),
                 onPressed: _loadModels,
               ),

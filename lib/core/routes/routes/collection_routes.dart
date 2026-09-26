@@ -10,7 +10,7 @@ class CollectionLibraryRoute extends AppRouteData with $CollectionLibraryRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectLibrary;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectLibrary;
 
   @override
   String get sidebarGroupId => 'collection';
@@ -33,7 +33,7 @@ class CollectionPictureRoute extends AppRouteData with $CollectionPictureRoute {
   String get sidebarLabel => title;
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
 
   @override
   String get sidebarGroupId => 'collection';

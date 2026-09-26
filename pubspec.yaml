@@ -71,6 +71,7 @@ dependencies:
   # 图片相关
   cached_network_image: ^3.4.1 # 网络图片缓存
   flutter_svg: ^2.2.3 # SVG图片支持
+  path_drawing: ^1.0.1 # 描边图标：SVG path d 字符串 -> ui.Path
   desktop_drop: ^0.5.0 # 桌面端拖拽文件支持
   video_player: ^2.10.1 # 图片/视频预览（Android/iOS/macOS/Web）
   media_kit: ^1.2.6 # 跨平台视频播放（Windows/Linux + 全平台）
@@ -173,6 +174,17 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
   fonts:
+    # 界面主字体；静态字重比变量字体在各平台的取轴行为更确定
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
     - family: FZLanTingYuanS-EB-GB
       fonts:
         - asset: assets/fonts/FZLanTingYuanS-R-GB.ttf

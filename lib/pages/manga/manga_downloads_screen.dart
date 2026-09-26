@@ -14,6 +14,8 @@ import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_download_model.dart';
 import 'package:slime_works/pages/manga/view_models/manga_downloads_viewmodel.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MangaDownloadsScreen extends BasePage<MangaDownloadsViewModel> {
   const MangaDownloadsScreen({super.key});
@@ -37,7 +39,7 @@ class _MangaDownloadsScreenState
         title: '下载管理',
         forceLocalChrome: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: DrawIcon(StrokeIcons.arrowBack),
           onPressed: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
@@ -77,8 +79,7 @@ class _MangaDownloadsScreenState
                       color: theme.colorScheme.primary.withValues(alpha: 0.12),
                       borderRadius: AppTheme.metrics.radius16,
                     ),
-                    child: Icon(
-                      Icons.download_outlined,
+                    child: DrawIcon(StrokeIcons.download,
                       size: scaleW(36),
                       color: theme.colorScheme.primary,
                     ),
@@ -199,7 +200,7 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                           image: entry.thumb!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, e, _) =>
-                              Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize24),
+                              DrawIcon(StrokeIcons.brokenImage, size: AppTheme.metrics.iconSize24),
                         ),
                       ),
                     )
@@ -211,7 +212,7 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                         color: theme.colorScheme.surfaceContainerHighest,
                         borderRadius: AppTheme.metrics.radius6,
                       ),
-                      child: const Icon(Icons.image_outlined),
+                      child: DrawIcon(StrokeIcons.image),
                     ),
                   SizedBox(width: metrics.kSpace12),
 
@@ -249,15 +250,15 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                   Column(
                     children: [
                       IconButton(
-                        icon: Icon(
-                          _expanded ? Icons.expand_less : Icons.expand_more,
+                        icon: DrawIcon(
+                          _expanded ? StrokeIcons.expandLess : StrokeIcons.expandMore,
                           size: AppTheme.metrics.iconSize20,
                         ),
                         onPressed: () => setState(() => _expanded = !_expanded),
                         tooltip: '查看章节',
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize20),
+                        icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize20),
                         onPressed: widget.onDelete,
                         tooltip: '删除全部',
                       ),
@@ -319,8 +320,7 @@ class _EpsStatusChip extends StatelessWidget {
       case MangaDownloadStatus.completed:
         bgColor = Colors.green.withValues(alpha: 0.15);
         fgColor = Colors.green;
-        trailing = Icon(
-          Icons.play_circle_outline,
+        trailing = DrawIcon(StrokeIcons.playCircleOutline,
           size: AppTheme.metrics.iconSize13,
           color: (Theme.of(context).brightness == Brightness.dark)
               ? DarkColors.success
@@ -342,8 +342,7 @@ class _EpsStatusChip extends StatelessWidget {
         fgColor = Colors.red;
         trailing = GestureDetector(
           onTap: onRetry,
-          child: Icon(
-            Icons.refresh,
+          child: DrawIcon(StrokeIcons.refresh,
             size: AppTheme.metrics.iconSize12,
             color: theme.colorScheme.error,
           ),

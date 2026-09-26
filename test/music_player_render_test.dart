@@ -2,19 +2,17 @@
 @Tags(['golden'])
 library;
 
-import 'dart:io';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/music_player/components/music_list_item.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
+
+import 'helpers/page_golden.dart';
 
 /// 音乐播放器歌曲列表的离屏渲染
 ///
@@ -23,23 +21,8 @@ import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 /// MusicListItem 直接摆出来截图，悬停态也一起看。
 void main() {
   setUpAll(() async {
-    final fonts = <String, String>{
-      'FZLanTingYuanS-EB-GB': 'assets/fonts/FZLanTingYuanS-EB-GB.ttf',
-    };
-    final flutterRoot = Platform.environment['FLUTTER_ROOT'];
-    if (flutterRoot != null) {
-      fonts['MaterialIcons'] =
-          '$flutterRoot/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
-    }
-    for (final entry in fonts.entries) {
-      final file = File(entry.value);
-      if (!file.existsSync()) continue;
-      final bytes = file.readAsBytesSync();
-      final loader = FontLoader(
-        entry.key,
-      )..addFont(Future.value(ByteData.view(Uint8List.fromList(bytes).buffer)));
-      await loader.load();
-    }
+    // 中文、图标字形都要真字体才看得出对齐，铺垫统一走 helper
+    await loadAppFonts();
   });
 
   testWidgets('浅色歌曲列表', (tester) async {
@@ -89,8 +72,8 @@ Future<void> _renderList(
       builder: (context, _) {
         AppTheme.resetMetrics();
         final theme = dark
-            ? AppTheme.buildCustomDark(DarkColors.primary, 1.0)
-            : AppTheme.buildCustomLight(LightColors.primary, 1.0);
+            ? AppTheme.buildCustomDark(AppTheme.kFollowThemeAccent, 1.0)
+            : AppTheme.buildCustomLight(AppTheme.kFollowThemeAccent, 1.0);
         final semantic = dark ? AppSemantic.dark : AppSemantic.light;
         return MaterialApp(
           debugShowCheckedModeBanner: false,

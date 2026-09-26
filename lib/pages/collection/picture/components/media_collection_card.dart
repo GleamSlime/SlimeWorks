@@ -12,6 +12,9 @@ import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MediaCollectionCard extends StatefulWidget {
   const MediaCollectionCard({
@@ -180,10 +183,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
 
   Widget _buildCoverImage(String? src, ThemeData theme) {
     if (widget.isLost && src != null && src.isNotEmpty) {
-      return const _CollectionPlaceholder(icon: Icons.broken_image_outlined);
+      return const _CollectionPlaceholder(icon: StrokeIcons.brokenImage);
     }
     if (src == null || src.isEmpty) {
-      return const _CollectionPlaceholder(icon: Icons.collections_outlined);
+      return const _CollectionPlaceholder(icon: StrokeIcons.collections);
     }
     final cacheW = () {
       if (src.startsWith('http')) return null;
@@ -206,7 +209,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
             width: double.infinity,
             height: double.infinity,
             errorBuilder: (_, _, _) =>
-                const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+                const _CollectionPlaceholder(icon: StrokeIcons.brokenImage),
           )
         : Image.file(
             File(src),
@@ -215,7 +218,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
             height: double.infinity,
             cacheWidth: cacheW,
             errorBuilder: (_, _, _) =>
-                const _CollectionPlaceholder(icon: Icons.broken_image_outlined),
+                const _CollectionPlaceholder(icon: StrokeIcons.brokenImage),
           );
     Widget cover = Stack(
       fit: StackFit.expand,
@@ -246,8 +249,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                   color: Colors.black.withAlpha(120),
                   borderRadius: AppTheme.metrics.radius999,
                 ),
-                child: Icon(
-                  Icons.lock_outline,
+                child: DrawIcon(StrokeIcons.lockOutline,
                   size: AppTheme.metrics.iconSize20,
                   color: Colors.white70,
                 ),
@@ -279,37 +281,37 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         GlassMenuItem<String>(
           value: 'rename',
           label: '重命名集合',
-          icon: Icons.drive_file_rename_outline_rounded,
+          icon: StrokeIcons.driveFileRenameOutline,
         ),
         GlassMenuItem<String>(
           value: 'move',
           label: '移动到文件夹',
-          icon: Icons.drive_file_move_rounded,
+          icon: StrokeIcons.driveFileMove,
         ),
         if (!widget.isRemote)
           GlassMenuItem<String>(
             value: 'open_folder',
             label: '打开所在文件夹',
-            icon: Icons.folder_open_rounded,
+            icon: StrokeIcons.folderOpen,
           ),
         if (widget.isRemote)
           GlassMenuItem<String>(
             value: 'open_folder',
             label: '查看远程路径',
-            icon: Icons.link_rounded,
+            icon: StrokeIcons.link,
           ),
         if (!widget.isRemote && widget.onOpenConfigDir != null)
           GlassMenuItem<String>(
             value: 'open_config_dir',
             label: '打开配置目录',
-            icon: Icons.settings_suggest_rounded,
+            icon: StrokeIcons.settingsSuggest,
           ),
         GlassMenuItem<String>(
           value: 'favorite',
           label: widget.isFavorited ? '取消收藏' : '收藏',
           icon: widget.isFavorited
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
+              ? StrokeIcons.favorite
+              : StrokeIcons.favoriteBorder,
         ),
         if (widget.onSimilarSearch != null)
           const PopupMenuItem<String>(value: 'similar', child: Text('相似查找')),
@@ -317,13 +319,13 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
           GlassMenuItem<String>(
             value: 'pull_to_local',
             label: '拉取到本地',
-            icon: Icons.download_rounded,
+            icon: StrokeIcons.download,
           ),
         if (PlatformUtil.isMobile)
           GlassMenuItem<String>(
             value: 'select',
             label: '进入多选',
-            icon: Icons.checklist_rounded,
+            icon: StrokeIcons.checklist,
           ),
         // 三个删除项统一收到最后，中间断一行：这条菜单十项、原来近 500 高，
         // 删除混在普通操作里最容易误点。
@@ -331,21 +333,21 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
         GlassMenuItem<String>(
           value: 'delete',
           label: '删除集合',
-          icon: Icons.delete_outline_rounded,
+          icon: StrokeIcons.deleteOutline,
           destructive: true,
         ),
         if (widget.onDeleteFolder != null)
           GlassMenuItem<String>(
             value: 'delete_folder',
             label: '删除文件夹',
-            icon: Icons.delete_sweep_rounded,
+            icon: StrokeIcons.deleteSweep,
             destructive: true,
           ),
         if (widget.isRemote && widget.onDeleteNodeFiles != null)
           GlassMenuItem<String>(
             value: 'delete_node_files',
             label: '删除节点本地文件',
-            icon: Icons.cloud_off_rounded,
+            icon: StrokeIcons.cloudOff,
             destructive: true,
           ),
       ],
@@ -631,10 +633,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                   color: _hovering
                                       ? Colors.black.withAlpha(150)
                                       : Colors.transparent,
-                                  child: Icon(
+                                  child: DrawIcon(
                                     widget.isFavorited
-                                        ? Icons.favorite_rounded
-                                        : Icons.favorite_border_rounded,
+                                        ? StrokeIcons.favorite
+                                        : StrokeIcons.favoriteBorder,
                                     color: widget.isFavorited
                                         ? Colors.redAccent
                                         : Colors.white70,
@@ -734,8 +736,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                 SizedBox(height: appMetrics.kSpace4),
                                 Row(
                                   children: [
-                                    Icon(
-                                      Icons.photo_library_outlined,
+                                    DrawIcon(StrokeIcons.photoLibrary,
                                       size: scaleW(12),
                                       color: Colors.white.withAlpha(180),
                                     ),
@@ -749,8 +750,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                       ),
                                     ),
                                     SizedBox(width: appMetrics.kSpace8),
-                                    Icon(
-                                      Icons.sd_card_outlined,
+                                    DrawIcon(StrokeIcons.sdCard,
                                       size: scaleW(12),
                                       color: Colors.white.withAlpha(180),
                                     ),
@@ -785,7 +785,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
 /// 集合/文件夹封面为空或加载失败时显示的默认占位图标。
 class _CollectionPlaceholder extends StatelessWidget {
   const _CollectionPlaceholder({required this.icon});
-  final IconData icon;
+  final StrokeIcon icon;
 
   @override
   Widget build(BuildContext context) {
@@ -802,8 +802,7 @@ class _CollectionPlaceholder extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Icon(
-          icon,
+        child: DrawIcon(icon,
           size: AppTheme.metrics.iconSize48,
           color: theme.colorScheme.primary.withAlpha(150),
         ),

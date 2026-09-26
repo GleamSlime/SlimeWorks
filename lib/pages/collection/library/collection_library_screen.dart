@@ -21,6 +21,8 @@ import 'package:slime_works/pages/collection/library/components/library_folder_b
 import 'package:slime_works/pages/collection/library/components/library_selection_bar.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
   const CollectionLibraryScreen({super.key});
@@ -96,18 +98,18 @@ class _CollectionLibraryScreenState
           spacing: AppTheme.metrics.kSpace8,
           children: [
             DesktopHeadToolsButton(
-              icon: const Icon(Icons.refresh),
+              icon: DrawIcon(StrokeIcons.refresh),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _confirmClearAll(context),
             ),
             DesktopHeadToolsButton(
-              icon: const Icon(Icons.create_new_folder),
+              icon: DrawIcon(StrokeIcons.createNewFolder),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _showCreateFolderDialog(context),
             ),
             DesktopHeadToolsButton(
-              icon: Icon(
-                isFavoritesOnly ? Icons.favorite : Icons.favorite_border,
+              icon: DrawIcon(
+                isFavoritesOnly ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
                 color: isFavoritesOnly ? Colors.red : null,
               ),
               size: AppTheme.metrics.kSpace40,
@@ -120,8 +122,7 @@ class _CollectionLibraryScreenState
               children: [
                 Builder(
                   builder: (tagBtnCtx) => DesktopHeadToolsButton(
-                    icon: Icon(
-                      Icons.label_outline,
+                    icon: DrawIcon(StrokeIcons.labelOutline,
                       color: activeTagCount > 0 ? Theme.of(context).colorScheme.primary : null,
                     ),
                     size: AppTheme.metrics.kSpace40,
@@ -159,23 +160,23 @@ class _CollectionLibraryScreenState
             ),
             Builder(
               builder: (sortBtnCtx) => DesktopHeadToolsButton(
-                icon: const Icon(Icons.sort),
+                icon: DrawIcon(StrokeIcons.sort),
                 size: AppTheme.metrics.kSpace40,
                 onTap: () => _showSortMenu(sortBtnCtx),
               ),
             ),
             DesktopHeadToolsButton(
-              icon: const Icon(Icons.auto_awesome_outlined),
+              icon: DrawIcon(StrokeIcons.autoAwesome),
               size: AppTheme.metrics.kSpace40,
               onTap: () => _showKeywordRulesDialog(),
             ),
             DesktopHeadToolsButton(
-              icon: const Icon(Icons.device_hub),
+              icon: DrawIcon(StrokeIcons.deviceHub),
               size: AppTheme.metrics.kSpace40,
               onTap: () => context.go('/lan-transfer'),
             ),
             DesktopHeadToolsButton(
-              icon: const Icon(Icons.cloud_sync_outlined),
+              icon: DrawIcon(StrokeIcons.cloudSync),
               size: AppTheme.metrics.kSpace40,
               onTap: () => viewModel.refreshRemoteNovels(),
             ),
@@ -362,8 +363,7 @@ class _CollectionLibraryScreenState
                         // 升序选项
                         ListTile(
                           dense: true,
-                          leading: Icon(
-                            Icons.arrow_upward,
+                          leading: DrawIcon(StrokeIcons.arrowUpward,
                             size: AppTheme.metrics.iconSize18,
                             color: isCurrentField && currentAscending
                                 ? Theme.of(context).colorScheme.primary
@@ -382,8 +382,7 @@ class _CollectionLibraryScreenState
                             ),
                           ),
                           trailing: isCurrentField && currentAscending
-                              ? Icon(
-                                  Icons.check,
+                              ? DrawIcon(StrokeIcons.check,
                                   size: AppTheme.metrics.iconSize18,
                                   color: Theme.of(context).colorScheme.primary,
                                 )
@@ -396,8 +395,7 @@ class _CollectionLibraryScreenState
                         // 降序选项
                         ListTile(
                           dense: true,
-                          leading: Icon(
-                            Icons.arrow_downward,
+                          leading: DrawIcon(StrokeIcons.arrowDownward,
                             size: AppTheme.metrics.iconSize18,
                             color: isCurrentField && !currentAscending
                                 ? Theme.of(context).colorScheme.primary
@@ -416,8 +414,7 @@ class _CollectionLibraryScreenState
                             ),
                           ),
                           trailing: isCurrentField && !currentAscending
-                              ? Icon(
-                                  Icons.check,
+                              ? DrawIcon(StrokeIcons.check,
                                   size: AppTheme.metrics.iconSize18,
                                   color: Theme.of(context).colorScheme.primary,
                                 )
@@ -477,7 +474,7 @@ class _CollectionLibraryScreenState
                             dense: true,
                             title: Text('搜索 "$kw" → 添加标签 "$tag"'),
                             trailing: IconButton(
-                              icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
+                              icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize18),
                               onPressed: () async {
                                 await viewModel.removeKeywordRule(i);
                                 setModalState(() {});
@@ -521,7 +518,7 @@ class _CollectionLibraryScreenState
                       ),
                       SizedBox(width: AppTheme.metrics.kSpace8),
                       IconButton(
-                        icon: const Icon(Icons.add),
+                        icon: DrawIcon(StrokeIcons.add),
                         onPressed: () async {
                           final kw = keywordCtrl.text.trim();
                           if (kw.isEmpty) return;
@@ -551,7 +548,7 @@ class _CollectionLibraryScreenState
                         ),
                       )
                     : TextButton.icon(
-                        icon: Icon(Icons.auto_awesome, size: AppTheme.metrics.iconSize16),
+                        icon: DrawIcon(StrokeIcons.autoAwesome, size: AppTheme.metrics.iconSize16),
                         label: const Text('应用到所有书籍'),
                         onPressed: () async {
                           final pendingKeyword = keywordCtrl.text.trim();
@@ -758,8 +755,7 @@ class _CollectionLibraryScreenState
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.file_download_outlined,
+                            DrawIcon(StrokeIcons.fileDownload,
                               size: scaleW(64),
                               color: Theme.of(context).colorScheme.primary,
                             ),
@@ -1074,7 +1070,7 @@ class _CollectionLibraryScreenState
         cover = Container(
           color: Theme.of(context).colorScheme.outline,
           child: Center(
-            child: Icon(Icons.book, size: scaleW(28), color: Colors.white70),
+            child: DrawIcon(StrokeIcons.book, size: scaleW(28), color: Colors.white70),
           ),
         );
       }
@@ -1150,7 +1146,7 @@ class _CollectionLibraryScreenState
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.folder_rounded, size: scaleW(36), color: Colors.blue.withAlpha(200)),
+                    DrawIcon(StrokeIcons.folder, size: scaleW(36), color: Colors.blue.withAlpha(200)),
                     SizedBox(height: scaleW(3)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: scaleW(6)),
@@ -1217,10 +1213,10 @@ class _CollectionLibraryScreenState
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    DrawIcon(
                       isDragHovering
-                          ? Icons.drive_file_move_rtl_outlined
-                          : Icons.arrow_back_rounded,
+                          ? StrokeIcons.driveFileMoveRtl
+                          : StrokeIcons.arrowBack,
                       size: scaleW(40),
                       color: isDragHovering
                           ? Theme.of(context).colorScheme.primary
@@ -1268,8 +1264,8 @@ class _CollectionLibraryScreenState
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            inFolder ? Icons.folder_open : Icons.library_books_outlined,
+          DrawIcon(
+            inFolder ? StrokeIcons.folderOpen : StrokeIcons.libraryBooks,
             size: AppTheme.metrics.iconSize64,
             color: Theme.of(context).hintColor.withAlpha(80),
           ),

@@ -2,14 +2,10 @@
 @Tags(['golden'])
 library;
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/widgets/app_chips.dart';
@@ -17,6 +13,11 @@ import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/core/widgets/glass_surface.dart';
 import 'package:slime_works/core/widgets/section_header.dart';
+
+import 'helpers/page_golden.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 设计系统离屏渲染
 ///
@@ -28,18 +29,7 @@ void main() {
   setUpAll(() async {
     // 测试环境默认用占位字体（所有字形都是方块），必须把项目字体喂进去
     // 才能看清中文排版效果。
-    for (final entry in const {
-      'FZLanTingYuanS-EB-GB': 'assets/fonts/FZLanTingYuanS-EB-GB.ttf',
-    }.entries) {
-      final file = File(entry.value);
-      if (!file.existsSync()) continue;
-      final bytes = file.readAsBytesSync();
-      final loader = FontLoader(entry.key)
-        ..addFont(
-          Future.value(ByteData.view(Uint8List.fromList(bytes).buffer)),
-        );
-      await loader.load();
-    }
+    await loadAppFonts();
   });
 
   testWidgets('浅色设计系统总览', (tester) async {
@@ -68,8 +58,8 @@ Future<void> _render(
       builder: (context, _) {
         AppTheme.resetMetrics();
         final theme = dark
-            ? AppTheme.buildCustomDark(DarkColors.primary, 1.0)
-            : AppTheme.buildCustomLight(LightColors.primary, 1.0);
+            ? AppTheme.buildCustomDark(AppTheme.kFollowThemeAccent, 1.0)
+            : AppTheme.buildCustomLight(AppTheme.kFollowThemeAccent, 1.0);
         // 这里不能对 context 调 AppSemantic.of()：它挂在 ScreenUtilInit 的
         // builder 上，位于 MaterialApp 之上，还没有 Theme。
         final semantic = dark ? AppSemantic.dark : AppSemantic.light;
@@ -188,7 +178,7 @@ class _Gallery extends StatelessWidget {
               child: StatCard(
                 label: '内存',
                 value: '184 MB',
-                icon: Icons.storage_rounded,
+                icon: StrokeIcons.storage,
               ),
             ),
             SizedBox(width: m.kSpace16),
@@ -196,7 +186,7 @@ class _Gallery extends StatelessWidget {
               child: StatCard(
                 label: '异常',
                 value: '3',
-                icon: Icons.error_outline_rounded,
+                icon: StrokeIcons.errorOutline,
                 tone: s.danger,
               ),
             ),
@@ -250,7 +240,7 @@ class _Gallery extends StatelessWidget {
                 decoration: const InputDecoration(
                   labelText: '搜索',
                   hintText: '输入关键词…',
-                  prefixIcon: Icon(Icons.search, size: 16),
+                  prefixIcon: DrawIcon(StrokeIcons.search, size: 16, trigger: StrokeTrigger.appear),
                 ),
               ),
             ),
@@ -306,7 +296,7 @@ class _Gallery extends StatelessWidget {
                     padding: EdgeInsets.all(m.kSpace20),
                     child: Row(
                       children: [
-                        Icon(Icons.bubble_chart, color: s.accent, size: m.iconSize20),
+                        DrawIcon(StrokeIcons.bubbleChart, color: s.accent, size: m.iconSize20),
                         SizedBox(width: m.kSpace12),
                         Expanded(
                           child: Column(
@@ -345,7 +335,7 @@ class _Gallery extends StatelessWidget {
                 child: EmptyState(
                   title: '还没有内容',
                   description: '导入本地文件或连接节点后即可开始浏览。',
-                  icon: Icons.folder_open_outlined,
+                  icon: StrokeIcons.folderOpen,
                   action: const FilledButton(onPressed: null, child: Text('去导入')),
                 ),
               ),
@@ -427,7 +417,7 @@ class _SidebarMock extends StatelessWidget {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
-    Widget item(IconData icon, String label, {bool selected = false}) {
+    Widget item(StrokeIcon icon, String label, {bool selected = false}) {
       return Container(
         height: m.kSpace32 * 1.3,
         margin: EdgeInsets.symmetric(vertical: m.kSpace2),
@@ -438,7 +428,12 @@ class _SidebarMock extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: m.iconSize16, color: selected ? s.accent : s.textTertiary),
+            DrawIcon(
+              icon,
+              size: m.iconSize16,
+              color: selected ? s.accent : s.textTertiary,
+              trigger: StrokeTrigger.appear,
+            ),
             SizedBox(width: m.kSpace10),
             Text(
               label,
@@ -471,13 +466,13 @@ class _SidebarMock extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                item(Icons.dashboard_outlined, '概览', selected: true),
-                item(Icons.crop_free_rounded, '屏幕捕获'),
-                item(Icons.swap_horiz_rounded, '互传'),
+                item(StrokeIcons.dashboard, '概览', selected: true),
+                item(StrokeIcons.cropFree, '屏幕捕获'),
+                item(StrokeIcons.swapHoriz, '互传'),
                 SizedBox(height: m.kSpace12),
                 Text('收藏夹', style: AppTextStyles.overline(context)),
-                item(Icons.photo_library_outlined, '媒体库'),
-                item(Icons.menu_book_outlined, '书库'),
+                item(StrokeIcons.photoLibrary, '媒体库'),
+                item(StrokeIcons.menuBook, '书库'),
               ],
             ),
           ),

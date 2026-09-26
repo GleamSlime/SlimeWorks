@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MediaSelectionBar extends StatelessWidget {
   const MediaSelectionBar({
@@ -53,8 +55,7 @@ class MediaSelectionBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.check_circle_outline,
+                    DrawIcon(StrokeIcons.checkCircleOutline,
                       size: scaleW(16),
                       color: theme.colorScheme.primary,
                     ),
@@ -81,7 +82,7 @@ class MediaSelectionBar extends StatelessWidget {
               SizedBox(width: appMetrics.kSpace8),
               FilledButton.icon(
                 onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
+                icon: DrawIcon(StrokeIcons.deleteOutline),
                 label: const Text('移出媒体库'),
               ),
             ],

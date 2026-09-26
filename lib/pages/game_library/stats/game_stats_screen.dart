@@ -6,6 +6,8 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_stats_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GameStatsScreen extends BasePage<GameLibraryStatsViewModel> {
   const GameStatsScreen({super.key});
@@ -27,7 +29,7 @@ class _GameStatsScreenState extends BasePageState<GameLibraryStatsViewModel, Gam
       actions: <Widget>[
         FilledButton.icon(
           onPressed: _pickRange,
-          icon: const Icon(Icons.date_range),
+          icon: DrawIcon(StrokeIcons.dateRange),
           label: const Text('选择区间'),
         ),
       ],

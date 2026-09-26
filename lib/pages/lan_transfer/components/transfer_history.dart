@@ -5,6 +5,9 @@ import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 传输历史组件
 class TransferHistory extends StatelessWidget {
@@ -89,7 +92,7 @@ class _TransferHistoryCard extends StatelessWidget {
                   color: _getStatusColor().withValues(alpha: 0.12),
                   borderRadius: AppTheme.metrics.radius10,
                 ),
-                child: Icon(
+                child: DrawIcon(
                   _getTypeIcon(item.transferType),
                   size: scaleW(18),
                   color: _getStatusColor(),
@@ -301,8 +304,7 @@ class _TransferHistoryCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.delete_outline,
+            DrawIcon(StrokeIcons.deleteOutline,
               size: scaleW(14),
               color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
             ),
@@ -360,8 +362,7 @@ class _TransferHistoryCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.ios_share,
+            DrawIcon(StrokeIcons.iosShare,
               size: scaleW(14),
               color: Get.isDarkMode ? DarkColors.primary : LightColors.primary,
             ),
@@ -400,8 +401,7 @@ class _TransferHistoryCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.copy,
+            DrawIcon(StrokeIcons.copy,
               size: scaleW(14),
               color: isDark ? DarkColors.success : LightColors.success,
             ),
@@ -435,8 +435,7 @@ class _TransferHistoryCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.cancel_outlined,
+            DrawIcon(StrokeIcons.cancel,
               size: scaleW(14),
               color: Theme.of(context).colorScheme.error,
             ),
@@ -472,16 +471,16 @@ class _TransferHistoryCard extends StatelessWidget {
     }
   }
 
-  IconData _getTypeIcon(TransferType type) {
+  StrokeIcon _getTypeIcon(TransferType type) {
     switch (type) {
       case TransferType.file:
-        return Icons.insert_drive_file_outlined;
+        return StrokeIcons.insertDriveFile;
       case TransferType.text:
-        return Icons.text_snippet_outlined;
+        return StrokeIcons.textSnippet;
       case TransferType.image:
-        return Icons.image_outlined;
+        return StrokeIcons.image;
       case TransferType.video:
-        return Icons.video_file_outlined;
+        return StrokeIcons.videoFile;
     }
   }
 

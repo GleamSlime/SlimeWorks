@@ -33,3 +33,5 @@ export 'widgets/empty_state.dart';
 export 'widgets/glass_surface.dart';
 export 'widgets/glass_menu.dart';
 export 'widgets/page_container.dart';
+export 'widgets/breadcrumb.dart';
+export 'widgets/tree_connector.dart';

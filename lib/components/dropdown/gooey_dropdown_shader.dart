@@ -8,7 +8,7 @@ import 'package:slime_works/components/animations/state_transition_animation.dar
 /// 使用示例：
 /// ```dart
 /// GooeyDropdownShader(
-///   button: Icon(Icons.menu, color: Colors.white),
+///   button: DrawIcon(StrokeIcons.menu, color: Colors.white),
 ///   content: YourContentWidget(),
 ///   buttonSize: Size(56, 56),
 ///   cardSize: Size(300, 200),
@@ -605,18 +605,18 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                                   final fixed = base.copyWith(decoration: TextDecoration.none);
 
                                   return StateTransitionAnimation(
-                                    svg: original.svg,
+                                    icon: original.icon,
                                     label: original.label,
-                                    hoverSvg: original.hoverSvg,
+                                    hoverIcon: original.hoverIcon,
                                     enableScaleAnimation: original.enableScaleAnimation,
                                     animationDuration: original.animationDuration,
                                     height: original.height,
                                     padding: original.padding,
                                     decoration: original.decoration,
                                     textStyle: fixed,
-                                    svgSize: original.svgSize,
+                                    iconSize: original.iconSize,
                                     spacing: original.spacing,
-                                    svgColor: original.svgColor,
+                                    iconColor: original.iconColor,
                                     loading: original.loading,
                                   );
                                 }

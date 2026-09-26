@@ -7,6 +7,8 @@ import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 翻译面板组件
 class TranslationPanel extends StatefulWidget {
@@ -167,7 +169,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('文本翻译', style: Theme.of(context).textTheme.titleLarge),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
           SizedBox(height: appMetrics.spacingMedium),
@@ -227,7 +229,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
               ),
               SizedBox(width: appMetrics.spacingMedium),
               IconButton(
-                icon: const Icon(Icons.refresh),
+                icon: DrawIcon(StrokeIcons.refresh),
                 onPressed: _isTranslating.value ? null : _loadModels,
                 tooltip: '刷新模型列表',
               ),
@@ -263,7 +265,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
                       height: scaleW(16),
                       child: const CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.translate),
+                  : DrawIcon(StrokeIcons.translate),
               label: Text(_isTranslating.value ? '翻译中...' : '开始翻译'),
             );
           }),

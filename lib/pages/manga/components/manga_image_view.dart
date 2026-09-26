@@ -6,6 +6,8 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 圆形加载进度环（模拟进度 0-99%，图片完成后消失）
 ///
@@ -152,7 +154,7 @@ class _MangaImageViewState extends State<MangaImageView> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.broken_image_outlined, size: AppTheme.metrics.iconSize32),
+                    DrawIcon(StrokeIcons.brokenImage, size: AppTheme.metrics.iconSize32),
                     SizedBox(height: AppTheme.metrics.kSpace8),
                     TextButton(onPressed: _retry, child: const Text('重试')),
                   ],

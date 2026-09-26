@@ -1,11 +1,14 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 构建空状态
 class EmptyState extends StatelessWidget {
   final String message;
-  final IconData icon;
+  final StrokeIcon icon;
   final bool isCapturing;
   final bool isCertInstalled;
   final VoidCallback? onAction;
@@ -18,14 +21,14 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: AppTheme.metrics.iconSize64, color: Theme.of(context).hintColor.withValues(alpha: 0.5)),
+          DrawIcon(icon, size: AppTheme.metrics.iconSize64, color: Theme.of(context).hintColor.withValues(alpha: 0.5)),
           SizedBox(height: AppTheme.metrics.kSpace16),
           Text(message, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).hintColor)),
           SizedBox(height: AppTheme.metrics.kSpace24),
           if (!isCapturing && onAction != null)
             FilledButton.icon(
               onPressed: onAction,
-              icon: Icon(isCertInstalled ? Icons.play_arrow : Icons.security),
+              icon: DrawIcon(isCertInstalled ? StrokeIcons.playArrow : StrokeIcons.security),
               label: Text(isCertInstalled ? '开始捕获' : '安装证书'),
             ),
         ],
@@ -37,7 +40,7 @@ class EmptyState extends StatelessWidget {
 /// URL卡片
 class UrlCard extends StatelessWidget {
   final String url;
-  final IconData icon;
+  final StrokeIcon icon;
   final Color color;
   final VoidCallback? onCopy;
   final VoidCallback? onOpen;
@@ -51,14 +54,14 @@ class UrlCard extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.1),
-          child: Icon(icon, color: color, size: AppTheme.metrics.iconSize20),
+          child: DrawIcon(icon, color: color, size: AppTheme.metrics.iconSize20),
         ),
         title: Text(url, maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize20),
+              icon: DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize20),
               onPressed: () {
                 if (onCopy != null) {
                   onCopy!();
@@ -69,7 +72,7 @@ class UrlCard extends StatelessWidget {
               },
               tooltip: '复制',
             ),
-            if (onOpen != null) IconButton(icon: Icon(Icons.open_in_new, size: AppTheme.metrics.iconSize20), onPressed: onOpen, tooltip: '打开'),
+            if (onOpen != null) IconButton(icon: DrawIcon(StrokeIcons.openInNew, size: AppTheme.metrics.iconSize20), onPressed: onOpen, tooltip: '打开'),
           ],
         ),
       ),
@@ -91,7 +94,7 @@ class JsonCard extends StatelessWidget {
       child: ExpansionTile(
         leading: CircleAvatar(
           backgroundColor: Colors.orange.withValues(alpha: 0.1),
-          child: Icon(Icons.code, color: Colors.orange, size: AppTheme.metrics.iconSize20),
+          child: DrawIcon(StrokeIcons.code, color: Colors.orange, size: AppTheme.metrics.iconSize20),
         ),
         title: Text(json.length > 50 ? '${json.substring(0, 50)}...' : json, maxLines: 1, overflow: TextOverflow.ellipsis),
         children: [
@@ -106,7 +109,7 @@ class JsonCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton.icon(
-                      icon: Icon(Icons.copy, size: AppTheme.metrics.iconSize18),
+                      icon: DrawIcon(StrokeIcons.copy, size: AppTheme.metrics.iconSize18),
                       label: const Text('复制'),
                       onPressed: () {
                         if (onCopy != null) {
@@ -132,7 +135,7 @@ class JsonCard extends StatelessWidget {
 
 /// 信息芯片
 class InfoChip extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final Color color;
 
@@ -146,7 +149,7 @@ class InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          DrawIcon(icon, size: AppTheme.metrics.iconSize14, color: color),
           SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             label,
@@ -199,7 +202,7 @@ class StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  final IconData icon;
+  final StrokeIcon icon;
 
   const StatCard({super.key, required this.label, required this.value, required this.color, required this.icon});
 
@@ -214,7 +217,7 @@ class StatCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: AppTheme.metrics.iconSize24),
+          DrawIcon(icon, color: color, size: AppTheme.metrics.iconSize24),
           SizedBox(width: AppTheme.metrics.kSpace12),
           Expanded(
             child: Column(
@@ -239,7 +242,7 @@ class StatCard extends StatelessWidget {
 class StatusBadge extends StatelessWidget {
   final String text;
   final Color color;
-  final IconData icon;
+  final StrokeIcon icon;
 
   const StatusBadge({super.key, required this.text, required this.color, required this.icon});
 
@@ -255,7 +258,7 @@ class StatusBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          DrawIcon(icon, size: AppTheme.metrics.iconSize14, color: color),
           SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             text,

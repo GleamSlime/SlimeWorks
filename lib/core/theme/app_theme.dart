@@ -25,19 +25,41 @@ class AppTheme {
 
   // ── 响应式主题状态（ThemeSettingsTab 写入，MyApp.build 读取）──────────────
   static final Rx<ThemeMode> themeModeObs = ThemeMode.system.obs;
-  static final Rx<Color> accentColorObs = LightColors.primary.obs;
+
+  /// 「跟随主题」这一档强调色：设置页的默认选项。
+  ///
+  /// 它不是一个真颜色——明暗两档的近黑不同值，只能由语义层分别给，
+  /// 所以这个值只当哨兵用，见 `_applyCustomization` 里的短路。
+  static const Color kFollowThemeAccent = AppBrand.ink;
+
+  static final Rx<Color> accentColorObs = kFollowThemeAccent.obs;
   static final RxDouble fontScaleObs = 1.0.obs;
 
   static const String _themeModeKey = 'theme_mode';
   static const String _accentColorKey = 'accent_color';
   static const String _fontScaleKey = 'font_scale';
 
-  /// 项目自带字体族名。
+  /// 界面主字体族名（西文）。
   ///
   /// ThemeData.fontFamily 只喂给 ThemeData 自己生成的那份 textTheme；一旦
   /// copyWith 换成手写 TextTheme 就会丢，全站静默回退到系统字体。所以字阶
   /// 构建完必须显式 apply 一次。
-  static const String _fontFamily = 'FZLanTingYuanS-EB-GB';
+  static const String _fontFamily = 'Inter';
+
+  /// Inter 不含 CJK 字形，中文/日文/韩文按这份顺序落到系统字。
+  ///
+  /// 不写这份清单也能显示（引擎自己兜底找系统字），但找到的字重和 Inter 对不上，
+  /// 中英混排会跳粗细，所以显式钉住。末尾再挂一份项目自带的中文字体：系统字
+  /// 一个都没匹配上时（headless 出图、精简过的 Android 字库）由它兜底，否则
+  /// 整页中文会变成豆腐块。
+  static const List<String> _fontFamilyFallback = [
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    'Noto Sans SC',
+    'FZLanTingYuanS-EB-GB',
+    'sans-serif',
+  ];
 
   /// 启动时从持久化存储加载主题配置（仅加载输入参数，不触发 ScreenUtil）。
   static Future<void> loadSavedTheme() async {
@@ -73,7 +95,13 @@ class AppTheme {
     // 用户可能选到一个很浅（或很深）的颜色。规则统一为：强调色必须先在其所属
     // 模式的表面上足够醒目，再据此决定它上面放黑字还是白字。
     // 若反过来固定用白字，暗色模式下会被压成一个发黑的紫块——正是原来的表现问题。
-    final fill = _ensureContrast(accent, semantic.surface);
+    //
+    // 「跟随主题」例外：近黑在明暗两档是两个值（浅色压黑、深色提到浅灰），
+    // 自选色只有一个值，硬把 #171717 送进 _ensureContrast 会在暗色档被提成中灰。
+    final followTheme = accent.toARGB32() == kFollowThemeAccent.toARGB32();
+    final fill = followTheme
+        ? semantic.accent
+        : _ensureContrast(accent, semantic.surface);
     final onAccent = _contrastColor(fill);
     final accentText = fill;
 
@@ -185,6 +213,28 @@ class AppTheme {
   // 历史上明暗两份主题是各写一遍的，暗色 OutlinedButton 里出现 LightColors.primary
   // 就是这么来的。改为单一定义、颜色从语义层取，结构上杜绝此类漂移。
 
+  /// 按钮文字样式。
+  ///
+  /// 字族必须写全：ButtonStyle.textStyle 是整条替换而不是叠加，裸 TextStyle
+  /// 会把主题字阶里的 fontFamily/fontFamilyFallback 顶掉，按钮中文就成了
+  /// 引擎兜底字（出图环境里直接是豆腐块）。
+  static TextStyle _buttonTextStyle() => TextStyle(
+    fontFamily: _fontFamily,
+    fontFamilyFallback: _fontFamilyFallback,
+    fontSize: scaleS(13),
+    fontWeight: FontWeight.w500,
+    height: 1.2,
+    letterSpacing: 0.2,
+  );
+
+  /// 给组件主题里手写的样式补上字族。
+  ///
+  /// 组件主题（按钮/对话框/菜单/列表项…）的 textStyle 是整条替换而不是叠加，
+  /// 裸 TextStyle 拿不到主题字阶的 fontFamily 与回退清单，中文会静默落到
+  /// 引擎兜底字上——出图环境里就是豆腐块。
+  static TextStyle _font(TextStyle t) =>
+      t.apply(fontFamily: _fontFamily, fontFamilyFallback: _fontFamilyFallback);
+
   static ButtonStyle _elevatedButton(Color fill, Color on) => ElevatedButton.styleFrom(
     backgroundColor: fill,
     foregroundColor: on,
@@ -196,12 +246,7 @@ class AppTheme {
     minimumSize: Size(scaleW(0), metrics.kSpace32),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
-    textStyle: TextStyle(
-      fontSize: scaleS(13),
-      fontWeight: FontWeight.w500,
-      height: 1.2,
-      letterSpacing: 0.2,
-    ),
+    textStyle: _buttonTextStyle(),
   );
 
   static ButtonStyle _filledButton(Color fill, Color on) => FilledButton.styleFrom(
@@ -215,12 +260,7 @@ class AppTheme {
     minimumSize: Size(scaleW(0), metrics.kSpace32),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
-    textStyle: TextStyle(
-      fontSize: scaleS(13),
-      fontWeight: FontWeight.w500,
-      height: 1.2,
-      letterSpacing: 0.2,
-    ),
+    textStyle: _buttonTextStyle(),
   );
 
   static ButtonStyle _textButton(Color accentText) => TextButton.styleFrom(
@@ -233,12 +273,7 @@ class AppTheme {
     minimumSize: Size(scaleW(0), metrics.kSpace32),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
-    textStyle: TextStyle(
-      fontSize: scaleS(13),
-      fontWeight: FontWeight.w500,
-      height: 1.2,
-      letterSpacing: 0.2,
-    ),
+    textStyle: _buttonTextStyle(),
   );
 
   static ButtonStyle _outlinedButton(Color accentText, Color borderColor) =>
@@ -252,12 +287,7 @@ class AppTheme {
         minimumSize: Size(scaleW(0), metrics.kSpace32),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(borderRadius: metrics.radiusControl),
-        textStyle: TextStyle(
-          fontSize: scaleS(13),
-          fontWeight: FontWeight.w500,
-          height: 1.2,
-          letterSpacing: 0.2,
-        ),
+        textStyle: _buttonTextStyle(),
       );
 
   /// 亮色主题
@@ -330,12 +360,12 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: TextStyle(
+        titleTextStyle: _font(TextStyle(
           fontSize: scaleS(16),
           fontWeight: FontWeight.w600,
           color: s.textPrimary,
           height: 1.4,
-        ),
+        )),
         iconTheme: IconThemeData(color: s.textSecondary, size: m.iconSize20),
       ),
 
@@ -376,9 +406,9 @@ class AppTheme {
         filled: true,
         fillColor: s.surfaceSunken,
         isDense: true,
-        hintStyle: TextStyle(color: s.textTertiary, fontSize: scaleS(13)),
-        labelStyle: TextStyle(color: s.textSecondary, fontSize: scaleS(13)),
-        floatingLabelStyle: TextStyle(color: s.accentText, fontSize: scaleS(12)),
+        hintStyle: _font(TextStyle(color: s.textTertiary, fontSize: scaleS(13))),
+        labelStyle: _font(TextStyle(color: s.textSecondary, fontSize: scaleS(13))),
+        floatingLabelStyle: _font(TextStyle(color: s.accentText, fontSize: scaleS(12))),
         border: OutlineInputBorder(
           borderRadius: m.radiusField,
           borderSide: BorderSide(color: s.border, width: scaleW(1)),
@@ -429,16 +459,16 @@ class AppTheme {
           borderRadius: m.radiusOverlay,
           side: BorderSide(color: s.glassBorder, width: scaleW(1)),
         ),
-        titleTextStyle: TextStyle(
+        titleTextStyle: _font(TextStyle(
           fontSize: scaleS(16),
           fontWeight: FontWeight.w600,
           color: s.textPrimary,
-        ),
-        contentTextStyle: TextStyle(
+        )),
+        contentTextStyle: _font(TextStyle(
           fontSize: scaleS(13),
           height: 1.6,
           color: s.textSecondary,
-        ),
+        )),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
@@ -465,23 +495,20 @@ class AppTheme {
         ),
         // M3 下菜单项文字走 labelTextStyle，textStyle 只参与旧渲染路径；两处都写，
         // 免得一改 useMaterial3 就发现菜单字号又飘回 SDK 默认值。
-        // fontFamily 必须显式带上：裸 TextStyle 拿不到 ThemeData.fontFamily，
-        // 菜单会静默回退系统字体，和页面里其他文字对不上。
-        textStyle: TextStyle(
-          fontFamily: _fontFamily,
+        // 字族由 _font 统一补，见其注释。
+        textStyle: _font(TextStyle(
           fontSize: scaleS(13),
           color: s.textPrimary,
-        ),
+        )),
         labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => TextStyle(
-            fontFamily: _fontFamily,
+          (states) => _font(TextStyle(
             fontSize: scaleS(13),
             fontWeight: FontWeight.w500,
             height: 1.25,
             color: states.contains(WidgetState.disabled)
                 ? s.textDisabled
                 : s.textPrimary,
-          ),
+          )),
         ),
         // 默认只有 vertical:8，高亮条会一路顶到圆角边缘。四周留一圈，菜单立刻
         // 像"卡片里装着条目"而不是"一块色皮"。
@@ -499,10 +526,10 @@ class AppTheme {
           color: s.isDark ? AppSurfaces.darkSurfaceRaised : AppSurfaces.lightTextPrimary,
           borderRadius: m.radius6,
         ),
-        textStyle: TextStyle(
+        textStyle: _font(TextStyle(
           fontSize: scaleS(11),
           color: s.isDark ? AppSurfaces.darkTextPrimary : Colors.white,
-        ),
+        )),
         padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
         waitDuration: const Duration(milliseconds: 500),
       ),
@@ -513,12 +540,12 @@ class AppTheme {
         indicatorColor: s.accentContainer,
         selectedIconTheme: IconThemeData(color: s.accent),
         unselectedIconTheme: IconThemeData(color: s.textTertiary),
-        selectedLabelTextStyle: TextStyle(
+        selectedLabelTextStyle: _font(TextStyle(
           fontSize: scaleS(12),
           fontWeight: FontWeight.w600,
           color: s.accentText,
-        ),
-        unselectedLabelTextStyle: TextStyle(fontSize: scaleS(12), color: s.textTertiary),
+        )),
+        unselectedLabelTextStyle: _font(TextStyle(fontSize: scaleS(12), color: s.textTertiary)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: s.surface,
@@ -527,21 +554,21 @@ class AppTheme {
         elevation: 0,
         height: m.kSpace56,
         labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => TextStyle(
+          (states) => _font(TextStyle(
             fontSize: scaleS(11),
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w600
                 : FontWeight.w500,
             color: states.contains(WidgetState.selected) ? s.accentText : s.textTertiary,
-          ),
+          )),
         ),
       ),
       tabBarTheme: TabBarThemeData(
         dividerColor: Colors.transparent,
         labelColor: s.textPrimary,
         unselectedLabelColor: s.textTertiary,
-        labelStyle: TextStyle(fontSize: scaleS(13), fontWeight: FontWeight.w600),
-        unselectedLabelStyle: TextStyle(fontSize: scaleS(13), fontWeight: FontWeight.w500),
+        labelStyle: _font(TextStyle(fontSize: scaleS(13), fontWeight: FontWeight.w600)),
+        unselectedLabelStyle: _font(TextStyle(fontSize: scaleS(13), fontWeight: FontWeight.w500)),
         indicatorSize: TabBarIndicatorSize.tab,
         indicator: BoxDecoration(
           color: s.accentContainer,
@@ -554,12 +581,12 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         iconColor: s.textSecondary,
         textColor: s.textPrimary,
-        titleTextStyle: TextStyle(
+        titleTextStyle: _font(TextStyle(
           fontSize: scaleS(13),
           fontWeight: FontWeight.w500,
           color: s.textPrimary,
-        ),
-        subtitleTextStyle: TextStyle(fontSize: scaleS(12), color: s.textSecondary),
+        )),
+        subtitleTextStyle: _font(TextStyle(fontSize: scaleS(12), color: s.textSecondary)),
         shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
         contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace4),
       ),
@@ -602,11 +629,11 @@ class AppTheme {
         selectedColor: s.accentContainer,
         side: BorderSide(color: s.hairline, width: scaleW(1)),
         shape: RoundedRectangleBorder(borderRadius: m.radiusPill),
-        labelStyle: TextStyle(
+        labelStyle: _font(TextStyle(
           fontSize: scaleS(12),
           fontWeight: FontWeight.w500,
           color: s.textSecondary,
-        ),
+        )),
         padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace4),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
@@ -627,10 +654,10 @@ class AppTheme {
       // ── 其它 ──
       snackBarTheme: SnackBarThemeData(
         backgroundColor: s.isDark ? AppSurfaces.darkSurfaceRaised : AppSurfaces.lightTextPrimary,
-        contentTextStyle: TextStyle(
+        contentTextStyle: _font(TextStyle(
           fontSize: scaleS(13),
           color: s.isDark ? s.textPrimary : Colors.white,
-        ),
+        )),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
       ),
@@ -647,7 +674,7 @@ class AppTheme {
             RoundedRectangleBorder(borderRadius: m.radiusControl),
           ),
           textStyle: WidgetStatePropertyAll(
-            TextStyle(fontSize: scaleS(12), fontWeight: FontWeight.w500),
+            _font(TextStyle(fontSize: scaleS(12), fontWeight: FontWeight.w500)),
           ),
         ),
       ),
@@ -750,22 +777,22 @@ class AppTheme {
         height: 1.5,
         letterSpacing: 0.6,
       ),
-    ).apply(fontFamily: _fontFamily);
+    ).apply(fontFamily: _fontFamily, fontFamilyFallback: _fontFamilyFallback);
   }
 
   static bool isLight(BuildContext context) {
     return Theme.of(context).brightness == Brightness.light;
   }
 
-  /// 侧边栏渐变底（保留旧签名，颜色改由语义层驱动）
-  /// 侧栏底色。
+  /// 侧边栏底色。
   ///
-  /// 用"下沉表面"而不是玻璃色：玻璃 tint 在浅色模式合成后接近纯白，
-  /// 和卡片同色，侧栏读不出是一个独立面板。保留 LinearGradient 返回类型
-  /// 是为了兼容调用方，两帧同色即纯色。
+  /// 不用玻璃 tint：它在浅色模式合成后接近纯白，和卡片同色，侧栏读不出是
+  /// 一个独立面板。保留 LinearGradient 返回类型是为了兼容调用方，两帧同色即纯色。
   static LinearGradient sideBarTheme(BuildContext context, {int alpha = 255}) {
     final s = AppSemantic.of(context);
-    final tint = s.surfaceSunken.withAlpha(alpha);
+    // 侧栏与内容区同底（画布色），只靠一条发丝线分栏；选中项抬成 surface 白卡，
+    // 对比关系才成立——用 sunken 底会让白卡和栏底糊成一片。
+    final tint = s.canvas.withAlpha(alpha);
     return LinearGradient(
       colors: [tint, tint],
       begin: Alignment.centerLeft,
@@ -1024,12 +1051,13 @@ class ThemeMetrics {
       radius100 = BorderRadius.all(Radius.circular(scaleW(100.r))),
       radius999 = BorderRadius.all(Radius.circular(scaleW(999.r))),
 
-      // 语义圆角复用已有数值，保证迁移前后观感一致
-      radiusControl = BorderRadius.all(Radius.circular(scaleW(9.r))),
-      radiusField = BorderRadius.all(Radius.circular(scaleW(11.r))),
-      radiusCard = BorderRadius.all(Radius.circular(scaleW(14.r))),
-      radiusPanel = BorderRadius.all(Radius.circular(scaleW(18.r))),
-      radiusOverlay = BorderRadius.all(Radius.circular(scaleW(22.r))),
+      // 语义圆角整体收小：控件与输入框同为一档，卡片只比控件多两像素。
+      // 圆角一大，小尺寸控件就变成一颗颗胶囊，列表也读不出边界。
+      radiusControl = BorderRadius.all(Radius.circular(scaleW(8.r))),
+      radiusField = BorderRadius.all(Radius.circular(scaleW(8.r))),
+      radiusCard = BorderRadius.all(Radius.circular(scaleW(10.r))),
+      radiusPanel = BorderRadius.all(Radius.circular(scaleW(14.r))),
+      radiusOverlay = BorderRadius.all(Radius.circular(scaleW(14.r))),
       radiusPill = BorderRadius.all(Radius.circular(scaleW(999.r))),
 
       iconSize12 = scaleSWithUserFont(12),

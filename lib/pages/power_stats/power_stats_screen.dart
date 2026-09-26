@@ -13,6 +13,9 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart' show PlatformUtil;
 import 'package:slime_works/view_models/power_stats_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class PowerStatsScreen extends StatefulWidget {
   const PowerStatsScreen({super.key});
@@ -172,8 +175,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                         height: m.iconSize14,
                         child: const CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Icon(
-                        Icons.bolt_rounded,
+                    : DrawIcon(StrokeIcons.bolt,
                         size: m.iconSize14,
                         color: LightColors.orange,
                       ),
@@ -235,8 +237,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     : theme.colorScheme.onSurface.withAlpha(8),
                 borderRadius: m.radius10,
               ),
-              child: Icon(
-                Icons.electric_bolt_rounded,
+              child: DrawIcon(StrokeIcons.electricBolt,
                 size: m.iconSize24,
                 color: enabled ? LightColors.orange : theme.colorScheme.onSurface.withAlpha(50),
               ),
@@ -520,28 +521,28 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
 
       final cards = <_SummaryCardData>[
         _SummaryCardData(
-          icon: Icons.bolt_rounded,
+          icon: StrokeIcons.bolt,
           label: '剩余电量',
           value: kwh.toStringAsFixed(2),
           unit: 'kWh',
           color: LightColors.yellow,
         ),
         _SummaryCardData(
-          icon: Icons.account_balance_wallet_rounded,
+          icon: StrokeIcons.accountBalanceWallet,
           label: '剩余金额',
           value: yuan.toStringAsFixed(2),
           unit: '元',
           color: LightColors.blue,
         ),
         _SummaryCardData(
-          icon: Icons.local_offer_rounded,
+          icon: StrokeIcons.localOffer,
           label: '综合单价',
           value: price.toStringAsFixed(2),
           unit: '元/kWh',
           color: LightColors.purple,
         ),
         _SummaryCardData(
-          icon: Icons.timer_rounded,
+          icon: StrokeIcons.timer,
           label: '分钟耗电',
           value: minuteCons.toStringAsFixed(3),
           unit: 'kWh',
@@ -601,7 +602,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   color: data.color.withAlpha(20),
                   borderRadius: m.radius6,
                 ),
-                child: Icon(data.icon, size: m.iconSize12, color: data.color),
+                child: DrawIcon(data.icon, size: m.iconSize12, color: data.color),
               ),
               SizedBox(width: m.kSpace8),
               Expanded(
@@ -714,7 +715,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     color: color.withAlpha(20),
                     borderRadius: m.radius6,
                   ),
-                  child: Icon(Icons.show_chart_rounded, size: m.iconSize12, color: color),
+                  child: DrawIcon(StrokeIcons.showChart, size: m.iconSize12, color: color),
                 ),
                 SizedBox(width: m.kSpace8),
                 Text(
@@ -782,8 +783,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.insights_rounded,
+          DrawIcon(StrokeIcons.insights,
             size: m.iconSize40,
             color: theme.colorScheme.onSurface.withAlpha(30),
           ),
@@ -821,38 +821,38 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           title: '小时',
           consumption: _viewModel.getSummaryConsumption('hour_consumption'),
           cost: _viewModel.getSummaryCost('hour_cost'),
-          icon: Icons.hourglass_bottom_rounded,
+          icon: StrokeIcons.hourglassBottom,
         ),
         _DimensionData(
           title: '1天',
           consumption: _viewModel.getSummaryConsumption('day_consumption'),
           cost: _viewModel.getSummaryCost('day_cost'),
-          icon: Icons.today_rounded,
+          icon: StrokeIcons.today,
         ),
         _DimensionData(
           title: '7天',
           consumption: _viewModel.getSummaryConsumption('week_consumption'),
           cost: _viewModel.getSummaryCost('week_cost'),
-          icon: Icons.date_range_rounded,
+          icon: StrokeIcons.dateRange,
         ),
         _DimensionData(
           title: '15天',
           consumption: _viewModel.getSummaryConsumption('fifteen_day_consumption'),
           cost: _viewModel.getSummaryCost('fifteen_day_cost'),
-          icon: Icons.calendar_month_rounded,
+          icon: StrokeIcons.calendarMonth,
         ),
         _DimensionData(
           title: '16天',
           consumption: _viewModel.getSummaryConsumption('sixteen_day_consumption'),
           cost: 0,
-          icon: Icons.calendar_view_week_rounded,
+          icon: StrokeIcons.calendarViewWeek,
           costHidden: true,
         ),
         _DimensionData(
           title: '30天',
           consumption: _viewModel.getSummaryConsumption('thirty_day_consumption'),
           cost: _viewModel.getSummaryCost('thirty_day_cost'),
-          icon: Icons.calendar_today_rounded,
+          icon: StrokeIcons.calendarToday,
         ),
       ];
 
@@ -901,7 +901,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
         children: [
           Row(
             children: [
-              Icon(data.icon, size: m.iconSize12, color: theme.colorScheme.primary),
+              DrawIcon(data.icon, size: m.iconSize12, color: theme.colorScheme.primary),
               SizedBox(width: m.kSpace6),
               Text(
                 data.title,
@@ -965,7 +965,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.tune_rounded, size: m.iconSize14, color: theme.colorScheme.primary),
+                DrawIcon(StrokeIcons.tune, size: m.iconSize14, color: theme.colorScheme.primary),
                 SizedBox(width: m.kSpace8),
                 Text(
                   '采集配置',
@@ -988,8 +988,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                       labelText: '电表号',
                       hintText: '输入电表号 (如 19501609994)',
                       isDense: true,
-                      prefixIcon: Icon(
-                        Icons.numbers_rounded,
+                      prefixIcon: DrawIcon(StrokeIcons.numbers,
                         size: m.iconSize16,
                       ),
                     ),
@@ -1077,7 +1076,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _viewModel.stopPolling(),
-                      icon: Icon(Icons.stop_circle_outlined, size: m.iconSize14),
+                      icon: DrawIcon(StrokeIcons.stopCircle, size: m.iconSize14),
                       label: const Text('停止轮询'),
                     ),
                   )
@@ -1087,7 +1086,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                       onPressed: _viewModel.meterId.value.isEmpty
                           ? null
                           : () => _viewModel.startPolling(),
-                      icon: Icon(Icons.play_circle_outline, size: m.iconSize14),
+                      icon: DrawIcon(StrokeIcons.playCircleOutline, size: m.iconSize14),
                       label: const Text('启动轮询'),
                     ),
                   ),
@@ -1095,7 +1094,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _viewModel.clearLogs(),
-                    icon: Icon(Icons.delete_outline_rounded, size: m.iconSize14),
+                    icon: DrawIcon(StrokeIcons.deleteOutline, size: m.iconSize14),
                     label: const Text('清空日志'),
                   ),
                 ),
@@ -1123,7 +1122,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.history_rounded, size: m.iconSize14, color: theme.colorScheme.primary),
+                DrawIcon(StrokeIcons.history, size: m.iconSize14, color: theme.colorScheme.primary),
                 SizedBox(width: m.kSpace8),
                 Text(
                   '抓取日志',
@@ -1237,7 +1236,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
 
 // ── 数据模型 ────────────────────────────────────────────────────────────────
 class _SummaryCardData {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final String value;
   final String unit;
@@ -1255,7 +1254,7 @@ class _DimensionData {
   final String title;
   final double consumption;
   final double cost;
-  final IconData icon;
+  final StrokeIcon icon;
   final bool costHidden;
   const _DimensionData({
     required this.title,

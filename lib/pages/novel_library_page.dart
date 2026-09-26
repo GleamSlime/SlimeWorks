@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 书籍库页面
 class NovelLibraryPage extends StatelessWidget {
@@ -24,13 +26,13 @@ class NovelLibraryPage extends StatelessWidget {
             children: [
               ElevatedButton.icon(
                 onPressed: () => controller.scanFolder(),
-                icon: const Icon(Icons.folder_open),
+                icon: DrawIcon(StrokeIcons.folderOpen),
                 label: const Text('扫描文件夹'),
               ),
               SizedBox(width: AppTheme.metrics.kSpace12),
               ElevatedButton.icon(
                 onPressed: () => controller.addSingleNovel(),
-                icon: const Icon(Icons.add),
+                icon: DrawIcon(StrokeIcons.add),
                 label: const Text('添加单个文件'),
               ),
               SizedBox(width: AppTheme.metrics.kSpace12),
@@ -65,7 +67,7 @@ class NovelLibraryPage extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.book_outlined, size: AppTheme.metrics.iconSize64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      DrawIcon(StrokeIcons.book, size: AppTheme.metrics.iconSize64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       SizedBox(height: AppTheme.metrics.kSpace16),
                       Text('暂无书籍', style: TextStyle(fontSize: AppTheme.metrics.fontSize15, color: Theme.of(context).hintColor)),
                       SizedBox(height: AppTheme.metrics.kSpace8),
@@ -150,7 +152,7 @@ class _NovelCard extends StatelessWidget {
                           }
                         } catch (_) {}
                         return Center(
-                          child: Icon(Icons.book, size: AppTheme.metrics.iconSize48, color: Colors.white70),
+                          child: DrawIcon(StrokeIcons.book, size: AppTheme.metrics.iconSize48, color: Colors.white70),
                         );
                       })()
                     else
@@ -163,7 +165,7 @@ class _NovelCard extends StatelessWidget {
                           ),
                         ),
                         child: Center(
-                          child: Icon(Icons.book, size: AppTheme.metrics.iconSize48, color: Colors.white70),
+                          child: DrawIcon(StrokeIcons.book, size: AppTheme.metrics.iconSize48, color: Colors.white70),
                         ),
                       ),
 
@@ -229,7 +231,7 @@ class _NovelCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 IconButton(
-                  icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
+                  icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize18),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: () {

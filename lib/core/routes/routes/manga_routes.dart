@@ -10,7 +10,7 @@ class MangaHomeRoute extends AppRouteData with $MangaHomeRoute {
   String get sidebarLabel => 'Manga';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
 
   @override
   String get sidebarGroupId => 'core';
@@ -33,7 +33,10 @@ class MangaComicDetailRoute extends AppRouteData with $MangaComicDetailRoute {
   String get title => '漫画详情';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/manga';
 
   static const Permission routePermission = Permission.accessManga;
 
@@ -54,7 +57,10 @@ class MangaSearchRoute extends AppRouteData with $MangaSearchRoute {
   String get title => '搜索漫画';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/manga';
 
   static const Permission routePermission = Permission.accessManga;
 
@@ -80,7 +86,10 @@ class MangaReaderRoute extends AppRouteData with $MangaReaderRoute {
   String get title => '漫画阅读';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/manga/comic';
 
   static const Permission routePermission = Permission.accessManga;
 
@@ -101,7 +110,10 @@ class MangaDownloadsRoute extends AppRouteData with $MangaDownloadsRoute {
   String get title => '下载管理';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/manga';
 
   @override
   String get sidebarGroupId => 'manga';
@@ -122,7 +134,10 @@ class MangaHistoryRoute extends AppRouteData with $MangaHistoryRoute {
   String get title => '观看记录';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/manga';
 
   static const Permission routePermission = Permission.accessManga;
 

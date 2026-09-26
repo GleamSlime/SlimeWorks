@@ -13,6 +13,9 @@ import 'package:slime_works/pages/music_player/components/eq_panel.dart';
 import 'package:slime_works/pages/music_player/components/vinyl_disc_animation.dart';
 import 'package:slime_works/pages/music_player/components/player_controls.dart';
 import 'package:slime_works/pages/music_player/components/waveform_seek_bar.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 沉浸式页面画在封面模糊层上，底色恒为深色，所以这一页的文字/轨道色不走语义色：
 /// 语义色（textSecondary 等）是按"压在浅色表面上"设计的，放到深色 art 上会直接看不见。
@@ -97,7 +100,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
           // 返回按钮
           IconButton(
             onPressed: viewModel.exitImmersiveMode,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            icon: DrawIcon(StrokeIcons.keyboardArrowDown),
             iconSize: m.iconSize28,
             color: _OnArt.primary,
             tooltip: '收起',
@@ -108,7 +111,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
             onPressed: () {
               _showMoreOptions(context);
             },
-            icon: const Icon(Icons.more_vert_rounded),
+            icon: DrawIcon(StrokeIcons.moreVert),
             color: _OnArt.primary,
             tooltip: '更多',
           ),
@@ -264,7 +267,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
           return _ActionButton(
             // 选中态靠"空心→实心"区分，不额外染红：原先的 Colors.redAccent
             // 既不在状态色体系里，也不在这页的白色口径里。
-            icon: isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            icon: isFav ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
             label: '收藏',
             active: isFav,
             onTap: item != null ? () => viewModel.toggleFavorite(item.id) : null,
@@ -272,21 +275,21 @@ class ImmersivePlayerScreen extends StatelessWidget {
         }),
         // 歌词
         Obx(() => _ActionButton(
-          icon: Icons.lyrics_outlined,
+          icon: StrokeIcons.lyrics,
           label: '歌词',
           active: viewModel.showLyricsPanel.value,
           onTap: viewModel.toggleLyricsPanel,
         )),
         // 波形进度
         Obx(() => _ActionButton(
-          icon: Icons.graphic_eq_rounded,
+          icon: StrokeIcons.graphicEq,
           label: '波形',
           active: viewModel.showWaveformMode.value,
           onTap: viewModel.toggleWaveformMode,
         )),
         // 均衡器
         _ActionButton(
-          icon: Icons.equalizer_rounded,
+          icon: StrokeIcons.equalizer,
           label: '均衡器',
           onTap: () => _showEqPanel(context),
         ),
@@ -304,17 +307,17 @@ class ImmersivePlayerScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.share_rounded),
+              leading: DrawIcon(StrokeIcons.share),
               title: const Text('分享'),
               onTap: () => Navigator.pop(ctx),
             ),
             ListTile(
-              leading: const Icon(Icons.playlist_add_rounded),
+              leading: DrawIcon(StrokeIcons.playlistAdd),
               title: const Text('添加到播放列表'),
               onTap: () => Navigator.pop(ctx),
             ),
             ListTile(
-              leading: const Icon(Icons.info_outline_rounded),
+              leading: DrawIcon(StrokeIcons.infoOutline),
               title: const Text('歌曲信息'),
               onTap: () => Navigator.pop(ctx),
             ),
@@ -368,7 +371,7 @@ class _BlurredBackground extends StatelessWidget {
 
 /// 功能按钮
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final bool active;
   final VoidCallback? onTap;
@@ -392,7 +395,7 @@ class _ActionButton extends StatelessWidget {
       children: [
         IconButton(
           onPressed: onTap,
-          icon: Icon(icon, size: m.iconSize24),
+          icon: DrawIcon(icon, size: m.iconSize24),
           color: color,
         ),
         Text(label, style: _artCaption(context).copyWith(color: color)),
@@ -416,12 +419,12 @@ class _VolumeSlider extends StatelessWidget {
           onPressed: () => _showVolumePopup(context),
           icon: Obx(() {
             final vol = viewModel.volume.value;
-            return Icon(
+            return DrawIcon(
               vol == 0
-                  ? Icons.volume_off_rounded
+                  ? StrokeIcons.volumeOff
                   : vol < 50
-                      ? Icons.volume_down_rounded
-                      : Icons.volume_up_rounded,
+                      ? StrokeIcons.volumeDown
+                      : StrokeIcons.volumeUp,
               size: m.iconSize24,
             );
           }),
@@ -511,12 +514,12 @@ class _VolumePopupOverlay extends StatelessWidget {
                       final vol = viewModel.volume.value;
                       return GestureDetector(
                         onTap: () => viewModel.setVolume(vol > 0 ? 0 : 100),
-                        child: Icon(
+                        child: DrawIcon(
                           vol == 0
-                              ? Icons.volume_off_rounded
+                              ? StrokeIcons.volumeOff
                               : vol < 50
-                                  ? Icons.volume_down_rounded
-                                  : Icons.volume_up_rounded,
+                                  ? StrokeIcons.volumeDown
+                                  : StrokeIcons.volumeUp,
                           size: m.iconSize20,
                           color: _OnArt.secondary,
                         ),
@@ -630,8 +633,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                   onPressed: isTranslating ? null : widget.viewModel.translateLyrics,
                   // 这页恒压在深色 art 上，选中态用白色而不是强调色：
                   // 亮色主题的 accent 是深色，落在 art 上等于把按钮关掉。
-                  icon: Icon(
-                    Icons.translate_rounded,
+                  icon: DrawIcon(StrokeIcons.translate,
                     size: m.iconSize16,
                     color: hasTranslation ? _OnArt.primary : _OnArt.muted,
                   ),

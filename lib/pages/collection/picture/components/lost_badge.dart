@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class LostBadge extends StatelessWidget {
   const LostBadge({super.key});
@@ -18,7 +20,7 @@ class LostBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.link_off, size: AppTheme.metrics.iconSize12, color: Colors.white),
+          DrawIcon(StrokeIcons.linkOff, size: AppTheme.metrics.iconSize12, color: Colors.white),
           SizedBox(width: AppTheme.metrics.kSpace4),
           Text('丢失', style: TextStyle(
             color: Colors.white,

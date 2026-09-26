@@ -7,6 +7,9 @@ import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class AliyunSettingsTab extends StatefulWidget {
   const AliyunSettingsTab({super.key});
@@ -59,7 +62,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
       ..showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildSectionTitle(String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -71,7 +74,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
             color: LightColors.orange.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(icon, size: m.iconSize12, color: LightColors.orange),
+          child: DrawIcon(icon, size: m.iconSize12, color: LightColors.orange),
         ),
         SizedBox(width: m.kSpace8),
         Text(
@@ -119,7 +122,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle('数据来源', Icons.swap_horiz),
+            _buildSectionTitle('数据来源', StrokeIcons.swapHoriz),
             SizedBox(height: m.kSpace12),
             _buildSettingsCard(
               child: Column(
@@ -134,8 +137,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           color: LightColors.orange.withAlpha(25),
                           borderRadius: m.radius8,
                         ),
-                        child: Icon(
-                          Icons.swap_horiz,
+                        child: DrawIcon(StrokeIcons.swapHoriz,
                           size: m.iconSize16,
                           color: LightColors.orange,
                         ),
@@ -183,7 +185,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
               ),
             ),
             SizedBox(height: m.kSpace24),
-            _buildSectionTitle('AccessKey 配置', Icons.key_rounded),
+            _buildSectionTitle('AccessKey 配置', StrokeIcons.key),
             SizedBox(height: m.kSpace12),
             _buildSettingsCard(
               child: Column(
@@ -205,8 +207,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           color: LightColors.orange.withAlpha(15),
                           borderRadius: m.radius8,
                         ),
-                        child: Icon(
-                          Icons.vpn_key_rounded,
+                        child: DrawIcon(StrokeIcons.vpnKey,
                           size: m.iconSize16,
                           color: LightColors.orange,
                         ),
@@ -235,7 +236,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           Clipboard.setData(ClipboardData(text: _accessKeyIdCtrl.text));
                           _showSnack('已复制');
                         },
-                        icon: Icon(Icons.copy_rounded, size: m.iconSize16),
+                        icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16),
                       ),
                     ),
                     style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
@@ -254,7 +255,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           color: LightColors.red.withAlpha(15),
                           borderRadius: m.radius8,
                         ),
-                        child: Icon(Icons.lock_rounded, size: m.iconSize16, color: LightColors.red),
+                        child: DrawIcon(StrokeIcons.lock, size: m.iconSize16, color: LightColors.red),
                       ),
                       SizedBox(width: m.kSpace10),
                       Expanded(
@@ -269,8 +270,8 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                       ),
                       IconButton(
                         onPressed: () => setState(() => _obscureSecret = !_obscureSecret),
-                        icon: Icon(
-                          _obscureSecret ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                        icon: DrawIcon(
+                          _obscureSecret ? StrokeIcons.visibilityOff : StrokeIcons.visibility,
                           size: m.iconSize16,
                           color: theme.colorScheme.onSurface.withAlpha(60),
                         ),
@@ -289,7 +290,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           Clipboard.setData(ClipboardData(text: _accessKeySecretCtrl.text));
                           _showSnack('已复制');
                         },
-                        icon: Icon(Icons.copy_rounded, size: m.iconSize16),
+                        icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16),
                       ),
                     ),
                     style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
@@ -302,7 +303,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
               ),
             ),
             SizedBox(height: m.kSpace24),
-            _buildSectionTitle('检查间隔', Icons.timer_rounded),
+            _buildSectionTitle('检查间隔', StrokeIcons.timer),
             SizedBox(height: m.kSpace12),
             _buildSettingsCard(
               child: Obx(
@@ -325,8 +326,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                             color: LightColors.cyan.withAlpha(15),
                             borderRadius: m.radius8,
                           ),
-                          child: Icon(
-                            Icons.schedule_rounded,
+                          child: DrawIcon(StrokeIcons.schedule,
                             size: m.iconSize16,
                             color: LightColors.cyan,
                           ),

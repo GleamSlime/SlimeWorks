@@ -10,6 +10,8 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/pages/novel_library/components/novel_card.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 书籍库页面
 class NovelLibraryPage extends StatelessWidget {
@@ -24,12 +26,12 @@ class NovelLibraryPage extends StatelessWidget {
         GlassMenuItem<String>(
           value: 'move_to_folder',
           label: '移动到文件夹',
-          icon: Icons.folder_open_rounded,
+          icon: StrokeIcons.folderOpen,
         ),
         GlassMenuItem<String>(
           value: 'delete',
           label: '删除',
-          icon: Icons.delete_outline_rounded,
+          icon: StrokeIcons.deleteOutline,
           destructive: true,
         ),
       ],
@@ -64,26 +66,26 @@ class NovelLibraryPage extends StatelessWidget {
         title: '书籍库',
         forceLocalChrome: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: DrawIcon(StrokeIcons.arrowBack),
           onPressed: () {
             if (context.canPop()) context.pop();
           },
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.folder_open),
+            icon: DrawIcon(StrokeIcons.folderOpen),
             tooltip: '扫描文件夹',
             onPressed: () => controller.scanFolder(),
           ),
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: DrawIcon(StrokeIcons.add),
             tooltip: '添加单个文件',
             onPressed: () => controller.addSingleNovel(),
           ),
           Obx(
             () => controller.novels.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.delete_sweep),
+                    icon: DrawIcon(StrokeIcons.deleteSweep),
                     tooltip: '清空所有',
                     onPressed: () => Get.dialog(
                       AlertDialog(
@@ -228,8 +230,7 @@ class NovelLibraryPage extends StatelessWidget {
                                         )
                                       : TextButton.icon(
                                           onPressed: () => controller.cancelSearch(),
-                                          icon: Icon(
-                                            Icons.cancel,
+                                          icon: DrawIcon(StrokeIcons.cancel,
                                             size: AppTheme.metrics.iconSize18,
                                           ),
                                           label: const Text('取消'),
@@ -314,13 +315,13 @@ class NovelLibraryPage extends StatelessWidget {
                                       hintText: controller.searchByContent.value
                                           ? '搜索书籍内容...'
                                           : '搜索书籍名字...',
-                                      prefixIcon: const Icon(Icons.search),
+                                      prefixIcon: DrawIcon(StrokeIcons.search),
                                       suffixIcon: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           if (controller.searchQuery.value.isNotEmpty)
                                             IconButton(
-                                              icon: const Icon(Icons.clear),
+                                              icon: DrawIcon(StrokeIcons.clear),
                                               onPressed: () {
                                                 controller.searchQuery.value = '';
                                                 controller.contentSearchResults.clear();
@@ -329,7 +330,7 @@ class NovelLibraryPage extends StatelessWidget {
                                           if (controller.searchByContent.value &&
                                               controller.searchQuery.value.isNotEmpty)
                                             IconButton(
-                                              icon: const Icon(Icons.search),
+                                              icon: DrawIcon(StrokeIcons.search),
                                               onPressed: () => controller.searchInContent(
                                                 controller.searchQuery.value,
                                               ),
@@ -400,8 +401,7 @@ class NovelLibraryPage extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.search_off,
+                          DrawIcon(StrokeIcons.searchOff,
                             size: AppTheme.metrics.iconSize64,
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
@@ -511,8 +511,7 @@ class NovelLibraryPage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.menu_book_outlined,
+          DrawIcon(StrokeIcons.menuBook,
             size: isNarrow ? 80 : 120,
             color: Theme.of(context).colorScheme.outline,
           ),
@@ -538,7 +537,7 @@ class NovelLibraryPage extends StatelessWidget {
             children: [
               ElevatedButton.icon(
                 onPressed: () => Get.find<NovelLibraryViewModel>().scanFolder(),
-                icon: const Icon(Icons.folder_open),
+                icon: DrawIcon(StrokeIcons.folderOpen),
                 label: const Text('扫描文件夹'),
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(
@@ -549,7 +548,7 @@ class NovelLibraryPage extends StatelessWidget {
               ),
               OutlinedButton.icon(
                 onPressed: () => Get.find<NovelLibraryViewModel>().addSingleNovel(),
-                icon: const Icon(Icons.add),
+                icon: DrawIcon(StrokeIcons.add),
                 label: const Text('添加单个文件'),
                 style: OutlinedButton.styleFrom(
                   padding: EdgeInsets.symmetric(

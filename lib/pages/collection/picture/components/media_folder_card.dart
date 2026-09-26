@@ -11,6 +11,8 @@ import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MediaFolderCard extends StatefulWidget {
   const MediaFolderCard({
@@ -92,38 +94,38 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
         GlassMenuItem<String>(
           value: 'rename',
           label: '重命名文件夹',
-          icon: Icons.drive_file_rename_outline_rounded,
+          icon: StrokeIcons.driveFileRenameOutline,
         ),
         if (widget.onTransfer != null)
           GlassMenuItem<String>(
             value: 'transfer',
             label: '转移集合到...',
-            icon: Icons.drive_folder_upload_rounded,
+            icon: StrokeIcons.driveFolderUpload,
           ),
         if (widget.isRemote && widget.onPullToLocal != null)
           GlassMenuItem<String>(
             value: 'pull_to_local',
             label: '拉取到本地',
-            icon: Icons.download_rounded,
+            icon: StrokeIcons.download,
           ),
         if (PlatformUtil.isMobile)
           GlassMenuItem<String>(
             value: 'select',
             label: '进入多选',
-            icon: Icons.checklist_rounded,
+            icon: StrokeIcons.checklist,
           ),
         const PopupMenuDivider(),
         if (widget.isRemote && widget.onDeleteNodeFiles != null)
           GlassMenuItem<String>(
             value: 'delete_node_files',
             label: '删除节点本地文件',
-            icon: Icons.cloud_off_rounded,
+            icon: StrokeIcons.cloudOff,
             destructive: true,
           ),
         GlassMenuItem<String>(
           value: 'delete',
           label: '删除文件夹',
-          icon: Icons.delete_outline_rounded,
+          icon: StrokeIcons.deleteOutline,
           destructive: true,
         ),
       ],
@@ -251,8 +253,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                           color: Colors.black.withAlpha(120),
                                           borderRadius: AppTheme.metrics.radius999,
                                         ),
-                                        child: Icon(
-                                          Icons.lock_outline,
+                                        child: DrawIcon(StrokeIcons.lockOutline,
                                           size: AppTheme.metrics.iconSize16,
                                           color: Colors.white70,
                                         ),
@@ -276,8 +277,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                             );
                           }())
                         : Center(
-                            child: Icon(
-                              Icons.folder_rounded,
+                            child: DrawIcon(StrokeIcons.folder,
                               size: scaleW(54),
                               color: theme.colorScheme.primary.withAlpha(180),
                             ),
@@ -377,8 +377,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                               SizedBox(height: appMetrics.kSpace4),
                               Row(
                                 children: [
-                                  Icon(
-                                    Icons.folder_outlined,
+                                  DrawIcon(StrokeIcons.folder,
                                     size: scaleW(12),
                                     color: Colors.white.withAlpha(180),
                                   ),
@@ -427,8 +426,7 @@ class _FolderPlaceholder extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Icon(
-          Icons.folder_off_outlined,
+        child: DrawIcon(StrokeIcons.folderOff,
           size: AppTheme.metrics.iconSize48,
           color: theme.colorScheme.primary.withAlpha(150),
         ),

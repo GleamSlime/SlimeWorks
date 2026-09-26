@@ -12,6 +12,8 @@ import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class AppUpdateService {
   static const String _feedUrl =
@@ -297,8 +299,7 @@ class AppUpdateService {
         shape: RoundedRectangleBorder(borderRadius: m.radius12),
         title: Row(
           children: [
-            Icon(
-              Icons.system_update_rounded,
+            DrawIcon(StrokeIcons.systemUpdate,
               size: m.iconSize24,
               color: theme.colorScheme.primary,
             ),

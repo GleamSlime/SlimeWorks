@@ -17,6 +17,9 @@ import 'package:slime_works/pages/music_player/components/playlist_sidebar.dart'
 import 'package:slime_works/pages/music_player/components/bottom_player_bar.dart';
 import 'package:slime_works/pages/music_player/components/eq_panel.dart';
 import 'package:slime_works/pages/music_player/components/immersive_player_screen.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 侧边栏宽度
 ///
@@ -232,28 +235,28 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                   onChanged: (v) => viewModel.searchQuery.value = v,
                   decoration: const InputDecoration(
                     hintText: '搜索歌曲...',
-                    prefixIcon: Icon(Icons.search_rounded),
+                    prefixIcon: DrawIcon(StrokeIcons.search),
                   ),
                 ),
               ),
               SizedBox(width: m.kSpace8),
               ToolIconButton(
-                icon: Icons.file_open_rounded,
+                icon: StrokeIcons.fileOpen,
                 tooltip: '导入文件',
                 onPressed: viewModel.pickAndImportFiles,
               ),
               ToolIconButton(
-                icon: Icons.folder_open_rounded,
+                icon: StrokeIcons.folderOpen,
                 tooltip: '导入文件夹',
                 onPressed: viewModel.pickAndImportFolder,
               ),
               ToolIconButton(
-                icon: Icons.link_rounded,
+                icon: StrokeIcons.link,
                 tooltip: 'ASMR链接导入',
                 onPressed: () => _showAsmrImportDialog(context),
               ),
               ToolIconButton(
-                icon: Icons.add_rounded,
+                icon: StrokeIcons.add,
                 tooltip: '新建播放列表',
                 onPressed: () => _showCreatePlaylistDialog(context),
               ),
@@ -293,13 +296,13 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
     // 搜索无结果和真的没导入过是两回事，共用一句"点击导入按钮添加"会让人以为列表被清空了。
     if (viewModel.searchQuery.value.trim().isNotEmpty) {
       return const EmptyState(
-        icon: Icons.search_rounded,
+        icon: StrokeIcons.search,
         title: '未找到匹配的歌曲',
         description: '换个关键词试试',
       );
     }
     return EmptyState(
-      icon: Icons.music_note_rounded,
+      icon: StrokeIcons.musicNote,
       title: '暂无音乐',
       description: '把音频文件直接拖进窗口，或用下面的按钮导入',
       action: Wrap(
@@ -309,17 +312,17 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         children: [
           ElevatedButton.icon(
             onPressed: viewModel.pickAndImportFiles,
-            icon: const Icon(Icons.file_open_rounded),
+            icon: DrawIcon(StrokeIcons.fileOpen),
             label: const Text('选择文件'),
           ),
           ElevatedButton.icon(
             onPressed: viewModel.pickAndImportFolder,
-            icon: const Icon(Icons.folder_open_rounded),
+            icon: DrawIcon(StrokeIcons.folderOpen),
             label: const Text('选择文件夹'),
           ),
           OutlinedButton.icon(
             onPressed: () => _showAsmrImportDialog(context),
-            icon: const Icon(Icons.link_rounded),
+            icon: DrawIcon(StrokeIcons.link),
             label: const Text('ASMR链接'),
           ),
         ],
@@ -344,7 +347,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.music_note_rounded, size: m.iconSize64, color: s.accent),
+              DrawIcon(StrokeIcons.musicNote, size: m.iconSize64, color: s.accent),
               SizedBox(height: m.kSpace12),
               Text(
                 '松开以导入音乐',
@@ -368,7 +371,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.edit_rounded),
+                leading: DrawIcon(StrokeIcons.edit),
                 title: const Text('重命名'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -376,18 +379,18 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.image_rounded),
+                leading: DrawIcon(StrokeIcons.image),
                 title: const Text('更换封面'),
                 onTap: () => Navigator.pop(ctx),
               ),
               ListTile(
-                leading: const Icon(Icons.folder_rounded),
+                leading: DrawIcon(StrokeIcons.folder),
                 title: const Text('移动到目录'),
                 onTap: () => Navigator.pop(ctx),
               ),
               // 批量语音识别
               ListTile(
-                leading: const Icon(Icons.record_voice_over_rounded),
+                leading: DrawIcon(StrokeIcons.recordVoiceOver),
                 title: const Text('批量语音识别'),
                 subtitle: Text(
                   '识别当前列表 ${viewModel.currentItems.length} 首歌曲',
@@ -401,7 +404,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
               const AppDivider(),
               // 危险项整行染色：混在一列普通操作里最容易被顺手点到。
               ListTile(
-                leading: Icon(Icons.delete_outline_rounded, color: s.danger.color),
+                leading: DrawIcon(StrokeIcons.deleteOutline, color: s.danger.color),
                 title: Text('删除播放列表', style: TextStyle(color: s.danger.color)),
                 onTap: () => Navigator.pop(ctx),
               ),
@@ -574,7 +577,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
           ),
           ElevatedButton.icon(
             onPressed: submit,
-            icon: Icon(Icons.link_rounded, size: AppTheme.metrics.iconSize18),
+            icon: DrawIcon(StrokeIcons.link, size: AppTheme.metrics.iconSize18),
             label: const Text('导入'),
           ),
         ],
@@ -599,7 +602,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
   void _showTrackSheet<T>({
     required BuildContext context,
     required String title,
-    required IconData icon,
+    required StrokeIcon icon,
     required String emptyTitle,
     required List<T> Function() items,
     required Widget Function(BuildContext context, T item) tileBuilder,
@@ -623,7 +626,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                 padding: EdgeInsets.all(m.kSpace16),
                 child: Row(
                   children: [
-                    Icon(icon, size: m.iconSize18, color: AppSemantic.of(ctx).accent),
+                    DrawIcon(icon, size: m.iconSize18, color: AppSemantic.of(ctx).accent),
                     SizedBox(width: m.kSpace8),
                     Text(title, style: AppTextStyles.sectionTitle(ctx)),
                     const Spacer(),
@@ -655,7 +658,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
     _showTrackSheet(
       context: context,
       title: '收藏',
-      icon: Icons.favorite_rounded,
+      icon: StrokeIcons.favorite,
       emptyTitle: '暂无收藏',
       items: () => viewModel.favoriteItems,
       tileBuilder: (ctx, item) => _TrackTile(
@@ -683,7 +686,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
     _showTrackSheet(
       context: context,
       title: '最近播放',
-      icon: Icons.history_rounded,
+      icon: StrokeIcons.history,
       emptyTitle: '暂无播放记录',
       items: () => viewModel.recentRecords,
       tileBuilder: (ctx, record) {
@@ -719,7 +722,7 @@ class _TrackTile extends StatelessWidget {
     return ListTile(
       dense: true,
       onTap: onTap,
-      leading: Icon(Icons.music_note_rounded, size: m.iconSize20, color: s.textTertiary),
+      leading: DrawIcon(StrokeIcons.musicNote, size: m.iconSize20, color: s.textTertiary),
       title: Text(
         title,
         style: AppTextStyles.rowTitle(context),
@@ -841,8 +844,7 @@ class _FolderInfoHeader extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           // 装饰性音符
-          Icon(
-            Icons.music_note_rounded,
+          DrawIcon(StrokeIcons.musicNote,
             size: size * 0.35,
             color: s.accent.withValues(alpha: 0.4),
           ),
@@ -850,8 +852,7 @@ class _FolderInfoHeader extends StatelessWidget {
           Positioned(
             right: m.kSpace4,
             bottom: m.kSpace4,
-            child: Icon(
-              Icons.settings_rounded,
+            child: DrawIcon(StrokeIcons.settings,
               size: m.iconSize14,
               color: s.textTertiary.withValues(alpha: 0.6),
             ),
@@ -881,13 +882,13 @@ class _FolderInfoHeader extends StatelessWidget {
           spacing: m.kSpace12,
           runSpacing: m.kSpace4,
           children: [
-            _InfoChip(icon: Icons.audiotrack_rounded, label: '$songCount 首'),
+            _InfoChip(icon: StrokeIcons.audiotrack, label: '$songCount 首'),
             if (playCount > 0)
-              _InfoChip(icon: Icons.play_circle_outline_rounded, label: '$playCount 次播放'),
+              _InfoChip(icon: StrokeIcons.playCircleOutline, label: '$playCount 次播放'),
             if (author != null && author!.isNotEmpty)
-              _InfoChip(icon: Icons.person_outline_rounded, label: author!),
+              _InfoChip(icon: StrokeIcons.personOutline, label: author!),
             if (createdAt != null)
-              _InfoChip(icon: Icons.calendar_today_rounded, label: _formatTimestamp(createdAt!)),
+              _InfoChip(icon: StrokeIcons.calendarToday, label: _formatTimestamp(createdAt!)),
           ],
         ),
         if (tags != null && tags!.isNotEmpty)
@@ -916,7 +917,7 @@ class _FolderInfoHeader extends StatelessWidget {
                   // 全部播放
                   ElevatedButton.icon(
                     onPressed: onPlayAll,
-                    icon: Icon(Icons.play_arrow_rounded, size: m.iconSize20),
+                    icon: DrawIcon(StrokeIcons.playArrow, size: m.iconSize20),
                     label: const Text('全部播放'),
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.symmetric(
@@ -929,7 +930,7 @@ class _FolderInfoHeader extends StatelessWidget {
                   // 导入文件
                   OutlinedButton.icon(
                     onPressed: onImportFiles,
-                    icon: Icon(Icons.file_open_rounded, size: m.iconSize18),
+                    icon: DrawIcon(StrokeIcons.fileOpen, size: m.iconSize18),
                     label: const Text('导入文件'),
                     style: OutlinedButton.styleFrom(
                       padding: EdgeInsets.symmetric(
@@ -942,7 +943,7 @@ class _FolderInfoHeader extends StatelessWidget {
                   // 导入文件夹
                   OutlinedButton.icon(
                     onPressed: onImportFolder,
-                    icon: Icon(Icons.folder_open_rounded, size: m.iconSize18),
+                    icon: DrawIcon(StrokeIcons.folderOpen, size: m.iconSize18),
                     label: const Text('导入文件夹'),
                     style: OutlinedButton.styleFrom(
                       padding: EdgeInsets.symmetric(
@@ -955,7 +956,7 @@ class _FolderInfoHeader extends StatelessWidget {
                   // ASMR 链接导入
                   OutlinedButton.icon(
                     onPressed: onImportAsmr,
-                    icon: Icon(Icons.link_rounded, size: m.iconSize18),
+                    icon: DrawIcon(StrokeIcons.link, size: m.iconSize18),
                     label: const Text('ASMR链接'),
                     style: OutlinedButton.styleFrom(
                       padding: EdgeInsets.symmetric(
@@ -972,7 +973,7 @@ class _FolderInfoHeader extends StatelessWidget {
             // 设置
             IconButton(
               onPressed: onSettings,
-              icon: const Icon(Icons.more_horiz_rounded),
+              icon: DrawIcon(StrokeIcons.moreHoriz),
               tooltip: '设置',
               style: IconButton.styleFrom(backgroundColor: s.surfaceSunken),
             ),
@@ -994,7 +995,7 @@ class _FolderInfoHeader extends StatelessWidget {
 
 /// 信息标签
 class _InfoChip extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
 
   const _InfoChip({required this.icon, required this.label});
@@ -1006,7 +1007,7 @@ class _InfoChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: m.iconSize14, color: s.textTertiary),
+        DrawIcon(icon, size: m.iconSize14, color: s.textTertiary),
         SizedBox(width: m.kSpace4),
         Text(label, style: AppTextStyles.caption(context)),
       ],
@@ -1032,17 +1033,17 @@ class _MusicPlayerToolbar extends StatelessWidget {
     return Row(
       children: [
         DesktopHeadToolsButton(
-          icon: Icon(Icons.favorite_rounded, size: m.iconSize16),
+          icon: DrawIcon(StrokeIcons.favorite, size: m.iconSize16),
           size: m.iconSize32,
           onTap: onFavorites,
         ),
         DesktopHeadToolsButton(
-          icon: Icon(Icons.history_rounded, size: m.iconSize16),
+          icon: DrawIcon(StrokeIcons.history, size: m.iconSize16),
           size: m.iconSize32,
           onTap: onRecentPlayed,
         ),
         DesktopHeadToolsButton(
-          icon: Icon(Icons.equalizer_rounded, size: m.iconSize16),
+          icon: DrawIcon(StrokeIcons.equalizer, size: m.iconSize16),
           size: m.iconSize32,
           onTap: onEqPanel,
         ),

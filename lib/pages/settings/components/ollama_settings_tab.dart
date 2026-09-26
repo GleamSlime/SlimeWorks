@@ -6,6 +6,9 @@ import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class OllamaSettingsTab extends StatefulWidget {
   const OllamaSettingsTab({super.key});
@@ -59,7 +62,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     }
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildSectionTitle(String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -71,7 +74,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
             color: theme.colorScheme.primary.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
         ),
         SizedBox(width: m.kSpace8),
         Text(
@@ -136,10 +139,10 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
       children: [
         Row(
           children: [
-            _buildSectionTitle('Ollama 服务器', Icons.smart_toy_outlined),
+            _buildSectionTitle('Ollama 服务器', StrokeIcons.smartToy),
             Spacer(),
             IconButton(
-              icon: const Icon(Icons.add),
+              icon: DrawIcon(StrokeIcons.add),
               onPressed: _showAddServerDialog,
               tooltip: '添加服务器',
               iconSize: m.iconSize18,
@@ -168,7 +171,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                       color: brandColor.withAlpha(20),
                       borderRadius: m.radius10,
                     ),
-                    child: Icon(Icons.dns_outlined, size: m.iconSize20, color: brandColor),
+                    child: DrawIcon(StrokeIcons.dns, size: m.iconSize20, color: brandColor),
                   ),
                   SizedBox(height: m.kSpace12),
                   Text(
@@ -230,8 +233,8 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                     color: statusColor.withAlpha(25),
                     borderRadius: m.radius8,
                   ),
-                  child: Icon(
-                    server.isAvailable ? Icons.check_circle_outline : Icons.error_outline,
+                  child: DrawIcon(
+                    server.isAvailable ? StrokeIcons.checkCircleOutline : StrokeIcons.errorOutline,
                     size: m.iconSize16,
                     color: statusColor,
                   ),
@@ -247,13 +250,13 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.edit),
+                      icon: DrawIcon(StrokeIcons.edit),
                       onPressed: () => _showEditServerDialog(server),
                       tooltip: '编辑',
                       iconSize: m.iconSize18,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete),
+                      icon: DrawIcon(StrokeIcons.delete),
                       onPressed: () => _deleteServer(server.url),
                       tooltip: '删除',
                       iconSize: m.iconSize18,
@@ -272,7 +275,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('默认 AI 模型', Icons.psychology_outlined),
+        _buildSectionTitle('默认 AI 模型', StrokeIcons.psychology),
         SizedBox(height: appMetrics.spacingMedium),
         Obx(() {
           return _buildSettingsCard(
@@ -301,7 +304,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                 ),
                 SizedBox(width: appMetrics.spacingMedium),
                 IconButton(
-                  icon: const Icon(Icons.refresh),
+                  icon: DrawIcon(StrokeIcons.refresh),
                   onPressed: _loadModels,
                   tooltip: '刷新模型列表',
                 ),
@@ -317,7 +320,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('连接测试', Icons.wifi_find_outlined),
+        _buildSectionTitle('连接测试', StrokeIcons.wifiFind),
         SizedBox(height: appMetrics.spacingMedium),
         _buildSettingsCard(
           child: Column(
@@ -333,7 +336,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                           height: scaleW(16),
                           child: const CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.wifi_find),
+                      : DrawIcon(StrokeIcons.wifiFind),
                   label: Text(_isLoading.value ? '测试中...' : '测试所有服务器'),
                 );
               }),

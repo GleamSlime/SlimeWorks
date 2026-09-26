@@ -3,6 +3,9 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/manga/components/manga_login_dialog.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 const String _kDefaultCdnIp = '104.18.227.172';
 
@@ -141,13 +144,13 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
       padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace16),
       children: [
         // ─── 账号 ─────────────────────────────────────────────
-        const _SectionTitle('账号', icon: Icons.person_outline),
+        const _SectionTitle('账号', icon: StrokeIcons.personOutline),
         _AccountCard(service: _service, onChanged: () => setState(() {})),
 
         SizedBox(height: m.kSpace20),
 
         // ─── API 分流 ──────────────────────────────────────────
-        const _SectionTitle('API 分流', icon: Icons.alt_route_rounded),
+        const _SectionTitle('API 分流', icon: StrokeIcons.altRoute),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -174,7 +177,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : Icon(Icons.speed, size: AppTheme.metrics.iconSize16),
+                          : DrawIcon(StrokeIcons.speed, size: AppTheme.metrics.iconSize16),
                       label: const Text('全部测速'),
                       onPressed: _testingAll ? null : _testAll,
                       style: OutlinedButton.styleFrom(
@@ -282,7 +285,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
         SizedBox(height: m.kSpace20),
 
         // ─── 代理 ──────────────────────────────────────────────
-        const _SectionTitle('代理（使用分流时通常无需设置）', icon: Icons.vpn_lock_outlined),
+        const _SectionTitle('代理（使用分流时通常无需设置）', icon: StrokeIcons.vpnLock),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -323,7 +326,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
         SizedBox(height: m.kSpace20),
 
         // ─── 图片服务器 ─────────────────────────────────────────
-        const _SectionTitle('图片服务器', icon: Icons.image_outlined),
+        const _SectionTitle('图片服务器', icon: StrokeIcons.image),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -378,7 +381,7 @@ class _AccountCard extends StatelessWidget {
         child: ListTile(
           leading: CircleAvatar(
             backgroundColor: theme.colorScheme.primaryContainer,
-            child: Icon(Icons.person, color: theme.colorScheme.onPrimaryContainer),
+            child: DrawIcon(StrokeIcons.person, color: theme.colorScheme.onPrimaryContainer),
           ),
           title: Text(service.currentUser?.name ?? '已登录'),
           subtitle: Text(
@@ -386,7 +389,7 @@ class _AccountCard extends StatelessWidget {
             style: theme.textTheme.bodySmall,
           ),
           trailing: TextButton.icon(
-            icon: Icon(Icons.logout, size: AppTheme.metrics.iconSize16),
+            icon: DrawIcon(StrokeIcons.logout, size: AppTheme.metrics.iconSize16),
             label: const Text('退出'),
             onPressed: () async {
               await service.logout();
@@ -411,8 +414,7 @@ class _AccountCard extends StatelessWidget {
                 color: theme.colorScheme.primary.withAlpha(25),
                 borderRadius: m.radius10,
               ),
-              child: Icon(
-                Icons.account_circle_outlined,
+              child: DrawIcon(StrokeIcons.accountCircle,
                 size: m.iconSize24,
                 color: theme.colorScheme.primary,
               ),
@@ -437,7 +439,7 @@ class _AccountCard extends StatelessWidget {
               ),
             ),
             FilledButton.icon(
-              icon: Icon(Icons.login, size: AppTheme.metrics.iconSize16),
+              icon: DrawIcon(StrokeIcons.login, size: AppTheme.metrics.iconSize16),
               label: const Text('登录'),
               onPressed: () async {
                 final ok = await showMangaLoginDialog(context);
@@ -514,9 +516,9 @@ class _ChannelRadioTile extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String text;
-  final IconData icon;
+  final StrokeIcon icon;
 
-  const _SectionTitle(this.text, {this.icon = Icons.settings_outlined});
+  const _SectionTitle(this.text, {this.icon = StrokeIcons.settings});
 
   @override
   Widget build(BuildContext context) {
@@ -533,7 +535,7 @@ class _SectionTitle extends StatelessWidget {
               color: theme.colorScheme.primary.withAlpha(20),
               borderRadius: m.radius6,
             ),
-            child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+            child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
           ),
           SizedBox(width: m.kSpace8),
           Text(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 桌面端媒体库操作栏（面包屑 / 统计 / 列数调节 / 排序）。
 /// 仅桌面端的 [ScreenChromeData.leading] 使用，移动端不显示该组件。
@@ -55,7 +57,7 @@ class LibraryActionBar extends StatelessWidget {
                   child: IgnorePointer(
                     ignoring: !showBack,
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
+                      icon: DrawIcon(StrokeIcons.arrowBack),
                       iconSize: scaleW(18),
                       padding: EdgeInsets.all(appMetrics.kSpace8),
                       constraints: BoxConstraints(
@@ -80,10 +82,10 @@ class LibraryActionBar extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.grid_view_rounded, size: scaleW(16), color: Theme.of(context).hintColor),
+                    DrawIcon(StrokeIcons.gridView, size: scaleW(16), color: Theme.of(context).hintColor),
                     SizedBox(width: appMetrics.kSpace4),
                     IconButton(
-                      icon: const Icon(Icons.remove_rounded),
+                      icon: DrawIcon(StrokeIcons.remove),
                       iconSize: scaleW(16),
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
@@ -92,7 +94,7 @@ class LibraryActionBar extends StatelessWidget {
                     ),
                     Text('$columnCount 列', style: Theme.of(context).textTheme.bodySmall),
                     IconButton(
-                      icon: const Icon(Icons.add_rounded),
+                      icon: DrawIcon(StrokeIcons.add),
                       iconSize: scaleW(16),
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       constraints: BoxConstraints(minWidth: scaleW(28), minHeight: scaleW(28)),
@@ -108,7 +110,7 @@ class LibraryActionBar extends StatelessWidget {
                   icon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sort_rounded, size: scaleW(18)),
+                      DrawIcon(StrokeIcons.sort, size: scaleW(18)),
                       SizedBox(width: appMetrics.kSpace4),
                       ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: scaleW(72)),
@@ -190,7 +192,7 @@ class LibraryActionBar extends StatelessWidget {
                         icon: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.sort_rounded, size: scaleW(18)),
+                            DrawIcon(StrokeIcons.sort, size: scaleW(18)),
                             SizedBox(width: appMetrics.kSpace4),
                             ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: scaleW(72)),
@@ -239,18 +241,18 @@ Widget _buildBreadcrumb(
       children: [
         TextButton(onPressed: onExitToRoot, child: const Text('媒体库')),
         for (int index = 0; index < trail.length; index++) ...[
-          Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+          DrawIcon(StrokeIcons.chevronRight, size: scaleW(18)),
           TextButton(
             onPressed: () => viewModel.enterFolder(trail[index].id),
             child: Text(trail[index].name),
           ),
         ],
         if (smartFolder != null) ...[
-          Icon(Icons.chevron_right_rounded, size: scaleW(18)),
+          DrawIcon(StrokeIcons.chevronRight, size: scaleW(18)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.auto_awesome_outlined, size: scaleW(14)),
+              DrawIcon(StrokeIcons.autoAwesome, size: scaleW(14)),
               SizedBox(width: appMetrics.kSpace4),
               Text(smartFolder.name, style: Theme.of(context).textTheme.labelMedium),
             ],

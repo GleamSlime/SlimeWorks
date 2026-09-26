@@ -12,6 +12,8 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class RemoteNovelReaderDialog extends StatefulWidget {
   final NovelMetadata metadata;
@@ -92,7 +94,7 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
+                    icon: DrawIcon(StrokeIcons.close),
                   ),
                 ],
               ),
@@ -636,12 +638,12 @@ class _RemoteReaderBottomBar extends StatelessWidget {
             IconButton(
               tooltip: '目录',
               onPressed: onOpenCatalog,
-              icon: const Icon(Icons.menu_book_outlined),
+              icon: DrawIcon(StrokeIcons.menuBook),
             ),
             IconButton(
               tooltip: '上一章',
               onPressed: canGoPrevious ? onPrevious : null,
-              icon: const Icon(Icons.chevron_left),
+              icon: DrawIcon(StrokeIcons.chevronLeft),
             ),
             Expanded(
               child: Center(child: Text('章节', style: theme.textTheme.labelLarge)),
@@ -649,17 +651,17 @@ class _RemoteReaderBottomBar extends StatelessWidget {
             IconButton(
               tooltip: '下一章',
               onPressed: canGoNext ? onNext : null,
-              icon: const Icon(Icons.chevron_right),
+              icon: DrawIcon(StrokeIcons.chevronRight),
             ),
             IconButton(
               tooltip: '书籍详情',
               onPressed: onShowBookInfo,
-              icon: const Icon(Icons.info_outline),
+              icon: DrawIcon(StrokeIcons.infoOutline),
             ),
             IconButton(
               tooltip: '阅读设置',
               onPressed: onShowReaderSettings,
-              icon: const Icon(Icons.tune),
+              icon: DrawIcon(StrokeIcons.tune),
             ),
           ],
         ),

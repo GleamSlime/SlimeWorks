@@ -2,18 +2,17 @@
 @Tags(['golden'])
 library;
 
-import 'dart:io';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
+
+import 'helpers/page_golden.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 弹出菜单的离屏渲染
 ///
@@ -22,25 +21,8 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 /// 再把整窗截图存成 golden：改一次菜单主题就能看到，不必启 macOS 应用。
 void main() {
   setUpAll(() async {
-    final fonts = <String, String>{
-      'FZLanTingYuanS-EB-GB': 'assets/fonts/FZLanTingYuanS-EB-GB.ttf',
-    };
-    // 测试环境默认不给 MaterialIcons 喂真字体，图标全渲染成方块，
-    // 菜单这种"图标+文字"的对齐根本没法验收。从 SDK 缓存里把字体捞出来。
-    final flutterRoot = Platform.environment['FLUTTER_ROOT'];
-    if (flutterRoot != null) {
-      fonts['MaterialIcons'] =
-          '$flutterRoot/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
-    }
-    for (final entry in fonts.entries) {
-      final file = File(entry.value);
-      if (!file.existsSync()) continue;
-      final bytes = file.readAsBytesSync();
-      final loader = FontLoader(
-        entry.key,
-      )..addFont(Future.value(ByteData.view(Uint8List.fromList(bytes).buffer)));
-      await loader.load();
-    }
+    // 中文、图标字形都要真字体才看得出对齐，铺垫统一走 helper
+    await loadAppFonts();
   });
 
   testWidgets('浅色菜单：紧凑行高 + 图标槽 + 选中/危险态 + 悬停水洗', (tester) async {
@@ -69,8 +51,8 @@ Future<void> _renderMenu(
       builder: (context, _) {
         AppTheme.resetMetrics();
         final theme = dark
-            ? AppTheme.buildCustomDark(DarkColors.primary, 1.0)
-            : AppTheme.buildCustomLight(LightColors.primary, 1.0);
+            ? AppTheme.buildCustomDark(AppTheme.kFollowThemeAccent, 1.0)
+            : AppTheme.buildCustomLight(AppTheme.kFollowThemeAccent, 1.0);
         final semantic = dark ? AppSemantic.dark : AppSemantic.light;
         return MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -87,30 +69,30 @@ Future<void> _renderMenu(
                     GlassMenuItem<String>(
                       value: 'mtime',
                       label: '按修改时间',
-                      icon: Icons.schedule_rounded,
+                      icon: StrokeIcons.schedule,
                       selected: true,
                     ),
                     GlassMenuItem<String>(
                       value: 'name',
                       label: '按文件名',
-                      icon: Icons.sort_by_alpha_rounded,
+                      icon: StrokeIcons.sortByAlpha,
                     ),
                     GlassMenuItem<String>(
                       value: 'pin',
                       label: '固定到侧边栏',
-                      icon: Icons.push_pin_rounded,
+                      icon: StrokeIcons.pushPin,
                     ),
                     const PopupMenuDivider(),
                     GlassMenuItem<String>(
                       value: 'delete',
                       label: '从库中移除',
-                      icon: Icons.delete_outline_rounded,
+                      icon: StrokeIcons.deleteOutline,
                       destructive: true,
                     ),
                     GlassMenuItem<String>(
                       value: 'none',
                       label: '已禁用项',
-                      icon: Icons.block_rounded,
+                      icon: StrokeIcons.block,
                       enabled: false,
                     ),
                   ],

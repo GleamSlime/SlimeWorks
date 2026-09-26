@@ -10,6 +10,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/components/window/floating_task_progress.dart';
+import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 
@@ -59,7 +60,7 @@ class DesktopScaffold extends StatefulWidget {
       titleBarStyle: TitleBarStyle.hidden,
       // macOS 下原生窗口底色必须留透明，否则 MainFlutterWindow 挂的振动层
       // 会被这层不透明底色彻底盖住。
-      backgroundColor: WindowGlass.sidebar ? Colors.transparent : LightColors.background1,
+      backgroundColor: WindowGlass.sidebar ? Colors.transparent : AppSemantic.light.surface,
       windowButtonVisibility: false,
       title: desktopScreen.title.value,
     );
@@ -136,9 +137,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
     // 主区必须实心，否则文字会直接压在桌面上。
     final bool bleedThroughWindow = WindowGlass.sidebar && !isMobile;
     return Material(
-      color: bleedThroughWindow
-          ? Colors.transparent
-          : Theme.of(context).scaffoldBackgroundColor,
+      color: bleedThroughWindow ? Colors.transparent : AppSemantic.of(context).canvas,
       child: isMobile
           ? widget.child
           : Stack(
@@ -147,8 +146,8 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                   child: Obx(() {
                     final String path = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
                     return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      reverseDuration: const Duration(milliseconds: 150),
+                      duration: AppMotion.base,
+                      reverseDuration: AppMotion.fast,
                       child: path.isEmpty
                           ? const SizedBox.shrink()
                           : _GlobalBlurBackground(key: ValueKey<String>(path), coverPath: path),
@@ -198,7 +197,7 @@ class _GlobalBlurBackground extends StatelessWidget {
         image,
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor.withAlpha(120)),
+          child: ColoredBox(color: AppSemantic.of(context).canvas.withAlpha(120)),
         ),
       ],
     );
@@ -212,6 +211,18 @@ class DesktopTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final chrome = getIt<DesktopScreenProvider>().screenChrome.value.data;
+      // 面包屑和标题占同一格、互斥：叠成上下两行会把 60 高的顶栏挤爆，
+      // 而且"标题 + 上面一行小标题"读起来像两个页面粘在一起。
+      // 页面给了自定义标题位（带控件的标题）就不抢，它比路由名更有信息量。
+      final trail = chrome.hasBreadcrumb
+          ? chrome.breadcrumb!
+          : (chrome.titleWidget != null
+                ? null
+                : AppRoutes.breadcrumbFor(
+                    Get.find<SidebarController>().selectedRoute.value,
+                    navigate: (location) => goRouter.go(location),
+                    leafLabel: chrome.title,
+                  ));
 
       return Container(
         padding: EdgeInsets.only(
@@ -227,11 +238,12 @@ class DesktopTopBar extends StatelessWidget {
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
-                child:
-                    chrome.titleWidget ??
-                    (chrome.title != null
-                        ? Text(chrome.title!, style: Theme.of(context).textTheme.titleMedium)
-                        : const SizedBox.shrink()),
+                child: trail != null
+                    ? Breadcrumb(entries: trail)
+                    : (chrome.titleWidget ??
+                          (chrome.title != null
+                              ? Text(chrome.title!, style: Theme.of(context).textTheme.titleMedium)
+                              : const SizedBox.shrink())),
               ),
             ),
             if (chrome.hasActions)

@@ -6,6 +6,9 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class SentrySettingsTab extends StatefulWidget {
   const SentrySettingsTab({super.key});
@@ -46,7 +49,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
       ..showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildSectionTitle(String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -58,7 +61,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
             color: theme.colorScheme.primary.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
         ),
         SizedBox(width: m.kSpace8),
         Text(
@@ -107,7 +110,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionTitle('Sentry 日志收集', Icons.radar_rounded),
+              _buildSectionTitle('Sentry 日志收集', StrokeIcons.radar),
               SizedBox(height: m.kSpace12),
               _buildSettingsCard(
                 child: Column(
@@ -122,8 +125,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             color: theme.colorScheme.primary.withAlpha(25),
                             borderRadius: m.radius8,
                           ),
-                          child: Icon(
-                            Icons.radar_rounded,
+                          child: DrawIcon(StrokeIcons.radar,
                             size: m.iconSize16,
                             color: theme.colorScheme.primary,
                           ),
@@ -160,7 +162,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                 ),
               ),
               SizedBox(height: m.kSpace16),
-              _buildSectionTitle('日志来源', Icons.swap_horiz),
+              _buildSectionTitle('日志来源', StrokeIcons.swapHoriz),
               SizedBox(height: m.kSpace12),
               _buildSettingsCard(
                 child: Column(
@@ -175,8 +177,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             color: theme.colorScheme.primary.withAlpha(25),
                             borderRadius: m.radius8,
                           ),
-                          child: Icon(
-                            Icons.swap_horiz,
+                          child: DrawIcon(StrokeIcons.swapHoriz,
                             size: m.iconSize16,
                             color: theme.colorScheme.primary,
                           ),
@@ -226,7 +227,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                 ),
               ),
               SizedBox(height: m.kSpace16),
-              _buildSectionTitle('自动刷新', Icons.autorenew),
+              _buildSectionTitle('自动刷新', StrokeIcons.autorenew),
               SizedBox(height: m.kSpace12),
               _buildSettingsCard(
                 child: Column(
@@ -245,8 +246,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                                     .withAlpha(25),
                             borderRadius: m.radius8,
                           ),
-                          child: Icon(
-                            Icons.autorenew,
+                          child: DrawIcon(StrokeIcons.autorenew,
                             size: m.iconSize16,
                             color: service.autoRefresh.value
                                 ? theme.colorScheme.primary
@@ -293,7 +293,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                 ),
               ),
               SizedBox(height: m.kSpace16),
-              _buildSectionTitle('DSN 配置', Icons.info_outline),
+              _buildSectionTitle('DSN 配置', StrokeIcons.infoOutline),
               SizedBox(height: m.kSpace12),
               _buildSettingsCard(
                 child: Column(
@@ -308,8 +308,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             color: theme.colorScheme.primary.withAlpha(25),
                             borderRadius: m.radius8,
                           ),
-                          child: Icon(
-                            Icons.info_outline,
+                          child: DrawIcon(StrokeIcons.infoOutline,
                             size: m.iconSize16,
                             color: theme.colorScheme.primary,
                           ),
@@ -416,7 +415,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
       ),
       child: Row(
         children: [
-          Icon(Icons.link, size: m.iconSize16, color: theme.hintColor),
+          DrawIcon(StrokeIcons.link, size: m.iconSize16, color: theme.hintColor),
           SizedBox(width: m.kSpace8),
           Expanded(
             child: SelectableText(
@@ -429,7 +428,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
             ),
           ),
           IconButton(
-            icon: Icon(Icons.copy, size: m.iconSize16, color: theme.hintColor),
+            icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16, color: theme.hintColor),
             tooltip: '复制 DSN',
             onPressed: () {
               Clipboard.setData(ClipboardData(text: service.currentDsn));

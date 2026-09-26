@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 待处理请求列表（用于 BottomSheet 展示）
 class PendingRequests extends StatelessWidget {
@@ -46,8 +49,7 @@ class PendingRequests extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.download_outlined,
+              DrawIcon(StrokeIcons.download,
                 color: isDark ? DarkColors.primary : LightColors.primary,
                 size: scaleW(22),
               ),
@@ -147,7 +149,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   color: primaryColor.withValues(alpha: 0.12),
                   borderRadius: AppTheme.metrics.radius10,
                 ),
-                child: Icon(
+                child: DrawIcon(
                   _getTypeIcon(widget.request.transferType),
                   size: scaleW(20),
                   color: primaryColor,
@@ -281,16 +283,16 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
     );
   }
 
-  IconData _getTypeIcon(TransferType type) {
+  StrokeIcon _getTypeIcon(TransferType type) {
     switch (type) {
       case TransferType.file:
-        return Icons.insert_drive_file_outlined;
+        return StrokeIcons.insertDriveFile;
       case TransferType.text:
-        return Icons.text_snippet_outlined;
+        return StrokeIcons.textSnippet;
       case TransferType.image:
-        return Icons.image_outlined;
+        return StrokeIcons.image;
       case TransferType.video:
-        return Icons.video_file_outlined;
+        return StrokeIcons.videoFile;
     }
   }
 

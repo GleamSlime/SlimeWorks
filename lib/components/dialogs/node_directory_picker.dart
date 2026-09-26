@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 节点目录浏览器弹窗。
 ///
@@ -97,7 +99,7 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_upward_rounded),
+                    icon: DrawIcon(StrokeIcons.arrowUpward),
                     tooltip: '上级目录',
                     iconSize: 18,
                     padding: EdgeInsets.zero,
@@ -141,7 +143,7 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                         final name = entry.split(RegExp(r'[/\\]')).last;
                         return ListTile(
                           dense: true,
-                          leading: Icon(Icons.folder_rounded, size: AppTheme.metrics.iconSize20),
+                          leading: DrawIcon(StrokeIcons.folder, size: AppTheme.metrics.iconSize20),
                           title: Text(name),
                           subtitle: Text(
                             entry,

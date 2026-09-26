@@ -8,6 +8,9 @@ import 'package:slime_works/pages/lan_transfer/components/device_list.dart';
 import 'package:slime_works/pages/lan_transfer/components/pending_requests.dart';
 import 'package:slime_works/pages/lan_transfer/components/scanning_animation.dart';
 import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 局域网互传页面
 class LanTransferScreen extends BasePage<LanTransferViewModel> {
@@ -139,7 +142,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                       child: CircularProgressIndicator(strokeWidth: 1.5, color: primaryColor),
                     )
                   else
-                    Icon(Icons.radar, size: m.iconSize14, color: primaryColor),
+                    DrawIcon(StrokeIcons.radar, size: m.iconSize14, color: primaryColor),
                   SizedBox(width: m.kSpace6),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
@@ -151,8 +154,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                     ),
                   ),
                   SizedBox(width: m.kSpace4),
-                  Icon(
-                    Icons.expand_more,
+                  DrawIcon(StrokeIcons.expandMore,
                     size: m.iconSize14,
                     color: isDark ? DarkColors.white40 : LightColors.black40,
                   ),
@@ -283,8 +285,8 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             value: 'pin',
             child: Row(
               children: [
-                Icon(
-                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                DrawIcon(
+                  isPinned ? StrokeIcons.pushPin : StrokeIcons.pushPin,
                   size: AppTheme.metrics.iconSize16,
                   color: isDark ? DarkColors.primary : LightColors.primary,
                 ),
@@ -297,7 +299,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             value: 'delete_history',
             child: Row(
               children: [
-                Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize16, color: Colors.orange),
+                DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize16, color: Colors.orange),
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 const Text('删除历史', style: TextStyle(color: Colors.orange)),
               ],
@@ -307,8 +309,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             value: 'delete_all',
             child: Row(
               children: [
-                Icon(
-                  Icons.delete_sweep_outlined,
+                DrawIcon(StrokeIcons.deleteSweep,
                   size: AppTheme.metrics.iconSize16,
                   color: Theme.of(context).colorScheme.error,
                 ),
@@ -371,8 +372,8 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
             // 置顶 / 取消置顶
             ListTile(
-              leading: Icon(
-                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              leading: DrawIcon(
+                isPinned ? StrokeIcons.pushPin : StrokeIcons.pushPin,
                 color: isDark ? DarkColors.primary : LightColors.primary,
               ),
               title: Text(
@@ -390,7 +391,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             ),
             // 删除历史
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.orange),
+              leading: DrawIcon(StrokeIcons.deleteOutline, color: Colors.orange),
               title: const Text('删除历史', style: TextStyle(color: Colors.orange)),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -399,8 +400,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             ),
             // 删除会话及文件
             ListTile(
-              leading: Icon(
-                Icons.delete_sweep_outlined,
+              leading: DrawIcon(StrokeIcons.deleteSweep,
                 color: Theme.of(context).colorScheme.error,
               ),
               title: Text('删除会话及文件', style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -555,8 +555,7 @@ class _LanTransferToolbar extends StatelessWidget {
                       ),
                     )
                   else
-                    Icon(
-                      Icons.devices,
+                    DrawIcon(StrokeIcons.devices,
                       size: AppTheme.metrics.iconSize14,
                       color: isDark ? DarkColors.white80 : LightColors.black80,
                     ),
@@ -570,8 +569,7 @@ class _LanTransferToolbar extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace4),
-                  Icon(
-                    Icons.expand_more,
+                  DrawIcon(StrokeIcons.expandMore,
                     size: AppTheme.metrics.iconSize14,
                     color: isDark ? DarkColors.white40 : LightColors.black40,
                   ),
@@ -717,8 +715,7 @@ class _DeviceSheetContent extends StatelessWidget {
                             ),
                           )
                         else
-                          Icon(
-                            Icons.radar,
+                          DrawIcon(StrokeIcons.radar,
                             size: scaleW(14),
                             color: isDark ? DarkColors.primary : LightColors.primary,
                           ),
@@ -811,8 +808,7 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
                 stops: const [0.0, 0.6, 1.0],
               ),
             ),
-            child: Icon(
-              Icons.wifi_tethering,
+            child: DrawIcon(StrokeIcons.wifiTethering,
               size: scaleW(36),
               color: primaryColor.withValues(alpha: 0.6),
             ),
@@ -860,7 +856,7 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.radar, size: m.iconSize18, color: primaryColor),
+                  DrawIcon(StrokeIcons.radar, size: m.iconSize18, color: primaryColor),
                   SizedBox(width: m.kSpace8),
                   Text(
                     '开始搜索',
@@ -971,8 +967,7 @@ class _PeerListSection extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(
-              Icons.forum_outlined,
+            child: DrawIcon(StrokeIcons.forum,
               size: scaleW(40),
               color: primaryColor.withValues(alpha: 0.4),
             ),
@@ -1089,8 +1084,7 @@ class _PeerListItemState extends State<_PeerListItem> {
                     ),
                   ],
                 ),
-                child: Icon(
-                  deviceIcon,
+                child: DrawIcon(deviceIcon,
                   size: scaleW(22),
                   color: Colors.white.withValues(alpha: 0.9),
                 ),
@@ -1103,8 +1097,7 @@ class _PeerListItemState extends State<_PeerListItem> {
                     Row(
                       children: [
                         if (widget.isPinned) ...[
-                          Icon(
-                            Icons.push_pin,
+                          DrawIcon(StrokeIcons.pushPin,
                             size: scaleW(12),
                             color: primaryColor.withValues(alpha: 0.6),
                           ),
@@ -1151,8 +1144,7 @@ class _PeerListItemState extends State<_PeerListItem> {
               AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
                 opacity: _isHovered ? 1.0 : 0.3,
-                child: Icon(
-                  Icons.chevron_right,
+                child: DrawIcon(StrokeIcons.chevronRight,
                   size: scaleW(18),
                   color: isDark ? DarkColors.white20 : LightColors.black20,
                 ),
@@ -1196,13 +1188,13 @@ class _PeerListItemState extends State<_PeerListItem> {
     return '${dt.month}/${dt.day}';
   }
 
-  IconData _deviceIcon(String name) {
+  StrokeIcon _deviceIcon(String name) {
     final lower = name.toLowerCase();
-    if (lower.contains('iphone') || lower.contains('ios')) return Icons.phone_iphone;
-    if (lower.contains('ipad')) return Icons.tablet_mac;
-    if (lower.contains('mac')) return Icons.laptop_mac;
-    if (lower.contains('android')) return Icons.phone_android;
-    if (lower.contains('windows')) return Icons.desktop_windows;
-    return Icons.devices;
+    if (lower.contains('iphone') || lower.contains('ios')) return StrokeIcons.phoneIphone;
+    if (lower.contains('ipad')) return StrokeIcons.tabletMac;
+    if (lower.contains('mac')) return StrokeIcons.laptopMac;
+    if (lower.contains('android')) return StrokeIcons.phoneAndroid;
+    if (lower.contains('windows')) return StrokeIcons.desktopWindows;
+    return StrokeIcons.devices;
   }
 }

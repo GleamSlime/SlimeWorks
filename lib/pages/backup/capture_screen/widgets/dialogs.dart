@@ -1,5 +1,7 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 显示密码输入对话框
 Future<String?> showPasswordDialog(BuildContext context) async {
@@ -8,7 +10,7 @@ Future<String?> showPasswordDialog(BuildContext context) async {
     context: context,
     barrierDismissible: false,
     builder: (context) => AlertDialog(
-      title: Row(children: [Icon(Icons.security, size: AppTheme.metrics.iconSize24), SizedBox(width: AppTheme.metrics.kSpace8), const Text('安装CA证书')]),
+      title: Row(children: [DrawIcon(StrokeIcons.security, size: AppTheme.metrics.iconSize24), SizedBox(width: AppTheme.metrics.kSpace8), const Text('安装CA证书')]),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,7 +32,7 @@ Future<String?> showPasswordDialog(BuildContext context) async {
             decoration: const InputDecoration(
               labelText: '管理员密码',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.lock),
+              prefixIcon: DrawIcon(StrokeIcons.lock),
             ),
             onSubmitted: (value) => Navigator.pop(context, value),
           ),
@@ -53,7 +55,7 @@ void showTrustCertificateGuide(BuildContext context) {
     context: context,
     builder: (context) => AlertDialog(
       title: Row(
-        children: [Icon(Icons.verified_user, size: AppTheme.metrics.iconSize24), SizedBox(width: AppTheme.metrics.kSpace8), const Text('信任CA证书')],
+        children: [DrawIcon(StrokeIcons.verifiedUser, size: AppTheme.metrics.iconSize24), SizedBox(width: AppTheme.metrics.kSpace8), const Text('信任CA证书')],
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -77,7 +79,7 @@ void showTrustCertificateGuide(BuildContext context) {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.blue, size: AppTheme.metrics.iconSize20),
+                  DrawIcon(StrokeIcons.infoOutline, color: Colors.blue, size: AppTheme.metrics.iconSize20),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Expanded(
                     child: Text(
@@ -144,7 +146,7 @@ Future<bool?> showDeleteTaskDialog(
     builder: (context) => AlertDialog(
       title: Row(
         children: [
-          const Icon(Icons.warning_amber, color: Colors.orange),
+          DrawIcon(StrokeIcons.warningAmber, color: Colors.orange),
           SizedBox(width: AppTheme.metrics.kSpace8),
           const Text('确认删除'),
         ],
@@ -165,7 +167,7 @@ Future<bool?> showDeleteTaskDialog(
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.orange, size: AppTheme.metrics.iconSize20),
+                  DrawIcon(StrokeIcons.infoOutline, color: Colors.orange, size: AppTheme.metrics.iconSize20),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Expanded(
                     child: Column(
@@ -235,7 +237,7 @@ Future<bool?> showReRecordDialog(BuildContext context, String taskName, bool isC
     builder: (context) => AlertDialog(
       title: Row(
         children: [
-          const Icon(Icons.refresh, color: Colors.orange),
+          DrawIcon(StrokeIcons.refresh, color: Colors.orange),
           SizedBox(width: AppTheme.metrics.kSpace8),
           const Text('确认重新录制'),
         ],
@@ -274,7 +276,7 @@ void showVideoPreview(BuildContext context, String taskName) {
               title: Text(taskName),
               automaticallyImplyLeading: false,
               actions: [
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => Navigator.pop(context)),
               ],
             ),
             Expanded(
@@ -282,7 +284,7 @@ void showVideoPreview(BuildContext context, String taskName) {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.play_circle_outline, size: AppTheme.metrics.iconSize64),
+                    DrawIcon(StrokeIcons.playCircleOutline, size: AppTheme.metrics.iconSize64),
                     SizedBox(height: AppTheme.metrics.kSpace16),
                     Text('视频预览功能待实现', style: Theme.of(context).textTheme.bodyLarge),
                   ],

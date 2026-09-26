@@ -6,6 +6,9 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_settings_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class GameSettingsTab extends StatefulWidget {
   const GameSettingsTab({super.key});
@@ -34,7 +37,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
     });
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildSectionTitle(String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -46,8 +49,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
             color: theme.colorScheme.primary.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(
-            icon,
+          child: DrawIcon(icon,
             size: m.iconSize12,
             color: theme.colorScheme.primary,
           ),
@@ -86,7 +88,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
-    required IconData icon,
+    required StrokeIcon icon,
   }) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
@@ -101,7 +103,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
               color: theme.colorScheme.primary.withAlpha(15),
               borderRadius: m.radius8,
             ),
-            child: Icon(icon, size: m.iconSize16, color: theme.colorScheme.primary),
+            child: DrawIcon(icon, size: m.iconSize16, color: theme.colorScheme.primary),
           ),
           SizedBox(width: m.kSpace12),
           Expanded(
@@ -145,7 +147,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
       return ListView(
         padding: EdgeInsets.all(m.kSpace16),
         children: <Widget>[
-          _buildSectionTitle('功能开关', Icons.toggle_on_outlined),
+          _buildSectionTitle('功能开关', StrokeIcons.toggleOn),
           SizedBox(height: m.kSpace12),
           _buildSettingsCard(
             child: Column(
@@ -155,7 +157,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
                   subtitle: '启动游戏时自动添加会话记录（演示版为估算时长）',
                   value: settings.autoTrackPlayTime,
                   onChanged: (v) => _viewModel!.saveSettings(settings.copyWith(autoTrackPlayTime: v)),
-                  icon: Icons.timer_outlined,
+                  icon: StrokeIcons.timer,
                 ),
                 Divider(height: m.kSpace8),
                 _buildSwitchRow(
@@ -163,7 +165,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
                   subtitle: '修改游戏详情后自动落盘',
                   value: settings.autoSave,
                   onChanged: (v) => _viewModel!.saveSettings(settings.copyWith(autoSave: v)),
-                  icon: Icons.save_outlined,
+                  icon: StrokeIcons.save,
                 ),
                 Divider(height: m.kSpace8),
                 _buildSwitchRow(
@@ -171,13 +173,13 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
                   subtitle: '仅在 Windows/macOS/Linux 生效',
                   value: settings.enableDesktopLaunch,
                   onChanged: (v) => _viewModel!.saveSettings(settings.copyWith(enableDesktopLaunch: v)),
-                  icon: Icons.play_circle_outline,
+                  icon: StrokeIcons.playCircleOutline,
                 ),
               ],
             ),
           ),
           SizedBox(height: m.kSpace24),
-          _buildSectionTitle('排序与数据', Icons.sort_rounded),
+          _buildSectionTitle('排序与数据', StrokeIcons.sort),
           SizedBox(height: m.kSpace12),
           _buildSettingsCard(
             child: Column(
@@ -192,7 +194,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
                         color: Theme.of(context).colorScheme.primary.withAlpha(15),
                         borderRadius: m.radius8,
                       ),
-                      child: Icon(Icons.sort_rounded, size: m.iconSize16, color: Theme.of(context).colorScheme.primary),
+                      child: DrawIcon(StrokeIcons.sort, size: m.iconSize16, color: Theme.of(context).colorScheme.primary),
                     ),
                     SizedBox(width: m.kSpace12),
                     Expanded(
@@ -225,7 +227,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
             ),
           ),
           SizedBox(height: m.kSpace24),
-          _buildSectionTitle('数据备份', Icons.backup_outlined),
+          _buildSectionTitle('数据备份', StrokeIcons.backup),
           SizedBox(height: m.kSpace12),
           _buildSettingsCard(
             child: Column(
@@ -243,12 +245,12 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
                   children: <Widget>[
                     FilledButton.icon(
                       onPressed: _exportBackup,
-                      icon: const Icon(Icons.download_outlined),
+                      icon: DrawIcon(StrokeIcons.download),
                       label: const Text('导出备份'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _importBackup,
-                      icon: const Icon(Icons.upload_outlined),
+                      icon: DrawIcon(StrokeIcons.upload),
                       label: const Text('导入备份'),
                     ),
                   ],

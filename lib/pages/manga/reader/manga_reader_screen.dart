@@ -22,6 +22,9 @@ import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_reader_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 阅读器顶底栏深色背景色（与漫画黑色背景协调）
 // 已改为使用主题色，去除硬编码暗色
@@ -207,8 +210,7 @@ class _MangaReaderScreenState
                               elevation: 0,
                               foregroundColor: Colors.black87,
                               leading: IconButton(
-                                icon: Icon(
-                                  Icons.arrow_back_ios_new_rounded,
+                                icon: DrawIcon(StrokeIcons.arrowBackIosNew,
                                   size: AppTheme.metrics.iconSize20,
                                 ),
                                 onPressed: _handleBack,
@@ -227,8 +229,7 @@ class _MangaReaderScreenState
                               ),
                               actions: [
                                 IconButton(
-                                  icon: Icon(
-                                    Icons.more_horiz_rounded,
+                                  icon: DrawIcon(StrokeIcons.moreHoriz,
                                     size: AppTheme.metrics.iconSize22,
                                   ),
                                   onPressed: () => _showMoreMenu(context),
@@ -312,7 +313,7 @@ class _MangaReaderScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.download_outlined),
+              leading: DrawIcon(StrokeIcons.download),
               title: const Text('下载'),
               subtitle: Text(
                 '选择章节下载',
@@ -325,7 +326,7 @@ class _MangaReaderScreenState
             ),
             if (PlatformUtil.isDesktop)
               ListTile(
-                leading: const Icon(Icons.save_alt),
+                leading: DrawIcon(StrokeIcons.saveAlt),
                 title: const Text('离线保存到媒体库'),
                 subtitle: Text(
                   '保存所有已加载图片',
@@ -640,8 +641,7 @@ class _MangaReaderScreenState
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.error_outline,
+                DrawIcon(StrokeIcons.errorOutline,
                   color: Colors.white70,
                   size: AppTheme.metrics.iconSize48,
                 ),
@@ -744,7 +744,7 @@ class _ReaderBottomBar extends StatelessWidget {
         children: [
           Expanded(
             child: _BarBtn(
-              icon: Icons.menu_book_outlined,
+              icon: StrokeIcons.menuBook,
               label: '章节',
               badge: '$currentEps / $totalEps',
               onTap: onEpsTap,
@@ -757,7 +757,7 @@ class _ReaderBottomBar extends StatelessWidget {
           ),
           Expanded(
             child: _BarBtn(
-              icon: Icons.tune_rounded,
+              icon: StrokeIcons.tune,
               label: '设置',
               onTap: onSettingsTap,
             ),
@@ -775,7 +775,7 @@ class _BarBtn extends StatelessWidget {
     this.badge,
     required this.onTap,
   });
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final String? badge;
   final VoidCallback onTap;
@@ -799,7 +799,7 @@ class _BarBtn extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: iconColor, size: AppTheme.metrics.iconSize20),
+            DrawIcon(icon, color: iconColor, size: AppTheme.metrics.iconSize20),
             SizedBox(height: AppTheme.metrics.kSpace2),
             Text(
               label,
@@ -895,8 +895,7 @@ class _ComicPageImageState extends State<_ComicPageImage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.broken_image_outlined,
+                DrawIcon(StrokeIcons.brokenImage,
                   color: Colors.white54,
                   size: AppTheme.metrics.iconSize48,
                 ),
@@ -911,8 +910,7 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                 SizedBox(height: AppTheme.metrics.kSpace8),
                 TextButton.icon(
                   onPressed: onRetry,
-                  icon: Icon(
-                    Icons.refresh,
+                  icon: DrawIcon(StrokeIcons.refresh,
                     color: Colors.white70,
                     size: AppTheme.metrics.iconSize16,
                   ),
@@ -1104,7 +1102,7 @@ class _NextChapterBanner extends StatelessWidget {
           SizedBox(height: AppTheme.metrics.kSpace12),
           FilledButton.icon(
             onPressed: onTap,
-            icon: const Icon(Icons.navigate_next),
+            icon: DrawIcon(StrokeIcons.navigateNext),
             label: Text('下一章：第 ${nextEps.order} 话'),
           ),
           SizedBox(height: AppTheme.metrics.kSpace8),

@@ -11,6 +11,8 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/aliyun_ddns_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class AliyunDdnsScreen extends StatefulWidget {
   const AliyunDdnsScreen({super.key});
@@ -131,8 +133,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                     : theme.colorScheme.onSurface.withAlpha(10),
                 borderRadius: m.radius8,
               ),
-              child: Icon(
-                Icons.cloud_sync_rounded,
+              child: DrawIcon(StrokeIcons.cloudSync,
                 size: m.iconSize18,
                 color: _viewModel.isEnabled.value
                     ? LightColors.success
@@ -193,7 +194,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                     color: LightColors.blue.withAlpha(20),
                     borderRadius: m.radius6,
                   ),
-                  child: Icon(Icons.public_rounded, size: m.iconSize12, color: LightColors.blue),
+                  child: DrawIcon(StrokeIcons.public, size: m.iconSize12, color: LightColors.blue),
                 ),
                 SizedBox(width: m.kSpace8),
                 Text(
@@ -217,8 +218,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.language_rounded,
+                  DrawIcon(StrokeIcons.language,
                     size: m.iconSize16,
                     color: theme.colorScheme.primary,
                   ),
@@ -254,8 +254,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.schedule_rounded,
+                    DrawIcon(StrokeIcons.schedule,
                       size: m.iconSize16,
                       color: theme.colorScheme.onSurface.withAlpha(80),
                     ),
@@ -291,10 +290,10 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                 ),
                 child: Row(
                   children: [
-                    Icon(
+                    DrawIcon(
                       _viewModel.lastResult.value.contains('失败')
-                          ? Icons.error_outline_rounded
-                          : Icons.check_circle_outline_rounded,
+                          ? StrokeIcons.errorOutline
+                          : StrokeIcons.checkCircleOutline,
                       size: m.iconSize16,
                       color: _viewModel.lastResult.value.contains('失败')
                           ? LightColors.red
@@ -342,7 +341,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                     color: LightColors.orange.withAlpha(20),
                     borderRadius: m.radius6,
                   ),
-                  child: Icon(Icons.dns_rounded, size: m.iconSize12, color: LightColors.orange),
+                  child: DrawIcon(StrokeIcons.dns, size: m.iconSize12, color: LightColors.orange),
                 ),
                 SizedBox(width: m.kSpace8),
                 Text(
@@ -376,7 +375,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
       height: m.kSpace24,
       child: TextButton.icon(
         onPressed: () => _showAddDomainDialog(context, theme, m),
-        icon: Icon(Icons.add_rounded, size: m.iconSize16),
+        icon: DrawIcon(StrokeIcons.add, size: m.iconSize16),
         label: Text('添加', style: TextStyle(fontSize: m.fontSize12)),
         style: TextButton.styleFrom(
           padding: EdgeInsets.symmetric(horizontal: m.kSpace10),
@@ -392,8 +391,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
       padding: EdgeInsets.symmetric(vertical: m.kSpace24),
       child: Column(
         children: [
-          Icon(
-            Icons.add_circle_outline_rounded,
+          DrawIcon(StrokeIcons.addCircleOutline,
             size: m.iconSize32,
             color: theme.colorScheme.onSurface.withAlpha(30),
           ),
@@ -441,8 +439,8 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                     : LightColors.orange.withAlpha(15),
                 borderRadius: m.radius6,
               ),
-              child: Icon(
-                updated ? Icons.check_rounded : Icons.language_rounded,
+              child: DrawIcon(
+                updated ? StrokeIcons.check : StrokeIcons.language,
                 size: m.iconSize14,
                 color: updated ? LightColors.success : LightColors.orange,
               ),
@@ -488,8 +486,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
             if (_viewModel.isLocal)
               IconButton(
                 onPressed: () => _showRemoveDomainDialog(context, theme, m, index, domain),
-                icon: Icon(
-                  Icons.close_rounded,
+                icon: DrawIcon(StrokeIcons.close,
                   size: m.iconSize16,
                   color: theme.colorScheme.onSurface.withAlpha(40),
                 ),
@@ -513,7 +510,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
         builder: (ctx, setDialogState) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.add_circle_rounded, size: m.iconSize20, color: theme.colorScheme.primary),
+              DrawIcon(StrokeIcons.addCircle, size: m.iconSize20, color: theme.colorScheme.primary),
               SizedBox(width: m.kSpace8),
               const Text('添加监控域名'),
             ],
@@ -656,7 +653,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                     color: LightColors.mint.withAlpha(20),
                     borderRadius: m.radius6,
                   ),
-                  child: Icon(Icons.history_rounded, size: m.iconSize12, color: LightColors.mint),
+                  child: DrawIcon(StrokeIcons.history, size: m.iconSize12, color: LightColors.mint),
                 ),
                 SizedBox(width: m.kSpace8),
                 Text(
@@ -672,7 +669,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                 if (_viewModel.isLocal && _viewModel.logs.isNotEmpty)
                   TextButton.icon(
                     onPressed: () => _viewModel.clearLogs(),
-                    icon: Icon(Icons.delete_outline_rounded, size: m.iconSize14),
+                    icon: DrawIcon(StrokeIcons.deleteOutline, size: m.iconSize14),
                     label: Text('清空', style: TextStyle(fontSize: m.fontSize11)),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
@@ -728,8 +725,8 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
         ),
         child: Row(
           children: [
-            Icon(
-              success ? Icons.check_circle_rounded : Icons.error_rounded,
+            DrawIcon(
+              success ? StrokeIcons.checkCircle : StrokeIcons.error,
               size: m.iconSize14,
               color: success ? LightColors.success : LightColors.red,
             ),
@@ -790,7 +787,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                 height: m.iconSize18,
                 child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.primary),
               )
-            : Icon(Icons.sync_rounded, size: m.iconSize20),
+            : DrawIcon(StrokeIcons.sync, size: m.iconSize20),
         tooltip: '立即检查',
       ),
     );

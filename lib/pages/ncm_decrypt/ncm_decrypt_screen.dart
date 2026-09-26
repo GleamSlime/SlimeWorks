@@ -4,6 +4,8 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/ncm_decrypt_service.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/pages/ncm_decrypt/components/ncm_folder_picker_dialog.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class NcmDecryptScreen extends StatefulWidget {
   const NcmDecryptScreen({super.key});
@@ -45,14 +47,14 @@ class _NcmDecryptScreenState extends State<NcmDecryptScreen> {
         children: [
           ElevatedButton.icon(
             onPressed: isDecrypting ? null : () => _showFolderPickerDialog(context),
-            icon: Icon(Icons.folder_open, size: m.iconSize18),
+            icon: DrawIcon(StrokeIcons.folderOpen, size: m.iconSize18),
             label: const Text('选择文件夹'),
           ),
           if (isDecrypting) ...[
             SizedBox(width: m.kSpace12),
             OutlinedButton.icon(
               onPressed: () => service.cancelDecrypt(),
-              icon: Icon(Icons.stop, size: m.iconSize18),
+              icon: DrawIcon(StrokeIcons.stop, size: m.iconSize18),
               label: const Text('取消'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.red,
@@ -88,7 +90,7 @@ class _NcmDecryptScreenState extends State<NcmDecryptScreen> {
             padding: EdgeInsets.symmetric(vertical: m.kSpace48),
             child: Column(
               children: [
-                Icon(Icons.lock_outline, size: 64, color: theme.hintColor.withAlpha(80)),
+                DrawIcon(StrokeIcons.lockOutline, size: 64, color: theme.hintColor.withAlpha(80)),
                 SizedBox(height: m.kSpace16),
                 Text(
                   '选择文件夹开始解密 NCM 文件',
@@ -229,8 +231,8 @@ class _NcmDecryptScreenState extends State<NcmDecryptScreen> {
           children: [
             Row(
               children: [
-                Icon(
-                  result.success ? Icons.check_circle : Icons.warning_amber,
+                DrawIcon(
+                  result.success ? StrokeIcons.check : StrokeIcons.warningAmber,
                   color: result.success ? Colors.green : Colors.orange,
                   size: m.iconSize24,
                 ),

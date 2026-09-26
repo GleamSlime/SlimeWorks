@@ -20,6 +20,9 @@ import 'package:slime_works/pages/sentry_log/components/sentry_log_list.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_stats_panel.dart';
 import 'package:slime_works/view_models/sentry_log/app_log_viewmodel.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 const Loggers _logger = Loggers(name: 'Sentry日志');
 
@@ -116,14 +119,14 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
           if (!_showAppLogs) ...[
             _buildActionButton(
               context: context,
-              icon: Icons.refresh_rounded,
+              icon: StrokeIcons.refresh,
               tooltip: '刷新',
               onPressed: () => _viewModel.reloadData(),
               isDark: isDark,
             ),
             _buildActionButton(
               context: context,
-              icon: Icons.download_outlined,
+              icon: StrokeIcons.download,
               tooltip: '导出',
               onPressed: () => _exportLogs(context),
               isDark: isDark,
@@ -224,7 +227,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.list_alt_rounded, size: m.iconSize16),
+                      DrawIcon(StrokeIcons.listAlt, size: m.iconSize16),
                       SizedBox(width: m.kSpace6),
                       const Text('日志列表'),
                     ],
@@ -235,7 +238,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.insights_rounded, size: m.iconSize16),
+                      DrawIcon(StrokeIcons.insights, size: m.iconSize16),
                       SizedBox(width: m.kSpace6),
                       const Text('统计'),
                     ],
@@ -310,8 +313,8 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
             children: [
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
-                child: Icon(
-                  _showAppLogs ? Icons.terminal_rounded : Icons.smart_toy_outlined,
+                child: DrawIcon(
+                  _showAppLogs ? StrokeIcons.terminal : StrokeIcons.smartToy,
                   key: ValueKey(_showAppLogs),
                   size: m.iconSize16,
                   color: _showAppLogs
@@ -367,7 +370,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
   /// 构建操作按钮（带悬停发光效果）
   Widget _buildActionButton({
     required BuildContext context,
-    required IconData icon,
+    required StrokeIcon icon,
     required String tooltip,
     required VoidCallback onPressed,
     required bool isDark,
@@ -429,7 +432,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
 
 /// 操作按钮组件（带悬停发光 + 缩放动画）
 class _ActionButtonWidget extends StatefulWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String tooltip;
   final VoidCallback onPressed;
   final bool isDark;
@@ -484,7 +487,7 @@ class _ActionButtonWidgetState extends State<_ActionButtonWidget> {
             scale: _hovered ? 1.08 : 1.0,
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            child: Icon(
+            child: DrawIcon(
               widget.icon,
               size: m.iconSize18,
               color: widget.isDark ? DarkColors.white80 : LightColors.black80,

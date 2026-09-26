@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class NcmDecryptCard extends StatefulWidget {
   const NcmDecryptCard({super.key});
@@ -74,8 +76,7 @@ class _NcmDecryptCardState extends State<NcmDecryptCard> {
                             ]
                           : null,
                     ),
-                    child: Icon(
-                      Icons.lock_open_rounded,
+                    child: DrawIcon(StrokeIcons.lockOpen,
                       color: _isHovered ? Colors.white : const Color(0xFF4ECDC4),
                       size: m.iconSize24,
                     ),

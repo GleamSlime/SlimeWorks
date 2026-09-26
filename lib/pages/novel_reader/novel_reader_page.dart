@@ -19,6 +19,8 @@ import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/pages/novel_reader/components/chapter_list.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_toolbar.dart';
 import 'package:slime_works/pages/novel_reader/components/reader_content.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 const Loggers _logger = Loggers(name: '阅读器');
 
 /// 书籍阅读器页面
@@ -104,7 +106,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                             controller.decreaseFontSize();
                             setModalState(() {});
                           },
-                          icon: const Icon(Icons.remove_circle_outline),
+                          icon: DrawIcon(StrokeIcons.removeCircleOutline),
                         ),
                         Obx(() => Text(controller.fontSize.value.toStringAsFixed(0))),
                         IconButton(
@@ -112,7 +114,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                             controller.increaseFontSize();
                             setModalState(() {});
                           },
-                          icon: const Icon(Icons.add_circle_outline),
+                          icon: DrawIcon(StrokeIcons.addCircleOutline),
                         ),
                       ],
                     ),
@@ -357,7 +359,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                 backgroundColor: Colors.transparent,
                                 elevation: 0,
                                 leading: IconButton(
-                                  icon: const Icon(Icons.arrow_back),
+                                  icon: DrawIcon(StrokeIcons.arrowBack),
                                   onPressed: () {
                                     if (context.canPop()) {
                                       context.pop();
@@ -376,7 +378,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                 ),
                                 actions: [
                                   IconButton(
-                                    icon: const Icon(Icons.list),
+                                    icon: DrawIcon(StrokeIcons.list),
                                     tooltip: '章节列表',
                                     onPressed: () {
                                       _exitImmersiveMode();
@@ -384,7 +386,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                     },
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.settings_outlined),
+                                    icon: DrawIcon(StrokeIcons.settings),
                                     tooltip: '阅读设置',
                                     onPressed: _showReaderSettingsSheet,
                                   ),
@@ -470,7 +472,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       data: ScreenChromeData(
         forceLocalChrome: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: DrawIcon(StrokeIcons.arrowBack),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -514,14 +516,14 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           IconButton(
             tooltip: '书籍详情',
             onPressed: _showBookInfoDialog,
-            icon: const Icon(Icons.info_outline),
+            icon: DrawIcon(StrokeIcons.infoOutline),
           ),
           Obx(() {
             final libraryVm = Get.find<NovelLibraryViewModel>();
             final isFav =
                 libraryVm.novels.firstWhereOrNull((n) => n.id == novel.id)?.isFavorite ?? false;
             return IconButton(
-              icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+              icon: DrawIcon(isFav ? StrokeIcons.favorite : StrokeIcons.favoriteBorder),
               onPressed: () => libraryVm.toggleFavorite(novel.id),
             );
           }),
@@ -600,8 +602,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
+          DrawIcon(StrokeIcons.errorOutline,
             size: AppTheme.metrics.iconSize64,
             color: Theme.of(context).colorScheme.error,
           ),
@@ -617,7 +618,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
           SizedBox(height: AppTheme.metrics.kSpace16),
           ElevatedButton.icon(
             onPressed: () => controller.loadNovelContent(),
-            icon: const Icon(Icons.refresh),
+            icon: DrawIcon(StrokeIcons.refresh),
             label: const Text('重试'),
           ),
         ],
@@ -656,7 +657,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
         color: Theme.of(context).colorScheme.outline,
         borderRadius: AppTheme.metrics.radius4,
       ),
-      child: Icon(Icons.book, size: size * 0.5, color: Colors.white70),
+      child: DrawIcon(StrokeIcons.book, size: size * 0.5, color: Colors.white70),
     );
   }
 }
@@ -688,13 +689,13 @@ class _MobileReaderBottomBar extends StatelessWidget {
             IconButton(
               tooltip: '目录',
               onPressed: controller.toggleChapterList,
-              icon: const Icon(Icons.menu_book_outlined),
+              icon: DrawIcon(StrokeIcons.menuBook),
             ),
             Obx(
               () => IconButton(
                 tooltip: '上一章',
                 onPressed: controller.hasPreviousChapter() ? controller.previousChapter : null,
-                icon: const Icon(Icons.chevron_left),
+                icon: DrawIcon(StrokeIcons.chevronLeft),
               ),
             ),
             Expanded(
@@ -715,7 +716,7 @@ class _MobileReaderBottomBar extends StatelessWidget {
               () => IconButton(
                 tooltip: '下一章',
                 onPressed: controller.hasNextChapter() ? controller.nextChapter : null,
-                icon: const Icon(Icons.chevron_right),
+                icon: DrawIcon(StrokeIcons.chevronRight),
               ),
             ),
             Obx(() {
@@ -725,18 +726,18 @@ class _MobileReaderBottomBar extends StatelessWidget {
               return IconButton(
                 tooltip: isFav ? '取消收藏' : '收藏',
                 onPressed: () => libraryVm.toggleFavorite(novel.id),
-                icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+                icon: DrawIcon(isFav ? StrokeIcons.favorite : StrokeIcons.favoriteBorder),
               );
             }),
             IconButton(
               tooltip: '书籍详情',
               onPressed: onShowBookInfo,
-              icon: const Icon(Icons.info_outline),
+              icon: DrawIcon(StrokeIcons.infoOutline),
             ),
             IconButton(
               tooltip: '阅读设置',
               onPressed: onShowReaderSettings,
-              icon: const Icon(Icons.tune),
+              icon: DrawIcon(StrokeIcons.tune),
             ),
           ],
         ),

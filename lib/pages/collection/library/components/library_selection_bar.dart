@@ -5,6 +5,8 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 多选状态时显示在底部的操作栏
 class LibrarySelectionBar extends StatelessWidget {
@@ -50,7 +52,7 @@ class LibrarySelectionBar extends StatelessWidget {
             SimpleDialogOption(
               onPressed: () => Navigator.of(ctx2).pop('__ROOT__'),
               child: Row(
-                children: [const Icon(Icons.home_outlined), SizedBox(width: AppTheme.metrics.kSpace8), const Text('移回根目录')],
+                children: [DrawIcon(StrokeIcons.home), SizedBox(width: AppTheme.metrics.kSpace8), const Text('移回根目录')],
               ),
             ),
           ...foldersToShow.map(
@@ -58,7 +60,7 @@ class LibrarySelectionBar extends StatelessWidget {
               onPressed: () => Navigator.of(ctx2).pop(f.id),
               child: Row(
                 children: [
-                  const Icon(Icons.folder_outlined),
+                  DrawIcon(StrokeIcons.folder),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Text(f.name),
                 ],
@@ -113,10 +115,10 @@ class LibrarySelectionBar extends StatelessWidget {
           children: [
             IconButton(
               onPressed: viewModel.toggleSelectAll,
-              icon: Icon(
+              icon: DrawIcon(
                 viewModel.selectedIds.length == viewModel.filteredItems.length
-                    ? Icons.check_box
-                    : Icons.check_box_outline_blank,
+                    ? StrokeIcons.checkBox
+                    : StrokeIcons.checkBoxOutlineBlank,
               ),
               tooltip: '全选',
             ),
@@ -131,8 +133,8 @@ class LibrarySelectionBar extends StatelessWidget {
               onPressed: count > 0 && selectedNovels.isNotEmpty
                   ? () => viewModel.favoriteSelected()
                   : null,
-              icon: Icon(
-                allFavorited ? Icons.star : Icons.star_border,
+              icon: DrawIcon(
+                allFavorited ? StrokeIcons.star : StrokeIcons.starBorder,
                 color: allFavorited ? Colors.amber : null,
               ),
               tooltip: allFavorited ? '取消收藏' : '加入收藏',
@@ -142,7 +144,7 @@ class LibrarySelectionBar extends StatelessWidget {
               onPressed: count > 0 && selectedNovels.isNotEmpty
                   ? () => _showMoveFolderDialog(context)
                   : null,
-              icon: const Icon(Icons.drive_file_move_outlined),
+              icon: DrawIcon(StrokeIcons.driveFileMove),
               tooltip: '移动到文件夹',
             ),
             SizedBox(width: AppTheme.metrics.kSpace4),
@@ -150,7 +152,7 @@ class LibrarySelectionBar extends StatelessWidget {
             SizedBox(width: AppTheme.metrics.kSpace8),
             FilledButton.icon(
               onPressed: count > 0 ? () => _confirmDelete(context) : null,
-              icon: Icon(Icons.delete_outline, size: AppTheme.metrics.iconSize18),
+              icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize18),
               label: const Text('删除'),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.error,

@@ -8,6 +8,9 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 const Loggers _logger = Loggers(name: '模块管理');
 
 /// 模块管理页面
@@ -186,13 +189,13 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
               const Spacer(),
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _refreshModules,
-                icon: const Icon(Icons.refresh),
+                icon: DrawIcon(StrokeIcons.refresh),
                 label: const Text('刷新'),
               ),
               SizedBox(width: AppTheme.metrics.kSpace8),
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : () => _showInstallDialog(),
-                icon: const Icon(Icons.add),
+                icon: DrawIcon(StrokeIcons.add),
                 label: const Text('安装模块'),
               ),
             ],
@@ -206,7 +209,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
             color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
             child: Row(
               children: [
-                Icon(Icons.error, color: Theme.of(context).colorScheme.error),
+                DrawIcon(StrokeIcons.error, color: Theme.of(context).colorScheme.error),
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 Expanded(
                   child: Text(
@@ -214,7 +217,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                     style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _error = null)),
+                IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => setState(() => _error = null)),
               ],
             ),
           ),
@@ -228,13 +231,13 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inbox, size: AppTheme.metrics.iconSize64, color: Theme.of(context).disabledColor),
+                      DrawIcon(StrokeIcons.inbox, size: AppTheme.metrics.iconSize64, color: Theme.of(context).disabledColor),
                       SizedBox(height: AppTheme.metrics.kSpace16),
                       Text('暂无已安装的模块', style: Theme.of(context).textTheme.bodyLarge),
                       SizedBox(height: AppTheme.metrics.kSpace8),
                       ElevatedButton.icon(
                         onPressed: () => _showInstallDialog(),
-                        icon: const Icon(Icons.add),
+                        icon: DrawIcon(StrokeIcons.add),
                         label: const Text('安装模块'),
                       ),
                     ],
@@ -267,7 +270,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
             // 模块名称和状态
             Row(
               children: [
-                Icon(
+                DrawIcon(
                   _getModuleIcon(module.moduleType),
                   size: AppTheme.metrics.iconSize32,
                   color: Theme.of(context).primaryColor,
@@ -312,17 +315,17 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                     GlassMenuItem<String>(
                       value: 'update',
                       label: '检查更新',
-                      icon: Icons.update_rounded,
+                      icon: StrokeIcons.update,
                     ),
                     GlassMenuItem<String>(
                       value: 'reinstall',
                       label: '重新安装',
-                      icon: Icons.refresh_rounded,
+                      icon: StrokeIcons.refresh,
                     ),
                     GlassMenuItem<String>(
                       value: 'uninstall',
                       label: '卸载',
-                      icon: Icons.delete_outline_rounded,
+                      icon: StrokeIcons.deleteOutline,
                       destructive: true,
                     ),
                   ],
@@ -384,12 +387,12 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
     );
   }
 
-  IconData _getModuleIcon(ModuleType type) {
+  StrokeIcon _getModuleIcon(ModuleType type) {
     switch (type) {
       case ModuleType.dynamicLibrary:
-        return Icons.library_books;
+        return StrokeIcons.libraryBooks;
       case ModuleType.executable:
-        return Icons.terminal;
+        return StrokeIcons.terminal;
     }
   }
 

@@ -11,6 +11,8 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MediaItemTile extends StatefulWidget {
   const MediaItemTile({
@@ -271,13 +273,13 @@ class _MediaItemTileState extends State<MediaItemTile> {
           GlassMenuItem<String>(
             value: 'open_folder',
             label: '打开所在文件夹',
-            icon: Icons.folder_open_rounded,
+            icon: StrokeIcons.folderOpen,
           ),
         if (widget.onSaveToGallery != null)
           GlassMenuItem<String>(
             value: 'save',
             label: '保存到相册',
-            icon: Icons.photo_library_outlined,
+            icon: StrokeIcons.photoLibrary,
           ),
         if (hasDestructive) ...[
           // 不可逆动作和普通动作之间断一行：这条菜单是右键就地弹出的，
@@ -287,14 +289,14 @@ class _MediaItemTileState extends State<MediaItemTile> {
             GlassMenuItem<String>(
               value: 'delete',
               label: '删除本地文件',
-              icon: Icons.delete_outline_rounded,
+              icon: StrokeIcons.deleteOutline,
               destructive: true,
             ),
           if (widget.onDeleteNodeLocalFile != null)
             GlassMenuItem<String>(
               value: 'delete_node_local',
               label: widget.deleteNodeLocalFileLabel ?? '删除节点本地文件',
-              icon: Icons.cloud_off_rounded,
+              icon: StrokeIcons.cloudOff,
               destructive: true,
             ),
         ],
@@ -406,8 +408,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                             color: Colors.black.withAlpha(120),
                                             borderRadius: AppTheme.metrics.radius999,
                                           ),
-                                          child: Icon(
-                                            Icons.lock_outline,
+                                          child: DrawIcon(StrokeIcons.lockOutline,
                                             size: appMetrics.iconSize16,
                                             color: Colors.white70,
                                           ),
@@ -421,10 +422,10 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                   src,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => Center(
-                                    child: Icon(
+                                    child: DrawIcon(
                                       _isAudio
-                                          ? Icons.music_note_rounded
-                                          : Icons.smart_display_rounded,
+                                          ? StrokeIcons.musicNote
+                                          : StrokeIcons.smartDisplay,
                                       size: scaleW(44),
                                       color: theme.colorScheme.primary.withAlpha(180),
                                     ),
@@ -439,8 +440,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
                                   }(),
                                 ))
                         : Center(
-                            child: Icon(
-                              _isAudio ? Icons.music_note_rounded : Icons.smart_display_rounded,
+                            child: DrawIcon(
+                              _isAudio ? StrokeIcons.musicNote : StrokeIcons.smartDisplay,
                               size: scaleW(44),
                               color: theme.colorScheme.primary.withAlpha(180),
                             ),
@@ -464,8 +465,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
                             ),
                           ),
                           child: Center(
-                            child: Icon(
-                              Icons.broken_image_outlined,
+                            child: DrawIcon(StrokeIcons.brokenImage,
                               size: scaleW(44),
                               color: theme.colorScheme.primary.withAlpha(180),
                             ),
@@ -508,12 +508,12 @@ class _MediaItemTileState extends State<MediaItemTile> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
+                          DrawIcon(
                             widget.item.kind == media_api.MediaKind.image
-                                ? Icons.image_outlined
+                                ? StrokeIcons.image
                                 : widget.item.kind == media_api.MediaKind.audio
-                                ? Icons.music_note_rounded
-                                : Icons.play_circle_outline_rounded,
+                                ? StrokeIcons.musicNote
+                                : StrokeIcons.playCircleOutline,
                             size: scaleW(10),
                             color: Colors.white.withAlpha(200),
                           ),

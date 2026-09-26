@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/core/utils/size_utils.dart';
+
 /// 动效令牌（Motion Tokens）
 ///
 /// 项目里原本散落着 250/280/300/400/600ms 等各自为政的时长，
@@ -24,6 +26,19 @@ class AppMotion {
   /// 列表/卡片批量入场的逐条间隔
   static const Duration stagger = Duration(milliseconds: 45);
 
+  /// 应用启动时整块面板的入场时长
+  ///
+  /// 比 [emphasis] 长是有意的：这一下只在开机播一次，慢一点才看得出层次。
+  static const Duration entrance = Duration(milliseconds: 600);
+
+  /// 入场级联里每条的间隔（[stagger] 留给会反复触发的列表动效）
+  static const Duration entranceGap = Duration(milliseconds: 80);
+
+  /// 一条入场级联的主控时长：每张卡按 0~1 的 Interval 摊在这条轴上
+  ///
+  /// 比 [entrance] 长是有意的——它不是单次过渡的时长，而是"整页错开播完"的总长。
+  static const Duration cascade = Duration(milliseconds: 900);
+
   // ── 曲线 ──
   /// 通用：起步快、收尾稳
   static const Cubic standard = Cubic(0.2, 0.0, 0.0, 1.0);
@@ -39,6 +54,62 @@ class AppMotion {
 
   static const Curve standardCurve = standard;
   static const Curve emphasizedDecelerate = decelerate;
+
+  // ── 弹簧 ──
+  /// 状态改变用弹簧：阻尼比 ζ = 22 / (2√260) ≈ 0.68 → 过冲约 5%，只回一次
+  static const SpringDescription spring = SpringDescription(
+    mass: 1,
+    stiffness: 260,
+    damping: 22,
+  );
+
+  /// 同一个弹簧给 `AnimatedX` 用的曲线档
+  ///
+  /// 隐式动画只吃 `Curve`，拿不到 [spring]，所以配一条过冲量一致的近似曲线。
+  /// 这样弹簧和曲线两条路出来的观感是同一个动作，不会一档偏弹一档偏黏。
+  static const Cubic springCurve = Cubic(0.34, 1.26, 0.44, 1.0);
+
+  /// 弹簧跑完一次的近似时长，只用来给需要 `Duration` 的接口占位
+  static const Duration springSettle = Duration(milliseconds: 420);
+
+  // ── 位移（一律宽度族：跟窗口走，不跟用户字号走）──
+  /// 文字/图标换脸的位移
+  static double get travelMicro => scaleW(4);
+
+  /// 按压下沉、错误抖动
+  static double get travelSmall => scaleW(6);
+
+  /// 页面转场上浮、抽屉入场
+  static double get travelBase => scaleW(8);
+
+  /// 面板从触发点下方展开
+  static double get travelMedium => scaleW(12);
+
+  /// 整块内容换脸（列表↔详情这类）
+  static double get travelLarge => scaleW(30);
+
+  // ── 缩放（无量纲，不随窗口，也不许随手取别的值）──
+  /// 按压：按下去一点，松手回位
+  static const double scalePress = 0.98;
+
+  /// 浮层进场起点（越大越不像"弹出来"）
+  static const double scaleEnter = 0.96;
+
+  /// 菜单从触发点长出来
+  static const double scaleMenu = 0.97;
+
+  /// 收起终态：差一点就是 1，留着这 1% 才看得出是"同一个东西缩回去"
+  static const double scaleRetreat = 0.99;
+
+  // ── 内容切换的瞬时模糊（BackdropFilter 的玻璃模糊另走 `AppGlass.*`）──
+  /// 文字、图标换脸
+  static const double blurContent = 2;
+
+  /// 面板、抽屉、气泡
+  static const double blurPanel = 4;
+
+  /// 页面转场
+  static const double blurPage = 8;
 
   /// 统一的 AnimatedContainer 参数组，避免每处手写 duration+curve
   static const Duration defaultDuration = base;

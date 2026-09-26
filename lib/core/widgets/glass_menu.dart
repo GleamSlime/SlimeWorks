@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_zone.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -8,7 +12,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 ///
 /// Material 默认 48 高的菜单行是给触屏定的，在桌面工具软件里显得极松——五项目的
 /// 菜单能撑开小半屏。而且各调用点为了一个勾选记号各自手搓
-/// `Row(Icon(check) + SizedBox(占位) + Text)`，图标槽宽度还不一致，同一层菜单里
+/// `Row(DrawIcon(check) + SizedBox(占位) + Text)`，图标槽宽度还不一致，同一层菜单里
 /// 文字对不齐。行高、槽宽、字号在这里一次定死。
 ///
 /// 用法和 [PopupMenuItem] 完全一样（它就是个 PopupMenuItem），因此
@@ -20,7 +24,7 @@ class GlassMenuItem<T> extends PopupMenuItem<T> {
     super.onTap,
     super.enabled,
     required String label,
-    IconData? icon,
+    StrokeIcon? icon,
     bool destructive = false,
     bool selected = false,
   }) : super(
@@ -50,7 +54,7 @@ class _GlassMenuRow extends StatelessWidget {
   });
 
   final String label;
-  final IconData? icon;
+  final StrokeIcon? icon;
   final bool destructive;
   final bool selected;
   final bool enabled;
@@ -75,30 +79,39 @@ class _GlassMenuRow extends StatelessWidget {
 
     // 悬停水洗不自建：外层 InkWell 用的就是 ThemeData.hoverColor（= surfaceHover），
     // 再叠一颗自己的圆角药丸会变成方块+药丸两层灰。
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: m.kSpace6,
-        vertical: m.kSpace4,
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: slot,
-            child: selected
-                ? Icon(Icons.check_rounded, size: m.iconSize16, color: s.accent)
-                : icon == null
-                ? null
-                : Icon(icon, size: m.iconSize16, color: iconColor),
-          ),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: foreground),
+    return StrokeZone(
+      // 菜单行的悬停就是"我要点这个"，让图标描一次比只变底色更跟手；
+      // 按下不重播——那一下菜单已经关掉了，播了也看不见。
+      broadcastPress: false,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: m.kSpace6,
+          vertical: m.kSpace4,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: slot,
+              child: selected
+                  ? DrawIcon(
+                      StrokeIcons.check,
+                      size: m.iconSize16,
+                      color: s.accent,
+                    )
+                  : icon == null
+                  ? null
+                  : DrawIcon(icon!, size: m.iconSize16, color: iconColor),
             ),
-          ),
-        ],
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: foreground),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

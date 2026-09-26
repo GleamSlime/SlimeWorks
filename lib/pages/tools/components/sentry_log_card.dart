@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class SentryLogCard extends StatefulWidget {
   const SentryLogCard({super.key});
@@ -74,8 +76,7 @@ class _SentryLogCardState extends State<SentryLogCard> {
                             ]
                           : null,
                     ),
-                    child: Icon(
-                      Icons.radar_rounded,
+                    child: DrawIcon(StrokeIcons.radar,
                       color: _isHovered ? Colors.white : const Color(0xFFA89FEE),
                       size: m.iconSize24,
                     ),

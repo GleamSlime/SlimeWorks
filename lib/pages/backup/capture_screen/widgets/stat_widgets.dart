@@ -1,5 +1,7 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 统计芯片
 class StatChip extends StatelessWidget {
@@ -42,7 +44,7 @@ class StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  final IconData icon;
+  final StrokeIcon icon;
 
   const StatCard({super.key, required this.label, required this.value, required this.color, required this.icon});
 
@@ -57,7 +59,7 @@ class StatCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: AppTheme.metrics.iconSize24),
+          DrawIcon(icon, color: color, size: AppTheme.metrics.iconSize24),
           SizedBox(width: AppTheme.metrics.kSpace12),
           Expanded(
             child: Column(
@@ -84,7 +86,7 @@ class StatCard extends StatelessWidget {
 
 /// 信息芯片
 class InfoChip extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final Color color;
 
@@ -98,7 +100,7 @@ class InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: AppTheme.metrics.iconSize14, color: color),
+          DrawIcon(icon, size: AppTheme.metrics.iconSize14, color: color),
           SizedBox(width: AppTheme.metrics.kSpace4),
           Text(
             label,

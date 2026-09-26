@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -14,7 +17,7 @@ class EmptyState extends StatelessWidget {
     super.key,
     required this.title,
     this.description,
-    this.icon = Icons.inbox_outlined,
+    this.icon = StrokeIcons.inbox,
     this.action,
     this.compact = false,
     this.padding,
@@ -22,7 +25,7 @@ class EmptyState extends StatelessWidget {
 
   final String title;
   final String? description;
-  final IconData icon;
+  final StrokeIcon icon;
   final Widget? action;
 
   /// compact 用于卡片/分栏内的小范围占位，regular 用于整页
@@ -56,7 +59,12 @@ class EmptyState extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: s.hairline, width: scaleW(1)),
               ),
-              child: Icon(icon, size: iconSize, color: s.textTertiary),
+              child: DrawIcon(
+                icon,
+                size: iconSize,
+                color: s.textTertiary,
+                effect: StrokeEffect.blur,
+              ),
             ),
             SizedBox(height: m.kSpace16),
             Text(

@@ -1,21 +1,34 @@
 import 'dart:io';
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
-import 'package:slime_works/components/buttons/svg_button.dart';
+import 'package:slime_works/components/buttons/stroke_icon_button.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_zone.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/components/window/sidebar_resize_handle.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/role_manager.dart';
+import 'package:slime_works/core/services/app_info_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/widgets/tree_connector.dart';
+
+/// 子项行高：`TreeConnector` 要按它算每枝的中心线，必须是确定值
+double get _kChildRowHeight => AppTheme.metrics.kSpace40;
 
 /// 侧边栏菜单项
 class SidebarMenuItem {
@@ -62,6 +75,80 @@ class SidebarController extends GetxController {
 
   // 各分组的折叠状态 (使用group.id作为key，true=折叠)
   final RxMap<String, bool> collapsedGroups = <String, bool>{}.obs;
+
+  // ── 展开态宽度（可拖拽）──
+  // 存的是设计稿像素，渲染时仍走 scaleW，窄窗自动收缩的行为不变。
+  static const double kDefaultExpandedWidth = 240;
+  static const double kMinExpandedWidth = 160;
+  static const double kMaxExpandedWidth = 420;
+
+  /// 侧栏宽度动画时长：文字揭示要等它跑完，两处必须共用同一个值
+  static const Duration kWidthAnimation = AppMotion.slow;
+
+  static const String _prefExpandedWidth = 'sidebar.expandedWidth';
+
+  final RxDouble expandedWidth = kDefaultExpandedWidth.obs;
+
+  // 拖拽中：宽度动画要关掉，否则容器慢半拍、缝追不上手指
+  final RxBool resizing = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _loadExpandedWidth();
+  }
+
+  Future<void> _loadExpandedWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getDouble(_prefExpandedWidth);
+    if (saved != null && saved >= kMinExpandedWidth && saved <= kMaxExpandedWidth) {
+      expandedWidth.value = saved;
+    }
+  }
+
+  Future<void> _saveExpandedWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_prefExpandedWidth, expandedWidth.value);
+  }
+
+  void beginResize() => resizing.value = true;
+
+  /// [deltaLogical] 是指针的横向位移（逻辑像素），这里换算回设计稿像素
+  void resizeBy(double deltaLogical) {
+    if (!isExpanded.value) {
+      // 收起态往右拖等于把它拉回来，不用先点一下把手
+      if (deltaLogical > 0) toggleSidebar();
+      return;
+    }
+    final ratio = scaleW(100) / 100;
+    final next = (expandedWidth.value + deltaLogical / ratio).clamp(
+      kMinExpandedWidth,
+      kMaxExpandedWidth,
+    );
+    if (next <= kMinExpandedWidth) {
+      _collapseByResize();
+      return;
+    }
+    expandedWidth.value = next;
+  }
+
+  void endResize() {
+    resizing.value = false;
+    _saveExpandedWidth();
+  }
+
+  /// 拖到最窄就自动收成图标条
+  ///
+  /// 宽度同时回到默认值：肯一路拖到最窄的人是想要它收起来，不是想要一条
+  /// 160 的窄栏，下次展开给他一条正常的。
+  void _collapseByResize() {
+    // 收这一刻要把动画打开，否则整条侧栏是瞬间弹没而不是收起来
+    resizing.value = false;
+    expandedWidth.value = kDefaultExpandedWidth;
+    toggleSidebar();
+    _saveExpandedWidth();
+  }
+
   // 是否已初始化为移动端模式
   bool _initializedMobile = false;
 
@@ -70,7 +157,7 @@ class SidebarController extends GetxController {
     isExpanded.value = !isExpanded.value;
 
     if (isExpanded.value) {
-      await Future.delayed(const Duration(milliseconds: 280));
+      await Future.delayed(SidebarController.kWidthAnimation);
       showExtends.value = true;
     } else {
       showExtends.value = false;
@@ -80,7 +167,7 @@ class SidebarController extends GetxController {
   void openSidebar() async {
     if (!isExpanded.value) {
       isExpanded.value = true;
-      await Future.delayed(const Duration(milliseconds: 280));
+      await Future.delayed(SidebarController.kWidthAnimation);
       showExtends.value = true;
     }
   }
@@ -132,19 +219,41 @@ class SidebarController extends GetxController {
   }
 }
 
+/// 挂在内容区左缘的侧栏把手
+///
+/// 放在内容区而不是侧栏里：Row 里后画的盖先画的，把手贴在侧栏右缘上会被
+/// 内容区吃掉半截，缩回侧栏内侧又会被那条滚动条压住——两边都不干净，
+/// 只有内容区这一侧是没人挡的。
+class SidebarResizeStrip extends StatelessWidget {
+  const SidebarResizeStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Get.find<SidebarController>();
+    return Obx(
+      () => SidebarResizeHandle(
+        collapsed: !controller.isExpanded.value,
+        onDragStart: controller.beginResize,
+        onDragUpdate: controller.resizeBy,
+        onDragEnd: controller.endResize,
+        onToggle: controller.toggleSidebar,
+      ),
+    );
+  }
+}
+
 /// 可收起的侧边栏组件
 class CollapsibleSidebar extends StatefulWidget {
   final List<SidebarGroup> groups;
-  final double expandedWidth;
+  // 展开态宽度不在此处：它是用户可改的持久状态，归 SidebarController 管
   final double collapsedWidth;
   final Duration animationDuration;
 
   const CollapsibleSidebar({
     super.key,
     required this.groups,
-    this.expandedWidth = 240.0,
     this.collapsedWidth = 75.0,
-    this.animationDuration = const Duration(milliseconds: 300),
+    this.animationDuration = SidebarController.kWidthAnimation,
   });
 
   @override
@@ -161,12 +270,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
   @override
   void initState() {
     super.initState();
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
+    _entranceController = AnimationController(vsync: this, duration: AppMotion.entrance);
     _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic);
-    Future.delayed(const Duration(milliseconds: 200), () {
+    Future.delayed(AppMotion.base, () {
       if (mounted) {
         _entranceController.forward();
       }
@@ -190,12 +296,19 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
   @override
   Widget build(BuildContext context) {
     final controller = Get.put(SidebarController());
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final isExpanded = controller.isExpanded.value;
       final showExtends = controller.showExtends.value;
-      final targetWidth = scaleW(isExpanded ? widget.expandedWidth : widget.collapsedWidth);
+      final resizing = controller.resizing.value;
+      // 侧栏不该吃掉整个窗口：窄窗时按窗口宽度设上限
+      final maxWidth = math.min(
+        scaleW(SidebarController.kMaxExpandedWidth),
+        MediaQuery.sizeOf(context).width * 0.45,
+      );
+      final expandedPx = math.min(scaleW(controller.expandedWidth.value), maxWidth);
+      final targetWidth = isExpanded ? expandedPx : scaleW(widget.collapsedWidth);
 
       if (desktopScreen.isMobile.value) {
         if (!controller._initializedMobile) {
@@ -208,7 +321,6 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
 
         return MobileSidebar(
           controller: controller,
-          theme: theme,
           targetWidth: targetWidth,
           animationDuration: widget.animationDuration,
           isExpanded: isExpanded,
@@ -222,7 +334,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
       }
 
       final String globalBackgroundPath = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
-      final isDark = theme.brightness == Brightness.dark;
+      final isDark = s.isDark;
 
       return FadeTransition(
         opacity: _entranceAnimation,
@@ -232,8 +344,8 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
             end: Offset.zero,
           ).animate(_entranceAnimation),
           child: AnimatedContainer(
-            duration: widget.animationDuration,
-            curve: Curves.easeInOutCubic,
+            duration: resizing ? Duration.zero : widget.animationDuration,
+            curve: AppMotion.standard,
             width: targetWidth,
             // 侧栏贴住窗口左/上/下边缘，圆角交给 macOS 的窗口蒙版去裁（实测内容
             // 层确实会被裁），这样两个圆角天然一致。原来的 margin+radius12 浮卡
@@ -261,14 +373,8 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                     : (WindowGlass.sidebar ? (isDark ? 175 : 120) : 255),
               ),
               // 只剩右侧一条发丝分隔线：四周描边在贴边布局下会被窗口蒙版裁掉半截
-              border: Border(
-                right: BorderSide(
-                  width: 1.w,
-                  color: isDark
-                      ? DarkColors.white10.withAlpha((255 * 0.6).toInt())
-                      : Colors.white.withAlpha(180),
-                ),
-              ),
+              // 线宽固定 1，不吃窗口缩放——缩放后不足 1 物理像素会被抗锯齿冲淡。
+              border: Border(right: BorderSide(color: s.glassBorder)),
             ),
             child: _buildSidebarContent(context, controller, isExpanded, showExtends),
           ),
@@ -320,27 +426,37 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
     );
   }
 
-  /// 构建侧边栏头部
+  /// 构建侧边栏头部：产品身份位 + 折叠开关
+  ///
+  /// 始终是一条 Row——换成 Column/Row 两套结构会让整个头部重排，
+  /// 而这一处要的是"同一个元素改宽度"：图标不动，字标的宽度收放。
   Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
     if (desktopScreen.isMobile.value) {
       return const SizedBox.shrink();
     }
 
+    final m = AppTheme.metrics;
+
     return AnimatedContainer(
       duration: widget.animationDuration,
-      curve: Curves.easeInOutCubic,
+      curve: AppMotion.standard,
       padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.metrics.kSpace8,
-        vertical: AppTheme.metrics.kSpace4,
+        horizontal: m.kSpace8,
+        vertical: m.kSpace8,
       ),
-      alignment: controller.isExpanded.value ? Alignment.bottomRight : Alignment.bottomCenter,
-      child: HoverSvgButton(
-        size: AppTheme.metrics.fontSize22,
-        svg: controller.isExpanded.value
-            ? Assets.image.svg.sidebarOpen
-            : Assets.image.svg.sidebarClose,
-        onTap: controller.toggleSidebar,
-        color: Theme.of(context).iconTheme.color,
+      child: Row(
+        children: [
+          const _SidebarLogo(),
+          Expanded(child: SizedBox(width: m.kSpace4)),
+          StrokeIconButton(
+            // 展开/收起是同一支笔换字形：旧的擦回去、新的描出来，比硬切更能读出"栏宽变了"
+            isExpanded ? StrokeIcons.assetSidebarOpen : StrokeIcons.assetSidebarClose,
+            size: scaleW(22),
+            onTap: controller.toggleSidebar,
+            color: Theme.of(context).iconTheme.color,
+            semanticLabel: isExpanded ? '收起侧栏' : '展开侧栏',
+          ),
+        ],
       ),
     );
   }
@@ -395,7 +511,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
           child: Divider(
             height: scaleW(1),
             thickness: scaleW(0.5),
-            color: Theme.of(context).dividerColor.withAlpha(20),
+            color: AppSemantic.of(context).hairline,
           ),
         ),
         Padding(
@@ -404,7 +520,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
             mainAxisSize: MainAxisSize.min,
             children: bottomGroup.items
                 .map(
-                  (item) => _buildMenuItem(context, controller, item, isExpanded, showExtends, 0),
+                  (item) => _buildMenuItem(context, controller, item, isExpanded, showExtends),
                 )
                 .toList(),
           ),
@@ -421,7 +537,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
     bool isExpanded,
     bool showExtends,
   ) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final bool isCollapsed = controller.isGroupCollapsed(group.id);
@@ -445,7 +561,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                         group.title!,
                         style: TextStyle(
                           fontSize: AppTheme.metrics.fontSize11,
-                          color: theme.hintColor.withAlpha(180),
+                          color: s.textTertiary,
                           fontWeight: FontWeight.w600,
                           decoration: TextDecoration.none,
                           letterSpacing: 1.2,
@@ -454,12 +570,13 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                     ),
                     AnimatedRotation(
                       turns: isCollapsed ? -0.25 : 0,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOutCubic,
-                      child: Icon(
-                        Icons.expand_more,
+                      duration: AppMotion.base,
+                      curve: AppMotion.standard,
+                      child: DrawIcon(
+                        StrokeIcons.expandMore,
                         size: AppTheme.metrics.iconSize14,
-                        color: theme.hintColor.withAlpha(120),
+                        color: s.textTertiary,
+                        trigger: StrokeTrigger.appear,
                       ),
                     ),
                   ],
@@ -473,16 +590,12 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                 horizontal: AppTheme.metrics.kSpace16,
                 vertical: AppTheme.metrics.kSpace8,
               ),
-              child: Divider(
-                height: 1,
-                thickness: scaleW(0.5),
-                color: theme.dividerColor.withAlpha(20),
-              ),
+              child: Divider(height: 1, thickness: scaleW(0.5), color: s.hairline),
             ),
 
           AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOutCubic,
+            duration: AppMotion.base,
+            curve: AppMotion.standard,
             alignment: Alignment.topCenter,
             child: isCollapsed && isExpanded
                 ? const SizedBox.shrink()
@@ -498,7 +611,6 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                             entry.value,
                             isExpanded,
                             showExtends,
-                            0,
                           ),
                         )
                         .toList(),
@@ -516,22 +628,18 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
     SidebarMenuItem item,
     bool isExpanded,
     bool showExtends,
-    int level,
   ) {
     return Obx(() {
       final isSelected = controller.selectedRoute.value == item.route.location;
       final isItemExpanded = controller.isItemExpanded(item.route.title);
-      final theme = Theme.of(context);
-      final isDark = theme.brightness == Brightness.dark;
+      final s = AppSemantic.of(context);
 
       return Container(
         decoration: isExpanded
             ? null
             : BoxDecoration(
-                color: isItemExpanded ? theme.dividerColor.withAlpha(5) : Colors.transparent,
-                border: isItemExpanded
-                    ? Border.all(width: 1.w, color: theme.dividerColor.withAlpha(10))
-                    : null,
+                color: isItemExpanded ? s.surfaceHover : Colors.transparent,
+                border: isItemExpanded ? Border.all(width: 1, color: s.hairline) : null,
               ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -544,10 +652,6 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
               child: _SidebarMenuItemButton(
                 isSelected: isSelected,
                 isExpanded: isExpanded,
-                isDark: isDark,
-                primaryColor: theme.colorScheme.primary,
-                onSurfaceColor: theme.colorScheme.onSurface,
-                iconColor: theme.iconTheme.color,
                 onTap: () {
                   if (item.hasChildren) {
                     return controller.toggleItemExpanded(item.route.title);
@@ -557,127 +661,108 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
+                    // 展开箭头在行的**右端**，不在行首：行首那一格是图标和
+                    // 选中指示条的位置，再塞一个箭头会先撞车，读起来也像两列。
                     if (isExpanded && item.hasChildren)
                       Positioned(
-                        left: -AppTheme.metrics.kSpace20,
-                        top: AppTheme.metrics.kSpace4,
-                        child: Padding(
-                          padding: EdgeInsets.only(right: AppTheme.metrics.kSpace4),
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
                           child: AnimatedRotation(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeInOutCubic,
-                            turns: isItemExpanded ? 0.25 : 0,
-                            child: SvgPicture.asset(
-                              Assets.image.svg.arrowRight,
-                              width: AppTheme.metrics.fontSize13,
-                              colorFilter: ColorFilter.mode(
-                                theme.textTheme.bodySmall?.color ?? Colors.black.withAlpha(51),
-                                BlendMode.srcIn,
-                              ),
+                            duration: AppMotion.base,
+                            curve: AppMotion.standard,
+                            // 收合时 ›、展开时 ⌄。和分组标题那枚箭头是同一个图形，
+                            // 用整支箭头（带杆）会读成"往下跳"而不是"这一组有子项"。
+                            turns: isItemExpanded ? 0 : -0.25,
+                            child: DrawIcon(
+                              StrokeIcons.expandMore,
+                              size: AppTheme.metrics.fontSize13,
+                              color: s.textTertiary,
+                              trigger: StrokeTrigger.appear,
                             ),
                           ),
                         ),
                       ),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOutCubic,
-                      padding: EdgeInsets.only(left: isExpanded ? 0 : AppTheme.metrics.kSpace4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          if (item.route.sidebarIcon != null)
-                            isExpanded
-                                ? AnimatedContainer(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOutCubic,
-                                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? theme.colorScheme.primary.withAlpha(isDark ? 25 : 20)
-                                          : Colors.transparent,
-                                      borderRadius: AppTheme.metrics.radius8,
-                                    ),
-                                    child: SvgPicture.asset(
-                                      item.route.sidebarIcon!,
-                                      width: AppTheme.metrics.fontSize18,
-                                      colorFilter: isSelected
-                                          ? ColorFilter.mode(
-                                              theme.colorScheme.primary,
-                                              BlendMode.srcIn,
-                                            )
-                                          : ColorFilter.mode(
-                                              theme.textTheme.bodyLarge?.color ?? Colors.black,
-                                              BlendMode.srcIn,
-                                            ),
-                                    ),
-                                  )
-                                : Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      AnimatedContainer(
-                                        duration: const Duration(milliseconds: 250),
-                                        curve: Curves.easeInOutCubic,
-                                        padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
-                                        decoration: BoxDecoration(
-                                          color: isSelected && isExpanded
-                                              ? theme.colorScheme.primary.withAlpha(
-                                                  isDark ? 25 : 20,
-                                                )
-                                              : Colors.transparent,
-                                          borderRadius: AppTheme.metrics.radius8,
-                                        ),
-                                        child: SvgPicture.asset(
-                                          item.route.sidebarIcon!,
-                                          width: AppTheme.metrics.fontSize22,
-                                          colorFilter: isSelected
-                                              ? ColorFilter.mode(
-                                                  theme.colorScheme.primary,
-                                                  BlendMode.srcIn,
-                                                )
-                                              : ColorFilter.mode(
-                                                  theme.iconTheme.color?.withAlpha(179) ??
-                                                      Colors.black,
-                                                  BlendMode.srcIn,
-                                                ),
-                                        ),
-                                      ),
-                                      if (item.route.sidebarBadgeWidget(context) != null)
-                                        Positioned(
-                                          right: AppTheme.metrics.kSpace2,
-                                          top: AppTheme.metrics.kSpace2,
-                                          child: item.route.sidebarBadgeWidget(context)!,
-                                        ),
-                                    ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        if (item.route.sidebarIcon != null)
+                          isExpanded
+                              ? AnimatedContainer(
+                                  duration: AppMotion.base,
+                                  curve: AppMotion.standard,
+                                  padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? s.accentContainer : Colors.transparent,
+                                    borderRadius: AppTheme.metrics.radius8,
                                   ),
-                          if (isExpanded && showExtends)
-                            Expanded(
-                              child: AnimatedOpacity(
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOutCubic,
-                                opacity: showExtends ? 1.0 : 0.0,
-                                child: ClipRect(
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      SizedBox(width: AppTheme.metrics.kSpace8),
-                                      Expanded(
-                                        child: Text(
-                                          item.route.sidebarLabel,
-                                          style: TextStyle(
-                                            fontSize: AppTheme.metrics.fontSize13,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w600
-                                                : FontWeight.w500,
-                                            color: isSelected
-                                                ? theme.colorScheme.primary
-                                                : theme.textTheme.bodyLarge?.color,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          softWrap: false,
-                                          maxLines: 1,
-                                        ),
+                                  child: DrawIcon(
+                                    item.route.sidebarIcon!,
+                                    size: AppTheme.metrics.fontSize18,
+                                    color: isSelected ? s.accent : s.textPrimary,
+                                  ),
+                                )
+                              : Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    AnimatedContainer(
+                                      duration: AppMotion.base,
+                                      curve: AppMotion.standard,
+                                      // 内边距只到 kSpace4：这一格横向只余 32 设计像素，
+                                      // 图标 22 再加两侧各 6 就已经撑破
+                                      padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                                      decoration: BoxDecoration(
+                                        color: isSelected && isExpanded
+                                            ? s.accentContainer
+                                            : Colors.transparent,
+                                        borderRadius: AppTheme.metrics.radius8,
                                       ),
-                                      if (item.route.sidebarBadgeCount != null)
+                                      child: DrawIcon(
+                                        item.route.sidebarIcon!,
+                                        // 图标必须和这条栏同一个缩放族：fontSize22 走的是
+                                        // 字号族，还要再乘用户调的字号比例——栏宽不动、
+                                        // 图标跟着字体长，比例不是 1 就把这一行顶破
+                                        size: scaleW(22),
+                                        color: isSelected ? s.accent : s.textTertiary,
+                                      ),
+                                    ),
+                                    if (item.route.sidebarBadgeWidget(context) != null)
+                                      Positioned(
+                                        right: AppTheme.metrics.kSpace2,
+                                        top: AppTheme.metrics.kSpace2,
+                                        child: item.route.sidebarBadgeWidget(context)!,
+                                      ),
+                                  ],
+                                ),
+                        if (isExpanded && showExtends)
+                          Expanded(
+                            child: AnimatedOpacity(
+                              duration: AppMotion.base,
+                              curve: AppMotion.standard,
+                              opacity: showExtends ? 1.0 : 0.0,
+                              child: ClipRect(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    SizedBox(width: AppTheme.metrics.kSpace8),
+                                    Expanded(
+                                      child: Text(
+                                        item.route.sidebarLabel,
+                                        style: TextStyle(
+                                          fontSize: AppTheme.metrics.fontSize13,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.w500,
+                                          color: isSelected ? s.accentText : s.textPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        softWrap: false,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                    if (item.route.sidebarBadgeCount != null)
+                                      _trailing(
                                         Container(
                                           padding: EdgeInsets.symmetric(
                                             horizontal: AppTheme.metrics.kSpace6,
@@ -688,8 +773,8 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                           ),
                                           decoration: BoxDecoration(
                                             color: isSelected
-                                                ? theme.colorScheme.primary.withAlpha(25)
-                                                : theme.hintColor.withAlpha(30),
+                                                ? s.accentContainer
+                                                : s.surfaceHover,
                                             borderRadius: AppTheme.metrics.radius8,
                                           ),
                                           child: Text(
@@ -699,29 +784,40 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                               fontSize: AppTheme.metrics.fontSize9,
                                               fontWeight: FontWeight.w600,
                                               color: isSelected
-                                                  ? theme.colorScheme.primary
-                                                  : theme.hintColor,
+                                                  ? s.accentText
+                                                  : s.textSecondary,
                                             ),
                                             maxLines: 1,
                                           ),
                                         ),
-                                      if (item.route.sidebarBadgeWidget(context) != null)
+                                      ),
+                                    if (item.route.sidebarBadgeWidget(context) != null)
+                                      _trailing(
                                         Padding(
-                                          padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
+                                          padding: EdgeInsets.only(
+                                            left: AppTheme.metrics.kSpace4,
+                                          ),
                                           child: item.route.sidebarBadgeWidget(context)!,
                                         ),
-                                      if (item.route.sidebarStatusWidget(context) != null)
+                                      ),
+                                    if (item.route.sidebarStatusWidget(context) != null)
+                                      _trailing(
                                         Padding(
-                                          padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
+                                          padding: EdgeInsets.only(
+                                            left: AppTheme.metrics.kSpace4,
+                                          ),
                                           child: item.route.sidebarStatusWidget(context)!,
                                         ),
-                                    ],
-                                  ),
+                                      ),
+                                    // 给行末的展开箭头让出横向空间，否则长标签会钻到箭头底下
+                                    if (item.hasChildren)
+                                      SizedBox(width: AppTheme.metrics.kSpace20),
+                                  ],
                                 ),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -730,34 +826,63 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
 
             if (item.hasChildren)
               AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOutCubic,
-                child: isItemExpanded
-                    ? Column(
+                duration: AppMotion.base,
+                curve: AppMotion.standard,
+                alignment: Alignment.topCenter,
+                child: !isItemExpanded
+                    ? const SizedBox.shrink()
+                    : isExpanded && showExtends
+                    ? TreeConnector(
+                        // 竖干在父项图标下方起，横枝把每个子项接到竖干上：
+                        // 一族的关系靠线成立，不靠缩进猜。
+                        childCount: item.children!.length,
+                        rowHeight: _kChildRowHeight,
+                        spacing: AppTheme.metrics.kSpace2,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: AppTheme.metrics.kSpace2,
+                          children: [
+                            for (final child in item.children!)
+                              _SidebarChildItem(
+                                item: child,
+                                selected:
+                                    controller.selectedRoute.value == child.route.location,
+                                onTap: () => _navigateAndMaybeClose(
+                                  controller,
+                                  child.route.location,
+                                ),
+                              ),
+                            SizedBox(height: AppTheme.metrics.kSpace4),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        // 图标条太窄，画不出竖干；子项仍逐条排在父项下面
                         mainAxisSize: MainAxisSize.min,
                         spacing: AppTheme.metrics.kSpace4,
                         children: [
-                          ...item.children!.map(
-                            (child) => isExpanded && showExtends
-                                ? _buildMenuItem(
-                                    context,
-                                    controller,
-                                    child,
-                                    isExpanded,
-                                    showExtends,
-                                    level + 1,
-                                  )
-                                : _buildCollapsedChildItem(context, controller, child),
-                          ),
+                          for (final child in item.children!)
+                            _buildCollapsedChildItem(context, controller, child),
                           SizedBox(height: AppTheme.metrics.kSpace4),
                         ],
-                      )
-                    : const SizedBox.shrink(),
+                      ),
               ),
           ],
         ),
       );
     });
+  }
+
+  /// 行尾那簇附加内容（计数徽章 / 状态点 / 版本字）
+  ///
+  /// 它们内部全是字号族，字号比例拉到 2 倍时固有宽度能吃完整行宽，而这一行的宽
+  /// 只由侧栏宽决定——族不同就压不动。统一钉在宽度族的上限里再裁：宁可截一段，
+  /// 不许顶破。
+  Widget _trailing(Widget child) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: AppTheme.metrics.kSpace56),
+      child: ClipRect(child: child),
+    );
   }
 
   /// 构建收起状态下的子菜单项
@@ -768,35 +893,37 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
   ) {
     return Obx(() {
       final isSelected = controller.selectedRoute.value == item.route.location;
-      final theme = Theme.of(context);
+      final s = AppSemantic.of(context);
 
       return Material(
-        color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            _navigateAndMaybeClose(controller, item.route.location);
-          },
-          splashFactory: NoSplash.splashFactory,
-          highlightColor: Colors.transparent,
-          borderRadius: AppTheme.metrics.radius12,
-          hoverColor: theme.colorScheme.onSurface.withAlpha(13),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppTheme.metrics.kSpace12,
-              vertical: AppTheme.metrics.kSpace10,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: AppTheme.metrics.radius12,
-              color: isSelected ? theme.colorScheme.onSurface.withAlpha(25) : Colors.transparent,
-            ),
-            child: Tooltip(
-              message: item.route.sidebarLabel,
-              child: HoverSvgButton(
-                svg: item.route.sidebarIcon!,
-                color: isSelected ? theme.colorScheme.primary : null,
-                onTap: () {
-                  _navigateAndMaybeClose(controller, item.route.location);
-                },
+        color: Colors.transparent,
+        child: StrokeZone(
+          // 整行都是命中区，点在文字上也该让图标描一次
+          child: InkWell(
+            onTap: () {
+              _navigateAndMaybeClose(controller, item.route.location);
+            },
+            splashFactory: NoSplash.splashFactory,
+            highlightColor: Colors.transparent,
+            borderRadius: AppTheme.metrics.radius12,
+            hoverColor: s.surfaceHover,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace12,
+                vertical: AppTheme.metrics.kSpace10,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: AppTheme.metrics.radius12,
+                color: isSelected ? s.accentContainer : Colors.transparent,
+              ),
+              child: Tooltip(
+                message: item.route.sidebarLabel,
+                child: DrawIcon(
+                  item.route.sidebarIcon!,
+                  size: scaleW(22),
+                  color: isSelected ? s.accent : null,
+                  trigger: StrokeTrigger.press,
+                ),
               ),
             ),
           ),
@@ -807,23 +934,163 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
 }
 
 /// 侧边栏菜单项按钮（带选中指示条 + 悬停发光效果）
+/// 侧栏顶部的产品身份位
+///
+/// 收起↔展开之间不重排、不淡出重进：图标是同一个元素，字标只是宽度收放。
+/// 点它等于回概览——侧栏是导航，产品名是它的根。
+class _SidebarLogo extends StatelessWidget {
+  const _SidebarLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
+    final controller = Get.find<SidebarController>();
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          controller.selectItem(const DashboardRoute().location);
+          goRouter.go(const DashboardRoute().location);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SvgPicture.asset(
+              Assets.image.svg.topBarLogo,
+              // 宽度族：图标条只有 75 设计像素，跟着字号长的图标会把它顶穿
+              width: scaleW(22),
+              height: scaleW(22),
+              colorFilter: ColorFilter.mode(s.textPrimary, BlendMode.srcIn),
+            ),
+            AnimatedSize(
+              duration: SidebarController.kWidthAnimation,
+              curve: AppMotion.standard,
+              alignment: Alignment.centerLeft,
+              child: Obx(
+                () => controller.isExpanded.value && controller.showExtends.value
+                    ? Padding(
+                        padding: EdgeInsets.only(left: m.kSpace8),
+                        child: Text(
+                          AppInfoService.appName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: m.fontSize14,
+                            fontWeight: FontWeight.w600,
+                            color: s.textPrimary,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 展开后的子项
+///
+/// 和顶层项差两件事：**不抬白卡、不出指示条**。一族里只允许一个抬升主体，
+/// 否则连接线和白卡会打架——到底是这行被选中，还是这一族被选中，读不出来。
+/// 子项的反馈只有水洗 + 文字升色，够用了。
+class _SidebarChildItem extends StatefulWidget {
+  const _SidebarChildItem({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SidebarMenuItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<_SidebarChildItem> createState() => _SidebarChildItemState();
+}
+
+class _SidebarChildItemState extends State<_SidebarChildItem> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
+    final icon = widget.item.route.sidebarIcon;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          height: _kChildRowHeight,
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace6),
+          decoration: BoxDecoration(
+            color: _pressed
+                ? s.surfaceActive
+                : _hovered
+                ? s.surfaceHover
+                : Colors.transparent,
+            borderRadius: m.radiusControl,
+          ),
+          child: Row(
+            spacing: m.kSpace8,
+            children: [
+              if (icon != null)
+                DrawIcon(
+                  icon,
+                  // 宽度族：这一行不吃用户字号比例，理由和图标条一样
+                  size: scaleW(16),
+                  color: widget.selected ? s.accent : s.textSecondary,
+                  trigger: StrokeTrigger.press,
+                ),
+              Expanded(
+                child: Text(
+                  widget.item.route.sidebarLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: m.fontSize13,
+                    fontWeight: widget.selected ? FontWeight.w500 : FontWeight.w400,
+                    color: widget.selected ? s.textPrimary : s.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SidebarMenuItemButton extends StatefulWidget {
   final bool isSelected;
   final bool isExpanded;
-  final bool isDark;
-  final Color primaryColor;
-  final Color onSurfaceColor;
-  final Color? iconColor;
   final VoidCallback onTap;
   final Widget child;
 
   const _SidebarMenuItemButton({
     required this.isSelected,
     required this.isExpanded,
-    required this.isDark,
-    required this.primaryColor,
-    required this.onSurfaceColor,
-    this.iconColor,
     required this.onTap,
     required this.child,
   });
@@ -838,6 +1105,7 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -845,30 +1113,26 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOutCubic,
+          duration: AppMotion.base,
+          curve: AppMotion.standard,
           height: m.kSpace44,
-          padding: EdgeInsets.symmetric(horizontal: widget.isExpanded ? m.kSpace4 : m.kSpace4),
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace4),
           decoration: BoxDecoration(
+            // 选中项不再染一层品牌色，而是抬起成一张白卡：侧栏底就是画布色，
+            // 白卡 + 1px 描边 + 一层极轻投影本身就是它的选中态。
             color: widget.isSelected
-                ? widget.primaryColor.withAlpha(widget.isDark ? 22 : 16)
+                ? s.surface
                 : _hovered
-                ? widget.onSurfaceColor.withAlpha(widget.isDark ? 10 : 8)
+                ? s.surfaceHover
                 : Colors.transparent,
-            borderRadius: m.radius10,
+            borderRadius: m.radiusControl,
+            // 只有选中项描边：每行都套一个框的话，一列看下去全是格子，
+            // 抬升关系反而读不出来；悬停有水洗，未选中不需要常驻描边。
+            border: widget.isSelected
+                ? Border.all(color: s.accentContainerBorder)
+                : null,
             boxShadow: [
-              if (widget.isSelected)
-                BoxShadow(
-                  color: widget.primaryColor.withAlpha(widget.isDark ? 18 : 12),
-                  blurRadius: 12,
-                  offset: const Offset(0, 2),
-                ),
-              if (_hovered && !widget.isSelected)
-                BoxShadow(
-                  color: widget.onSurfaceColor.withAlpha(5),
-                  blurRadius: 8,
-                  offset: const Offset(0, 1),
-                ),
+              if (widget.isSelected) ...s.elevation(Elevation.raised),
             ],
           ),
           child: Row(
@@ -876,22 +1140,13 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
             children: [
               if (widget.isExpanded)
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOutCubic,
+                  duration: AppMotion.base,
+                  curve: AppMotion.standard,
                   width: scaleW(3),
                   height: widget.isSelected ? m.kSpace20 : 0,
                   decoration: BoxDecoration(
-                    color: widget.isSelected ? widget.primaryColor : Colors.transparent,
+                    color: widget.isSelected ? s.accent : Colors.transparent,
                     borderRadius: BorderRadius.circular(scaleW(2)),
-                    boxShadow: widget.isSelected
-                        ? [
-                            BoxShadow(
-                              color: widget.primaryColor.withAlpha(60),
-                              blurRadius: scaleW(6),
-                              offset: Offset(scaleW(2), 0),
-                            ),
-                          ]
-                        : null,
                   ),
                 ),
               Expanded(child: widget.child),
@@ -922,9 +1177,9 @@ class _SidebarEntranceAnimationState extends State<_SidebarEntranceAnimation>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _controller = AnimationController(vsync: this, duration: AppMotion.emphasis);
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    final delay = Duration(milliseconds: 300 + widget.index * 80);
+    final delay = AppMotion.slow + AppMotion.entranceGap * widget.index;
     Future.delayed(delay, () {
       if (mounted) _controller.forward();
     });
@@ -951,7 +1206,6 @@ class _SidebarEntranceAnimationState extends State<_SidebarEntranceAnimation>
 /// 移动端侧边栏组件（支持手势滑动）
 class MobileSidebar extends StatefulWidget {
   final SidebarController controller;
-  final ThemeData theme;
   final double targetWidth;
   final Duration animationDuration;
   final bool isExpanded;
@@ -962,7 +1216,6 @@ class MobileSidebar extends StatefulWidget {
   const MobileSidebar({
     super.key,
     required this.controller,
-    required this.theme,
     required this.targetWidth,
     required this.animationDuration,
     required this.isExpanded,
@@ -983,6 +1236,7 @@ class MobileSidebarState extends State<MobileSidebar> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     double sidebarLeft;
     double sidebarExpandScale = desktopScreen.sidebarExpandScale.value;
     if (_isDragging) {
@@ -1068,16 +1322,16 @@ class MobileSidebarState extends State<MobileSidebar> {
                     }
                   },
                   child: AnimatedContainer(
-                    duration: _isDragging ? Duration.zero : const Duration(milliseconds: 300),
-                    curve: Curves.easeInOutCubic,
-                    color: Colors.black.withAlpha(((255 * maskOpacity) * 0.45).toInt()),
+                    duration: _isDragging ? Duration.zero : AppMotion.slow,
+                    curve: AppMotion.standard,
+                    color: s.scrim.withAlpha(((255 * maskOpacity) * 0.45).toInt()),
                   ),
                 ),
               ),
 
             AnimatedPositioned(
               duration: _isDragging ? Duration.zero : widget.animationDuration,
-              curve: Curves.easeInOutCubic,
+              curve: AppMotion.standard,
               left: sidebarLeft,
               top: 0,
               bottom: 0,
@@ -1115,20 +1369,16 @@ class MobileSidebarState extends State<MobileSidebar> {
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    color: widget.theme.colorScheme.surface,
+                    // 这里不写 color：下一行的 gradient 会盖掉它，写了也不生效。
                     boxShadow: widget.isMobile != true
                         ? [
                             BoxShadow(
-                              color: widget.theme.shadowColor.withAlpha(40),
+                              color: s.shadowKey.withAlpha(40),
                               blurRadius: AppTheme.metrics.kSpace24,
                               offset: Offset(AppTheme.metrics.kSpace2, 0),
                             ),
                             BoxShadow(
-                              color:
-                                  (widget.theme.brightness == Brightness.dark
-                                          ? DarkColors.primary
-                                          : LightColors.primary)
-                                      .withAlpha(12),
+                              color: AppBrand.soft.withAlpha(12),
                               blurRadius: AppTheme.metrics.kSpace32,
                               offset: Offset(0, AppTheme.metrics.kSpace4),
                             ),

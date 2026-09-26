@@ -65,34 +65,39 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
     textSecondary: AppSurfaces.lightTextSecondary,
     textTertiary: AppSurfaces.lightTextTertiary,
     textDisabled: AppSurfaces.lightTextDisabled,
-    accent: AppBrand.deep,
-    accentOn: Colors.white,
-    accentText: AppBrand.deep,
-    accentContainer: Color(0xFFEDEAFB),
-    accentContainerBorder: Color(0xFFD6D0F5),
-    accentGradient: AppBrand.lightGradient,
+    // 主按钮/选中态走"反相墨色"：全站只留这一种实心强调底，
+    // 品牌紫退出主色位，只活在 info 与图表里当点缀。
+    accent: AppBrand.ink,
+    accentOn: AppBrand.inkOn,
+    accentText: AppSurfaces.lightTextPrimary,
+    accentContainer: Color(0xFFF5F5F5),
+    accentContainerBorder: AppSurfaces.lightBorder,
+    accentGradient: AppBrand.inkLight,
     success: AppStatusRole(
       color: AppStatus.lightSuccess,
-      onContainer: AppStatus.lightSuccess,
+      onContainer: AppStatus.lightSuccessText,
     ),
     warning: AppStatusRole(
       color: AppStatus.lightWarning,
-      onContainer: AppStatus.lightWarning,
+      onContainer: AppStatus.lightWarningText,
     ),
     danger: AppStatusRole(
       color: AppStatus.lightDanger,
-      onContainer: AppStatus.lightDanger,
+      onContainer: AppStatus.lightDangerText,
     ),
-    info: AppStatusRole(color: AppStatus.lightInfo, onContainer: AppStatus.lightInfo),
+    info: AppStatusRole(
+      color: AppStatus.lightInfo,
+      onContainer: AppStatus.lightInfoText,
+    ),
     neutral: AppStatusRole(
       color: AppStatus.lightNeutral,
-      onContainer: AppSurfaces.lightTextSecondary,
+      onContainer: AppStatus.lightNeutralText,
     ),
     scrim: LightColors.overlay,
-    shadowKey: Color(0x14000000),
-    shadowAmbient: Color(0x0A000000),
+    shadowKey: Color(0x0F000000),
+    shadowAmbient: Color(0x07000000),
     glassTint: Color(0xB8FFFFFF),
-    glassBorder: Color(0x33FFFFFF),
+    glassBorder: AppSurfaces.lightBorder,
     glassBlur: AppGlass.blurMedium,
     glassPanelTint: Color(0x8CFFFFFF),
   );
@@ -113,44 +118,46 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
     textSecondary: AppSurfaces.darkTextSecondary,
     textTertiary: AppSurfaces.darkTextTertiary,
     textDisabled: AppSurfaces.darkTextDisabled,
-    accent: AppBrand.soft,
-    accentOn: Colors.black,
-    accentText: AppBrand.softLight,
-    accentContainer: Color(0xFF2C2843),
-    accentContainerBorder: Color(0xFF453E6B),
-    accentGradient: AppBrand.darkGradient,
+    // 暗色下"反相"就是提亮到近白：主按钮是一块亮底 + 墨色字，
+    // 而不是又回到一层面料般的紫。
+    accent: AppBrand.inkInverse,
+    accentOn: AppBrand.ink,
+    accentText: AppSurfaces.darkTextPrimary,
+    accentContainer: Color(0xFF262626),
+    accentContainerBorder: Color(0xFF404040),
+    accentGradient: AppBrand.inkDark,
     success: AppStatusRole(
       color: AppStatus.darkSuccess,
-      onContainer: AppStatus.darkSuccess,
+      onContainer: AppStatus.darkSuccessText,
       dark: true,
     ),
     warning: AppStatusRole(
       color: AppStatus.darkWarning,
-      onContainer: AppStatus.darkWarning,
+      onContainer: AppStatus.darkWarningText,
       dark: true,
     ),
     danger: AppStatusRole(
       color: AppStatus.darkDanger,
-      onContainer: AppStatus.darkDanger,
+      onContainer: AppStatus.darkDangerText,
       dark: true,
     ),
     info: AppStatusRole(
       color: AppStatus.darkInfo,
-      onContainer: AppStatus.darkInfo,
+      onContainer: AppStatus.darkInfoText,
       dark: true,
     ),
     neutral: AppStatusRole(
       color: AppStatus.darkNeutral,
-      onContainer: AppSurfaces.darkTextSecondary,
+      onContainer: AppStatus.darkNeutralText,
       dark: true,
     ),
     scrim: DarkColors.overlay,
-    shadowKey: Color(0x59000000),
-    shadowAmbient: Color(0x2E000000),
-    glassTint: Color(0x9E23241F),
-    glassBorder: Color(0x24FFFFFF),
+    shadowKey: Color(0x66000000),
+    shadowAmbient: Color(0x33000000),
+    glassTint: Color(0x9E171717),
+    glassBorder: AppSurfaces.darkBorder,
     glassBlur: AppGlass.blurMedium,
-    glassPanelTint: Color(0x6B212218),
+    glassPanelTint: Color(0x6B171717),
   );
 
   static AppSemantic of(BuildContext context) {
@@ -211,10 +218,12 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
   List<BoxShadow> elevation(Elevation level, {Color? tint}) {
     final base = switch (level) {
       Elevation.none => const _ShadowSpec(0, 0, 0),
+      // 抬升量整体压小：这套语言里层次主要靠 1px 实心描边拉开，
+      // 投影只负责"离地一点点"，投得越重越像贴了张纸上去。
       Elevation.raised => const _ShadowSpec(1, 2, 0),
-      Elevation.card => const _ShadowSpec(2, 8, 0),
-      Elevation.floating => const _ShadowSpec(6, 20, -2),
-      Elevation.overlay => const _ShadowSpec(16, 44, -6),
+      Elevation.card => const _ShadowSpec(1, 3, 0),
+      Elevation.floating => const _ShadowSpec(10, 15, -3),
+      Elevation.overlay => const _ShadowSpec(20, 25, -5),
     };
     if (base.blur == 0) return const [];
     return [
@@ -371,7 +380,10 @@ class AppStatusRole {
   /// 半透明容器底（标签、徽章、告警条背景）
   Color get container => AppStatus.container(color, dark: dark);
 
-  Color get containerBorder => AppStatus.containerBorder(color);
+  /// 容器内描边
+  ///
+  /// 必须跟着 `dark` 走：暗色档要更浓才压得住深灰表面，漏传就等于这条规则白写。
+  Color get containerBorder => AppStatus.containerBorder(color, dark: dark);
 
   AppStatusRole lerp(AppStatusRole other, double t) => AppStatusRole(
     color: Color.lerp(color, other.color, t)!,

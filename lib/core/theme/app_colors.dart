@@ -139,8 +139,8 @@ class DarkColors {
 
 /// 中性表面层次（Surface Ramps）
 ///
-/// AI 工具类产品的层次感来自「同一色相下极小幅度的明度阶梯」，
-/// 而不是靠黑白硬切。这里定义四层表面 + 两级描边。
+/// 纯灰、不带任何色温偏移：一旦掺进暖调，卡片和画布的分层就会发"糊"，
+/// 状态色也跟着串味。层次靠明度阶梯 + 1px 实心描边拉开，不靠彩色染色。
 class AppSurfaces {
   AppSurfaces._();
 
@@ -149,7 +149,7 @@ class AppSurfaces {
   ///
   /// 必须与 surface 拉开：历史上画布与卡片都是接近 #FFF 的白，
   /// 卡片只能靠描边勉强分辨，整页显得"平、糊、没有浮起感"。
-  static const Color lightCanvas = Color(0xFFF1F1EE);
+  static const Color lightCanvas = Color(0xFFFAFAFA);
 
   /// 一级表面：卡片 / 面板
   static const Color lightSurface = Color(0xFFFFFFFF);
@@ -158,71 +158,99 @@ class AppSurfaces {
   static const Color lightSurfaceRaised = Color(0xFFFFFFFF);
 
   /// 下沉表面：输入框底 / 分组背景
-  static const Color lightSurfaceSunken = Color(0xFFEBEBE7);
+  static const Color lightSurfaceSunken = Color(0xFFF5F5F5);
 
   /// 交互态
   ///
   /// 悬停是"状态层"，必须用水洗而不是实心色：实心底一压上去，底下那层窗口磨砂就
   /// 断了（实测表现为鼠标移到侧栏分组标题上出现一块不透的白斑）。
   ///
-  /// 水洗的方向必须跟着底色走：亮色侧的表面是白（#FFFFFF 卡片 / #F1F1EE 画布），
-  /// 再往上叠白色就是零反馈——原来这颗 0x2DFFFFFF 正是这个问题，卡片、列表行、
-  /// 菜单在亮色模式下全都没有悬停。改成半透明黑，压白得 #E8E8E8、压画布得 #E0E0DC，
-  /// 依旧透得下去。暗色侧表面本来就比白亮，继续用提亮的白水洗。
-  static const Color lightSurfaceHover = Color(0x14000000);
-  static const Color lightSurfaceActive = Color(0xFFEDEDFA);
+  /// 水洗的方向必须跟着底色走：亮色侧的表面是白（#FFFFFF 卡片 / #FAFAFA 画布），
+  /// 再往上叠白色就是零反馈——原来那颗 0x2DFFFFFF 正是这个问题，卡片、列表行、
+  /// 菜单在亮色模式下全都没有悬停。改成半透明黑，压白得 #F5F5F5、压画布得 #F0F0F0，
+  /// 依旧透得下去。暗色侧表面本来就比白暗，继续用提亮的白水洗。
+  static const Color lightSurfaceHover = Color(0x0A000000);
+  static const Color lightSurfaceActive = Color(0x14000000);
 
   /// 亮色下极轻的分隔（用于相邻表面几乎无接缝处）
-  static const Color lightHairline = Color(0x0F000000);
+  static const Color lightHairline = Color(0x0D000000);
 
   /// 亮色下常规描边
-  static const Color lightBorder = Color(0x1A000000);
+  ///
+  /// 这套语言里描边是实心灰阶（#E5E5E5），不是半透明黑：描边要能独立成立，
+  /// 卡片压在画布上才有那一条干脆的分界线。
+  static const Color lightBorder = Color(0xFFE5E5E5);
 
   /// 亮色下强描边（输入框聚焦前 / 需要边界感处）
-  static const Color lightBorderStrong = Color(0x2E000000);
+  static const Color lightBorderStrong = Color(0xFFA3A3A3);
 
   // ── 暗色 ──
-  /// 窗口画布（沿用项目原有的暖调深灰，保留品牌气质）
-  static const Color darkCanvas = Color(0xFF141512);
+  /// 窗口画布
+  static const Color darkCanvas = Color(0xFF0A0A0A);
 
   /// 一级表面
-  static const Color darkSurface = Color(0xFF232420);
+  static const Color darkSurface = Color(0xFF171717);
 
   /// 二级表面
-  static const Color darkSurfaceRaised = Color(0xFF2B2C28);
+  static const Color darkSurfaceRaised = Color(0xFF262626);
 
   /// 下沉表面
   ///
   /// 不能等于 darkCanvas：否则"下沉"控件（输入框/图标底板/侧栏）贴在画布上时
   /// 完全隐形，落在卡片上又像一个挖空的洞。
-  static const Color darkSurfaceSunken = Color(0xFF1A1B17);
+  static const Color darkSurfaceSunken = Color(0xFF0F0F0F);
 
   /// 交互态
   ///
-  /// 暗色侧的表面比白暗，所以这里继续用**提亮**的白水洗（压在暗色画布 #141512 上
-  /// 仍还原成原来的 #2E2F2B）。方向与亮色相反是有意为之：水洗永远朝"看得见"那侧走。
-  static const Color darkSurfaceHover = Color(0x1CFFFFFF);
-  static const Color darkSurfaceActive = Color(0xFF322F45);
+  /// 暗色侧的表面比白暗，所以这里继续用**提亮**的白水洗。方向与亮色相反是
+  /// 有意为之：水洗永远朝"看得见"那侧走。
+  static const Color darkSurfaceHover = Color(0x14FFFFFF);
+  static const Color darkSurfaceActive = Color(0x1FFFFFFF);
 
   static const Color darkHairline = Color(0x14FFFFFF);
-  static const Color darkBorder = Color(0x24FFFFFF);
-  static const Color darkBorderStrong = Color(0x3DFFFFFF);
+  static const Color darkBorder = Color(0x1AFFFFFF);
+  static const Color darkBorderStrong = Color(0x33FFFFFF);
 
   // ── 文字层级 ──
-  static const Color lightTextPrimary = Color(0xFF21221E);
-  static const Color lightTextSecondary = Color(0xFF5E5F59);
-  static const Color lightTextTertiary = Color(0xFF74756E);
-  static const Color lightTextDisabled = Color(0xFFB8B9B2);
+  static const Color lightTextPrimary = Color(0xFF0A0A0A);
+  static const Color lightTextSecondary = Color(0xFF525252);
+  static const Color lightTextTertiary = Color(0xFF737373);
+  static const Color lightTextDisabled = Color(0xFFA3A3A3);
 
-  static const Color darkTextPrimary = Color(0xFFEDEEE9);
-  static const Color darkTextSecondary = Color(0xFFA9AAA3);
-  static const Color darkTextTertiary = Color(0xFF8E8F86);
-  static const Color darkTextDisabled = Color(0xFF5A5B56);
+  static const Color darkTextPrimary = Color(0xFFFAFAFA);
+  static const Color darkTextSecondary = Color(0xFFA3A3A3);
+  static const Color darkTextTertiary = Color(0xFF737373);
+  static const Color darkTextDisabled = Color(0xFF525252);
 }
 
 /// 品牌与强调色（Brand Ramp）
+///
+/// 品牌紫现在只是点缀（info、图表、装饰）；主色位由 [inkLight] / [inkDark] 这对
+/// 反相墨色接管。渐变字段仍保留，因为渐变标题的老签名还吃 LinearGradient，
+/// 两端同色即纯色。
 class AppBrand {
   AppBrand._();
+
+  /// 反相主按钮底色（亮色：近黑）
+  static const Color ink = Color(0xFF171717);
+
+  /// 反相主按钮文字（亮色）
+  static const Color inkOn = Color(0xFFFAFAFA);
+
+  /// 反相主按钮底色（暗色：近白）
+  static const Color inkInverse = Color(0xFFE5E5E5);
+
+  /// 两端同色的"渐变"：只为还吃 LinearGradient 的老签名（渐变标题）保留
+  static const LinearGradient inkLight = LinearGradient(
+    colors: [ink, ink],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  static const LinearGradient inkDark = LinearGradient(
+    colors: [inkInverse, inkInverse],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 
   /// 品牌软紫（装饰、渐变、大面积铺底）
   static const Color soft = Color(0xFFA89FEE);
@@ -252,22 +280,33 @@ class AppBrand {
 
 /// 状态色家族（语义化，取代散落的 Colors.green / orange / red）
 ///
-/// 每个状态提供三档：主色、容器底色（约 12% 透明）、容器上的文字色。
-/// 这样同一个"成功"标签在明暗两套主题下都保持正确的对比与浓度。
+/// 每个状态提供两档：主色（点、图标、图表线）和容器上的文字色。
+/// 文字必须单独压深/提亮：状态主色本身是给"点"用的，直接拿它当小字号文字，
+/// 亮色下 #00BB7F 这种饱和绿在白底上只有 2.4:1，读起来是一片糊。
 class AppStatus {
   AppStatus._();
 
-  static const Color lightSuccess = Color(0xFF2E9463);
-  static const Color lightWarning = Color(0xFFB57A10);
-  static const Color lightDanger = Color(0xFFD24C55);
-  static const Color lightInfo = Color(0xFF3580B8);
-  static const Color lightNeutral = Color(0xFF7A7B75);
+  static const Color lightSuccess = Color(0xFF00BB7F);
+  static const Color lightSuccessText = Color(0xFF004E3B);
+  static const Color lightWarning = Color(0xFFEDB200);
+  static const Color lightWarningText = Color(0xFF733E0A);
+  static const Color lightDanger = Color(0xFFE40014);
+  static const Color lightDangerText = Color(0xFF9F0712);
+  static const Color lightInfo = Color(0xFF8D54FF);
+  static const Color lightInfoText = Color(0xFF4D179A);
+  static const Color lightNeutral = Color(0xFF737373);
+  static const Color lightNeutralText = Color(0xFF404040);
 
-  static const Color darkSuccess = Color(0xFF63CB9C);
-  static const Color darkWarning = Color(0xFFE7B45C);
-  static const Color darkDanger = Color(0xFFF2838A);
-  static const Color darkInfo = Color(0xFF77BEEA);
-  static const Color darkNeutral = Color(0xFF9A9B95);
+  static const Color darkSuccess = Color(0xFF00BB7F);
+  static const Color darkSuccessText = Color(0xFF5EEAD4);
+  static const Color darkWarning = Color(0xFFEDB200);
+  static const Color darkWarningText = Color(0xFFFCD34D);
+  static const Color darkDanger = Color(0xFFFF6568);
+  static const Color darkDangerText = Color(0xFFFFB4B6);
+  static const Color darkInfo = Color(0xFFAC4BFF);
+  static const Color darkInfoText = Color(0xFFD6BBFE);
+  static const Color darkNeutral = Color(0xFFA1A1A1);
+  static const Color darkNeutralText = Color(0xFFD4D4D4);
 
   /// 容器底色统一用主色 + 低透明度，避免再手写 withAlpha
   static Color container(Color base, {bool dark = false}) =>

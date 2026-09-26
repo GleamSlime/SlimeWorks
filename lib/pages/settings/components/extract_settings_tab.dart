@@ -4,6 +4,9 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class ExtractSettingsTab extends StatelessWidget {
   const ExtractSettingsTab({super.key});
@@ -19,7 +22,7 @@ class ExtractSettingsTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle(context, '解压方式', Icons.folder_zip_outlined),
+          _buildSectionTitle(context, '解压方式', StrokeIcons.folderZip),
           SizedBox(height: m.kSpace12),
           _buildSettingsCard(
             context,
@@ -37,31 +40,31 @@ class ExtractSettingsTab extends StatelessWidget {
                   context,
                   '按压缩包名称创建文件夹',
                   ExtractOutputMode.byArchiveName,
-                  Icons.folder_outlined,
+                  StrokeIcons.folder,
                 ),
                 _buildOutputModeOption(
                   context,
                   '全部解压到目录下',
                   ExtractOutputMode.flatToOutput,
-                  Icons.list_outlined,
+                  StrokeIcons.list,
                 ),
                 _buildOutputModeOption(
                   context,
                   '按原目录结构创建',
                   ExtractOutputMode.preserveStructure,
-                  Icons.account_tree_outlined,
+                  StrokeIcons.accountTree,
                 ),
                 _buildOutputModeOption(
                   context,
                   '解压到同级目录',
                   ExtractOutputMode.sameDirectory,
-                  Icons.drive_file_move_outline,
+                  StrokeIcons.driveFileMoveOutline,
                 ),
               ],
             ),
           ),
           SizedBox(height: m.kSpace24),
-          _buildSectionTitle(context, '并行解压数', Icons.speed_rounded),
+          _buildSectionTitle(context, '并行解压数', StrokeIcons.speed),
           SizedBox(height: m.kSpace12),
           _buildSettingsCard(
             context,
@@ -103,7 +106,7 @@ class ExtractSettingsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
+  Widget _buildSectionTitle(BuildContext context, String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -115,8 +118,7 @@ class ExtractSettingsTab extends StatelessWidget {
             color: theme.colorScheme.primary.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(
-            icon,
+          child: DrawIcon(icon,
             size: m.iconSize12,
             color: theme.colorScheme.primary,
           ),
@@ -154,7 +156,7 @@ class ExtractSettingsTab extends StatelessWidget {
     BuildContext context,
     String label,
     ExtractOutputMode mode,
-    IconData icon,
+    StrokeIcon icon,
   ) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
@@ -168,11 +170,10 @@ class ExtractSettingsTab extends StatelessWidget {
           color: theme.colorScheme.primary.withAlpha(15),
           borderRadius: m.radius8,
         ),
-        child: Icon(icon, size: m.iconSize16, color: theme.colorScheme.primary),
+        child: DrawIcon(icon, size: m.iconSize16, color: theme.colorScheme.primary),
       ),
       title: Text(label, style: theme.textTheme.bodySmall),
-      trailing: Icon(
-        Icons.check_circle_outline,
+      trailing: DrawIcon(StrokeIcons.checkCircleOutline,
         size: m.iconSize18,
         color: theme.colorScheme.primary.withAlpha(80),
       ),
@@ -191,10 +192,10 @@ class ExtractSettingsTab extends StatelessWidget {
       children: [
         Row(
           children: [
-            _buildSectionTitle(context, '解压密码管理', Icons.vpn_key_outlined),
+            _buildSectionTitle(context, '解压密码管理', StrokeIcons.vpnKey),
             Spacer(),
             IconButton(
-              icon: Icon(Icons.add_circle_outline, size: m.iconSize20),
+              icon: DrawIcon(StrokeIcons.addCircleOutline, size: m.iconSize20),
               onPressed: () => _showAddPasswordDialog(context, service),
               tooltip: '添加密码',
             ),
@@ -228,7 +229,7 @@ class ExtractSettingsTab extends StatelessWidget {
                       color: brandColor.withAlpha(20),
                       borderRadius: m.radius10,
                     ),
-                    child: Icon(Icons.lock_outline, size: m.iconSize20, color: brandColor),
+                    child: DrawIcon(StrokeIcons.lockOutline, size: m.iconSize20, color: brandColor),
                   ),
                   SizedBox(height: m.kSpace12),
                   Text(
@@ -278,7 +279,7 @@ class ExtractSettingsTab extends StatelessWidget {
           color: theme.colorScheme.primary.withAlpha(15),
           borderRadius: m.radius8,
         ),
-        child: Icon(Icons.vpn_key_outlined, size: m.iconSize16, color: theme.colorScheme.primary),
+        child: DrawIcon(StrokeIcons.vpnKey, size: m.iconSize16, color: theme.colorScheme.primary),
       ),
       title: Text(
         entry.displayName,
@@ -299,12 +300,12 @@ class ExtractSettingsTab extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: Icon(Icons.edit_outlined, size: m.iconSize16),
+            icon: DrawIcon(StrokeIcons.edit, size: m.iconSize16),
             onPressed: () => _showEditRemarkDialog(context, service, entry),
             tooltip: '编辑备注',
           ),
           IconButton(
-            icon: Icon(Icons.delete_outline, size: m.iconSize16, color: theme.colorScheme.error),
+            icon: DrawIcon(StrokeIcons.deleteOutline, size: m.iconSize16, color: theme.colorScheme.error),
             onPressed: () => _confirmDelete(context, service, entry),
             tooltip: '删除',
           ),

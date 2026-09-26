@@ -2,13 +2,14 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/core/index.dart';
 
 class StateTransitionAnimation extends StatefulWidget {
-  final String? svg;
+  final StrokeIcon? icon;
   final String? label;
-  final String? hoverSvg;
+  final StrokeIcon? hoverIcon;
   final bool enableScaleAnimation;
   final Duration animationDuration;
 
@@ -17,25 +18,25 @@ class StateTransitionAnimation extends StatefulWidget {
   final EdgeInsetsGeometry? padding;
   final BoxDecoration? decoration;
   final TextStyle? textStyle;
-  final double? svgSize;
-  final Color? svgColor;
+  final double? iconSize;
+  final Color? iconColor;
   final double? spacing;
   final bool? loading;
 
   const StateTransitionAnimation({
     super.key,
-    this.svg,
+    this.icon,
     this.label,
-    this.hoverSvg,
+    this.hoverIcon,
     this.enableScaleAnimation = true,
     this.animationDuration = const Duration(milliseconds: 400),
     this.height,
     this.padding,
     this.decoration,
     this.textStyle,
-    this.svgSize,
+    this.iconSize,
     this.spacing,
-    this.svgColor,
+    this.iconColor,
     this.loading = false,
   });
 
@@ -60,17 +61,17 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
   bool _hasAnimated = false;
   bool _hovering = false;
 
-  late String _currentSvg;
+  late StrokeIcon? _currentIcon;
   late String _currentLabel;
 
-  String? _prevSvg;
+  StrokeIcon? _prevIcon;
   String? _prevLabel;
 
   @override
   void initState() {
     super.initState();
 
-    _currentSvg = widget.svg ?? '';
+    _currentIcon = widget.icon;
     _currentLabel = widget.label ?? '';
 
     _controller = AnimationController(duration: widget.animationDuration, vsync: this);
@@ -108,8 +109,8 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
   void didUpdateWidget(StateTransitionAnimation oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // 检测 svg 或 label 是否发生变化
-    if (oldWidget.svg != widget.svg || oldWidget.label != widget.label || oldWidget.hoverSvg != widget.hoverSvg) {
+    // 检测图标或 label 是否发生变化
+    if (oldWidget.icon != widget.icon || oldWidget.label != widget.label || oldWidget.hoverIcon != widget.hoverIcon) {
       _triggerAnimation();
     }
   }
@@ -119,10 +120,10 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
 
     setState(() {
       _hasAnimated = true;
-      _prevSvg = _currentSvg;
+      _prevIcon = _currentIcon;
       _prevLabel = _currentLabel;
 
-      _currentSvg = widget.svg ?? '';
+      _currentIcon = widget.icon;
       _currentLabel = widget.label ?? '';
     });
 
@@ -132,14 +133,14 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
   }
 
   void _handleHoverEnter() {
-    if (widget.hoverSvg != null && widget.svg != null && !_hovering) {
+    if (widget.hoverIcon != null && widget.icon != null && !_hovering) {
       setState(() {
         _hovering = true;
         _hasAnimated = true;
-        _prevSvg = _currentSvg;
+        _prevIcon = _currentIcon;
         _prevLabel = _currentLabel;
 
-        _currentSvg = widget.hoverSvg!;
+        _currentIcon = widget.hoverIcon!;
         _currentLabel = widget.label ?? '';
       });
 
@@ -150,14 +151,14 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
   }
 
   void _handleHoverExit() {
-    if (widget.hoverSvg != null && widget.svg != null && _hovering) {
+    if (widget.hoverIcon != null && widget.icon != null && _hovering) {
       setState(() {
         _hovering = false;
         _hasAnimated = true;
-        _prevSvg = _currentSvg;
+        _prevIcon = _currentIcon;
         _prevLabel = _currentLabel;
 
-        _currentSvg = widget.svg!;
+        _currentIcon = widget.icon!;
         _currentLabel = widget.label ?? '';
       });
 
@@ -188,9 +189,9 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
     final textStyle = widget.textStyle != null
         ? widget.textStyle!
         : DefaultTextStyle.of(context).style.merge(TextStyle(fontSize: AppTheme.metrics.fontSize13, fontWeight: FontWeight.w500));
-    final svgSize = widget.svgSize ?? 20;
+    final iconSize = widget.iconSize ?? 20;
     final spacing = widget.spacing ?? 10;
-    final svgColor = widget.svgColor ?? Theme.of(context).textTheme.bodyMedium?.color;
+    final iconColor = widget.iconColor ?? Theme.of(context).textTheme.bodyMedium?.color;
 
     return MouseRegion(
       // cursor: widget.loading == true ? SystemMouseCursors.noDrop : SystemMouseCursors.click,
@@ -214,11 +215,11 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
                 opacity: 0,
                 alwaysIncludeSemantics: false,
                 child: _Content(
-                  svg: _currentSvg.isNotEmpty ? _currentSvg : null,
+                  icon: _currentIcon,
                   label: _currentLabel,
                   textStyle: textStyle,
-                  svgSize: svgSize,
-                  svgColor: svgColor,
+                  iconSize: iconSize,
+                  iconColor: iconColor,
                   spacing: spacing,
                   loading: widget.loading,
                 ),
@@ -239,11 +240,11 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
                             child: ImageFiltered(
                               imageFilter: ImageFilter.blur(sigmaX: _outBlur.value, sigmaY: _outBlur.value),
                               child: _Content(
-                                svg: _prevSvg?.isNotEmpty == true ? _prevSvg : null,
+                                icon: _prevIcon,
                                 label: _prevLabel!,
                                 textStyle: textStyle,
-                                svgSize: svgSize,
-                                svgColor: svgColor,
+                                iconSize: iconSize,
+                                iconColor: iconColor,
                                 spacing: spacing,
                                 loading: widget.loading,
                               ),
@@ -270,11 +271,11 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
                             child: ImageFiltered(
                               imageFilter: ImageFilter.blur(sigmaX: _inBlur.value, sigmaY: _inBlur.value),
                               child: _Content(
-                                svg: _currentSvg.isNotEmpty ? _currentSvg : null,
+                                icon: _currentIcon,
                                 label: _currentLabel,
                                 textStyle: textStyle,
-                                svgSize: svgSize,
-                                svgColor: svgColor,
+                                iconSize: iconSize,
+                                iconColor: iconColor,
                                 spacing: spacing,
                                 loading: widget.loading,
                               ),
@@ -292,11 +293,11 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: _Content(
-                      svg: _currentSvg.isNotEmpty ? _currentSvg : null,
+                      icon: _currentIcon,
                       label: _currentLabel,
                       textStyle: textStyle,
-                      svgSize: svgSize,
-                      svgColor: svgColor,
+                      iconSize: iconSize,
+                      iconColor: iconColor,
                       spacing: spacing,
                       loading: widget.loading,
                     ),
@@ -311,20 +312,20 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
 }
 
 class _Content extends StatelessWidget {
-  final String? svg;
+  final StrokeIcon? icon;
   final String label;
   final TextStyle textStyle;
-  final double svgSize;
+  final double iconSize;
   final double spacing;
-  final Color? svgColor;
+  final Color? iconColor;
   final bool? loading;
 
   const _Content({
-    required this.svg,
+    required this.icon,
     required this.label,
     required this.textStyle,
-    required this.svgSize,
-    required this.svgColor,
+    required this.iconSize,
+    required this.iconColor,
     required this.spacing,
     this.loading,
   });
@@ -340,24 +341,26 @@ class _Content extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (svg != null && loading != true)
-          SvgPicture.asset(
-            svg!,
-            width: svgSize,
-            height: svgSize,
-            colorFilter: svgColor != null ? ColorFilter.mode(svgColor!, BlendMode.srcIn) : null,
+        if (icon != null && loading != true)
+          // 这里不叠描边动画：切换本身已经有位移 + 模糊 + 淡入三层，
+          // 再让图标自己描一遍会糊成一团，动效只能留一个主角。
+          DrawIcon(
+            icon!,
+            size: iconSize,
+            color: iconColor,
+            trigger: StrokeTrigger.none,
           ),
         if (loading == true)
           SizedBox(
-            width: svgSize,
-            height: svgSize,
+            width: iconSize,
+            height: iconSize,
             child: CircularProgressIndicator(
               strokeWidth: scaleW(0.5),
-              valueColor: AlwaysStoppedAnimation<Color>(svgColor ?? Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black),
+              valueColor: AlwaysStoppedAnimation<Color>(iconColor ?? Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black),
             ),
           ),
         if (label.isNotEmpty) ...[
-          if (svg != null) SizedBox(width: spacing),
+          if (icon != null) SizedBox(width: spacing),
           Flexible(
             fit: FlexFit.loose,
             child: Text(

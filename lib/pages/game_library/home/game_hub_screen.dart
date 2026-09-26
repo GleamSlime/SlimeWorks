@@ -12,6 +12,9 @@ import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_home_viewmodel.dart';
 import 'package:slime_works/view_models/game_library/game_library_categories_viewmodel.dart';
 import 'package:slime_works/view_models/game_library/game_library_stats_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class GameHubScreen extends StatefulWidget {
   const GameHubScreen({super.key});
@@ -158,7 +161,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sports_esports_outlined, size: m.iconSize16),
+                      DrawIcon(StrokeIcons.sportsEsports, size: m.iconSize16),
                       SizedBox(width: m.kSpace6),
                       const Text('首页'),
                     ],
@@ -169,7 +172,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.folder_copy_outlined, size: m.iconSize16),
+                      DrawIcon(StrokeIcons.folderCopy, size: m.iconSize16),
                       SizedBox(width: m.kSpace6),
                       const Text('分类'),
                     ],
@@ -180,7 +183,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.query_stats_rounded, size: m.iconSize16),
+                      DrawIcon(StrokeIcons.queryStats, size: m.iconSize16),
                       SizedBox(width: m.kSpace6),
                       const Text('统计'),
                     ],
@@ -277,7 +280,7 @@ class _HomeTab extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(Icons.schedule, size: m.iconSize20, color: Colors.white70),
+                        DrawIcon(StrokeIcons.schedule, size: m.iconSize20, color: Colors.white70),
                         SizedBox(width: m.kSpace8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,13 +322,13 @@ class _HomeTab extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _GlassStatItem(
-                              icon: Icons.library_books_outlined,
+                              icon: StrokeIcons.libraryBooks,
                               label: '游戏数',
                               value: '${data.totalGames}',
                             ),
                             SizedBox(width: m.kSpace16),
                             _GlassStatItem(
-                              icon: Icons.timer_outlined,
+                              icon: StrokeIcons.timer,
                               label: '总时长',
                               value: homeVm.formatDuration(data.totalPlayTimeSec),
                             ),
@@ -402,7 +405,7 @@ class _HomeTab extends StatelessWidget {
                                 onPressed: () async {
                                   await homeVm.launchGame(lastGame);
                                 },
-                                icon: const Icon(Icons.play_arrow),
+                                icon: DrawIcon(StrokeIcons.playArrow),
                                 label: const Text(
                                   '继续游玩',
                                   style: TextStyle(fontWeight: FontWeight.w700),
@@ -423,8 +426,7 @@ class _HomeTab extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(
-                          Icons.sports_esports_outlined,
+                        DrawIcon(StrokeIcons.sportsEsports,
                           size: m.iconSize64,
                           color: Colors.white38,
                         ),
@@ -448,7 +450,7 @@ class _HomeTab extends StatelessWidget {
                             foregroundColor: Colors.black87,
                           ),
                           onPressed: () => const GameLibraryRoute().go(context),
-                          icon: const Icon(Icons.library_books),
+                          icon: DrawIcon(StrokeIcons.libraryBooks),
                           label: const Text('浏览游戏库'),
                         ),
                       ],
@@ -468,8 +470,7 @@ class _HomeTab extends StatelessWidget {
       return DecoratedBox(
         decoration: BoxDecoration(color: Colors.white12, borderRadius: AppTheme.metrics.radius14),
         child: Center(
-          child: Icon(
-            Icons.image_not_supported_outlined,
+          child: DrawIcon(StrokeIcons.imageNotSupported,
             color: Colors.white38,
             size: AppTheme.metrics.iconSize40,
           ),
@@ -483,7 +484,7 @@ class _HomeTab extends StatelessWidget {
         placeholder: (_, _) => const DecoratedBox(decoration: BoxDecoration(color: Colors.white12)),
         errorWidget: (_, _, _) => const DecoratedBox(
           decoration: BoxDecoration(color: Colors.white12),
-          child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38)),
+          child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
         ),
       );
     }
@@ -493,7 +494,7 @@ class _HomeTab extends StatelessWidget {
     }
     return const DecoratedBox(
       decoration: BoxDecoration(color: Colors.white12),
-      child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38)),
+      child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
     );
   }
 
@@ -525,7 +526,7 @@ class _CategoriesTab extends StatelessWidget {
                 child: TextField(
                   decoration: const InputDecoration(
                     hintText: '搜索分类',
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: DrawIcon(StrokeIcons.search),
                     isDense: true,
                   ),
                   onChanged: (String value) => catVm.searchQuery.value = value,
@@ -534,7 +535,7 @@ class _CategoriesTab extends StatelessWidget {
               const Spacer(),
               FilledButton.icon(
                 onPressed: () => _showCreateDialog(context, catVm),
-                icon: const Icon(Icons.create_new_folder_outlined),
+                icon: DrawIcon(StrokeIcons.createNewFolder),
                 label: const Text('新增分类'),
               ),
             ],
@@ -548,8 +549,7 @@ class _CategoriesTab extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.folder_off_outlined,
+                    DrawIcon(StrokeIcons.folderOff,
                       size: m.iconSize48,
                       color: isDark ? DarkColors.white20 : LightColors.black20,
                     ),
@@ -618,7 +618,7 @@ class _StatsTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatsOverviewCard(
-                  icon: Icons.timer_outlined,
+                  icon: StrokeIcons.timer,
                   title: '总时长',
                   value: statsVm.formatDuration(data.totalPlayTimeSec),
                   isDark: isDark,
@@ -628,7 +628,7 @@ class _StatsTab extends StatelessWidget {
               SizedBox(width: m.kSpace12),
               Expanded(
                 child: _StatsOverviewCard(
-                  icon: Icons.event_repeat_rounded,
+                  icon: StrokeIcons.eventRepeat,
                   title: '会话次数',
                   value: '${data.sessionCount} 次',
                   isDark: isDark,
@@ -650,8 +650,7 @@ class _StatsTab extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: m.kSpace32),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.show_chart_rounded,
+                    DrawIcon(StrokeIcons.showChart,
                       size: m.iconSize48,
                       color: isDark ? DarkColors.white20 : LightColors.black20,
                     ),
@@ -775,7 +774,7 @@ class _GlassCard extends StatelessWidget {
 }
 
 class _GlassStatItem extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String label;
   final String value;
   const _GlassStatItem({required this.icon, required this.label, required this.value});
@@ -790,7 +789,7 @@ class _GlassStatItem extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: m.iconSize14, color: Colors.white60),
+            DrawIcon(icon, size: m.iconSize14, color: Colors.white60),
             SizedBox(width: m.kSpace4),
             Text(
               label,
@@ -949,8 +948,7 @@ class _CategoryCardState extends State<_CategoryCard> {
                 ),
               ),
               if (widget.category.isSystem)
-                Icon(
-                  Icons.lock_outline,
+                DrawIcon(StrokeIcons.lockOutline,
                   size: m.iconSize16,
                   color: widget.isDark ? DarkColors.white40 : LightColors.black40,
                 )
@@ -964,12 +962,12 @@ class _CategoryCardState extends State<_CategoryCard> {
                     GlassMenuItem<String>(
                       value: 'edit',
                       label: '编辑',
-                      icon: Icons.edit_outlined,
+                      icon: StrokeIcons.edit,
                     ),
                     GlassMenuItem<String>(
                       value: 'delete',
                       label: '删除',
-                      icon: Icons.delete_outline_rounded,
+                      icon: StrokeIcons.deleteOutline,
                       destructive: true,
                     ),
                   ],
@@ -983,7 +981,7 @@ class _CategoryCardState extends State<_CategoryCard> {
 }
 
 class _StatsOverviewCard extends StatelessWidget {
-  final IconData icon;
+  final StrokeIcon icon;
   final String title;
   final String value;
   final bool isDark;
@@ -1019,7 +1017,7 @@ class _StatsOverviewCard extends StatelessWidget {
                   color: primaryColor.withAlpha(15),
                   borderRadius: m.radius8,
                 ),
-                child: Icon(icon, size: m.iconSize16, color: primaryColor),
+                child: DrawIcon(icon, size: m.iconSize16, color: primaryColor),
               ),
               SizedBox(width: m.kSpace8),
               Text(
@@ -1088,7 +1086,7 @@ class _DateRangeCard extends StatelessWidget {
                     color: primaryColor.withAlpha(15),
                     borderRadius: m.radius8,
                   ),
-                  child: Icon(Icons.date_range_rounded, size: m.iconSize16, color: primaryColor),
+                  child: DrawIcon(StrokeIcons.dateRange, size: m.iconSize16, color: primaryColor),
                 ),
                 SizedBox(width: m.kSpace8),
                 Text(

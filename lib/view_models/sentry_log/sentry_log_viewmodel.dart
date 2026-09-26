@@ -6,6 +6,8 @@ import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/src/rust/api/sentry_log.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 const Loggers _logger = Loggers(name: 'Sentry日志VM');
 
 class SentryLogViewModel extends GetxController {
@@ -302,20 +304,20 @@ class SentryLogViewModel extends GetxController {
     }
   }
 
-  IconData getLevelIcon(String level) {
+  StrokeIcon getLevelIcon(String level) {
     switch (level) {
       case 'fatal':
-        return Icons.error;
+        return StrokeIcons.error;
       case 'error':
-        return Icons.error_outline;
+        return StrokeIcons.errorOutline;
       case 'warning':
-        return Icons.warning_amber;
+        return StrokeIcons.warningAmber;
       case 'info':
-        return Icons.info_outline;
+        return StrokeIcons.infoOutline;
       case 'debug':
-        return Icons.bug_report;
+        return StrokeIcons.bugReport;
       default:
-        return Icons.article;
+        return StrokeIcons.article;
     }
   }
 

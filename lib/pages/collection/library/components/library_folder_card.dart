@@ -9,6 +9,8 @@ import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class LibraryFolderCard extends StatefulWidget {
   final NovelFolder folder;
@@ -117,12 +119,12 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
       items: [
         GlassMenuItem<void>(
           label: '重命名',
-          icon: Icons.drive_file_rename_outline_rounded,
+          icon: StrokeIcons.driveFileRenameOutline,
           onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) => _showRenameDialog(ctx)),
         ),
         GlassMenuItem<void>(
           label: '删除文件夹',
-          icon: Icons.delete_outline_rounded,
+          icon: StrokeIcons.deleteOutline,
           destructive: true,
           onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) => _confirmDelete(ctx)),
         ),
@@ -338,8 +340,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                   color: Colors.black.withAlpha(120),
                                   borderRadius: AppTheme.metrics.radius999,
                                 ),
-                                child: Icon(
-                                  Icons.lock_outline,
+                                child: DrawIcon(StrokeIcons.lockOutline,
                                   size: AppTheme.metrics.iconSize16,
                                   color: Colors.white70,
                                 ),
@@ -361,8 +362,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // 文件夹图标
-                    Icon(
-                      Icons.folder_rounded,
+                    DrawIcon(StrokeIcons.folder,
                       size: scaleW(56),
                       color: widget.isBookHover
                           ? theme.colorScheme.tertiary.withAlpha(220)
@@ -451,8 +451,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                         color: Colors.black.withAlpha(60),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        Icons.more_vert,
+                      child: DrawIcon(StrokeIcons.moreVert,
                         size: appMetrics.fontSize13,
                         color: Colors.white,
                       ),
@@ -474,7 +473,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       border: Border.all(color: Colors.white, width: scaleW(2)),
                     ),
                     child: widget.isSelected
-                        ? Icon(Icons.check, size: appMetrics.fontSize13, color: Colors.white)
+                        ? DrawIcon(StrokeIcons.check, size: appMetrics.fontSize13, color: Colors.white)
                         : null,
                   ),
                 ),

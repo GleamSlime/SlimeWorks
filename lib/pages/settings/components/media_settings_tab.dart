@@ -6,6 +6,8 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MediaSettingsTab extends StatefulWidget {
   const MediaSettingsTab({super.key});
@@ -615,8 +617,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                         onTap: _openCachePath,
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.folder_outlined,
+                            DrawIcon(StrokeIcons.folder,
                               size: AppTheme.metrics.iconSize13,
                               color: theme.colorScheme.primary,
                             ),

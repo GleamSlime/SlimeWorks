@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 Widget appBarBackButton(BuildContext context, {VoidCallback? onPressed, String? prevRoutePath}) {
   return IconButton(
     padding: EdgeInsets.zero,
-    icon: const Icon(Icons.arrow_back_ios_rounded),
+    icon: DrawIcon(StrokeIcons.arrowBackIos),
     onPressed: () {
       if (onPressed != null) {
         return onPressed();

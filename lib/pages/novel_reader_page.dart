@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 书籍阅读器页面
 class NovelReaderPage extends StatefulWidget {
@@ -68,7 +70,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline, size: AppTheme.metrics.iconSize48, color: Theme.of(context).colorScheme.error),
+                          DrawIcon(StrokeIcons.errorOutline, size: AppTheme.metrics.iconSize48, color: Theme.of(context).colorScheme.error),
                           SizedBox(height: AppTheme.metrics.kSpace16),
                           Text(
                             controller.errorMessage.value,
@@ -140,7 +142,7 @@ class _ReaderToolbar extends StatelessWidget {
         children: [
           // 章节列表切换
           IconButton(
-            icon: const Icon(Icons.menu_book),
+            icon: DrawIcon(StrokeIcons.menuBook),
             tooltip: '章节列表',
             onPressed: controller.toggleChapterList,
           ),
@@ -149,7 +151,7 @@ class _ReaderToolbar extends StatelessWidget {
           // 上一章
           Obx(
             () => IconButton(
-              icon: const Icon(Icons.chevron_left),
+              icon: DrawIcon(StrokeIcons.chevronLeft),
               tooltip: '上一章',
               onPressed: controller.hasPreviousChapter() ? controller.previousChapter : null,
             ),
@@ -168,7 +170,7 @@ class _ReaderToolbar extends StatelessWidget {
           // 下一章
           Obx(
             () => IconButton(
-              icon: const Icon(Icons.chevron_right),
+              icon: DrawIcon(StrokeIcons.chevronRight),
               tooltip: '下一章',
               onPressed: controller.hasNextChapter() ? controller.nextChapter : null,
             ),
@@ -182,17 +184,17 @@ class _ReaderToolbar extends StatelessWidget {
               return Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_upward),
+                    icon: DrawIcon(StrokeIcons.arrowUpward),
                     tooltip: '上一个搜索结果',
                     onPressed: controller.previousSearchResult,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.list),
+                    icon: DrawIcon(StrokeIcons.list),
                     tooltip: '搜索结果列表',
                     onPressed: controller.openSearchResultsList,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.arrow_downward),
+                    icon: DrawIcon(StrokeIcons.arrowDownward),
                     tooltip: '下一个搜索结果',
                     onPressed: controller.nextSearchResult,
                   ),
@@ -201,7 +203,7 @@ class _ReaderToolbar extends StatelessWidget {
               );
             }
             return IconButton(
-              icon: const Icon(Icons.search),
+              icon: DrawIcon(StrokeIcons.search),
               tooltip: '搜索',
               onPressed: controller.showSearchDialog,
             );
@@ -209,13 +211,13 @@ class _ReaderToolbar extends StatelessWidget {
 
           // 字体大小
           IconButton(
-            icon: const Icon(Icons.text_decrease),
+            icon: DrawIcon(StrokeIcons.textDecrease),
             tooltip: '减小字体',
             onPressed: controller.decreaseFontSize,
           ),
           Obx(() => Text('${controller.fontSize.value.toInt()}')),
           IconButton(
-            icon: const Icon(Icons.text_increase),
+            icon: DrawIcon(StrokeIcons.textIncrease),
             tooltip: '增大字体',
             onPressed: controller.increaseFontSize,
           ),

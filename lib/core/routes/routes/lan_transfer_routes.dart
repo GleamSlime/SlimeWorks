@@ -10,7 +10,7 @@ class LanTransferRoute extends AppRouteData with $LanTransferRoute {
   String get sidebarLabel => '互传';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCloudAccess;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCloudAccess;
 
   @override
   String get sidebarGroupId => 'core';

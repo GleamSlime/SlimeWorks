@@ -20,6 +20,8 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/core/widgets/glass_surface.dart';
 import 'package:slime_works/core/widgets/page_container.dart';
 import 'package:slime_works/core/widgets/section_header.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 设计系统总览（原"主题预览"）
 ///
@@ -496,9 +498,9 @@ class _ComponentsTab extends StatelessWidget {
             runSpacing: m.kSpace12,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const ToolIconButton(icon: Icons.search_outlined),
-              const ToolIconButton(icon: Icons.tune, selected: true),
-              const ToolIconButton(icon: Icons.more_horiz),
+              const ToolIconButton(icon: StrokeIcons.search),
+              const ToolIconButton(icon: StrokeIcons.tune, selected: true),
+              const ToolIconButton(icon: StrokeIcons.moreHoriz),
               Switch(value: true, onChanged: (_) {}),
               Switch(value: false, onChanged: (_) {}),
               Checkbox(value: true, onChanged: (_) {}),
@@ -590,7 +592,7 @@ class _ComponentsTab extends StatelessWidget {
                 child: StatCard(
                   label: '媒体总数',
                   value: '12,480',
-                  icon: Icons.photo_library_outlined,
+                  icon: StrokeIcons.photoLibrary,
                 ),
               ),
               SizedBox(width: m.kSpace16),
@@ -599,7 +601,7 @@ class _ComponentsTab extends StatelessWidget {
                   label: '下载中',
                   value: '8',
                   hint: '8 项进行中 · 2 排队',
-                  icon: Icons.downloading_rounded,
+                  icon: StrokeIcons.downloading,
                   tone: s.info,
                 ),
               ),
@@ -608,7 +610,7 @@ class _ComponentsTab extends StatelessWidget {
                 child: StatCard(
                   label: '异常',
                   value: '3',
-                  icon: Icons.error_outline_rounded,
+                  icon: StrokeIcons.errorOutline,
                   tone: s.danger,
                 ),
               ),
@@ -646,7 +648,7 @@ class _ComponentsTab extends StatelessWidget {
                     child: EmptyState(
                       title: '还没有内容',
                       description: '导入本地文件或连接节点后即可开始浏览。',
-                      icon: Icons.folder_open_outlined,
+                      icon: StrokeIcons.folderOpen,
                       action: const FilledButton(
                         onPressed: null,
                         child: Text('去导入'),
@@ -844,8 +846,8 @@ class _GlassTabState extends State<_GlassTab> {
                   child: GlassFloat(
                     child: Row(
                       children: [
-                        const ToolIconButton(icon: Icons.play_arrow_rounded),
-                        const ToolIconButton(icon: Icons.skip_next_rounded),
+                        const ToolIconButton(icon: StrokeIcons.playArrow),
+                        const ToolIconButton(icon: StrokeIcons.skipNext),
                         SizedBox(width: m.kSpace6),
                         Text('悬浮工具条', style: AppTextStyles.caption(context)),
                       ],
@@ -889,24 +891,24 @@ class _GlassTabState extends State<_GlassTab> {
                   GlassMenuItem<String>(
                     value: 'sort',
                     label: '按修改时间',
-                    icon: Icons.schedule_rounded,
+                    icon: StrokeIcons.schedule,
                     selected: true,
                   ),
                   GlassMenuItem<String>(
                     value: 'name',
                     label: '按文件名',
-                    icon: Icons.sort_by_alpha_rounded,
+                    icon: StrokeIcons.sortByAlpha,
                   ),
                   GlassMenuItem<String>(
                     value: 'pin',
                     label: '固定到侧边栏',
-                    icon: Icons.push_pin_rounded,
+                    icon: StrokeIcons.pushPin,
                   ),
                   const PopupMenuDivider(),
                   GlassMenuItem<String>(
                     value: 'delete',
                     label: '从库中移除',
-                    icon: Icons.delete_outline_rounded,
+                    icon: StrokeIcons.deleteOutline,
                     destructive: true,
                   ),
                 ],
@@ -918,7 +920,7 @@ class _GlassTabState extends State<_GlassTab> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sort_rounded, size: m.iconSize16),
+                      DrawIcon(StrokeIcons.sort, size: m.iconSize16),
                       SizedBox(width: m.kSpace6),
                       Text('打开示例菜单', style: AppTextStyles.caption(context)),
                     ],
@@ -1105,7 +1107,7 @@ class _MotionTabState extends State<_MotionTab> {
                     duration: AppMotion.base,
                     curve: AppMotion.standard,
                     turns: _expanded ? 0.25 : 0,
-                    child: Icon(Icons.chevron_right, size: m.iconSize18, color: s.textTertiary),
+                    child: DrawIcon(StrokeIcons.chevronRight, size: m.iconSize18, color: s.textTertiary),
                   ),
                 ),
                 AnimatedSize(

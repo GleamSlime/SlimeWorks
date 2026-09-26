@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/core/widgets/breadcrumb.dart';
+
 @immutable
 class ScreenChromeData {
   final String? title;
   final Widget? titleWidget;
+
+  /// 层级导航。多于一级时接管标题格——**和 title 互斥、占同一格**，
+  /// 不叠成上下两行；只有一级（或 null）时退回 title 渲染。
+  final List<BreadcrumbEntry>? breadcrumb;
+
   final Widget? leading;
   final List<Widget> actions;
   final Widget? toolbar;
@@ -28,6 +35,7 @@ class ScreenChromeData {
     this.toolbar,
     this.toolbarHeight,
     this.titleWidget,
+    this.breadcrumb,
     this.bottomBar,
     this.bottomBarHeight,
     this.enableMobileImmersiveMode = false,
@@ -40,6 +48,9 @@ class ScreenChromeData {
   static const ScreenChromeData empty = ScreenChromeData();
 
   bool get hasLeading => leading != null;
+
+  /// 只有一级的面包屑不叫层级导航，退回标题
+  bool get hasBreadcrumb => breadcrumb != null && breadcrumb!.length > 1;
 
   bool get hasActions => actions.isNotEmpty;
 

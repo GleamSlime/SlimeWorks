@@ -137,7 +137,8 @@ void main() {
         ['顺序播放', '列表循环', '单曲循环', '随机播放'],
       );
       for (final m in PlayerPlayMode.values) {
-        expect(m.icon.codePoint, greaterThan(0));
+        // 描边图标没有码位，能校验的是"真的有笔画可描"
+        expect(m.icon.paths, isNotEmpty, reason: m.label);
       }
     });
   });

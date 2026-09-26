@@ -17,6 +17,9 @@ import 'package:slime_works/core/index.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MediaViewerPage extends StatefulWidget {
   const MediaViewerPage({
@@ -697,7 +700,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
                   child: Row(
                     children: [
                       _GlassIconButton(
-                        icon: Icons.arrow_back_rounded,
+                        icon: StrokeIcons.arrowBack,
                         tooltip: '返回',
                         onTap: () => Navigator.of(context).maybePop(),
                       ),
@@ -748,7 +751,7 @@ class _GlassIconButton extends StatelessWidget {
     this.tooltip,
   });
 
-  final IconData icon;
+  final StrokeIcon icon;
   final VoidCallback onTap;
   final String? tooltip;
 
@@ -765,8 +768,7 @@ class _GlassIconButton extends StatelessWidget {
             height: 42,
             color: Colors.black.withValues(alpha: 0.42),
             alignment: Alignment.center,
-            child: Icon(
-              icon,
+            child: DrawIcon(icon,
               color: Colors.white,
               size: AppTheme.metrics.iconSize22,
             ),
@@ -943,7 +945,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
 
   /// 构建一个独立的圆形玻璃按钮，带 fade+scale 动画。
   Widget _actionBtn({
-    required IconData icon,
+    required StrokeIcon icon,
     required String tooltip,
     required VoidCallback onTap,
     required int delayMs,
@@ -975,7 +977,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     if (widget.onSave != null) {
       actionBtns.add(
         _actionBtn(
-          icon: Icons.save_alt_rounded,
+          icon: StrokeIcons.saveAlt,
           tooltip: '保存到相册',
           onTap: widget.onSave!,
           delayMs: delay,
@@ -986,7 +988,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     if (widget.canGoPrev) {
       actionBtns.add(
         _actionBtn(
-          icon: Icons.expand_less_rounded,
+          icon: StrokeIcons.expandLess,
           tooltip: '上一项',
           onTap: widget.onPrev,
           delayMs: delay,
@@ -997,7 +999,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     if (widget.canGoNext) {
       actionBtns.add(
         _actionBtn(
-          icon: Icons.expand_more_rounded,
+          icon: StrokeIcons.expandMore,
           tooltip: '下一项',
           onTap: widget.onNext,
           delayMs: delay,
@@ -1018,7 +1020,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
         ],
         // 常驻折叠/展开总按钮
         _GlassIconButton(
-          icon: Icons.more_vert_rounded,
+          icon: StrokeIcons.moreVert,
           tooltip: _expanded ? '收起' : '更多操作',
           onTap: _toggle,
         ),
@@ -1334,8 +1336,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
+                      child: DrawIcon(StrokeIcons.brokenImage,
                         size: AppTheme.metrics.iconSize64,
                         color: Colors.white38,
                       ),
@@ -1361,8 +1362,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
+                      child: DrawIcon(StrokeIcons.brokenImage,
                         size: AppTheme.metrics.iconSize64,
                         color: Colors.white38,
                       ),
@@ -1396,8 +1396,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: FilledButton.icon(
                     onPressed: _reset,
-                    icon: Icon(
-                      Icons.zoom_out_map_rounded,
+                    icon: DrawIcon(StrokeIcons.zoomOutMap,
                       size: AppTheme.metrics.iconSize18,
                     ),
                     label: const Text('重置缩放'),
@@ -1612,8 +1611,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                 color: Colors.white.withValues(alpha: 0.08),
               ),
               alignment: Alignment.center,
-              child: Icon(
-                Icons.error_outline_rounded,
+              child: DrawIcon(StrokeIcons.errorOutline,
                 color: LightColors.primary.withValues(alpha: 0.7),
                 size: 28,
               ),
@@ -1652,7 +1650,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
       // 窗口播放（画中画）
       if (isMobile)
         _GlassControlIcon(
-          icon: Icons.picture_in_picture_alt_rounded,
+          icon: StrokeIcons.pictureInPictureAlt,
           tooltip: '画中画',
           onTap: () => _enterPip(context),
         ),
@@ -1764,8 +1762,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                             ),
                           ),
                           alignment: Alignment.center,
-                          child: Icon(
-                            Icons.music_note_rounded,
+                          child: DrawIcon(StrokeIcons.musicNote,
                             color: LightColors.primary.withValues(alpha: 0.4),
                             size: AppTheme.metrics.iconSize64,
                           ),
@@ -2025,8 +2022,8 @@ class _VideoFitButton extends StatelessWidget {
     final isCover = currentFit == BoxFit.cover;
     return IconButton(
       tooltip: isCover ? '适应屏幕' : '填充屏幕',
-      icon: Icon(
-        isCover ? Icons.fit_screen_rounded : Icons.crop_rounded,
+      icon: DrawIcon(
+        isCover ? StrokeIcons.fitScreen : StrokeIcons.crop,
         color: Colors.white,
         size: AppTheme.metrics.iconSize22,
       ),
@@ -2049,12 +2046,11 @@ class _VideoVolumeButton extends StatelessWidget {
       builder: (context, snapshot) {
         final vol = snapshot.data ?? 100.0;
         final icon = vol == 0
-            ? Icons.volume_off_rounded
-            : (vol < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
+            ? StrokeIcons.volumeOff
+            : (vol < 50 ? StrokeIcons.volumeDown : StrokeIcons.volumeUp);
         return IconButton(
           tooltip: vol == 0 ? '取消静音' : '静音',
-          icon: Icon(
-            icon,
+          icon: DrawIcon(icon,
             color: Colors.white,
             size: AppTheme.metrics.iconSize22,
           ),
@@ -2076,7 +2072,7 @@ class _VideoVolumeButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.volume_down_rounded, color: Colors.white70),
+            DrawIcon(StrokeIcons.volumeDown, color: Colors.white70),
             Expanded(
               child: StreamBuilder<double>(
                 stream: player.stream.volume,
@@ -2092,7 +2088,7 @@ class _VideoVolumeButton extends StatelessWidget {
                 },
               ),
             ),
-            const Icon(Icons.volume_up_rounded, color: Colors.white70),
+            DrawIcon(StrokeIcons.volumeUp, color: Colors.white70),
           ],
         ),
       ),
@@ -2106,7 +2102,7 @@ class _GlassControlIcon extends StatelessWidget {
     required this.onTap,
     this.tooltip,
   });
-  final IconData icon;
+  final StrokeIcon icon;
   final VoidCallback onTap;
   final String? tooltip;
 
@@ -2114,8 +2110,7 @@ class _GlassControlIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
-      icon: Icon(
-        icon,
+      icon: DrawIcon(icon,
         color: Colors.white.withValues(alpha: 0.85),
         size: AppTheme.metrics.iconSize20,
       ),
@@ -2170,8 +2165,7 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader>
               ),
             ),
             alignment: Alignment.center,
-            child: Icon(
-              Icons.play_arrow_rounded,
+            child: DrawIcon(StrokeIcons.playArrow,
               color: Colors.white.withValues(alpha: opacity),
               size: 24,
             ),

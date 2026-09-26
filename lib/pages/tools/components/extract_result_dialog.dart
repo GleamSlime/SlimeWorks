@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
 
 class ExtractResultDialog extends StatelessWidget {
   final ExtractResultInfo result;
@@ -14,14 +16,14 @@ class ExtractResultDialog extends StatelessWidget {
     final m = AppTheme.metrics;
     final service = getIt.get<ExtractService>();
 
-    final icon = result.success ? Icons.check_circle_outline : Icons.error_outline;
+    final icon = result.success ? StrokeIcons.checkCircleOutline : StrokeIcons.errorOutline;
     final iconColor = result.success ? Colors.green : theme.colorScheme.error;
     final title = result.success ? '解压完成' : '解压失败';
 
     return AlertDialog(
       title: Row(
         children: [
-          Icon(icon, color: iconColor, size: m.iconSize24),
+          DrawIcon(icon, color: iconColor, size: m.iconSize24),
           SizedBox(width: m.kSpace12),
           Text(title, style: theme.textTheme.titleLarge),
         ],

@@ -8,6 +8,8 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_settings_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class GameSettingsScreen extends BasePage<GameLibrarySettingsViewModel> {
   const GameSettingsScreen({super.key});
@@ -105,12 +107,12 @@ class _GameSettingsScreenState
                       children: <Widget>[
                         FilledButton.icon(
                           onPressed: _exportBackup,
-                          icon: const Icon(Icons.download_outlined),
+                          icon: DrawIcon(StrokeIcons.download),
                           label: const Text('导出备份'),
                         ),
                         OutlinedButton.icon(
                           onPressed: _importBackup,
-                          icon: const Icon(Icons.upload_outlined),
+                          icon: DrawIcon(StrokeIcons.upload),
                           label: const Text('导入备份'),
                         ),
                       ],

@@ -10,7 +10,7 @@ class GameHomeRoute extends AppRouteData with $GameHomeRoute {
   String get sidebarLabel => '游戏';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuGame;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuGame;
 
   @override
   String get sidebarGroupId => 'game-library';
@@ -36,7 +36,7 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
   String get sidebarLabel => '游戏库';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectLibrary;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectLibrary;
 
   @override
   String get sidebarGroupId => 'game-library';
@@ -89,7 +89,11 @@ class GameDetailRoute extends AppRouteData with $GameDetailRoute {
   String get title => '游戏详情';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/game/library';
+
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -112,10 +116,10 @@ class GameCategoriesRoute extends AppRouteData with $GameCategoriesRoute {
   String get sidebarLabel => '游戏分类';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectFile;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectFile;
 
   @override
-  bool get showInSidebar => false;
+  String? get sidebarParent => '/game/library';
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -138,7 +142,11 @@ class GameCategoryDetailRoute extends AppRouteData with $GameCategoryDetailRoute
   String get title => '分类详情';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuCollectPictures;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuCollectPictures;
+
+  @override
+  String? get sidebarParent => '/game/categories';
+
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -161,10 +169,10 @@ class GameStatsRoute extends AppRouteData with $GameStatsRoute {
   String get sidebarLabel => '游戏统计';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuBill;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuBill;
 
   @override
-  bool get showInSidebar => false;
+  String? get sidebarParent => '/game/library';
 
   static const Permission routePermission = Permission.accessGameLibrary;
 
@@ -187,10 +195,10 @@ class GameSettingsRoute extends AppRouteData with $GameSettingsRoute {
   String get sidebarLabel => '游戏设置';
 
   @override
-  String get sidebarIcon => Assets.image.svg.menuSetting;
+  StrokeIcon get sidebarIcon => StrokeIcons.assetMenuSetting;
 
   @override
-  bool get showInSidebar => false;
+  String? get sidebarParent => '/game/library';
 
   static const Permission routePermission = Permission.accessGameLibrary;
 

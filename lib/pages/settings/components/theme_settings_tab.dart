@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 
@@ -12,6 +15,8 @@ class ThemeSettingsTab extends StatefulWidget {
 
 class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   static const _accentPalette = [
+    // 第一档是「跟随主题」：近黑，明暗各由语义层给一份
+    AppTheme.kFollowThemeAccent,
     LightColors.primary,
     LightColors.purple,
     LightColors.indigo,
@@ -30,7 +35,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
 
   ThemeMode _themeMode = ThemeMode.system;
   double _fontScale = 1.0;
-  Color _accentColor = LightColors.primary;
+  Color _accentColor = AppTheme.kFollowThemeAccent;
 
   @override
   void initState() {
@@ -95,14 +100,14 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     }
   }
 
-  IconData _themeModeIcon(ThemeMode mode) {
+  StrokeIcon _themeModeIcon(ThemeMode mode) {
     switch (mode) {
       case ThemeMode.light:
-        return Icons.light_mode_rounded;
+        return StrokeIcons.lightMode;
       case ThemeMode.dark:
-        return Icons.dark_mode_rounded;
+        return StrokeIcons.darkMode;
       case ThemeMode.system:
-        return Icons.brightness_auto_rounded;
+        return StrokeIcons.brightnessAuto;
     }
   }
 
@@ -128,7 +133,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            DrawIcon(
               _themeModeIcon(mode),
               size: m.iconSize20,
               color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withAlpha(120),
@@ -177,8 +182,8 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           ],
         ),
         child: isSelected
-            ? Icon(
-                Icons.check,
+            ? DrawIcon(
+                StrokeIcons.check,
                 color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
                 size: m.iconSize20,
               )
@@ -187,7 +192,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     );
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
+  Widget _buildSectionTitle(String title, StrokeIcon icon) {
     final theme = Theme.of(context);
     final m = AppTheme.metrics;
     return Row(
@@ -199,7 +204,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             color: theme.colorScheme.primary.withAlpha(20),
             borderRadius: m.radius6,
           ),
-          child: Icon(
+          child: DrawIcon(
             icon,
             size: m.iconSize12,
             color: theme.colorScheme.primary,
@@ -229,7 +234,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('主题模式', Icons.palette_outlined),
+          _buildSectionTitle('主题模式', StrokeIcons.palette),
           SizedBox(height: m.kSpace12),
           Container(
             width: double.infinity,
@@ -246,7 +251,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             ),
           ),
           SizedBox(height: m.kSpace24),
-          _buildSectionTitle('主题配色', Icons.color_lens_outlined),
+          _buildSectionTitle('主题配色', StrokeIcons.colorLens),
           SizedBox(height: m.kSpace4),
           Text(
             '选择全局强调色，将影响按钮、标签、滑块等组件',
@@ -272,7 +277,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             ),
           ),
           SizedBox(height: m.kSpace24),
-          _buildSectionTitle('字号大小', Icons.text_fields_rounded),
+          _buildSectionTitle('字号大小', StrokeIcons.textFields),
           SizedBox(height: m.kSpace4),
           Text(
             '调整全局文本缩放比例，影响所有页面的文字大小',
@@ -328,7 +333,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             ),
           ),
           SizedBox(height: m.kSpace32),
-          _buildSectionTitle('预览样式', Icons.preview_outlined),
+          _buildSectionTitle('预览样式', StrokeIcons.preview),
           SizedBox(height: m.kSpace12),
           Container(
             width: double.infinity,

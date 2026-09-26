@@ -18,6 +18,9 @@ import 'package:slime_works/pages/manga/components/manga_login_dialog.dart';
 import 'package:slime_works/pages/manga/manga_favourites_screen.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_home_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MangaHomeScreen extends BasePage<MangaHomeViewModel> {
   const MangaHomeScreen({super.key});
@@ -63,7 +66,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
       actions: vm.isLoggedIn
           ? [
               IconButton(
-                icon: const Icon(Icons.search),
+                icon: DrawIcon(StrokeIcons.search),
                 tooltip: '搜索',
                 onPressed: () => _goToSearch(context),
               ),
@@ -93,10 +96,9 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                                   ),
                                 ),
                                 errorBuilder: (_, _, _) =>
-                                    const Icon(Icons.account_circle_outlined),
+                                    DrawIcon(StrokeIcons.accountCircle),
                               )
-                            : Icon(
-                                Icons.account_circle_outlined,
+                            : DrawIcon(StrokeIcons.accountCircle,
                                 size: AppTheme.metrics.iconSize28,
                               ),
                       ),
@@ -151,8 +153,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                 color: theme.colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: metrics.radius16,
               ),
-              child: Icon(
-                Icons.lock_person_outlined,
+              child: DrawIcon(StrokeIcons.lockPerson,
                 size: scaleW(36),
                 color: theme.colorScheme.primary,
               ),
@@ -174,7 +175,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             SizedBox(height: metrics.kSpace24),
             FilledButton.icon(
-              icon: const Icon(Icons.login),
+              icon: DrawIcon(StrokeIcons.login),
               label: const Text('登录'),
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.symmetric(
@@ -222,8 +223,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.cloud_off_outlined,
+                        DrawIcon(StrokeIcons.cloudOff,
                           size: scaleW(48),
                           color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                         ),
@@ -289,7 +289,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                   curve: Curves.easeInOut,
                 ),
                 tooltip: '返回顶部',
-                child: const Icon(Icons.keyboard_arrow_up),
+                child: DrawIcon(StrokeIcons.keyboardArrowUp),
               ),
             ),
           ),
@@ -332,7 +332,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             if (onRefresh != null) ...[
               const Spacer(),
               TextButton.icon(
-                icon: Icon(Icons.refresh, size: AppTheme.metrics.iconSize16),
+                icon: DrawIcon(StrokeIcons.refresh, size: AppTheme.metrics.iconSize16),
                 label: const Text('换一批'),
                 onPressed: onRefresh,
               ),
@@ -444,8 +444,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                               fit: BoxFit.cover,
                               errorBuilder: (_, _, _) => Container(
                                 color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                                child: Icon(
-                                  Icons.account_circle_outlined,
+                                child: DrawIcon(StrokeIcons.accountCircle,
                                   size: AppTheme.metrics.iconSize28,
                                   color: theme.colorScheme.primary,
                                 ),
@@ -453,8 +452,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                             )
                           : Container(
                               color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                              child: Icon(
-                                Icons.account_circle_outlined,
+                              child: DrawIcon(StrokeIcons.accountCircle,
                                 size: AppTheme.metrics.iconSize28,
                                 color: theme.colorScheme.primary,
                               ),
@@ -496,7 +494,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             Divider(height: 1, color: theme.dividerColor),
             _MenuTile(
-              icon: Icons.favorite_outline,
+              icon: StrokeIcons.favoriteOutline,
               iconColor: Colors.red,
               title: '我的收藏',
               onTap: () {
@@ -507,7 +505,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
               },
             ),
             _MenuTile(
-              icon: Icons.history_outlined,
+              icon: StrokeIcons.history,
               iconColor: theme.colorScheme.primary,
               title: '观看记录',
               onTap: () {
@@ -516,7 +514,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
               },
             ),
             _MenuTile(
-              icon: Icons.block_outlined,
+              icon: StrokeIcons.block,
               iconColor: Colors.orange,
               title: '屏蔽词管理',
               onTap: () {
@@ -525,7 +523,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
               },
             ),
             _MenuTile(
-              icon: Icons.download_outlined,
+              icon: StrokeIcons.download,
               iconColor: isDark ? DarkColors.blue : LightColors.blue,
               title: '下载管理',
               onTap: () {
@@ -535,7 +533,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             Divider(height: 1, color: theme.dividerColor),
             _MenuTile(
-              icon: Icons.logout,
+              icon: StrokeIcons.logout,
               iconColor: theme.colorScheme.error,
               title: '退出登录',
               onTap: () async {
@@ -563,7 +561,7 @@ class _MenuTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final IconData icon;
+  final StrokeIcon icon;
   final Color iconColor;
   final String title;
   final VoidCallback onTap;
@@ -587,7 +585,7 @@ class _MenuTile extends StatelessWidget {
                 color: iconColor.withValues(alpha: 0.12),
                 borderRadius: AppTheme.metrics.radius8,
               ),
-              child: Icon(icon, size: AppTheme.metrics.iconSize18, color: iconColor),
+              child: DrawIcon(icon, size: AppTheme.metrics.iconSize18, color: iconColor),
             ),
             SizedBox(width: AppTheme.metrics.kSpace12),
             Expanded(
@@ -596,8 +594,7 @@ class _MenuTile extends StatelessWidget {
                 style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
               ),
             ),
-            Icon(
-              Icons.chevron_right,
+            DrawIcon(StrokeIcons.chevronRight,
               size: AppTheme.metrics.iconSize20,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
             ),

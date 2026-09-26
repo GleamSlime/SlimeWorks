@@ -6,6 +6,9 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_event_detail.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 日志列表组件
 class SentryLogList extends StatelessWidget {
@@ -65,7 +68,7 @@ class SentryLogList extends StatelessWidget {
                 if (viewModel.totalEvents.value > viewModel.events.length)
                   TextButton.icon(
                     onPressed: () => viewModel.loadMore(),
-                    icon: Icon(Icons.expand_more_rounded, size: m.iconSize16),
+                    icon: DrawIcon(StrokeIcons.expandMore, size: m.iconSize16),
                     label: const Text('加载更多'),
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                   ),
@@ -118,8 +121,7 @@ class SentryLogList extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(
-              Icons.radar_rounded,
+            child: DrawIcon(StrokeIcons.radar,
               size: m.iconSize32,
               color: theme.colorScheme.primary.withAlpha(120),
             ),
@@ -212,7 +214,7 @@ class SentryLogList extends StatelessWidget {
                           ],
                           if (platform.isNotEmpty) ...[
                             SizedBox(width: m.kSpace6),
-                            Icon(
+                            DrawIcon(
                               _getPlatformIcon(platform),
                               size: m.iconSize12,
                               color: theme.hintColor,
@@ -247,7 +249,7 @@ class SentryLogList extends StatelessWidget {
                         SizedBox(height: m.kSpace2),
                         Row(
                           children: [
-                            Icon(Icons.source_rounded, size: m.iconSize12, color: theme.hintColor),
+                            DrawIcon(StrokeIcons.source, size: m.iconSize12, color: theme.hintColor),
                             SizedBox(width: m.kSpace4),
                             Expanded(
                               child: Text(
@@ -270,7 +272,7 @@ class SentryLogList extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.only(right: m.kSpace4),
                 child: IconButton(
-                  icon: Icon(Icons.close_rounded, size: m.iconSize14, color: theme.hintColor),
+                  icon: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: theme.hintColor),
                   onPressed: () => _confirmDelete(context, eventId),
                   tooltip: '删除',
                   visualDensity: VisualDensity.compact,
@@ -352,21 +354,21 @@ class SentryLogList extends StatelessWidget {
   }
 
   /// 获取平台对应图标
-  IconData _getPlatformIcon(String platform) {
+  StrokeIcon _getPlatformIcon(String platform) {
     switch (platform.toLowerCase()) {
       case 'javascript':
       case 'node':
-        return Icons.javascript;
+        return StrokeIcons.javascript;
       case 'python':
-        return Icons.code_rounded;
+        return StrokeIcons.code;
       case 'rust':
-        return Icons.memory_rounded;
+        return StrokeIcons.memory;
       case 'java':
-        return Icons.coffee_rounded;
+        return StrokeIcons.coffee;
       case 'go':
-        return Icons.speed_rounded;
+        return StrokeIcons.speed;
       default:
-        return Icons.terminal_rounded;
+        return StrokeIcons.terminal;
     }
   }
 
@@ -416,7 +418,7 @@ class SentryLogList extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: m.radius12),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: m.iconSize20),
+            DrawIcon(StrokeIcons.warningAmber, color: Colors.orange.shade700, size: m.iconSize20),
             SizedBox(width: m.kSpace8),
             const Text('确认删除'),
           ],

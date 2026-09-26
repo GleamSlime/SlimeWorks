@@ -14,6 +14,8 @@ import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_favourites_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MangaFavouritesScreen extends BasePage<MangaFavouritesViewModel> {
   const MangaFavouritesScreen({super.key});
@@ -44,7 +46,7 @@ class _MangaFavouritesScreenState
       data: ScreenChromeData(
         title: '我的收藏',
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: DrawIcon(StrokeIcons.arrowBack),
           onPressed: () {
             if (Navigator.of(context).canPop()) Navigator.of(context).pop();
           },
@@ -66,8 +68,7 @@ class _MangaFavouritesScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.cloud_off_outlined,
+            DrawIcon(StrokeIcons.cloudOff,
               size: scaleW(48),
               color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
             ),
@@ -79,7 +80,7 @@ class _MangaFavouritesScreenState
             ),
             SizedBox(height: metrics.kSpace12),
             FilledButton.icon(
-              icon: const Icon(Icons.refresh),
+              icon: DrawIcon(StrokeIcons.refresh),
               label: const Text('重试'),
               onPressed: viewModel.refresh,
             ),
@@ -116,8 +117,7 @@ class _MangaFavouritesScreenState
                     color: theme.colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: metrics.radius16,
                   ),
-                  child: Icon(
-                    Icons.favorite_border,
+                  child: DrawIcon(StrokeIcons.favoriteBorder,
                     size: scaleW(36),
                     color: theme.colorScheme.primary,
                   ),

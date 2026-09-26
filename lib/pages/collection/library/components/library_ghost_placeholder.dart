@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 /// 拖拽排序时在目标前方显示的半透明"幽灵"占位卡
 class GhostPlaceholderCard extends StatefulWidget {
@@ -68,7 +70,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.folder_rounded, size: scaleW(40), color: Colors.blue.withAlpha(180)),
+            DrawIcon(StrokeIcons.folder, size: scaleW(40), color: Colors.blue.withAlpha(180)),
             SizedBox(height: scaleW(4)),
             Text(folder.name, style: TextStyle(fontSize: appMetrics.fontSize11), maxLines: 1),
           ],

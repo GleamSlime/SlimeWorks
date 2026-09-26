@@ -17,6 +17,8 @@ import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_history_viewmodel.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MangaHistoryScreen extends BasePage<MangaHistoryViewModel> {
   const MangaHistoryScreen({super.key});
@@ -39,7 +41,7 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
         title: '观看记录',
         forceLocalChrome: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: DrawIcon(StrokeIcons.arrowBack),
           onPressed: () {
             if (Navigator.of(context).canPop()) Navigator.of(context).pop();
           },
@@ -48,7 +50,7 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
           Obx(
             () => viewModel.items.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.delete_sweep_outlined),
+                    icon: DrawIcon(StrokeIcons.deleteSweep),
                     tooltip: '清空记录',
                     onPressed: () => _confirmClearAll(context),
                   )
@@ -103,8 +105,7 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
                     color: theme.colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: appMetrics.radius16,
                   ),
-                  child: Icon(
-                    Icons.history_outlined,
+                  child: DrawIcon(StrokeIcons.history,
                     size: scaleW(36),
                     color: theme.colorScheme.primary,
                   ),
@@ -191,7 +192,7 @@ class _HistoryListItem extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: EdgeInsets.only(right: metrics.kSpace20),
         color: theme.colorScheme.error,
-        child: const Icon(Icons.delete_outline, color: Colors.white),
+        child: DrawIcon(StrokeIcons.deleteOutline, color: Colors.white),
       ),
       onDismissed: (_) => onDelete(),
       child: InkWell(
@@ -209,8 +210,7 @@ class _HistoryListItem extends StatelessWidget {
                         width: scaleW(52),
                         height: scaleW(72),
                         color: theme.colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.image_not_supported_outlined,
+                        child: DrawIcon(StrokeIcons.imageNotSupported,
                           size: scaleW(24),
                           color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                         ),
@@ -248,8 +248,7 @@ class _HistoryListItem extends StatelessWidget {
 
               /// 删除按钮
               IconButton(
-                icon: Icon(
-                  Icons.close,
+                icon: DrawIcon(StrokeIcons.close,
                   size: scaleW(16),
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                 ),
@@ -305,8 +304,7 @@ class _ThumbImage extends StatelessWidget {
         width: scaleW(52),
         height: scaleW(72),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.image_not_supported_outlined,
+        child: DrawIcon(StrokeIcons.imageNotSupported,
           size: scaleW(20),
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
         ),
@@ -321,8 +319,7 @@ class _ThumbImage extends StatelessWidget {
         width: scaleW(52),
         height: scaleW(72),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.image_not_supported_outlined,
+        child: DrawIcon(StrokeIcons.imageNotSupported,
           size: scaleW(20),
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
         ),

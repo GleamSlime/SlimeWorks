@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 /// 设备列表组件
 class DeviceList extends StatelessWidget {
@@ -99,7 +102,7 @@ class _DeviceCard extends StatelessWidget {
                     : (isDark ? DarkColors.white10 : LightColors.black10),
                 borderRadius: AppTheme.metrics.radius12,
               ),
-              child: Icon(
+              child: DrawIcon(
                 _getDeviceIcon(device.deviceType),
                 size: scaleW(22),
                 color: isSelected
@@ -143,7 +146,7 @@ class _DeviceCard extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.verified_user, size: scaleW(10), color: isDark ? DarkColors.success : LightColors.success),
+                              DrawIcon(StrokeIcons.verifiedUser, size: scaleW(10), color: isDark ? DarkColors.success : LightColors.success),
                               SizedBox(width: scaleW(3)),
                               Text('已信任', style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: isDark ? DarkColors.success : LightColors.success)),
                             ],
@@ -193,7 +196,7 @@ class _DeviceCard extends StatelessWidget {
                 if (isSelected)
                   Padding(
                     padding: EdgeInsets.only(top: isTrusted ? 0 : AppTheme.metrics.kSpace4),
-                    child: Icon(Icons.check_circle, size: scaleW(20), color: primaryColor),
+                    child: DrawIcon(StrokeIcons.check, size: scaleW(20), color: primaryColor),
                   ),
               ],
             ),
@@ -203,20 +206,20 @@ class _DeviceCard extends StatelessWidget {
     );
   }
 
-  IconData _getDeviceIcon(String deviceType) {
+  StrokeIcon _getDeviceIcon(String deviceType) {
     switch (deviceType.toLowerCase()) {
       case 'ios':
       case 'iphone':
-        return Icons.phone_iphone;
+        return StrokeIcons.phoneIphone;
       case 'android':
-        return Icons.phone_android;
+        return StrokeIcons.phoneAndroid;
       case 'macos':
       case 'mac':
-        return Icons.laptop_mac;
+        return StrokeIcons.laptopMac;
       case 'windows':
-        return Icons.laptop_windows;
+        return StrokeIcons.laptopWindows;
       default:
-        return Icons.devices;
+        return StrokeIcons.devices;
     }
   }
 }
