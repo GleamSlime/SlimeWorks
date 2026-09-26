@@ -59,6 +59,8 @@ jobs:
         run: |
           flutter pub get
           flutter pub run build_runner build --delete-conflicting-outputs
+          # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
+          dart run tool/stroke_icons/generate.dart
 
       - name: 创建 .env 文件（占位）
         run: |
@@ -151,6 +153,8 @@ jobs:
         run: |
           flutter pub get
           flutter pub run build_runner build --delete-conflicting-outputs
+          # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
+          dart run tool/stroke_icons/generate.dart
           flutter precache --macos
 
       - name: 创建 .env 文件（占位）
@@ -238,6 +242,8 @@ jobs:
         run: |
           flutter pub get
           flutter pub run build_runner build --delete-conflicting-outputs
+          # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
+          dart run tool/stroke_icons/generate.dart
 
       - name: 创建 .env 文件（占位）
         shell: bash
@@ -333,6 +339,8 @@ jobs:
         run: |
           flutter pub get
           flutter pub run build_runner build --delete-conflicting-outputs
+          # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
+          dart run tool/stroke_icons/generate.dart
 
       - name: 创建 .env 文件
         run: |
@@ -711,6 +719,8 @@ jobs:
         run: |
           flutter pub get
           flutter pub run build_runner build --delete-conflicting-outputs
+          # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
+          dart run tool/stroke_icons/generate.dart
 
       - name: 创建 .env 文件
         run: |

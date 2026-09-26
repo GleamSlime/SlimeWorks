@@ -147,6 +147,7 @@ rust/
 ```bash
 flutter_rust_bridge_codegen generate          # 生成 FRB 绑定
 flutter pub run build_runner build             # 生成资源引用/JSON序列化
+dart run tool/stroke_icons/generate.dart       # 生成描边图标常量（*.g.dart 不入库，CI 同样先跑这步）
 flutter run -d macos                           # 开发运行
 flutter build macos --release                  # 发布构建
 cd rust && cargo test --workspace              # Rust 测试
