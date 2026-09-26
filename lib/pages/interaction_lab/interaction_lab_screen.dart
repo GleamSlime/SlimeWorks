@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'cases/interaction_lab_cases.dart';
 import 'kit.dart';
 
-/// 交互实验室：12 个交互组件，一格一个
+/// 交互实验室：13 个交互组件，一格一个
 ///
 /// 和动效实验室同一套定位——**看的东西，不是用的东西**：这一页复刻一组带真实
 /// 手势的组件（按住拖拽、下拉刷新、滑动确认、验证码融合……），尺寸/圆角/颜色/
@@ -59,6 +59,7 @@ class _InteractionLabScreenState extends State<InteractionLabScreen> {
                                 subtitle: c.subtitle,
                                 stageW: c.stageW,
                                 stageH: c.stageH,
+                                dark: c.dark,
                                 onEnlarge: () => setState(() => _focused = c),
                                 stage: c.build(),
                               ),
@@ -156,7 +157,8 @@ class _InteractionLabScreenState extends State<InteractionLabScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _focused = null),
         child: ColoredBox(
-          color: const Color(0xE6FFFFFF),
+          // 暗色那一格放大时铺的是深底：白纱压在黑卡上会把卡片洗成灰色
+          color: c.dark ? const Color(0xE6101114) : const Color(0xE6FFFFFF),
           child: Center(
             child: GestureDetector(
               // 点案例本身不该关掉放大层
@@ -164,9 +166,20 @@ class _InteractionLabScreenState extends State<InteractionLabScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${c.seq}. ${c.title}', style: IlText.title.copyWith(fontSize: 15)),
+                  Text(
+                    '${c.seq}. ${c.title}',
+                    style: IlText.title.copyWith(
+                      fontSize: 15,
+                      color: c.dark ? IlDarkColor.text : IlColor.text,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(c.subtitle, style: IlText.subtitle),
+                  Text(
+                    c.subtitle,
+                    style: IlText.subtitle.copyWith(
+                      color: c.dark ? IlDarkColor.textSubtle : IlColor.textSubtle,
+                    ),
+                  ),
                   const SizedBox(height: 18),
                   SizedBox(
                     width: c.stageW * 2,

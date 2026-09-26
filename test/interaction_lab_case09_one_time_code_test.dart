@@ -93,12 +93,16 @@ Future<void> _pump(WidgetTester t, int ms) async {
 bool _has(Finder f) => f.evaluate().isNotEmpty;
 
 /// 拿焦点后逐位敲，末尾补一帧让数字真的挂上树
+///
+/// [gapMs] 只加在两位**之间**：末位后面再等 320ms 的话，它的入场早走完了，
+/// "还在进的那一格"就拍不到了。
 Future<void> _focusAndType(WidgetTester t, String s, {int gapMs = 0}) async {
   await t.tapAt(ilStageCenter(t));
   await _pump(t, 32);
-  for (final ch in s.split('')) {
-    await ilType(t, ch);
-    if (gapMs > 0) await _pump(t, gapMs);
+  final chars = s.split('');
+  for (var i = 0; i < chars.length; i++) {
+    await ilType(t, chars[i]);
+    if (gapMs > 0 && i < chars.length - 1) await _pump(t, gapMs);
   }
   await t.pump(const Duration(milliseconds: 16));
 }
@@ -141,7 +145,7 @@ void main() {
       child: const Case09OneTimeCode(),
       // 第一位走完 300ms 入场再敲第二位，图里才同时有"稳的"和"在进的"
       act: (t) => _focusAndType(t, '12', gapMs: 320),
-      thenMs: 48,
+      thenMs: 16,
     );
   });
 
@@ -155,21 +159,33 @@ void main() {
     );
   });
 
-  testWidgets('9. OTP 融合途中：拉丝接上了', tags: 'golden', (tester) async {
+  testWidgets('9. OTP 融合起手：缝被 goo 拉丝接上', tags: 'golden', (tester) async {
     await shootIlCase(
       tester,
       name: 'c09_merge',
       child: const Case09OneTimeCode(),
       act: (t) => _focusAndType(t, '1234'),
+      thenMs: 408,
+    );
+  });
+
+  testWidgets('9. OTP 到位前一拍：窄一点、高一点', tags: 'golden', (tester) async {
+    await shootIlCase(
+      tester,
+      name: 'c09_tall',
+      child: const Case09OneTimeCode(),
+      // 宽高吃的是没钳位的 m：m 还在 1 以下时先窄先高（竖高实测 46 > 44）
+      act: (t) => _focusAndType(t, '1234'),
       thenMs: 496,
     );
   });
 
-  testWidgets('9. OTP 过冲峰：窄一点高一点', tags: 'golden', (tester) async {
+  testWidgets('9. OTP 过冲峰：又宽又扁', tags: 'golden', (tester) async {
     await shootIlCase(
       tester,
       name: 'c09_overshoot',
       child: const Case09OneTimeCode(),
+      // m 冲过 1 的那一拍：宽 144 > 128，高度反而压回 44 以内
       act: (t) => _focusAndType(t, '1234'),
       thenMs: 608,
     );
@@ -387,6 +403,31 @@ void main() {
     expect(_okA(tester), 1);
     expect(_caretA(tester), 0, reason: 'data-on 要求融合进度还没起步');
     expect(_hitCursor(tester), SystemMouseCursors.click, reason: '已验证态的光标变了');
+    await unmountPage(tester);
+  });
+
+  testWidgets('融合起手：弹簧确实经过"缝还在、goo 够得着"的那一帧', (tester) async {
+    await mountIlCase(tester, const Case09OneTimeCode());
+    await _focusAndType(tester, '1234');
+    // 缝 = dx − 36。σ=3 + `24α−12` 那道硬阈值够得到的上限是 3.66px
+    // （中点 α = erfc(g/(2σ√2))，要留 (1+12)/24 = .542），所以窗口是 36 < dx < 39.66。
+    double? bridgedDx;
+    var bridgedPill = -1.0, bridgedSlot = -1.0;
+    final seq = <double>[];
+    // 按 8ms 半步推：16ms 整步会让弹簧从 40.5 直接跨过 36.3，采样点落在窗口外面
+    for (var f = 0; f < 90; f++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      final dx = _cellX(tester, 1) - _cellX(tester, 0);
+      if (dx < 42.5) seq.add(dx);
+      if (bridgedDx == null && dx > 36.66 && dx < 39.66) {
+        bridgedDx = dx;
+        bridgedPill = _pillW(tester);
+        bridgedSlot = _slotA(tester, 0);
+      }
+    }
+    expect(bridgedDx, isNotNull, reason: '四格要有一帧"没叠上但已经被拉丝接住"：${seq.map((v) => v.toStringAsFixed(2)).toList()}');
+    expect(bridgedPill, 0.0, reason: '这一帧胶囊那层宽度还是 0 —— 连着的一段只能是 goo 拉丝');
+    expect(bridgedSlot, greaterThan(0.85), reason: '数字层还挂着，所以量像素得避开中线那行');
     await unmountPage(tester);
   });
 

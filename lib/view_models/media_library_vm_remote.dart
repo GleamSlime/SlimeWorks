@@ -15,6 +15,8 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       return;
     }
     _remoteThumbPolling = true;
+    // 每 2s 一轮，只在明显变慢时留痕（这条链一慢就会连带拖住首屏取数）
+    final trace = TimingTrace('轮询远程缩略图进度', scope: '${nodes.length}个节点');
     try {
       var total = 0;
       var completed = 0;
@@ -49,111 +51,118 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
         remoteThumbProgress.value = null;
       }
     } finally {
+      trace.end(slowOnlyMs: 1000);
       _remoteThumbPolling = false;
     }
   }
 
   Future<void> refreshRemoteLibrary() async {
-    await _refreshRemoteFolders();
-    await _refreshRemoteCollections();
-    if (currentFolderId.value != null && currentFolder == null) {
-      currentFolderId.value = null;
-    }
-  }
+    final nodes = nodeSettingsService.enabledRemoteNodes;
+    final trace = TimingTrace('刷新远程媒体库', scope: '${nodes.length}个节点');
 
-  Future<void> refreshRemoteCollections() async {
-    await refreshRemoteLibrary();
-  }
+    // 节点之间并发、节点内三路（文件夹/集合/智能文件夹）也并发：
+    // 旧实现是「先所有节点的文件夹、再所有节点的集合」的串行链，
+    // N 个节点首屏要付 2N 轮往返，任何一个地址慢都会把整屏拖住。
+    final results = await Future.wait(
+      nodes.map(_loadNodeMetadata),
+    );
 
-  Future<void> _refreshRemoteFolders() async {
     final remote = <media_api.MediaFolder>[];
     final nodeIdMap = <String, String>{};
     final nodeNameMap = <String, String>{};
     final rawIdMap = <String, String>{};
 
-    for (final node in nodeSettingsService.enabledRemoteNodes) {
-      try {
-        final payloads = await nodeSettingsService.fetchNodeMediaFolders(node);
-        for (final payload in payloads) {
-          final rawId = (payload['id'] ?? '').toString();
-          if (rawId.isEmpty) {
-            continue;
-          }
-          final syntheticId = _buildRemoteFolderId(node.id, rawId);
-          remote.add(_buildRemoteFolder(payload, syntheticId, node.id));
-          nodeIdMap[syntheticId] = node.id;
-          nodeNameMap[syntheticId] = node.name;
-          rawIdMap[syntheticId] = rawId;
-        }
-      } catch (error) {
-        _logger.error('刷新远程媒体文件夹失败: ${node.name} -> $error');
+    final remoteColl = <media_api.MediaCollection>[];
+    final collNodeIdMap = <String, String>{};
+    final collNameMap = <String, String>{};
+    final collRawIdMap = <String, String>{};
+    final remoteSfMap = <String, List<SmartFolder>>{};
+
+    for (final item in results) {
+      final node = item.node;
+      final meta = item.metadata;
+      if (meta == null) {
+        continue;
       }
+      for (final payload in meta.folders) {
+        final rawId = (payload['id'] ?? '').toString();
+        if (rawId.isEmpty) {
+          continue;
+        }
+        final syntheticId = _buildRemoteFolderId(node.id, rawId);
+        remote.add(_buildRemoteFolder(payload, syntheticId, node.id));
+        nodeIdMap[syntheticId] = node.id;
+        nodeNameMap[syntheticId] = node.name;
+        rawIdMap[syntheticId] = rawId;
+      }
+      final nodeSfs = <SmartFolder>[];
+      for (final payload in meta.collections) {
+        final rawId = (payload['id'] ?? '').toString();
+        if (rawId.isEmpty) {
+          continue;
+        }
+        final syntheticId = _buildRemoteCollectionId(node.id, rawId);
+        remoteColl.add(_buildRemoteCollection(payload, syntheticId, node.id));
+        collNodeIdMap[syntheticId] = node.id;
+        collNameMap[syntheticId] = node.name;
+        collRawIdMap[syntheticId] = rawId;
+        // 解析服务端返回的集合总大小
+        final totalSizeRaw = payload['total_size'];
+        if (totalSizeRaw != null) {
+          _collectionSizes[syntheticId] = _parseBigIntLike(totalSizeRaw);
+        }
+      }
+      for (final payload in meta.smartFolders) {
+        final rawSfId = (payload['id'] ?? '').toString();
+        if (rawSfId.isEmpty) continue;
+        // 用合成 ID 重建 SmartFolder；targetFolderIds 在客户端无效，清空即可
+        nodeSfs.add(
+          SmartFolder.fromJson({
+            ...Map<String, dynamic>.from(payload),
+            'id': '${MediaLibraryViewModel._remoteSmartFolderPrefix}${node.id}:$rawSfId',
+            'targetFolderIds': <String>[],
+          }),
+        );
+      }
+      remoteSfMap[node.id] = nodeSfs;
     }
 
     remoteFolders.assignAll(remote);
     remoteFolderNodeId.assignAll(nodeIdMap);
     remoteFolderNodeName.assignAll(nodeNameMap);
     remoteFolderRawId.assignAll(rawIdMap);
+
+    remoteCollections.assignAll(remoteColl);
+    remoteCollectionNodeId.assignAll(collNodeIdMap);
+    remoteCollectionNodeName.assignAll(collNameMap);
+    remoteCollectionRawId.assignAll(collRawIdMap);
+    _remoteSmartFolders.assignAll(remoteSfMap);
+
+    if (currentFolderId.value != null && currentFolder == null) {
+      currentFolderId.value = null;
+    }
+    trace.end();
   }
 
-  Future<void> _refreshRemoteCollections() async {
-    final remote = <media_api.MediaCollection>[];
-    final nodeIdMap = <String, String>{};
-    final nodeNameMap = <String, String>{};
-    final rawIdMap = <String, String>{};
-    final remoteSfMap = <String, List<SmartFolder>>{};
+  Future<void> refreshRemoteCollections() async {
+    await refreshRemoteLibrary();
+  }
 
-    for (final node in nodeSettingsService.enabledRemoteNodes) {
-      try {
-        final payloads = await nodeSettingsService.fetchNodeMediaCollections(node);
-        for (final payload in payloads) {
-          final rawId = (payload['id'] ?? '').toString();
-          if (rawId.isEmpty) {
-            continue;
-          }
-          final syntheticId = _buildRemoteCollectionId(node.id, rawId);
-          remote.add(_buildRemoteCollection(payload, syntheticId, node.id));
-          nodeIdMap[syntheticId] = node.id;
-          nodeNameMap[syntheticId] = node.name;
-          rawIdMap[syntheticId] = rawId;
-          // 解析服务端返回的集合总大小
-          final totalSizeRaw = payload['total_size'];
-          if (totalSizeRaw != null) {
-            _collectionSizes[syntheticId] = _parseBigIntLike(totalSizeRaw);
-          }
-        }
-      } catch (error) {
-        _logger.error('刷新远程媒体集合失败: ${node.name} -> $error');
-      }
-
-      // 获取远程节点的智能文件夹，并以 "smart-folder:remote:<nodeId>:<rawId>" 命名
-      try {
-        final sfPayloads = await nodeSettingsService.fetchNodeSmartFolders(node);
-        final nodeSfs = <SmartFolder>[];
-        for (final payload in sfPayloads) {
-          final rawSfId = (payload['id'] ?? '').toString();
-          if (rawSfId.isEmpty) continue;
-          final syntheticSfId =
-              '${MediaLibraryViewModel._remoteSmartFolderPrefix}${node.id}:$rawSfId';
-          // 用合成 ID 重建 SmartFolder；targetFolderIds 在客户端无效，清空即可
-          final sf = SmartFolder.fromJson({
-            ...Map<String, dynamic>.from(payload as Map),
-            'id': syntheticSfId,
-            'targetFolderIds': <String>[],
-          });
-          nodeSfs.add(sf);
-        }
-        remoteSfMap[node.id] = nodeSfs;
-      } catch (error) {
-        _logger.error('刷新远程智能文件夹失败: ${node.name} -> $error');
-      }
+  /// 取单个节点的媒体元数据；失败只记日志并返回空结果，不连带拖垮其它节点。
+  Future<_NodeMetadataResult> _loadNodeMetadata(NodeEndpoint node) async {
+    final nodeTrace = TimingTrace('节点取数', scope: node.name);
+    try {
+      final meta = await nodeSettingsService.fetchNodeMediaMetadata(node.id);
+      nodeTrace.end(
+        note: '文件夹=${meta.folders.length} 集合=${meta.collections.length} '
+            '智能文件夹=${meta.smartFolders.length}',
+      );
+      return _NodeMetadataResult(node: node, metadata: meta);
+    } catch (error) {
+      nodeTrace.end(note: '失败');
+      _logger.error('刷新远程媒体库失败: ${node.name} -> $error');
+      return _NodeMetadataResult(node: node, metadata: null);
     }
-
-    remoteCollections.assignAll(remote);
-    remoteCollectionNodeId.assignAll(nodeIdMap);
-    remoteCollectionNodeName.assignAll(nodeNameMap);
-    remoteCollectionRawId.assignAll(rawIdMap);
-    _remoteSmartFolders.assignAll(remoteSfMap);
   }
 
   media_api.MediaFolder _buildRemoteFolder(
@@ -210,4 +219,13 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       order: _parseIntLike(payload['order']),
     );
   }
+}
+
+/// [RemoteNodeOperationsExt.refreshRemoteLibrary] 单节点取数结果。
+/// 失败只落在这一行上，不连带影响其它节点。
+class _NodeMetadataResult {
+  const _NodeMetadataResult({required this.node, required this.metadata});
+
+  final NodeEndpoint node;
+  final NodeMediaMetadata? metadata;
 }

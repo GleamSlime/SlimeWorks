@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/utils/timing_trace.dart';
 import 'package:slime_works/src/rust/api/http_bridge.dart' as http_bridge_api;
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
@@ -178,8 +179,170 @@ class NodeSettingsService extends GetxService {
     }
 
     _isInitialized = true;
-    // 启动后台节点连通性检测，不阻塞应用启动
-    Future.delayed(const Duration(milliseconds: 200), refreshNodeConnectivity).ignore();
+    // 远程节点的连通确认与取数预热放在应用初始化完成后由 warmUpAfterLaunch 统一发起：
+    // 放在这里会在 runApp 之前抢占启动窗口，且一次跑完就不会再有第二次机会。
+  }
+
+  // ── 启动预热与连通看门狗 ─────────────────────────────────────────────────
+
+  /// 离线节点复探间隔：节点在启动时才没起来（对端慢、网络还没就绪），
+  /// 没有这一步就只能等用户进媒体库发业务请求才被"救活"。
+  static const Duration _nodeWatchdogInterval = Duration(seconds: 20);
+
+  Timer? _nodeWatchdog;
+
+  /// 预热快照的有效期：超过就直接重拉，宁慢不旧。
+  static const Duration _remoteMetaMaxAge = Duration(seconds: 60);
+
+  /// 每个节点的远程元数据预热结果（含在途的 Future，取用一次即失效）。
+  final Map<String, Future<NodeMediaMetadata?>> _remoteMetaWarmups =
+      <String, Future<NodeMediaMetadata?>>{};
+
+  /// 应用初始化完毕后调用：确认节点连通 + 预取远程媒体元数据 + 装上离线复探看门狗。
+  Future<void> warmUpAfterLaunch() async {
+    if (!isInitialized) {
+      await init();
+    }
+    final trace = TimingTrace('应用启动节点预热');
+    await refreshNodeConnectivity();
+    trace.lap('连通确认 ${remoteNodes.where((n) => n.enabled).length}个节点');
+    // 预热不等网络：先返回，让看门狗和首屏各自按需取快照
+    for (final node in enabledRemoteNodes) {
+      requestNodeMediaMetadataWarmup(node.id);
+    }
+    _startNodeWatchdog();
+    trace.end();
+  }
+
+  void _startNodeWatchdog() {
+    _nodeWatchdog?.cancel();
+    _nodeWatchdog = Timer.periodic(_nodeWatchdogInterval, (_) {
+      _recheckOfflineNodes().ignore();
+    });
+  }
+
+  /// 只复探「当前判为离线或已熔断」的启用节点，全在线时这一轮零流量。
+  Future<void> _recheckOfflineNodes() async {
+    final stale = remoteNodes
+        .where(
+          (n) =>
+              n.enabled &&
+              (_circuitBreakedNodes.contains(n.id) || nodeConnectivity[n.id] != true),
+        )
+        .toList(growable: false);
+    if (stale.isEmpty) {
+      return;
+    }
+    final trace = TimingTrace('离线节点复探', scope: '${stale.length}个');
+    await Future.wait(stale.map((n) => checkNodeConnectivity(n.id)));
+    trace.end();
+    for (final node in stale) {
+      if (nodeConnectivity[node.id] != true) {
+        continue;
+      }
+      _logger.info('节点已恢复连接: ${node.name}');
+      // 节点回来了：补预热，并通知已打开的媒体库重取远程数据。
+      // 先清掉上次失败留下的空快照条目，否则幂等判断会跳过这次补热。
+      invalidateNodeMediaMetadataCache(nodeId: node.id);
+      requestNodeMediaMetadataWarmup(node.id);
+      libraryMutationTick.value++;
+    }
+  }
+
+  /// 发起某节点远程媒体元数据的后台预热（幂等：已在途或已备好则跳过）。
+  void requestNodeMediaMetadataWarmup(String nodeId) {
+    final node = getNodeById(nodeId);
+    if (node == null || !node.enabled || _remoteMetaWarmups.containsKey(nodeId)) {
+      return;
+    }
+    // 预热失败不能留下没人 await 的 error Future：就地吞掉，把「没预热上」表达为 null。
+    // 三路只要有一路没取到就不进缓存：残缺快照一旦被首屏复用，用户看到的就是
+    // 「远程一个集合都没有」这种假象（实测过一次 list_media_collections 超时导致集合=0）。
+    // 不落缓存≠丢弃数据：没有快照时 fetchNodeMediaMetadata 会现拉一次，
+    // 现拉仍然按「能取到几路算几路」的宽容口径返回，老节点缺 action 也不会白屏。
+    final future = _fetchNodeMediaMetadata(node).then<NodeMediaMetadata?>(
+      (metadata) => metadata.complete ? metadata : null,
+      onError: (Object error, StackTrace _) {
+        _logger.info('远程元数据预热失败: ${node.name} -> $error');
+        return null;
+      },
+    );
+    _remoteMetaWarmups[nodeId] = future;
+  }
+
+  /// 取某节点的远程媒体元数据：命中预热快照则直接用（并作废快照，后续按实时拉取），
+  /// 没有快照时现拉一次。媒体库首屏因此不必等三轮串行往返。
+  Future<NodeMediaMetadata> fetchNodeMediaMetadata(String nodeId) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+    // 熔断节点不在首屏路径上付那 1.5s 复探：恢复交给后台看门狗，它补好快照会通知媒体库重取。
+    if (isNodeCircuitBreaked(nodeId)) {
+      throw StateError('节点已熔断: ${node.name}，等待后台复探恢复');
+    }
+    final warmup = _remoteMetaWarmups.remove(nodeId);
+    if (warmup != null) {
+      final trace = TimingTrace('复用远程元数据预热', scope: node.name);
+      final result = await warmup;
+      // 预热结果只在很短的时间内算新鲜：放久了再复用，等于把首屏换成一份过期快照。
+      final fresh = result != null &&
+          DateTime.now().difference(result.takenAt) <= _remoteMetaMaxAge;
+      trace.end(note: fresh ? null : '未命中，改为实时拉取');
+      if (result != null && fresh) {
+        return result;
+      }
+    }
+    return _fetchNodeMediaMetadata(node);
+  }
+
+  /// 丢弃所有预热快照（节点增删改、集合结构变化后调用，避免复用过期数据）。
+  void invalidateNodeMediaMetadataCache({String? nodeId}) {
+    if (nodeId == null) {
+      _remoteMetaWarmups.clear();
+      return;
+    }
+    _remoteMetaWarmups.remove(nodeId);
+  }
+
+  Future<NodeMediaMetadata> _fetchNodeMediaMetadata(NodeEndpoint node) async {
+    final trace = TimingTrace('拉取远程媒体元数据', scope: node.name);
+    // 三路并发，但各自独立吞错：某一路失败（老节点没有该 action）不该连带清空另外两路。
+    Future<Object?> settle(Future<List<Map<String, dynamic>>> future) =>
+        future.then<Object?>((v) => v).catchError((Object e) => e);
+    final results = await Future.wait(<Future<Object?>>[
+      settle(fetchNodeMediaFolders(node)),
+      settle(fetchNodeMediaCollections(node)),
+      settle(fetchNodeSmartFolders(node)),
+    ]);
+    if (results.every((r) => r is! List)) {
+      // 三路全挂 = 节点确实没应答，抛出让调用方按「该节点离线」处理
+      trace.end(note: '三路全失败');
+      throw results.firstWhere((r) => r is! List) as Object;
+    }
+    final failed = <String>[];
+    List<Map<String, dynamic>> pick(int index, String name) {
+      final r = results[index];
+      if (r is List) {
+        return r.map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
+      }
+      failed.add('$name: $r');
+      return const <Map<String, dynamic>>[];
+    }
+
+    final meta = NodeMediaMetadata(
+      folders: pick(0, '文件夹'),
+      collections: pick(1, '集合'),
+      smartFolders: pick(2, '智能文件夹'),
+      takenAt: DateTime.now(),
+      complete: failed.isEmpty,
+    );
+    trace.end(
+      note: '文件夹=${meta.folders.length} 集合=${meta.collections.length}'
+          ' 智能文件夹=${meta.smartFolders.length}'
+          '${failed.isEmpty ? '' : ' 失败: ${failed.join(' | ')}'}',
+    );
+    return meta;
   }
 
   /// 是否已熔断（本次运行期间不再自动请求）
@@ -227,6 +390,7 @@ class NodeSettingsService extends GetxService {
     remoteNodes.add(endpoint);
     await _save();
     await checkNodeConnectivity(endpoint.id);
+    requestNodeMediaMetadataWarmup(endpoint.id);
   }
 
   Future<void> updateRemoteNode(NodeEndpoint endpoint) async {
@@ -245,13 +409,19 @@ class NodeSettingsService extends GetxService {
     );
     remoteNodes.refresh();
     await _save();
+    // 地址/授权码/开关都可能变，旧快照不再可信
+    invalidateNodeMediaMetadataCache(nodeId: endpoint.id);
     await checkNodeConnectivity(endpoint.id);
+    if (endpoint.enabled) {
+      requestNodeMediaMetadataWarmup(endpoint.id);
+    }
   }
 
   Future<void> removeRemoteNode(String nodeId) async {
     remoteNodes.removeWhere((n) => n.id == nodeId);
     nodeConnectivity.remove(nodeId);
     nodeConnectivityError.remove(nodeId);
+    invalidateNodeMediaMetadataCache(nodeId: nodeId);
     await _save();
   }
 
@@ -269,13 +439,16 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> refreshNodeConnectivity() async {
+    final trace = TimingTrace('节点连通性全量确认');
     final enabledNodes = remoteNodes.where((n) => n.enabled).toList();
     final disabledNodes = remoteNodes.where((n) => !n.enabled).toList();
     for (final node in disabledNodes) {
       nodeConnectivity[node.id] = false;
       nodeConnectivityError[node.id] = '节点已禁用';
     }
+    // 并发探：串行时 N 个节点的超时是累加的
     await Future.wait(enabledNodes.map((node) => checkNodeConnectivity(node.id)));
+    trace.end(note: '节点数=${enabledNodes.length}');
   }
 
   Future<void> checkNodeConnectivity(String nodeId) async {
@@ -289,25 +462,31 @@ class NodeSettingsService extends GetxService {
       return;
     }
     _circuitBreakedNodes.remove(nodeId);
+    final trace = TimingTrace('节点探测', scope: node.name);
 
-    final lanResult = await _probeNodeUrl(node.lanApiBaseUrl, timeout: _probeFastTimeout);
-    if (lanResult == _ProbeResult.ok) {
+    // LAN 与 WAN 并发探：串行时「LAN 地址已失效」这一最常见的场景要把快速档超时
+    // 完整付一遍才轮到 WAN，节点看起来就是慢半拍。
+    final lanBase = node.lanApiBaseUrl;
+    final results = await Future.wait(<Future<_ProbeResult>>[
+      _probeNodeUrl(lanBase, timeout: _probeFastTimeout),
+      if (lanBase == null || lanBase != node.apiBaseUrl)
+        _probeNodeUrl(node.apiBaseUrl, timeout: _probeFastTimeout),
+    ]);
+    trace.lap('快速档(${results.length}路并发)');
+
+    // 任一路通了就算在线；没通的那一路不表态，不当失败证据。
+    if (results.contains(_ProbeResult.ok)) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
-      return;
-    }
-
-    final wanResult = await _probeNodeUrl(node.apiBaseUrl, timeout: _probeFastTimeout);
-    if (wanResult == _ProbeResult.ok) {
-      nodeConnectivity[nodeId] = true;
-      nodeConnectivityError[nodeId] = '';
+      trace.end();
       return;
     }
 
     // 401 说明节点在线、只是码不对：不熔断，改完授权码刷新即可恢复
-    if (lanResult == _ProbeResult.unauthorized || wanResult == _ProbeResult.unauthorized) {
+    if (results.contains(_ProbeResult.unauthorized)) {
       nodeConnectivity[nodeId] = false;
       nodeConnectivityError[nodeId] = '授权码错误，请核对节点授权码';
+      trace.end();
       return;
     }
 
@@ -315,20 +494,24 @@ class NodeSettingsService extends GetxService {
     // 批量生成缩略图），也可能只是 Wi-Fi 抖了一下——一次抖动就熔断要用户手动重试，代价太不对称。
     // 确认档只放宽到 1.5s 并只跑一轮，避免把启动/保存路径拖成秒级阻塞。
     final confirmed = await _reprobeNode(node);
+    trace.lap('确认档');
     if (confirmed == _ProbeResult.ok) {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
+      trace.end();
       return;
     }
     if (confirmed == _ProbeResult.unauthorized) {
       nodeConnectivity[nodeId] = false;
       nodeConnectivityError[nodeId] = '授权码错误，请核对节点授权码';
+      trace.end();
       return;
     }
 
     nodeConnectivity[nodeId] = false;
     nodeConnectivityError[nodeId] = '节点不可达';
     _circuitBreakedNodes.add(nodeId);
+    trace.end(note: '判定熔断');
     _logger.info(
       '节点已熔断: ${node.name}（快速档+确认档均无响应 | LAN=${node.lanApiBaseUrl} WAN=${node.apiBaseUrl}）',
     );
@@ -338,6 +521,10 @@ class NodeSettingsService extends GetxService {
     if (baseUrl == null || baseUrl.isEmpty) return _ProbeResult.unreachable;
     final urls = _candidateNodeCallUrls(baseUrl);
     for (final url in urls) {
+      // 【临时埋点】把每一次候选地址尝试的 Dio 异常类型打出来：
+      // 实测快速档标称 200ms 却付了 1.2s，需要区分「超时本身没生效」和
+      // 「启动期主 isolate 忙，超时回调被排后」这两种可能。
+      final probeTrace = TimingTrace('探测', scope: url);
       try {
         await _probeDio.post<dynamic>(
           url,
@@ -348,8 +535,10 @@ class NodeSettingsService extends GetxService {
             sendTimeout: timeout,
           ),
         );
+        probeTrace.end(note: 'ok');
         return _ProbeResult.ok;
       } on DioException catch (e) {
+        probeTrace.end(note: 'type=${e.type} status=${e.response?.statusCode}');
         final status = e.response?.statusCode;
         if (status == 401) {
           return _ProbeResult.unauthorized;
@@ -363,19 +552,26 @@ class NodeSettingsService extends GetxService {
           return _ProbeResult.ok;
         }
         continue;
-      } catch (_) {
+      } catch (e) {
+        probeTrace.end(note: '非Dio异常=${e.runtimeType}');
         continue;
       }
     }
     return _ProbeResult.unreachable;
   }
 
-  /// 确认档复探：把节点已知的所有地址（生效/LAN/WAN）都问一遍，只要不是全部无响应就给出结论。
+  /// 确认档复探：把节点已知的所有地址（生效/LAN/WAN）并发问一遍，
+  /// 只要不是全部无响应就给出结论。串行会让「一个地址已失效」的节点
+  /// 把每个候选地址的超时都付一遍。
   Future<_ProbeResult> _reprobeNode(NodeEndpoint node) async {
-    for (final base in {node.effectiveApiBaseUrl, node.lanApiBaseUrl, node.apiBaseUrl}) {
-      final result = await _probeNodeUrl(base, timeout: _probeConfirmTimeout);
-      if (result != _ProbeResult.unreachable) return result;
-    }
+    final bases = <String>{node.effectiveApiBaseUrl, node.lanApiBaseUrl ?? '', node.apiBaseUrl}
+        .where((b) => b.isNotEmpty)
+        .toList(growable: false);
+    final results = await Future.wait(
+      bases.map((base) => _probeNodeUrl(base, timeout: _probeConfirmTimeout)),
+    );
+    if (results.contains(_ProbeResult.ok)) return _ProbeResult.ok;
+    if (results.contains(_ProbeResult.unauthorized)) return _ProbeResult.unauthorized;
     return _ProbeResult.unreachable;
   }
 
@@ -384,11 +580,13 @@ class NodeSettingsService extends GetxService {
   /// 同节点的并发请求共用这一次复探，避免一屏封面刷出十几个 ping。
   Future<void> _ensureNodeReachable(NodeEndpoint node) async {
     if (!_circuitBreakedNodes.contains(node.id)) return;
+    final trace = TimingTrace('熔断节点业务请求前复探', scope: node.name);
     final alive = await (_nodeBreakChecks[node.id] ??= _reprobeNode(node).whenComplete(() {
       // 必须用块体：箭头写法会把 remove() 返回的那个 Future（正是本 Future）
       // 当成 whenComplete 的后续去等，自锁后永不完成。
       _nodeBreakChecks.remove(node.id);
     }));
+    trace.end(note: '结果=$alive');
     if (alive == _ProbeResult.ok) {
       _circuitBreakedNodes.remove(node.id);
       nodeConnectivity[node.id] = true;
@@ -1158,12 +1356,15 @@ class NodeSettingsService extends GetxService {
   }) async {
     final candidateUrls = _candidateNodeCallUrls(node.effectiveApiBaseUrl);
     final txBytes = _estimatePayloadBytes(requestPayload);
+    // 【临时埋点】整次调用（含换地址重试、忙重试）的墙钟耗时
+    final trace = TimingTrace('节点调用', scope: '${node.name} $action');
     Object? lastError;
     StackTrace? lastStackTrace;
     int busyRetries = 0;
 
     for (int index = 0; index < candidateUrls.length; index++) {
       final url = candidateUrls[index];
+      final attemptTrace = TimingTrace('POST', scope: url);
       final isLast = index == candidateUrls.length - 1;
       try {
         final response = await _dio.post<Map<String, dynamic>>(
@@ -1172,16 +1373,19 @@ class NodeSettingsService extends GetxService {
           options: _nodeCallOptionsForAction(action),
           onReceiveProgress: onReceiveProgress,
         );
+        attemptTrace.end(note: 'HTTP ${response.statusCode}');
         final body = response.data ?? <String, dynamic>{};
         _recordAppTraffic(txBytes: txBytes, rxBytes: _estimatePayloadBytes(body));
         if (body['success'] == true) {
           nodeConnectivity[node.id] = true;
           nodeConnectivityError[node.id] = '';
           await _persistResolvedNodeBaseUrl(node, _baseUrlFromNodeCallUrl(url));
+          trace.end(note: 'bytes=${_estimatePayloadBytes(body)}');
           return body;
         }
         throw Exception((body['error'] ?? '节点返回失败').toString());
       } catch (e, st) {
+        attemptTrace.end(note: '失败=${e.runtimeType}');
         // 节点回「并发已满」（503/429）说明连接是通的，只是服务端在背压：
         // 等一小会儿重来一次，否则一次偶发的并发峰值就变成用户可见的失败。
         if (e is DioException && _isNodeBusyError(e) && busyRetries < _nodeBusyRetries) {
@@ -1200,7 +1404,6 @@ class NodeSettingsService extends GetxService {
     }
 
     final error = lastError ?? Exception('节点请求失败');
-    nodeConnectivity[node.id] = false;
     nodeConnectivityError[node.id] = _isUnauthorizedError(error) ? '授权码错误，请核对节点授权码' : error.toString();
     _logger.error(
       '节点请求失败: ${node.name} $action | URLs=${candidateUrls.join(' , ')}',
@@ -1208,7 +1411,9 @@ class NodeSettingsService extends GetxService {
       stackTrace: lastStackTrace,
     );
 
-    // 如果是网络超时/断开，做一次快速探测；探测也失败则熔断
+    // 如果是网络超时/断开，做一次快速探测；探测也失败才熔断并标离线。
+    // 单个 action 超时不等于节点不可用：一上来就把整节点标成离线，会让看门狗把它
+    // 当成待恢复节点多刷一轮全库（实测在启动预热那一轮就这么白刷了一次）。
     final isNetworkTimeout =
         error is DioException &&
         (error.type == DioExceptionType.connectionTimeout ||
@@ -1216,13 +1421,19 @@ class NodeSettingsService extends GetxService {
             error.type == DioExceptionType.receiveTimeout ||
             error.type == DioExceptionType.sendTimeout);
     if (isNetworkTimeout && !_circuitBreakedNodes.contains(node.id)) {
+      final probeTrace = TimingTrace('失败后快速探测', scope: node.name);
       final probeOk = await _quickProbeNode(node);
+      probeTrace.end(note: 'probeOk=$probeOk');
       if (!probeOk) {
+        nodeConnectivity[node.id] = false;
         _circuitBreakedNodes.add(node.id);
         nodeConnectivityError[node.id] = '节点已熔断（多次超时），请在设置中手动重试';
       }
+    } else if (!isNetworkTimeout) {
+      nodeConnectivity[node.id] = false;
     }
 
+    trace.end(note: '最终失败=${error.runtimeType}');
     throw error;
   }
 
@@ -1569,3 +1780,4 @@ class _NodeAuthInterceptor extends Interceptor {
     handler.next(options);
   }
 }
+

@@ -199,8 +199,22 @@ fn kill_process_on_port(#[cfg_attr(not(unix), allow(unused_variables))] port: u1
     }
 }
 
+/// 【临时埋点】节点侧单请求耗时，日志格式 `标签(+NN.NNNs)`。
+/// 走 log_info 而不是 println：这样在节点那台机器的日志文件里也查得到。
+fn trace_elapsed(started: std::time::Instant, label: &str) {
+    let secs = started.elapsed().as_secs_f64();
+    crate::api::logger::log_info(&format!("[耗时][节点] {label}(+{secs:.3}s)"));
+}
+
 /// 处理单个连接：解析请求行 → 调用路由 → 写回响应
+///
+/// 所有响应都显式带 `Connection: close`：一个连接只服务一个请求就 return
+/// （socket 随即关闭），但 HTTP/1.1 默认 keep-alive。不写这个头，dart:io 会把
+/// 已经收到 FIN 的 socket 放回空闲池复用，下一个请求发进死连接后收不到任何
+/// 响应，只能干等到 Dio 的 receiveTimeout（12s）才失败重试 —— 这正是
+/// 「远程节点取数要卡 10 秒以上」的根因。
 fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
+    let conn_started = std::time::Instant::now();
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(10)))
         .ok();
@@ -309,11 +323,17 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                         (200, types::NodeResponse::success(data).to_json())
                     } else {
                         // 复用全局共享的 tokio runtime，避免每次请求创建/销毁 runtime
+                        let action_started = std::time::Instant::now();
                         let result = shared_runtime().block_on(handlers::dispatch_action(
                             &node_req.action,
                             node_req.params,
                             &config,
                         ));
+                        // 【临时埋点】节点侧动作执行耗时，>300ms 的都会被看到
+                        trace_elapsed(
+                            action_started,
+                            &format!("节点动作 {}", node_req.action),
+                        );
                         match result {
                             Ok(data) => (200, types::NodeResponse::success(data).to_json()),
                             Err(e) => (500, types::NodeResponse::error(e).to_json()),
@@ -345,6 +365,8 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                 .split('&')
                 .any(|p| p.starts_with("width=") && p.len() > 6);
 
+            // 【临时埋点】媒体流/出图的分段耗时（两条分支各自结束时报一次）
+            let media_started = std::time::Instant::now();
             // 非 Range 请求且是图片/封面模式 → 走缩略图生成（原逻辑）
             if range_header.is_none()
                 && (is_cover || has_width || media_handler::is_image_path(&file_path))
@@ -354,22 +376,27 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                     Ok(response_bytes) => {
                         let content_type = media_handler::guess_media_content_type(&file_path);
                         let header = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                            "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                             content_type,
                             response_bytes.len()
                         );
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.write_all(&response_bytes);
+                        trace_elapsed(
+                            media_started,
+                            &format!("节点出图 {} bytes={}", file_path, response_bytes.len()),
+                        );
                         return;
                     }
                     Err(e) => {
                         let err_body = format!("media error: {}", e);
                         let header = format!(
-                            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                             err_body.len()
                         );
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.write_all(err_body.as_bytes());
+                        trace_elapsed(media_started, &format!("节点出图失败 {}", file_path));
                         return;
                     }
                 }
@@ -382,15 +409,19 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                     for (k, v) in &headers {
                         header.push_str(&format!("{}: {}\r\n", k, v));
                     }
-                    header.push_str("Access-Control-Allow-Origin: *\r\n\r\n");
+                    header.push_str("Access-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n");
                     let _ = stream.write_all(header.as_bytes());
                     let _ = stream.write_all(&body_bytes);
+                    trace_elapsed(
+                        media_started,
+                        &format!("节点流媒体 {} bytes={}", file_path, body_bytes.len()),
+                    );
                     return;
                 }
                 Err(e) => {
                     let err_body = format!("media error: {}", e);
                     let header = format!(
-                        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                         err_body.len()
                     );
                     let _ = stream.write_all(header.as_bytes());
@@ -475,7 +506,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             match result {
                 Ok(bytes) => {
                     let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                        "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                         bytes.len()
                     );
                     let _ = stream.write_all(header.as_bytes());
@@ -486,7 +517,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                     let err_body = serde_json::json!({"success": false, "error": format!("{}", e)})
                         .to_string();
                     let header = format!(
-                        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                         err_body.len()
                     );
                     let _ = stream.write_all(header.as_bytes());
@@ -698,7 +729,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         ("OPTIONS", _) => {
             // 直接返回并提前退出
             let header = format!(
-                "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, X-Sentry-Auth\r\nAccess-Control-Max-Age: 86400\r\nContent-Length: 0\r\n\r\n"
+                "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, X-Sentry-Auth\r\nAccess-Control-Max-Age: 86400\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
             );
             let _ = stream.write_all(header.as_bytes());
             return;
@@ -711,12 +742,17 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     };
 
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}",
+        "HTTP/1.1 {}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
         status_text(status),
         body_str.len(),
         body_str
     );
     let _ = stream.write_all(response.as_bytes());
+    // 【临时埋点】从 accept 到写完响应的整段占用时间（含读请求体）
+    trace_elapsed(
+        conn_started,
+        &format!("节点响应 {} {} status={}", method, route, status),
+    );
 
     // suppress unused warning
     let _ = peer;

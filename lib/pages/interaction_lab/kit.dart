@@ -48,6 +48,41 @@ abstract final class IlColor {
   static const blue = Color(0xFF3B6EF6);
 }
 
+/// 参考稿的暗色盘（`[data-theme=dark]`，且 `data-fill` 跟着主题走 → `dark` 档）
+///
+/// 只有 13 号那一格是暗的，所以这里单开一份、不去动 [IlColor]：
+/// 浅色那 12 格的读数一个都不该因为多了一格而变。
+/// 注意 `--slab-dark` 在浅主题是 `#0e0f11`、在暗主题是 `#2c2d31` ——
+/// 名字里的 dark 指"旋钮的深色档"，不是主题。
+abstract final class IlDarkColor {
+  static const ink = Color(0xFFECEAE5); // --ink
+  static const ink3 = Color(0xFF9D9C96);
+  static const ink4 = Color(0xFF86857F);
+  static const ink5 = Color(0xFF6F6E69);
+
+  /// `--fill-slab`：卡片底、钮底、头像抠边三处共用同一个值
+  static const slab = Color(0xFF2C2D31);
+
+  /// `--fill-on`：slab 上的字/图标
+  static const slabInk = Color(0xFFF4F3F1);
+
+  /// `--board`：卡片外壳（= 浅色那档的纯白）
+  static const pane = Color(0xFF212429);
+
+  /// `--pane-edge`（flat 档）：rgba(236,235,231,.08)
+  static const paneEdge = Color(0x14ECEAE5);
+
+  /// 舞台底 `.dtl-block`：`rgba(--ink-rgb,.06)` 压在页面底 `--bg`(#101114) 上
+  ///
+  /// 这里给的是**已经叠完**的不透明值：golden 只拍舞台那一块，量不到底下的
+  /// `--bg`，留个半透明色就会拍到一层白。浅色那档的 [IlColor.stage] 不用换 ——
+  /// 它压的是纯白，叠完和直接画一样。
+  static const stage = Color(0xFF1D1E21);
+
+  static const text = ink;
+  static const textSubtle = ink4;
+}
+
 abstract final class IlFont {
   static const family = 'Inter';
 
@@ -99,6 +134,13 @@ abstract final class IlShadow {
   static const card = <BoxShadow>[
     BoxShadow(color: Color(0x0A000000), blurRadius: 3, offset: Offset(0, 1)),
     BoxShadow(color: IlColor.paneEdge, blurRadius: 0, spreadRadius: 1),
+  ];
+
+  /// 暗色那档：1px 环要换成"浅底深字"的反向 `--pane-edge`，
+  /// 沿用 [card] 那一圈就会在黑地上完全看不见
+  static const cardDark = <BoxShadow>[
+    BoxShadow(color: Color(0x2E000000), blurRadius: 3, offset: Offset(0, 1)),
+    BoxShadow(color: IlDarkColor.paneEdge, blurRadius: 0, spreadRadius: 1),
   ];
 }
 
@@ -161,6 +203,7 @@ class IlStage extends StatelessWidget {
     this.height = IlSize.stageH,
     this.center = true,
     this.clip = true,
+    this.dark = false,
   });
 
   final Widget child;
@@ -175,15 +218,18 @@ class IlStage extends StatelessWidget {
   /// 但组件级 demo 里画在舞台外的阴影/气泡得留着）
   final bool clip;
 
+  /// 暗色档：只换舞台底色，组件自己的颜色各格自带
+  final bool dark;
+
   @override
   Widget build(BuildContext context) {
     final body = center ? Center(child: child) : child;
     final stage = Container(
       width: width,
       height: height,
-      decoration: const BoxDecoration(
-        color: IlColor.stage,
-        borderRadius: BorderRadius.all(Radius.circular(IlSize.stageRadius)),
+      decoration: BoxDecoration(
+        color: dark ? IlDarkColor.stage : IlColor.stage,
+        borderRadius: const BorderRadius.all(Radius.circular(IlSize.stageRadius)),
       ),
       // 必须自己钉一层默认字样式：舞台外面没有 Material，`Text` 会去接
       // MaterialApp 那份兜底样式——黄色双下划线，专门提醒"把文字放进 Material"
@@ -210,6 +256,7 @@ class IlCard extends StatelessWidget {
     this.onEnlarge,
     this.stageW = IlSize.stageW,
     this.stageH = IlSize.stageH,
+    this.dark = false,
   });
 
   final int seq;
@@ -220,16 +267,19 @@ class IlCard extends StatelessWidget {
   final double stageW;
   final double stageH;
 
+  /// 这一格是不是暗色档（外壳跟着翻，不影响别的格子）
+  final bool dark;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: IlSize.cardW(stageW),
       height: IlSize.cardH(stageH),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: IlColor.pane,
-          borderRadius: BorderRadius.all(Radius.circular(IlSize.cardRadius)),
-          boxShadow: IlShadow.card,
+        decoration: BoxDecoration(
+          color: dark ? IlDarkColor.pane : IlColor.pane,
+          borderRadius: const BorderRadius.all(Radius.circular(IlSize.cardRadius)),
+          boxShadow: dark ? IlShadow.cardDark : IlShadow.card,
         ),
         // 同 IlStage：卡片自己的标题也不该接到 MaterialApp 那份兜底样式上
         child: DefaultTextStyle(
@@ -248,10 +298,17 @@ class IlCard extends StatelessWidget {
                       '$seq. $title',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: IlText.title,
+                      style: IlText.title.copyWith(color: dark ? IlDarkColor.text : IlColor.text),
                     ),
                     const SizedBox(height: 6),
-                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: IlText.subtitle),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: IlText.subtitle.copyWith(
+                        color: dark ? IlDarkColor.textSubtle : IlColor.ink4,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -259,7 +316,11 @@ class IlCard extends StatelessWidget {
                 Positioned(
                   right: IlSize.gutter + 4,
                   bottom: IlSize.gutter + 4,
-                  child: IlIconButton(onTap: onEnlarge!, icon: Icons.open_in_full_rounded),
+                  child: IlIconButton(
+                    onTap: onEnlarge!,
+                    icon: Icons.open_in_full_rounded,
+                    dark: dark,
+                  ),
                 ),
             ],
           ),
@@ -271,10 +332,18 @@ class IlCard extends StatelessWidget {
 
 /// 卡片右下角的放大钮：36 圆，150ms 换底色
 class IlIconButton extends StatefulWidget {
-  const IlIconButton({super.key, required this.onTap, required this.icon});
+  const IlIconButton({
+    super.key,
+    required this.onTap,
+    required this.icon,
+    this.dark = false,
+  });
 
   final VoidCallback onTap;
   final IconData icon;
+
+  /// 暗色档：底色是"往字的方向提一档"的水洗，不是浅灰
+  final bool dark;
 
   @override
   State<IlIconButton> createState() => _IlIconButtonState();
@@ -285,6 +354,9 @@ class _IlIconButtonState extends State<IlIconButton> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = widget.dark;
+    final base = dark ? const Color(0x14ECEAE5) : const Color(0xFFF4F4F4);
+    final hot = dark ? const Color(0x1FECEAE5) : const Color(0xFFF1F1F1);
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -298,13 +370,14 @@ class _IlIconButtonState extends State<IlIconButton> {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: _hovered ? const Color(0xFFF1F1F1) : const Color(0xFFF4F4F4),
+            color: _hovered ? hot : base,
             shape: BoxShape.circle,
           ),
           child: Icon(
             widget.icon,
             size: 16,
-            color: _hovered ? IlColor.text : IlColor.text.withValues(alpha: 0.6),
+            color: (dark ? IlDarkColor.ink : IlColor.ink)
+                .withValues(alpha: _hovered ? 1 : 0.6),
           ),
         ),
       ),

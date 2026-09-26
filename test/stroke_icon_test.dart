@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -217,6 +221,71 @@ void main() {
       );
       await tester.pump();
       expect(_progress(tester), 1);
+    });
+  });
+
+  // 一枚图标是几条分离轮廓各画各的，一次 drawPath 只算一遍自己的覆盖，
+  // 半透明色在交叉处就会把 alpha 乘两遍，读起来像图标自己叠出第二层颜色
+  group('半透明上色', () {
+    testWidgets('自交叉处不叠色：交叉点和别处一样深', (tester) async {
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(devicePixelRatio: 1),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: boundary,
+                child: const ColoredBox(
+                  color: Color(0xFFFFFFFF),
+                  child: SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: Center(
+                      child: DrawIcon(
+                        StrokeIcons.close,
+                        size: 80,
+                        trigger: StrokeTrigger.none,
+                        color: Color(0x73000000),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      late int crossing;
+      late int darkest;
+      await tester.runAsync(() async {
+        final render =
+            boundary.currentContext!.findRenderObject()
+                as RenderRepaintBoundary;
+        final image = await render.toImage(pixelRatio: 1);
+        final bytes = await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        );
+        final data = bytes!.buffer.asUint8List();
+        int luminance(int x, int y) => data[(y * image.width + x) * 4];
+        crossing = luminance(60, 60); // 两笔正十字的交点
+        darkest = 255;
+        for (var y = 20; y < 100; y++) {
+          for (var x = 20; x < 100; x++) {
+            darkest = math.min(darkest, luminance(x, y));
+          }
+        }
+      });
+      // 白底上 45% 黑：单覆盖 ≈140，乘两遍是 77
+      expect(crossing, greaterThanOrEqualTo(120));
+      expect(
+        crossing - darkest,
+        lessThan(6),
+        reason: '交叉点比笔画别处深，就是 alpha 又乘了一遍',
+      );
     });
   });
 

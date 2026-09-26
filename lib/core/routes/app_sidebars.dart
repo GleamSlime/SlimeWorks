@@ -64,6 +64,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const SettingsRoute(),
     const MotionLabRoute(),
     const InteractionLabRoute(),
+    const SurfaceLabRoute(),
 
     const GameCategoriesRoute(),
     const GameStatsRoute(),

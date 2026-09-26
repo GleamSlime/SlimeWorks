@@ -317,21 +317,36 @@ class _StrokePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 半透明要整枚过一次层：一次 drawPath 里 Skia 只算一遍覆盖，可一枚图标是好几条
+    // 分离的轮廓各画各的，交叉处（close 的两笔、图片上压一道斜杠）就把 alpha 乘了
+    // 两遍，读起来像图标自己叠出第二层颜色。
+    final alpha = color.a;
+    final hoisted = alpha < 1.0;
+    final ink = hoisted ? color.withValues(alpha: 1.0) : color;
+    if (hoisted) {
+      // 层的矩形会裁掉内容，而笔画会出界：留 6 倍笔宽，够 blur 那档的外溢
+      canvas.saveLayer(
+        (Offset.zero & size).inflate(size.width * weight / 4),
+        Paint()..color = Color.fromRGBO(0, 0, 0, alpha),
+      );
+    }
     final reverse = outgoing;
     if (reverse != null && progress < 1) {
       // 旧的从尾部擦回，新的同时描出，读起来像同一支笔在换字形
-      _paintIcon(canvas, reverse, 1 - progress, size, erase: true);
+      _paintIcon(canvas, reverse, 1 - progress, size, ink, erase: true);
     } else if (reverse != null) {
       done();
     }
-    _paintIcon(canvas, geometry, progress, size);
+    _paintIcon(canvas, geometry, progress, size, ink);
+    if (hoisted) canvas.restore();
   }
 
   void _paintIcon(
     Canvas canvas,
     StrokeGeometry geometry,
     double progress,
-    Size size, {
+    Size size,
+    Color color, {
     bool erase = false,
   }) {
     // 缩放按各自几何的坐标系走：24 的 Tabler 和 40 的品牌标记能在同一张画布上
@@ -380,7 +395,7 @@ class _StrokePainter extends CustomPainter {
     }
 
     if (!erase && effect == StrokeEffect.flow && progress >= 1) {
-      _paintFlow(canvas, geometry, stroke);
+      _paintFlow(canvas, geometry, stroke, color);
     }
     canvas.restore();
   }
@@ -401,7 +416,7 @@ class _StrokePainter extends CustomPainter {
   }
 
   /// 沿笔画移动的高光窗：跨笔画时窗口首尾相接，绕一圈连续走
-  void _paintFlow(Canvas canvas, StrokeGeometry geometry, Paint stroke) {
+  void _paintFlow(Canvas canvas, StrokeGeometry geometry, Paint stroke, Color color) {
     final total = geometry.totalLength;
     if (total <= 0) return;
     final window = total * 0.22;

@@ -189,7 +189,7 @@ class _CollectionPictureScreenState
   void _onScroll() {
     if (_scrollController.hasClients) {
       viewModel.savedScrollOffset.value = _scrollController.offset;
-      _logger.info('[Scroll] _onScroll: saved offset=${_scrollController.offset}');
+      // _logger.info('[Scroll] _onScroll: saved offset=${_scrollController.offset}');
     }
   }
 
@@ -302,7 +302,8 @@ class _CollectionPictureScreenState
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DrawIcon(StrokeIcons.close,
+                  DrawIcon(
+                    StrokeIcons.close,
                     size: AppTheme.metrics.iconSize18,
                     color: scheme.onPrimaryContainer,
                   ),
@@ -433,9 +434,7 @@ class _CollectionPictureScreenState
                 // 移动端：有内部导航层级时，在左边缘叠加一个右滑返回手势区域。
                 // 补偿 PopScope 在 iOS CupertinoPage 中只拦截 Android 返回键的不足。
                 if (!hasInternalBackLevel) {
-                  return clearBtn == null
-                      ? body
-                      : Stack(children: [body, clearBtn]);
+                  return clearBtn == null ? body : Stack(children: [body, clearBtn]);
                 }
                 return Stack(
                   children: [
@@ -495,7 +494,8 @@ class _CollectionPictureScreenState
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  DrawIcon(StrokeIcons.folderOpen,
+                                  DrawIcon(
+                                    StrokeIcons.folderOpen,
                                     size: AppTheme.metrics.iconSize64,
                                     color: Theme.of(context).colorScheme.primary,
                                   ),
@@ -581,7 +581,8 @@ class _CollectionPictureScreenState
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DrawIcon(StrokeIcons.gridView,
+                    DrawIcon(
+                      StrokeIcons.gridView,
                       size: scaleW(16),
                       color: Theme.of(context).hintColor,
                     ),
@@ -722,8 +723,7 @@ class _CollectionPictureScreenState
                             (o) => GlassMenuItem<CollectionSortOrder>(
                               value: o,
                               label: o.label,
-                              selected:
-                                  viewModel.collectionSortOrder.value == o,
+                              selected: viewModel.collectionSortOrder.value == o,
                             ),
                           )
                           .toList(),
@@ -1667,7 +1667,8 @@ class _CollectionPictureScreenState
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox(width: AppTheme.metrics.kSpace16 * entry.$2),
-                          DrawIcon(StrokeIcons.folder,
+                          DrawIcon(
+                            StrokeIcons.folder,
                             size: scaleW(16),
                             color: Theme.of(context).hintColor,
                           ),
@@ -1716,37 +1717,36 @@ class _CollectionPictureScreenState
                 children: [
                   const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。'),
                   const SizedBox(height: 12),
-                  const Text('可选清除磁盘上的缩略图缓存：',
-                      style: TextStyle(fontSize: 13)),
+                  const Text('可选清除磁盘上的缩略图缓存：', style: TextStyle(fontSize: 13)),
                   CheckboxListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     value: clearAppCache,
-                    onChanged: (v) =>
-                        setState(() => clearAppCache = v ?? true),
-                    title: const Text('清除应用缓存目录缩略图',
-                        style: TextStyle(fontSize: 13)),
-                    subtitle: const Text('library/media/thumbnails/',
-                        style: TextStyle(fontSize: 11)),
+                    onChanged: (v) => setState(() => clearAppCache = v ?? true),
+                    title: const Text('清除应用缓存目录缩略图', style: TextStyle(fontSize: 13)),
+                    subtitle: const Text(
+                      'library/media/thumbnails/',
+                      style: TextStyle(fontSize: 11),
+                    ),
                   ),
                   CheckboxListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     value: clearResourceCache,
-                    onChanged: (v) =>
-                        setState(() => clearResourceCache = v ?? true),
-                    title: const Text('清除各资源目录 .SlimeWorks/tmp 缩略图',
-                        style: TextStyle(fontSize: 13)),
+                    onChanged: (v) => setState(() => clearResourceCache = v ?? true),
+                    title: const Text(
+                      '清除各资源目录 .SlimeWorks/tmp 缩略图',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消')),
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error),
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
                   onPressed: () async {
                     Navigator.of(context).pop();
                     await viewModel.clearLocalLibrary(

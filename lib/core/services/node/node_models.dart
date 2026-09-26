@@ -74,3 +74,26 @@ class NodeEndpoint {
     );
   }
 }
+
+/// 单个远程节点的媒体元数据快照（文件夹 / 集合 / 智能文件夹的原始 payload）。
+///
+/// 首屏取数由 [NodeSettingsService.fetchNodeMediaMetadata] 一次并发拉齐三路，
+/// 命中启动预热时可直接复用，省掉「进页面才开始问节点」的那段空等。
+class NodeMediaMetadata {
+  const NodeMediaMetadata({
+    required this.folders,
+    required this.collections,
+    required this.smartFolders,
+    required this.takenAt,
+    this.complete = true,
+  });
+
+  final List<Map<String, dynamic>> folders;
+  final List<Map<String, dynamic>> collections;
+  final List<Map<String, dynamic>> smartFolders;
+  final DateTime takenAt;
+
+  /// 三路是否全部取到。为 false 时列表为空可能只是「那一路失败了」，
+  /// 不能当成「该节点没有这类数据」渲染给用户。
+  final bool complete;
+}

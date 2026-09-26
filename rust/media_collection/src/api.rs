@@ -1527,6 +1527,8 @@ fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
     LAST_MEDIA_ITEMS_ACCESS_SECS.store(now_secs, Ordering::Relaxed);
 
     if items.is_none() {
+        // 【临时埋点】冷加载整张 media_items 表：远程节点首次取数时的主要耗时来源
+        let load_started = std::time::Instant::now();
         let mut data = Vec::new();
         if let Ok(records) = db_module::db_list_all(item_table_name()) {
             for record in records {
@@ -1536,8 +1538,9 @@ fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
             }
         }
         sw_info!(
-            "[media_cache] 从数据库加载媒体条目到内存，共 {} 条",
-            data.len()
+            "[media_cache] 从数据库加载媒体条目到内存，共 {} 条(+{:.3}s)",
+            data.len(),
+            load_started.elapsed().as_secs_f64()
         );
         *items = Some(data);
     }

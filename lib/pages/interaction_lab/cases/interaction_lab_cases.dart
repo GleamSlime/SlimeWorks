@@ -10,13 +10,18 @@ import 'case_06_pull_refresh.dart';
 import 'case_07_assignees.dart';
 import 'case_08_create_menu.dart';
 import 'case_09_one_time_code.dart';
+import 'case_10_roster.dart';
+import 'case_11_command_bar.dart';
+import 'case_12_now_playing.dart';
+import 'case_13_action_node.dart';
 
 /// 分类：只用于这张页面上的筛选，不参与任何全局配置
 enum IlCat {
   press('按压'),
   drag('拖拽'),
   select('选择'),
-  input('输入');
+  input('输入'),
+  hover('悬停');
 
   const IlCat(this.label);
 
@@ -34,6 +39,7 @@ class IlCase {
     required this.build,
     this.stageW = IlSize.stageW,
     this.stageH = IlSize.stageH,
+    this.dark = false,
   });
 
   final int seq;
@@ -47,9 +53,12 @@ class IlCase {
   /// 这一格的舞台尺寸，默认全页统一档；量出来更高的格子自己报
   final double stageW;
   final double stageH;
+
+  /// 参考稿这一条本身就是暗色档（外壳跟着翻，见 [IlStage.dark]）
+  final bool dark;
 }
 
-/// 12 格，顺序和用户给的清单一致
+/// 13 格，顺序和用户给的清单一致
 final List<IlCase> kIlCases = <IlCase>[
   IlCase(
     seq: 1,
@@ -119,5 +128,38 @@ final List<IlCase> kIlCases = <IlCase>[
     subtitle: '点一下再敲四位：先看一遍呼吸波，对了四格拉丝融成胶囊，错了抖散（数字只掉不淡）',
     cat: IlCat.input,
     build: Case09OneTimeCode.new,
+  ),
+  IlCase(
+    seq: 10,
+    title: 'Selection list',
+    subtitle: '勾是描边画进去的；底部 54px 被裁住，勾第一个就长出深色 CTA',
+    cat: IlCat.select,
+    // 名单占位恒 224（裁切不改布局），舞台得比默认的 232 再高一点才不顶到边
+    stageH: 248,
+    build: Case10Roster.new,
+  ),
+  IlCase(
+    seq: 11,
+    title: 'Command bar',
+    subtitle: '点一下钮就从条里走出来：缝拉到 5px 才断开，敲字翻深底、提交又翻回白底',
+    cat: IlCat.input,
+    build: Case11CommandBar.new,
+  ),
+  IlCase(
+    seq: 12,
+    title: 'Now playing',
+    subtitle: '点整条长开：一根 quart-out 同时管盒高/封面/圆心，时间和喜欢只走最后 40%',
+    cat: IlCat.press,
+    build: Case12NowPlaying.new,
+  ),
+  IlCase(
+    seq: 13,
+    title: 'Action node',
+    subtitle: '指针一进，四个钮沿"绕着圆角"那条弧从卡片底下甩出来：位移能冲到 1.4 倍，缩放只到 1',
+    cat: IlCat.hover,
+    dark: true,
+    // 卡片自己撑出来的高 + 上下各 52 的扇出留白
+    stageH: 328,
+    build: Case13ActionNode.new,
   ),
 ];

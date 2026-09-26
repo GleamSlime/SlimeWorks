@@ -15,6 +15,7 @@ import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/natural_compare.dart';
+import 'package:slime_works/core/utils/timing_trace.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/components/dialogs/node_directory_picker.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
@@ -1055,9 +1056,11 @@ class MediaLibraryViewModel extends BaseViewModel {
     final rawId = getRemoteRawCollectionId(collectionId);
     if (nodeId == null || rawId == null) return;
     _remoteItemPathsLoading.add(collectionId);
+    final trace = TimingTrace('深度搜索预热远程条目', scope: collectionId);
     nodeSettingsService
         .fetchNodeMediaCollectionItems(nodeId: nodeId, collectionId: rawId)
         .then((payloads) {
+          trace.end(note: '条目=${payloads.length}');
           _remoteCollectionItemPaths[collectionId] = payloads
               .map((p) => (p['file_path'] ?? '').toString())
               .toList();
@@ -1720,10 +1723,15 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   Future<void> _refreshAllInternal() async {
     // Phase 1: 立即加载本地数据，使 UI 快速可用
+    final trace = TimingTrace('媒体库 refreshAll');
     await _loadSmartFolders();
+    trace.lap('智能文件夹');
     await loadFolders();
+    trace.lap('本地文件夹');
     await loadCollections();
+    trace.lap('本地集合');
     await loadCurrentCollectionItems();
+    trace.end(note: '本地数据完成，转入远程');
     // Phase 2: 后台异步加载远程节点数据，不阻塞 UI
     _refreshRemoteBackground();
   }
@@ -1731,11 +1739,13 @@ class MediaLibraryViewModel extends BaseViewModel {
   void _refreshRemoteBackground() {
     if (isLoadingRemote.value) return; // 已有后台任务在跑
     isLoadingRemote.value = true;
+    final trace = TimingTrace('远程媒体库后台刷新');
     refreshRemoteLibrary()
         .catchError((Object e) {
           _logger.error('[媒体库] 远程刷新失败: $e');
         })
         .whenComplete(() {
+          trace.end();
           isLoadingRemote.value = false;
         });
   }
@@ -1920,6 +1930,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         if (nodeId == null || rawId == null) {
           throw StateError('远程媒体集合映射不存在');
         }
+        final itemsTrace = TimingTrace('拉取远程集合条目', scope: collectionId);
         final payloads = await nodeSettingsService
             .fetchNodeMediaCollectionItems(
               nodeId: nodeId,
@@ -1928,6 +1939,7 @@ class MediaLibraryViewModel extends BaseViewModel {
                 if (total > 0) itemLoadProgress.value = count / total;
               },
             );
+        itemsTrace.end(note: '条目=${payloads.length}');
         currentItems.assignAll(
           payloads.map((payload) => _buildRemoteItem(payload, collectionId)),
         );

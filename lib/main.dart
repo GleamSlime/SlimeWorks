@@ -109,6 +109,12 @@ Future<void> main() async {
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
   initializeLogger();
 
+  // 应用初始化完毕：确认远程节点连通性并预热远程媒体库元数据。
+  // 放在这里而不是 NodeSettingsService.init()：那一步在 runApp 之前，
+  // 提前跑一次就成了唯一一次——节点当时没起来就只能等用户进媒体库才恢复。
+  // 排在最前：预热只依赖节点配置，不该被 ffmpeg/Sentry 这些无关的启动步骤排队拖慢。
+  unawaited(getIt<NodeSettingsService>().warmUpAfterLaunch());
+
   // 异步解析 ffmpeg/ffprobe 路径：先探测系统 PATH（命中则跳过下载），
   // 未命中则触发内置模块下载。完成后将解析结果注册到 media_collection。
   if (Platform.isWindows || Platform.isMacOS) {

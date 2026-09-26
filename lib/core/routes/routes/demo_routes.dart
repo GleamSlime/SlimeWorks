@@ -90,3 +90,27 @@ class InteractionLabRoute extends AppRouteData with $InteractionLabRoute {
     return AppRoutes.buildPage(context, state, const InteractionLabScreen());
   }
 }
+
+@TypedGoRoute<SurfaceLabRoute>(path: '/surface-lab')
+class SurfaceLabRoute extends AppRouteData with $SurfaceLabRoute {
+  const SurfaceLabRoute();
+
+  @override
+  String get title => '表面实验室';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.playCircleOutline;
+
+  @override
+  String? get sidebarGroupId => 'lab';
+
+  static const Permission routePermission = Permission.accessDemo;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const SurfaceLabScreen());
+  }
+}
