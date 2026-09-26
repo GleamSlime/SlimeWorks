@@ -20,6 +20,7 @@ import 'package:slime_works/pages/collection/picture/collection_picture_screen.d
 import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
 import 'package:slime_works/pages/demo/viewmodel_demo_page.dart';
 import 'package:slime_works/pages/motion_lab/motion_lab_screen.dart';
+import 'package:slime_works/pages/interaction_lab/interaction_lab_screen.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -129,6 +130,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<GooeyDemoRoute>(path: '/gooey-demo'),
     TypedGoRoute<ViewModelDemoRoute>(path: '/viewmodel-demo'),
     TypedGoRoute<MotionLabRoute>(path: '/motion-lab'),
+    TypedGoRoute<InteractionLabRoute>(path: '/interaction-lab'),
     TypedGoRoute<LanChatRoute>(path: '/lan-chat'),
     TypedGoRoute<MangaComicDetailRoute>(path: '/manga/comic/:comicId'),
     TypedGoRoute<MangaSearchRoute>(path: '/manga/search'),

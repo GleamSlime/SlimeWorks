@@ -109,6 +109,8 @@ class _Case29ImageOpenTiltState extends State<Case29ImageOpenTilt> with SingleTi
             }),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
+              // 触屏用点按落定倾角，鼠标侧仍由 hover 连续跟随
+              onTapDown: (d) => _track(d.localPosition),
               onTap: _toggle,
               child: SizedBox(
                 width: _tileW,

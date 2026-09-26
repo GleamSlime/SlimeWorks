@@ -21,14 +21,17 @@ class StrokePath {
 /// 未引用的图标不进产物——icon font 和 assets 目录都做不到这点。
 @immutable
 class StrokeIcon {
-  const StrokeIcon({required this.name, required this.paths});
+  const StrokeIcon({required this.name, required this.paths, this.viewBox = 24});
 
   /// Tabler 原始图标名，只用于调试与断言
   final String name;
   final List<StrokePath> paths;
 
-  /// 视图框边长：描边宽度与动画节奏都在这个空间里定义，绘制时整体缩放
-  static const double viewBox = 24;
+  /// 视图框边长：描边宽度与动画节奏都在这个空间里定义，绘制时整体缩放。
+  ///
+  /// Tabler 全是 24；品牌标记那种自绘资产是 40，不放开的话同一支笔在两种
+  /// 坐标系里粗细差 1.7 倍。
+  final double viewBox;
 
   @override
   String toString() => 'StrokeIcon($name)';
@@ -40,7 +43,7 @@ class StrokeIcon {
 /// 度量对象与它所属的 [ui.Path] 同生命周期，所以三者一起留在缓存里。
 @immutable
 class StrokeGeometry {
-  StrokeGeometry(this.paths, this.metrics, this.lengths, this.solid)
+  StrokeGeometry(this.paths, this.metrics, this.lengths, this.solid, this.viewBox)
       : totalLength = lengths.fold<double>(0.0, (a, b) => a + b);
 
   final List<ui.Path> paths;
@@ -52,6 +55,9 @@ class StrokeGeometry {
   /// 该笔画是实心块还是可描的中心线
   final List<bool> solid;
   final double totalLength;
+
+  /// 继承自 [StrokeIcon.viewBox]：擦回旧几何时要按**它自己**的坐标系缩放
+  final double viewBox;
 }
 
 final Map<String, StrokeGeometry> _geometryCache = {};
@@ -78,7 +84,7 @@ StrokeGeometry geometryOf(StrokeIcon icon) {
   }
 
   return _geometryCache[icon.name] =
-      StrokeGeometry(paths, metrics, lengths, solid);
+      StrokeGeometry(paths, metrics, lengths, solid, icon.viewBox);
 }
 
 /// 把 0~1 的总进度按弧长**顺序**摊到各条笔画上，返回每条各自的 0~1。

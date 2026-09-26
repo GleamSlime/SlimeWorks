@@ -471,6 +471,9 @@ class _DraggableSource extends StatelessWidget {
       onEnter: (_) => onHoverIn(),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        // 触屏里竖着划会被页面滚走，手动拖拽在手机上使不上劲；
+        // 给指尖留一条入口：点一下同样跑完整段投递演示
+        onTap: onHoverIn,
         onPanStart: onPanStart,
         onPanUpdate: onPanUpdate,
         onPanEnd: onPanEnd,

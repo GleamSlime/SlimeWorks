@@ -317,31 +317,36 @@ class _StrokePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scale = size.width / StrokeIcon.viewBox;
-    canvas.scale(scale);
-
     final reverse = outgoing;
     if (reverse != null && progress < 1) {
       // 旧的从尾部擦回，新的同时描出，读起来像同一支笔在换字形
-      _paintIcon(canvas, reverse, 1 - progress, erase: true);
+      _paintIcon(canvas, reverse, 1 - progress, size, erase: true);
     } else if (reverse != null) {
       done();
     }
-    _paintIcon(canvas, geometry, progress);
+    _paintIcon(canvas, geometry, progress, size);
   }
 
   void _paintIcon(
     Canvas canvas,
     StrokeGeometry geometry,
-    double progress, {
+    double progress,
+    Size size, {
     bool erase = false,
   }) {
+    // 缩放按各自几何的坐标系走：24 的 Tabler 和 40 的品牌标记能在同一张画布上
+    // 叠着擦/描，换图标过渡才不会跳一下
+    canvas.save();
+    canvas.scale(size.width / geometry.viewBox);
+    // weight 的口径固定在 24 空间，所以换到别的坐标系要跟着放大，
+    // 否则同一支笔在 40 空间里会细 1.7 倍
+    final strokeWidth = weight * geometry.viewBox / 24;
     final locals = strokeProgressFor(geometry, progress);
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = weight
+      ..strokeWidth = strokeWidth
       // flow 模式下本体压暗成"轨道"，高光段才走得出来；同亮度画是看不出流动的
       ..color = !erase && effect == StrokeEffect.flow
           ? color.withValues(alpha: color.a * 0.42)
@@ -377,6 +382,7 @@ class _StrokePainter extends CustomPainter {
     if (!erase && effect == StrokeEffect.flow && progress >= 1) {
       _paintFlow(canvas, geometry, stroke);
     }
+    canvas.restore();
   }
 
   ui.Path _trimmed(
@@ -404,7 +410,8 @@ class _StrokePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = weight
+      // 跟着本体笔宽走：坐标系已经不是 24 了，再取 weight 会细一档
+      ..strokeWidth = stroke.strokeWidth
       // 高光段比本体重一点，才读得出"在流"
       ..color = color.withValues(alpha: color.a.clamp(0.35, 1.0));
     var walked = 0.0;

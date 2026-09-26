@@ -96,28 +96,35 @@ class _Case04TextStatesSwapState extends State<Case04TextStatesSwap>
 
   @override
   Widget build(BuildContext context) {
-    // 收：从 0 走到满值；进：从满值退回 0；停：直接 0（原位）
-    // 位移/模糊/透明度共用同一条 ease-in-out，所以在这里统一换算一次
-    final p = switch (_phase) {
-      _Phase.exit => _ease.transform(_c.value),
-      _Phase.enter => 1 - _ease.transform(_c.value),
-      _Phase.rest => 0.0,
-    };
-    // 位移方向是这一段唯一的区别：收向上、进从下来
-    final offset = Offset(0, _phase == _Phase.enter ? _dy * p : -_dy * p);
     return LabStage(
       child: Stack(
         children: [
           Center(
-            child: Transform.translate(
-              offset: offset,
-              child: Opacity(
-                opacity: (1 - p).clamp(0.0, 1.0),
-                child: LabBlur(
-                  sigma: _blur * p,
-                  child: Text(_messages[_index], maxLines: 1, style: _style),
-                ),
-              ),
+            // 进度只在这条 builder 里读：不包这一层，build 只在 setState 那一次
+            // 跑到，读到的永远是起点的 0——整段动效看着像"没有"
+            child: AnimatedBuilder(
+              animation: _c,
+              builder: (context, _) {
+                // 收：从 0 走到满值；进：从满值退回 0；停：直接 0（原位）
+                // 位移/模糊/透明度共用同一条 ease-in-out，所以在这里统一换算一次
+                final p = switch (_phase) {
+                  _Phase.exit => _ease.transform(_c.value),
+                  _Phase.enter => 1 - _ease.transform(_c.value),
+                  _Phase.rest => 0.0,
+                };
+                // 位移方向是这一段唯一的区别：收向上、进从下来
+                final offset = Offset(0, _phase == _Phase.enter ? _dy * p : -_dy * p);
+                return Transform.translate(
+                  offset: offset,
+                  child: Opacity(
+                    opacity: (1 - p).clamp(0.0, 1.0),
+                    child: LabBlur(
+                      sigma: _blur * p,
+                      child: Text(_messages[_index], maxLines: 1, style: _style),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           LabStageFooter(

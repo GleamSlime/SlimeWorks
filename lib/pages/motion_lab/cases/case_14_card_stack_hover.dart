@@ -72,6 +72,9 @@ class _Case14CardStackHoverState extends State<Case14CardStackHover> {
   bool _stackHovered = false;
   int? _cardHovered;
 
+  /// 鼠标指针是否落在整摞的 120 框内：只有它才有权"离开整摞"
+  bool _pointerInStack = false;
+
   @override
   Widget build(BuildContext context) {
     // 绘制序 = z 序；被单指的那张抬到最顶（CSS z-index:30）
@@ -84,8 +87,12 @@ class _Case14CardStackHoverState extends State<Case14CardStackHover> {
     return LabStage(
       child: Center(
         child: MouseRegion(
-          onEnter: (_) => setState(() => _stackHovered = true),
+          onEnter: (_) => setState(() {
+            _pointerInStack = true;
+            _stackHovered = true;
+          }),
           onExit: (_) => setState(() {
+            _pointerInStack = false;
             _stackHovered = false;
             _cardHovered = null;
           }),
@@ -108,8 +115,11 @@ class _Case14CardStackHoverState extends State<Case14CardStackHover> {
                         _stackHovered = true;
                         _cardHovered = i;
                       }),
+                      // 触屏没有"移出整摞"这一步：再点同一颗就把扇形也收回
                       onCardExit: () => setState(() {
-                        if (_cardHovered == i) _cardHovered = null;
+                        if (_cardHovered != i) return;
+                        _cardHovered = null;
+                        if (!_pointerInStack) _stackHovered = false;
                       }),
                     ),
                   ),
@@ -160,10 +170,10 @@ class _StackCard extends StatelessWidget {
               scale: 1 + (_hoverScale - 1) * s,
               child: Opacity(
                 opacity: spec.opacity + (1 - spec.opacity) * t,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  onEnter: (_) => onCardEnter(),
-                  onExit: (_) => onCardExit(),
+                child: LabHoverRegion(
+                  group: 'c14',
+                  onEnter: onCardEnter,
+                  onExit: onCardExit,
                   child: const _CardFace(),
                 ),
               ),

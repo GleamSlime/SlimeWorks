@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/buttons/stroke_icon_button.dart';
@@ -23,12 +22,17 @@ import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
-import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/widgets/tree_connector.dart';
 
 /// 子项行高：`TreeConnector` 要按它算每枝的中心线，必须是确定值
 double get _kChildRowHeight => AppTheme.metrics.kSpace40;
+
+/// 侧栏行图标的描边时长
+///
+/// 缺省的 `AppMotion.slow` 压在 22 设计像素的图标上一闪而过，笔顺根本走不完一遍，
+/// hover 那一下读起来像抖了一下而不是"这行被指到了"。提到 emphasis 档才看得清。
+const Duration _kRowStrokeDuration = AppMotion.emphasis;
 
 /// 侧边栏菜单项
 class SidebarMenuItem {
@@ -895,6 +899,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                     item.route.sidebarIcon!,
                                     size: AppTheme.metrics.fontSize18,
                                     color: isSelected ? s.accent : s.textPrimary,
+                                    duration: _kRowStrokeDuration,
                                   ),
                                 )
                               : Stack(
@@ -919,6 +924,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                         // 图标跟着字体长，比例不是 1 就把这一行顶破
                                         size: scaleW(22),
                                         color: isSelected ? s.accent : s.textTertiary,
+                                        duration: _kRowStrokeDuration,
                                       ),
                                     ),
                                     if (item.route.sidebarBadgeWidget(context) != null)
@@ -1116,7 +1122,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                   item.route.sidebarIcon!,
                   size: scaleW(22),
                   color: isSelected ? s.accent : null,
-                  trigger: StrokeTrigger.press,
+                  // auto：悬停进这一格和按下都描一次，事件源是包住整行的 StrokeZone
+                  trigger: StrokeTrigger.auto,
+                  duration: _kRowStrokeDuration,
                 ),
               ),
             ),
@@ -1131,6 +1139,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
 ///
 /// 展开态内部不重排：图标是同一个元素，字标只是宽度收放。
 /// 点它等于回概览——侧栏是导航，产品名是它的根。
+///
+/// 标记不吃 SvgPicture：几何由生成器直接从那张 svg 资产裁成 [StrokeIcons.brandMark]，
+/// 所以栏展开那一下能一笔一笔描出来，而不是整枚换透明度淡入。
 class _SidebarLogo extends StatelessWidget {
   const _SidebarLogo();
 
@@ -1151,12 +1162,20 @@ class _SidebarLogo extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SvgPicture.asset(
-              Assets.image.svg.topBarLogo,
-              // 宽度族：图标条只有 75 设计像素，跟着字号长的图标会把它顶穿
-              width: scaleW(22),
-              height: scaleW(22),
-              colorFilter: ColorFilter.mode(s.textPrimary, BlendMode.srcIn),
+            // 宽度族：图标条只有 75 设计像素，跟着字号长的图标会把它顶穿。
+            // 笔宽 0.9（24 空间口径）：原资产是 40 空间里 0.5~1 的发丝线，换算过来
+            // 只有 0.3~0.6，压到 22 像素上会被抗锯齿冲淡；但再粗过 1 就把四个
+            // 空心节点填成实心饼，等于回到原来那团黑
+            DrawIcon(
+              StrokeIcons.brandMark,
+              size: scaleW(22),
+              weight: 0.9,
+              color: s.textPrimary,
+              // 45 条笔画按弧长顺序描，缺省的 AppMotion.slow 会糊成一团闪，
+              // 按入场档给足时间。栏展开时它是新挂载的，appear 正好描这一下。
+              trigger: StrokeTrigger.appear,
+              duration: AppMotion.entrance,
+              semanticLabel: AppInfoService.appName,
             ),
             AnimatedSize(
               duration: SidebarController.kWidthAnimation,
@@ -1225,49 +1244,52 @@ class _SidebarChildItemState extends State<_SidebarChildItem> {
         _hovered = false;
         _pressed = false;
       }),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          height: _kChildRowHeight,
-          padding: EdgeInsets.symmetric(horizontal: m.kSpace6),
-          decoration: BoxDecoration(
-            color: _pressed
-                ? s.surfaceActive
-                : _hovered
-                ? s.surfaceHover
-                : Colors.transparent,
-            borderRadius: m.radiusControl,
-          ),
-          child: Row(
-            spacing: m.kSpace8,
-            children: [
-              if (icon != null)
-                DrawIcon(
-                  icon,
-                  // 宽度族：这一行不吃用户字号比例，理由和图标条一样
-                  size: scaleW(16),
-                  color: widget.selected ? s.accent : s.textSecondary,
-                  trigger: StrokeTrigger.press,
-                ),
-              Expanded(
-                child: Text(
-                  widget.item.route.sidebarLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: m.fontSize13,
-                    fontWeight: widget.selected ? FontWeight.w500 : FontWeight.w400,
-                    color: widget.selected ? s.textPrimary : s.textSecondary,
+      child: StrokeZone(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          child: AnimatedContainer(
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
+            height: _kChildRowHeight,
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace6),
+            decoration: BoxDecoration(
+              color: _pressed
+                  ? s.surfaceActive
+                  : _hovered
+                  ? s.surfaceHover
+                  : Colors.transparent,
+              borderRadius: m.radiusControl,
+            ),
+            child: Row(
+              spacing: m.kSpace8,
+              children: [
+                if (icon != null)
+                  DrawIcon(
+                    icon,
+                    // 宽度族：这一行不吃用户字号比例，理由和图标条一样
+                    size: scaleW(16),
+                    color: widget.selected ? s.accent : s.textSecondary,
+                    trigger: StrokeTrigger.auto,
+                    duration: _kRowStrokeDuration,
+                  ),
+                Expanded(
+                  child: Text(
+                    widget.item.route.sidebarLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: m.fontSize13,
+                      fontWeight: widget.selected ? FontWeight.w500 : FontWeight.w400,
+                      color: widget.selected ? s.textPrimary : s.textSecondary,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1304,47 +1326,50 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: AppMotion.base,
-          curve: AppMotion.standard,
-          height: m.kSpace44,
-          padding: EdgeInsets.symmetric(horizontal: m.kSpace4),
-          decoration: BoxDecoration(
-            // 选中项不再染一层品牌色，而是抬起成一张白卡：侧栏底就是画布色，
-            // 白卡 + 1px 描边 + 一层极轻投影本身就是它的选中态。
-            color: widget.isSelected
-                ? s.surface
-                : _hovered
-                ? s.surfaceHover
-                : Colors.transparent,
-            borderRadius: m.radiusControl,
-            // 只有选中项描边：每行都套一个框的话，一列看下去全是格子，
-            // 抬升关系反而读不出来；悬停有水洗，未选中不需要常驻描边。
-            border: widget.isSelected
-                ? Border.all(color: s.accentContainerBorder)
-                : null,
-            boxShadow: [
-              if (widget.isSelected) ...s.elevation(Elevation.raised),
-            ],
-          ),
-          child: Row(
-            spacing: m.kSpace8,
-            children: [
-              if (widget.isExpanded)
-                AnimatedContainer(
-                  duration: AppMotion.base,
-                  curve: AppMotion.standard,
-                  width: scaleW(3),
-                  height: widget.isSelected ? m.kSpace20 : 0,
-                  decoration: BoxDecoration(
-                    color: widget.isSelected ? s.accent : Colors.transparent,
-                    borderRadius: BorderRadius.circular(scaleW(2)),
+      // 悬停到哪一行就描那一行的图标：事件源套在整行上，点在文字上也算这一行
+      child: StrokeZone(
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: AppMotion.base,
+            curve: AppMotion.standard,
+            height: m.kSpace44,
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace4),
+            decoration: BoxDecoration(
+              // 选中项不再染一层品牌色，而是抬起成一张白卡：侧栏底就是画布色，
+              // 白卡 + 1px 描边 + 一层极轻投影本身就是它的选中态。
+              color: widget.isSelected
+                  ? s.surface
+                  : _hovered
+                  ? s.surfaceHover
+                  : Colors.transparent,
+              borderRadius: m.radiusControl,
+              // 只有选中项描边：每行都套一个框的话，一列看下去全是格子，
+              // 抬升关系反而读不出来；悬停有水洗，未选中不需要常驻描边。
+              border: widget.isSelected
+                  ? Border.all(color: s.accentContainerBorder)
+                  : null,
+              boxShadow: [
+                if (widget.isSelected) ...s.elevation(Elevation.raised),
+              ],
+            ),
+            child: Row(
+              spacing: m.kSpace8,
+              children: [
+                if (widget.isExpanded)
+                  AnimatedContainer(
+                    duration: AppMotion.base,
+                    curve: AppMotion.standard,
+                    width: scaleW(3),
+                    height: widget.isSelected ? m.kSpace20 : 0,
+                    decoration: BoxDecoration(
+                      color: widget.isSelected ? s.accent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(scaleW(2)),
+                    ),
                   ),
-                ),
-              Expanded(child: widget.child),
-            ],
+                Expanded(child: widget.child),
+              ],
+            ),
           ),
         ),
       ),

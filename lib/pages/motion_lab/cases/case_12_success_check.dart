@@ -59,6 +59,10 @@ class _Case12SuccessCheckState extends State<Case12SuccessCheck> with TickerProv
   @override
   void initState() {
     super.initState();
+    // build 里直接读两条钟的 value，所以必须挂重绘监听：不挂就只在 setState
+    // 那一次取到起点值，整段入场退场全部瞬移（看着像没有动效）
+    _in.addListener(_repaint);
+    _out.addListener(_repaint);
     // 用状态回调接力而不是 await forward()：中途被 dispose 时 future 会抛取消错
     _in.addStatusListener((status) {
       if (status == AnimationStatus.completed && _phase == _Phase.appearing) {
@@ -71,6 +75,10 @@ class _Case12SuccessCheckState extends State<Case12SuccessCheck> with TickerProv
         setState(() => _phase = _Phase.hidden);
       }
     });
+  }
+
+  void _repaint() {
+    if (mounted) setState(() {});
   }
 
   @override

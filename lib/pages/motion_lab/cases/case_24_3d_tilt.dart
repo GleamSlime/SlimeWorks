@@ -115,12 +115,12 @@ class _Case24Tilt3DState extends State<Case24Tilt3D> {
           Center(
             // 悬停区域是这块没变形的 192×106 外框：
             // 让倾斜后的卡面自己去接指针，卡角一抬指针就"掉出去"了
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              onEnter: (e) => _track(e.localPosition),
-              onHover: (e) => _track(e.localPosition),
+            child: LabHoverRegion(
+              // 触屏按点按落点定倾角，再点一下回正
+              group: 'c24',
+              onHoverAt: _track,
               // 离开时只收倾角，不抹指针位置：光斑留在最后待过的地方淡出去
-              onExit: (_) => setState(() => _hovering = false),
+              onExit: () => setState(() => _hovering = false),
               child: SizedBox(
                 width: _cardW,
                 height: _cardH,

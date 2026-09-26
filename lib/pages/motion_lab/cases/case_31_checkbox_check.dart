@@ -81,9 +81,14 @@ class _Case31CheckboxCheckState extends State<Case31CheckboxCheck>
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: CustomPaint(
-                    size: const Size.square(_glyph),
-                    painter: _CheckPainter(progress: _draw.value),
+                  // 必须重建 painter：光挂 CustomPaint.repaint 只会拿旧实例
+                  // 重画一遍，进度还是挂载时那个 0
+                  child: ListenableBuilder(
+                    listenable: _draw,
+                    builder: (context, _) => CustomPaint(
+                      size: const Size.square(_glyph),
+                      painter: _CheckPainter(progress: _draw.value),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 9),

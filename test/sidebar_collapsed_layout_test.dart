@@ -1,9 +1,13 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -148,12 +152,114 @@ void main() {
     );
     await unmountPage(tester);
   });
+
+  // 悬停到哪一行，就描那一行的图标
+  //
+  // 事件源是包住整行的 StrokeZone：指针落在文字上也算碰到这一行，而一次进入只播
+  // 一次（onEnter 而非 onHover）。整栏齐描会读成"卡了一下"，顶部品牌标记也不跟着动。
+  testWidgets('悬停到哪一行就描那一行的图标', (tester) async {
+    await _mountSidebar(tester, fontScale: 1.0, expanded: true);
+    await _runEntrance(tester);
+    expect(
+      _iconProgress(tester, StrokeIcons.assetMenuDistributed),
+      1,
+      reason: '入场那一下应先画完',
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(1300, 800));
+    addTearDown(gesture.removePointer);
+
+    Offset rowCenter(String label) => tester.getCenter(find.text(label));
+
+    await gesture.moveTo(rowCenter('概览'));
+    // onEnter 在这一帧的 hitTest 里派发、下一帧才建出来，少一泵就读到旧值
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(
+      _iconProgress(tester, StrokeIcons.assetMenuDistributed),
+      lessThan(1),
+      reason: '没回到"未画完"就是没重播',
+    );
+    expect(
+      _iconProgress(tester, StrokeIcons.assetMenuCapture),
+      1,
+      reason: '邻居跟着描就成了整栏齐播',
+    );
+    expect(
+      _iconProgress(tester, StrokeIcons.brandMark),
+      1,
+      reason: 'hover 到行不该带上顶部标记',
+    );
+
+    // 再走 340ms 仍未画完：时长确实接的是行档。缺省的 AppMotion.slow（320ms）
+    // 在这一帧就已经是满笔，笔顺还没走完一遍就收工，读起来只有一抖
+    await tester.pump(const Duration(milliseconds: 340));
+    expect(
+      _iconProgress(tester, StrokeIcons.assetMenuDistributed),
+      lessThan(1),
+      reason: '描边时长还是短档，一笔没走完',
+    );
+
+    // 行内挪动不该反复播
+    await advance(tester, steps: 20);
+    await gesture.moveTo(rowCenter('概览') + const Offset(-30, 0));
+    await tester.pump();
+    expect(
+      _iconProgress(tester, StrokeIcons.assetMenuDistributed),
+      1,
+      reason: '同一行里挪鼠标又起播了',
+    );
+
+    // 换一行换一枚：上一行画完就停，新进来的那行才开始
+    await gesture.moveTo(rowCenter('屏幕捕获'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(_iconProgress(tester, StrokeIcons.assetMenuCapture), lessThan(1));
+    expect(_iconProgress(tester, StrokeIcons.assetMenuDistributed), 1);
+
+    await advance(tester, steps: 20);
+    expect(_iconProgress(tester, StrokeIcons.assetMenuCapture), 1);
+
+    // 出栏再回来要再描一次
+    await gesture.moveTo(const Offset(1300, 800));
+    await tester.pump();
+    await gesture.moveTo(rowCenter('概览'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(
+      _iconProgress(tester, StrokeIcons.assetMenuDistributed),
+      lessThan(1),
+      reason: '出去再进来要再描一次',
+    );
+
+    await advance(tester, steps: 20);
+    expect(_iconProgress(tester, StrokeIcons.assetMenuDistributed), 1);
+    await unmountPage(tester);
+  });
 }
 
 /// 入场动画一小步一小步走完（每组错开 80ms，最后那组要 900ms 多才起跳）。
 /// 中途每一帧都排过版，窄宽度下的溢出才藏不住。
 Future<void> _runEntrance(WidgetTester tester) =>
     advance(tester, steps: 35);
+
+/// 某一枚图标当前的描边进度
+///
+/// 按几何认，不按下标认：栏里 DrawIcon 成串，顺序一变就读到别的图标上了
+double _iconProgress(WidgetTester tester, StrokeIcon icon) {
+  final paint = tester.widget<CustomPaint>(
+    find
+        .descendant(
+          of: find.byWidgetPredicate((w) => w is DrawIcon && w.icon == icon),
+          matching: find.byType(CustomPaint),
+        )
+        .first,
+  );
+  return (paint.painter as dynamic).debugProgress as double;
+}
+
+
 
 Future<void> _mountSidebar(
   WidgetTester tester, {

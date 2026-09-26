@@ -326,6 +326,9 @@ double sp = m.kSpace16;
 - ❌ 发光 / glow / 外发光描边。层次只允许来自描边和投影。
 - ❌ **UI 骨架上铺渐变**（按钮底、卡片底、侧栏底一律纯色）。渐变只活在图表线里。
 - ❌ 图标描边粗细不一致（正在做全局图标组件，见 §9.11）。
+- ❌ **用模糊表达远近**（堆叠越深越糊）。上面允许的"短暂模糊"只活在状态切换的那一瞬；
+  常驻的景深糊在白药丸压近白舞台这种低对比内容上一眼读作"没对齐/渲染坏了"。
+  远近只用位移、缩放、变暗三样表达。
 - ❌ 无事发生的空等时间；也 ❌ 一眼看出是模板套出来的动效。
 
 ### 5.2 时长节奏
@@ -712,8 +715,9 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 | `StrokeController` + `StrokeTrigger.manual` | 同上 | 外部驱动进度：滚动进度、入场级联、录制时长 |
 | `StrokeZone(child, {broadcastPress, broadcastHover, enabled})` | `components/icons/stroke_zone.dart` | 事件源：整行/整卡按下时，让**内部所有**图标一起重播 |
 | `StrokeIconButton(icon, {onTap, size, color, hoverColor, scaleOnPress})` | `components/buttons/stroke_icon_button.dart` | 图标即按钮：悬停换色 + 按下缩放 + 自己就是事件源 |
-| `StrokeIcons`（238 几何 + 337 别名） | `components/icons/stroke_icons.g.dart` | 构建期生成的常量，**勿手改** |
+| `StrokeIcons`（239 几何 + 338 别名） | `components/icons/stroke_icons.g.dart` | 构建期生成的常量，**勿手改** |
 | 生成器 + 映射表 | `tool/stroke_icons/generate.dart`、`data/icon_map.json` | 换图标/加图标只改映射表再重跑 |
+| `StrokeIcon.viewBox`（默认 24） | `components/icons/stroke_geometry.dart` | 非 Tabler 的自绘图形按资产自己的坐标系走，笔宽自动折算回 24 口径 |
 
 **为什么是构建期常量而不是 icon font 或 svg 资产**：只有这一条路能做到"没引用的图标不进产物"。
 icon font 整包进 `pubspec`，svg 目录整目录进 bundle；生成出来的 Dart 常量没被 import 的符号会被
@@ -729,6 +733,7 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
 | 只读状态图标 | `StrokeTrigger.none` 或 `appear` |
 | 换图标（展开/收起、播放/暂停、选中态） | 直接换 `icon`，`DrawIcon` 自己走"旧的擦回去 + 新的描出来" |
 | 悬停才浮现的符号（macOS 窗口灯） | `manual` + 外层一个 `AnimationController` 写 `StrokeController.progress`：进场描出、离场擦回 |
+| 笔画数远超一枚图标的整幅标记（侧栏品牌标记 45 笔） | `appear` + `duration: AppMotion.entrance`：只在自己挂载那一下描，不吃容器脉冲 |
 
 动效叠加的上限：**一个转场里只允许一个主角**。`StateTransitionAnimation` 已经有位移 + 模糊 +
 淡入三层，里面的图标就固定 `StrokeTrigger.none`，再描一遍会糊成一团。
@@ -757,6 +762,10 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
     描边粗细统一 2（小尺寸才提权）。**禁止**再引入 `Icon(Icons.*)`、icon font 或
     svg 资产图标；换图标/加图标只改 `tool/stroke_icons/data/icon_map.json` 再重跑生成器，
     不要手改 `stroke_icons.g.dart`。
+    品牌标记那种自绘资产走生成器的 `_svgMarks`：生成器直接读那张 svg 的 `<path>`
+    裁成 `StrokeIcons.brandMark`（`viewBox` 跟着资产走），**资产仍是唯一来源**，
+    不要手抄 d 字符串。全站只剩关于页那枚大图还直接画 `SvgPicture`——它不需要描边，
+    留着是为了保资产的多色。
 13. 系统平台自带的控件外观**不为了统一而动**：macOS 三颗窗口灯仍是红黄绿实心圆，
     符号只在悬停时描出来（`_MacLight`，走 `manual` 由悬停驱动）——平台约定优先于组件统一。
 
@@ -841,7 +850,7 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 像素，乘上 `scaleW` 之后 1440 窗口下整套尺寸会缩到 75%，那就不是还原了。例外只圈在
 `lib/pages/motion_lab/**`，越界即违规。
 
-### 12.4 四个动效坑（都是这一页里真炸过的）
+### 12.4 动效坑（都是这一页里真炸过的）
 
 1. **`build()` 里读控制器 ≠ 会重绘**：`_c.value` 直接读进 build，没挂 `AnimatedBuilder` /
    `ListenableBuilder` / `addListener`，画面就永远停在挂载那一帧。测试里表现为"动效完全不存在"，
@@ -854,7 +863,40 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
    `addPostFrameCallback` 里改的目标要下一帧才生效。所以 `shootLabCase` 在交互之后固定推
    **两帧真实时间**（2×16ms），只推一帧就拍到"没动"。
 4. **`Cubic.transform` 对 [0,1] 之外直接断言**：行程比例（`elapsed / 总时长`）一律
-   `.clamp(0.0, 1.0)` 再喂进去，否则回弹曲线一过冲就抛。
+   `.clamp(0.0, 1.0)` 再喂进去，否则回弹曲线一过冲就抛。同理，过冲曲线算出来的**透明度**
+   也会顶出 [0,1]，喂给 `Opacity` 前必须 `clamp`（32 号）。
+5. **`AnimationController.repeat()` 永远到不了 `completed`**：状态一路是 `forward`，挂在
+   "播完一次再往下走"上的收尾逻辑一次都不跑（17 号骨架屏揭示完不出文字就是这么来的）。
+   要循环就自己 `forward(from: 0)` 重启。
+6. **一次 `pump(时长)` 只出一帧**：假异步里 `pump(600ms)` 是把表推 600ms 后画**一张**，
+   中间过程不存在。要看途中帧得按 16ms 步进循环推。
+7. **`CustomPaint(repaint: X)` 只重画、不重建 painter**：painter 是旧实例、读的还是旧值时
+   照样白干（31 号的对勾就是这么消失的）。用 `ListenableBuilder` 把父节点一起重建才算。
+8. **舞台外的 `Text` 会去接 `MaterialApp` 的兜底字样式**：`app.dart` 里那份 `_errorTextStyle`
+   是黄字双下划线，专门提醒"把文字放进 Material"。隔离层没有 Material，于是 129 张 golden 里
+   113 张白带一条黄杠。`LabStage` / `LabCard` 各自钉一层 `DefaultTextStyle` 才干净。
+9. **`Stack` 里的 `Positioned` 只给 `width` 不给 `height`** → 子节点收到 `h: 0..∞` 的 loose
+   约束，`OverflowBox` 会去要"允许范围内最大"，直接无限高断言（23 号）。用它撑"宽度不占槽"
+   的效果时，高度必须给死。
+10. **`Row` 里的 `Column` 必须写 `mainAxisSize.min`**：Row 给子节点的是"高度上限 = 自己可用的
+    那一段"，`Column` 默认 `max` 就正好顶满，于是文字贴到最上、图标按交叉轴居中，一行散成两截
+    （32 号）。父链上限是无限时看不出问题，一进 `Center` 就炸——所以别等断言，写的时候就带上。
+11. **`late final` 控制器在 `dispose()` 里被构造出来**：`late final _c = AnimationController(...)`
+    谁先摸谁负责建。`dispose` 里写 `_c.dispose()` 之前没碰过它（动效一次没播）就是"挂载即建钟"，
+    测试里表现为 `A Ticker was not disposed`，且报的行号指向 dispose，看着像销毁写错了。
+12. **弹簧不推进就是冻住的**：`IlSpring` 是个 `ChangeNotifier`，自己不知道时间。只 `aim()` 不接
+    `Ticker`/`addListener` 驱动，画面停在起点，`atRest` 也永远是 false——比"没动"更难查，因为它
+    自称还在动。要么挂驱动，要么一开始就用 `jumpTo`。
+13. **`Center` 会悄悄夹住超本子节点**：子节点比 `Center` 给的可用空间大时不报溢出，只按父约束
+    缩放定位。要"放得下就居中、放不下就溢出去"得用 `UnconstrainedBox`——而它自己会报溢出，
+    纯粹想撑宽不给尺寸时用 `OverflowBox`（3 号松手后的 `✓ Confirmed` 就是这么处理的）。
+14. **`addPointer` 不等于按下**：`TestGesture.addPointer()` 只发 `PointerAddedEvent`（等价悬停
+    进入），拖拽识别器根本不会进拖拽态，图却拍得出一张静止的"看起来没问题"。按下要另写
+    `down(point)`。同页的鼠标手势**共用 device 1**，一根手指没 `removePointer()` 就再起第二根，
+    `MouseTracker` 直接断言 `'(event is PointerAddedEvent) == (lastEvent is PointerRemovedEvent)'`
+    ——所以 `ilDrop` 收尾时 `up()` 之后必须 `removePointer()`。
+15. **按 16ms 步进推进时最后一段要按余数收尾**：`for (left=n; left>0; left-=16)` 会把"120ms 那一帧"
+    拍成 128ms（16 的整倍数）。要求精确对表的帧，末段得 `pump(余数)`。
 
 形变面板另有一条：CSS 的 `overflow: hidden` 在 Flutter 里要给子节点按**展开尺寸**定死
 `Positioned(width/height)`、由外层 `ClipRRect` 裁掉多出来的部分；`Positioned.fill` 和
@@ -882,8 +924,98 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - 途中帧默认 150ms；还在 delay 里的慢启动格、以及刚炸开挤成一团的格子，另写进 `_midOverride`。
 - **只看静止帧证明不了动效存在**。审计口径：43 格的 idle / mid 两张取哈希比对，
   `mid == idle` 必须为空集；`end == idle` 只允许是"落定后本来就该没有"的格子（6 号纸屑落完）。
+- **三帧采样也证明不了"途中不炸"**：过冲顶出的非法透明度、只在某几帧出现的溢出断言，
+  三帧全都恰好躲过去。所以每格还有一条不带 `golden` 标签的**逐帧扫**：按 16ms 推到 3000ms，
+  任何一帧 `takeException()` 非空就 fail。`flutter test --exclude-tags golden` 单跑它。
+  真机报的缺陷里有两成是这条路先抓到的。
 - 确定性：随机只许 `math.Random(固定种子)`；出现 `DateTime.now()` 或依赖真实窗口的 `MediaQuery`
   就会第二次跑挂。不带 `--update-goldens` 重跑一遍即是一次复现检验。
+
+### 12.7 交互实验室：会被人按住拖的那些
+
+第二块参考页（`/interaction-lab`，`lib/pages/interaction_lab/`）。规矩和 §12 同一套：
+自己的局部底座（`kit.dart` 的 `Il*`），一格一个独立组件，**不读也不写** `AppTheme` /
+`AppSemantic` / `AppMotion`，尺寸写字面 px（§12.3 的同一条例外）。
+
+差别只在**这一页的格子要真的能操作**，不是循环播放的演示：搜索框要真输入、把手要真按住拖、
+列表要真拖拽换序。于是验收口径也多一条——不能只拍"动到了"，要拍"按哪儿动哪儿"：
+
+- 用 `ilGrab` / `ilDragTo` / `ilDrop`（`test/helpers/il_golden.dart`）逐位移喂事件，坑见 §12.4 的 14。
+- **`ilDragTo` 的起点在进函数时就钉死**：拿"上一帧落点"再乘 `i/steps`，每步只走完*剩余*
+  距离的一成，到末帧指针几乎不动——静止在末帧上拍，速度驱动的形变量恒为 0。
+- **弹簧驱动的量不许再套 `Animated*`**：药丸宽度已经在吃弹簧的值，每帧都变一次就会
+  每帧重启一遍自己的 220ms 补间，于是永远追不上（量到的是"走了 16%"的宽度）。
+  只有颜色那一档是补间。
+- **按在远处不许瞬移**：按住点与把手中心拉开距离再拖，`press_far` 帧必须和 `idle` 帧**哈希相同**
+  （跟手的语义是"位移 = 指针位移"，不是"把手跳到指针"）。
+- **跟手用像素量**：拖 `dx` 之后量黑色水洗带的游程端点，端点差要等于 `dx`。
+- **钉边用像素量**：松手那刻右边缘定住，`far` / `morph` / `done` 三帧的游程右端必须是同一个数。
+- 回弹的挤压看包围盒高度：静止 `y147..194`，回弹帧 `y145..196` 才说明真的鼓起来了。
+- **形变看同一颗药丸的三个读数**（4 号）：静止 `196×44`、慢拖（每帧 1.5px）`190×47`、
+  快甩（每帧 30px，撞 ±3 钳位）`176×52`——宽和反比地高，面积守恒才算"拉长"而不是"缩放"。
+  拍这两张要先按着不动等 260ms 让抬起弹簧走完，否则宽度还没到 208，`scaleX` 就量不准。
+- **停过再起的 Ticker 必须显式 `start()`**（`IlSpringDrive`，5 号把它逼出来的）：
+  `_ticker ??= createTicker(..)..start()` 只在第一回建表，走完一次就 `stop()` 了，
+  之后每次换目标只是 notify，表不再跑——**第二次动作的弹簧恒停在起点**（收起/返回整段不动）。
+  重启时 `_last` 也要归零，否则第一帧拿到"距上次起跑"的整个时长，弹簧一步到底。
+- **透明度 0 不等于不存在**：`Opacity(0)` 的子树照样吃指针。参考稿那层是**真卸载**的，
+  所以淡没了的 `Undo` 不会隔着半条药丸抢点击——这里得配 `IgnorePointer`，
+  并且用 `find.text(..).hitTestable()` 断言两态各自只在有货时受理指针。
+- **交接帧要"零暗像素"**（5 号）：点完 60ms 那一帧白底还在 112→206 的路上，
+  标签却已经瞬移到目标矩形、淡入还压着 100ms 延后 → 量 `y140..205` 带里暗像素必须为 0。
+  这一帧是"只有背景药丸吃弹簧"这条口径唯一的实证。
+- **欠阻尼看会不会短过静止位**：去那条 `{460,30,.9}` 干脆，回那条 `{420,20,.9}` 带一点回送，
+  收回中段量到 `102` 宽（< 静止的 `112`）才证明它真的弹过了头。
+- 出图坐标系是**整个窗口 420×342**，不是舞台：舞台心 = `(210, 171)`，
+  井 260×96 坐在舞台正中 → 胶囊 idle `x154..266`、done `x107..313`、`y149..193`。
+  倒计时条按行量（`y191..192`）：`177@560ms`、`100@2064ms`，和 `206·(1-t/4000)` 对得上。
+
+- **Flutter 的命中盒是半开区间**（6 号）：正好压在右边界上的那次 pointer 事件送不进图里
+  （浏览器里 `clientX-left` 是可以等于宽度的），而且还会顺手触发 `MouseRegion.onExit`。
+  扫读格的 `_plotAt(f)` 右端因此退 0.01px，左端 `dx=0` 本来在盒内不用退。
+- **切片偏移是"首点的下标"，不是"偏移量"**（6 号）：时间轴按整条 34 点铺，换窗口只换读数窗口。
+  `_slice.off` 取 `from` 而不是 `length-from`，否则 1H 那 5 个点会被拉回 `09:00` 起。
+- **CSS 的外描边不等于 Flutter 的内描边**（6 号）：`box-shadow:0 0 0 2px` 画在 9px 元素的盒子
+  **外面**、配 `margin:-4.5` 对盒心；换成 `Border.all(width:2)` 画在 13px 盒**内**，
+  要退的是外沿一半 `6.5`，照抄 `4.5` 就整体右下偏 2px。
+- **拍"落定"帧要按弹簧的走完时间等**（6 号）：`{.1728,.736}` 从 58 回 0 是 50 帧 ≈ 800ms。
+  抢拍的话整张 sheet 还沉着 3~4px，会被量曲线的脚本当成"曲线画歪了"。
+- **量曲线：覆盖率加权，并且补 0.5 的行中修正**。二值掩码的行均值只有 0.5px 档，
+  量出来的"最大偏差 0.5px"全是量化噪声；改成覆盖率质心后同一个 case 从 ±0.5 收到 ±0.26。
+- **末点的提示圈不能用包围盒定圆心**（6 号）：曲线正从左边同一行插进来，把左沿拉长。
+  只用**顶帽三行**的覆盖率质心取 x——那是圈上唯一线够不着的地方；底帽不行，线就趴在那一档。
+- **Catmull-Rom 的首末段 `x(t)` 不线性**（6 号）：端点用重复点兜底之后
+  `c1.x = a.x + step/6`、`c2.x = b.x - step/6`（中间段才正好三等分）。按 x 线性反解 `t`
+  在 34 点窗口只错 0.26px，到 5 点窗口就是 1.81px 的假偏差。比对脚本要把 path 稠密采样再插值。
+
+- **位移探针的 key 要挂在 `Transform` 的内侧**（7 号）：`RenderTransform` 自己的坐标系**不含**
+  它正在算的那道矩阵，把 key 挂在外层 `Positioned` 上，`getTransformTo(祖先)` 拿到的永远是
+  未位移的那一份，量出来全程恒为 0。挂进子树（这里是 `Opacity`）才对。
+- **定时补间每次 `aim` 同值都要短路**（7 号）：悬停水洗的目标每帧都被重发一次，若 `aim` 无条件
+  重置起点和已过时间，钟就永远走不完——表现为"底色一直停在半途"且 Ticker 不停。
+  `if (_to == target) return this;`，构造函数里也要把 `_to` 初始化成 `from`。
+- **退场中的元素被再次选中时只能捞回来重播**（7 号）：直接新建就会有两颗同 key 的 `Positioned`
+  并列在同一个 `Stack` 里，Flutter 当场抛 duplicate keys。`revive()` 把退场标志清掉、
+  四个量各归进场起点，比"先删后建"少一帧闪。
+- **量像素的三条基线**（7 号）：golden 里窗口画布 250、舞台卡底 237，所以"白"必须 `min≥254`
+  才排得掉卡底；`spreadRadius:1` 的 1px 外环不是白，用白色包围盒量药丸会少 2px，要另开一条
+  "与 237 有差"的掩码才量得到 46；圆形要沿**中轴列**量竖向直径，偏 6px 的列被弧切掉只剩 24。
+- **半像素落位会把 103 宽削成 102 列满白**（8 号）：奇数宽坐在 `158.5–261.5` 上，两端各差半格。
+  量的尺寸一律给 ±1 容差，别把抗锯齿当成尺寸错。同理，圆角不要靠数白点反推（文字也是墨），
+  改成"取弧上几行采样列的左端点，和 `cx − √(r² − (cy − y)²)` 对表"，只有对的 r 才全行对上。
+- **CSS 的 `:hover` 和 `:focus-visible` 是两条规则，别只认一条**（8 号）：行底那层水洗两条都绑，
+  而且 `:hover` 把时长盖成 140ms、基础规则留 220ms → **进快出慢**。只读 `:focus-visible`
+  那条会漏掉鼠标悬停时最显眼的一层，而且 golden 看不出来（静止帧本来就一样）。
+- **同参数弹簧的不同量，归一化进度只在"三条都还在路上"时相等**（8 号）：弹簧的静止阈值是绝对量
+  （0.02px），跨度 9px 的圆角比跨度 128px 的高度早落定十几帧。拿归一化进度做 `closeTo` 断言，
+  必须在任何一条已经到位之后停下来，否则拍到的是阈值差而不是曲线差。
+- **逐帧扫的两条读数纪律**（8 号）：① `Size.toString()` 只留一位小数，弹簧尾帧每帧只挪
+  0.006~0.02px，会被压成同一行、误判成"卡住"——按全精度记；② 扫的帧数必然比动画长，
+  尾巴全是一模一样的静止帧，那是跑完了不是卡住，平帧只数到"最后一次还在动"为止。
+- **量途中帧的行墨点，采样窗口必须先把自己框进白块内部**（8 号）：白块那 1px `pane-edge` 外环
+  是灰的，窗口一越过白块底边就把外环读成"这一行亮了"，量出"第 4 行比第 3 行先进"的假象。
+- **按压帧要卡在门槛前一格**（8 号）：60ms 之后尺寸弹簧立刻起步，`thenMs` 多给一帧拍到的就是
+  "已经在长"，压下去的那点 scale 白测。先用一次性 test 把逐帧读数打出来再定 `thenMs`。
 
 ---
 

@@ -90,10 +90,12 @@ class _Case17SkeletonLoaderAndRevealState extends State<Case17SkeletonLoaderAndR
   @override
   void initState() {
     super.initState();
-    // 一轮脉冲 = 一次 completed，用它当"数据到了"的信号，省掉另行计时
+    // 一轮脉冲 = 一次 completed，用它当"数据到了"的信号，省掉另行计时。
+    // 注意不能用 repeat()：循环播放时状态一直是 forward，永远不发 completed，
+    // 这条监听就永不触发，正文层停在 opacity 0（看着就是"动画完了却没字"）
     _pulse.addStatusListener(_onPulseCycle);
     // 挂载即处于脉冲态：_loading 初值为 true、揭示进度初值为 0，所以不必 setState
-    _pulse.repeat();
+    _pulse.forward(from: 0);
   }
 
   @override
@@ -116,8 +118,7 @@ class _Case17SkeletonLoaderAndRevealState extends State<Case17SkeletonLoaderAndR
       _loading = true;
       _reveal.value = 0;
     });
-    _pulse.value = 0;
-    _pulse.repeat();
+    _pulse.forward(from: 0);
   }
 
   @override

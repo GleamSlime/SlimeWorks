@@ -6,6 +6,9 @@ import 'package:slime_works/pages/motion_lab/lab_kit.dart';
 
 import 'page_golden.dart';
 
+// 这一页的用例几乎都要自己拆窗口，顺手把那条透出去，省得每个文件重复 import
+export 'page_golden.dart' show unmountPage;
+
 // 动效实验室单格案例的出图铺垫
 //
 // 每一帧都单开一个 test：`matchesGoldenFile` 出过图之后，同一个 test 里后续
@@ -14,6 +17,13 @@ import 'page_golden.dart';
 //
 // 三态的含义：idle = 和参考稿对静的静止样，mid = 途中一帧（时长/曲线接没接上
 // 只有这一帧能看出来），end = 走完的终态。
+
+/// 把一格案例挂上窗口（不出图，逐帧扫的用例用这个）
+Future<void> mountLabCase(WidgetTester tester, Widget child, {Size window = const Size(320, 284)}) async {
+  await loadAppFonts();
+  await pumpAppPage(tester, Center(child: child), size: window);
+  await advance(tester);
+}
 
 /// 拍一格案例的某一帧
 ///
@@ -27,9 +37,7 @@ Future<void> shootLabCase(
   Future<void> Function(WidgetTester tester)? act,
   int? thenMs,
 }) async {
-  await loadAppFonts();
-  await pumpAppPage(tester, Center(child: child), size: window);
-  await advance(tester);
+  await mountLabCase(tester, child, window: window);
 
   if (act != null) {
     await act(tester);
@@ -38,7 +46,15 @@ Future<void> shootLabCase(
     // 这一帧当成对表帧，进度停在 0；只推一帧则目标还没换，钟晚一帧才起
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
-    if (thenMs != null) await tester.pump(Duration(milliseconds: thenMs));
+    // 剩下的行程按 16ms 一步步推：一次 pump(400ms) 在假异步里**只出一帧**，
+    // 而定时器是在这一帧之前才把钟建起来的，于是拍到的永远是 0 进度
+    // 末段不足 16ms 按余数收尾：否则整段被抬到 16 的整倍数，要 120ms 拍到 128ms
+    var left = thenMs ?? 0;
+    while (left > 0) {
+      final step = left < 16 ? left : 16;
+      await tester.pump(Duration(milliseconds: step));
+      left -= step;
+    }
   }
 
   await expectLater(

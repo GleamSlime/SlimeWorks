@@ -70,7 +70,9 @@ const _labelOverride = {19: 'Ask'};
 /// 慢启动的格子：150ms 还在延迟里，拍到的是静止帧，等于没验
 ///
 /// 6 号反过来——纸屑刚炸开还挤成一团，推晚一点才拍得开行迹
-const _midOverride = {4: 400, 6: 400, 12: 600, 37: 2500, 38: 600};
+/// 9 号也反过来：液滴飞到中心距 50px 以上桥就掐断了，150ms 只剩四颗散圆
+/// 28 号的粒子窗口含延迟有 830ms，150ms 才刚出中心
+const _midOverride = {4: 400, 6: 400, 9: 100, 12: 600, 28: 300, 37: 2500, 38: 600};
 
 String _pad(int seq) => seq.toString().padLeft(2, '0');
 
@@ -150,6 +152,20 @@ void main() {
 
     testWidgets('${c.seq}. ${c.title} 终态帧', tags: 'golden', (tester) async {
       await _shoot(tester, c, frame: 'end', ms: 2000);
+    });
+
+    // 三帧采样测不出"只有途中某几帧会炸"：过冲曲线把透明度顶出 [0,1]、
+    // 形变途中溢出，都只在中间那一小段发生。逐帧推一遍才算验过
+    testWidgets('${c.seq}. ${c.title} 逐帧扫', (tester) async {
+      await mountLabCase(tester, c.build());
+      final act = _acts[c.seq]!;
+      if (act != _Act.auto) await _trigger(tester, act, c.seq);
+      for (var ms = 16; ms <= 3000; ms += 16) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final e = tester.takeException();
+        if (e != null) fail('${c.seq} 号 ${ms}ms 抛了：$e');
+      }
+      await unmountPage(tester);
     });
   }
 }

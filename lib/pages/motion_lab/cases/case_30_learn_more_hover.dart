@@ -62,10 +62,11 @@ class _Case30LearnMoreHoverState extends State<Case30LearnMoreHover> {
       child: Stack(
         children: [
           Center(
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              onEnter: (_) => setState(() => _hovered = true),
-              onExit: (_) => setState(() => _hovered = false),
+            child: LabHoverRegion(
+              // 触屏没有 hover：点一下按住这个状态，再点一下离开
+              group: 'c30',
+              onEnter: () => setState(() => _hovered = true),
+              onExit: () => setState(() => _hovered = false),
               child: Container(
                 height: _btnH,
                 // 右内衬比左内衬小 6：箭头的右移量就吃在这一档里

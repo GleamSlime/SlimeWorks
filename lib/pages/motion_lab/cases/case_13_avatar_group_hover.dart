@@ -87,6 +87,10 @@ class _Case13AvatarGroupHoverState extends State<Case13AvatarGroupHover> {
                           lifting: _active == i,
                           curve: _active == null ? _easeOut : LabEase.smoothOut,
                           onEnter: () => setState(() => _active = i),
+                          // 触屏再点同一颗 = 指针移开
+                          onExit: () => setState(() {
+                            if (_active == i) _active = null;
+                          }),
                         ),
                       ),
                   ],
@@ -108,6 +112,7 @@ class _Avatar extends StatelessWidget {
     required this.lifting,
     required this.curve,
     required this.onEnter,
+    required this.onExit,
   });
 
   final String label;
@@ -119,6 +124,7 @@ class _Avatar extends StatelessWidget {
   final bool lifting;
   final Curve curve;
   final VoidCallback onEnter;
+  final VoidCallback onExit;
 
   @override
   Widget build(BuildContext context) {
@@ -131,10 +137,13 @@ class _Avatar extends StatelessWidget {
         offset: Offset(0, _lift * t),
         child: Transform.scale(
           scale: lifting ? 1 + (_scaleActive - 1) * t : 1,
-          child: MouseRegion(
+          child: LabHoverRegion(
+            // 整排共用一个互斥组：点下一颗先把上一颗收回原位
+            group: 'c13',
             // `+N` 那颗在参考稿里是 cursor: default——它一样会抬，只是不能点
             cursor: label == _moreLabel ? SystemMouseCursors.basic : SystemMouseCursors.click,
-            onEnter: (_) => onEnter(),
+            onEnter: onEnter,
+            onExit: onExit,
             child: _AvatarFace(label: label),
           ),
         ),

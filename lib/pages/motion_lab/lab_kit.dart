@@ -14,6 +14,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:path_drawing/path_drawing.dart';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind, TapUpDetails;
 import 'package:flutter/material.dart';
 
 /// 参考稿的浅色盘（`--*` 变量原值）
@@ -172,7 +173,9 @@ class LabStage extends StatelessWidget {
           color: LabColor.stage,
           borderRadius: BorderRadius.all(Radius.circular(LabSize.stageRadius)),
         ),
-        child: child,
+        // 必须自己钉一层默认字样式：舞台外面没有 Material，`Text` 会去接
+        // MaterialApp 那份兜底样式——黄色双下划线，专门用来提醒"把文字放进 Material"
+        child: DefaultTextStyle(style: LabText.body, child: child),
       ),
     );
   }
@@ -210,39 +213,44 @@ class LabCard extends StatelessWidget {
           borderRadius: BorderRadius.all(Radius.circular(LabSize.cardRadius)),
           boxShadow: LabShadow.card,
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: 12,
-              top: 12,
-              child: stage,
-            ),
-            Positioned(
-              left: LabSize.cardPadX,
-              bottom: 20,
-              // 右边给圆钮让出 44
-              right: LabSize.cardPadX + 44,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$seq. $title${pro ? '  ·  Pro' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: LabText.title,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: LabText.subtitle),
-                ],
-              ),
-            ),
-            if (onEnlarge != null)
+        // 同 LabStage：卡片自己的标题也不该接到 MaterialApp 那份兜底样式上
+        child: DefaultTextStyle(
+          style: LabText.body,
+          child: Stack(
+            children: [
               Positioned(
-                right: LabSize.cardPadX,
-                bottom: 16,
-                child: LabIconButton(onTap: onEnlarge!, icon: Icons.open_in_full_rounded),
+                left: 12,
+                top: 12,
+                child: stage,
               ),
-          ],
+              Positioned(
+                left: LabSize.cardPadX,
+                bottom: 20,
+                // 右边给圆钮让出 44
+                right: LabSize.cardPadX + 44,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$seq. $title${pro ? '  ·  Pro' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: LabText.title,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(subtitle,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: LabText.subtitle),
+                  ],
+                ),
+              ),
+              if (onEnlarge != null)
+                Positioned(
+                  right: LabSize.cardPadX,
+                  bottom: 16,
+                  child: LabIconButton(onTap: onEnlarge!, icon: Icons.open_in_full_rounded),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -378,6 +386,91 @@ class LabStageFooter extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: children,
         ),
+      ),
+    );
+  }
+}
+
+/// 触屏兼容的悬停区：把只认 hover 的动效也交给指尖
+///
+/// 触屏没有 enter/exit 事件，纯 hover 驱动的格子在手机上等于点不动。这里
+/// 鼠标一侧照旧走 MouseRegion，触屏把点一下当作"指针进来并停在原地"、再点
+/// 一下当作"指针离开"。只有触屏指针走这条路——桌面上鼠标点击不改变悬停语义。
+/// 传 [group] 时同组互斥：点第二块会先让占着的那块退场，不会出现两格同时处于悬停态。
+class LabHoverRegion extends StatefulWidget {
+  const LabHoverRegion({
+    super.key,
+    required this.child,
+    this.group,
+    this.cursor = SystemMouseCursors.click,
+    this.onEnter,
+    this.onExit,
+    this.onHoverAt,
+  });
+
+  final Widget child;
+
+  /// 互斥组的标识（同一次实验共用一个字符串即可）
+  final Object? group;
+  final MouseCursor cursor;
+  final VoidCallback? onEnter;
+  final VoidCallback? onExit;
+
+  /// 指针落点，相对本区域：鼠标移动与触屏点按共用
+  final void Function(Offset localPosition)? onHoverAt;
+
+  @override
+  State<LabHoverRegion> createState() => _LabHoverRegionState();
+}
+
+class _LabHoverRegionState extends State<LabHoverRegion> {
+  /// 每组当前被指尖按住的实例（没给 group 就以自身为组）
+  static final Map<Object, _LabHoverRegionState> _held = {};
+
+  Object get _key => widget.group ?? this;
+
+  void _tapUp(TapUpDetails d) {
+    if (d.kind != PointerDeviceKind.touch) return;
+    if (_held[_key] == this) {
+      _held.remove(_key);
+      widget.onExit?.call();
+      return;
+    }
+    final previous = _held.remove(_key);
+    if (previous != null && previous.mounted) previous.widget.onExit?.call();
+    _held[_key] = this;
+    widget.onEnter?.call();
+    widget.onHoverAt?.call(_local(d.globalPosition));
+  }
+
+  /// 放大层里整块被 FittedBox 缩放过，必须用 globalToLocal 换算而不是做减法
+  Offset _local(Offset global) {
+    final box = context.findRenderObject();
+    return box is RenderBox ? box.globalToLocal(global) : Offset.zero;
+  }
+
+  @override
+  void dispose() {
+    if (_held[_key] == this) _held.remove(_key);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.cursor,
+      onEnter: (e) {
+        widget.onEnter?.call();
+        widget.onHoverAt?.call(e.localPosition);
+      },
+      onHover: widget.onHoverAt == null
+          ? null
+          : (e) => widget.onHoverAt!(e.localPosition),
+      onExit: (_) => widget.onExit?.call(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: _tapUp,
+        child: widget.child,
       ),
     );
   }

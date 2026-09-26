@@ -31,44 +31,50 @@ class _MotionLabScreenState extends State<MotionLabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        ColoredBox(
-          color: LabColor.page,
-          child: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-                    child: Center(
-                      child: Wrap(
-                        spacing: 24,
-                        runSpacing: 24,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          for (final c in _shown)
-                            LabCard(
-                              seq: c.seq,
-                              title: c.title,
-                              subtitle: c.subtitle,
-                              pro: c.pro,
-                              onEnlarge: () => setState(() => _focused = c),
-                              stage: c.build(),
-                            ),
-                        ],
+    // 整页自带默认字样式：这页的排版全本地定义，不靠宿主那层 Material。
+    // 少了这一行，页头副标题和筛选 chip 在没有 Material 祖先时就接住
+    // MaterialApp 的兜底样式——黄色双下划线
+    return DefaultTextStyle(
+      style: LabText.body,
+      child: Stack(
+        children: [
+          ColoredBox(
+            color: LabColor.page,
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+                      child: Center(
+                        child: Wrap(
+                          spacing: 24,
+                          runSpacing: 24,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (final c in _shown)
+                              LabCard(
+                                seq: c.seq,
+                                title: c.title,
+                                subtitle: c.subtitle,
+                                pro: c.pro,
+                                onEnlarge: () => setState(() => _focused = c),
+                                stage: c.build(),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        if (_focused != null) _buildFocus(_focused!),
-      ],
+          if (_focused != null) _buildFocus(_focused!),
+        ],
+      ),
     );
   }
 

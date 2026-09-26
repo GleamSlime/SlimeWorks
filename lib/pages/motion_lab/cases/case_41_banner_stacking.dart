@@ -4,11 +4,15 @@ import '../lab_kit.dart';
 
 /// 41. Banner stacking — 吐司式堆叠，最多三层
 ///
-/// 参考稿每条横幅只有一个"深度"目标：新来的从下方 80px 带着 0.97 缩放
-/// 和 2px 模糊升起入场（350ms 顺出），老的一层层往后退——每退一层
-/// 上移 12px（peek）、缩 0.06、按 0.4 的步长变暗；被挤出第三层的
-/// 用另一只 250ms 的钟往深处淡没。悬停在堆叠上时全部摊开：
-/// 老横幅按"自身高 + 8px 间隙"整层上移、回到全亮全实。
+/// 参考稿每条横幅只有一个"深度"目标：新来的从下方 60px 带着 0.97 缩放
+/// 升起入场（350ms 顺出），老的一层层往后退——每退一层上移 12px（peek）、
+/// 缩 0.06、按 0.4 的步长变暗；被挤出第三层的用另一只 250ms 的钟往深处
+/// 淡没。悬停在堆叠上时全部摊开：老横幅按"自身高 + 8px 间隙"整层上移、
+/// 回到全亮。
+///
+/// 参考稿还给深度 1/2 配了 1px/2px 的常驻模糊、入场/退场配 2px。这里
+/// 一律去掉：白药丸压在近白舞台上，σ=2 连点两下就糊成一片，观感是缺陷
+/// 不是层次——变暗和缩小已经足够表达远近。
 class Case41BannerStacking extends StatefulWidget {
   const Case41BannerStacking({super.key});
 
@@ -36,6 +40,12 @@ class _Case41BannerStackingState extends State<Case41BannerStacking> {
   static const _bannerW = 261.0;
   static const _bannerH = 46.0;
 
+  /// `--p34-distance`
+  static const _rise = 60.0;
+
+  /// 退场补间跑完再留 60ms 余量才真正摘掉节点
+  static const _removeDelay = Duration(milliseconds: 250 + 60);
+
   final List<_BannerItem> _items = [];
   int _seq = 0;
   bool _spread = false;
@@ -48,7 +58,7 @@ class _Case41BannerStackingState extends State<Case41BannerStacking> {
         // 第四层没有位置：被挤出 2 深的退到幕后
         if (b.depth > 2) {
           b.leaving = true;
-          Future.delayed(_closeDur, () {
+          Future.delayed(_removeDelay, () {
             if (mounted) setState(() => _items.remove(b));
           });
         }
@@ -74,7 +84,12 @@ class _Case41BannerStackingState extends State<Case41BannerStacking> {
             left: (LabSize.stageW - _bannerW) / 2,
             // `.p34-stage-inner` 底衬 78：堆叠底缘离舞台 78px
             bottom: 78,
-            child: MouseRegion(
+            child: LabHoverRegion(
+              // 触屏没有 hover：点一下摊开，再点一下收回
+              group: 'c41',
+              cursor: SystemMouseCursors.basic,
+              onEnter: () => setState(() => _spread = true),
+              onExit: () => setState(() => _spread = false),
               // 命中区按摊开后的整列来算：缝隙不属于任何一条横幅
               child: SizedBox(
                 width: _bannerW,
@@ -92,8 +107,6 @@ class _Case41BannerStackingState extends State<Case41BannerStacking> {
                   ],
                 ),
               ),
-              onEnter: (_) => setState(() => _spread = true),
-              onExit: (_) => setState(() => _spread = false),
             ),
           ),
           LabStageFooter(
@@ -105,7 +118,7 @@ class _Case41BannerStackingState extends State<Case41BannerStacking> {
   }
 }
 
-/// 单条横幅：位移走 bottom，缩放/透明度/模糊各挂一条独立补间，
+/// 单条横幅：位移走 bottom，缩放/透明度各挂一条独立补间，
 /// 全部共用同一只钟（入场与层间 350ms，退场 250ms）
 class _StackedBanner extends StatelessWidget {
   const _StackedBanner({
@@ -124,7 +137,7 @@ class _StackedBanner extends StatelessWidget {
     if (item.leaving) return 36; // --stack-peek * -3
     switch (item.depth) {
       case -1:
-        return -80; // --stack-rise
+        return -_Case41BannerStackingState._rise;
       case 0:
         return 0;
       case 1:
@@ -146,8 +159,6 @@ class _StackedBanner extends StatelessWidget {
     // 深度 1 收 0.4、深度 2 只按 1.6 步长收（参考稿原样）
     return item.depth == 1 ? 1 - 0.4 : 1 - 0.4 * 1.6;
   }
-
-  double get _blur => item.leaving || _entering ? 2 : 0; // --stack-blur
 
   Duration get _dur => item.leaving ? _Case41BannerStackingState._closeDur : _Case41BannerStackingState._openDur;
 
@@ -180,12 +191,7 @@ class _StackedBanner extends StatelessWidget {
             opacity: opacity,
             child: child,
           ),
-          child: _ValueTween(
-            duration: _dur,
-            value: _blur,
-            builder: (context, blur, child) => LabBlur(sigma: blur, child: child!),
-            child: const _BannerSurface(),
-          ),
+          child: const _BannerSurface(),
         ),
       ),
     );

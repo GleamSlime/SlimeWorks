@@ -63,6 +63,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const AboutRoute(),
     const SettingsRoute(),
     const MotionLabRoute(),
+    const InteractionLabRoute(),
 
     const GameCategoriesRoute(),
     const GameStatsRoute(),
@@ -119,6 +120,10 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     ),
     'music': _GroupConfig(id: 'music', sort: 42, permission: Permission.accessCollection),
     'tools': _GroupConfig(id: 'tools', title: '工具', sort: 45, permission: Permission.accessTools),
+    // 实验室单独一段：两页都是"看的东西，不是用的东西"，混进工具里读起来像功能入口。
+    // 排在 50 之后：没在下面登记过的分组（游戏库）会落到默认 50 且没有标题，
+    // 插到它们中间会让那几项看着像归属于"实验室"。
+    'lab': _GroupConfig(id: 'lab', title: '实验室', sort: 55, permission: Permission.accessDemo),
     'bottom': _GroupConfig(id: 'bottom', sort: 90, permission: Permission.accessSettings),
   };
 

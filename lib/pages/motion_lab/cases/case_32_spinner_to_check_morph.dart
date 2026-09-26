@@ -155,6 +155,9 @@ class _Case32SpinnerToCheckMorphState extends State<Case32SpinnerToCheckMorph>
             ),
             const SizedBox(width: _rowGap),
             const Column(
+              // 不写 min 会顶到 Row 的可用高度（这里就是整个舞台），
+              // 文字贴到舞台顶边、图标却仍垂直居中，两半直接散开
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Build demo page', style: _titleStyle),
@@ -239,9 +242,11 @@ class _Case32SpinnerToCheckMorphState extends State<Case32SpinnerToCheckMorph>
       case _Phase.morphing:
         final e = v * _totalMs;
         return _Values(
-          ring: 1 - _cssEase.transform((e / _ringMs).clamp(0.0, 1.0)),
-          spinner: 1 - _cssEase.transform((e / _spinOutMs).clamp(0.0, 1.0)),
-          disc: _easePop.transform((e / _discMs).clamp(0.0, 1.0)),
+          ring: _opaque(1 - _cssEase.transform((e / _ringMs).clamp(0.0, 1.0))),
+          spinner: _opaque(1 - _cssEase.transform((e / _spinOutMs).clamp(0.0, 1.0))),
+          // 原稿给淡入挂的是过冲曲线：浏览器把 opacity 夹在 [0,1]，所以过冲那段
+          // 只是"提前满值"。Flutter 的 Opacity 直接断言，必须自己夹
+          disc: _opaque(_easePop.transform((e / _discMs).clamp(0.0, 1.0))),
           scale: 1 + (_scaleTo - 1) * _easeOvershoot.transform((e / _scaleMs).clamp(0.0, 1.0)),
           lift: _liftEnvelope(e),
           draw: _drawn(LabEase.smoothOut.transform(((e - _drawDelayMs) / _drawMs).clamp(0.0, 1.0))),
@@ -252,9 +257,9 @@ class _Case32SpinnerToCheckMorphState extends State<Case32SpinnerToCheckMorph>
         final e = _cssEase.transform(v);
         // 抬升挂的是 animation：data-state 一撤就归位，所以这里给 0 而不是补间
         return _Values(
-          ring: e,
-          spinner: e,
-          disc: 1 - s,
+          ring: _opaque(e),
+          spinner: _opaque(e),
+          disc: _opaque(1 - s),
           scale: _scaleTo + (1 - _scaleTo) * s,
           lift: 0,
           draw: _drawn(1 - s),
@@ -262,6 +267,9 @@ class _Case32SpinnerToCheckMorphState extends State<Case32SpinnerToCheckMorph>
         );
     }
   }
+
+  /// 透明度通道：过冲曲线会把值顶出 [0,1]，`Opacity` 见到就抛断言
+  static double _opaque(double v) => v.clamp(0.0, 1.0);
 
   /// 250ms 抬起 3px，再花 300ms 落回（落回那条自带一点回弹）
   double _liftEnvelope(double e) {

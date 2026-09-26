@@ -57,12 +57,36 @@ class MotionLabRoute extends AppRouteData with $MotionLabRoute {
   StrokeIcon get sidebarIcon => StrokeIcons.playCircleOutline;
 
   @override
-  String? get sidebarGroupId => 'tools';
+  String? get sidebarGroupId => 'lab';
 
   static const Permission routePermission = Permission.accessDemo;
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return AppRoutes.buildPage(context, state, const MotionLabScreen());
+  }
+}
+
+@TypedGoRoute<InteractionLabRoute>(path: '/interaction-lab')
+class InteractionLabRoute extends AppRouteData with $InteractionLabRoute {
+  const InteractionLabRoute();
+
+  @override
+  String get title => '交互实验室';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.playCircleOutline;
+
+  @override
+  String? get sidebarGroupId => 'lab';
+
+  static const Permission routePermission = Permission.accessDemo;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const InteractionLabScreen());
   }
 }

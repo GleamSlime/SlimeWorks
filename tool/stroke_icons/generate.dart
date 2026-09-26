@@ -16,6 +16,14 @@ const _outFile = 'lib/components/icons/stroke_icons.g.dart';
 const _fixtureFile = 'test/fixtures/stroke_icons_all.dart';
 const _libDir = 'lib';
 
+/// 不走 Tabler、直接吃项目 svg 资产的图形。
+///
+/// 品牌标记那种自绘资产本来就在 assets 里，手抄 45 条 d 字符串必然和资产漂移；
+/// 让生成器去读资产，SVG 仍然是唯一来源。
+const _svgMarks = [
+  (alias: 'brandMark', name: 'brand-mark', file: 'assets/image/svg/top_bar_logo.svg'),
+];
+
 /// Material 图标名的风格后缀，归一化时剥掉（Tabler 只有一种笔画风格）
 final _styleSuffix = RegExp(r'_(rounded|outlined|sharp|circle|twotone)$');
 
@@ -61,16 +69,20 @@ void main(List<String> args) {
   // 它只在 test/ 下被引用，不进 app 产物，所以不会破坏"未引用不进包"。
   File(_fixtureFile).createSync(recursive: true);
   File(_fixtureFile).writeAsStringSync(_emitFixture(material, asset));
-  stdout.writeln('✓ 已生成 $_outFile：${used.length} 个 Tabler 图标几何，'
-      '${material.length + asset.length} 个别名');
+  final svgNote = _svgMarks.isEmpty ? '' : ' + ${_svgMarks.length} 个 svg 资产几何';
+  stdout.writeln('✓ 已生成 $_outFile：${used.length} 个 Tabler 图标几何$svgNote，'
+      '${material.length + asset.length + _svgMarks.length} 个别名');
 }
 
 Map<String, dynamic> _loadJson(String path) =>
     jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
 
 /// 扫 lib，找出没有映射的 Material 图标名（供 --check 提示补表）
+///
+/// 必须带词边界：`StrokeIcons.foo` 里也含子串 `Icons.foo`，不加边界会把
+/// 生成物自己的每一根别名报成未解析，`--check` 永远红。
 List<String> _scanUnresolved(Map<String, String> material) {
-  final pattern = RegExp(r'Icons\.([a-zA-Z0-9_]+)');
+  final pattern = RegExp(r'\bIcons\.([a-zA-Z0-9_]+)');
   final found = <String>{};
   for (final entity in Directory(_libDir).listSync(recursive: true)) {
     if (entity is! File || !entity.path.endsWith('.dart')) continue;
@@ -102,7 +114,8 @@ String _emit(
   final buffer = StringBuffer()
     ..writeln('''// GENERATED — 由 tool/stroke_icons/generate.dart 生成，请勿手改。
 // 改图标只改 tool/stroke_icons/data/icon_map.json，然后重跑生成器。
-// 几何来源：Tabler outline（MIT），笔画为 24x24 viewBox 的中心线路径。
+// 几何来源：Tabler outline（MIT），笔画为 24x24 viewBox 的中心线路径；
+// 少数品牌标记类图形直接读自项目的 svg 资产，viewBox 跟着资产走。
 import 'stroke_geometry.dart';''');
 
   for (final name in byTabler) {
@@ -124,6 +137,24 @@ import 'stroke_geometry.dart';''');
     buffer.writeln(');');
   }
 
+  for (final mark in _svgMarks) {
+    final geometry = _readSvgMark(mark.file);
+    buffer.writeln();
+    buffer.writeln('/// ${mark.name}：直接读自 ${mark.file}，viewBox ${geometry.viewBox}');
+    buffer.writeln('const StrokeIcon _\$${mark.alias} = StrokeIcon(');
+    buffer.writeln("  name: '${mark.name}',");
+    buffer.writeln('  viewBox: ${geometry.viewBox},');
+    buffer.writeln('  paths: [');
+    for (final (d, solid) in geometry.paths) {
+      final escaped = d.replaceAll("'", r"\'");
+      buffer.writeln(solid
+          ? "    StrokePath.filled('$escaped'),"
+          : "    StrokePath('$escaped'),");
+    }
+    buffer.writeln('  ],');
+    buffer.writeln(');');
+  }
+
   buffer.writeln();
   buffer.writeln('/// 项目里用到的描边图标集合，替代 `Icons.*` 与自绘 svg 资产。');
   buffer.writeln('abstract final class StrokeIcons {');
@@ -132,8 +163,35 @@ import 'stroke_geometry.dart';''');
         ..sort((a, b) => a.key.compareTo(b.key)))) {
     buffer.writeln('  static const StrokeIcon ${entry.key} = _\$${camel(entry.value)};');
   }
+  for (final mark in _svgMarks) {
+    buffer.writeln('  static const StrokeIcon ${mark.alias} = _\$${mark.alias};');
+  }
   buffer.writeln('}');
   return buffer.toString();
+}
+
+/// 从项目 svg 资产里裁出描边几何
+///
+/// 只认 `<path>`：rect/circle 那些图元没有 d 字符串，`computeMetrics` 拿不到中心线。
+/// 笔顺按文档顺序，也就是设计师在矢量软件里的叠放顺序，读起来是对的。
+({double viewBox, List<(String d, bool solid)> paths}) _readSvgMark(String file) {
+  final source = File(file).readAsStringSync();
+  final viewBoxMatch = RegExp(r'viewBox="[\d.\s-]+"').firstMatch(source);
+  final box = viewBoxMatch == null
+      ? 24.0
+      : double.parse(viewBoxMatch.group(0)!.split('"')[1].trim().split(RegExp(r'\s+'))[2]);
+  final paths = <(String, bool)>[];
+  for (final m in RegExp(r'<path\b[^>]*>').allMatches(source)) {
+    final tag = m.group(0)!;
+    final d = RegExp(r'\bd="([^"]*)"').firstMatch(tag)?.group(1);
+    if (d == null || d.isEmpty) continue;
+    // 根节点写的是 fill="none"，没带 fill 属性的 path 继承它，就是纯描边；
+    // 只有显式的实色 fill（眼睛、刻度点那种小块）才是描不出来的实心块
+    final fill = RegExp(r'\bfill="([^"]*)"').firstMatch(tag)?.group(1);
+    final solid = fill != null && fill != 'none' && fill != 'white';
+    paths.add((d, solid));
+  }
+  return (viewBox: box, paths: paths);
 }
 
 /// 生成物里每个几何常量的注释：它服务哪些调用名（便于回查为什么留这个图标）
