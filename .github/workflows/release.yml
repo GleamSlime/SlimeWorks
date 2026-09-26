@@ -70,7 +70,21 @@ jobs:
           ENVEOF
 
       - name: Flutter 单元测试
-        run: flutter test --exclude-tags golden
+        run: |
+          # 日志下载要仓库管理员权限，失败时把报错原文推成注解，公开 API 也读得到
+          status=0
+          flutter test --exclude-tags golden --reporter expanded > test.log 2>&1 || status=$?
+          cat test.log
+          if [ $status -ne 0 ]; then
+            python3 - <<'PY'
+          import re
+          text = open('test.log', encoding='utf-8', errors='replace').read()
+          for block in re.findall(r'\d\d:\d\d[^\n]*\[E\][^\n]*\n(?:(?!\d\d:\d\d)[^\n]*\n){0,20}', text):
+              esc = block.strip()[:1800].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print('::error::' + esc)
+          PY
+          fi
+          exit $status
 
   # ===== test-rust：Rust 单元测试，暂只观测不拦门 =====
   # whisper-rs-sys 的 build script 用 bindgen，必须能拿到 libclang；cargokit 只在
