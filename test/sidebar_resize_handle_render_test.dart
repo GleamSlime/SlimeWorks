@@ -107,7 +107,7 @@ void main() {
     expect(kinds.last, isNot('click'));
   });
 
-  testWidgets('拖拽换算、拖到最窄自动收起、收起态往右拖拉回展开', (tester) async {
+  testWidgets('拖拽换算、拖到最窄自动收起、收起态跟手展开', (tester) async {
     // 宽度要落盘，先把偏好层垫上，否则平台通道直接抛
     SharedPreferences.setMockInitialValues({});
     late double ratio;
@@ -148,16 +148,28 @@ void main() {
     expect(controller.resizing.value, isFalse);
     expect(controller.expandedWidth.value, SidebarController.kDefaultExpandedWidth);
 
-    // 收起态继续往左拖没有意义，不该把状态又翻回去
+    // 收起态继续往左拖：宽度跟手收缩，但不该把状态翻回展开
     controller.resizeBy(-10);
     expect(controller.isExpanded.value, isFalse);
+    expect(controller.following.value, isTrue);
+    expect(controller.followWidth.value, lessThan(SidebarController.kCollapsedWidth));
 
-    // 收起态往右拖等于把它拉回来
+    // 往右拖是渐进的：途里只是跟手，没过半就松手弹回收起位
     controller.resizeBy(10);
-    expect(controller.isExpanded.value, isTrue);
-
     controller.endResize();
-    expect(controller.resizing.value, isFalse);
+    expect(controller.isExpanded.value, isFalse);
+    expect(controller.following.value, isFalse);
+
+    // 拖过阈值再松手才落到展开，落点宽直接接手跟手宽
+    controller.beginResize();
+    controller.resizeBy(120);
+    expect(controller.isExpanded.value, isFalse);
+    controller.endResize();
+    expect(controller.isExpanded.value, isTrue);
+    expect(
+      controller.expandedWidth.value,
+      greaterThanOrEqualTo(SidebarController.kMinExpandedWidth),
+    );
 
     // toggleSidebar 要等宽度动画跑完才亮扩展内容，不推进 fake 时钟就留个挂起的 Timer
     await tester.pump(SidebarController.kWidthAnimation + const Duration(milliseconds: 100));

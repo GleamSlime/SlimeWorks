@@ -4,9 +4,11 @@
 > 反馈靠同一个形状改尺寸/改圆角/改颜色，不靠加东西。本文是**取色、取尺寸、取动效的唯一口径来源**。
 >
 > 代码入口：`lib/core/theme/`（令牌）+ `lib/core/widgets/`（组件）+ `lib/components/window/`（外壳）
-> + `lib/pages/theme_preview_screen.dart`（可视化总览，路由 `/theme-preview`）。
+> + `lib/pages/theme_preview_screen.dart`（可视化总览，路由 `/theme-preview`）
+> + `lib/pages/motion_lab/`（动效参考集，隔离在主题之外，§12）。
 >
-> 阅读顺序：§1 分层 → §2 取色 → §3 尺寸 → §4 文字 → §5 动效 → §6 外壳 → §7 玻璃 → §8 组件 → §9 规范 → §10 验收 → §11 进度。
+> 阅读顺序：§1 分层 → §2 取色 → §3 尺寸 → §4 文字 → §5 动效 → §6 外壳 → §7 磨砂 → §8 响应式
+> → §9 组件 → §10 规范 → §11 验收 → §12 动效实验室 → §13 进度。
 > 标了 **🔧 待落地** 的条目是已定的契约、代码还没跟上，改动时按契约做，不要按现状反推。
 
 ---
@@ -811,7 +813,81 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 
 ---
 
-## 12. 迁移进度与已知缺口
+## 12. 动效实验室（隔离案例集）
+
+`lib/pages/motion_lab/` 是一页 43 格的动效参考集：每格一个独立组件，照外部参考稿逐像素还原
+尺寸/颜色/时长/曲线/关键帧。**它是只读参考，不是产品 UI**——§5.1 的禁令在这里依然成立，
+发光、粒子爆炸、骨架渐变搬进真页面仍然是违规。
+
+### 12.1 结构
+
+- `lab_kit.dart`：这一页自己的 token 层（`LabColor` / `LabFont` / `LabEase` / `LabSize` /
+  `LabShadow` / `LabText` / `LabStage` / `LabCard` / `LabAnimateButton` / `LabIconButton` /
+  `LabStageFooter` / `LabBlur` / `LabTween` / `LabIcon`）。
+- `cases/case_NN_*.dart`：43 个文件，一格一个 class，互不引用。
+- `cases/motion_lab_cases.dart`：注册表 `kLabCases`（`seq` / `title` / `subtitle` / `cat` / `build`），
+  页面和测试都只认这张表——加一格只加文件 + 加一条注册。
+
+### 12.2 隔离：一堵单向墙
+
+- **不读也不写** `AppTheme` / `AppSemantic` / `AppMotion`，也不碰 `LightColors` / `AppTextStyles`。
+- 依赖只能单向流入：`lib/pages/motion_lab/**` 之外不许 import 它，唯一的入边是路由注册。
+  真页面要用某个效果，把算法搬过去按 §5 的口径重写，不要直接引用。
+- 复测：`grep -rln "motion_lab" lib/ | grep -v "^lib/pages/motion_lab/"` 只应剩 `core/routes/app_routes.dart`。
+
+### 12.3 字面 px 是**记录在案的例外**
+
+§10.2 禁裸数字，这一页**故意**全是裸数字（`style_showcase_screen` 同理）：参考稿给的就是绝对
+像素，乘上 `scaleW` 之后 1440 窗口下整套尺寸会缩到 75%，那就不是还原了。例外只圈在
+`lib/pages/motion_lab/**`，越界即违规。
+
+### 12.4 四个动效坑（都是这一页里真炸过的）
+
+1. **`build()` 里读控制器 ≠ 会重绘**：`_c.value` 直接读进 build，没挂 `AnimatedBuilder` /
+   `ListenableBuilder` / `addListener`，画面就永远停在挂载那一帧。测试里表现为"动效完全不存在"，
+   真机上偶尔被别的 `setState` 顺带刷一帧——最难查。`repeat()` 的循环钟尤其如此。
+2. **`TweenAnimationBuilder` 只在 `begin != end` 时起钟**（SDK 的 `initState` 里就一句
+   `if (_currentTween!.begin != _currentTween!.end) controller.forward();`）。入场补间首帧两个值
+   常常都是 0，下一帧把 `end` 换成 1 时**钟已经不会再转**，界面永远停在 0。
+   → 用 `LabTween` / `_ValueTween`（值到值补间，自己挂监听，首帧直接落目标）。
+3. **零时长 `pump()` 是"对表帧"**：刚 `forward()` 的钟会把这一帧当成对表，进度仍是 0；而
+   `addPostFrameCallback` 里改的目标要下一帧才生效。所以 `shootLabCase` 在交互之后固定推
+   **两帧真实时间**（2×16ms），只推一帧就拍到"没动"。
+4. **`Cubic.transform` 对 [0,1] 之外直接断言**：行程比例（`elapsed / 总时长`）一律
+   `.clamp(0.0, 1.0)` 再喂进去，否则回弹曲线一过冲就抛。
+
+形变面板另有一条：CSS 的 `overflow: hidden` 在 Flutter 里要给子节点按**展开尺寸**定死
+`Positioned(width/height)`、由外层 `ClipRRect` 裁掉多出来的部分；`Positioned.fill` 和
+`UnconstrainedBox` 在 morph 途中必然溢出断言。
+
+### 12.5 局部工具为什么不用现成的
+
+| 工具 | 干什么 | 为什么单独一份 |
+|---|---|---|
+| `LabIcon` | 按 path 数据现画的描边图标 | 全局 `DrawIcon` 的尺寸走宽度族、颜色走语义色，这一页两样都不许碰 |
+| `LabBlur` | `ImageFiltered` 糊本地图层 | 不依赖主题 |
+| `LabTween` / `_ValueTween` | 值到值补间 | 见 §12.4 的 2 |
+
+### 12.6 验收：一帧一个 test
+
+```bash
+flutter test -t golden test/motion_lab_all_cases_test.dart              # 129 张 = 43 格 × 静止/途中/终态
+flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart
+flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --plain-name 'Confetti burst'  # 单格重出
+```
+
+- 触发方式按格子写死在 `_acts`：点按钮 / 点可点区 / 压悬停 / 什么都不做只推进时间。
+  可点、可拖的元素靠 `cursor: click|grab` 的 `MouseRegion` 找，比猜坐标可靠（拖拽格是 `grab`）。
+- **一帧一个 test**：出过图之后同一个 test 里的第二次点击就不再接到了。
+- 途中帧默认 150ms；还在 delay 里的慢启动格、以及刚炸开挤成一团的格子，另写进 `_midOverride`。
+- **只看静止帧证明不了动效存在**。审计口径：43 格的 idle / mid 两张取哈希比对，
+  `mid == idle` 必须为空集；`end == idle` 只允许是"落定后本来就该没有"的格子（6 号纸屑落完）。
+- 确定性：随机只许 `math.Random(固定种子)`；出现 `DateTime.now()` 或依赖真实窗口的 `MediaQuery`
+  就会第二次跑挂。不带 `--update-goldens` 重跑一遍即是一次复现检验。
+
+---
+
+## 13. 迁移进度与已知缺口
 
 ### 已完成
 
@@ -829,6 +905,8 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 - **全站图标收敛**（§9.1）：`Icon(Icons.*)` 与 `assets/image/svg` 的 41 张自绘图标全部换成
   构建期生成的 `DrawIcon(StrokeIcons.*)` + 描边动画，122 个调用点一遍过；只保留品牌标
   `top_bar_logo.svg`。产物里"没引用的图标不进包"（mac/windows/ios 三端同理）
+- **动效实验室**（§12）：43 格参考案例全部落地，一格一个组件、零全局主题耦合，
+  129 张 golden（每格静止/途中/终态）可复现；途中帧哈希比对证明 43 格**全部**在动
 
 ### 未完成（按可见度排序）
 
@@ -852,7 +930,7 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 
 ---
 
-## 13. 相关提交
+## 14. 相关提交
 
 ```
 40452f4 refactor(ui): 音乐播放器整块接进设计系统语义层

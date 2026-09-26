@@ -34,6 +34,9 @@ migrate_working_dir/
 /coverage/
 **/build/
 
+# golden 不匹配时 Flutter 吐的 diff 图，临时产物
+/test/failures/
+
 # Symbolication related
 app.*.symbols
 

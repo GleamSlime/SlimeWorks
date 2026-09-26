@@ -224,6 +224,15 @@ class DesktopTopBar extends StatelessWidget {
                     leafLabel: chrome.title,
                   ));
 
+      // 侧栏收进隐藏态后，原来住在栏顶的 macOS 三颗灯没了落脚点，
+      // 借顶栏左端这一格。往右让开一截是给内容区左缘的指示条留命中区，
+      // 否则红灯被那 22 宽的把手吃掉半截。
+      // 跟手拖出途中侧栏顶的灯已经画出来了，顶栏这一盏要熄，否则一处两套灯；
+      // 这时候栏比灯还窄，硬塞进顶栏 Row 就是那条 RenderFlex overflowed。
+      final sidebar = Get.find<SidebarController>();
+      final lightsHere =
+          Platform.isMacOS && sidebar.isHidden.value && !sidebar.following.value;
+
       return Container(
         padding: EdgeInsets.only(
           left: AppTheme.metrics.kSpace12,
@@ -234,6 +243,11 @@ class DesktopTopBar extends StatelessWidget {
         child: Row(
           spacing: appMetrics.kSpace12,
           children: [
+            if (lightsHere)
+              Padding(
+                padding: EdgeInsets.only(left: scaleW(16)),
+                child: const MacWindowButtons(),
+              ),
             if (chrome.hasLeading) chrome.leading!,
             Expanded(
               child: Align(

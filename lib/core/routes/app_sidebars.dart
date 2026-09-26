@@ -5,6 +5,42 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 
+/// 历史上没有侧边栏的页面。侧栏全局化后它们并入外壳，但进入时默认落在
+/// 隐藏态——只剩内容区左缘一根指示条，阅读/工具类页面的沉浸感才和过去一致。
+/// 已登记进侧栏条目的页面（动效实验室、漫画历史）不算：从侧栏点进去
+/// 又被立刻藏起来，等于自相矛盾。
+const Set<String> kSidebarDefaultHiddenPaths = {
+  '/novel-library',
+  '/novel-reader',
+  '/module-management',
+  '/theme-preview',
+  '/http-bridge-test',
+  '/websocket-test',
+  '/image-tools',
+  '/image-toolbox',
+  '/media-library',
+  '/datasource',
+  '/clearwater',
+  '/cloud-word',
+  '/distributed',
+  '/request-host',
+  '/gooey-demo',
+  '/viewmodel-demo',
+  '/lan-chat',
+  '/manga/comic',
+  '/manga/search',
+  '/manga/read',
+  '/game/detail',
+  '/game/category',
+  '/style-showcase',
+};
+
+/// 按路径段前缀匹配：参数化路径（/manga/read/x/1 等）也算命中。
+/// 用 `'$base/'` 而不是裸前缀，否则 '/game/category' 会误伤 '/game/categories'。
+bool sidebarDefaultHidden(String location) => kSidebarDefaultHiddenPaths.any(
+  (base) => location == base || location.startsWith('$base/'),
+);
+
 /// 从路由元数据自动生成侧边栏分组
 List<SidebarGroup> buildSidebarGroupsFromRoutes() {
   final isMobilePlatform = Platform.isAndroid || Platform.isIOS;
@@ -26,6 +62,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const GameLibraryRoute(),
     const AboutRoute(),
     const SettingsRoute(),
+    const MotionLabRoute(),
 
     const GameCategoriesRoute(),
     const GameStatsRoute(),

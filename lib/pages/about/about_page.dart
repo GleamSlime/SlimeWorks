@@ -98,7 +98,9 @@ class AboutPage extends StatelessWidget {
               Assets.image.svg.topBarLogo,
               width: scaleW(100),
               height: scaleW(100),
-              // colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              // 底板是紫色渐变，原图的深蓝描边压在上面几乎读不出来；
+              // 资产已经去掉底色与投影，单色压平后就是干净的线稿
+              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
             ),
           ),
         ),

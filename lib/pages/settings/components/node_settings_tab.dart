@@ -205,338 +205,331 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final brandColor = isDark ? DarkColors.primary : LightColors.primary;
 
-    return Obx(
-      () => Scaffold(
-        body: SingleChildScrollView(
-          padding: EdgeInsets.all(m.kSpace16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionTitle('本机节点', StrokeIcons.dns),
-              SizedBox(height: m.kSpace12),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(m.kSpace16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
-                  borderRadius: m.radius12,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
-                  ),
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(m.kSpace16),
+      child: Obx(
+        () => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('本机节点', StrokeIcons.dns),
+            SizedBox(height: m.kSpace12),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(m.kSpace16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
+                borderRadius: m.radius12,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: m.kSpace32,
-                          height: m.kSpace32,
-                          decoration: BoxDecoration(
-                            color: brandColor.withAlpha(25),
-                            borderRadius: m.radius8,
-                          ),
-                          child: DrawIcon(StrokeIcons.computer,
-                            size: m.iconSize16,
-                            color: brandColor,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: m.kSpace32,
+                        height: m.kSpace32,
+                        decoration: BoxDecoration(
+                          color: brandColor.withAlpha(25),
+                          borderRadius: m.radius8,
+                        ),
+                        child: DrawIcon(
+                          StrokeIcons.computer,
+                          size: m.iconSize16,
+                          color: brandColor,
+                        ),
+                      ),
+                      SizedBox(width: m.kSpace10),
+                      Expanded(
+                        child: Text(
+                          '本机节点服务',
+                          style: TextStyle(
+                            fontSize: m.fontSize13,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
-                        SizedBox(width: m.kSpace10),
+                      ),
+                      Switch(value: service.localNodeEnabled.value, onChanged: _saveLocalSettings),
+                    ],
+                  ),
+                  SizedBox(height: m.kSpace12),
+                  TextField(
+                    controller: _localNameCtrl,
+                    decoration: const InputDecoration(labelText: 'API节点名'),
+                    onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
+                  ),
+                  SizedBox(height: m.kSpace8),
+                  TextField(
+                    controller: _localPortCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '节点端口'),
+                    onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
+                  ),
+                  // 开启节点后展示本机授权码：其他设备添加节点时需要它
+                  if (service.localNodeEnabled.value) ...[
+                    SizedBox(height: m.kSpace12),
+                    Row(
+                      children: [
+                        Text('本机授权码', style: Theme.of(context).textTheme.titleSmall),
+                        SizedBox(width: m.kSpace8),
                         Expanded(
-                          child: Text(
-                            '本机节点服务',
+                          child: SelectableText(
+                            service.localNodeAuthCode.value.isEmpty
+                                ? '未设置'
+                                : service.localNodeAuthCode.value,
                             style: TextStyle(
                               fontSize: m.fontSize13,
                               fontWeight: FontWeight.w600,
+                              fontFamily: 'monospace',
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
-                        Switch(
-                          value: service.localNodeEnabled.value,
-                          onChanged: _saveLocalSettings,
+                        IconButton(
+                          onPressed: _copyLocalAuthCode,
+                          icon: DrawIcon(StrokeIcons.copy),
+                          iconSize: m.iconSize16,
+                          tooltip: '复制授权码到剪切板',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        IconButton(
+                          onPressed: _regenerateLocalAuthCode,
+                          icon: DrawIcon(StrokeIcons.autorenew),
+                          iconSize: m.iconSize16,
+                          tooltip: '重置授权码（旧码立即失效）',
+                          visualDensity: VisualDensity.compact,
                         ),
                       ],
                     ),
-                    SizedBox(height: m.kSpace12),
-                    TextField(
-                      controller: _localNameCtrl,
-                      decoration: const InputDecoration(labelText: 'API节点名'),
-                      onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
+                    Text(
+                      '其他设备添加本节点时填写它；请求头 X-SW-Auth 携带其 sha256 摘要',
+                      style: TextStyle(
+                        fontSize: m.fontSize12,
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                      ),
                     ),
-                    SizedBox(height: m.kSpace8),
-                    TextField(
-                      controller: _localPortCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: '节点端口'),
-                      onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
+                  ],
+                  SizedBox(height: m.kSpace12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: () => _saveLocalSettings(service.localNodeEnabled.value),
+                      child: const Text('保存本机节点设置'),
                     ),
-                    // 开启节点后展示本机授权码：其他设备添加节点时需要它
-                    if (service.localNodeEnabled.value) ...[
-                      SizedBox(height: m.kSpace12),
-                      Row(
-                        children: [
-                          Text('本机授权码', style: Theme.of(context).textTheme.titleSmall),
-                          SizedBox(width: m.kSpace8),
-                          Expanded(
-                            child: SelectableText(
-                              service.localNodeAuthCode.value.isEmpty
-                                  ? '未设置'
-                                  : service.localNodeAuthCode.value,
+                  ),
+                  SizedBox(height: m.kSpace12),
+                  Text('本机API地址', style: Theme.of(context).textTheme.titleSmall),
+                  SizedBox(height: m.kSpace6),
+                  if (service.localNodeApiList.isEmpty)
+                    Text(
+                      '暂无可用地址',
+                      style: TextStyle(
+                        fontSize: m.fontSize12,
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                      ),
+                    )
+                  else
+                    ...service.localNodeApiList.map(
+                      (api) => Padding(
+                        padding: EdgeInsets.only(bottom: m.kSpace4),
+                        child: Row(
+                          children: [
+                            DrawIcon(StrokeIcons.link, size: m.iconSize12, color: brandColor),
+                            SizedBox(width: m.kSpace6),
+                            SelectableText(
+                              api,
                               style: TextStyle(
-                                fontSize: m.fontSize13,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'monospace',
-                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: m.fontSize12,
+                                color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
                               ),
                             ),
-                          ),
-                          IconButton(
-                            onPressed: _copyLocalAuthCode,
-                            icon: DrawIcon(StrokeIcons.copy),
-                            iconSize: m.iconSize16,
-                            tooltip: '复制授权码到剪切板',
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          IconButton(
-                            onPressed: _regenerateLocalAuthCode,
-                            icon: DrawIcon(StrokeIcons.autorenew),
-                            iconSize: m.iconSize16,
-                            tooltip: '重置授权码（旧码立即失效）',
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                      Text(
-                        '其他设备添加本节点时填写它；请求头 X-SW-Auth 携带其 sha256 摘要',
-                        style: TextStyle(
-                          fontSize: m.fontSize12,
-                          color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                          ],
                         ),
-                      ),
-                    ],
-                    SizedBox(height: m.kSpace12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton(
-                        onPressed: () => _saveLocalSettings(service.localNodeEnabled.value),
-                        child: const Text('保存本机节点设置'),
                       ),
                     ),
-                    SizedBox(height: m.kSpace12),
-                    Text('本机API地址', style: Theme.of(context).textTheme.titleSmall),
-                    SizedBox(height: m.kSpace6),
-                    if (service.localNodeApiList.isEmpty)
-                      Text(
-                        '暂无可用地址',
-                        style: TextStyle(
-                          fontSize: m.fontSize12,
-                          color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
-                        ),
-                      )
-                    else
-                      ...service.localNodeApiList.map(
-                        (api) => Padding(
-                          padding: EdgeInsets.only(bottom: m.kSpace4),
-                          child: Row(
-                            children: [
-                              DrawIcon(StrokeIcons.link, size: m.iconSize12, color: brandColor),
-                              SizedBox(width: m.kSpace6),
-                              SelectableText(
-                                api,
-                                style: TextStyle(
-                                  fontSize: m.fontSize12,
-                                  color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              SizedBox(height: m.kSpace24),
-              Row(
-                children: [
-                  _buildSectionTitle('远程节点', StrokeIcons.cloud),
-                  Spacer(),
-                  IconButton(
-                    onPressed: service.refreshNodeConnectivity,
-                    icon: DrawIcon(StrokeIcons.sync),
-                    tooltip: '刷新连通状态',
-                    iconSize: m.iconSize18,
-                  ),
-                  IconButton(
-                    onPressed: () => _showNodeEditor(),
-                    icon: DrawIcon(StrokeIcons.add),
-                    tooltip: '添加节点',
-                    iconSize: m.iconSize18,
-                  ),
                 ],
               ),
-              SizedBox(height: m.kSpace12),
-              if (service.remoteNodes.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace32),
+            ),
+            SizedBox(height: m.kSpace24),
+            Row(
+              children: [
+                _buildSectionTitle('远程节点', StrokeIcons.cloud),
+                Spacer(),
+                IconButton(
+                  onPressed: service.refreshNodeConnectivity,
+                  icon: DrawIcon(StrokeIcons.sync),
+                  tooltip: '刷新连通状态',
+                  iconSize: m.iconSize18,
+                ),
+                IconButton(
+                  onPressed: () => _showNodeEditor(),
+                  icon: DrawIcon(StrokeIcons.add),
+                  tooltip: '添加节点',
+                  iconSize: m.iconSize18,
+                ),
+              ],
+            ),
+            SizedBox(height: m.kSpace12),
+            if (service.remoteNodes.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace32),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(60),
+                  borderRadius: m.radius12,
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant.withAlpha(60),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: m.kSpace40,
+                      height: m.kSpace40,
+                      decoration: BoxDecoration(
+                        color: brandColor.withAlpha(20),
+                        borderRadius: m.radius10,
+                      ),
+                      child: DrawIcon(StrokeIcons.cloudOff, size: m.iconSize20, color: brandColor),
+                    ),
+                    SizedBox(height: m.kSpace12),
+                    Text(
+                      '暂无远程节点',
+                      style: TextStyle(
+                        fontSize: m.fontSize13,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    SizedBox(height: m.kSpace4),
+                    Text(
+                      '点击右上角 + 添加远程节点',
+                      style: TextStyle(
+                        fontSize: m.fontSize12,
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...service.remoteNodes.map((node) {
+                final ok = service.nodeConnectivity[node.id];
+                final dotColor = ok == null
+                    ? Colors.grey
+                    : ok
+                    ? Colors.green
+                    : Colors.red;
+                final statusLabel = ok == null
+                    ? '检测中'
+                    : ok
+                    ? '已连接'
+                    : '不可达';
+                return Container(
+                  margin: EdgeInsets.only(bottom: m.kSpace8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(60),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
                     borderRadius: m.radius12,
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant.withAlpha(60),
+                      color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: m.kSpace40,
-                        height: m.kSpace40,
-                        decoration: BoxDecoration(
-                          color: brandColor.withAlpha(20),
-                          borderRadius: m.radius10,
-                        ),
-                        child: DrawIcon(StrokeIcons.cloudOff,
-                          size: m.iconSize20,
-                          color: brandColor,
-                        ),
-                      ),
-                      SizedBox(height: m.kSpace12),
-                      Text(
-                        '暂无远程节点',
-                        style: TextStyle(
-                          fontSize: m.fontSize13,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      SizedBox(height: m.kSpace4),
-                      Text(
-                        '点击右上角 + 添加远程节点',
-                        style: TextStyle(
-                          fontSize: m.fontSize12,
-                          color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                ...service.remoteNodes.map((node) {
-                  final ok = service.nodeConnectivity[node.id];
-                  final dotColor = ok == null
-                      ? Colors.grey
-                      : ok
-                      ? Colors.green
-                      : Colors.red;
-                  final statusLabel = ok == null
-                      ? '检测中'
-                      : ok
-                      ? '已连接'
-                      : '不可达';
-                  return Container(
-                    margin: EdgeInsets.only(bottom: m.kSpace8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
-                      borderRadius: m.radius12,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: m.radius12,
-                      child: Row(
-                        children: [
-                          Container(width: 4, height: 72, color: dotColor),
-                          Expanded(
-                            child: ListTile(
-                              title: Row(
-                                children: [
-                                  Expanded(child: Text(node.name)),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: m.kSpace8,
-                                      vertical: m.kSpace2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: dotColor.withAlpha(25),
-                                      borderRadius: m.radius999,
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: m.kSpace6,
-                                          height: m.kSpace6,
-                                          decoration: BoxDecoration(
-                                            color: dotColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        SizedBox(width: m.kSpace4),
-                                        Text(
-                                          statusLabel,
-                                          style: TextStyle(
-                                            fontSize: m.fontSize12,
-                                            fontWeight: FontWeight.w600,
-                                            color: dotColor,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                  child: ClipRRect(
+                    borderRadius: m.radius12,
+                    child: Row(
+                      children: [
+                        Container(width: 4, height: 72, color: dotColor),
+                        Expanded(
+                          child: ListTile(
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(node.name)),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: m.kSpace8,
+                                    vertical: m.kSpace2,
                                   ),
-                                ],
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(node.apiBaseUrl, style: TextStyle(fontSize: m.fontSize12)),
-                                  if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
-                                    Text(
-                                      '内网: ${node.lanApiBaseUrl}',
-                                      style: TextStyle(fontSize: m.fontSize12, color: Colors.teal),
-                                    ),
-                                  // 连通失败时给出原因（授权码错误 / 不可达 / 已禁用）
-                                  if (ok == false)
-                                    Text(
-                                      service.nodeConnectivityError[node.id] ?? '',
-                                      style: TextStyle(
-                                        fontSize: m.fontSize12,
-                                        color: Theme.of(context).colorScheme.error,
+                                  decoration: BoxDecoration(
+                                    color: dotColor.withAlpha(25),
+                                    borderRadius: m.radius999,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: m.kSpace6,
+                                        height: m.kSpace6,
+                                        decoration: BoxDecoration(
+                                          color: dotColor,
+                                          shape: BoxShape.circle,
+                                        ),
                                       ),
+                                      SizedBox(width: m.kSpace4),
+                                      Text(
+                                        statusLabel,
+                                        style: TextStyle(
+                                          fontSize: m.fontSize12,
+                                          fontWeight: FontWeight.w600,
+                                          color: dotColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(node.apiBaseUrl, style: TextStyle(fontSize: m.fontSize12)),
+                                if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
+                                  Text(
+                                    '内网: ${node.lanApiBaseUrl}',
+                                    style: TextStyle(fontSize: m.fontSize12, color: Colors.teal),
+                                  ),
+                                // 连通失败时给出原因（授权码错误 / 不可达 / 已禁用）
+                                if (ok == false)
+                                  Text(
+                                    service.nodeConnectivityError[node.id] ?? '',
+                                    style: TextStyle(
+                                      fontSize: m.fontSize12,
+                                      color: Theme.of(context).colorScheme.error,
                                     ),
-                                ],
-                              ),
-                              // 内容行数会随错误提示变化，交由 ListTile 自适应高度
-                              isThreeLine: false,
-                              leading: Switch(
-                                value: node.enabled,
-                                onChanged: (v) => service.setRemoteNodeEnabled(node.id, v),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: DrawIcon(StrokeIcons.edit),
-                                    onPressed: () => _showNodeEditor(initial: node),
-                                    iconSize: m.iconSize18,
                                   ),
-                                  IconButton(
-                                    icon: DrawIcon(StrokeIcons.deleteOutline),
-                                    onPressed: () => service.removeRemoteNode(node.id),
-                                    iconSize: m.iconSize18,
-                                  ),
-                                ],
-                              ),
+                              ],
+                            ),
+                            // 内容行数会随错误提示变化，交由 ListTile 自适应高度
+                            isThreeLine: false,
+                            leading: Switch(
+                              value: node.enabled,
+                              onChanged: (v) => service.setRemoteNodeEnabled(node.id, v),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: DrawIcon(StrokeIcons.edit),
+                                  onPressed: () => _showNodeEditor(initial: node),
+                                  iconSize: m.iconSize18,
+                                ),
+                                IconButton(
+                                  icon: DrawIcon(StrokeIcons.deleteOutline),
+                                  onPressed: () => service.removeRemoteNode(node.id),
+                                  iconSize: m.iconSize18,
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  );
-                }),
-            ],
-          ),
+                  ),
+                );
+              }),
+          ],
         ),
       ),
     );
@@ -624,10 +617,7 @@ class _NodeEditorDialogState extends State<_NodeEditorDialog> {
             SizedBox(height: m.kSpace12),
             TextField(
               controller: _apiCtrl,
-              decoration: const InputDecoration(
-                labelText: '外网API',
-                hintText: 'http://公网IP:17888',
-              ),
+              decoration: const InputDecoration(labelText: '外网API', hintText: 'http://公网IP:17888'),
             ),
             SizedBox(height: m.kSpace12),
             TextField(
@@ -642,10 +632,7 @@ class _NodeEditorDialogState extends State<_NodeEditorDialog> {
               controller: _authCodeCtrl,
               obscureText: true,
               style: const TextStyle(fontFamily: 'monospace'),
-              decoration: const InputDecoration(
-                labelText: '授权码（节点侧提供）',
-                hintText: '与对端「本机授权码」一致',
-              ),
+              decoration: const InputDecoration(labelText: '授权码（节点侧提供）', hintText: '与对端「本机授权码」一致'),
             ),
           ],
         ),

@@ -42,3 +42,27 @@ class ViewModelDemoRoute extends AppRouteData with $ViewModelDemoRoute {
     return AppRoutes.buildPage(context, state, const ViewModelDemoScreenPage());
   }
 }
+
+@TypedGoRoute<MotionLabRoute>(path: '/motion-lab')
+class MotionLabRoute extends AppRouteData with $MotionLabRoute {
+  const MotionLabRoute();
+
+  @override
+  String get title => '动效实验室';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.playCircleOutline;
+
+  @override
+  String? get sidebarGroupId => 'tools';
+
+  static const Permission routePermission = Permission.accessDemo;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const MotionLabScreen());
+  }
+}

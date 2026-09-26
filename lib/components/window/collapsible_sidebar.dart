@@ -64,6 +64,13 @@ class SidebarController extends GetxController {
   // 侧边栏是否展开
   final RxBool isExpanded = isDesktop ? true.obs : false.obs;
 
+  // 隐藏态：整条栏不占宽度，只剩内容区左缘那根指示条
+  final RxBool isHidden = false.obs;
+
+  // 进"默认隐藏页"之前的显示状态（展开/收起），离开时按它恢复
+  bool _lastVisibleExpanded = isDesktop;
+  bool _routeForcedHidden = false;
+
   // 侧边栏扩展内容是否显示
   final RxBool showExtends = true.obs;
 
@@ -111,16 +118,36 @@ class SidebarController extends GetxController {
     await prefs.setDouble(_prefExpandedWidth, expandedWidth.value);
   }
 
-  void beginResize() => resizing.value = true;
+  void beginResize() {
+    resizing.value = true;
+    if (!isExpanded.value) _beginFollow();
+  }
+
+  // ── 收起/隐藏态起拖：跟手展开 ──
+  // 过去往右拖一下等于点了展开，整条栏"啪"地弹到全宽，和手上的位移对不上。
+  // 现在拖拽期间栏宽直接跟着指针走：拖过图标条宽当场离开隐藏态，拖回它以下
+  // 当场进隐藏态；拖过最小展开宽文字就地出现；松手按进度决定展开还是弹回。
+  static const double kCollapsedWidth = 75;
+  final RxBool following = false.obs;
+  final RxDouble followWidth = 0.0.obs;
+
+  void _beginFollow() {
+    following.value = true;
+    followWidth.value = isHidden.value ? 0 : kCollapsedWidth;
+  }
 
   /// [deltaLogical] 是指针的横向位移（逻辑像素），这里换算回设计稿像素
   void resizeBy(double deltaLogical) {
+    final ratio = scaleW(100) / 100;
     if (!isExpanded.value) {
-      // 收起态往右拖等于把它拉回来，不用先点一下把手
-      if (deltaLogical > 0) toggleSidebar();
+      if (!following.value) _beginFollow();
+      followWidth.value = (followWidth.value + deltaLogical / ratio).clamp(
+        0.0,
+        kMaxExpandedWidth,
+      );
+      _syncHiddenWithFollowWidth();
       return;
     }
-    final ratio = scaleW(100) / 100;
     final next = (expandedWidth.value + deltaLogical / ratio).clamp(
       kMinExpandedWidth,
       kMaxExpandedWidth,
@@ -132,8 +159,38 @@ class SidebarController extends GetxController {
     expandedWidth.value = next;
   }
 
+  /// 隐藏态跟着拖拽宽度就地翻转，不等松手：
+  /// 拖过图标条宽等于把栏拉回可见态，拖回图标条宽以下直接进隐藏态——
+  /// 手上的位移和栏的状态始终一一对应。
+  void _syncHiddenWithFollowWidth() {
+    if (isHidden.value) {
+      if (followWidth.value >= kCollapsedWidth) {
+        _routeForcedHidden = false;
+        isHidden.value = false;
+      }
+    } else if (followWidth.value < kCollapsedWidth) {
+      hideSidebar();
+    }
+  }
+
   void endResize() {
     resizing.value = false;
+    if (following.value) {
+      following.value = false;
+      // 过半才认：拖到最小展开宽的六成算"要展开"，往回弹是手滑
+      if (followWidth.value >= kMinExpandedWidth * 0.6) {
+        // 落点宽直接接手跟手宽：松手瞬间不许跳
+        expandedWidth.value = followWidth.value.clamp(
+          kMinExpandedWidth,
+          kMaxExpandedWidth,
+        );
+        _routeForcedHidden = false;
+        isHidden.value = false;
+        openSidebar();
+        _saveExpandedWidth();
+      }
+      return;
+    }
     _saveExpandedWidth();
   }
 
@@ -177,6 +234,53 @@ class SidebarController extends GetxController {
     if (isExpanded.value) {
       showExtends.value = false;
       isExpanded.value = false;
+    }
+  }
+
+  /// 进入隐藏态：整条栏收到 0 宽，只剩内容区左缘的指示条
+  void hideSidebar() {
+    if (isHidden.value) return;
+    // 路由强制隐藏时不许覆盖记忆：_routeForcedHidden 置位就是"已经记过了"
+    if (!_routeForcedHidden) _lastVisibleExpanded = isExpanded.value;
+    showExtends.value = false;
+    isExpanded.value = false;
+    isHidden.value = true;
+  }
+
+  /// 退出隐藏态，回到之前记着的显示状态
+  void _revealSidebar({bool? expanded}) {
+    if (!isHidden.value) return;
+    isHidden.value = false;
+    if (expanded ?? _lastVisibleExpanded) {
+      openSidebar();
+    }
+  }
+
+  /// 指示条的三态循环：展开 → 收起 → 隐藏 → 展开
+  void cycleVisibility() {
+    if (isHidden.value) {
+      _routeForcedHidden = false;
+      _revealSidebar(expanded: true);
+    } else if (isExpanded.value) {
+      toggleSidebar();
+    } else {
+      _routeForcedHidden = false;
+      hideSidebar();
+    }
+  }
+
+  /// 路由切换时对齐显示状态：默认隐藏页强制隐藏，回到普通页恢复进页前的状态。
+  /// 用户在普通页手动隐藏的意图不被恢复——只有"页面逼的"才在离开时还原。
+  void applyVisibilityForPath(String path, {required bool defaultHidden}) {
+    if (defaultHidden) {
+      if (!isHidden.value) {
+        _lastVisibleExpanded = isExpanded.value;
+        _routeForcedHidden = true;
+        hideSidebar();
+      }
+    } else if (_routeForcedHidden && isHidden.value) {
+      _routeForcedHidden = false;
+      _revealSidebar();
     }
   }
 
@@ -236,7 +340,19 @@ class SidebarResizeStrip extends StatelessWidget {
         onDragStart: controller.beginResize,
         onDragUpdate: controller.resizeBy,
         onDragEnd: controller.endResize,
-        onToggle: controller.toggleSidebar,
+        // 箭头只沿"可见"这根轴走一格：展开 ↔ 收起，隐藏态点它 = 展开。
+        // 从收起再往"看不见"走一格交给悬停时浮出的闭眼图标——过去点一下
+        // 箭头三态连跳，收起态点完直接消失，看着像侧栏丢了。
+        onToggle: () {
+          if (controller.isHidden.value) {
+            controller.cycleVisibility(); // 隐藏 → 展开
+          } else {
+            controller.toggleSidebar(); // 展开 ↔ 收起
+          }
+        },
+        onHide: !controller.isExpanded.value && !controller.isHidden.value
+            ? controller.hideSidebar
+            : null,
       ),
     );
   }
@@ -252,7 +368,7 @@ class CollapsibleSidebar extends StatefulWidget {
   const CollapsibleSidebar({
     super.key,
     required this.groups,
-    this.collapsedWidth = 75.0,
+    this.collapsedWidth = SidebarController.kCollapsedWidth,
     this.animationDuration = SidebarController.kWidthAnimation,
   });
 
@@ -302,13 +418,29 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
       final isExpanded = controller.isExpanded.value;
       final showExtends = controller.showExtends.value;
       final resizing = controller.resizing.value;
+      final isHidden = controller.isHidden.value;
       // 侧栏不该吃掉整个窗口：窄窗时按窗口宽度设上限
       final maxWidth = math.min(
         scaleW(SidebarController.kMaxExpandedWidth),
         MediaQuery.sizeOf(context).width * 0.45,
       );
       final expandedPx = math.min(scaleW(controller.expandedWidth.value), maxWidth);
-      final targetWidth = isExpanded ? expandedPx : scaleW(widget.collapsedWidth);
+      // 跟手展开中：宽度就是指针拖出来的那个数，不掺动画
+      final following = controller.following.value;
+      final targetWidth = following
+          ? math.min(scaleW(controller.followWidth.value), maxWidth)
+          : isHidden
+          ? 0.0
+          : (isExpanded ? expandedPx : scaleW(widget.collapsedWidth));
+      // 隐藏态必须清 padding/边框/子内容：0 宽里塞 6 的 padding 和 1 的描边
+      // 会留一条幽灵发丝线。跟手拉出来之后这些又要回来，所以分开判。
+      final chromeHidden = isHidden && !following;
+      // 拖过最小展开宽（也就是往回拖会自动收起的那条线）：栏里的文字当场就该
+      // 出来，而不是等松手才补齐
+      final followExpanded =
+          following &&
+          !isExpanded &&
+          controller.followWidth.value >= SidebarController.kMinExpandedWidth;
 
       if (desktopScreen.isMobile.value) {
         if (!controller._initializedMobile) {
@@ -344,17 +476,20 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
             end: Offset.zero,
           ).animate(_entranceAnimation),
           child: AnimatedContainer(
-            duration: resizing ? Duration.zero : widget.animationDuration,
+            // 跟手期间动画必须关掉，否则容器慢半拍、缝追不上手指
+            duration: resizing || following ? Duration.zero : widget.animationDuration,
             curve: AppMotion.standard,
             width: targetWidth,
             // 侧栏贴住窗口左/上/下边缘，圆角交给 macOS 的窗口蒙版去裁（实测内容
             // 层确实会被裁），这样两个圆角天然一致。原来的 margin+radius12 浮卡
             // 比窗口角（实测半径约 19pt）更方，两条弧在角上会分叉露出底下的振动层。
-            padding: EdgeInsets.only(
-              left: AppTheme.metrics.kSpace6,
-              top: AppTheme.metrics.kSpace6,
-              bottom: AppTheme.metrics.kSpace6,
-            ),
+            padding: chromeHidden
+                ? EdgeInsets.zero
+                : EdgeInsets.only(
+                    left: AppTheme.metrics.kSpace6,
+                    top: AppTheme.metrics.kSpace6,
+                    bottom: AppTheme.metrics.kSpace6,
+                  ),
             decoration: BoxDecoration(
               // 这里原来还写了 color: colorScheme.surface，但 BoxDecoration 里
               // gradient 会盖掉 color，那行是不生效的，删掉免得误以为侧栏必须是不透明。
@@ -374,13 +509,67 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
               ),
               // 只剩右侧一条发丝分隔线：四周描边在贴边布局下会被窗口蒙版裁掉半截
               // 线宽固定 1，不吃窗口缩放——缩放后不足 1 物理像素会被抗锯齿冲淡。
-              border: Border(right: BorderSide(color: s.glassBorder)),
+              border: chromeHidden
+                  ? null
+                  : Border(right: BorderSide(color: s.glassBorder)),
             ),
-            child: _buildSidebarContent(context, controller, isExpanded, showExtends),
+            child: chromeHidden
+                ? const SizedBox.shrink()
+                : _buildFittedContent(
+                    context,
+                    controller,
+                    isExpanded: isExpanded || followExpanded,
+                    showExtends: showExtends || followExpanded,
+                    transient: following || isHidden,
+                  ),
           ),
         ),
       );
     });
+  }
+
+  /// 侧栏内容的排版宽度下限：不足就按下限排版再用 ClipRect 裁出可见的一截。
+  /// 拖拽拉出和宽度动画的中间帧都会路过"比内容固有宽更窄"的宽度，直接按
+  /// 真实宽排版就是满屏 RenderFlex overflowed；窄时只露左半截、拖宽自然全
+  /// 露出来。静止态不掺和：收起态图标条按自身宽度自然排版，中轴才不会挪。
+  Widget _buildFittedContent(
+    BuildContext context,
+    SidebarController controller, {
+    required bool isExpanded,
+    required bool showExtends,
+    required bool transient,
+  }) {
+    // 6 的左 padding 要一并扣掉：容器给内容的真实宽就是栏宽减它，
+    // 下限按"栏宽"算会在刚好贴合的那一刻误判成窄、白白裁一刀。
+    final floorPx = isExpanded
+        ? scaleW(SidebarController.kMinExpandedWidth) - AppTheme.metrics.kSpace6
+        : transient
+        ? scaleW(widget.collapsedWidth) - AppTheme.metrics.kSpace6
+        : null;
+    final content = _buildSidebarContent(context, controller, isExpanded, showExtends);
+    if (floorPx == null) {
+      return content;
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= floorPx) {
+          return content;
+        }
+        final height = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height;
+        return ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: floorPx,
+            maxWidth: floorPx,
+            minHeight: height,
+            maxHeight: height,
+            child: content,
+          ),
+        );
+      },
+    );
   }
 
   /// 构建侧边栏内容
@@ -428,8 +617,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
 
   /// 构建侧边栏头部：产品身份位 + 折叠开关
   ///
-  /// 始终是一条 Row——换成 Column/Row 两套结构会让整个头部重排，
-  /// 而这一处要的是"同一个元素改宽度"：图标不动，字标的宽度收放。
+  /// 展开态是一条 Row（字标在左、把手在右）；收起态只剩把手一枚，居中放，
+  /// 和上面的窗口灯、下面的图标条对齐到同一条中轴。
+  /// 展开↔收起之间不换 Column/Row 结构，整条头部才不会重排。
   Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
     if (desktopScreen.isMobile.value) {
       return const SizedBox.shrink();
@@ -445,9 +635,13 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
         vertical: m.kSpace8,
       ),
       child: Row(
+        // 收起态把把手和上面的灯、下面的图标条对齐到同一条中轴；展开态才是"字标在左、把手在右"
+        mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
-          const _SidebarLogo(),
-          Expanded(child: SizedBox(width: m.kSpace4)),
+          // 图标条只有 75 设计像素，装不下产品身份位：收起态直接不画，
+          // 而不是缩成一枚挤在把手旁边
+          if (isExpanded) const _SidebarLogo(),
+          if (isExpanded) Expanded(child: SizedBox(width: m.kSpace4)),
           StrokeIconButton(
             // 展开/收起是同一支笔换字形：旧的擦回去、新的描出来，比硬切更能读出"栏宽变了"
             isExpanded ? StrokeIcons.assetSidebarOpen : StrokeIcons.assetSidebarClose,
@@ -933,10 +1127,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
   }
 }
 
-/// 侧边栏菜单项按钮（带选中指示条 + 悬停发光效果）
-/// 侧栏顶部的产品身份位
+/// 侧栏顶部的产品身份位（仅展开态构建，收起态整枚不画）
 ///
-/// 收起↔展开之间不重排、不淡出重进：图标是同一个元素，字标只是宽度收放。
+/// 展开态内部不重排：图标是同一个元素，字标只是宽度收放。
 /// 点它等于回概览——侧栏是导航，产品名是它的根。
 class _SidebarLogo extends StatelessWidget {
   const _SidebarLogo();
@@ -1082,6 +1275,7 @@ class _SidebarChildItemState extends State<_SidebarChildItem> {
   }
 }
 
+/// 侧边栏菜单项按钮（带选中指示条 + 悬停发光效果）
 class _SidebarMenuItemButton extends StatefulWidget {
   final bool isSelected;
   final bool isExpanded;

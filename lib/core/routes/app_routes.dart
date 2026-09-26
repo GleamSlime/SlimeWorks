@@ -13,11 +13,13 @@ import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/desktop_layout.dart';
+import 'package:slime_works/core/routes/app_sidebars.dart';
 import 'package:slime_works/pages/capture_screen_page.dart';
 import 'package:slime_works/pages/collection/library/collection_library_screen.dart';
 import 'package:slime_works/pages/collection/picture/collection_picture_screen.dart';
 import 'package:slime_works/pages/demo/gooey_dropdown_demo_page.dart';
 import 'package:slime_works/pages/demo/viewmodel_demo_page.dart';
+import 'package:slime_works/pages/motion_lab/motion_lab_screen.dart';
 import 'package:slime_works/pages/novel_library/novel_library_page.dart';
 import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -107,6 +109,33 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<AliyunDdnsRoute>(path: '/aliyun'),
     TypedGoRoute<NcmDecryptRoute>(path: '/ncm-decrypt'),
     TypedGoRoute<PowerStatsRoute>(path: '/power-stats'),
+
+    // 以下页面过去不在外壳里（整窗都是内容、没有侧边栏）。
+    // 侧栏改成全局后它们也进外壳，进入时按默认隐藏态处理，见 kSidebarDefaultHiddenPaths。
+    TypedGoRoute<NovelLibraryRoute>(path: '/novel-library'),
+    TypedGoRoute<NovelReaderRoute>(path: '/novel-reader'),
+    TypedGoRoute<ModuleManagementRoute>(path: '/module-management'),
+    TypedGoRoute<ThemePreviewRoute>(path: '/theme-preview'),
+    TypedGoRoute<HttpBridgeTestRoute>(path: '/http-bridge-test'),
+    TypedGoRoute<WebSocketTestRoute>(path: '/websocket-test'),
+    TypedGoRoute<ImageToolsRoute>(path: '/image-tools'),
+    TypedGoRoute<ImageToolboxRoute>(path: '/image-toolbox'),
+    TypedGoRoute<MediaLibraryRoute>(path: '/media-library'),
+    TypedGoRoute<DatasourceRoute>(path: '/datasource'),
+    TypedGoRoute<ClearwaterRoute>(path: '/clearwater'),
+    TypedGoRoute<CloudWordRoute>(path: '/cloud-word'),
+    TypedGoRoute<DistributedRoute>(path: '/distributed'),
+    TypedGoRoute<RequestHostRoute>(path: '/request-host'),
+    TypedGoRoute<GooeyDemoRoute>(path: '/gooey-demo'),
+    TypedGoRoute<ViewModelDemoRoute>(path: '/viewmodel-demo'),
+    TypedGoRoute<MotionLabRoute>(path: '/motion-lab'),
+    TypedGoRoute<LanChatRoute>(path: '/lan-chat'),
+    TypedGoRoute<MangaComicDetailRoute>(path: '/manga/comic/:comicId'),
+    TypedGoRoute<MangaSearchRoute>(path: '/manga/search'),
+    TypedGoRoute<MangaReaderRoute>(path: '/manga/read/:comicId/:epsOrder'),
+    TypedGoRoute<MangaHistoryRoute>(path: '/manga/history'),
+    TypedGoRoute<GameDetailRoute>(path: '/game/detail/:gameId'),
+    TypedGoRoute<GameCategoryDetailRoute>(path: '/game/category/:categoryId'),
   ],
 )
 class AppShellRouteData extends ShellRouteData {
@@ -239,7 +268,9 @@ class AppRoutes {
         ...$appRoutes,
         GoRoute(
           path: '/style-showcase',
-          builder: (context, state) => const StyleShowcaseScreen(),
+          // 非 typed 路由进不了上面的 ShellRoute，手动包同一层外壳
+          builder: (context, state) =>
+              const DesktopLayout(child: StyleShowcaseScreen()),
         ),
       ],
       navigatorKey: navigatorKey,
@@ -264,6 +295,11 @@ class AppRoutes {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           controller.selectedRoute.value = path;
+          // 历史上没有侧栏的页面进来就落在隐藏态，离开时恢复（见 SidebarController）
+          controller.applyVisibilityForPath(
+            path,
+            defaultHidden: sidebarDefaultHidden(path),
+          );
         });
 
         return null;
