@@ -132,9 +132,11 @@ class _SidebarResizeHandleState extends State<SidebarResizeHandle>
         setState(() => _hovering = false);
         _fold.reverse();
       },
+      // 整条带子只认"左右拖"；点按不再全收——过去 top:0/bottom:0 的一整列
+      // 都是 opaque 命中区，点在缝上的空位也会切展开/收起，把内容区左缘
+      // 一竖排的点击全吃掉。现在 tap 只挂在箭头本体和闭眼图标上。
       child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onToggle,
+        behavior: HitTestBehavior.translucent,
         onHorizontalDragStart: (_) {
           // 按下去箭头要摊回成一根线：这时候手上的事是拖，不是点
           _fold.reverse();
@@ -159,22 +161,27 @@ class _SidebarResizeHandleState extends State<SidebarResizeHandle>
             alignment: Alignment.center,
             children: [
               Center(
-                child: CustomPaint(
-                  size: Size(widget.hitWidth, _armLength * 2 + _stroke * 2),
-                  painter: _FoldPainter(
-                    progress: t,
-                    arm: _armLength,
-                    stroke: _stroke,
-                    color: lineColor,
-                    // 展开态往左折成 ‹，收起态往右折成 ›
-                    pointLeft: !widget.collapsed,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onToggle,
+                  child: CustomPaint(
+                    size: Size(widget.hitWidth, _armLength * 2 + _stroke * 2),
+                    painter: _FoldPainter(
+                      progress: t,
+                      arm: _armLength,
+                      stroke: _stroke,
+                      color: lineColor,
+                      // 展开态往左折成 ‹，收起态往右折成 ›
+                      pointLeft: !widget.collapsed,
+                    ),
                   ),
                 ),
               ),
               if (_showHide)
                 // 闭眼图标贴在箭头正下方，一律不出这条 22 宽的带子：
-                // 往内容区一侧扩就会把页面边缘的点击吃掉。命中的是整枚
-                // 图标带一圈垫高，比裸 14px 好点中；它的 tap 在更深一层，
+                // 往内容区一侧扩就会把页面边缘的点击吃掉。尺寸和描边按箭头
+                // 那枚手势对齐（对折臂展约 20、笔宽 3），否则上下两个图标
+                // 一大小一眼看得出不是同一档。它的 tap 在更深一层，
                 // 会赢过外层"点箭头=onToggle"，互不串台。
                 Center(
                   child: Padding(
@@ -183,10 +190,14 @@ class _SidebarResizeHandleState extends State<SidebarResizeHandle>
                       behavior: HitTestBehavior.opaque,
                       onTap: widget.onHide,
                       child: Padding(
-                        padding: EdgeInsets.all(scaleW(4)),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: scaleW(1),
+                          vertical: scaleW(4),
+                        ),
                         child: DrawIcon(
                           StrokeIcons.visibilityOff,
-                          size: scaleW(14),
+                          size: scaleW(20),
+                          weight: 3,
                           color: active,
                           trigger: StrokeTrigger.appear,
                           semanticLabel: '隐藏侧栏',
