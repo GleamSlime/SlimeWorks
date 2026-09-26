@@ -220,8 +220,10 @@ void main() {
     });
   });
 
+  // 整组都是像素比对：基准 PNG 由 macOS 渲染，Linux runner 的光栅化对不上，
+  // 所以打上 golden 标签，CI 用 `flutter test --exclude-tags golden` 跳过
   group('出图', () {
-    testWidgets('全量图标图册（亮）', (tester) async {
+    testWidgets('全量图标图册（亮）', tags: 'golden', (tester) async {
       await _pumpGallery(tester, dark: false);
       await expectLater(
         find.byType(MaterialApp),
@@ -229,7 +231,7 @@ void main() {
       );
     });
 
-    testWidgets('全量图标图册（暗）', (tester) async {
+    testWidgets('全量图标图册（暗）', tags: 'golden', (tester) async {
       await _pumpGallery(tester, dark: true);
       await expectLater(
         find.byType(MaterialApp),
@@ -237,7 +239,7 @@ void main() {
       );
     });
 
-    testWidgets('draw / blur / flow 的中间态与完成态', (tester) async {
+    testWidgets('draw / blur / flow 的中间态与完成态', tags: 'golden', (tester) async {
       await pumpAppPage(
         tester,
         const Center(
@@ -276,7 +278,7 @@ void main() {
       await unmountPage(tester);
     });
 
-    testWidgets('切换图标的擦除过渡中间态', (tester) async {
+    testWidgets('切换图标的擦除过渡中间态', tags: 'golden', (tester) async {
       var play = true;
       late StateSetter setInner;
       await pumpAppPage(

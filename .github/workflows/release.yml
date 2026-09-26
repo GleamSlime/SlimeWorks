@@ -71,16 +71,27 @@ jobs:
 
       - name: Flutter 单元测试
         run: |
-          # 日志下载要仓库管理员权限，失败时把报错原文推成注解，公开 API 也读得到
+          # 日志下载要仓库管理员权限，失败时把报错原文推成注解，公开 API 也读得到。
+          # [E] 那行只写"See exception logs above"，真正的报错在它前面的行里，所以往
+          # 前多取 30 行；同一条失败的区间自动合并，不重复出注解。
           status=0
           flutter test --exclude-tags golden --reporter expanded > test.log 2>&1 || status=$?
           cat test.log
           if [ $status -ne 0 ]; then
             python3 - <<'PY'
           import re
-          text = open('test.log', encoding='utf-8', errors='replace').read()
-          for block in re.findall(r'\d\d:\d\d[^\n]*\[E\][^\n]*\n(?:(?!\d\d:\d\d)[^\n]*\n){0,20}', text):
-              esc = block.strip()[:1800].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          lines = open('test.log', encoding='utf-8', errors='replace').read().splitlines()
+          spans = [(max(0, i - 30), min(len(lines), i + 6)) for i, l in enumerate(lines)
+                   if '[E]' in l and re.match(r'\s*\d\d:\d\d', l)]
+          merged = []
+          for lo, hi in spans:
+              if merged and lo <= merged[-1][1]:
+                  merged[-1][1] = max(merged[-1][1], hi)
+              else:
+                  merged.append([lo, hi])
+          for lo, hi in merged:
+              block = '\n'.join(lines[lo:hi])[-1800:]
+              esc = block.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
               print('::error::' + esc)
           PY
           fi
