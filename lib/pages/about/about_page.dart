@@ -14,6 +14,7 @@ import 'package:slime_works/gen/assets.gen.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -51,10 +52,6 @@ class AboutPage extends StatelessWidget {
                     _buildVersionInfo(context),
                     SizedBox(height: AppTheme.metrics.kSpace24),
                     _buildUpdateSection(context),
-                    SizedBox(height: AppTheme.metrics.kSpace24),
-                    _buildTechStack(context),
-                    SizedBox(height: AppTheme.metrics.kSpace24),
-                    _buildLinks(context),
                     SizedBox(height: AppTheme.metrics.kSpace32),
                     _buildCopyright(context),
                   ],
@@ -158,8 +155,15 @@ class AboutPage extends StatelessWidget {
           ),
           Divider(height: 1, color: theme.dividerColor),
           _InfoRow(icon: StrokeIcons.phoneAndroid, label: '平台', value: _platformName()),
-          Divider(height: 1, color: theme.dividerColor),
-          _InfoRow(icon: StrokeIcons.code, label: '框架', value: 'Flutter ${_flutterVersion()}'),
+          // 构建时间只有 GitHub Actions 打包的分发版才有（见 lib/core/build_info.dart）
+          if (AppInfoService.buildTime.isNotEmpty) ...[
+            Divider(height: 1, color: theme.dividerColor),
+            _InfoRow(
+              icon: StrokeIcons.accessTime,
+              label: '构建时间',
+              value: AppInfoService.buildTime,
+            ),
+          ],
         ],
       ),
     );
@@ -179,13 +183,44 @@ class AboutPage extends StatelessWidget {
           ),
         ),
         if (!_supportsAutoUpdate)
+          // iOS 走蒲公英分发：没有应用内更新通道，给一个直达下载页的按钮
           _AboutCard(
-            child: Text(
-              '当前平台不支持应用内自动更新，请前往 GitHub Releases 手动下载新版本',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withAlpha(140),
-                height: 1.5,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Platform.isIOS
+                      ? 'iOS 测试版通过蒲公英分发，点击下方按钮前往下载最新版本'
+                      : '当前平台不支持应用内自动更新，请前往 GitHub Releases 手动下载新版本',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(140),
+                    height: 1.5,
+                  ),
+                ),
+                if (Platform.isIOS) ...[
+                  SizedBox(height: AppTheme.metrics.kSpace12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        const url = 'https://www.pgyer.com/SlimeWork';
+                        final ok = await launchUrl(
+                          Uri.parse(url),
+                          mode: LaunchMode.externalApplication,
+                        );
+                        if (!ok) {
+                          EasyLoading.showError('无法打开链接');
+                        }
+                      },
+                      icon: DrawIcon(StrokeIcons.download, size: AppTheme.metrics.iconSize16),
+                      label: Text(
+                        '前往蒲公英下载',
+                        style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           )
         else
@@ -338,115 +373,6 @@ class AboutPage extends StatelessWidget {
     });
   }
 
-  Widget _buildTechStack(BuildContext context) {
-    final theme = Theme.of(context);
-    final items = [
-      const _TechItem(icon: '🦀', name: 'Rust', desc: '高性能核心引擎'),
-      const _TechItem(icon: '🎯', name: 'Dart', desc: '跨平台 UI 框架'),
-      const _TechItem(icon: '⚡', name: 'GetX', desc: '状态管理与依赖注入'),
-      const _TechItem(icon: '🔗', name: 'GoRouter', desc: '声明式路由导航'),
-    ];
-
-    return _AboutCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace12),
-            child: Text(
-              '技术栈',
-              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Wrap(
-            spacing: AppTheme.metrics.kSpace8,
-            runSpacing: AppTheme.metrics.kSpace8,
-            children: items.map((item) => _buildTechChip(context, item)).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTechChip(BuildContext context, _TechItem item) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.metrics.kSpace12,
-        vertical: AppTheme.metrics.kSpace8,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(60),
-        borderRadius: AppTheme.metrics.radius8,
-        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(60)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(item.icon, style: TextStyle(fontSize: AppTheme.metrics.fontSize13)),
-          SizedBox(width: AppTheme.metrics.kSpace8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                item.name,
-                style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              Text(
-                item.desc,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withAlpha(120),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLinks(BuildContext context) {
-    final theme = Theme.of(context);
-    return _AboutCard(
-      child: Column(
-        children: [
-          _LinkRow(
-            icon: StrokeIcons.language,
-            label: '官方网站',
-            value: 'gleamslime.com',
-            onTap: () {},
-          ),
-          Divider(height: 1, color: theme.dividerColor),
-          _LinkRow(icon: StrokeIcons.code, label: 'GitHub', value: '查看源代码', onTap: () {}),
-          Divider(height: 1, color: theme.dividerColor),
-          _LinkRow(icon: StrokeIcons.bugReport, label: '问题反馈', value: '提交 Issue', onTap: () {}),
-          Divider(height: 1, color: theme.dividerColor),
-          _LinkRow(
-            icon: StrokeIcons.description,
-            label: '开源许可',
-            value: '查看第三方许可',
-            onTap: () {
-              showLicensePage(
-                context: context,
-                applicationName: AppInfoService.appName,
-                applicationVersion: '${AppInfoService.version}+${AppInfoService.buildNumber}',
-                applicationIcon: Padding(
-                  padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                  child: SvgPicture.asset(
-                    Assets.image.svg.topBarLogo,
-                    width: AppTheme.metrics.kSpace48,
-                    colorFilter: ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCopyright(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
@@ -475,10 +401,6 @@ class AboutPage extends StatelessWidget {
     if (Platform.isAndroid) return 'Android';
     if (Platform.isIOS) return 'iOS';
     return 'Unknown';
-  }
-
-  String _flutterVersion() {
-    return '3.x';
   }
 }
 
@@ -530,54 +452,4 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _LinkRow extends StatelessWidget {
-  final StrokeIcon icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  const _LinkRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppTheme.metrics.radius8,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
-        child: Row(
-          children: [
-            DrawIcon(icon, size: AppTheme.metrics.fontSize18, color: theme.colorScheme.primary),
-            SizedBox(width: AppTheme.metrics.kSpace12),
-            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-            Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary),
-            ),
-            SizedBox(width: AppTheme.metrics.kSpace4),
-            DrawIcon(StrokeIcons.chevronRight,
-              size: AppTheme.metrics.fontSize15,
-              color: theme.colorScheme.onSurface.withAlpha(80),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TechItem {
-  final String icon;
-  final String name;
-  final String desc;
-
-  const _TechItem({required this.icon, required this.name, required this.desc});
 }

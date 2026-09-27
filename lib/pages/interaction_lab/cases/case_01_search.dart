@@ -209,6 +209,10 @@ class _Case01SearchState extends State<Case01Search> {
         alignment: Alignment.center,
         minWidth: 0,
         maxWidth: double.infinity,
+        // 高度也要放开：只松宽不松高的话，外框 104 的紧约束会顺着传下来，
+        // 把收起态 64×64 的圆胶囊拉成 64×104 的竖长条
+        minHeight: 0,
+        maxHeight: double.infinity,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _tap,
