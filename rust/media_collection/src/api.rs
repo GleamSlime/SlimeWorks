@@ -941,6 +941,19 @@ static MEDIA_FOLDERS: OnceLock<Arc<Mutex<Vec<MediaFolder>>>> = OnceLock::new();
 /// 下次调用会重试（若数据库文件被另一进程独占锁定，锁定解除后即可恢复，
 /// 避免失败被永久缓存导致本进程内收藏等数据读写永久失效）。
 static DB_INIT_RESULT: OnceLock<()> = OnceLock::new();
+/// 首开串行锁：`DB_INIT_RESULT` 只防"成功后重复"，防不了**并发首开**——
+/// 远程节点一次请求会并发送出 list_media_collections / folders / smart_folders
+/// 三个动作，三线程同时 db_init 同一个 redb 文件时，独占锁只让一个赢家通过，
+/// 其余全拿 "Failed to create/open database"，然后拿着没绑定的表把**空结果
+/// 永久缓存进 OnceLock**（症状：移动端只见文件夹、不见资源）。
+/// 后来者在这把锁上排队，等赢家开完再走人。
+static DB_INIT_MUTEX: Mutex<()> = Mutex::new(());
+/// 初始化失败期（磁盘/权限/别的进程占着库文件）各 getter 返回的兜底空表：
+/// 不进真正的缓存 OnceLock，故障解除后下一次调用照常加载真数据——
+/// 落册的永远是"至少初始化成功过"之后读到的内容，不会把故障期空态钉死。
+static EMPTY_COLLECTIONS: OnceLock<Arc<Mutex<Vec<MediaCollection>>>> = OnceLock::new();
+static EMPTY_FOLDERS: OnceLock<Arc<Mutex<Vec<MediaFolder>>>> = OnceLock::new();
+static EMPTY_SMART_FOLDERS: OnceLock<Arc<Mutex<Vec<SmartFolder>>>> = OnceLock::new();
 
 /// Returns the platform-specific default base dir for app data.
 fn app_data_base() -> String {
@@ -1206,6 +1219,15 @@ impl Drop for ThumbTaskGuard {
 /// Exposed publicly so Dart can call it explicitly at startup.
 pub fn initialize_db() -> Result<(), String> {
     // 已成功过：直接返回（幂等）
+    if DB_INIT_RESULT.get().is_some() {
+        return Ok(());
+    }
+    // 首开串行化：上面那道检查挡不住并发——N 个线程一起走到这里，
+    // 就会各自拿同一个 redb 文件去撞独占锁，只有赢家开得住，其余全拿
+    // "Failed to create/open database" 回去，上层再把"读失败"当"库里没数据"
+    // 缓存掉（本次节点事故的源头）。在这里排队，拿锁后复查，赢家的结果立即可用。
+    // 持锁方万一 panic 也不该让后续调用全部跟着炸：从毒化中恢复继续走。
+    let _guard = DB_INIT_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     if DB_INIT_RESULT.get().is_some() {
         return Ok(());
     }
@@ -1489,8 +1511,13 @@ fn folder_table_name() -> String {
 }
 
 fn get_collections() -> &'static Arc<Mutex<Vec<MediaCollection>>> {
+    // 初始化没成功就不落册：OnceLock 一旦在故障期吃进这张空表，
+    // 之后哪怕库恢复了也永远读到 0 条（本次节点事故的放大器）。
+    // 失败期返回不落册的空集合兜底，下次调用继续重试。
+    if initialize_db().is_err() {
+        return EMPTY_COLLECTIONS.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
+    }
     MEDIA_COLLECTIONS.get_or_init(|| {
-        ensure_db_initialized();
         let collections = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(collection_table_name());
         if let Ok(records) = db_module::db_list_all(collection_table_name()) {
@@ -1529,20 +1556,40 @@ fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
     if items.is_none() {
         // 【临时埋点】冷加载整张 media_items 表：远程节点首次取数时的主要耗时来源
         let load_started = std::time::Instant::now();
-        let mut data = Vec::new();
-        if let Ok(records) = db_module::db_list_all(item_table_name()) {
-            for record in records {
-                if let Ok(item) = serde_json::from_str::<MediaItem>(&record.value) {
-                    data.push(item);
+        // 库还没开成先补一次初始化（首开竞态已被 initialize_db 的串行锁消掉，
+        // 这里主要兜"整个进程第一次碰条目"的顺序问题）。
+        // init_ok 与否决定读失败时的语义：开库成功时"表不存在"是新库的正常
+        // 空态（首次写入才会建表），必须缓存成空表；开库都没成功才是故障期，
+        // 不落册、下次重试。
+        let init_ok = initialize_db().is_ok();
+        match db_module::db_list_all(item_table_name()) {
+            Ok(records) => {
+                let mut data = Vec::new();
+                for record in records {
+                    if let Ok(item) = serde_json::from_str::<MediaItem>(&record.value) {
+                        data.push(item);
+                    }
                 }
+                sw_info!(
+                    "[media_cache] 从数据库加载媒体条目到内存，共 {} 条(+{:.3}s)",
+                    data.len(),
+                    load_started.elapsed().as_secs_f64()
+                );
+                *items = Some(data);
             }
+            Err(e) if init_ok => {
+                // 库已开成，读失败按空态落册（与修复前的行为一致，调用方
+                // 依赖 ensure_items_loaded 之后 guard 一定是 Some）
+                sw_warn!("[media_cache] 媒体条目读取失败，按空表落册: {}", e);
+                *items = Some(Vec::new());
+            }
+            // 库都没开成：不落 Some(空)，保持 None 下次访问再重试，
+            // 免得把故障期的空态永久缓存（同 get_collections 的落册守卫）
+            Err(e) => sw_warn!(
+                "[media_cache] 加载媒体条目失败且数据库未就绪，本次不缓存，下次重试: {}",
+                e
+            ),
         }
-        sw_info!(
-            "[media_cache] 从数据库加载媒体条目到内存，共 {} 条(+{:.3}s)",
-            data.len(),
-            load_started.elapsed().as_secs_f64()
-        );
-        *items = Some(data);
     }
 }
 
@@ -1581,8 +1628,11 @@ pub fn check_and_release_if_idle(idle_threshold_secs: u64) -> bool {
 }
 
 fn get_folders() -> &'static Arc<Mutex<Vec<MediaFolder>>> {
+    // 同 get_collections：故障期不落册空表
+    if initialize_db().is_err() {
+        return EMPTY_FOLDERS.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
+    }
     MEDIA_FOLDERS.get_or_init(|| {
-        ensure_db_initialized();
         let folders = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(folder_table_name());
         if let Ok(records) = db_module::db_list_all(folder_table_name()) {
@@ -2714,8 +2764,11 @@ fn smart_folder_table_name() -> String {
 }
 
 fn get_smart_folders() -> &'static Arc<Mutex<Vec<SmartFolder>>> {
+    // 同 get_collections：故障期不落册空表
+    if initialize_db().is_err() {
+        return EMPTY_SMART_FOLDERS.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
+    }
     SMART_FOLDERS.get_or_init(|| {
-        ensure_db_initialized();
         let folders = Arc::new(Mutex::new(Vec::new()));
         let _ = db_module::db_register_table(smart_folder_table_name());
         if let Ok(records) = db_module::db_list_all(smart_folder_table_name()) {

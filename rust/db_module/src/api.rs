@@ -35,9 +35,19 @@ fn get_or_open(db_path: &str) -> DbResult<Arc<DbStorage>> {
         return Ok(existing.clone());
     }
     drop(map);
-    let storage = Arc::new(
-        DbStorage::new(db_path).map_err(|e| format!("Failed to create database: {}", e))?,
-    );
+    let storage = match DbStorage::new(db_path) {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            // 撞独占锁失败的输家再来一眼：赢家可能已经建好实例（甚至已插回表），
+            // 能复用就复用，而不是把 "Failed to create/open database" 抛给上层，
+            // 让上层把"打不开"误当"库里没数据"
+            let map = instances().lock().unwrap();
+            if let Some(existing) = map.get(db_path) {
+                return Ok(existing.clone());
+            }
+            return Err(format!("Failed to create database: {}", e));
+        }
+    };
     let mut map = instances().lock().unwrap();
     // 并发创建保护：若另一线程已插入则复用
     if let Some(existing) = map.get(db_path) {
