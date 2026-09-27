@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -45,6 +46,15 @@ class _Case01SearchState extends State<Case01Search> {
 
   final FocusNode _focus = FocusNode(debugLabel: 'interaction-lab.search');
 
+  /// 移动端才挂的隐形真输入框：系统的软键盘只给"带输入连接的可编辑控件"弹出，
+  /// 这一格的假光标走 `Focus.onKeyEvent`，那是物理键盘那套——触屏上
+  /// `requestFocus()` 什么也不弹。隐形 TextField 压在字段区上接管焦点，
+  /// 文字经 `onChanged` 喂回 `_text`；桌面不挂这颗，事件仍走原来那条
+  /// `Focus` 路径，golden 一像素不动。
+  static final bool _softKeyboard = Platform.isAndroid || Platform.isIOS;
+  final TextEditingController _editor = TextEditingController();
+  final FocusNode _fieldFocus = FocusNode(debugLabel: 'interaction-lab.search.field');
+
   bool _open = false;
   bool _press = false;
   bool _hoverSkin = false;
@@ -62,6 +72,8 @@ class _Case01SearchState extends State<Case01Search> {
     _busyTimer?.cancel();
     _w.dispose();
     _focus.dispose();
+    _fieldFocus.dispose();
+    _editor.dispose();
     super.dispose();
   }
 
@@ -78,7 +90,14 @@ class _Case01SearchState extends State<Case01Search> {
         _lean = Offset.zero;
       });
       _w.aim(_openW);
-      _focus.requestFocus();
+      // 触屏走隐形 TextField（焦点在它身上才会弹软键盘），
+      // 桌面仍走外层 Focus 收物理键盘事件
+      if (_softKeyboard) {
+        _editor.text = _text;
+        _fieldFocus.requestFocus();
+      } else {
+        _focus.requestFocus();
+      }
     });
   }
 
@@ -252,11 +271,45 @@ class _Case01SearchState extends State<Case01Search> {
                         offset: Offset((1 - say) * -6, 0),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: _Field(text: _text, caret: _open && _focus.hasFocus),
+                          child: _Field(
+                            text: _text,
+                            caret: _open && (_focus.hasFocus || _fieldFocus.hasFocus),
+                          ),
                         ),
                       ),
                     ),
                   ),
+                  // 隐形真输入：只在触屏展开后挂上，压在字段区里接管焦点，
+                  // 让系统把软键盘弹出来；渲染全透明，字由上面的假 _Field 画
+                  if (_softKeyboard && _open)
+                    Positioned(
+                      left: _fieldLeft,
+                      right: _fieldRight,
+                      top: 0,
+                      bottom: 0,
+                      child: Opacity(
+                        opacity: 0,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: TextField(
+                            focusNode: _fieldFocus,
+                            controller: _editor,
+                            maxLines: 1,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            inputFormatters: [LengthLimitingTextInputFormatter(22)],
+                            onChanged: (v) {
+                              if (v == _text) return;
+                              setState(() => _text = v);
+                              _keystroke();
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

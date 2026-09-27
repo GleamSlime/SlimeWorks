@@ -194,6 +194,22 @@ abstract final class IlText {
   );
 }
 
+/// 触屏手势抢滚动的临时锁
+///
+/// 实验室里能"跟手拖"的格子大多用 `Listener` + `pointerRouter`（要的是 CSS
+/// `setPointerCapture` 那种语义），而 `Listener` 不进手势竞技场——触屏上只要
+/// 位移过了 slop，页面外层那颗 `SingleChildScrollView` 照样会把整页一起拖走。
+/// 于是接管手指的格子在按住期间给这里 +1、松手 -1；页面读到非零就把滚动
+/// 物理换成 `NeverScrollableScrollPhysics`，没被接管的其余格子照常滚。
+/// 桌面端鼠标本来就用滚轮滚动，计数挂着也不改变手感。
+abstract final class IlTouchLock {
+  static final ValueNotifier<int> held = ValueNotifier<int>(0);
+
+  static void acquire() => held.value = held.value + 1;
+
+  static void release() => held.value = math.max(0, held.value - 1);
+}
+
 /// 舞台：尺寸由格子自己报，圆角 28、`rgba(23,24,26,.06)` 底，内容裁在里面
 class IlStage extends StatelessWidget {
   const IlStage({

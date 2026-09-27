@@ -164,6 +164,36 @@ class _Case06PullRefreshState extends State<Case06PullRefresh> with SingleTicker
   Offset? _downAt;
   bool _engaged = false;
 
+  /// 两把页面滚动锁：下拉真正接管（越过死区）一把、图上手势扫读一把。
+  /// 这里全是裸 Listener，不进手势竞技场——不锁住，触屏上拖卡片/划曲线
+  /// 会同时把外层 SingleChildScrollView 的整页一起拖走
+  bool _pullLocked = false;
+  bool _scrubLocked = false;
+
+  void _lockPull() {
+    if (_pullLocked) return;
+    _pullLocked = true;
+    IlTouchLock.acquire();
+  }
+
+  void _unlockPull() {
+    if (!_pullLocked) return;
+    _pullLocked = false;
+    IlTouchLock.release();
+  }
+
+  void _lockScrub() {
+    if (_scrubLocked) return;
+    _scrubLocked = true;
+    IlTouchLock.acquire();
+  }
+
+  void _unlockScrub() {
+    if (!_scrubLocked) return;
+    _scrubLocked = false;
+    IlTouchLock.release();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -173,6 +203,9 @@ class _Case06PullRefreshState extends State<Case06PullRefresh> with SingleTicker
   @override
   void dispose() {
     _dropRoute();
+    // 手指还按着就被拆掉时把两把锁都归还，免得页面永远滚不动
+    _unlockPull();
+    _unlockScrub();
     _work?.cancel();
     _ticker?.stop();
     _ticker = null;
@@ -250,6 +283,7 @@ class _Case06PullRefreshState extends State<Case06PullRefresh> with SingleTicker
       }
       if (n < _dead) return;
       _engaged = true;
+      _lockPull();
       _pointer = e.pointer;
       GestureBinding.instance.pointerRouter.addRoute(e.pointer, _route);
       _scrub = null;
@@ -266,6 +300,7 @@ class _Case06PullRefreshState extends State<Case06PullRefresh> with SingleTicker
     _downAt = null;
     final wasEngaged = _engaged;
     _engaged = false;
+    _unlockPull();
     _dropRoute();
     if (!wasEngaged) return;
     if (_armed) {
@@ -598,9 +633,15 @@ class _Case06PullRefreshState extends State<Case06PullRefresh> with SingleTicker
       child: Listener(
         behavior: HitTestBehavior.opaque,
         // 原稿挂的是 `pointermove`——鼠标没按键也在图上扫，这里得连 hover 一起接
-        onPointerDown: _scrubTo,
+        // 触屏按住图上也是"扫读"而不是"滚页"：down 锁页、up/cancel 归还
+        onPointerDown: (e) {
+          _lockScrub();
+          _scrubTo(e);
+        },
         onPointerMove: _scrubTo,
         onPointerHover: _scrubTo,
+        onPointerUp: (_) => _unlockScrub(),
+        onPointerCancel: (_) => _unlockScrub(),
         child: SizedBox(
           width: _plotW,
           height: _plotH,

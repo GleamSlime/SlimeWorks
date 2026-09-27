@@ -1,10 +1,19 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Float64List;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show KeyEvent, KeyDownEvent, KeyRepeatEvent, LogicalKeyboardKey;
+import 'package:flutter/services.dart'
+    show
+        KeyEvent,
+        KeyDownEvent,
+        KeyRepeatEvent,
+        LogicalKeyboardKey,
+        FilteringTextInputFormatter,
+        LengthLimitingTextInputFormatter,
+        TextInputType;
 
 import '../kit.dart';
 
@@ -156,6 +165,16 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
   double _caretFadeWait = _fadeMs;
 
   final FocusNode _focusNode = FocusNode(debugLabel: 'interaction-lab.otp');
+
+  /// 移动端才挂的隐形真输入：系统的软键盘只给"带输入连接的可编辑控件"弹出，
+  /// 这一格的假光标走 `Focus.onKeyEvent`（物理键盘那套），触屏上
+  /// `requestFocus()` 什么也不弹。隐形数字 TextField 压在整行底下，
+  /// 点子上由最上层的命中层接住、经 [_press] 把焦点给到它，数字经
+  /// `onChanged` 喂回 `_code`；桌面不挂这颗，事件仍走外层 `Focus`，golden 不动。
+  static final bool _softKeyboard = Platform.isAndroid || Platform.isIOS;
+  final TextEditingController _editor = TextEditingController();
+  final FocusNode _fieldFocus = FocusNode(debugLabel: 'interaction-lab.otp.field');
+
   Ticker? _ticker;
   Duration _last = Duration.zero;
 
@@ -163,6 +182,7 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
   void initState() {
     super.initState();
     _focusNode.addListener(_onFocus);
+    _fieldFocus.addListener(_onFocus);
   }
 
   @override
@@ -170,12 +190,17 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
     _focusNode
       ..removeListener(_onFocus)
       ..dispose();
+    _fieldFocus
+      ..removeListener(_onFocus)
+      ..dispose();
+    _editor.dispose();
     _ticker?.stop();
     super.dispose();
   }
 
   void _onFocus() {
-    _focused = _focusNode.hasFocus;
+    // 触屏那侧的焦点在隐形输入上，判定"光标该不该亮"得把两颗节点一起看
+    _focused = _focusNode.hasFocus || _fieldFocus.hasFocus;
     _kick();
   }
 
@@ -192,7 +217,13 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
       _merge.aim(0);
     }
     _syncCaret();
-    _focusNode.requestFocus();
+    // 触屏走隐形 TextField（焦点落在它身上软键盘才弹），桌面走外层 Focus
+    if (_softKeyboard) {
+      _editor.text = _code;
+      _fieldFocus.requestFocus();
+    } else {
+      _focusNode.requestFocus();
+    }
     _kick();
   }
 
@@ -245,12 +276,15 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
     } else {
       _phase = _Phase.ok;
       _merge.aim(1);
+      // 验证通过把焦点交出去：桌面收起假光标，触屏顺带把软键盘也收掉
       _focusNode.unfocus();
+      _fieldFocus.unfocus();
     }
   }
 
   void _reset() {
     _code = '';
+    _editor.clear();
     for (var i = 0; i < _cells; i++) {
       _entryAt[i] = null;
     }
@@ -396,6 +430,39 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
               for (var i = 0; i < _cells; i++) _slot(i, k, slotA),
               _caretBox(),
               _okBox(okA),
+              // 隐形数字输入：常驻挂着（check/no 期间不收，免得键盘闪进闪出），
+              // 压在命中层底下——点击仍由最后那颗 Listener 接住走 _press
+              if (_softKeyboard)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  width: _rowW,
+                  height: _rowH,
+                  child: Opacity(
+                    opacity: 0,
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: TextField(
+                        focusNode: _fieldFocus,
+                        controller: _editor,
+                        maxLines: 1,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(_cells),
+                        ],
+                        onChanged: (v) {
+                          if (v != _code) _setCode(v);
+                        },
+                      ),
+                    ),
+                  ),
+                ),
               // `.otp-field` 排在最后：整个 165×44 都是它的命中区
               Positioned.fill(
                 child: MouseRegion(

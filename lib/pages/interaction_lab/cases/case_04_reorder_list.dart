@@ -88,6 +88,10 @@ class _Case04ReorderListState extends State<Case04ReorderList> with SingleTicker
   int? _held;
   int? _hover;
   int? _pointer;
+
+  /// 拿起期间整页滚动的锁（触屏上裸 Listener 不进竞技场，不锁页面就会跟着走）
+  bool _locked = false;
+
   int _startSlot = 0;
   double _dy = 0;
   double _lastY = 0;
@@ -111,6 +115,7 @@ class _Case04ReorderListState extends State<Case04ReorderList> with SingleTicker
   void dispose() {
     // 手指还按着就把销毁掉的 State 摘掉，否则 router 还往这儿投事件
     _dropRoute();
+    _unlock();
     _ticker?.stop();
     _ticker = null;
     super.dispose();
@@ -118,11 +123,24 @@ class _Case04ReorderListState extends State<Case04ReorderList> with SingleTicker
 
   // ---------------------------------------------------------------- 指针
 
+  /// 归还页面滚动锁；带幂等，dispose 兜底时不会重复还
+  void _unlock() {
+    if (!_locked) return;
+    _locked = false;
+    IlTouchLock.release();
+  }
+
   /// 按下即"抓起"。跟手靠 `pointerRouter` 收这个指针的全部事件，
   /// 等价于原稿的 `setPointerCapture`——手指划出这一行也还在跟
   void _grab(int id, PointerDownEvent e) {
     // 原稿 `if(!drag.current)return`：按住期间不响应第二根手指
     if (_held != null) return;
+    // 触屏上从这颗行砖起手默认是"拖行"不是"滚页"——不锁住，页面的
+    // SingleChildScrollView 会绕过竞技场把整页一起带走（Listener 不进竞技场）
+    if (!_locked) {
+      _locked = true;
+      IlTouchLock.acquire();
+    }
     setState(() {
       _held = id;
       _pointer = e.pointer;
@@ -180,6 +198,7 @@ class _Case04ReorderListState extends State<Case04ReorderList> with SingleTicker
   void _release() {
     final id = _held;
     if (id == null) return;
+    _unlock();
     _dropRoute();
     setState(() {
       _held = null;
