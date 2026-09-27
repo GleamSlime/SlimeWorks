@@ -134,7 +134,7 @@ rust/
 | 页面命名 | `_screen.dart` 结尾，class `Screen` 结尾，继承 `BasePage` |
 | 响应式 | 桌面端窗口≤600 强制移动端模式，用 `SizeUtils.isMobile/isDesktop` |
 | 尺寸 | 参考 `AppTheme.metrics`，禁止直接数字或 `int.w`，未定义用 `scaleW()` |
-| 日志 | Dart: `Loggers` class，Rust: `logger::{log_error, log_info}`，关键流程中文 |
+| 日志 | Dart: `Loggers` class，Rust: `logger::{log_error, log_info}`，关键流程中文。文件日志由 `slime_logger` 按天滚动并保留 30 天：macOS `~/Library/Logs/史莱姆工坊/logs/slime_works_<日期>.log`，Windows `%APPDATA%\SlimeWorks\logs\` |
 | 注释 | 必须中文, 不要删除已有注释 |
 | 弹窗 | `showDialog` 而非 `Get.dialog` |
 | 校验 | Flutter → `flutter analyze`，Rust → `cargo build` |

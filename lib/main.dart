@@ -107,7 +107,16 @@ Future<void> main() async {
 }
 
 Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
-  initializeLogger();
+  // 日志目录：桌面端（macOS）显式传入系统 Logs 目录，slime_logger 会在其下
+  // 再建 logs 子目录，最终日志落在 ~/Library/Logs/史莱姆工坊/logs/slime_works_<日期>.log。
+  // 之前不传参时 Rust 侧回退到 $TMPDIR/slimeworks，那里会被 macOS 定期清理、
+  // 且路径随登录会话变化，用户和排查问题时都很难找到日志。
+  // Windows 保持原逻辑（Rust 侧用 %APPDATA%\SlimeWorks）；移动端无文件日志需求，走 TMPDIR 沙盒。
+  final macHome = Platform.environment['HOME'];
+  final logInstallDir = (Platform.isMacOS && macHome != null)
+      ? '$macHome/Library/Logs/史莱姆工坊'
+      : null;
+  initializeLogger(installDir: logInstallDir);
 
   // 应用初始化完毕：确认远程节点连通性并预热远程媒体库元数据。
   // 放在这里而不是 NodeSettingsService.init()：那一步在 runApp 之前，
