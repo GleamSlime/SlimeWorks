@@ -833,6 +833,11 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 尺寸/颜色/时长/曲线/关键帧。**它是只读参考，不是产品 UI**——§5.1 的禁令在这里依然成立，
 发光、粒子爆炸、骨架渐变搬进真页面仍然是违规。
 
+同一套接线方式后来复用了两遍，长出了三页（`/motion-lab` 43 格、`/interaction-lab` 13 格、
+`/surface-lab` 6 格）。**加一格或加一页照 `docs/ui_labs.md` §1 走**（目录骨架、本地令牌底座、
+单向隔离墙、注册表、路由四落点、每格四道验收），三页全部组件的功能与样式台账也在
+`docs/ui_labs.md` §2。本节只记坑：§12.1–12.6 是动效页，§12.7 交互页，§12.8 表面页。
+
 ### 12.1 结构
 
 - `lab_kit.dart`：这一页自己的 token 层（`LabColor` / `LabFont` / `LabEase` / `LabSize` /
