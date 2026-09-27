@@ -8,6 +8,8 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/services/asr/asr_models.dart';
+import 'package:slime_works/core/services/asr/asr_settings_service.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -27,6 +29,8 @@ class MediaItemTile extends StatefulWidget {
     this.onDeleteNodeLocalFile,
     this.deleteNodeLocalFileLabel,
     this.onSaveToGallery,
+    this.onRecognizeSubtitle,
+    this.onTranslateSubtitle,
     this.fixedHeight,
     this.showOverlay = true,
     this.isLost = false,
@@ -57,6 +61,13 @@ class MediaItemTile extends StatefulWidget {
 
   /// 保存图片到相册（移动端）。
   final VoidCallback? onSaveToGallery;
+
+  /// 识别该媒体文件的字幕并输出 SRT（仅本地音视频且扩展名受支持时由父级传入）。
+  /// 参数为识别语言代码（auto/ko/ja/zh/yue/en），由右键子菜单选定。
+  final void Function(String language)? onRecognizeSubtitle;
+
+  /// 把同名 .srt 翻译成中文（仅本地音视频由父级传入；有无字幕由动作内部校验）。
+  final VoidCallback? onTranslateSubtitle;
 
   /// 瀑布流模式下由外部指定的固定高度（null = 填满格子）。
   final double? fixedHeight;
@@ -249,7 +260,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
         widget.onOpenFolder != null ||
         widget.onDeleteFile != null ||
         widget.onDeleteNodeLocalFile != null ||
-        widget.onSaveToGallery != null;
+        widget.onSaveToGallery != null ||
+        widget.onRecognizeSubtitle != null ||
+        widget.onTranslateSubtitle != null;
     if (!hasActions) return;
     if (!mounted) return;
     // 将全局坐标换算为 Overlay 本地坐标，保证菜单在光标位置弹出（与 MediaCollectionCard 一致）
@@ -259,7 +272,10 @@ class _MediaItemTileState extends State<MediaItemTile> {
     final hasDestructive =
         widget.onDeleteFile != null || widget.onDeleteNodeLocalFile != null;
     final hasPlainActions =
-        widget.onOpenFolder != null || widget.onSaveToGallery != null;
+        widget.onOpenFolder != null ||
+        widget.onSaveToGallery != null ||
+        widget.onRecognizeSubtitle != null ||
+        widget.onTranslateSubtitle != null;
     final action = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -280,6 +296,18 @@ class _MediaItemTileState extends State<MediaItemTile> {
             value: 'save',
             label: '保存到相册',
             icon: StrokeIcons.photoLibrary,
+          ),
+        if (widget.onRecognizeSubtitle != null)
+          GlassMenuItem<String>(
+            value: 'recognize_subtitle',
+            label: '识别字幕',
+            icon: StrokeIcons.recordVoiceOver,
+          ),
+        if (widget.onTranslateSubtitle != null)
+          GlassMenuItem<String>(
+            value: 'translate_subtitle',
+            label: '翻译字幕为中文',
+            icon: StrokeIcons.translate,
           ),
         if (hasDestructive) ...[
           // 不可逆动作和普通动作之间断一行：这条菜单是右键就地弹出的，
@@ -307,6 +335,41 @@ class _MediaItemTileState extends State<MediaItemTile> {
     if (action == 'save') widget.onSaveToGallery?.call();
     if (action == 'delete') widget.onDeleteFile?.call();
     if (action == 'delete_node_local') widget.onDeleteNodeLocalFile?.call();
+    if (action == 'recognize_subtitle') {
+      // 上面 await 过菜单，这里确认 context 还挂在树上再取它弹子菜单
+      if (!context.mounted) return;
+      final language = await _showSubtitleLanguageMenu(context, localPos, overlaySize);
+      if (language != null) widget.onRecognizeSubtitle?.call(language);
+    }
+    if (action == 'translate_subtitle') widget.onTranslateSubtitle?.call();
+  }
+
+  /// 识别字幕的语言子菜单：SenseVoice 的自动检测对日韩语音频经常判错，
+  /// 所以这里让使用方按素材显式指定，并把本次选择记住作为下次默认
+  Future<String?> _showSubtitleLanguageMenu(
+    BuildContext context,
+    Offset localPos,
+    Size overlaySize,
+  ) {
+    final preferred = getIt<AsrSettingsService>().defaultLanguage.value;
+    return showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        localPos.dx,
+        localPos.dy,
+        overlaySize.width - localPos.dx,
+        overlaySize.height - localPos.dy,
+      ),
+      items: [
+        for (final option in kAsrLanguages)
+          GlassMenuItem<String>(
+            value: option.code,
+            label: option.label,
+            icon: StrokeIcons.translate,
+            selected: option.code == preferred,
+          ),
+      ],
+    );
   }
 
   @override

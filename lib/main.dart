@@ -22,6 +22,7 @@ import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
+import 'package:slime_works/core/services/asr/asr_settings_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
 import 'package:slime_works/core/services/initialize/ffmpeg.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -96,6 +97,9 @@ Future<void> main() async {
 
   // 初始化 Sentry 设置服务
   await getIt<SentrySettingsService>().init();
+
+  // 初始化语音识别设置（内网大模型列表 + 本地引擎部署状态，纯本地读取）
+  await getIt<AsrSettingsService>().init();
 
   // 提前加载持久化主题配置（仅解析输入参数，不依赖 ScreenUtil）
   await AppTheme.loadSavedTheme();

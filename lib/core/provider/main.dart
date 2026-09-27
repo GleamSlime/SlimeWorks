@@ -19,6 +19,9 @@ import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/power_stats_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
+import 'package:slime_works/core/services/asr/asr_service.dart';
+import 'package:slime_works/core/services/asr/asr_settings_service.dart';
+import 'package:slime_works/core/services/asr/subtitle_translate_service.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 
 final getIt = GetIt.instance;
@@ -94,6 +97,14 @@ void getItInit() {
 
   // 语音识别任务队列
   getIt.registerLazySingleton<TranscriptionTaskQueue>(() => TranscriptionTaskQueue());
+
+  // 语音识别（字幕）：内网大模型列表 + 本地 SenseVoice 引擎部署
+  getIt.registerLazySingleton<AsrService>(() => AsrService());
+  // 字幕翻译：内网 NMT（LibreTranslate 兼容）服务，把日韩文字幕转中文供审核
+  getIt.registerLazySingleton<SubtitleTranslateService>(() => SubtitleTranslateService());
+  getIt.registerLazySingleton<AsrSettingsService>(
+    () => AsrSettingsService(getIt<AsrService>(), getIt<SubtitleTranslateService>()),
+  );
 
   isInitialized = true;
 }

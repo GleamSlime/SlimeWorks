@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/aliyun_ddns.dart';
+import 'api/asr.dart';
 import 'api/capture.dart';
 import 'api/extract.dart';
 import 'api/ffmpeg.dart';
@@ -201,6 +202,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AsrSegmentInfo dco_decode_asr_segment_info(dynamic raw);
+
+  @protected
+  AsrStatusInfo dco_decode_asr_status_info(dynamic raw);
+
+  @protected
+  AsrSubtitleResultInfo dco_decode_asr_subtitle_result_info(dynamic raw);
+
+  @protected
   AvailableModuleInfo dco_decode_available_module_info(dynamic raw);
 
   @protected
@@ -217,6 +227,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CaptureStats dco_decode_box_autoadd_capture_stats(dynamic raw);
+
+  @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
   FFmpegConfig dco_decode_box_autoadd_f_fmpeg_config(dynamic raw);
@@ -283,6 +296,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<AsrSegmentInfo> dco_decode_list_asr_segment_info(dynamic raw);
 
   @protected
   List<AvailableModuleInfo> dco_decode_list_available_module_info(dynamic raw);
@@ -446,6 +462,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CaptureStats? dco_decode_opt_box_autoadd_capture_stats(dynamic raw);
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
@@ -670,6 +689,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AsrSegmentInfo sse_decode_asr_segment_info(SseDeserializer deserializer);
+
+  @protected
+  AsrStatusInfo sse_decode_asr_status_info(SseDeserializer deserializer);
+
+  @protected
+  AsrSubtitleResultInfo sse_decode_asr_subtitle_result_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AvailableModuleInfo sse_decode_available_module_info(
     SseDeserializer deserializer,
   );
@@ -690,6 +720,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats sse_decode_box_autoadd_capture_stats(
     SseDeserializer deserializer,
   );
+
+  @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   FFmpegConfig sse_decode_box_autoadd_f_fmpeg_config(
@@ -764,6 +797,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AsrSegmentInfo> sse_decode_list_asr_segment_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<AvailableModuleInfo> sse_decode_list_available_module_info(
@@ -971,6 +1009,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptureStats? sse_decode_opt_box_autoadd_capture_stats(
     SseDeserializer deserializer,
   );
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
@@ -1241,6 +1282,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_asr_segment_info(
+    AsrSegmentInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_asr_status_info(AsrStatusInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_asr_subtitle_result_info(
+    AsrSubtitleResultInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_available_module_info(
     AvailableModuleInfo self,
     SseSerializer serializer,
@@ -1264,6 +1320,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     CaptureStats self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_fmpeg_config(
@@ -1357,6 +1416,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_asr_segment_info(
+    List<AsrSegmentInfo> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_available_module_info(
@@ -1625,6 +1690,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     CaptureStats? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
