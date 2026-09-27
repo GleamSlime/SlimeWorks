@@ -10,7 +10,7 @@ class AppInfoService {
   static String buildNumber = '1';
   static String versionWithBuild = 'v1.0.0+1';
 
-  /// CI 打包时间（UTC），仅 GitHub Actions 分发的构建非空
+  /// CI 打包时间（北京时间 UTC+8），仅 GitHub Actions 分发的构建非空
   static String buildTime = '';
 
   static bool _initialized = false;

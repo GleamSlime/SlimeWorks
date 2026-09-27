@@ -9,6 +9,6 @@ class CiBuildInfo {
   /// CI 构建号，格式 YYYYMMDD.commit短hash（与 GitHub Release tag 一致）
   static const String buildNumber = '';
 
-  /// CI 打包时间（UTC）
+  /// CI 打包时间（北京时间 UTC+8）
   static const String buildTime = '';
 }

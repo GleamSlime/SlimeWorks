@@ -214,7 +214,7 @@ class AboutPage extends StatelessWidget {
                       },
                       icon: DrawIcon(StrokeIcons.download, size: AppTheme.metrics.iconSize16),
                       label: Text(
-                        '前往蒲公英下载',
+                        '打开分发页面',
                         style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
                       ),
                     ),
