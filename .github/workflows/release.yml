@@ -365,6 +365,13 @@ jobs:
   build-ios:
     needs: [detect-version, test]
     runs-on: macos-15
+    env:
+      # 3.47.5 起 stable 通道默认开启 SPM（3.41 及以前是默认关的）。开启后 podhelper 会把
+      # 带 Package.swift 的插件从 Pods 里摘掉，而本 job 用裸 xcodebuild archive 出包，
+      # 工程从未做过 SPM 集成（迁移只发生在 flutter build ios 里），这批模块就两边都没有，
+      # archive 直接 fatal error: module 'audio_session' not found（退出码 65）。
+      # 钉死走 CocoaPods，与仓库里 ios/Podfile.lock 的形态一致。
+      FLUTTER_SWIFT_PACKAGE_MANAGER: "false"
     steps:
       - uses: actions/checkout@v4
 
@@ -578,7 +585,22 @@ jobs:
 
       - name: 安装 CocoaPods 依赖
         working-directory: ios
-        run: pod install --repo-update
+        run: |
+          pod install --repo-update
+          # 早失败探针：形态错配原本要等 archive 跑 30~40 分钟才以 module not found 暴露。
+          # ① SPM 开着时，18 个带 Package.swift 的插件不进 Pods；
+          # ② 工程若被本地 `flutter build ios` 自动迁移成 SPM（pbxproj 里有生成包引用）又被
+          #    提交上来，本 job 的 CocoaPods 路线会与之冲突（工具没有反向迁移）。
+          # 两种都当场红，别拖到 archive。
+          if ! grep -q "^  - audio_session " Podfile.lock; then
+            echo "❌ audio_session 没进 Pods：SPM 没被关住（见本 job 的 FLUTTER_SWIFT_PACKAGE_MANAGER）"
+            exit 1
+          fi
+          if grep -q "FlutterGeneratedPluginSwiftPackage" Runner.xcodeproj/project.pbxproj; then
+            echo "❌ iOS 工程已迁移到 SPM，与本 job 的 CocoaPods 路线冲突：回退工程迁移，或改走 flutter build ios --config-only"
+            exit 1
+          fi
+          echo "✅ Pods 形态正常（插件全进 Pods，工程未做 SPM 迁移）"
 
       - name: 验证证书可用性
         env:
