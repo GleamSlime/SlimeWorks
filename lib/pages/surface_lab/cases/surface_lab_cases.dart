@@ -7,6 +7,7 @@ import 'case_03_popover_form.dart';
 import 'case_04_metal_button.dart';
 import 'case_05_dynamic_island.dart';
 import 'case_06_expandable.dart';
+import 'case_08_cutout_card.dart';
 
 /// 分类：只用于这张页面上的筛选，不参与任何全局配置
 enum SvCat {
@@ -104,5 +105,15 @@ final List<SvCase> kSvCases = <SvCase>[
     stageW: Case06Expandable.stageW,
     stageH: Case06Expandable.stageH,
     build: Case06Expandable.new,
+  ),
+  SvCase(
+    seq: 8,
+    title: 'CutoutCard',
+    subtitle: '白表面咬进图里：接缝那两块是同一条内弧的垫角；壳、图、胶囊各走 .5/0.7/0.3s',
+    cat: SvCat.reveal,
+    // 卡 448×484，四周再各让 32 给悬停那三档糊光
+    stageW: Case08CutoutCard.stageW,
+    stageH: Case08CutoutCard.stageH,
+    build: Case08CutoutCard.new,
   ),
 ];

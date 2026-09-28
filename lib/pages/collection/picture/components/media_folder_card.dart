@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -19,7 +20,10 @@ class MediaFolderCard extends StatefulWidget {
     super.key,
     required this.folder,
     required this.coverSource,
-    required this.collectionCount,
+    required this.itemCount,
+    required this.resourceCount,
+    required this.totalSize,
+    required this.typeLabel,
     required this.isSelected,
     required this.onTap,
     required this.onLongPress,
@@ -35,7 +39,18 @@ class MediaFolderCard extends StatefulWidget {
 
   final media_api.MediaFolder folder;
   final String? coverSource;
-  final int collectionCount;
+
+  /// 点开该文件夹能看到的卡片数（子文件夹 + 本层集合）
+  final int itemCount;
+
+  /// 子树内仍然存在的资源条数
+  final int resourceCount;
+
+  /// 子树内仍然存在的资源体积
+  final BigInt totalSize;
+
+  /// 卡片类型徽章：文件夹 / 同名分组 / 远程文件夹
+  final String typeLabel;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
@@ -310,7 +325,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                             borderRadius: AppTheme.metrics.radius999,
                           ),
                           child: Text(
-                            '${widget.collectionCount} 个集合',
+                            widget.typeLabel,
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: appMetrics.fontSize9,
@@ -382,12 +397,20 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
                                     color: Colors.white.withAlpha(180),
                                   ),
                                   SizedBox(width: appMetrics.kSpace4),
-                                  Text(
-                                    '${widget.collectionCount} 个集合',
-                                    style: TextStyle(
-                                      color: Colors.white.withAlpha(180),
-                                      fontSize: appMetrics.fontSize9,
-                                      fontWeight: FontWeight.w500,
+                                  Flexible(
+                                    child: Text(
+                                      // 计数与体积合成一段再省略：分成两个 Text
+                                      // 时窄卡会把行撑爆，省略号也没地方落
+                                      widget.resourceCount > 0
+                                          ? '${widget.itemCount} 项 · 共 ${widget.resourceCount} 资源 · ${formatFileSize(widget.totalSize)}'
+                                          : '${widget.itemCount} 项 · 共 ${widget.resourceCount} 资源',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white.withAlpha(180),
+                                        fontSize: appMetrics.fontSize9,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
                                 ],

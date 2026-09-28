@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
@@ -18,6 +19,8 @@ class SmartFolderCard extends StatelessWidget {
     super.key,
     required this.smartFolder,
     required this.matchCount,
+    required this.resourceCount,
+    required this.totalSize,
     required this.isSelected,
     required this.onTap,
     required this.onLongPress,
@@ -31,7 +34,15 @@ class SmartFolderCard extends StatelessWidget {
   });
 
   final SmartFolder smartFolder;
+
+  /// 命中的集合数
   final int matchCount;
+
+  /// 命中集合内仍然存在的资源条数
+  final int resourceCount;
+
+  /// 命中集合内仍然存在的资源体积
+  final BigInt totalSize;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
@@ -244,7 +255,7 @@ class SmartFolderCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Match count badge (top-left)
+            // 类型徽章 (top-left)
             Positioned(
               left: appMetrics.kSpace10,
               top: appMetrics.kSpace10,
@@ -258,7 +269,7 @@ class SmartFolderCard extends StatelessWidget {
                   borderRadius: AppTheme.metrics.radius999,
                 ),
                 child: Text(
-                  '$matchCount 个集合',
+                  '智能文件夹',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: appMetrics.fontSize9,
@@ -334,12 +345,19 @@ class SmartFolderCard extends StatelessWidget {
                                 color: Colors.white.withAlpha(180),
                               ),
                               SizedBox(width: appMetrics.kSpace4),
-                              Text(
-                                '$matchCount 个集合',
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(180),
-                                  fontSize: appMetrics.fontSize9,
-                                  fontWeight: FontWeight.w500,
+                              // 计数 + 体积一段话：拆成两个 Text 时窄卡会撑爆行
+                              Flexible(
+                                child: Text(
+                                  resourceCount > 0
+                                      ? '$matchCount 项 · 共 $resourceCount 资源 · ${formatFileSize(totalSize)}'
+                                      : '$matchCount 项 · 共 $resourceCount 资源',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withAlpha(180),
+                                    fontSize: appMetrics.fontSize9,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                               if (smartFolder.regexPattern.isNotEmpty) ...[
@@ -349,7 +367,10 @@ class SmartFolderCard extends StatelessWidget {
                                   color: Colors.white.withAlpha(180),
                                 ),
                                 SizedBox(width: appMetrics.kSpace4),
-                                Flexible(
+                                // 正则只当线索用，封顶 46：做成非 flex 的定宽件，
+                                // 计数那段才能拿到整行剩下的宽度
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: scaleW(46)),
                                   child: Text(
                                     smartFolder.regexPattern,
                                     maxLines: 1,

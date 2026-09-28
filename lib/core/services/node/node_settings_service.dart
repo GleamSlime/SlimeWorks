@@ -155,6 +155,30 @@ class NodeSettingsService extends GetxService {
   /// 熔断解除复探的进行中Future（按节点去重），避免一屏请求各自打一次 ping。
   final Map<String, Future<_ProbeResult>> _nodeBreakChecks = <String, Future<_ProbeResult>>{};
 
+  /// nodeId → 最近一次真正应答过的 base。
+  ///
+  /// 同时配了内网/外网地址时，`effectiveApiBaseUrl` 永远选内网那一个；内网常年不通
+  /// （换过网段、对端不在同一 LAN）就会让取数每次都先付一遍连接超时，图片 URL 更是
+  /// 直接指向死地址。这里记下应答过的那一路，后续调用与 URL 构造都以它为先。
+  final Map<String, String> _nodeAnsweredBase = <String, String>{};
+
+  /// 该节点当前该用的 base：有应答记录用记录，没有就按 LAN 优先的默认口径。
+  String _baseUrlFor(NodeEndpoint node) => _nodeAnsweredBase[node.id] ?? node.effectiveApiBaseUrl;
+
+  /// 调用候选地址：先应答过的那一路，再 LAN、再 WAN（去重保序）。
+  /// 只给一个地址时，`_shouldTryFallbackUrl` 想回退也没有下一个地址可换。
+  List<String> _nodeCallCandidateUrls(NodeEndpoint node) {
+    final bases = <String>{
+      _baseUrlFor(node),
+      node.effectiveApiBaseUrl,
+      node.lanApiBaseUrl ?? '',
+      node.apiBaseUrl,
+    }.where((b) => b.isNotEmpty).toList(growable: false);
+    return <String>[
+      for (final base in bases) ..._candidateNodeCallUrls(base),
+    ];
+  }
+
   /// 已缩放图片的内存缓存（key = cacheKey，LRU 淘汰，总字节上限 80MB）。
   final Map<String, Uint8List> _resizedBytesCache = {};
 
@@ -183,13 +207,7 @@ class NodeSettingsService extends GetxService {
     // 放在这里会在 runApp 之前抢占启动窗口，且一次跑完就不会再有第二次机会。
   }
 
-  // ── 启动预热与连通看门狗 ─────────────────────────────────────────────────
-
-  /// 离线节点复探间隔：节点在启动时才没起来（对端慢、网络还没就绪），
-  /// 没有这一步就只能等用户进媒体库发业务请求才被"救活"。
-  static const Duration _nodeWatchdogInterval = Duration(seconds: 20);
-
-  Timer? _nodeWatchdog;
+  // ── 启动预热与离线复探 ─────────────────────────────────────────────────
 
   /// 预热快照的有效期：超过就直接重拉，宁慢不旧。
   static const Duration _remoteMetaMaxAge = Duration(seconds: 60);
@@ -198,7 +216,7 @@ class NodeSettingsService extends GetxService {
   final Map<String, Future<NodeMediaMetadata?>> _remoteMetaWarmups =
       <String, Future<NodeMediaMetadata?>>{};
 
-  /// 应用初始化完毕后调用：确认节点连通 + 预取远程媒体元数据 + 装上离线复探看门狗。
+  /// 应用初始化完毕后调用：确认节点连通 + 预取远程媒体元数据。
   Future<void> warmUpAfterLaunch() async {
     if (!isInitialized) {
       await init();
@@ -206,23 +224,19 @@ class NodeSettingsService extends GetxService {
     final trace = TimingTrace('应用启动节点预热');
     await refreshNodeConnectivity();
     trace.lap('连通确认 ${remoteNodes.where((n) => n.enabled).length}个节点');
-    // 预热不等网络：先返回，让看门狗和首屏各自按需取快照
+    // 预热不等网络：先返回，让首屏按需取快照
     for (final node in enabledRemoteNodes) {
       requestNodeMediaMetadataWarmup(node.id);
     }
-    _startNodeWatchdog();
     trace.end();
   }
 
-  void _startNodeWatchdog() {
-    _nodeWatchdog?.cancel();
-    _nodeWatchdog = Timer.periodic(_nodeWatchdogInterval, (_) {
-      _recheckOfflineNodes().ignore();
-    });
-  }
-
-  /// 只复探「当前判为离线或已熔断」的启用节点，全在线时这一轮零流量。
-  Future<void> _recheckOfflineNodes() async {
+  /// 复探「当前判为离线或已熔断」的启用节点，全在线时这一轮零流量。
+  ///
+  /// 只在真正要用远程数据时调用（媒体库进页面 / 点刷新），没有后台定时轮询：
+  /// 节点长时间不可达时，定时复探会变成每 20 秒一串无意义的超时日志。
+  /// 节点回来了就补预热并通知已打开的媒体库重取远程数据。
+  Future<void> recheckOfflineNodes() async {
     final stale = remoteNodes
         .where(
           (n) =>
@@ -241,7 +255,6 @@ class NodeSettingsService extends GetxService {
         continue;
       }
       _logger.info('节点已恢复连接: ${node.name}');
-      // 节点回来了：补预热，并通知已打开的媒体库重取远程数据。
       // 先清掉上次失败留下的空快照条目，否则幂等判断会跳过这次补热。
       invalidateNodeMediaMetadataCache(nodeId: node.id);
       requestNodeMediaMetadataWarmup(node.id);
@@ -277,9 +290,10 @@ class NodeSettingsService extends GetxService {
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
     }
-    // 熔断节点不在首屏路径上付那 1.5s 复探：恢复交给后台看门狗，它补好快照会通知媒体库重取。
+    // 熔断节点不在首屏路径上付那 1.5s 复探：媒体库在拉远程数据前已经整体复探过一轮，
+    // 这里再探一次只是把同一件事付两遍。
     if (isNodeCircuitBreaked(nodeId)) {
-      throw StateError('节点已熔断: ${node.name}，等待后台复探恢复');
+      throw StateError('节点已熔断: ${node.name}，点刷新或重新进入页面会重新探测');
     }
     final warmup = _remoteMetaWarmups.remove(nodeId);
     if (warmup != null) {
@@ -364,7 +378,7 @@ class NodeSettingsService extends GetxService {
 
   String getNodeEffectiveBaseUrl(String nodeId) {
     final node = getNodeById(nodeId);
-    return node?.effectiveApiBaseUrl ?? '';
+    return node == null ? '' : _baseUrlFor(node);
   }
 
   Future<void> addRemoteNode({
@@ -411,6 +425,7 @@ class NodeSettingsService extends GetxService {
     await _save();
     // 地址/授权码/开关都可能变，旧快照不再可信
     invalidateNodeMediaMetadataCache(nodeId: endpoint.id);
+    _nodeAnsweredBase.remove(endpoint.id);
     await checkNodeConnectivity(endpoint.id);
     if (endpoint.enabled) {
       requestNodeMediaMetadataWarmup(endpoint.id);
@@ -422,6 +437,7 @@ class NodeSettingsService extends GetxService {
     nodeConnectivity.remove(nodeId);
     nodeConnectivityError.remove(nodeId);
     invalidateNodeMediaMetadataCache(nodeId: nodeId);
+    _nodeAnsweredBase.remove(nodeId);
     await _save();
   }
 
@@ -466,16 +482,19 @@ class NodeSettingsService extends GetxService {
 
     // LAN 与 WAN 并发探：串行时「LAN 地址已失效」这一最常见的场景要把快速档超时
     // 完整付一遍才轮到 WAN，节点看起来就是慢半拍。
-    final lanBase = node.lanApiBaseUrl;
-    final results = await Future.wait(<Future<_ProbeResult>>[
-      _probeNodeUrl(lanBase, timeout: _probeFastTimeout),
-      if (lanBase == null || lanBase != node.apiBaseUrl)
-        _probeNodeUrl(node.apiBaseUrl, timeout: _probeFastTimeout),
-    ]);
+    final bases = <String>{
+      if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty) node.lanApiBaseUrl!,
+      node.apiBaseUrl,
+    }.toList(growable: false);
+    final results = await Future.wait(
+      bases.map((base) => _probeNodeUrl(base, timeout: _probeFastTimeout)),
+    );
     trace.lap('快速档(${results.length}路并发)');
 
     // 任一路通了就算在线；没通的那一路不表态，不当失败证据。
     if (results.contains(_ProbeResult.ok)) {
+      // bases 是 LAN 先、WAN 后，取第一个应答的就是「LAN 能用就用 LAN」。
+      _nodeAnsweredBase[nodeId] = bases[results.indexOf(_ProbeResult.ok)];
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
       trace.end();
@@ -570,7 +589,10 @@ class NodeSettingsService extends GetxService {
     final results = await Future.wait(
       bases.map((base) => _probeNodeUrl(base, timeout: _probeConfirmTimeout)),
     );
-    if (results.contains(_ProbeResult.ok)) return _ProbeResult.ok;
+    if (results.contains(_ProbeResult.ok)) {
+      _nodeAnsweredBase[node.id] = bases[results.indexOf(_ProbeResult.ok)];
+      return _ProbeResult.ok;
+    }
     if (results.contains(_ProbeResult.unauthorized)) return _ProbeResult.unauthorized;
     return _ProbeResult.unreachable;
   }
@@ -969,7 +991,7 @@ class NodeSettingsService extends GetxService {
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
     }
-    final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
+    final normalized = _normalizeBaseUrl(_baseUrlFor(node));
     final params = <String, String>{'path': filePath};
     if (thumbnailWidth != null && thumbnailWidth > 0) {
       params['width'] = thumbnailWidth.toString();
@@ -990,7 +1012,7 @@ class NodeSettingsService extends GetxService {
   String buildNodeUploadUrl(String nodeId) {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
-    final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
+    final normalized = _normalizeBaseUrl(_baseUrlFor(node));
     return '$normalized/node/upload';
   }
 
@@ -1032,7 +1054,7 @@ class NodeSettingsService extends GetxService {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
     await _ensureNodeReachable(node);
-    final normalized = _normalizeBaseUrl(node.effectiveApiBaseUrl);
+    final normalized = _normalizeBaseUrl(_baseUrlFor(node));
     final url =
         '$normalized/node/upload/archive?dest=${Uri.encodeComponent(destDir)}';
     final file = File(zipPath);
@@ -1354,7 +1376,7 @@ class NodeSettingsService extends GetxService {
     required Map<String, dynamic> requestPayload,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final candidateUrls = _candidateNodeCallUrls(node.effectiveApiBaseUrl);
+    final candidateUrls = _candidateNodeCallUrls(node.effectiveApiBaseUrl); // MUTATION
     final txBytes = _estimatePayloadBytes(requestPayload);
     // 【临时埋点】整次调用（含换地址重试、忙重试）的墙钟耗时
     final trace = TimingTrace('节点调用', scope: '${node.name} $action');
@@ -1374,6 +1396,8 @@ class NodeSettingsService extends GetxService {
           onReceiveProgress: onReceiveProgress,
         );
         attemptTrace.end(note: 'HTTP ${response.statusCode}');
+        // 有 HTTP 应答就说明这一路是通的（业务失败也一样），后续调用不必再试别的地址。
+        _nodeAnsweredBase[node.id] = _baseUrlFromNodeCallUrl(url);
         final body = response.data ?? <String, dynamic>{};
         _recordAppTraffic(txBytes: txBytes, rxBytes: _estimatePayloadBytes(body));
         if (body['success'] == true) {
@@ -1412,8 +1436,8 @@ class NodeSettingsService extends GetxService {
     );
 
     // 如果是网络超时/断开，做一次快速探测；探测也失败才熔断并标离线。
-    // 单个 action 超时不等于节点不可用：一上来就把整节点标成离线，会让看门狗把它
-    // 当成待恢复节点多刷一轮全库（实测在启动预热那一轮就这么白刷了一次）。
+    // 单个 action 超时不等于节点不可用：一上来就把整节点标成离线，会让下一次离线复探
+    // 把它当成待恢复节点多刷一轮全库（实测在启动预热那一轮就这么白刷了一次）。
     final isNetworkTimeout =
         error is DioException &&
         (error.type == DioExceptionType.connectionTimeout ||
@@ -1438,40 +1462,47 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 快速探测节点是否可达（bypass 熔断检查，用于验证重试）。
-  /// 返回 true 表示节点有响应（无论业务是否成功）。
+  /// 返回 true 表示节点有响应（无论业务是否成功），并把应答的那一路记成后续首选地址。
   Future<bool> _quickProbeNode(NodeEndpoint node) async {
-    final candidateUrls = <String>[];
-    if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty) {
-      candidateUrls.addAll(_candidateNodeCallUrls(node.lanApiBaseUrl!));
-    }
-    candidateUrls.addAll(_candidateNodeCallUrls(node.apiBaseUrl));
-    if (candidateUrls.isEmpty) return false;
+    final bases = <String>{
+      if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty) node.lanApiBaseUrl!,
+      node.apiBaseUrl,
+    };
+    final probeUrls = <String, List<String>>{
+      for (final base in bases) base: _candidateNodeCallUrls(base),
+    };
+    final total = probeUrls.values.map((l) => l.length).fold(0, (a, b) => a + b);
+    if (total == 0) return false;
     const timeout = _probeConfirmTimeout;
-    for (final url in candidateUrls) {
-      try {
-        await _probeDio.post<dynamic>(
-          url,
-          data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
-          options: Options(
-            connectTimeout: timeout,
-            receiveTimeout: timeout,
-            sendTimeout: timeout,
-          ),
-        );
-        return true;
-      } on DioException catch (e) {
-        // 只有连接层失败才算这个地址不可达，HTTP 层错误说明节点还活着
-        if (e.type != DioExceptionType.connectionTimeout &&
-            e.type != DioExceptionType.connectionError &&
-            e.type != DioExceptionType.receiveTimeout &&
-            e.type != DioExceptionType.sendTimeout) {
+    for (final entry in probeUrls.entries) {
+      for (final url in entry.value) {
+        try {
+          await _probeDio.post<dynamic>(
+            url,
+            data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+            options: Options(
+              connectTimeout: timeout,
+              receiveTimeout: timeout,
+              sendTimeout: timeout,
+            ),
+          );
+          _nodeAnsweredBase[node.id] = _baseUrlFromNodeCallUrl(url);
           return true;
+        } on DioException catch (e) {
+          // 只有连接层失败才算这个地址不可达，HTTP 层错误说明节点还活着
+          if (e.type != DioExceptionType.connectionTimeout &&
+              e.type != DioExceptionType.connectionError &&
+              e.type != DioExceptionType.receiveTimeout &&
+              e.type != DioExceptionType.sendTimeout) {
+            _nodeAnsweredBase[node.id] = _baseUrlFromNodeCallUrl(url);
+            return true;
+          }
+        } catch (_) {
+          // 换下一个候选地址继续探
         }
-      } catch (_) {
-        // 换下一个候选地址继续探
       }
     }
-    _logger.info('节点已熔断: ${node.name}（请求超时且 ${candidateUrls.length} 个候选地址均无响应）');
+    _logger.info('节点已熔断: ${node.name}（请求超时且 $total 个候选地址均无响应）');
     return false;
   }
 

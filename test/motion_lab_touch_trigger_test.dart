@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:slime_works/pages/motion_lab/cases/case_44_voice_waveform.dart';
 import 'package:slime_works/pages/motion_lab/cases/motion_lab_cases.dart';
 import 'package:slime_works/pages/motion_lab/lab_kit.dart';
 import 'package:slime_works/pages/motion_lab/motion_lab_screen.dart';
@@ -191,6 +192,40 @@ void main() {
 
     await g.up();
     await tester.pump();
+    expect(LabTouchLock.held.value, 0, reason: '松手没归还滚动锁');
+    await unmountPage(tester);
+  });
+
+  // 44 号是"按住说话"：整块舞台就是按下面，上滑进取消档。这一路是裸 `Listener`
+  // （不进竞技场），所以锁必须在 down 这一下就给出 —— 否则手指一位移就被页面外层
+  // 那颗滚动赢走，"上滑取消"变成"滚整页"。说明文字换档走 `AnimatedSwitcher`，
+  // 补间里新旧两份同时在树上，所以只认"出现"不认"消失"
+  testWidgets('44. 声波：按住上滑进取消档，松手交还滚动锁', (tester) async {
+    await loadAppFonts();
+    await pumpAppPage(tester, const MotionLabScreen());
+    await advance(tester);
+
+    final stage = find.descendant(
+      of: find.byType(Case44VoiceWaveform),
+      matching: find.byType(LabStage),
+    );
+    await tester.ensureVisible(stage);
+    await tester.pump();
+    final page = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    final scrolled0 = page.position.pixels;
+    expect(LabTouchLock.held.value, 0, reason: '起手前锁没归零');
+
+    final g = await tester.startGesture(tester.getCenter(stage));
+    await tester.pump();
+    expect(LabTouchLock.held.value, 1, reason: '按下没锁住页面滚动');
+
+    await g.moveBy(const Offset(0, -30));
+    await _advance(tester, 200);
+    expect(find.text('松开取消'), findsWidgets, reason: '上滑没进取消档');
+    expect(page.position.pixels, scrolled0, reason: '上滑取消把整页滚走了');
+
+    await g.up();
+    await _advance(tester, 200);
     expect(LabTouchLock.held.value, 0, reason: '松手没归还滚动锁');
     await unmountPage(tester);
   });

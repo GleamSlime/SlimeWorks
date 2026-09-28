@@ -188,7 +188,9 @@ pub fn is_running_as_administrator() -> bool {
     }
 }
 
+/// 检查是否以管理员身份运行（Windows）
 #[cfg(not(target_os = "windows"))]
+#[frb(sync)]
 pub fn is_running_as_administrator() -> bool {
     false
 }

@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
@@ -25,6 +26,7 @@ class MediaCollectionCard extends StatefulWidget {
     required this.isSelecting,
     required this.isRemote,
     required this.nodeName,
+    required this.resourceCount,
     required this.totalSize,
     required this.isFavorited,
     required this.onTap,
@@ -51,6 +53,11 @@ class MediaCollectionCard extends StatefulWidget {
   final bool isSelecting;
   final bool isRemote;
   final String? nodeName;
+
+  /// 仍然存在的资源条数（失效资源不计）
+  final int resourceCount;
+
+  /// 仍然存在的资源体积
   final BigInt totalSize;
   final bool isFavorited;
   final VoidCallback onTap;
@@ -135,16 +142,6 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
     _privacyWorker?.dispose();
     _hoverTimer?.cancel();
     super.dispose();
-  }
-
-  static String _formatBytes(BigInt bytes) {
-    final d = bytes.toDouble();
-    if (d < 1024) return '${d.toStringAsFixed(0)} B';
-    if (d < 1024 * 1024) return '${(d / 1024).toStringAsFixed(1)} KB';
-    if (d < 1024 * 1024 * 1024) {
-      return '${(d / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(d / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
   /// 根据悬停/滑动位置返回当前应显示的封面路径。
@@ -547,7 +544,10 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                         ? Colors.black.withAlpha(130)
                                         : Colors.black.withAlpha(90),
                                     child: Text(
-                                      '${widget.collection.itemCount} 项 · ${_formatBytes(widget.totalSize)}',
+                                      // 类型徽章：计数与体积统一放在底部信息栏，和文件夹卡同构
+                                      '集合',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: appMetrics.fontSize9,
@@ -741,12 +741,16 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                       color: Colors.white.withAlpha(180),
                                     ),
                                     SizedBox(width: appMetrics.kSpace4),
-                                    Text(
-                                      '${widget.collection.itemCount} 项',
-                                      style: TextStyle(
-                                        color: Colors.white.withAlpha(180),
-                                        fontSize: appMetrics.fontSize9,
-                                        fontWeight: FontWeight.w500,
+                                    Flexible(
+                                      child: Text(
+                                        '${widget.resourceCount} 项',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white.withAlpha(180),
+                                          fontSize: appMetrics.fontSize9,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                     SizedBox(width: appMetrics.kSpace8),
@@ -755,12 +759,16 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                                       color: Colors.white.withAlpha(180),
                                     ),
                                     SizedBox(width: appMetrics.kSpace4),
-                                    Text(
-                                      _formatBytes(widget.totalSize),
-                                      style: TextStyle(
-                                        color: Colors.white.withAlpha(180),
-                                        fontSize: appMetrics.fontSize9,
-                                        fontWeight: FontWeight.w500,
+                                    Flexible(
+                                      child: Text(
+                                        formatFileSize(widget.totalSize),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white.withAlpha(180),
+                                          fontSize: appMetrics.fontSize9,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ],

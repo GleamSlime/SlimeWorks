@@ -169,6 +169,22 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// collectionId → 该集合内所有媒体文件路径列表（供智能文件夹文件名匹配使用，懒加载）。
   final _collectionItemPaths = <String, List<String>>{};
 
+  /// collectionId → 该集合「磁盘上仍然存在」的体积与条数。
+  /// 库里记录的 fileSize 不会因外部删文件而变小，父级文件夹要如实汇总现存体积
+  /// 就得逐条 stat；这份数据由 [refreshCollectionLiveStats] 后台批量刷。
+  final _collectionLiveStats = <String, ({BigInt size, int count})>{};
+
+  /// 现存资源统计的刷新代数：既是 [liveStatsVersion] 的重建信号，也是汇总缓存的失效键。
+  final liveStatsVersion = 0.obs;
+  bool _liveStatsInFlight = false;
+  bool _liveStatsDirty = false;
+
+  /// 文件夹递归汇总缓存（子级卡片数 / 资源数 / 体积）及其输入快照。
+  Map<String, MediaFolderSummary>? _folderSummaryOut;
+  List<media_api.MediaFolder>? _folderSummarySrc;
+  int _folderSummaryGeneration = -1;
+  int _folderSummaryLiveEpoch = -1;
+
   /// 文件路径预热缓存的写入代数：文件名模式的智能文件夹匹配依赖它。
   int _itemPathsEpoch = 0;
 
@@ -1678,6 +1694,201 @@ class MediaLibraryViewModel extends BaseViewModel {
         .length;
   }
 
+  /// 集合「磁盘上仍然存在」的体积与条数（排除失效资源）。
+  ///
+  /// 远程集合的文件在节点侧，本机 stat 不到，直接用节点上报值；
+  /// 本地集合在全库 stat 落地前退回库里记录值，避免首屏闪 0。
+  ({BigInt size, int count}) collectionResources(
+    media_api.MediaCollection collection,
+  ) {
+    // 读取即注册依赖：stat 落地后集合卡也要跟着换数
+    liveStatsVersion.value;
+    if (!isRemoteCollection(collection.id)) {
+      final live = _collectionLiveStats[collection.id];
+      if (live != null) return live;
+    }
+    return (
+      size: getCollectionTotalSize(collection.id),
+      count: collection.itemCount.toInt(),
+    );
+  }
+
+  /// 文件夹卡片的展示汇总。
+  ///
+  /// [MediaFolderSummary.childCards] 只数直接子级（点开这个文件夹能看到的卡片），
+  /// resources/size 递归整棵子树，且只计仍然存在的资源。
+  MediaFolderSummary folderSummary(String folderId) {
+    // 读取即注册依赖：全库 stat 落地后卡片重建
+    liveStatsVersion.value;
+    if (isDupGroup(folderId)) {
+      // 同名集合分组是虚拟文件夹：成员集合即其全部子级，分组内不再二次聚合
+      final members = dupGroupCollections(folderId);
+      var resources = 0;
+      var size = BigInt.zero;
+      for (final collection in members) {
+        final stat = collectionResources(collection);
+        resources += stat.count;
+        size += stat.size;
+      }
+      return MediaFolderSummary(
+        childCards: members.length,
+        resources: resources,
+        size: size,
+      );
+    }
+    return _folderSummaries()[folderId] ?? MediaFolderSummary.empty;
+  }
+
+  /// 智能文件夹命中集合的体积与条数汇总。
+  ({BigInt size, int count}) smartFolderResources(SmartFolder sf) {
+    liveStatsVersion.value;
+    var size = BigInt.zero;
+    var count = 0;
+    for (final collection in collectionsMatchingSmartFolder(sf)) {
+      final stat = collectionResources(collection);
+      size += stat.size;
+      count += stat.count;
+    }
+    return (size: size, count: count);
+  }
+
+  /// 一次性算出所有文件夹的汇总，卡片同步读缓存。
+  ///
+  /// 后序遍历：父级的递归量 = 本层集合 + 各子文件夹已经算好的递归量，整棵树只走一遍。
+  Map<String, MediaFolderSummary> _folderSummaries() {
+    // 先读 mergedCollections：集合变化只有经过它重算才会推进代数，
+    // 放在缓存判定之后再读就永远慢一拍，新增的集合会算不进汇总。
+    final collections = mergedCollections;
+    final local = folders;
+    final remote = remoteFolders;
+    final out = _folderSummaryOut;
+    if (out != null &&
+        _folderSummaryGeneration == _mergedCollectionsGeneration &&
+        _folderSummaryLiveEpoch == liveStatsVersion.value &&
+        _sameFolderSource(local, remote)) {
+      return out;
+    }
+    final computed = _computeFolderSummaries(collections);
+    _folderSummarySrc = <media_api.MediaFolder>[...local, ...remote];
+    _folderSummaryOut = computed;
+    _folderSummaryGeneration = _mergedCollectionsGeneration;
+    _folderSummaryLiveEpoch = liveStatsVersion.value;
+    return computed;
+  }
+
+  /// 文件夹结构快照是否仍是同一批实例（字段全 final，实例不变即内容不变）。
+  bool _sameFolderSource(
+    List<media_api.MediaFolder> local,
+    List<media_api.MediaFolder> remote,
+  ) {
+    final src = _folderSummarySrc;
+    if (src == null || src.length != local.length + remote.length) {
+      return false;
+    }
+    var i = 0;
+    for (final folder in local) {
+      if (!identical(src[i++], folder)) return false;
+    }
+    for (final folder in remote) {
+      if (!identical(src[i++], folder)) return false;
+    }
+    return true;
+  }
+
+  Map<String, MediaFolderSummary> _computeFolderSummaries(
+    List<media_api.MediaCollection> collections,
+  ) {
+    final childrenByParent = <String, List<media_api.MediaFolder>>{};
+    for (final folder in mergedFolders) {
+      final parentId = folder.parentId;
+      if (parentId != null) {
+        childrenByParent.putIfAbsent(parentId, () => []).add(folder);
+      }
+    }
+    final collectionsByFolder = <String, List<media_api.MediaCollection>>{};
+    for (final collection in collections) {
+      final parentId = collection.folderId;
+      if (parentId != null) {
+        collectionsByFolder.putIfAbsent(parentId, () => []).add(collection);
+      }
+    }
+
+    final summaries = <String, MediaFolderSummary>{};
+    MediaFolderSummary walk(
+      media_api.MediaFolder folder,
+      Set<String> visiting,
+    ) {
+      final cached = summaries[folder.id];
+      if (cached != null) return cached;
+      // 远程节点的父子数据可能带环，走不出的按空汇总返回
+      if (!visiting.add(folder.id)) return MediaFolderSummary.empty;
+      final direct = collectionsByFolder[folder.id] ?? const [];
+      final children = childrenByParent[folder.id] ?? const [];
+      var resources = 0;
+      var size = BigInt.zero;
+      for (final collection in direct) {
+        final stat = collectionResources(collection);
+        resources += stat.count;
+        size += stat.size;
+      }
+      // 同名集合在本层折叠成一张分组卡，所以集合贡献的卡片数按去重标题计
+      var childCards = children.length + direct.map((c) => c.title).toSet().length;
+      for (final child in children) {
+        final sub = walk(child, visiting);
+        resources += sub.resources;
+        size += sub.size;
+      }
+      visiting.remove(folder.id);
+      final summary = MediaFolderSummary(
+        childCards: childCards,
+        resources: resources,
+        size: size,
+      );
+      summaries[folder.id] = summary;
+      return summary;
+    }
+
+    for (final folder in mergedFolders) {
+      walk(folder, <String>{});
+    }
+    return summaries;
+  }
+
+  /// 刷新「磁盘上仍然存在」的资源体积与条数（Rust 侧并发逐文件 stat）。
+  ///
+  /// 全库扫描有真实开销，所以不挂在首屏链路上：每次 loadCollections 之后补一轮，
+  /// 期间再来请求就标记脏，本轮跑完补一次，保证删除动作最终会反映到父级汇总上。
+  Future<void> refreshCollectionLiveStats() async {
+    if (_liveStatsInFlight) {
+      _liveStatsDirty = true;
+      return;
+    }
+    _liveStatsInFlight = true;
+    try {
+      do {
+        _liveStatsDirty = false;
+        try {
+          final stats = await media_api.getAllCollectionLiveStats();
+          _collectionLiveStats
+            ..clear()
+            ..addEntries(
+              stats.map(
+                (stat) => MapEntry(
+                  stat.collectionId,
+                  (size: stat.liveSize, count: stat.liveCount.toInt()),
+                ),
+              ),
+            );
+          liveStatsVersion.value++;
+        } catch (error) {
+          _logger.error('[媒体库] 现存资源统计失败: $error');
+        }
+      } while (_liveStatsDirty);
+    } finally {
+      _liveStatsInFlight = false;
+    }
+  }
+
   List<media_api.MediaFolder> getAvailableFoldersForCollection(
     String collectionId,
   ) {
@@ -1740,7 +1951,11 @@ class MediaLibraryViewModel extends BaseViewModel {
     if (isLoadingRemote.value) return; // 已有后台任务在跑
     isLoadingRemote.value = true;
     final trace = TimingTrace('远程媒体库后台刷新');
-    refreshRemoteLibrary()
+    // 离线/熔断节点的复活探测挂在这里：只有进页面和点刷新才付这一次，没有后台定时轮询。
+    // 顺序不能反 —— 熔断位还挂着时 fetchNodeMediaMetadata 直接抛，远程那一栏就是空的。
+    nodeSettingsService
+        .recheckOfflineNodes()
+        .then((_) => refreshRemoteLibrary())
         .catchError((Object e) {
           _logger.error('[媒体库] 远程刷新失败: $e');
         })
@@ -1777,6 +1992,9 @@ class MediaLibraryViewModel extends BaseViewModel {
       // 预热阶段：批量填充 _collectionSizes / _collectionItemPaths / _lostCollections
       // 一次 await 三组缓存，避免 build 期间每张卡片单独调 FFI 阻塞 UI
       await _prewarmCollectionCaches(rawCollections);
+      // 现存资源统计要逐文件 stat，全库扫有实打实的开销，所以不挂在首屏链路上；
+      // 删除资源/集合后也会走到这里，父级文件夹的体积因此自动跟着重算。
+      unawaited(refreshCollectionLiveStats());
       if (currentCollectionId.value != null && currentCollection == null) {
         exitCollection();
       }
@@ -2334,6 +2552,31 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
     return normalized;
   }
+}
+
+/// [MediaLibraryViewModel.folderSummary] 的结果：文件夹卡片的三个展示口径。
+class MediaFolderSummary {
+  const MediaFolderSummary({
+    required this.childCards,
+    required this.resources,
+    required this.size,
+  });
+
+  /// 点开该文件夹能看到的卡片数（直接子文件夹 + 本层集合，同名集合算一张）。
+  final int childCards;
+
+  /// 子树内仍然存在的资源条数。
+  final int resources;
+
+  /// 子树内仍然存在的资源体积。
+  final BigInt size;
+
+  /// BigInt.zero 不是编译期常量，所以这里只能是 final。
+  static final empty = MediaFolderSummary(
+    childCards: 0,
+    resources: 0,
+    size: BigInt.zero,
+  );
 }
 
 /// [MediaLibraryViewModel.collectionsMatchingSmartFolder] 的一条缓存记录。

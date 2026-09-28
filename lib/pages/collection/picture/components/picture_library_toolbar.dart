@@ -248,7 +248,8 @@ class PictureLibraryToolbar extends StatelessWidget {
                         onPressed: onUpload,
                       ),
                     ),
-                  DrawIcon(StrokeIcons.gridView,
+                  DrawIcon(
+                    StrokeIcons.gridView,
                     size: scaleW(16),
                     color: Theme.of(context).hintColor,
                   ),
@@ -389,9 +390,7 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
                 ),
                 border: OutlineInputBorder(
                   borderRadius: AppTheme.metrics.radius8,
-                  borderSide: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                 ),
               ),
             ),
@@ -466,7 +465,8 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
                   borderRadius: AppTheme.metrics.radius999,
                   child: Padding(
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                    child: DrawIcon(StrokeIcons.cancel,
+                    child: DrawIcon(
+                      StrokeIcons.cancel,
                       size: AppTheme.metrics.iconSize16,
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -502,7 +502,8 @@ class _ThumbPausedIndicator extends StatelessWidget {
               borderRadius: AppTheme.metrics.radius999,
               child: Padding(
                 padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                child: DrawIcon(StrokeIcons.playCircleOutline,
+                child: DrawIcon(
+                  StrokeIcons.playCircleOutline,
                   size: AppTheme.metrics.iconSize16,
                   color: Theme.of(context).colorScheme.primary,
                 ),

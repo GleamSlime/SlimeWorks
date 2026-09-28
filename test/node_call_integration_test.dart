@@ -244,6 +244,71 @@ void main() {
     });
   });
 
+  // ── 内网地址失效、外网可用 ────────────────────────────────────────────────
+
+  group('LAN 不通 WAN 通', () {
+    test('业务调用回退到外网地址，并把应答过的那一路记成首选', () async {
+      final service = await createService();
+      final deadPort = await freeLoopbackPort();
+      mountNode(
+        service,
+        apiBaseUrl: server.baseUrl,
+        lanApiBaseUrl: 'http://127.0.0.1:$deadPort',
+      );
+
+      final response = await service.callNodeAction(nodeId: 'node-a', action: 'list_novels');
+      expect(response['success'], isTrue);
+      // 图片/上传 URL 交给 Image.network 与播放器，没有换地址的机会，只能靠首选指对
+      expect(service.getNodeEffectiveBaseUrl('node-a'), server.baseUrl);
+      expect(
+        service.buildNodeMediaUrl(nodeId: 'node-a', filePath: '/a.jpg'),
+        startsWith(server.baseUrl),
+      );
+    });
+
+    test('连通性探测探通外网后，后续调用不再付内网超时', () async {
+      final service = await createService();
+      final deadPort = await freeLoopbackPort();
+      mountNode(
+        service,
+        apiBaseUrl: server.baseUrl,
+        lanApiBaseUrl: 'http://127.0.0.1:$deadPort',
+      );
+
+      await service.checkNodeConnectivity('node-a');
+      expect(service.nodeConnectivity['node-a'], isTrue);
+      expect(service.getNodeEffectiveBaseUrl('node-a'), server.baseUrl);
+
+      final before = server.requests.length;
+      await service.callNodeAction(nodeId: 'node-a', action: 'list_novels');
+      // 一发即中：内网那一路没排在候选地址最前面
+      expect(server.requests.length, before + 1);
+    });
+
+    test('改节点地址会作废首选：请求打到新地址而不是旧的首选', () async {
+      final service = await createService();
+      final deadPort = await freeLoopbackPort();
+      final other = await FakeNodeServer.start();
+      addTearDown(other.dispose);
+      mountNode(
+        service,
+        apiBaseUrl: server.baseUrl,
+        lanApiBaseUrl: 'http://127.0.0.1:$deadPort',
+      );
+      await service.callNodeAction(nodeId: 'node-a', action: 'list_novels');
+      expect(service.getNodeEffectiveBaseUrl('node-a'), server.baseUrl);
+
+      // 用户把外网地址换成另一台机器：旧首选那台还"活着"，不作废就会一直打错地方
+      await service.updateRemoteNode(
+        service.remoteNodes[0].copyWith(apiBaseUrl: other.baseUrl),
+      );
+      final response = await service.callNodeAction(nodeId: 'node-a', action: 'list_novels');
+      expect(response['success'], isTrue);
+      expect(service.getNodeEffectiveBaseUrl('node-a'), other.baseUrl);
+      expect(requestFor(other, 'list_novels'), isNotNull);
+    });
+  });
+
   // ── 并发打满时的背压（节点回 503） ────────────────────────────────────────
 
   group('节点并发满（HTTP 503）', () {

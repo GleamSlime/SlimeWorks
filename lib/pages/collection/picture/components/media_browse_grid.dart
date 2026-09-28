@@ -188,12 +188,21 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
   Widget _buildFolderCard(BuildContext context, folder) {
     // 同名集合分组是虚拟文件夹：不支持重命名/删除/迁移，也不接受拖放。
     final isDupGroup = vm.isDupGroup(folder.id);
+    final isRemoteFolder = vm.isRemoteFolder(folder.id);
+    final summary = vm.folderSummary(folder.id);
     final folderCard = MediaFolderCard(
       folder: folder,
       coverSource: vm.buildFolderCoverSource(folder),
-      collectionCount: vm.collectionCountInFolder(folder.id),
+      itemCount: summary.childCards,
+      resourceCount: summary.resources,
+      totalSize: summary.size,
+      typeLabel: isDupGroup
+          ? '同名分组'
+          : isRemoteFolder
+          ? '远程文件夹'
+          : '文件夹',
       isSelected: vm.selectedIds.contains(folder.id),
-      isRemote: vm.isRemoteFolder(folder.id),
+      isRemote: isRemoteFolder,
       nodeName: vm.getRemoteFolderNodeName(folder.id),
       isLost: isDupGroup ? false : vm.checkFolderLost(folder),
       onTap: () {
@@ -238,10 +247,13 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     final nodeName = nodeId != null
         ? (vm.nodeSettingsService.getNodeById(nodeId)?.name ?? nodeId)
         : null;
+    final sfResources = vm.smartFolderResources(sf);
     final sfCard = SmartFolderCard(
       smartFolder: sf,
       coverSource: vm.buildSmartFolderCoverSource(sf),
       matchCount: vm.collectionsMatchingSmartFolder(sf).length,
+      resourceCount: sfResources.count,
+      totalSize: sfResources.size,
       isSelected: vm.selectedIds.contains(sf.id),
       nodeName: nodeName,
       isLost: vm.checkSmartFolderLost(sf),
@@ -280,6 +292,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
   }
 
   Widget _buildCollectionCard(BuildContext context, collection) {
+    final live = vm.collectionResources(collection);
     final card = MediaCollectionCard(
       collection: collection,
       coverSource: vm.buildCollectionCoverSource(collection),
@@ -287,7 +300,8 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       isSelecting: vm.isSelecting.value,
       isRemote: vm.isRemoteCollection(collection.id),
       nodeName: vm.getRemoteNodeName(collection.id),
-      totalSize: vm.getCollectionTotalSize(collection.id),
+      resourceCount: live.count,
+      totalSize: live.size,
       isFavorited: vm.isFavorite(collection.id),
       isLost: vm.checkCollectionLost(collection),
       hoverCoverSources: vm.isRemoteCollection(collection.id)

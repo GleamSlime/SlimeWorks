@@ -308,6 +308,30 @@ pub fn check_paths_exist(paths: Vec<String>) -> Vec<bool> {
     media_collection::check_paths_exist(paths)
 }
 
+/// FFI version of [media_collection::CollectionLiveStats].
+pub struct CollectionLiveStats {
+    pub collection_id: String,
+    pub live_size: u64,
+    pub live_count: u32,
+}
+
+/// 每个集合「磁盘上仍然存在」的资源体积与条数（失效资源不计）。
+// 异步：全库逐文件 stat，必须离开 Dart UI 线程
+pub fn get_all_collection_live_stats() -> anyhow::Result<Vec<CollectionLiveStats>> {
+    media_collection::get_all_collection_live_stats()
+        .map(|stats| {
+            stats
+                .into_iter()
+                .map(|s| CollectionLiveStats {
+                    collection_id: s.collection_id,
+                    live_size: s.live_size,
+                    live_count: s.live_count,
+                })
+                .collect()
+        })
+        .map_err(|error| anyhow::anyhow!(error))
+}
+
 /// Lightweight per-collection counts (no file paths), for polling file-count changes.
 // 异步：FRB 在后台线程池执行
 pub fn get_all_collection_counts() -> anyhow::Result<Vec<CollectionCount>> {

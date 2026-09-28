@@ -15,6 +15,7 @@ import 'dart:typed_data' show Float64List;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, TapUpDetails;
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:path_drawing/path_drawing.dart';
 
@@ -316,6 +317,70 @@ class SvTapGrow extends StatelessWidget {
         if (l > 0) band('left', left: 0, top: t, bottom: b, width: l),
         if (r > 0) band('right', right: 0, top: t, bottom: b, width: r),
       ],
+    );
+  }
+}
+
+/// 触屏兼容的悬停区：只认 hover 的格子也给指尖一条路
+///
+/// 触屏没有 enter/exit，纯悬停驱动的格子在手机上等于点不动。鼠标一侧照旧走
+/// `MouseRegion`，指尖点一下当作"指针进来并停在原地"、再点一下当作"离开"。
+/// 只有触屏指针走这条路 —— 桌面上鼠标点击不改变悬停语义。
+/// 传 [group] 时同组互斥：点第二块会先让占着的那块退场，不会两格同时悬停。
+class SvHoverRegion extends StatefulWidget {
+  const SvHoverRegion({
+    super.key,
+    required this.child,
+    this.group,
+    this.cursor = SystemMouseCursors.click,
+    this.onEnter,
+    this.onExit,
+  });
+
+  final Widget child;
+
+  /// 互斥组的标识（同一格里共用一个字符串即可）
+  final Object? group;
+  final MouseCursor cursor;
+  final VoidCallback? onEnter;
+  final VoidCallback? onExit;
+
+  @override
+  State<SvHoverRegion> createState() => _SvHoverRegionState();
+}
+
+class _SvHoverRegionState extends State<SvHoverRegion> {
+  /// 每组当前被指尖按住的实例（没给 group 就以自身为组）
+  static final Map<Object, _SvHoverRegionState> _held = {};
+
+  Object get _key => widget.group ?? this;
+
+  void _tapUp(TapUpDetails d) {
+    if (d.kind != PointerDeviceKind.touch) return;
+    if (_held[_key] == this) {
+      _held.remove(_key);
+      widget.onExit?.call();
+      return;
+    }
+    final previous = _held.remove(_key);
+    if (previous != null && previous.mounted) previous.widget.onExit?.call();
+    _held[_key] = this;
+    widget.onEnter?.call();
+  }
+
+  @override
+  void dispose() {
+    if (_held[_key] == this) _held.remove(_key);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.cursor,
+      onEnter: (_) => widget.onEnter?.call(),
+      onExit: (_) => widget.onExit?.call(),
+      child: GestureDetector(behavior: HitTestBehavior.opaque, onTapUp: _tapUp, child: widget.child),
     );
   }
 }

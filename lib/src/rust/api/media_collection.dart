@@ -158,6 +158,10 @@ Future<List<CollectionStats>> getAllCollectionStats() =>
 Future<List<bool>> checkPathsExist({required List<String> paths}) =>
     RustLib.instance.api.crateApiMediaCollectionCheckPathsExist(paths: paths);
 
+/// 每个集合「磁盘上仍然存在」的资源体积与条数（失效资源不计）。
+Future<List<CollectionLiveStats>> getAllCollectionLiveStats() =>
+    RustLib.instance.api.crateApiMediaCollectionGetAllCollectionLiveStats();
+
 /// Lightweight per-collection counts (no file paths), for polling file-count changes.
 Future<List<CollectionCount>> getAllCollectionCounts() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionCounts();
@@ -283,6 +287,32 @@ class CollectionCount {
           collectionId == other.collectionId &&
           itemCount == other.itemCount &&
           totalSize == other.totalSize;
+}
+
+/// FFI version of [media_collection::CollectionLiveStats].
+class CollectionLiveStats {
+  final String collectionId;
+  final BigInt liveSize;
+  final int liveCount;
+
+  const CollectionLiveStats({
+    required this.collectionId,
+    required this.liveSize,
+    required this.liveCount,
+  });
+
+  @override
+  int get hashCode =>
+      collectionId.hashCode ^ liveSize.hashCode ^ liveCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CollectionLiveStats &&
+          runtimeType == other.runtimeType &&
+          collectionId == other.collectionId &&
+          liveSize == other.liveSize &&
+          liveCount == other.liveCount;
 }
 
 /// Aggregated per-collection stats returned in a single batch FFI call.

@@ -386,7 +386,11 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     // ③ disk cache hit — 相邻缓存命中时不再重新生成
     if let Some(ref p) = adjacent_path {
         if is_valid_cache_hit(p) {
-            sw_debug!("[thumb] cache-hit(adjacent) | src={} | w={}", file_path, width);
+            sw_debug!(
+                "[thumb] cache-hit(adjacent) 缓存命中不再重新生成 | src={} | w={}",
+                file_path,
+                width
+            );
             return Some(p.to_string_lossy().into_owned());
         }
     }
@@ -419,7 +423,10 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
             }
         }
         None => {
-            sw_warn!("[thumb] 无法计算相邻缓存路径，跳过缓存生成 | src={}", file_path);
+            sw_warn!(
+                "[thumb] 无法计算相邻缓存路径，跳过缓存生成 | src={}",
+                file_path
+            );
             return None;
         }
     };
@@ -746,10 +753,8 @@ fn node_thumb_lock() -> &'static Mutex<HashMap<String, NodeThumbEntry>> {
                     .collect();
                 for k in expired {
                     if let Some(entry) = map.remove(&k) {
-                        NODE_THUMB_TOTAL_BYTES.fetch_sub(
-                            entry.bytes.len() as u64,
-                            Ordering::Relaxed,
-                        );
+                        NODE_THUMB_TOTAL_BYTES
+                            .fetch_sub(entry.bytes.len() as u64, Ordering::Relaxed);
                     }
                 }
             }
@@ -759,9 +764,7 @@ fn node_thumb_lock() -> &'static Mutex<HashMap<String, NodeThumbEntry>> {
 }
 
 fn node_thumb_get(key: &str) -> Option<Vec<u8>> {
-    let mut map = node_thumb_lock()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut map = node_thumb_lock().lock().unwrap_or_else(|e| e.into_inner());
     if let Some(entry) = map.get(key) {
         if entry.inserted_at.elapsed().as_secs() < NODE_THUMB_TTL_SECS {
             return Some(entry.bytes.clone());
@@ -774,9 +777,7 @@ fn node_thumb_get(key: &str) -> Option<Vec<u8>> {
 }
 
 fn node_thumb_put(key: &str, bytes: Vec<u8>) {
-    let mut map = node_thumb_lock()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut map = node_thumb_lock().lock().unwrap_or_else(|e| e.into_inner());
     let mut total = NODE_THUMB_TOTAL_BYTES.load(Ordering::Relaxed) as usize;
     // 先清过期，再按最早插入逐出到容量以内
     let expired: Vec<String> = map
@@ -823,7 +824,9 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
         .iter()
         .any(|e| lower.ends_with(e));
     let is_image = is_plain_image
-        || [".heic", ".heif", ".avif"].iter().any(|e| lower.ends_with(e));
+        || [".heic", ".heif", ".avif"]
+            .iter()
+            .any(|e| lower.ends_with(e));
     let is_video = [
         ".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".flv", ".wmv", ".ts", ".m2ts", ".mpg",
         ".mpeg",
@@ -831,8 +834,7 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
     .iter()
     .any(|e| lower.ends_with(e));
     let is_audio = [
-        ".mp3", ".flac", ".aac", ".m4a", ".ogg", ".opus", ".wav", ".wma", ".ape", ".aiff",
-        ".alac",
+        ".mp3", ".flac", ".aac", ".m4a", ".ogg", ".opus", ".wav", ".wma", ".ape", ".aiff", ".alac",
     ]
     .iter()
     .any(|e| lower.ends_with(e));
@@ -868,7 +870,11 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
             Some(out)
         }
         _ => {
-            sw_debug!("[node-thumb] generate failed | src={} | w={}", file_path, width);
+            sw_debug!(
+                "[node-thumb] generate failed | src={} | w={}",
+                file_path,
+                width
+            );
             None
         }
     }
@@ -887,9 +893,7 @@ fn resize_to_jpeg_bytes(src: &str, width: u32) -> Option<Vec<u8>> {
     let target_h = ((orig_h as f64) * (target_w as f64) / (orig_w as f64)) as u32;
     let resized = img.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
     let mut buf = std::io::Cursor::new(Vec::new());
-    resized
-        .write_to(&mut buf, image::ImageFormat::Jpeg)
-        .ok()?;
+    resized.write_to(&mut buf, image::ImageFormat::Jpeg).ok()?;
     Some(buf.into_inner())
 }
 
@@ -1165,8 +1169,7 @@ fn delete_thumbnail_tasks_for_file_paths(file_paths: &[String]) {
         return;
     }
     let _ = db_module::db_register_table(thumbnail_task_table_name());
-    let targets: std::collections::HashSet<&str> =
-        file_paths.iter().map(|p| p.as_str()).collect();
+    let targets: std::collections::HashSet<&str> = file_paths.iter().map(|p| p.as_str()).collect();
     let Ok(records) = db_module::db_list_all(thumbnail_task_table_name()) else {
         return;
     };
@@ -1259,8 +1262,7 @@ pub fn initialize_db() -> Result<(), String> {
 /// 文件（如 music_player.db）。这里把散落记录合并回 media.db（幂等，只执行一次）。
 fn migrate_scattered_media_data(media_db_path: &str) {
     // 幂等标记：已迁移过则跳过
-    if let Ok(Some(flag)) = db_module::db_get(meta_table_name(), "scatter_merged_v1".to_string())
-    {
+    if let Ok(Some(flag)) = db_module::db_get(meta_table_name(), "scatter_merged_v1".to_string()) {
         if flag == "1" {
             return;
         }
@@ -1273,7 +1275,9 @@ fn migrate_scattered_media_data(media_db_path: &str) {
         .filter(|t| *t != meta_table_name())
         .collect();
 
-    let dst_modified = std::fs::metadata(media_db_path).and_then(|m| m.modified()).ok();
+    let dst_modified = std::fs::metadata(media_db_path)
+        .and_then(|m| m.modified())
+        .ok();
 
     for candidate in &candidates {
         let src = candidate.to_string_lossy().into_owned();
@@ -1281,8 +1285,12 @@ fn migrate_scattered_media_data(media_db_path: &str) {
             continue;
         }
         // 常规表：只补齐目标缺失的记录，不覆盖已有数据
-        match db_module::db_merge_tables(src.clone(), media_db_path.to_string(), tables.clone(), false)
-        {
+        match db_module::db_merge_tables(
+            src.clone(),
+            media_db_path.to_string(),
+            tables.clone(),
+            false,
+        ) {
             Ok(n) if n > 0 => sw_info!("[media_db] 从 {} 合并散落记录 {} 条", src, n),
             Ok(_) => {}
             Err(e) => sw_warn!("[media_db] 合并 {} 失败: {}", src, e),
@@ -1341,7 +1349,8 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
         let ok = run_tracked_command(
             std::process::Command::new(ffmpeg_cmd())
                 .args([
-                    "-nostdin", "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y", &out_str,
+                    "-nostdin", "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y",
+                    &out_str,
                 ])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
@@ -1421,10 +1430,18 @@ pub fn extract_video_scrub_frames(
     if cached.iter().all(|p| std::path::Path::new(p).exists()) {
         return Ok(cached);
     }
-    std::fs::create_dir_all(&frame_dir)
-        .map_err(|e| format!("创建预览帧目录失败（只读盘？）: {} | {}", frame_dir.display(), e))?;
+    std::fs::create_dir_all(&frame_dir).map_err(|e| {
+        format!(
+            "创建预览帧目录失败（只读盘？）: {} | {}",
+            frame_dir.display(),
+            e
+        )
+    })?;
     #[cfg(target_os = "windows")]
-    if let Some(sw_dir) = Path::new(&video_path).parent().map(|p| p.join(".SlimeWorks")) {
+    if let Some(sw_dir) = Path::new(&video_path)
+        .parent()
+        .map(|p| p.join(".SlimeWorks"))
+    {
         ensure_hidden_attr(&sw_dir);
     }
 
@@ -1674,11 +1691,8 @@ fn delete_items_from_db(item_ids: &[String]) {
     if item_ids.is_empty() {
         return;
     }
-    if let Err(error) = db_module::db_batch_write(
-        item_table_name(),
-        Vec::new(),
-        item_ids.to_vec(),
-    ) {
+    if let Err(error) = db_module::db_batch_write(item_table_name(), Vec::new(), item_ids.to_vec())
+    {
         sw_debug!("[media_scan] 批量删除媒体条目失败: {}", error);
     }
 }
@@ -1767,10 +1781,7 @@ fn upsert_collection_from_folder(
 
         // 同一次导入的增删合并到单个 redb 事务：逐条 db_set/db_delete 会让 N 个
         // 条目触发 N 次 commit（每次一趟磁盘刷写），导入上千文件时是分钟级差距。
-        let sets = items
-            .iter()
-            .filter_map(item_to_record)
-            .collect::<Vec<_>>();
+        let sets = items.iter().filter_map(item_to_record).collect::<Vec<_>>();
         match db_module::db_batch_write(item_table_name(), sets, removed_ids) {
             Ok(_) => {
                 stored_items.retain(|item| item.collection_id != collection_id);
@@ -2033,6 +2044,92 @@ pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
     Ok(map.into_values().collect())
 }
 
+/// Per-collection stats counting only resources that still exist on disk.
+/// 库里记录的 `file_size` 在文件被外部删除后仍是旧值，父级文件夹要如实汇总
+/// 「现存资源体积」就必须逐条 stat，而不是信数据库。
+pub struct CollectionLiveStats {
+    pub collection_id: String,
+    pub live_size: u64,
+    pub live_count: u32,
+}
+
+/// 把逐条「存在 → 字节数 / 不存在 → None」的判定汇总成每个集合的现存体积与条数。
+/// 纯计算，供单测覆盖；`None` 的条目只登记集合、不累计。
+fn aggregate_live_stats<'a, I: IntoIterator<Item = (&'a str, Option<u64>)>>(
+    entries: I,
+) -> Vec<CollectionLiveStats> {
+    let mut map: HashMap<&str, (u64, u32)> = HashMap::new();
+    for (collection_id, live_size) in entries {
+        let entry = map.entry(collection_id).or_default();
+        if let Some(bytes) = live_size {
+            entry.0 += bytes;
+            entry.1 += 1;
+        }
+    }
+    let mut stats = map
+        .into_iter()
+        .map(|(collection_id, (live_size, live_count))| CollectionLiveStats {
+            collection_id: collection_id.to_string(),
+            live_size,
+            live_count,
+        })
+        .collect::<Vec<_>>();
+    stats.sort_by(|left, right| left.collection_id.cmp(&right.collection_id));
+    stats
+}
+
+/// 汇总每个集合「磁盘上仍然存在」的资源体积与条数（失效资源不计入）。
+/// 全库逐文件 stat，因此先在锁内取快照再放开锁并发跑，避免卡住其它 FFI。
+pub fn get_all_collection_live_stats() -> Result<Vec<CollectionLiveStats>, String> {
+    let snapshot: Vec<(String, String)> = {
+        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+        ensure_items_loaded(&mut guard);
+        guard
+            .as_ref()
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|item| (item.collection_id.clone(), item.file_path.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    // IO 等待为主，线程再多也没收益；上限 8 防止大机器上打爆文件描述符
+    let workers = std::thread::available_parallelism()
+        .map(|count| count.get().clamp(1, 8))
+        .unwrap_or(4);
+    let chunk_size = snapshot.len().div_ceil(workers).max(1);
+    let mut verdicts: Vec<(&str, Option<u64>)> = Vec::with_capacity(snapshot.len());
+    std::thread::scope(|scope| {
+        let handles = snapshot
+            .chunks(chunk_size)
+            .map(|chunk| {
+                scope.spawn(|| {
+                    chunk
+                        .iter()
+                        .map(|(collection_id, file_path)| {
+                            // 目录/管道等不算资源；stat 失败即视为已失效
+                            let live = std::fs::metadata(file_path)
+                                .ok()
+                                .filter(|meta| meta.is_file())
+                                .map(|meta| meta.len());
+                            (collection_id.as_str(), live)
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            if let Ok(partial) = handle.join() {
+                verdicts.extend(partial);
+            }
+        }
+    });
+
+    Ok(aggregate_live_stats(verdicts))
+}
+
 /// 轻量级集合统计（不含文件路径列表），用于轮询检测文件数量变化。
 #[derive(Debug, Clone)]
 pub struct CollectionCount {
@@ -2084,7 +2181,10 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
 /// 条目按集合整体删旧插新，磁盘新增文件被拾取、已删文件被清理，天然不产生重复。
 pub fn rescan_media_folder(folder_path: String) -> Result<MediaCollection, String> {
     let normalized = normalize_folder_path(Path::new(&folder_path))?;
-    sw_debug!("[media_scan] rescan_media_folder: 重新扫描 {:?}", normalized);
+    sw_debug!(
+        "[media_scan] rescan_media_folder: 重新扫描 {:?}",
+        normalized
+    );
     upsert_collection_from_folder(Path::new(&normalized), true)
 }
 
@@ -2422,9 +2522,7 @@ pub fn clear_all_local_media(
 
     // 先收集所有集合的 folder_path（清空后无法再获取），用于资源缓存清理
     let folder_paths: Vec<String> = if clear_resource_thumbnail_cache {
-        let collections = get_collections()
-            .lock()
-            .map_err(|e| e.to_string())?;
+        let collections = get_collections().lock().map_err(|e| e.to_string())?;
         collections.iter().map(|c| c.folder_path.clone()).collect()
     } else {
         Vec::new()
@@ -2639,9 +2737,7 @@ pub fn open_in_file_manager(file_path: String) -> Result<(), String> {
         let select_path = match path.canonicalize() {
             Ok(p) => {
                 let s = p.to_string_lossy().into_owned();
-                s.strip_prefix(r"\\?\")
-                    .map(str::to_string)
-                    .unwrap_or(s)
+                s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
             }
             Err(_) => path.display().to_string(),
         };
@@ -2972,8 +3068,40 @@ mod tests {
         assert_eq!(default_collection_title(path), "未命名集合");
     }
 
-    // ── adjacent_cache_path ──────────────────────────────────────────────
+    // ── aggregate_live_stats ─────────────────────────────────────────────
 
+    #[test]
+    fn live_stats_skip_missing_and_merge_by_collection() {
+        // None = 文件已不在磁盘上：既不计条数也不计体积，但集合仍要出现
+        let stats = aggregate_live_stats([
+            ("c1", Some(100)),
+            ("c1", None),
+            ("c1", Some(50)),
+            ("c2", None),
+        ]);
+        assert_eq!(stats.len(), 2);
+        assert_eq!(stats[0].collection_id, "c1");
+        assert_eq!(stats[0].live_size, 150);
+        assert_eq!(stats[0].live_count, 2);
+        assert_eq!(stats[1].collection_id, "c2");
+        assert_eq!(stats[1].live_size, 0);
+        assert_eq!(stats[1].live_count, 0);
+    }
+
+    #[test]
+    fn live_stats_output_is_order_stable() {
+        // HashMap 迭代顺序随机，输出必须按集合 ID 排好，否则 Dart 侧每次刷新都在抖动
+        let stats = aggregate_live_stats([("b", Some(1)), ("a", Some(1)), ("c", Some(1))]);
+        assert_eq!(
+            stats
+                .iter()
+                .map(|s| s.collection_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b", "c"]
+        );
+    }
+
+    // ── adjacent_cache_path ──────────────────────────────────────────────
     #[test]
     fn adjacent_cache_path_basic() {
         // 拼接规则：<资源父目录>/.SlimeWorks/tmp/<文件名>_w<宽度>.jpg
@@ -3184,10 +3312,7 @@ mod tests {
                 db_path.starts_with(home_path.to_string_lossy().as_ref()),
                 "DB 路径必须位于隔离 HOME 内，绝不触碰真实用户库: {db_path}"
             );
-            DbTestEnv {
-                home_path,
-                db_path,
-            }
+            DbTestEnv { home_path, db_path }
         })
     }
 
@@ -3305,7 +3430,15 @@ mod tests {
         assert_eq!(stored.name, format!("智能夹 {tag}"));
 
         // 更新后 DB 同步；名称空白拒绝；不存在报错
-        assert!(create_smart_folder("  ".into(), String::new(), vec![], String::new(), String::new(), vec![]).is_err());
+        assert!(create_smart_folder(
+            "  ".into(),
+            String::new(),
+            vec![],
+            String::new(),
+            String::new(),
+            vec![]
+        )
+        .is_err());
         let updated = update_smart_folder(
             sf.id.clone(),
             format!("改名 {tag}"),
@@ -3319,9 +3452,21 @@ mod tests {
         assert_eq!(updated.file_type_filter, SmartFolderFileType::All);
         let raw = db_row(smart_folder_table_name(), &sf.id).unwrap();
         assert!(raw.contains(&format!("改名 {tag}")));
-        assert!(update_smart_folder("no_such_id".into(), "x".into(), String::new(), vec![], String::new(), String::new(), vec![]).is_err());
+        assert!(update_smart_folder(
+            "no_such_id".into(),
+            "x".into(),
+            String::new(),
+            vec![],
+            String::new(),
+            String::new(),
+            vec![]
+        )
+        .is_err());
 
-        assert!(get_all_smart_folders().unwrap().iter().any(|s| s.id == sf.id));
+        assert!(get_all_smart_folders()
+            .unwrap()
+            .iter()
+            .any(|s| s.id == sf.id));
         assert!(delete_smart_folder(sf.id.clone()).unwrap());
         assert!(!delete_smart_folder(sf.id.clone()).unwrap());
         assert!(db_row(smart_folder_table_name(), &sf.id).is_none());
@@ -3335,7 +3480,10 @@ mod tests {
         let key = format!("order_case_{}", std::process::id());
 
         // 未写入时为空列表
-        assert_eq!(get_collection_order(key.clone()).unwrap(), Vec::<String>::new());
+        assert_eq!(
+            get_collection_order(key.clone()).unwrap(),
+            Vec::<String>::new()
+        );
 
         // 保存 → 读回 + 确认落库
         save_collection_order(key.clone(), vec!["a".into(), "b".into()]).unwrap();
@@ -3354,7 +3502,10 @@ mod tests {
 
         // 损坏 JSON 容错：读取侧回退空列表而不是报错
         db_module::db_set(collection_order_table_name(), key.clone(), "{坏数据".into()).unwrap();
-        assert_eq!(get_collection_order(key.clone()).unwrap(), Vec::<String>::new());
+        assert_eq!(
+            get_collection_order(key.clone()).unwrap(),
+            Vec::<String>::new()
+        );
 
         // 空列表 = 删除语义
         save_collection_order(key.clone(), vec![]).unwrap();
@@ -3388,8 +3539,8 @@ mod tests {
         std::fs::write(root.join("readme.txt"), b"not media").unwrap();
 
         let folder_path = std::fs::canonicalize(&root).unwrap();
-        let collection = import_media_folder(folder_path.to_string_lossy().into_owned())
-            .expect("导入应成功");
+        let collection =
+            import_media_folder(folder_path.to_string_lossy().into_owned()).expect("导入应成功");
         assert_eq!(collection.item_count, 2, "只应统计受支持的媒体文件");
         assert_eq!(
             collection.title,
@@ -3410,8 +3561,8 @@ mod tests {
         );
 
         // 导入链路应已预生成封面邻近缓存（不依赖 ffmpeg：Rust 回退兜底）
-        let cache = adjacent_cache_path(Path::new(&collection.cover_path.clone().unwrap()), 320)
-            .unwrap();
+        let cache =
+            adjacent_cache_path(Path::new(&collection.cover_path.clone().unwrap()), 320).unwrap();
         assert!(
             is_valid_cache_hit(&cache),
             "导入后封面缩略图应已写入: {}",
@@ -3450,7 +3601,10 @@ mod tests {
             rescan_media_folder(folder_path.to_string_lossy().into_owned()).expect("重扫应成功");
         assert_eq!(rescanned.id, collection.id, "重扫应复用既有集合 id");
         assert_eq!(rescanned.item_count, 3);
-        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 3);
+        assert_eq!(
+            row_count_for_collection(item_table_name(), &collection.id),
+            3
+        );
         let items = get_media_collection_items(collection.id.clone()).unwrap();
         assert_eq!(items.len(), 3);
         assert_eq!(
@@ -3462,13 +3616,21 @@ mod tests {
         // 删除集合：内存 + 两张表 + 关联缩略图任务全部清理
         assert!(delete_media_collection(collection.id.clone()).unwrap());
         assert!(db_row(collection_table_name(), &collection.id).is_none());
-        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 0);
+        assert_eq!(
+            row_count_for_collection(item_table_name(), &collection.id),
+            0
+        );
         assert!(!delete_media_collection("no_such_collection".into()).unwrap());
         let pending = get_all_pending_thumbnail_tasks().unwrap();
         assert!(
-            !pending.iter().any(|t| t.file_path.starts_with(&root.to_string_lossy().into_owned())
+            !pending.iter().any(|t| t
+                .file_path
+                .starts_with(&root.to_string_lossy().into_owned())
                 || t.file_path.starts_with(
-                    &std::fs::canonicalize(&root).unwrap().to_string_lossy().into_owned()
+                    &std::fs::canonicalize(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
                 )),
             "删除集合后不应残留该目录的缩略图任务: {pending:?}"
         );
@@ -3498,7 +3660,10 @@ mod tests {
         // 递归=false：只有直接含媒体的目录各自成集合；notes 与空根目录被排除
         let collections = scan_media_folders(root.to_string_lossy().into_owned()).unwrap();
         let titles: Vec<&str> = collections.iter().map(|c| c.title.as_str()).collect();
-        assert!(titles.contains(&"volA") && titles.contains(&"volB"), "got: {titles:?}");
+        assert!(
+            titles.contains(&"volA") && titles.contains(&"volB"),
+            "got: {titles:?}"
+        );
         assert!(!titles.contains(&"notes"));
         let vol_b = collections.iter().find(|c| c.title == "volB").unwrap();
         assert_eq!(vol_b.item_count, 2);
@@ -3525,8 +3690,7 @@ mod tests {
         std::fs::write(root.join("stray.txt"), b"keep me").unwrap();
 
         let folder_path = std::fs::canonicalize(&root).unwrap();
-        let collection =
-            import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
 
         let deleted = delete_collection_local_files(collection.id.clone()).unwrap();
         assert_eq!(deleted, 2, "只应删除媒体文件");
@@ -3538,14 +3702,14 @@ mod tests {
         );
         assert!(root.join("stray.txt").exists(), "非媒体残留文件不得误删");
         assert!(root.exists(), "目录非空时不得删除集合根目录");
-        assert!(
-            root.parent().unwrap().exists(),
-            "清理绝不向上传播到父目录"
-        );
+        assert!(root.parent().unwrap().exists(), "清理绝不向上传播到父目录");
 
         // 本函数刻意不动数据库：集合与条目记录仍在库里（后续由 delete_media_collection 收口）
         assert!(db_row(collection_table_name(), &collection.id).is_some());
-        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 2);
+        assert_eq!(
+            row_count_for_collection(item_table_name(), &collection.id),
+            2
+        );
 
         assert!(delete_media_collection(collection.id).unwrap());
         let _ = std::fs::remove_dir_all(&root);
@@ -3559,8 +3723,7 @@ mod tests {
         let root = fake_media_root("clear_all");
         write_test_image(&root.join("a.bmp"));
         let folder_path = std::fs::canonicalize(&root).unwrap();
-        let collection =
-            import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
 
         // 模拟历史残留的资源缓存文件（另有导入链路生成的封面缓存同目录）
         let tmp_dir = root.join(".SlimeWorks").join("tmp");
@@ -3629,11 +3792,19 @@ mod tests {
         assert_eq!(task.retries, 2);
 
         // 任务记录在表里真实存在（非仅内存）
-        assert!(db_row(thumbnail_task_table_name(), &thumb_task_key(&bogus_str, 320)).is_some());
+        assert!(db_row(
+            thumbnail_task_table_name(),
+            &thumb_task_key(&bogus_str, 320)
+        )
+        .is_some());
 
         // 成功语义：删除记录 + 忘掉重试计数（磁盘缓存即真相）
         complete_thumbnail_task(&bogus_str, 320, true);
-        assert!(db_row(thumbnail_task_table_name(), &thumb_task_key(&bogus_str, 320)).is_none());
+        assert!(db_row(
+            thumbnail_task_table_name(),
+            &thumb_task_key(&bogus_str, 320)
+        )
+        .is_none());
         assert_eq!(thumb_retry_count(&thumb_task_key(&bogus_str, 320)), 0);
 
         let _ = std::fs::remove_dir_all(&root);
@@ -3698,12 +3869,18 @@ mod tests {
 
         // 首次：唯一路径必然未命中内存缓存，走纯 Rust 缩放（BMP 属位图，不经过 ffmpeg）
         let bytes = generate_thumbnail_bytes(img_str.clone(), 200).expect("应能生成缩略图字节");
-        assert!(bytes.len() > 2 && bytes[0] == 0xFF && bytes[1] == 0xD8, "输出应是 JPEG 字节流");
+        assert!(
+            bytes.len() > 2 && bytes[0] == 0xFF && bytes[1] == 0xD8,
+            "输出应是 JPEG 字节流"
+        );
 
         // 用哨兵值污染内存缓存：再次调用应原样返回哨兵 → 证明命中走的是内存缓存
         let probe = b"__mem_cache_probe__".to_vec();
         node_thumb_put(&key, probe.clone());
-        assert_eq!(generate_thumbnail_bytes(img_str.clone(), 200).unwrap(), probe);
+        assert_eq!(
+            generate_thumbnail_bytes(img_str.clone(), 200).unwrap(),
+            probe
+        );
         // 不同宽度是另一个 key，不受哨兵影响
         assert_ne!(
             generate_thumbnail_bytes(img_str.clone(), 99).unwrap(),
@@ -3717,8 +3894,10 @@ mod tests {
         );
 
         // 不支持的扩展名 → None
-        assert!(generate_thumbnail_bytes(root.join("x.txt").to_string_lossy().into_owned(), 200)
-            .is_none());
+        assert!(
+            generate_thumbnail_bytes(root.join("x.txt").to_string_lossy().into_owned(), 200)
+                .is_none()
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

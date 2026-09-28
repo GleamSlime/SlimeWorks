@@ -829,12 +829,12 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 
 ## 12. 动效实验室（隔离案例集）
 
-`lib/pages/motion_lab/` 是一页 43 格的动效参考集：每格一个独立组件，照外部参考稿逐像素还原
+`lib/pages/motion_lab/` 是一页 44 格的动效参考集：每格一个独立组件，照外部参考稿逐像素还原
 尺寸/颜色/时长/曲线/关键帧。**它是只读参考，不是产品 UI**——§5.1 的禁令在这里依然成立，
 发光、粒子爆炸、骨架渐变搬进真页面仍然是违规。
 
-同一套接线方式后来复用了两遍，长出了三页（`/motion-lab` 43 格、`/interaction-lab` 13 格、
-`/surface-lab` 6 格）。**加一格或加一页照 `docs/ui_labs.md` §1 走**（目录骨架、本地令牌底座、
+同一套接线方式后来复用了两遍，长出了三页（`/motion-lab` 44 格、`/interaction-lab` 13 格、
+`/surface-lab` 7 格）。**加一格或加一页照 `docs/ui_labs.md` §1 走**（目录骨架、本地令牌底座、
 单向隔离墙、注册表、路由四落点、每格四道验收），三页全部组件的功能与样式台账也在
 `docs/ui_labs.md` §2。本节只记坑：§12.1–12.6 是动效页，§12.7 交互页，§12.8 表面页。
 
@@ -843,7 +843,7 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 - `lab_kit.dart`：这一页自己的 token 层（`LabColor` / `LabFont` / `LabEase` / `LabSize` /
   `LabShadow` / `LabText` / `LabStage` / `LabCard` / `LabAnimateButton` / `LabIconButton` /
   `LabStageFooter` / `LabBlur` / `LabTween` / `LabIcon`）。
-- `cases/case_NN_*.dart`：43 个文件，一格一个 class，互不引用。
+- `cases/case_NN_*.dart`：44 个文件，一格一个 class，互不引用。
 - `cases/motion_lab_cases.dart`：注册表 `kLabCases`（`seq` / `title` / `subtitle` / `cat` / `build`），
   页面和测试都只认这张表——加一格只加文件 + 加一条注册。
 
@@ -923,7 +923,7 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 ### 12.6 验收：一帧一个 test
 
 ```bash
-flutter test -t golden test/motion_lab_all_cases_test.dart              # 129 张 = 43 格 × 静止/途中/终态
+flutter test -t golden test/motion_lab_all_cases_test.dart              # 132 张 = 44 格 × 静止/途中/终态
 flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart
 flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --plain-name 'Confetti burst'  # 单格重出
 ```
@@ -932,7 +932,7 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
   可点、可拖的元素靠 `cursor: click|grab` 的 `MouseRegion` 找，比猜坐标可靠（拖拽格是 `grab`）。
 - **一帧一个 test**：出过图之后同一个 test 里的第二次点击就不再接到了。
 - 途中帧默认 150ms；还在 delay 里的慢启动格、以及刚炸开挤成一团的格子，另写进 `_midOverride`。
-- **只看静止帧证明不了动效存在**。审计口径：43 格的 idle / mid 两张取哈希比对，
+- **只看静止帧证明不了动效存在**。审计口径：44 格的 idle / mid 两张取哈希比对，
   `mid == idle` 必须为空集；`end == idle` 只允许是"落定后本来就该没有"的格子（6 号纸屑落完）。
 - **三帧采样也证明不了"途中不炸"**：过冲顶出的非法透明度、只在某几帧出现的溢出断言，
   三帧全都恰好躲过去。所以每格还有一条不带 `golden` 标签的**逐帧扫**：按 16ms 推到 3000ms，
@@ -1363,6 +1363,15 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - **参考稿自己就把内容裁掉一截**（6 号）：展开态白卡内容盒 432，页眉 106 + 中段 290 + 页脚 36
   正好占满，而中段的内容要 288、可用只有 266 —— 最后一枚钮被 `overflow-hidden` 吃掉 13px。
   这是它 `flex-grow` 的既定行为，照抄，别"顺手修好"（像素量尺实测：钮可见段 405→428）。
+- **行盒按整像素取整，排版流会把钉死的盒子顶爆半格**（8 号）：`fontSize 20 / height 27.5`
+  实测行盒是 28.0，`14 / 22.75` 两行是 46.0（不是 45.5）。参考稿内容区那 194 是量出来的死数，
+  四段照 CSS 那样流式往下排就凭空多出 0.5px，直接报 RenderFlex overflow。做法：四段改成
+  量到的**绝对落点**（24 / 59.5 / 121 / 138）摆进 `Stack` —— 段落多出来的那半格本来就落在
+  段与段之间的空隙里，换摆法一格不挪。于是断言只钉落点，行高那两侧给 ±1 的容差。
+- **接缝的垫角要锚在标签自己那条边上**（8 号）：标签的宽是内衬撑出来的（`px-5` 包一行 11px
+  的字），字形换一档就跟量到的 105.1 差几像素。垫角若照量到的横坐标摆（图坐标 −1 和 104.1），
+  接缝处就留一道白缝或压出一道白边；改成"相对标签自己的边探出 31、回叠 1"之后宽度怎么变都
+  咬住。这条同时定了个规矩：**量到的宽度只能当测试预期，不能当布局输入**。
 
 ### 12.9 触屏这一路（三页共同的账）
 
@@ -1374,8 +1383,8 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
   接管焦点，字经 `onChanged` 喂回内部那份读数。**只在安卓/iOS 挂**（`IlTouch.softKeyboard`
   / `SvTouch.softKeyboard`），桌面那条路一字不改 —— 代价是这条分支在离屏测不到（桌面恒
   为 false），只能真机验收。所以"桌面 golden 一像素不动"是它的保险，不是它的证明。
-- **悬停驱动的格子给不出 enter，就用点按顶替，但判据不许换**（交互 13、动效页那批
-  `LabHoverRegion`）：指尖点一下卡片当"指针进来并停在原地"、再点一下当离开；收不收仍走
+- **悬停驱动的格子给不出 enter，就用点按顶替，但判据不许换**（交互 13、表面 8、动效页那批
+  `LabHoverRegion` / `SvHoverRegion`）：指尖点一下卡片当"指针进来并停在原地"、再点一下当离开；收不收仍走
   原来那套几何（交互 13 是 `_zone` 那条 path，点在钮与钮之间那块 reach 里算"还没走"）。
   **只认 `PointerDeviceKind.touch`**，桌面鼠标点击不改变悬停语义，两件事各走各的。
 - **跟手那几格会被整页滚走，而且是两种输法**（动效 20、交互 4/6）：① 交互 4/6 跟手走的是裸
@@ -1390,7 +1399,9 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - **这一条测得出来，别默认"只能真机"**：`tester.startGesture()` 默认就是
   `PointerDeviceKind.touch`，只要挂的是**整页**（不是单格），竞技场、slop、滚动全是真的。
   `test/motion_lab_touch_trigger_test.dart` 20 号那条就是这样验的：按下读数 → 拖完页面
-  `pixels` 没动 → 图块自己跟手 → 松手归还。裸 `Listener` 会留 pending 微任务，收尾要
+  `pixels` 没动 → 图块自己跟手 → 松手归还。44 号"按住说话"是同一验法的第二个实例，而且它
+  那一侧是**裸 `Listener`**（连竞技场都不进），锁只能靠按下那一下主动给出。裸 `Listener`
+  会留 pending 微任务，收尾要
   `TestAsyncUtils.guard()` 包住 `up()` + 推帧，否则报的是铺垫造成的假红。
 - **受理区不能压在脸自己身上**（表面 4）：把透明命中层叠在脸上面，视觉对、静止帧 golden
   也对，唯独**按下的那一档慢半拍** —— 脸自己的 `onTapDown` 要等竞技场分出胜负（松手那一瞬）
@@ -1432,8 +1443,8 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - **全站图标收敛**（§9.1）：`Icon(Icons.*)` 与 `assets/image/svg` 的 41 张自绘图标全部换成
   构建期生成的 `DrawIcon(StrokeIcons.*)` + 描边动画，122 个调用点一遍过；只保留品牌标
   `top_bar_logo.svg`。产物里"没引用的图标不进包"（mac/windows/ios 三端同理）
-- **动效实验室**（§12）：43 格参考案例全部落地，一格一个组件、零全局主题耦合，
-  129 张 golden（每格静止/途中/终态）可复现；途中帧哈希比对证明 43 格**全部**在动
+- **动效实验室**（§12）：44 格参考案例全部落地，一格一个组件、零全局主题耦合，
+  132 张 golden（每格静止/途中/终态）可复现；途中帧哈希比对证明 44 格**全部**在动
 
 ### 未完成（按可见度排序）
 

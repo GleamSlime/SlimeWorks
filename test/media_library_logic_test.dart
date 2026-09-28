@@ -1080,6 +1080,123 @@ void main() {
     });
   });
 
+  // ── 文件夹卡片汇总口径 folderSummary ──────────────────────────────────────
+
+  group('folderSummary 子级卡片数与递归体积', () {
+    test('childCards 只数直接子级，同名集合折叠成一张卡', () {
+      vm.folders.assignAll([
+        folder('f1'),
+        folder('f2', parentId: 'f1'),
+        folder('f3', parentId: 'f2'),
+      ]);
+      vm.collections.assignAll([
+        col('a', title: 'A', folderId: 'f1', itemCount: BigInt.from(3)),
+        col('b', title: 'B', folderId: 'f1', itemCount: BigInt.one),
+        col('c', title: 'B', folderId: 'f1', itemCount: BigInt.two),
+        col('d', title: 'D', folderId: 'f3', itemCount: BigInt.from(10)),
+      ]);
+      // 打开 f1 只看到：1 个子文件夹 + 标题 A + 标题 B 折叠卡
+      expect(vm.folderSummary('f1').childCards, 3);
+      // 资源数递归到孙级 f3
+      expect(vm.folderSummary('f1').resources, 16);
+      // f3 只算自己这一层
+      expect(vm.folderSummary('f3').childCards, 1);
+      expect(vm.folderSummary('f3').resources, 10);
+    });
+
+    test('体积沿父子链冒泡到父级', () {
+      vm.folders.assignAll([
+        folder('p'),
+        folder('c1', parentId: 'p'),
+      ]);
+      vm.collections.assignAll([
+        col('m1', folderId: 'p', itemCount: BigInt.one),
+        col('m2', folderId: 'c1', itemCount: BigInt.one),
+      ]);
+      // _collectionSizes 未预热（FFI 桩失败），此处用库里 itemCount 等价验证冒泡路径
+      expect(vm.folderSummary('c1').resources, 1);
+      expect(vm.folderSummary('p').resources, 2);
+    });
+
+    test('空文件夹与未知 ID 返回全 0', () {
+      vm.folders.assignAll([folder('empty')]);
+      expect(vm.folderSummary('empty').childCards, 0);
+      expect(vm.folderSummary('empty').resources, 0);
+      expect(vm.folderSummary('empty').size, BigInt.zero);
+      expect(vm.folderSummary('nope'), same(MediaFolderSummary.empty));
+    });
+
+    test('父子成环时仍能返回，不死循环', () {
+      vm.folders.assignAll([
+        folder('loop-a', parentId: 'loop-b'),
+        folder('loop-b', parentId: 'loop-a'),
+      ]);
+      vm.collections.assignAll([
+        col('x', folderId: 'loop-a', itemCount: BigInt.two),
+        col('y', folderId: 'loop-b', itemCount: BigInt.from(5)),
+      ]);
+      final summary = vm.folderSummary('loop-a');
+      expect(summary.resources, 7);
+      expect(summary.childCards, 2);
+    });
+
+    test('集合或文件夹结构变化后汇总缓存自动失效', () {
+      vm.folders.assignAll([folder('f1')]);
+      vm.collections.assignAll([col('a', folderId: 'f1', itemCount: BigInt.one)]);
+      expect(vm.folderSummary('f1').resources, 1);
+      expect(vm.folderSummary('f1').childCards, 1);
+      vm.collections.assignAll([
+        col('a', folderId: 'f1', itemCount: BigInt.one),
+        col('b', folderId: 'f1', itemCount: BigInt.from(9)),
+      ]);
+      expect(vm.folderSummary('f1').resources, 10);
+      expect(vm.folderSummary('f1').childCards, 2);
+      // 新挂一个子文件夹也要反映到 childCards
+      vm.folders.assignAll([
+        folder('f1'),
+        folder('f2', parentId: 'f1'),
+      ]);
+      expect(vm.folderSummary('f1').childCards, 3);
+    });
+
+    test('同名集合分组的汇总 = 分组成员集合', () {
+      vm.collections.assignAll([
+        col('a', title: '同人', folderId: null, itemCount: BigInt.from(4)),
+        col('c', title: '同人', folderId: null, itemCount: BigInt.from(6)),
+      ]);
+      vm.visibleItems; // 登记分组父目录
+      expect(vm.folderSummary('dup-group:同人').childCards, 2);
+      expect(vm.folderSummary('dup-group:同人').resources, 10);
+    });
+
+    test('远程集合按节点上报的体积与条数计', () async {
+      await mountNodeAndRefresh(
+        folders: [
+          {'id': 'nf', 'name': '节点文件夹'},
+        ],
+        collections: [
+          {
+            'id': 'nc',
+            'title': '节点集合',
+            'folder_id': 'nf',
+            'item_count': '7',
+            'total_size': '1073741824',
+          },
+        ],
+      );
+      final summary = vm.folderSummary('remote-media-folder:node-a:nf');
+      expect(summary.resources, 7);
+      expect(summary.size, BigInt.from(1073741824));
+    });
+
+    test('collectionResources：本地未 stat 时退回库里记录值', () {
+      final c = col('a', itemCount: BigInt.from(12));
+      final stat = vm.collectionResources(c);
+      expect(stat.count, 12);
+      expect(stat.size, BigInt.zero);
+    });
+  });
+
   // ── 排序枚举 label ─────────────────────────────────────────────────────────
 
   group('排序枚举', () {

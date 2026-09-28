@@ -254,6 +254,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CollectionCount dco_decode_collection_count(dynamic raw);
 
   @protected
+  CollectionLiveStats dco_decode_collection_live_stats(dynamic raw);
+
+  @protected
   CollectionStats dco_decode_collection_stats(dynamic raw);
 
   @protected
@@ -306,6 +309,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CollectionCount> dco_decode_list_collection_count(dynamic raw);
+
+  @protected
+  List<CollectionLiveStats> dco_decode_list_collection_live_stats(dynamic raw);
 
   @protected
   List<CollectionStats> dco_decode_list_collection_stats(dynamic raw);
@@ -751,6 +757,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CollectionCount sse_decode_collection_count(SseDeserializer deserializer);
 
   @protected
+  CollectionLiveStats sse_decode_collection_live_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CollectionStats sse_decode_collection_stats(SseDeserializer deserializer);
 
   @protected
@@ -811,6 +822,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CollectionCount> sse_decode_list_collection_count(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CollectionLiveStats> sse_decode_list_collection_live_stats(
     SseDeserializer deserializer,
   );
 
@@ -1359,6 +1375,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_collection_live_stats(
+    CollectionLiveStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_collection_stats(
     CollectionStats self,
     SseSerializer serializer,
@@ -1433,6 +1455,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_collection_count(
     List<CollectionCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_collection_live_stats(
+    List<CollectionLiveStats> self,
     SseSerializer serializer,
   );
 

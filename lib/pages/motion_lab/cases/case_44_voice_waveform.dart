@@ -32,7 +32,20 @@ import '../lab_kit.dart';
 /// -  说明文字 `#989898`、六字宽 158 逻辑 px
 ///
 /// 振幅来源是**合成包络**：谐波表由 `math.Random(固定 seed)` 定相，主时钟只推进
-/// 滚动相位与起幅，全程不读麦克风、不读 `DateTime.now()`，所以任何一帧都可复现。
+/// 中轴向两侧的膨胀相位与起幅，全程不读麦克风、不读 `DateTime.now()`，所以任何一帧
+/// 都可复现。
+///
+/// 动线的方向只有一个：**中轴 → 两侧**，没有横向漂流。两件事各自负责一段：
+/// - **起幅**（按下、以及循环里"开始说"那一段）：束的横向范围按 `g` 从中间往两边开，
+///   见 [_spread]。`g = 1` 时这一档恒等于 1，静止与满幅两档的形状一个字都没改；
+/// - **持续起伏**：整幅图案绕中轴**各向同性地胀缩**，见 [_flow] —— 相位吃
+///   `u − flow·(2u − 1)`，到处的位移正比于它到中轴的距离，所以看着就是从中间推出去。
+///   `flow` 取 `sin²`：恒非负（只推不收成压缩）、在循环的两端值和斜率都是 0，
+///   所以按着不放也不会撞出一帧硬跳。
+///
+/// 五层**不许是等差的一叠副本**：每层的载波中心、带宽、横向错相、膨胀速率都各自抖一档
+/// （[_Layer.dc] / [sig] / [shift] / [drift]），于是腹与腹互相穿插的位置一路在变。
+/// 抖的幅度仍锁在"极窄带"里 —— 每层只在 f≈10 附近留三档，一旦给内层加高频细纹就变梳齿。
 ///
 /// 触屏：整块舞台就是"按住说话"的面，按下即 [LabTouchLock.acquire]。这一路是裸
 /// `Listener`（要 CSS `setPointerCapture` 那种"按住就是我的"语义，且上滑取消要连续
@@ -54,8 +67,11 @@ const _captionGap = 61.0;
 /// 上滑多少算进"取消"档
 const _armTravel = 28.0;
 
-/// 一次说话里波形整体滚过的周期数
-const _scrollTurns = 1.0;
+/// 一次说话里图案绕中轴胀出去的最大位移（以整幅为单位）
+///
+/// 0.12 折算到横向上是"一腹 26px ↔ 一腹 33px"来回：再大就顶到 `flow = .5` 那个退化点
+/// （那时整幅的相位被压成同一个常数，图案糊成一片），再小就读不出"从中间推出去"
+const _flowAmp = 0.12;
 
 /// 参考稿的横向渐变停点（t 相对波形盒左沿）
 const _ramp = <Color>[
@@ -75,14 +91,28 @@ const _cancelMix = Color(0xFF9A9AA4);
 
 /// 束边的羽化量（画布 px）。参考稿的束边不是硬描边，逐层之间有一层看得见的雾；
 /// 折算到 256 宽的画布上约一个多 px 的高斯
-const _feather = 1.0;
+const _feather = 1.3;
 
-/// 分层：外层→内层。五层**共用同一档频段**（只留 f=10 的载波附近，所以每层都是圆胖
-/// 平滑的），[k] 半高系数，[floor] 常数底厚（芯不随振幅消失、层与层之间也不互相捏到
-/// 零），[skew] 下沿相对上沿的错相，[shift] 该层整体在横向上的错相
+/// 分层：外层→内层。[k] 半高系数，[floor] 常数底厚（芯不随振幅消失、层与层之间也不
+/// 互相捏到零），[skew] 下沿相对上沿的错相，[shift] 该层整体在横向上的错相
 /// （两个错相都以整幅为单位，别再按周期读）
+///
+/// 后三个是这一轮新加的**去规律**档：[dc] 该层载波中心相对 f=10 的偏移、[sig] 该层
+/// 的带宽、[drift] 该层膨胀速率的倍率。五层若只错开 [shift]，那一叠就是等差副本，
+/// 腹与腹的穿插位置永远不变；载波中心各偏一点，穿插才一路在动。
 class _Layer {
-  const _Layer(this.lo, this.hi, this.k, this.alpha, this.floor, this.skew, this.shift);
+  const _Layer({
+    required this.lo,
+    required this.hi,
+    required this.k,
+    required this.alpha,
+    required this.floor,
+    required this.skew,
+    required this.shift,
+    required this.dc,
+    required this.sig,
+    required this.drift,
+  });
 
   final int lo;
   final int hi;
@@ -91,14 +121,17 @@ class _Layer {
   final double floor;
   final double skew;
   final double shift;
+  final double dc;
+  final double sig;
+  final double drift;
 }
 
 const _layers = <_Layer>[
-  _Layer(8, 13, 1.00, 0.28, 0.16, 0.022, 0.000),
-  _Layer(8, 13, 0.75, 0.40, 0.15, 0.022, 0.020),
-  _Layer(8, 13, 0.55, 0.52, 0.14, 0.022, 0.040),
-  _Layer(8, 13, 0.38, 0.66, 0.13, 0.022, 0.060),
-  _Layer(8, 13, 0.24, 0.92, 0.12, 0.022, 0.080),
+  _Layer(lo: 8, hi: 13, k: 1.00, alpha: 0.28, floor: 0.16, skew: 0.022, shift: 0.000, dc: 0.00, sig: 0.40, drift: 0.00),
+  _Layer(lo: 8, hi: 13, k: 0.74, alpha: 0.41, floor: 0.15, skew: 0.026, shift: 0.023, dc: 0.34, sig: 0.36, drift: 0.21),
+  _Layer(lo: 8, hi: 13, k: 0.57, alpha: 0.51, floor: 0.14, skew: 0.019, shift: 0.041, dc: -0.38, sig: 0.45, drift: -0.27),
+  _Layer(lo: 8, hi: 13, k: 0.37, alpha: 0.67, floor: 0.13, skew: 0.024, shift: 0.057, dc: 0.17, sig: 0.38, drift: 0.31),
+  _Layer(lo: 8, hi: 13, k: 0.24, alpha: 0.92, floor: 0.12, skew: 0.021, shift: 0.083, dc: -0.21, sig: 0.42, drift: -0.14),
 ];
 
 /// 谐波表：固定 seed 定幅度与相位，`f` 取整数保证周期闭合、滚动无缝。
