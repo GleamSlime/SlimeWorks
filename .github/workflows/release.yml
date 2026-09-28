@@ -547,6 +547,28 @@ jobs:
           echo "Profile Name: $PP_NAME"
           echo "Profile 过期时间: $PP_EXPIRY"
 
+      # 与本地开发环境对齐 Xcode：本机用 Xcode 27.0 构建正常，runner 默认却选中 26.3，
+      # 26.3 编译 audio_session（just_audio 的传递依赖）时 GeneratedPluginRegistrant
+      # 报 "module 'audio_session' not found"（ryanheise/audio_session#52 的已知 Xcode 版本相关缺陷）。
+      # runner 上 Xcode 目录带版本号（如 /Applications/Xcode_27.0.app），不能写死路径，先探测再切换。
+      - name: 指定 Xcode 版本（与本地对齐，27.x）
+        run: |
+          echo "=== 当前 Xcode ==="
+          xcodebuild -version
+          echo "=== runner 上可用 Xcode 目录 ==="
+          ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null || true
+          # 优先切到与本地一致的 27.x；找不到则回退并告警（仍用默认 Xcode，构建多半会失败）
+          FOUND=""
+          for d in /Applications/Xcode_27*.app /Applications/Xcode.app; do
+            if [ -d "$d" ]; then sudo xcode-select --switch "$d"; FOUND="$d"; break; fi
+          done
+          if [ -n "$FOUND" ]; then
+            echo "✅ 已切换到 Xcode: $FOUND"
+          else
+            echo "⚠️ 未找到 Xcode 27，保持 runner 默认版本"
+          fi
+          xcodebuild -version
+
       # 与 build-macos 保持一致：GitHub macos-15 runner 预装的 cocoapods 会加载失败
       - name: 修复 CocoaPods 环境
         run: |
