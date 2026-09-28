@@ -32,21 +32,29 @@ import '../lab_kit.dart';
 ///    只有 `BlendMode.screen` 同时给得出这两种结果
 /// -  说明文字 `#989898`、六字宽 158 逻辑 px
 ///
-/// 振幅来源是**合成包络**：谐波表由 `math.Random(固定 seed)` 定相，主时钟只推进
-/// 中轴向两侧的膨胀相位与起幅，全程不读麦克风、不读 `DateTime.now()`，所以任何一帧
-/// 都可复现。
+/// 振幅来源是**合成包络**：谐波表由 `math.Random(固定 seed)` 定相，主时钟只推进下面那两档。
 ///
-/// 动线的方向只有一个：**中轴 → 两侧**，没有横向漂流。两件事各自负责一段：
-/// - **起幅**（按下、以及循环里"开始说"那一段）：束的横向范围按 `g` 从中间往两边开，
-///   见 [_spread]。`g = 1` 时这一档恒等于 1，静止与满幅两档的形状一个字都没改；
-/// - **持续起伏**：整幅图案绕中轴**各向同性地胀缩**，见 [_flow] —— 相位吃
-///   `u − flow·(2u − 1)`，到处的位移正比于它到中轴的距离，所以看着就是从中间推出去。
-///   `flow` 取 `sin²`：恒非负（只推不收成压缩）、在循环的两端值和斜率都是 0，
-///   所以按着不放也不会撞出一帧硬跳。
+/// 动线只有一条：**波从中轴生出来，往两侧走，走到端点消失，一路重复**。
 ///
-/// 五层**不许是等差的一叠副本**：每层的载波中心、带宽、横向错相、膨胀速率都各自抖一档
-/// （[_Layer.dc] / [sig] / [shift] / [drift]），于是腹与腹互相穿插的位置一路在变。
-/// 抖的幅度仍锁在"极窄带"里 —— 每层只在 f≈10 附近留三档，一旦给内层加高频细纹就变梳齿。
+/// 载波的坐标是 `|u − 0.5|`（见 [_arg]）—— 中轴是原点、两翼对称地往外长，再减去
+/// `speed·t` 就是"整幅图案往外推"。方向感靠的是**单调**：`speed` 是每圈走的**整数个
+/// 周期**，所以接缝上两帧严丝合缝（既不用倒着退回去，也不会跳一帧）；而腹从中间出来后
+/// 一路被 [_taper] 那扇窗压着往下走，到端点正好归零 —— "扩散直至消失"是窗给的，不是
+/// 另加一档淡出。
+///
+/// 之前两版错在都带一档**会回头**的东西：胀缩是 `sin²`（推出去还要收回来），音量波是
+/// 高斯包（长起来还要落下去）—— 眼睛锁定的那一排腹于是会中途换成前一排，读出来就是
+/// 倒播。改成单调外推之后没有可锁定的第二选了。
+///
+/// 起幅（按下、以及循环里"开始说"那一段）另有一档横向闸门 [_spread]：束的横向范围按
+/// `g` 从中间往两边开，方向与外推一致。`g = 1` 时它恒等于 1，量到的形状一个字都没改。
+///
+/// 两档都只吃主时钟，不读麦克风、不读 `DateTime.now()`，任何一帧都可复现。
+///
+/// 五层**不许是等差的一叠副本**：每层的载波中心、带宽、横向错相各抖一档
+/// （[_Layer.dc] / [sig] / [shift]），两翼还故意不做镜像（[_waveLean]）—— 于是腹与腹
+/// 互相穿插的位置一路在变。抖的幅度仍锁在"极窄带"里 —— 每层只在 f≈10 附近留三档，
+/// 一旦给内层加高频细纹就变梳齿。
 ///
 /// 触屏：整块舞台就是"按住说话"的面，按下即 [LabTouchLock.acquire]。这一路是裸
 /// `Listener`（要 CSS `setPointerCapture` 那种"按住就是我的"语义，且上滑取消要连续
@@ -68,11 +76,17 @@ const _captionGap = 61.0;
 /// 上滑多少算进"取消"档
 const _armTravel = 28.0;
 
-/// 一次说话里图案绕中轴胀出去的最大位移（以整幅为单位）
+/// 载波每圈往外走几个**完整周期**
 ///
-/// 0.12 折算到横向上是"一腹 26px ↔ 一腹 33px"来回：再大就顶到 `flow = .5` 那个退化点
-/// （那时整幅的相位被压成同一个常数，图案糊成一片），再小就读不出"从中间推出去"
-const _flowAmp = 0.12;
+/// 必须是整数：一圈的位移正好是周期的整倍数，接缝上两帧重合，既不用倒退也不会跳。
+/// 1 = 一腹从中轴走到端点 2100ms（波形盒 256px、一腹 26px → 折算过去约 61px/s，
+/// 任一固定点上约 420ms 过一个腹，跟"说话"的节奏对得上）
+const _waveSpeed = 1;
+
+/// 镜像的破缺量：给有符号的那一段加这点偏置，两翼的腹距与波速各差约 6%
+///
+/// 纯镜像太"规律"（左右严丝合缝地一起动，一眼就是复制粘贴），偏开之后两翼互相错着走
+const _waveLean = 0.06;
 
 /// 参考稿的横向渐变停点（t 相对波形盒左沿）
 const _ramp = <Color>[
@@ -98,9 +112,9 @@ const _feather = 1.3;
 /// 互相捏到零），[skew] 下沿相对上沿的错相，[shift] 该层整体在横向上的错相
 /// （两个错相都以整幅为单位，别再按周期读）
 ///
-/// 后三个是这一轮新加的**去规律**档：[dc] 该层载波中心相对 f=10 的偏移、[sig] 该层
-/// 的带宽、[drift] 该层膨胀速率的倍率。五层若只错开 [shift]，那一叠就是等差副本，
-/// 腹与腹的穿插位置永远不变；载波中心各偏一点，穿插才一路在动。
+/// 后两个是**去规律**档：[dc] 该层载波中心相对 f=10 的偏移、[sig] 该层的带宽。五层若只
+/// 错开 [shift]，那一叠就是等差副本，腹与腹的穿插位置永远不变；载波中心各偏一点，
+/// 腹距就不一样，穿插才一路在动。
 class _Layer {
   const _Layer({
     required this.lo,
@@ -112,7 +126,6 @@ class _Layer {
     required this.shift,
     required this.dc,
     required this.sig,
-    required this.drift,
   });
 
   final int lo;
@@ -124,15 +137,14 @@ class _Layer {
   final double shift;
   final double dc;
   final double sig;
-  final double drift;
 }
 
 const _layers = <_Layer>[
-  _Layer(lo: 8, hi: 13, k: 1.00, alpha: 0.28, floor: 0.16, skew: 0.022, shift: 0.000, dc: 0.00, sig: 0.40, drift: 0.00),
-  _Layer(lo: 8, hi: 13, k: 0.74, alpha: 0.41, floor: 0.15, skew: 0.026, shift: 0.023, dc: 0.34, sig: 0.36, drift: 0.21),
-  _Layer(lo: 8, hi: 13, k: 0.57, alpha: 0.51, floor: 0.14, skew: 0.019, shift: 0.041, dc: -0.38, sig: 0.45, drift: -0.27),
-  _Layer(lo: 8, hi: 13, k: 0.37, alpha: 0.67, floor: 0.13, skew: 0.024, shift: 0.057, dc: 0.17, sig: 0.38, drift: 0.31),
-  _Layer(lo: 8, hi: 13, k: 0.24, alpha: 0.92, floor: 0.12, skew: 0.021, shift: 0.083, dc: -0.21, sig: 0.42, drift: -0.14),
+  _Layer(lo: 8, hi: 13, k: 1.00, alpha: 0.28, floor: 0.16, skew: 0.022, shift: 0.000, dc: 0.00, sig: 0.40),
+  _Layer(lo: 8, hi: 13, k: 0.74, alpha: 0.41, floor: 0.15, skew: 0.026, shift: 0.023, dc: 0.34, sig: 0.36),
+  _Layer(lo: 8, hi: 13, k: 0.57, alpha: 0.51, floor: 0.14, skew: 0.019, shift: 0.041, dc: -0.38, sig: 0.45),
+  _Layer(lo: 8, hi: 13, k: 0.37, alpha: 0.67, floor: 0.13, skew: 0.024, shift: 0.057, dc: 0.17, sig: 0.38),
+  _Layer(lo: 8, hi: 13, k: 0.24, alpha: 0.92, floor: 0.12, skew: 0.021, shift: 0.083, dc: -0.21, sig: 0.42),
 ];
 
 /// 谐波表：固定 seed 定幅度与相位，`f` 取整数保证周期闭合、滚动无缝。
@@ -230,21 +242,33 @@ double _body(double u) => math.pow(_swell(u), 0.35).toDouble();
 
 /// 起幅的横向闸门：**从中轴往两侧开**，不是整条一起变高
 ///
-/// [g] 是 eased 后的起幅量。闸门按"到中轴的距离"比宽，`g·1.35` 就是当前开到的半幅
-/// （单位：半幅 = 1），外面 0.35 是软边。`g = 1` 时 `(1.35 − q)/0.35 ≥ 1` 对整幅恒成立
-/// —— 也就是说完那一档闸门完全不存在，量到的纺锤形状一个字没改，改的只有进来的路。
+/// [g] 是闸门开度（`open`，只涨不落）。闸门按"到中轴的距离"比宽，`g·1.35` 就是当前开到
+/// 的半幅（单位：半幅 = 1），外面 0.35 是软边。`g = 1` 时 `(1.35 − q)/0.35 ≥ 1` 对整幅
+/// 恒成立 —— 也就是说开满那一档闸门完全不存在，量到的纺锤形状一个字没改，改的只有进来的路。
 double _spread(double u, double g) {
   final q = (u - 0.5).abs() * 2;
   final t = ((g * 1.35 - q) / 0.35).clamp(0.0, 1.0);
   return t * t * (3 - 2 * t);
 }
 
-/// 第 [i] 层在 [u] 处的采样横坐标：绕中轴的各向同性胀缩 + 该层自己的速率与错相
+/// 第 [i] 层在 [u] 处该读谐波表的哪一个横坐标：**从中轴生出来、往两侧走**
 ///
-/// 位移正比于 `2u − 1`（到中轴的有符号距离），所以中轴那一点永远不动、越靠两端走得越多
-/// —— 读起来就是从中间推出去。`1 + drift` 让五层各胀各的，穿插位置一路在变；
-/// 最大 `flow·(1+drift) = .156`，离 `0.5` 那个退化点（整幅被压成同一个相位、糊成一片）还远
-double _flow(_Layer i, double u, double flow) => u - flow * (1 + i.drift) * (2 * u - 1);
+/// `|u − 0.5|` 把中轴钉成原点、两翼对称地往外长（整幅正好铺满一个周期 → 一翼 5 个腹），
+/// 减 `speed·t` 让整幅图案一路往外推：某个腹从中轴出来，走到端点要 2100ms，而每圈走的
+/// 位移是整数个周期，所以接缝上两帧重合 —— 没有"退回去"这一段，倒播无从发生。
+///
+/// `_waveLean` 给有符号的那一段加偏置：纯镜像会让左右严丝合缝地一起动，一眼是复制粘贴；
+/// 偏开 6% 之后两翼的腹距与波速都不一样。[shift] 是该层的静态错相（下沿再叠 [skew]），
+/// 两者都以整幅为单位
+double _arg(int i, double u, double t, {required bool upper}) {
+  final l = _layers[i];
+  final s = u - 0.5;
+  return s.abs() +
+      s * _waveLean +
+      l.shift +
+      (upper ? 0 : l.skew) -
+      t * _waveSpeed;
+}
 
 class Case44VoiceWaveform extends StatefulWidget {
   const Case44VoiceWaveform({super.key});
@@ -255,14 +279,14 @@ class Case44VoiceWaveform extends StatefulWidget {
 
 class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
     with TickerProviderStateMixin {
-  /// 主时钟：一圈 = 一次"按住说完一句"，膨胀相位与起幅都从它派生，
+  /// 主时钟：一圈 = 一次"按住说完一句"，载波的外推相位与那两档包络都从它派生，
   /// 所以离屏按 16ms 推进就能逐帧复现，不需要真的有人按着
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 4200),
   )..addListener(() => setState(() {}));
 
-  /// 按住时把起幅顶到满：松手收回，循环那档自己走
+  /// 按住时把高度与横向闸门顶到满：松手收回，循环那两档自己走
   late final AnimationController _held = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 320),
@@ -273,14 +297,22 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
   bool _armed = false;
   bool _locked = false;
 
-  /// 循环里的起幅包络：两头各留一段平的空档，中间是"正在说"
-  static double _auto(double t) {
+  /// 循环里的**高度**包络：两头各留一段平的空档，中间是"正在说"
+  static double _level(double t) {
     if (t < 0.06) return 0;
     if (t < 0.18) return LabEase.smoothOut.transform((t - 0.06) / 0.12);
     if (t < 0.80) return 1;
     if (t < 0.94) return 1 - Curves.easeIn.transform((t - 0.80) / 0.14);
     return 0;
   }
+
+  /// 循环里的**横向**闸门：只涨不落
+  ///
+  /// 一句话收尾时束要消失，但"往中间收"是个反向动作，眼睛会把它读成倒播 —— 所以收那
+  /// 一程只降高度，闸门一路停在 1。它落回 0 的那一瞬间高度也正好是 0（上面那档的
+  /// t < 0.06 空档），画布上什么都没有，接缝看不出来。
+  static double _attack(double t) =>
+      t < 0.06 ? 0 : LabEase.smoothOut.transform(((t - 0.06) / 0.12).clamp(0.0, 1.0));
 
   void _lock() {
     if (_locked) return;
@@ -335,14 +367,13 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
 
   @override
   Widget build(BuildContext context) {
-    final live = math.max(_auto(_c.value), _held.value);
-    // `sin²`：恒非负（只往外推，不会压成压缩的一档），而且在 t=0 和 t=1 两处值与斜率
-    // 都是 0 —— 按着不放时循环照转，也撞不出硬跳
-    final flow = _flowAmp * math.pow(math.sin(math.pi * _c.value), 2).toDouble();
+    final level = math.max(_level(_c.value), _held.value);
+    // 闸门只涨不落（见 [_attack]）：束收回去那一段只降高度，不往中间挤
+    final open = math.max(_attack(_c.value), _held.value);
     final armed = _armed ? 1.0 : 0.0;
     final caption = _armed
         ? '松开取消'
-        : live <= 0.01
+        : level <= 0.01
               ? '按住说话'
               : '上滑取消发送';
     return LabStage(
@@ -359,8 +390,9 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
               Positioned.fill(
                 child: CustomPaint(
                   painter: _WavePainter(
-                    flow: flow,
-                    level: live,
+                    phase: _c.value,
+                    level: level,
+                    open: open,
                     armed: armed,
                   ),
                 ),
@@ -407,14 +439,20 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
 
 class _WavePainter extends CustomPainter {
   const _WavePainter({
-    required this.flow,
+    required this.phase,
     required this.level,
+    required this.open,
     required this.armed,
   });
 
-  /// 绕中轴的胀缩量（见 [_flow]）
-  final double flow;
+  /// 主时钟（0..1 一圈 = 一次说话），载波的外推只吃它
+  final double phase;
+
+  /// 高度（起幅 + 按住顶满）
   final double level;
+
+  /// 横向闸门：只涨不落（见 [_attack]）
+  final double open;
   final double armed;
 
   /// 采样点数：256 px 画布上每 px 1.25 个点，一腹约 26 px → 每腹 32 个点，不留折角
@@ -432,14 +470,19 @@ class _WavePainter extends CustomPainter {
     stops: _rampStops,
   );
 
-  /// 第 [i] 层在 [u] 处的上/下沿。横坐标先过 [_flow] 那道绕中轴的胀缩，再叠该层的
-  /// [shift]（下沿再叠 [skew]）；振幅吃 [_taper]、底厚吃 [_body]，两个窗分开；
-  /// 最后整条乘 [_spread] —— 起幅那一段的横向范围是从中间往两边开的
+  /// 第 [i] 层在 [u] 处的上/下沿。横坐标过 [_arg]（从中轴往两侧外推的载波 + 该层的
+  /// 静态错相，下沿再叠 [skew]）；振幅吃 [_taper]、底厚吃 [_body]，两个窗分开；
+  /// 高度再乘 [g]（起幅）与 [_spread]（按下那一段往两边开的横向范围）
   double _edge(int i, double u, double g, {required bool upper}) {
+    final v = _Band.read(i, _arg(i, u, phase, upper: upper));
     final l = _layers[i];
-    final v = _Band.read(i, _flow(l, u, flow) + l.shift + (upper ? 0 : l.skew));
     final half = l.floor * _body(u) + (1 - l.floor) * v * _taper(u);
-    return _axisY + (upper ? -_halfUp : _halfDn) * l.k * g * half * _spread(u, g);
+    return _axisY +
+        (upper ? -_halfUp : _halfDn) *
+            l.k *
+            g *
+            half *
+            _spread(u, open);
   }
 
   /// 一层上下沿围成的透镜形
@@ -518,5 +561,8 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter old) =>
-      old.flow != flow || old.level != level || old.armed != armed;
+      old.phase != phase ||
+      old.level != level ||
+      old.open != open ||
+      old.armed != armed;
 }

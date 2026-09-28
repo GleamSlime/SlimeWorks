@@ -907,6 +907,11 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
     ——所以 `ilDrop` 收尾时 `up()` 之后必须 `removePointer()`。
 15. **按 16ms 步进推进时最后一段要按余数收尾**：`for (left=n; left>0; left-=16)` 会把"120ms 那一帧"
     拍成 128ms（16 的整倍数）。要求精确对表的帧，末段得 `pump(余数)`。
+16. **会"回头"的调制一律被读成倒播**：44 号声波连着错两版 —— 先做绕中轴的坐标胀缩（`sin²`：推出去
+    还要收回来），再做音量包（高斯：长起来还要落下去），眼睛锁定的那一排腹中途换成前一排，看着就是
+    倒放。方向感要靠**单调**：载波坐标取 `|u − 0.5| − speed·t`，`speed` 是每圈走的整数个周期，接缝上
+    两帧重合，压根没有倒退那一段；"往两边开"的闸门只涨不落，收尾只降高度。验方向也别比两张静止帧——
+    连拍的每列包络叠成时空图，条纹一路往外斜才是往外走（往内是反斜，来回是横纹）。
 
 形变面板另有一条：CSS 的 `overflow: hidden` 在 Flutter 里要给子节点按**展开尺寸**定死
 `Positioned(width/height)`、由外层 `ClipRRect` 裁掉多出来的部分；`Positioned.fill` 和
