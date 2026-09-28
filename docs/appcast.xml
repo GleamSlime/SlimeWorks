@@ -7,15 +7,15 @@
     <item>
       <title>1.0.0</title>
       <description>
-        <![CDATA[Auto build v1.0.0+20260928.1e62aac]]>
+        <![CDATA[Auto build v1.0.0+20260928.7fbf469]]>
       </description>
-      <pubDate>Mon, 28 Sep 2026 10:47:57 +0000</pubDate>
+      <pubDate>Mon, 28 Sep 2026 17:41:58 +0000</pubDate>
       <enclosure
-        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20260928.1e62aac/slime_works-1.0.0+31-macos.dmg"
-        sparkle:version="97"
+        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20260928.7fbf469/slime_works-1.0.0+31-macos.dmg"
+        sparkle:version="99"
         sparkle:shortVersionString="1.0.0"
         sparkle:edSignature=""
-        length="66208485"
+        length="66208425"
         type="application/octet-stream" />
     </item>
   </channel>
