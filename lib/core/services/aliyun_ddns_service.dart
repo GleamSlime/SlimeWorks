@@ -71,8 +71,9 @@ class AliyunDdnsService extends GetxService {
   String? get currentNodeBaseUrl {
     if (isLocal) return null;
     final nodeService = GetIt.instance.get<NodeSettingsService>();
-    final node = nodeService.getNodeById(selectedNodeId.value);
-    return node?.effectiveApiBaseUrl;
+    // 走服务层的"最近应答地址"：直接读 effectiveApiBaseUrl 会永远压在失效的内网那一路
+    final base = nodeService.getNodeEffectiveBaseUrl(selectedNodeId.value);
+    return base.isEmpty ? null : base;
   }
 
   Future<void> ensureInitialized() async {

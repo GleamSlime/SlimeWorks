@@ -159,13 +159,27 @@ class NodeEndpoint {
 // 检测单个节点（手动操作）
 await nodeSettingsService.checkNodeConnectivity(nodeId);
 
-// 检测全部节点（定期自动执行）
+// 检测全部节点（启动时一轮 + 由调用方按需触发）
 await nodeSettingsService.refreshNodeConnectivity();
 ```
 
 结果存储：
 - `nodeConnectivity[nodeId]`：`true` = 在线
 - `nodeConnectivityError[nodeId]`：错误信息文本
+
+#### 内网 / 外网地址选择
+
+节点同时填了 `lanApiBaseUrl`（内网）和 `apiBaseUrl`（外网）时，`effectiveApiBaseUrl` 恒等于内网地址——
+内网一旦失效（换网段、对端不在了），取数会每轮先付一遍连接超时，图片/上传 URL 更是直接指向死地址，
+表现为"外网明明通，媒体库里却没有这个节点的内容"。因此服务层额外记一份 **最近应答过的那一路**：
+
+- 记入时机：`checkNodeConnectivity`（并发探 LAN/WAN，取第一个应答，LAN 优先）、`_reprobeNode`、
+  `_quickProbeNode`、以及 `_performNodeCall` 拿到任意 HTTP 应答时
+- 使用范围：`getNodeEffectiveBaseUrl` / `buildNodeMediaUrl` / `buildNodeUploadUrl` /
+  归档上传地址，以及 power_stats、aliyun_ddns 的节点端点
+- 业务调用的候选地址是 `[首选, LAN, WAN]` 去重后的全集，所以上一次失败也能就地换到另一路
+- 编辑或删除节点时该记录作废，避免旧地址压着新配置
+- 内存态、不落盘：重启后仍先按 LAN 优先试
 
 #### 智能 URL 修正
 

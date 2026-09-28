@@ -17,8 +17,9 @@ import '../lab_kit.dart';
 ///    29%）。画布 256 宽 → 折算 [_halfUp] 22 / [_halfDn] 28
 /// -  最外层包络沿中轴**约 10 个腹**（实测 6 个峰落在 2x px 306/432/561/687/810/933，
 ///    间距 125 = 62 逻辑 px = 整幅的 1/10.05），腹高 68/75/99/91/107/86 长短不齐，
-///    两腹之间只凹到三成多。所以频谱只留 f=10 附近一档极窄的载波（见 [_Band._w]），
-///    五层共用它，再逐层横向错开 [_Layer.shift]，才有那种互相穿插的回声厚度
+///    两腹之间只凹到三成多。所以频谱每层只留 f≈10 附近一档极窄的载波（见 [_Band._wts]），
+///    五层共用同一张谐波表、各自偏一点中心再横向错开 [_Layer.shift]，才有那种互相穿插的
+///    回声厚度
 /// -  上下两路取同一张表的两个错相，于是波腹左右不对齐（[_Layer.skew] 以整幅为
 ///    单位，别再按周期读）
 /// -  束不从盒左沿就起：实测上沿到 u≈0.13 才离开中轴，见 [_swell0]
@@ -140,16 +141,11 @@ abstract final class _Band {
   static const _seed = 20260928;
   static const _top = 13;
 
-  /// 频谱：**只有一档极窄的载波**挂在 f=10 上（参考稿最外层包络实测 6 个峰、间距
-  /// 125 的 2x px = 62 逻辑 px = 整幅的 1/10.05）。σ² 取 0.4 —— 只留 f=9/10/11 三档，
-  /// 两档边带相差 1 正好让腹高在整幅里起伏一个来回（参考稿腹高实测 68/75/99/91/
-  /// 107/86，最高与最低差一半）。档再宽就糊成一片：包络的沟填平、腹也凸不出来，
-  /// 而**五层共用同一档频段**，厚度全靠横向错相叠出来，一旦给内层加高频细纹就变梳齿
-  static double _w(int f) => math.exp(-((f - 10) * (f - 10)) / 0.4);
-
-  static final List<double> _amp = () {
+  /// 每档的随机底幅：五层共用同一张表（"同一条声波的多重回声"就靠这个），
+  /// 层与层的差别只落在 [_wts] 那一圈带通上
+  static final List<double> _gain = () {
     final r = math.Random(_seed);
-    return [0.0, for (var f = 1; f <= _top; f++) (0.55 + r.nextDouble()) * _w(f)];
+    return [0.0, for (var f = 1; f <= _top; f++) 0.55 + r.nextDouble()];
   }();
 
   static final List<double> _phase = () {
@@ -157,25 +153,43 @@ abstract final class _Band {
     return [for (var f = 0; f <= _top; f++) r.nextDouble()];
   }();
 
-  /// 各频段的实际极值（密采一遍），用来归一；与 [_layers] 同序
-  static final List<List<double>> _norm = [
-    for (final l in _layers) _extent(l.lo, l.hi),
+  /// 第 i 层实际吃到的各频幅度 = 底幅 × 该层自己的带通（中心 `10 + dc`、宽 `sig`）。
+  ///
+  /// 带通原本五层共用同一档：只留 f=9/10/11 三档（参考稿最外层包络实测 6 个峰、间距
+  /// 125 的 2x px = 62 逻辑 px = 整幅的 1/10.05），两档边带相差 1 正好让腹高在整幅里
+  /// 起伏一个来回（腹高实测 68/75/99/91/107/86，最高与最低差一半）。现在逐层把中心偏
+  /// ±0.4、宽偏 ±0.05 —— 那是把这一层的腹距整体挪个百分点，穿插位置才一路在变；
+  /// 档再宽就糊成一片（沟填平、腹凸不出来），而**一旦给内层加高频细纹就变梳齿**
+  static final List<List<double>> _wts = [
+    for (final l in _layers)
+      [
+        0.0,
+        for (var f = 1; f <= _top; f++)
+          _gain[f] * math.exp(-((f - 10.0 - l.dc) * (f - 10.0 - l.dc)) / l.sig),
+      ],
   ];
 
-  static List<double> _extent(int lo, int hi) {
+  /// 各频段的实际极值（密采一遍），用来归一；与 [_layers] 同序
+  static final List<List<double>> _norm = [
+    for (var i = 0; i < _layers.length; i++) _extent(i),
+  ];
+
+  static List<double> _extent(int i) {
     var mn = double.infinity, mx = -double.infinity;
-    for (var i = 0; i < 2880; i++) {
-      final v = _raw(lo, hi, i / 2880);
+    for (var j = 0; j < 2880; j++) {
+      final v = _raw(i, j / 2880);
       if (v < mn) mn = v;
       if (v > mx) mx = v;
     }
     return [mn, mx];
   }
 
-  static double _raw(int lo, int hi, double u) {
+  static double _raw(int i, double u) {
+    final l = _layers[i];
+    final w = _wts[i];
     var s = 0.0;
-    for (var f = lo; f <= hi; f++) {
-      s += _amp[f] * math.sin(2 * math.pi * (f * u + _phase[f]));
+    for (var f = l.lo; f <= l.hi; f++) {
+      s += w[f] * math.sin(2 * math.pi * (f * u + _phase[f]));
     }
     return s;
   }
@@ -185,11 +199,10 @@ abstract final class _Band {
   /// 腹顶圆、沟也圆，同时把最矮的腹抬到标称半高的四成 —— 参考稿实测谷/峰 0.38~0.44。
   /// 最后垫 0.24 的底，两腹之间不捏到零
   static double read(int i, double u) {
-    final l = _layers[i];
     final e = _norm[i];
     final span = e[1] - e[0];
     if (span <= 0) return 0.5;
-    final m = (_raw(l.lo, l.hi, u) - e[0]) / span;
+    final m = (_raw(i, u) - e[0]) / span;
     final a = math.pow(m.clamp(0.0, 1.0), _peak).toDouble();
     final b = math.pow((1 - m).clamp(0.0, 1.0), _peak).toDouble();
     return _base + (1 - _base) * a / (a + b);
@@ -215,6 +228,24 @@ double _taper(double u) => math.pow(_swell(u), 1.1).toDouble();
 /// 底厚窗：同样收到零，但胖得多，让亮芯在远离中段的位置也还有肉
 double _body(double u) => math.pow(_swell(u), 0.35).toDouble();
 
+/// 起幅的横向闸门：**从中轴往两侧开**，不是整条一起变高
+///
+/// [g] 是 eased 后的起幅量。闸门按"到中轴的距离"比宽，`g·1.35` 就是当前开到的半幅
+/// （单位：半幅 = 1），外面 0.35 是软边。`g = 1` 时 `(1.35 − q)/0.35 ≥ 1` 对整幅恒成立
+/// —— 也就是说完那一档闸门完全不存在，量到的纺锤形状一个字没改，改的只有进来的路。
+double _spread(double u, double g) {
+  final q = (u - 0.5).abs() * 2;
+  final t = ((g * 1.35 - q) / 0.35).clamp(0.0, 1.0);
+  return t * t * (3 - 2 * t);
+}
+
+/// 第 [i] 层在 [u] 处的采样横坐标：绕中轴的各向同性胀缩 + 该层自己的速率与错相
+///
+/// 位移正比于 `2u − 1`（到中轴的有符号距离），所以中轴那一点永远不动、越靠两端走得越多
+/// —— 读起来就是从中间推出去。`1 + drift` 让五层各胀各的，穿插位置一路在变；
+/// 最大 `flow·(1+drift) = .156`，离 `0.5` 那个退化点（整幅被压成同一个相位、糊成一片）还远
+double _flow(_Layer i, double u, double flow) => u - flow * (1 + i.drift) * (2 * u - 1);
+
 class Case44VoiceWaveform extends StatefulWidget {
   const Case44VoiceWaveform({super.key});
 
@@ -224,7 +255,7 @@ class Case44VoiceWaveform extends StatefulWidget {
 
 class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
     with TickerProviderStateMixin {
-  /// 主时钟：一圈 = 一次"按住说完一句"，滚动相位与起幅都从它派生，
+  /// 主时钟：一圈 = 一次"按住说完一句"，膨胀相位与起幅都从它派生，
   /// 所以离屏按 16ms 推进就能逐帧复现，不需要真的有人按着
   late final AnimationController _c = AnimationController(
     vsync: this,
@@ -305,6 +336,9 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
   @override
   Widget build(BuildContext context) {
     final live = math.max(_auto(_c.value), _held.value);
+    // `sin²`：恒非负（只往外推，不会压成压缩的一档），而且在 t=0 和 t=1 两处值与斜率
+    // 都是 0 —— 按着不放时循环照转，也撞不出硬跳
+    final flow = _flowAmp * math.pow(math.sin(math.pi * _c.value), 2).toDouble();
     final armed = _armed ? 1.0 : 0.0;
     final caption = _armed
         ? '松开取消'
@@ -325,7 +359,7 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
               Positioned.fill(
                 child: CustomPaint(
                   painter: _WavePainter(
-                    scroll: _c.value * _scrollTurns,
+                    flow: flow,
                     level: live,
                     armed: armed,
                   ),
@@ -373,12 +407,13 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
 
 class _WavePainter extends CustomPainter {
   const _WavePainter({
-    required this.scroll,
+    required this.flow,
     required this.level,
     required this.armed,
   });
 
-  final double scroll;
+  /// 绕中轴的胀缩量（见 [_flow]）
+  final double flow;
   final double level;
   final double armed;
 
@@ -397,13 +432,14 @@ class _WavePainter extends CustomPainter {
     stops: _rampStops,
   );
 
-  /// 第 [i] 层在 [u] 处的上/下沿。每层整体错开 [shift]、下沿再错开 [skew]，
-  /// 振幅吃 [_taper]、底厚吃 [_body]，两个窗分开
+  /// 第 [i] 层在 [u] 处的上/下沿。横坐标先过 [_flow] 那道绕中轴的胀缩，再叠该层的
+  /// [shift]（下沿再叠 [skew]）；振幅吃 [_taper]、底厚吃 [_body]，两个窗分开；
+  /// 最后整条乘 [_spread] —— 起幅那一段的横向范围是从中间往两边开的
   double _edge(int i, double u, double g, {required bool upper}) {
     final l = _layers[i];
-    final v = _Band.read(i, u + scroll + l.shift + (upper ? 0 : l.skew));
+    final v = _Band.read(i, _flow(l, u, flow) + l.shift + (upper ? 0 : l.skew));
     final half = l.floor * _body(u) + (1 - l.floor) * v * _taper(u);
-    return _axisY + (upper ? -_halfUp : _halfDn) * l.k * g * half;
+    return _axisY + (upper ? -_halfUp : _halfDn) * l.k * g * half * _spread(u, g);
   }
 
   /// 一层上下沿围成的透镜形
@@ -482,5 +518,5 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter old) =>
-      old.scroll != scroll || old.level != level || old.armed != armed;
+      old.flow != flow || old.level != level || old.armed != armed;
 }

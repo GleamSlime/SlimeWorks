@@ -1376,7 +1376,7 @@ class NodeSettingsService extends GetxService {
     required Map<String, dynamic> requestPayload,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final candidateUrls = _candidateNodeCallUrls(node.effectiveApiBaseUrl); // MUTATION
+    final candidateUrls = _nodeCallCandidateUrls(node);
     final txBytes = _estimatePayloadBytes(requestPayload);
     // 【临时埋点】整次调用（含换地址重试、忙重试）的墙钟耗时
     final trace = TimingTrace('节点调用', scope: '${node.name} $action');
