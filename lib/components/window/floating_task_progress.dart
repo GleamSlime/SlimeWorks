@@ -109,38 +109,41 @@ class FloatingTaskProgress extends StatelessWidget {
                       ),
                       Obx(() {
                         final p = current.progress.value;
-                        if (p > 0) {
-                          return Text(
-                            '${(p * 100).toStringAsFixed(0)}%',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: s.accent,
-                                ),
-                          );
+                        // 内网转写等待结果期间没有可量化进度，不显示百分比
+                        if (current.indeterminate.value || p <= 0) {
+                          return const SizedBox.shrink();
                         }
-                        return const SizedBox.shrink();
+                        return Text(
+                          '${(p * 100).toStringAsFixed(0)}%',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: s.accent,
+                              ),
+                        );
                       }),
                     ],
                   ),
                   // 单任务进度条
                   Obx(() {
                     final p = current.progress.value;
-                    if (p > 0) {
-                      return Padding(
-                        padding: EdgeInsets.only(top: AppTheme.metrics.kSpace4),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace2),
-                          child: LinearProgressIndicator(
-                            value: p,
-                            minHeight: 2,
-                            backgroundColor: s.surfaceSunken,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              s.accent.withValues(alpha: 0.6),
-                            ),
+                    final unknown = current.indeterminate.value;
+                    if (!unknown && p <= 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: EdgeInsets.only(top: AppTheme.metrics.kSpace4),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace2),
+                        child: LinearProgressIndicator(
+                          // value 为 null 时是跑马灯，用于远程服务处理中
+                          value: unknown ? null : p,
+                          minHeight: 2,
+                          backgroundColor: s.surfaceSunken,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            s.accent.withValues(alpha: 0.6),
                           ),
                         ),
-                      );
-                    }
-                    return const SizedBox.shrink();
+                      ),
+                    );
                   }),
                 ],
                 // 完成后显示汇总
@@ -165,7 +168,7 @@ class FloatingTaskProgress extends StatelessWidget {
       children: [
         if (completed > 0)
           Text(
-            '成功 $completed 首',
+            '成功 $completed 个',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: s.success.color,
                 ),
@@ -174,7 +177,7 @@ class FloatingTaskProgress extends StatelessWidget {
           SizedBox(width: AppTheme.metrics.kSpace8),
         if (failed > 0)
           Text(
-            '失败 $failed 首',
+            '失败 $failed 个',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: s.danger.color,
                 ),

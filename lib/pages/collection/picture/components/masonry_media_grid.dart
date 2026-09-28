@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/services/asr/subtitle_action.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -265,6 +266,23 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       // 移动端图片支持保存到相册（本地和远程均支持）
       onSaveToGallery: (PlatformUtil.isMobile && !isVideo && !isAudio)
           ? () => saveToGallery(context, fullSource)
+          : null,
+      // 识别字幕只对本地音视频开放：远程集合里的 filePath 是节点侧路径，本机读不到
+      onRecognizeSubtitle: (!widget.isRemote && (isVideo || isAudio))
+          ? (language) => recognizeSubtitleAction(
+              context,
+              filePath: item.filePath,
+              displayName: item.title,
+              language: language,
+            )
+          : null,
+      // 翻译走同名 .srt，字幕还不存在时由动作内部提示"请先识别字幕"
+      onTranslateSubtitle: (!widget.isRemote && (isVideo || isAudio))
+          ? () => translateSubtitleAction(
+              context,
+              filePath: item.filePath,
+              displayName: item.title,
+            )
           : null,
     );
 

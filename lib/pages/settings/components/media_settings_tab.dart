@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/pages/settings/components/asr_subtitle_section.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -694,6 +695,11 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
             ),
           );
         }),
+
+        SizedBox(height: AppTheme.metrics.kSpace24),
+
+        // ── 语音识别字幕（内网大模型 + 本地 SenseVoice）──────────────────────
+        const AsrSubtitleSection(),
 
         if (!Platform.isWindows && !Platform.isMacOS)
           Padding(

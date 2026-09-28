@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/services/asr/subtitle_action.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
@@ -256,6 +257,27 @@ class MediaCollectionDetailView extends StatelessWidget {
                   onDeleteFile: isRemote ? null : () => onConfirmDelete(item),
                   onDeleteNodeLocalFile: isRemote
                       ? () => onConfirmDeleteNodeLocalFile?.call(item)
+                      : null,
+                  // 与瀑布流分支一致：识别字幕仅对本地音视频开放
+                  onRecognizeSubtitle: (!isRemote &&
+                          (item.kind == media_api.MediaKind.video ||
+                              item.kind == media_api.MediaKind.audio))
+                      ? (language) => recognizeSubtitleAction(
+                          context,
+                          filePath: item.filePath,
+                          displayName: item.title,
+                          language: language,
+                        )
+                      : null,
+                  // 翻译走同名 .srt，字幕还不存在时由动作内部提示"请先识别字幕"
+                  onTranslateSubtitle: (!isRemote &&
+                          (item.kind == media_api.MediaKind.video ||
+                              item.kind == media_api.MediaKind.audio))
+                      ? () => translateSubtitleAction(
+                          context,
+                          filePath: item.filePath,
+                          displayName: item.title,
+                        )
                       : null,
                 );
               },

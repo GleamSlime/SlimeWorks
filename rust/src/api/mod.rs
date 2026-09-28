@@ -1,4 +1,5 @@
 pub mod aliyun_ddns; // 阿里云DDNS模块
+pub mod asr; // 语音识别字幕模块（SenseVoice sidecar）
 pub mod capture;
 pub mod extract;
 pub mod ffmpeg;
