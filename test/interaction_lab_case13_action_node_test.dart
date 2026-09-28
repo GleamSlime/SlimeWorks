@@ -11,7 +11,7 @@ import 'helpers/il_golden.dart';
 // 13 号 Action node：四个圆钮藏在卡片右上角底下，指针一进整块就沿
 // "贴着圆角外侧 30px"的那条倒角线甩出来
 //
-// 断言要证明的九件事：
+// 断言要证明的十件事：
 // 1. **取点公式**：四个目标圆心 = 参考稿表里那四个读数，弧长的三段（上沿直线 /
 //    1/4 圆弧 / 右沿直线）各自对得上，整排对称压在角平分线两侧。
 // 2. **停靠位**：收起态四颗的圆心都在 (-20,20)，而且整颗都在卡片盒里 ——
@@ -24,6 +24,8 @@ import 'helpers/il_golden.dart';
 // 7. **卡片抬起 1px**，260ms 带过冲；扇出不跟着抬。
 // 8. 版式：272 宽 / 圆角 20 / mark 30（圆角 9.4）/ 头像 24 且后一个压前一个 6px。
 // 9. 逐帧扫不抛、收尾钉死。
+// 10. **触屏那条路**：点卡片 = 指针进来（走到同一批目标位）、再点 = 出去；点在
+//     reach 里算还在块内、点钮不穿到 toggle，出块才收；鼠标点击不当 toggle 用。
 //
 // 读数口径：圆心一律按**未抬起时**的卡片右上角算（`translate:0 -1px` 只抬卡片，
 // 扇出层不抬），所以进悬停之前先抓一次角点，后面全都对着它比。
@@ -429,6 +431,105 @@ void main() {
       }
       expect(tester.takeException(), isNull);
       await _park(tester, g);
+      await unmountPage(tester);
+    });
+  });
+
+  // 触屏给不出 enter/hover/exit，这一格另接了一条点按：`_tapZone` 把"点卡片"读成
+  // 指针进来并停在原地。`tester.tap` 默认就是 touch 指针，鼠标那一侧得手动造手势。
+  group('触屏那条路', () {
+    testWidgets('点卡片 = 指针进来：走到目标位并抬卡片，再点一下按倒序收回', (tester) async {
+      await mountIlCase(tester, const Case13ActionNode(), window: _win);
+      final corner = _fanOrigin(tester);
+      await tester.tap(find.byKey(_card));
+      await _run(tester, 900);
+      for (var i = 0; i < _ids.length; i++) {
+        expect(
+          _boxRect(tester, _ids[i]).center,
+          _near(corner + _targets[i]),
+          reason: '触屏展开后第 $i 号该和悬停展开同一个位置',
+        );
+      }
+      expect(tester.getRect(find.byKey(_card)).top, closeTo(corner.dy - 1, 0.02));
+      await tester.tap(find.byKey(_card));
+      await _run(tester, 900);
+      for (final id in _ids) {
+        expect(_boxRect(tester, id).center, _near(corner + _home), reason: '$id 该收回角底下');
+      }
+      expect(tester.takeException(), isNull);
+      await unmountPage(tester);
+    });
+
+    testWidgets('点在钮缝里算"指针还留在块内"，出了整块才收', (tester) async {
+      await mountIlCase(tester, const Case13ActionNode(), window: _win);
+      final corner = _fanOrigin(tester);
+      await tester.tap(find.byKey(_card));
+      await _run(tester, 900);
+      // 卡片盒外、reach 内（0/1 号之间上方那点，四颗都碰不到）
+      await tester.tapAt(corner + const Offset(40, -20));
+      await _run(tester, 300);
+      expect(
+        _boxRect(tester, 'settings').center,
+        _near(corner + _targets[3]),
+        reason: '那块 hover 也算命中，点它不该当收起用',
+      );
+      // 同一条竖线上低过 reach 下缘：hover 的死角，点它 = 指针出了整块
+      await tester.tapAt(corner + const Offset(40, 130));
+      await _run(tester, 900);
+      expect(_boxRect(tester, 'settings').center, _near(corner + _home));
+      await unmountPage(tester);
+    });
+
+    testWidgets('鼠标那一下不当 toggle：开着时点击不收，移出才收', (tester) async {
+      await mountIlCase(tester, const Case13ActionNode(), window: _win);
+      final corner = _fanOrigin(tester);
+      final g = await ilHoverAt(tester, _cardCenter(tester));
+      await _run(tester, 900);
+      final at = _cardCenter(tester);
+      await g.down(at);
+      await tester.pump();
+      await g.up();
+      await _run(tester, 300);
+      expect(
+        _boxRect(tester, 'connect').center,
+        _near(corner + _targets[0]),
+        reason: '桌面上点击不改悬停语义',
+      );
+      await _park(tester, g);
+      await _run(tester, 900);
+      expect(_boxRect(tester, 'connect').center, _near(corner + _home));
+      await unmountPage(tester);
+    });
+
+    testWidgets('点在一颗钮上不当作"再点一下卡片"：扇出保持开着', (tester) async {
+      await mountIlCase(tester, const Case13ActionNode(), window: _win);
+      final corner = _fanOrigin(tester);
+      await tester.tap(find.byKey(_card));
+      await _run(tester, 900);
+      await tester.tap(find.byKey(const ValueKey<String>('act-add')));
+      await _run(tester, 300);
+      for (var i = 0; i < _ids.length; i++) {
+        expect(
+          _boxRect(tester, _ids[i]).center,
+          _near(corner + _targets[i]),
+          reason: '钮上的空 onTap 把这一笔吞了：不该穿到悬停盒那层当 toggle',
+        );
+      }
+      await unmountPage(tester);
+    });
+
+    testWidgets('收起态点在 reach 那块不开：reach 当时是死的', (tester) async {
+      await mountIlCase(tester, const Case13ActionNode(), window: _win);
+      final corner = _fanOrigin(tester);
+      await tester.tapAt(corner + const Offset(40, -20));
+      await _run(tester, 300);
+      for (final id in _ids) {
+        expect(
+          _boxRect(tester, id).center,
+          _near(corner + _home),
+          reason: '$id：收起态只有卡片盒算命中',
+        );
+      }
       await unmountPage(tester);
     });
   });

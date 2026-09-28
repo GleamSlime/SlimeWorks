@@ -277,6 +277,9 @@ class _Case12NowPlayingState extends State<Case12NowPlaying> with SingleTickerPr
                             _say(art, v),
                             _bar(_mix(_barTop0, _barTop1, v), k),
                             _tap(tapSide),
+                            // 受理区排在 chip 和三张脸前面：它们自己那一格照旧归它们，
+                            // 只有落在外扩那一圈的点才归这层
+                            ..._opsPads(v),
                             _like(_likeS, k),
                             _ops(v),
                           ],
@@ -568,17 +571,21 @@ class _Case12NowPlayingState extends State<Case12NowPlaying> with SingleTickerPr
     );
   }
 
+  /// 左边那组三个小操作：上一首 / 播放暂停 / 下一首
+  ///
+  /// 折叠态 24/30、展开态 34/46，指尖都按不准，所以受理区另起一层压在它们底下，
+  /// 见 [_opsPads]：这里只画脸，撑盒子会把整组挪位。
   Widget _ops(double v) {
     final op = _mix(_op0, _op1, v);
     final lead = _mix(_lead0, _lead1, v);
     final gap = _mix(_gap0, _gap1, v);
     final icon = _mix(_icon0, _icon1, v);
-    final tw = op * 2 + lead + gap * 2;
+    final (left, top) = _opsTopLeft(v);
     return Positioned(
       key: const ValueKey('ops'),
       // 原稿是 `left/top` 定圆心 + `translate:-50% -50%`，这里直接把左上角算出来
-      left: _mix(_opsX0, _opsX1, v) - tw / 2,
-      top: _mix(_opsY0, _opsY1, v) - lead / 2,
+      left: left,
+      top: top,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -600,6 +607,47 @@ class _Case12NowPlayingState extends State<Case12NowPlaying> with SingleTickerPr
         ],
       ),
     );
+  }
+
+  /// 整组的左上角：宽度是三张脸加两段空隙，圆心落在参考稿那两点上
+  (double, double) _opsTopLeft(double v) {
+    final op = _mix(_op0, _op1, v);
+    final lead = _mix(_lead0, _lead1, v);
+    final gap = _mix(_gap0, _gap1, v);
+    return (
+      _mix(_opsX0, _opsX1, v) - (op * 2 + lead + gap * 2) / 2,
+      _mix(_opsY0, _opsY1, v) - lead / 2,
+    );
+  }
+
+  /// 三颗小钮的透明受理区：跟 [_ops] 用同一套算式，排在它前面压在脸底下
+  ///
+  /// 相邻两颗圆心只隔 `op/2 + gap + lead/2`（折叠态 32），探过这条中线就是抢邻钮的
+  /// 点，所以横向最多一人一半 —— prev/next 因此只有 40，中间那颗反而正好 44。
+  /// 纵向没人跟它抢，直接凑满 44。
+  List<Widget> _opsPads(double v) {
+    final op = _mix(_op0, _op1, v);
+    final lead = _mix(_lead0, _lead1, v);
+    final gap = _mix(_gap0, _gap1, v);
+    final (left, top) = _opsTopLeft(v);
+    // 一张脸的圈最多铺到跟邻脸的中线，也就是"圆心距"这么多
+    final wide = math.min(ilTapMinSide, op / 2 + gap + lead / 2);
+    List<Widget> pad(String id, double x, double size, VoidCallback tap) => ilTapPads(
+      // 两张小脸在整组里是垂直居中的，所以圈也按圆心对齐
+      face: Rect.fromLTWH(x, top + (lead - size) / 2, size, size),
+      grow: EdgeInsets.symmetric(
+        horizontal: math.max(0.0, (wide - size) / 2),
+        vertical: math.max(0.0, (ilTapMinSide - size) / 2),
+      ),
+      onTap: tap,
+      tag: 'op-$id',
+    );
+
+    return [
+      ...pad('prev', left, op, _toStart),
+      ...pad('lead', left + op + gap, lead, _togglePlay),
+      ...pad('next', left + op + gap + lead + gap, op, _toStart),
+    ];
   }
 
   Color _inkOf(_OpFx fx) => Color.lerp(IlColor.ink3, IlColor.ink, fx.hov.v)!;

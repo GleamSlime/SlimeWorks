@@ -102,6 +102,9 @@ class _Case20DragDropWithPhysicsState extends State<Case20DragDropWithPhysics>
   Offset _retFromTL = _srcHomeTL;
   double _retFromTilt = 0;
 
+  /// 这一格当前有没有占着页面滚动锁
+  bool _locked = false;
+
   @override
   void initState() {
     super.initState();
@@ -129,8 +132,22 @@ class _Case20DragDropWithPhysicsState extends State<Case20DragDropWithPhysics>
 
   void _rebuild() => setState(() {});
 
+  /// 页面滚动锁：带幂等，dispose 兜底时不会重复还
+  void _lock() {
+    if (_locked) return;
+    _locked = true;
+    LabTouchLock.acquire();
+  }
+
+  void _unlock() {
+    if (!_locked) return;
+    _locked = false;
+    LabTouchLock.release();
+  }
+
   @override
   void dispose() {
+    _unlock();
     _seq.dispose();
     _ret.dispose();
     _over.dispose();
@@ -307,12 +324,21 @@ class _Case20DragDropWithPhysicsState extends State<Case20DragDropWithPhysics>
                           scale: scale,
                           child: LabBlur(
                             sigma: blur,
-                            child: _DraggableSource(
-                              canDrag: !_busy,
-                              onPanStart: _onPanStart,
-                              onPanUpdate: _onPanUpdate,
-                              onPanEnd: _onPanEnd,
-                              onHoverIn: _startDemo,
+                            child: Listener(
+                              // 按下即锁住页面滚动：`onPanStart` 要等位移过 slop 才响，
+                              // 而页面那颗滚动的拖拽识别器 slop 更短，等它先赢这一笔就归
+                              // 整页滚动了 —— 锁必须在 down 这一下就给出
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: (_) => _lock(),
+                              onPointerUp: (_) => _unlock(),
+                              onPointerCancel: (_) => _unlock(),
+                              child: _DraggableSource(
+                                canDrag: !_busy,
+                                onPanStart: _onPanStart,
+                                onPanUpdate: _onPanUpdate,
+                                onPanEnd: _onPanEnd,
+                                onHoverIn: _startDemo,
+                              ),
                             ),
                           ),
                         ),

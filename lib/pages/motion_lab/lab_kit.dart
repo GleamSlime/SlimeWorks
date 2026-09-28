@@ -391,6 +391,22 @@ class LabStageFooter extends StatelessWidget {
   }
 }
 
+/// 触屏手势抢滚动的临时锁
+///
+/// 跟手的格子多用裸 `Listener`（要的是 CSS `setPointerCapture` 那种"按住就是我的"
+/// 语义），而 `Listener` 不进手势竞技场 —— 触屏上位移一过 slop，页面外层那颗
+/// `SingleChildScrollView` 照样把整页一起拖走，于是"拖滑块"变成"滚页面"。就算用
+/// `onPan*` 进了竞技场也未必赢：页面那颗滚动的 slop 更短，先起步的是它（20 号）。
+/// 接管手指的格子在按住期间给这里 +1、松手 -1；页面读到非零就把滚动物理换成
+/// `NeverScrollableScrollPhysics`。桌面鼠标走滚轮，计数挂着也不改变手感。
+abstract final class LabTouchLock {
+  static final ValueNotifier<int> held = ValueNotifier<int>(0);
+
+  static void acquire() => held.value = held.value + 1;
+
+  static void release() => held.value = math.max(0, held.value - 1);
+}
+
 /// 触屏兼容的悬停区：把只认 hover 的动效也交给指尖
 ///
 /// 触屏没有 enter/exit 事件，纯 hover 驱动的格子在手机上等于点不动。这里

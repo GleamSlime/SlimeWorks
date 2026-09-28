@@ -9,6 +9,7 @@
 /// 就不是还原了。这条例外只圈在 `lib/pages/surface_lab/**`。
 library;
 
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Float64List;
 import 'dart:ui' show ImageFilter;
@@ -166,6 +167,157 @@ abstract final class SvText {
     height: 18 / 13,
     color: SvColor.mutedFg,
   );
+}
+
+/// 触屏手势抢滚动的临时锁
+///
+/// 跟手拖的格子用的是 `Listener`（要 CSS `setPointerCapture` 那种"按住就是我的"
+/// 语义），而 `Listener` 不进手势竞技场 —— 触屏上位移一过 slop，页面外层那颗
+/// `SingleChildScrollView` 照样把整页一起拖走。于是接管手指的格子在按住期间给
+/// 这里 +1、松手 -1；页面读到非零就把滚动物理换成 `NeverScrollableScrollPhysics`。
+/// 桌面端鼠标走滚轮，计数挂着也不改变手感。
+abstract final class SvTouchLock {
+  static final ValueNotifier<int> held = ValueNotifier<int>(0);
+
+  static void acquire() => held.value = held.value + 1;
+
+  static void release() => held.value = math.max(0, held.value - 1);
+}
+
+/// 这一格要不要挂软键盘那套真输入
+///
+/// 靠 `Focus.onKeyEvent` 自己收键的假输入只吃物理键盘：触屏上 `requestFocus()`
+/// 什么也不弹，得压一颗全透明 `TextField` 接管焦点，让系统把键盘弹出来。
+/// 只在安卓/iOS 挂，桌面不挂 —— 桌面走原来那条 `Focus` 路径，golden 一像素不动。
+abstract final class SvTouch {
+  static final bool softKeyboard = Platform.isAndroid || Platform.isIOS;
+}
+
+/// 指尖那一格的下限（Material 那条 44）
+const svTapMinSide = 44.0;
+
+EdgeInsets _tapPadGrow(Rect face, EdgeInsets? grow, double minSide) {
+  return grow ??
+      EdgeInsets.fromLTRB(
+        math.max(0.0, (minSide - face.width) / 2),
+        math.max(0.0, (minSide - face.height) / 2),
+        math.max(0.0, (minSide - face.width) / 2),
+        math.max(0.0, (minSide - face.height) / 2),
+      );
+}
+
+/// 把脸那一格凑到指尖下限：短边不足 [minSide] 就四边对半分探出去
+///
+/// 给了 [grow] 就照 [grow] 探（邻居挤在一起时用它收着扩，别越过圆心距）。
+Rect svTapPadOf(Rect face, {EdgeInsets? grow, double minSide = svTapMinSide}) {
+  final g = _tapPadGrow(face, grow, minSide);
+  return Rect.fromLTWH(
+    face.left - g.left,
+    face.top - g.top,
+    face.width + g.left + g.right,
+    face.height + g.top + g.bottom,
+  );
+}
+
+/// 一圈拆成四条互不重叠的带子：[pad] 是整格（脸加外扩）、[face] 是脸，两者都在
+/// 宿主那一层里量，四条拼起来正好是整格减去那张脸
+///
+/// 带子不能压在脸上：受理区多一个抢 tap 的识别器，脸自己的按下就得等竞技场
+/// 分出胜负才响（松手那一刻），按住的高亮慢半拍。各占各的点才谁也不抢谁。
+List<Positioned> svTapBands(Rect pad, Rect face, VoidCallback onTap, {String tag = 'pad'}) {
+  Positioned band(String id, Rect r) => Positioned(
+    key: ValueKey<String>('sv-tap-$tag-$id'),
+    left: r.left,
+    top: r.top,
+    width: r.width,
+    height: r.height,
+    // `opaque`：带子里没有孩子，`deferToChild` 的话整块都是空的、一笔也收不到
+    child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap),
+  );
+
+  final above = face.top - pad.top;
+  final below = pad.bottom - face.bottom;
+  final left = face.left - pad.left;
+  final right = pad.right - face.right;
+  return [
+    if (above > 0) band('top', Rect.fromLTWH(pad.left, pad.top, pad.width, above)),
+    if (below > 0) band('bottom', Rect.fromLTWH(pad.left, face.bottom, pad.width, below)),
+    if (left > 0) band('left', Rect.fromLTWH(pad.left, face.top, left, face.height)),
+    if (right > 0) band('right', Rect.fromLTWH(face.right, face.top, right, face.height)),
+  ];
+}
+
+/// 压在脸底下的透明受理区：跟脸同一个 Stack、排在脸前面
+///
+/// 指尖按不准 16×32 那一格，而参考稿的观感一动就废，所以受理区只能另起一层，
+/// 不去碰脸自己的盒子。[face] 是脸在宿主这一层里的坐标，探出去的量见 [svTapPadOf]。
+///
+/// 为什么不能用 `Stack(clipBehavior: Clip.none)` + `Positioned`（负 inset）把命中盒
+/// 从脸外面探出去：`RenderBox.hitTest` 第一句就是拿自己的 `size` 判这个点在不在
+/// 框里，祖先链上只要有一环没把这个点框住，事件压根走不到探出去
+/// 那一层 —— 探出去的盒子只画不收，看着挺对、点上去是死的。所以受理区必须占一格
+/// 真实布局，也就必须落在一个本来就这么大的宿主里。
+///
+/// 带子跟脸各占各的点：脸上那一下仍由脸自己接，落在脸外那一圈才归带子。
+List<Widget> svTapPads({
+  required Rect face,
+  required VoidCallback onTap,
+  EdgeInsets? grow,
+  double minSide = svTapMinSide,
+  String tag = 'pad',
+}) {
+  final pad = svTapPadOf(face, grow: grow, minSide: minSide);
+  return svTapBands(pad, face, onTap, tag: tag);
+}
+
+/// 没有现成大宿主可借时的另一条路：让受理区当脸的外套，把这一格撑到 [grow] 那么大
+///
+/// 撑大的量要在旁边的空隙里如数扣回来（`gap`、行距都是现成的账），扣少了脸挪位、
+/// 扣多了整块跟着长 —— 两边都得填一样的数，观感才一格不动。圆心距是上限：一张脸
+/// 能探多远，由它跟邻脸之间那点缝决定，探过中线就变成抢邻脸的点。
+///
+/// 外扩那一圈拆成四条互不重叠的带子，而不是在脸外面再套一层 `GestureDetector`：
+/// 多一个抢 tap 的识别器，脸自己的按下就要等仲裁分出胜负才发，按下的高慢半拍。
+/// 带子跟脸各占各的点，谁也不抢谁。
+class SvTapGrow extends StatelessWidget {
+  const SvTapGrow({
+    super.key,
+    required this.grow,
+    required this.onTap,
+    required this.child,
+  });
+
+  final EdgeInsets grow;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // 上下两条通铺（连两个角一起收），左右两条只占中段：四条拼起来正好是那圈，
+    // 一格也不压在脸上。`opaque`：带子里没有孩子，`deferToChild` 就一笔也收不到。
+    Widget band(String id, {double? top, double? bottom, double? left, double? right, double? width, double? height}) =>
+        Positioned(
+          key: ValueKey('sv-tap-band-$id'),
+          top: top,
+          bottom: bottom,
+          left: left,
+          right: right,
+          width: width,
+          height: height,
+          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap),
+        );
+
+    final double t = grow.top, b = grow.bottom, l = grow.left, r = grow.right;
+    return Stack(
+      children: [
+        Padding(padding: grow, child: child),
+        if (t > 0) band('top', top: 0, left: 0, right: 0, height: t),
+        if (b > 0) band('bottom', bottom: 0, left: 0, right: 0, height: b),
+        if (l > 0) band('left', left: 0, top: t, bottom: b, width: l),
+        if (r > 0) band('right', right: 0, top: t, bottom: b, width: r),
+      ],
+    );
+  }
 }
 
 /// 舞台：尺寸由格子自己报，圆角 28，内容默认裁在里面

@@ -159,6 +159,17 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
   final SvSpring _f = SvSpring.phys(stiffness: _flipS, damping: _flipD, from: -_flipRise);
 
   final FocusNode _focus = FocusNode(debugLabel: 'surface-lab.popover-form');
+
+  /// 软键盘只给"带输入连接的可编辑控件"弹出，这一格的假输入走 `Focus.onKeyEvent`
+  /// （物理键盘那套），触屏上 `requestFocus()` 什么也不弹。于是常驻压一颗隐形
+  /// TextField 在 textarea 那一格里，文字经 `onChanged` 喂回 `_note`；桌面不挂这颗，
+  /// 事件仍走外层 `Focus`，golden 一像素不动。
+  ///
+  /// 它不能跟着 `_surface()` 那样按 `show` 挂卸：`requestFocus()` 对还没进树的节点是
+  /// 空操作，`_openIt()` 那一刻正好要焦点。
+  static final bool _softKeyboard = SvTouch.softKeyboard;
+  final TextEditingController _editor = TextEditingController();
+  final FocusNode _fieldFocus = FocusNode(debugLabel: 'surface-lab.popover-form.field');
   late final Ticker _ticker;
   Duration _last = Duration.zero;
 
@@ -194,6 +205,8 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
     _toSuccess?.cancel();
     _toClose?.cancel();
     _focus.dispose();
+    _fieldFocus.dispose();
+    _editor.dispose();
     super.dispose();
   }
 
@@ -242,8 +255,22 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
     });
     // 换脸的进度要回起点：上一次可能停在成功页那一档
     _x.jumpTo(-_headRise);
-    _focus.requestFocus();
+    if (_softKeyboard) {
+      // 焦点给真输入才弹得出键盘（这颗常驻在树里，见 [_softKeyboard]）
+      _editor.text = _note;
+      _fieldFocus.requestFocus();
+    } else {
+      _focus.requestFocus();
+    }
     _u.aim(_panelH);
+  }
+
+  /// 唯一改 `_note` 的口
+  ///
+  /// 真输入框要跟着回写：清空/交表时它要是还留着旧字，下一次 `onChanged` 会把旧值顶回来
+  void _setNote(String next) {
+    if (_note != next) setState(() => _note = next);
+    if (_softKeyboard && _editor.text != next) _editor.text = next;
   }
 
   void _close() {
@@ -251,12 +278,13 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
     setState(() {
       _fromSuccess = _success;
       _open = false;
-      _note = '';
       _loading = _success = false;
     });
+    _setNote('');
     _toSuccess?.cancel();
     _toClose?.cancel();
     _focus.unfocus();
+    _fieldFocus.unfocus();
     _u.aim(_btnH);
     // success 没有声明 exit 档（参考稿只给了 enter）：从成功页收回去就让它原样
     // 挂着跟着盒子缩没，别在半路把 form 那张翻回来闪一下。进度跟着冻住
@@ -269,6 +297,8 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
     if (!_open || _loading || _success) return;
     // textarea 的 `required` 加 demo 里的 `if (!feedback) return`：空的就不交
     if (_note.isEmpty) return;
+    // 交表就把手指引走：转圈和成功页都不该压着一层键盘（桌面这条路焦点不在这颗上，空操作）
+    _fieldFocus.unfocus();
     setState(() => _loading = true);
     _f.aim(0);
     _toSuccess = Timer(const Duration(milliseconds: _loadingMs), () {
@@ -304,13 +334,13 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
     }
     if (_loading || _success) return KeyEventResult.ignored;
     if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
-      if (_note.isNotEmpty) setState(() => _note = _note.substring(0, _note.length - 1));
+      if (_note.isNotEmpty) _setNote(_note.substring(0, _note.length - 1));
       return KeyEventResult.handled;
     }
     // 输入看 `character`：`keyLabel` 是键名，字母永远大写，Shift/输入法都不算
     final ch = event.character ?? '';
     if (ch.isEmpty) return KeyEventResult.ignored;
-    setState(() => _note += ch);
+    _setNote(_note + ch);
     return KeyEventResult.handled;
   }
 
@@ -364,8 +394,18 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    // 收起态整块就是那颗按钮；展开之后这块是面板本体，点击不再是开合，
+                    // 而是"把收掉的键盘要回来"（textarea 那一格由真输入自己接）。
+                    // 转圈和成功页那两档不抢焦点，免得键盘顶起一个没人看的脸
                     onTap: () {
-                      if (!_open) _openIt();
+                      if (!_open) {
+                        _openIt();
+                      } else if (_softKeyboard &&
+                          !_loading &&
+                          !_success &&
+                          !_fieldFocus.hasFocus) {
+                        _fieldFocus.requestFocus();
+                      }
                     },
                     // 收起态它是那颗白底描边的按钮，展开态它是那块灰框面板：
                     // `layoutId` 换的是元素自己，样式跟着一起换，不补间
@@ -399,8 +439,53 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
                                 maxHeight: _panelH,
                                 child: _surface(),
                               ),
-                            if (show && _open && !_success) _tab(),
+                            // 把手那张脸只有 12×26，指尖按不准：受理区压在它底下
+                            // （左右各探 16、往上探 18；往下是正文那一片，让给真输入）
+                            if (show && _open && !_success) ...[
+                              ...svTapPads(
+                                face: _tabRect,
+                                grow: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                                onTap: _close,
+                                tag: 'tab',
+                              ),
+                              _tab(),
+                            ],
                             _label(p),
+                            // 真输入：压在 textarea 那一格里（面板坐标 17,17 起），字全由
+                            // 卡里那套假文本画，所以自己隐掉。挂最上层是因为 `Text` 自己
+                            // 受理命中（`RenderParagraph.hitTestSelf` 恒真），压在它下面
+                            // 那一笔就进不了这颗字段。收起态得靠 IgnorePointer 断掉：
+                            // ClipRRect 只裁到那颗按钮的圆角盒，按钮下半截那一点正好落在
+                            // 它的矩形里，不挡就是"点按钮 → 键盘弹了面板却没开"
+                            if (_softKeyboard)
+                              Positioned(
+                                left: _gutter + _bw + _noteAt.dx,
+                                top: _gutter + _bw + _noteAt.dy,
+                                width: _noteMaxW,
+                                height: _taH - _noteAt.dy,
+                                child: IgnorePointer(
+                                  ignoring: !_open,
+                                  child: Opacity(
+                                    opacity: 0,
+                                    child: Material(
+                                      type: MaterialType.transparency,
+                                      child: TextField(
+                                        focusNode: _fieldFocus,
+                                        controller: _editor,
+                                        maxLines: null,
+                                        textAlignVertical: TextAlignVertical.top,
+                                        decoration: const InputDecoration(
+                                          isDense: true,
+                                          border: InputBorder.none,
+                                          contentPadding: EdgeInsets.zero,
+                                        ),
+                                        style: _body,
+                                        onChanged: _setNote,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -529,6 +614,17 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
               child: const CustomPaint(size: Size(_notchW, _notchH), painter: _Notch()),
             ),
           ),
+          // Submit 只有 24 高：受理区压在它底下，上下各探 10 凑够指尖那一格
+          ...svTapPads(
+            face: Rect.fromLTWH(
+              _submitX - _gutter - _bw,
+              (_footH - _submitH) / 2,
+              _submitW,
+              _submitH,
+            ),
+            onTap: _doSubmit,
+            tag: 'submit',
+          ),
           Positioned(
             left: _submitX - _gutter - _bw,
             top: (_footH - _submitH) / 2,
@@ -598,6 +694,7 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
       color: _btnInk,
     );
     final w = _w;
+    // 受理区不在这里：24 高那一圈由页脚 Stack 里的 `SvTapPad` 收，见 `_footer()`
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -633,8 +730,7 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
                 child: Transform.translate(
                   offset: Offset(0, _flipRise * w),
                   child: const Center(
-                      child:
-                          Text(_submitText, key: Case03PopoverForm.btnLabelKey, style: style)),
+                      child: Text(_submitText, key: Case03PopoverForm.btnLabelKey, style: style)),
                 ),
               ),
               Opacity(

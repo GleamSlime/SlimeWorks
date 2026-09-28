@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Float64List;
 import 'dart:ui' show ImageFilter;
@@ -171,7 +170,7 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
   /// `requestFocus()` 什么也不弹。隐形数字 TextField 压在整行底下，
   /// 点子上由最上层的命中层接住、经 [_press] 把焦点给到它，数字经
   /// `onChanged` 喂回 `_code`；桌面不挂这颗，事件仍走外层 `Focus`，golden 不动。
-  static final bool _softKeyboard = Platform.isAndroid || Platform.isIOS;
+  static final bool _softKeyboard = IlTouch.softKeyboard;
   final TextEditingController _editor = TextEditingController();
   final FocusNode _fieldFocus = FocusNode(debugLabel: 'interaction-lab.otp.field');
 

@@ -378,6 +378,31 @@ void main() {
       await unmountPage(t);
     });
 
+    // 把手只有 12×26、Submit 只有 24 高，指尖按不准，所以两张脸底下各压了一层
+    // 透明受理区。这一层必须占一格真实布局：探出宿主盒子的命中压根收不到
+    // （`RenderBox.hitTest` 第一句就是 `size.contains(position)`）。
+    testWidgets('指尖受理区：把手和 Submit 外扩那一圈点得着', (t) async {
+      await mount(t);
+      await openIt(t);
+      await run(t, 700);
+
+      // 把手左边 8：不在 12 宽的脸上，在 16+12+16 的圈里
+      await t.tapAt(tab(t).centerLeft + const Offset(-8, 0));
+      await run(t, 800);
+      expect(box(t).height, closeTo(btnH, 0.2), reason: '把手左边那一圈没接住');
+
+      await openIt(t);
+      await svType(t, 'Nice');
+      final s = submit(t);
+      // 下边 6：24 高的脸只到 24，圈探到 34 → 这一点落在圈里、不在脸上
+      await t.tapAt(Offset(s.center.dx, s.bottom + 6));
+      await run(t, 100);
+      expect(box(t).height, closeTo(panelH, 0.2), reason: '圈里那点被当成了"点外面"');
+      await run(t, 1600);
+      expect(success(t).width, closeTo(356.0, 0.2), reason: 'Submit 下面那一圈没交成表');
+      await unmountPage(t);
+    });
+
     testWidgets('Cmd+Enter 直接交表', (t) async {
       await mount(t);
       await openIt(t);

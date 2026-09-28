@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -51,7 +50,7 @@ class _Case01SearchState extends State<Case01Search> {
   /// `requestFocus()` 什么也不弹。隐形 TextField 压在字段区上接管焦点，
   /// 文字经 `onChanged` 喂回 `_text`；桌面不挂这颗，事件仍走原来那条
   /// `Focus` 路径，golden 一像素不动。
-  static final bool _softKeyboard = Platform.isAndroid || Platform.isIOS;
+  static final bool _softKeyboard = IlTouch.softKeyboard;
   final TextEditingController _editor = TextEditingController();
   final FocusNode _fieldFocus = FocusNode(debugLabel: 'interaction-lab.search.field');
 

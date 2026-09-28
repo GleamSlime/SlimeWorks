@@ -5,7 +5,7 @@ import 'package:slime_works/pages/motion_lab/cases/motion_lab_cases.dart';
 
 import 'helpers/lab_golden.dart';
 
-// 43 格逐格出图：静止帧 + 途中帧 + 终态帧。
+// 44 格逐格出图：静止帧 + 途中帧 + 终态帧。
 //
 // 一帧一个 test：出过图之后同一 test 里的点击就不再接到（见 lab_golden 的说明）。
 // 只看静止帧证明不了动效存在，途中那帧才是时长和曲线接没接上的证据。
@@ -59,6 +59,7 @@ const Map<int, _Act> _acts = {
   41: _Act.animate,
   42: _Act.play,
   43: _Act.auto,
+  44: _Act.auto,
 };
 
 /// 舞台在 320×284 的窗口里居中（舞台本身 296×260）
@@ -72,7 +73,7 @@ const _labelOverride = {19: 'Ask'};
 /// 6 号反过来——纸屑刚炸开还挤成一团，推晚一点才拍得开行迹
 /// 9 号也反过来：液滴飞到中心距 50px 以上桥就掐断了，150ms 只剩四颗散圆
 /// 28 号的粒子窗口含延迟有 830ms，150ms 才刚出中心
-const _midOverride = {4: 400, 6: 400, 9: 100, 12: 600, 28: 300, 37: 2500, 38: 600};
+const _midOverride = {4: 400, 6: 400, 9: 100, 12: 600, 28: 300, 37: 2500, 38: 600, 44: 420};
 
 String _pad(int seq) => seq.toString().padLeft(2, '0');
 

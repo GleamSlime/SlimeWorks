@@ -1,0 +1,7 @@
+# 放在仓库根是因为出包时 cargokit 从 macos/ 目录调 cargo，cargo 只向上找配置，
+# rust/.cargo/config.toml 在这条路径上不生效。
+# proc-macro 的 host 编译不吃 RUSTFLAGS，只能靠 rustc 读的 minos 控制：
+# minos>=12 启用 chained fixups 后，Xcode 27 的 ld 把 LC_SYMTAB stroff 只对齐到 4 字节，
+# macOS 27 的 dyld 拒载这类 dylib（mis-aligned LINKEDIT string pool），表现为 can't find crate。
+[env]
+MACOSX_DEPLOYMENT_TARGET = { value = "11.0", force = true }

@@ -422,9 +422,26 @@ class _Case02FloatingPanelState extends State<Case02FloatingPanel>
                 child: ClipRRect(
                   // `overflow:hidden` 是真的：那行字飞到面板上方时就是被这一圈裁掉的
                   borderRadius: BorderRadius.circular(_radius - _bw),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [_title(), _body(), _footer()],
+                  child: Stack(
+                    children: [
+                      // 收起那颗箭头只有 16 见方，指尖按不准，所以底下压一层透明受理区。
+                      // 它不能只压在页脚那一格里：页脚总共 40 高，装不下 44 的一格，
+                      // 所以铺在整块内容上、按内容坐标定位
+                      ...svTapPads(
+                        face: Rect.fromLTWH(
+                          _pad,
+                          _titleH + _bodyH + _footPadY,
+                          _arrow,
+                          _arrow,
+                        ),
+                        onTap: _close,
+                        tag: 'collapse',
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [_title(), _body(), _footer()],
+                      ),
+                    ],
                   ),
                 ),
               ),

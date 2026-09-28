@@ -93,6 +93,14 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
   bool _focused = false;
   bool _micHover = false;
   final FocusNode _focusNode = FocusNode(debugLabel: 'interaction-lab.command');
+
+  /// 软键盘只给"带输入连接的可编辑控件"弹出，这一格的假输入走 `Focus.onKeyEvent`
+  /// （物理键盘那套），触屏上 `requestFocus()` 什么也不弹。于是常驻压一颗隐形
+  /// TextField 在条底下接管焦点，文字经 `onChanged` 喂回 `_text`；桌面不挂这颗，
+  /// 事件仍走外层 `Focus`，golden 一像素不动。
+  static final bool _softKeyboard = IlTouch.softKeyboard;
+  final TextEditingController _editor = TextEditingController();
+  final FocusNode _fieldNode = FocusNode(debugLabel: 'interaction-lab.command.field');
   Ticker? _ticker;
   Duration _last = Duration.zero;
 
@@ -108,6 +116,7 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
   void initState() {
     super.initState();
     _focusNode.addListener(_onFocus);
+    _fieldNode.addListener(_onFocus);
   }
 
   @override
@@ -115,6 +124,10 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
     _focusNode
       ..removeListener(_onFocus)
       ..dispose();
+    _fieldNode
+      ..removeListener(_onFocus)
+      ..dispose();
+    _editor.dispose();
     _ticker?.stop();
     super.dispose();
   }
@@ -122,12 +135,15 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
   // ---- 交互
 
   void _onFocus() {
-    _focused = _focusNode.hasFocus;
+    _focused = _focusNode.hasFocus || _fieldNode.hasFocus;
     _sync();
   }
 
   void _setText(String next) {
+    if (next == _text) return;
     setState(() => _text = next);
+    // 真输入框要跟着回写：清空/提交时它要是还留着旧字，下一次 onChanged 会把旧值顶回来
+    if (_softKeyboard && _editor.text != next) _editor.text = next;
     _sync();
   }
 
@@ -212,7 +228,10 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
               child: GestureDetector(
                 key: const ValueKey('blur'),
                 behavior: HitTestBehavior.translucent,
-                onTapDown: (_) => _focusNode.unfocus(),
+                onTapDown: (_) {
+                  _focusNode.unfocus();
+                  _fieldNode.unfocus();
+                },
               ),
             ),
             Align(
@@ -223,6 +242,35 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
                   clipBehavior: Clip.none,
                   children: [
                     _goo(barW, goX, goW, scale),
+                    if (_softKeyboard)
+                      Positioned(
+                        // 落在文字那一格里：Android 的候选词窗就贴在光标位上
+                        left: _padL,
+                        right: _padR + _micBox + _inner,
+                        top: 0,
+                        height: _h,
+                        child: Opacity(
+                          opacity: 0,
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: TextField(
+                              focusNode: _fieldNode,
+                              controller: _editor,
+                              maxLines: 1,
+                              textInputAction: TextInputAction.send,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: (v) {
+                                if (v != _text) _setText(v);
+                              },
+                              onSubmitted: (_) => _submit(),
+                            ),
+                          ),
+                        ),
+                      ),
                     _bar(barW),
                     _go(goX, goW, scale, armed),
                   ],
@@ -298,7 +346,12 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
         key: const ValueKey('hit-bar'),
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) {
-          _focusNode.requestFocus();
+          if (_softKeyboard) {
+            _editor.text = _text;
+            _fieldNode.requestFocus();
+          } else {
+            _focusNode.requestFocus();
+          }
           _kick();
         },
         child: MouseRegion(

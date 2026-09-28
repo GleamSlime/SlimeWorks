@@ -43,6 +43,7 @@ import 'case_40_matrix_dot_loader.dart';
 import 'case_41_banner_stacking.dart';
 import 'case_42_image_generation_placeholder.dart';
 import 'case_43_get_pro_button.dart';
+import 'case_44_voice_waveform.dart';
 
 /// 分类：只用于这张页面上的筛选，不参与任何全局配置
 enum LabCat {
@@ -78,7 +79,7 @@ class LabCase {
   final bool pro;
 }
 
-/// 43 格，顺序和参考稿首页一致
+/// 44 格，顺序和参考稿首页一致
 final List<LabCase> kLabCases = <LabCase>[
   LabCase(
     seq: 1,
@@ -391,5 +392,12 @@ final List<LabCase> kLabCases = <LabCase>[
     cat: LabCat.effects,
     pro: true,
     build: Case43GetProButton.new,
+  ),
+  LabCase(
+    seq: 44,
+    title: 'Voice waveform',
+    subtitle: 'Layered voicewave swells with the amplitude',
+    cat: LabCat.effects,
+    build: Case44VoiceWaveform.new,
   ),
 ];

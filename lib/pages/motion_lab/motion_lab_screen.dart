@@ -45,9 +45,16 @@ class _MotionLabScreenState extends State<MotionLabScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
+                  // 拖拽物理、滑块那几格用裸 Listener 跟手，不进手势竞技场；
+                  // 它们接管手指期间把这里换成不可滚，触屏上拖组件就不会把整页带走
                   Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: LabTouchLock.held,
+                      builder: (context, held, child) => SingleChildScrollView(
+                        physics: held > 0 ? const NeverScrollableScrollPhysics() : null,
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+                        child: child,
+                      ),
                       child: Center(
                         child: Wrap(
                           spacing: 24,

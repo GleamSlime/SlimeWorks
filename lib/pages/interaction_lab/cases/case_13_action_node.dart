@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind, TapUpDetails;
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,9 @@ import '../kit.dart';
 /// （`.nod-card{z-index:1}` 盖 `.nod-fan{z-index:0}`，全程没有透明度通道）。
 /// 指针一进整块，钮就沿"贴着圆角外侧 30px"的那条倒角线滑出来，
 /// 每钮一根弹簧，起跳时刻按 49.5ms 错开，离开再按倒序收回去。
+///
+/// 触屏给不出 enter/exit，所以另接一条点按：点卡片当"指针进来并停在原地"、再点
+/// 当离开，判据还是 `_zone` 那套几何（`_tapZone`）。
 ///
 /// 参考稿三条值得单独记的口径：
 /// 1. **一根弹簧同时管位移和缩放，但上限分开**：位移允许冲到 1.4 倍（沿
@@ -251,7 +255,7 @@ class _Case13ActionNodeState extends State<Case13ActionNode> with SingleTickerPr
   Path _zone(Size hoverBox) {
     final g = _fan;
     // 悬停盒的底就是根盒的底：上下只有顶部多出 overY
-    final path = Path()..addRect(Rect.fromLTRB(0, g.overY, _cardW, hoverBox.height));
+    final path = Path()..addRect(_cardRect(hoverBox));
     if (_open) {
       path.addPath(
         // reach 在参考稿里就是绝对定位在扇出原点上的一组 left/top，平移量照着抄。
@@ -262,6 +266,27 @@ class _Case13ActionNodeState extends State<Case13ActionNode> with SingleTickerPr
     }
     return path;
   }
+
+  /// 触屏的点法：这一格的开合原本只有鼠标悬停那一条路
+  ///
+  /// 触屏给不出 enter/hover/exit，所以指尖点一下卡片当作"指针进来并停在原地"、
+  /// 再点一下当作离开。判据仍走 `_zone` 那套几何：点在钮与钮之间那块 reach 里算
+  /// "指针还留在块内"（跟悬停一样不收），出了整块才收。只有 touch 指针走这条路，
+  /// 桌面上鼠标点击不改变悬停语义。
+  void _tapZone(TapUpDetails d) {
+    if (d.kind != PointerDeviceKind.touch) return;
+    final ro = _hitKey.currentContext?.findRenderObject();
+    if (ro is! RenderBox || !ro.hasSize) return;
+    final p = ro.globalToLocal(d.globalPosition);
+    if (_cardRect(ro.size).contains(p)) {
+      _setOpen(!_open);
+    } else if (!_zone(ro.size).contains(p)) {
+      _setOpen(false);
+    }
+  }
+
+  /// 卡片根盒在悬停盒坐标里占的那块 —— 也就是收起态的受理区
+  Rect _cardRect(Size hoverBox) => Rect.fromLTRB(0, _fan.overY, _cardW, hoverBox.height);
 
   /// 进/出整块：先把旧计时器全部作废再按新方向重建，连点两下不会叠出两层错拍
   void _setOpen(bool v) {
@@ -349,31 +374,39 @@ class _Case13ActionNodeState extends State<Case13ActionNode> with SingleTickerPr
           onExit: (_) => _setOpen(false),
           child: Listener(
             onPointerCancel: (_) => _setOpen(false),
-            child: SizedBox(
-              width: _cardW + g.overX,
-              child: Padding(
-                padding: EdgeInsets.only(top: g.overY),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // 扇出层先画：卡片压在它上面，收起态的钮就是被这么藏住的
-                    // （参考稿没有透明度通道，`.nod-card{z-index:1}` 盖 `.nod-fan{z-index:0}`）
-                    for (var i = 0; i < _count; i++)
-                      Positioned(
-                        left: g.fanAt.dx + _lerp(g.home.dx, g.targets[i].dx, i) - IlNodeFan.half,
-                        top: g.fanAt.dy + _lerp(g.home.dy, g.targets[i].dy, i) - IlNodeFan.half,
-                        child: _btn(i),
+            child: GestureDetector(
+              // translucent：判定要覆盖整颗悬停盒，而 `deferToChild` 只在盒里有
+              // 孩子被命中时才收下这一笔 —— 卡片右侧那块空白没有孩子，点它本来该
+              // 读成"指针出了整块"，却会连 onTapUp 都收不到。MouseRegion 那道门是
+              // `size.contains`，所以悬停在那块有反应、点按没有，两边得对齐。
+              behavior: HitTestBehavior.translucent,
+              onTapUp: _tapZone,
+              child: SizedBox(
+                width: _cardW + g.overX,
+                child: Padding(
+                  padding: EdgeInsets.only(top: g.overY),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // 扇出层先画：卡片压在它上面，收起态的钮就是被这么藏住的
+                      // （参考稿没有透明度通道，`.nod-card{z-index:1}` 盖 `.nod-fan{z-index:0}`）
+                      for (var i = 0; i < _count; i++)
+                        Positioned(
+                          left: g.fanAt.dx + _lerp(g.home.dx, g.targets[i].dx, i) - IlNodeFan.half,
+                          top: g.fanAt.dy + _lerp(g.home.dy, g.targets[i].dy, i) - IlNodeFan.half,
+                          child: _btn(i),
+                        ),
+                      // 卡片：z-index 1 那一层
+                      Transform.translate(
+                        // `[data-on]` 那 1px 抬起是卡片自己的事，扇出不跟着动
+                        offset: Offset(0, -_lift.value),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: IlNodeFan.band),
+                          child: _card(),
+                        ),
                       ),
-                    // 卡片：z-index 1 那一层
-                    Transform.translate(
-                      // `[data-on]` 那 1px 抬起是卡片自己的事，扇出不跟着动
-                      offset: Offset(0, -_lift.value),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: IlNodeFan.band),
-                        child: _card(),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -492,7 +525,8 @@ class _Case13ActionNodeState extends State<Case13ActionNode> with SingleTickerPr
       onExit: (_) => _aimZoom(i, 0),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        // 参考稿的钮没有点击行为 —— 这一块的注册类别就是 Hover
+        // 参考稿的钮没有点击行为 —— 这一块的注册类别就是 Hover。这里留一个空 onTap
+        // 把点击吞掉：不吞的话这一笔会穿到悬停盒那层，点钮变成"再点一下卡片"把扇出收了
         onTap: () {},
         child: Transform.scale(
           // 挂个 key：测试要读这一格矩阵，而树上还有悬停盒那层 translate 的 Transform

@@ -14,5 +14,6 @@ reqwest = { version = "0.12", features = ["blocking", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 regex = "1"
-bzip2 = "0.5"
+# 0.6 默认用纯 Rust 的 libbz2-rs-sys；0.5 走 C 绑定，macOS/iOS 链接找不到 _BZ2_* 符号
+bzip2 = "0.6"
 tar = "0.4"

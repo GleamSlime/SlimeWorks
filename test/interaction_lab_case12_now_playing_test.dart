@@ -539,6 +539,37 @@ void main() {
     await unmountPage(tester);
   });
 
+  // 折叠态那三颗圆钮只有 24/30，指尖按不准，所以脸外面压了一圈透明受理区。
+  // 横向不能随便探：相邻两颗圆心只隔 32，探过中线就互相抢了。
+  testWidgets('折叠态小钮：外扩那一圈点得着，也不跟整条的热区抢', (tester) async {
+    await mountIlCase(tester, const Case12NowPlaying());
+    final lead = tester.getRect(find.byKey(const ValueKey('op-lead')));
+    final prev = tester.getRect(find.byKey(const ValueKey('op-prev')));
+    expect(lead.width, 30);
+    expect(_v(tester), 0, reason: '起手是折叠条');
+    expect(_glyph(tester).r, 1, reason: '还没点过，静止在播放三角');
+
+    // 脸上方 5px：既在受理区里、也在整条的展开热区里 —— 小钮要赢
+    await tester.tapAt(Offset(lead.center.dx, lead.top - 5));
+    await _pump(tester, 340);
+    expect(_v(tester), 0, reason: '这一笔被整条抢去展开了');
+    expect(_glyph(tester).r, 0, reason: '受理区上面那一圈没接住');
+
+    // 下面同理，顺带把播放翻回去
+    await tester.tapAt(Offset(lead.center.dx, lead.bottom + 5));
+    await _pump(tester, 340);
+    expect(_v(tester), 0);
+    expect(_glyph(tester).r, 1, reason: '受理区下面那一圈没接住');
+
+    // 左边 17：出了 prev 的脸（12）但还在它的受理区（16）里 → 归 prev，不是 lead
+    await tester.tapAt(Offset(lead.center.dx - 17, lead.center.dy));
+    await _pump(tester, 340);
+    expect(_v(tester), 0);
+    expect(_glyph(tester).r, 1, reason: '两圈的边界漏过了中线，lead 被 prev 的位置点着了');
+    expect(prev.width, 24);
+    await unmountPage(tester);
+  });
+
   testWidgets('hover / press：颜色 .16s、底色 .16s、缩放 .13s', (tester) async {
     await mountIlCase(tester, const Case12NowPlaying());
     await _openAndSettle(tester);

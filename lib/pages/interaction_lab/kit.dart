@@ -9,6 +9,7 @@
 /// 就不是还原了。这条例外只圈在 `lib/pages/interaction_lab/**`。
 library;
 
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Float64List;
 import 'dart:ui' show ImageFilter;
@@ -208,6 +209,85 @@ abstract final class IlTouchLock {
   static void acquire() => held.value = held.value + 1;
 
   static void release() => held.value = math.max(0, held.value - 1);
+}
+
+/// 这一格要不要挂软键盘那套真输入
+///
+/// 靠 `Focus.onKeyEvent` 自己收键的假输入只吃物理键盘：触屏上 `requestFocus()`
+/// 什么也不弹，得压一颗全透明 `TextField` 接管焦点，让系统把键盘弹出来。
+/// 只在安卓/iOS 挂，桌面不挂——桌面走原来那条 `Focus` 路径，golden 一像素不动。
+abstract final class IlTouch {
+  static final bool softKeyboard = Platform.isAndroid || Platform.isIOS;
+}
+
+/// 指尖那一格的下限（Material 那条 44）
+const ilTapMinSide = 44.0;
+
+/// 一圈拆成四条互不重叠的带子：[pad] 是整格（脸加外扩）、[face] 是脸，两者都在
+/// 宿主那一层里量，四条拼起来正好是整格减去那张脸
+///
+/// 带子不能压在脸上：受理区多一个抢 tap 的识别器，脸自己的按下就得等竞技场
+/// 分出胜负才响（松手那一刻），按住的高亮慢半拍。各占各的点才谁也不抢谁。
+List<Positioned> ilTapBands(Rect pad, Rect face, VoidCallback onTap, {String tag = 'pad'}) {
+  Positioned band(String id, Rect r) => Positioned(
+    key: ValueKey<String>('il-tap-$tag-$id'),
+    left: r.left,
+    top: r.top,
+    width: r.width,
+    height: r.height,
+    // `opaque`：带子里没有孩子，`deferToChild` 的话整块都是空的、一笔也收不到
+    child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap),
+  );
+
+  final above = face.top - pad.top;
+  final below = pad.bottom - face.bottom;
+  final left = face.left - pad.left;
+  final right = pad.right - face.right;
+  return [
+    if (above > 0) band('top', Rect.fromLTWH(pad.left, pad.top, pad.width, above)),
+    if (below > 0) band('bottom', Rect.fromLTWH(pad.left, face.bottom, pad.width, below)),
+    if (left > 0) band('left', Rect.fromLTWH(pad.left, face.top, left, face.height)),
+    if (right > 0) band('right', Rect.fromLTWH(face.right, face.top, right, face.height)),
+  ];
+}
+
+/// 压在脸底下的透明受理区：跟脸同一个 Stack、排在脸前面
+///
+/// 受理区只能另起一层，不能去撑脸自己的盒子（一撑就挪位、观感就废）。也不能用
+/// `Stack(clipBehavior: Clip.none)` + `Positioned`（负 inset）把命中盒探出去：
+/// `RenderBox.hitTest` 第一句就是拿自己的 `size` 判这个点在不在框里，祖先链上
+/// 有一环没把这个点框住，事件压根走不到探出去那一层 —— 探出去的盒子
+/// 只画不收，看着挺对、点上去是死的。所以这一层必须占一格真实布局，也就必须
+/// 落在一个本来就这么大的宿主里。[face] 是脸在宿主那一层里的坐标。
+///
+/// 带子跟脸各占各的点：脸上那一下仍由脸自己接，落在脸外那一圈才归带子。
+List<Widget> ilTapPads({
+  required Rect face,
+  required VoidCallback onTap,
+  EdgeInsets? grow,
+  double minSide = ilTapMinSide,
+  String tag = 'pad',
+}) {
+  return ilTapBands(ilTapPadOf(face, grow: grow, minSide: minSide), face, onTap, tag: tag);
+}
+
+/// 把脸那一格凑到指尖下限：短边不足 [minSide] 就四边对半分探出去
+///
+/// 给了 [grow] 就照 [grow] 探（邻居挤在一起时用它收着扩，别越过圆心距）。
+Rect ilTapPadOf(Rect face, {EdgeInsets? grow, double minSide = ilTapMinSide}) {
+  final g = grow ??
+      EdgeInsets.fromLTRB(
+        math.max(0.0, (minSide - face.width) / 2),
+        math.max(0.0, (minSide - face.height) / 2),
+        math.max(0.0, (minSide - face.width) / 2),
+        math.max(0.0, (minSide - face.height) / 2),
+      );
+  return Rect.fromLTWH(
+    face.left - g.left,
+    face.top - g.top,
+    face.width + g.left + g.right,
+    face.height + g.top + g.bottom,
+  );
 }
 
 /// 舞台：尺寸由格子自己报，圆角 28、`rgba(23,24,26,.06)` 底，内容裁在里面

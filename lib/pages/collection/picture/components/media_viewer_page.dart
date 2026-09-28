@@ -14,6 +14,7 @@ import 'package:media_kit_video/media_kit_video_controls/media_kit_video_control
     as media_controls;
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/services/asr/subtitle_mount.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -376,6 +377,10 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       );
       return _VideoPreview(
         source: source,
+        filePath: item.filePath,
+        subtitleNodeId: widget.viewModel.isRemoteCollection(widget.collectionId)
+            ? widget.viewModel.getRemoteNodeId(widget.collectionId)
+            : null,
         title: item.title,
         coverSource: coverSource,
         isActive: isActive,
@@ -1420,6 +1425,7 @@ class _ImageViewerState extends State<_ImageViewer> {
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
     required this.source,
+    required this.filePath,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
@@ -1427,9 +1433,13 @@ class _VideoPreview extends StatefulWidget {
     this.isAudio = false,
     this.title,
     this.coverSource,
+    this.subtitleNodeId,
   });
 
   final String? source;
+
+  /// 媒体文件的原始路径（本地路径或节点侧路径），用于定位同级字幕
+  final String filePath;
   final VoidCallback onDragStart;
   final void Function(double dy) onDragUpdate;
   final void Function(double velocity, double screenExtent) onDragEnd;
@@ -1445,6 +1455,9 @@ class _VideoPreview extends StatefulWidget {
 
   /// 封面图路径或 URL（用于系统播放控件显示）
   final String? coverSource;
+
+  /// 非空表示媒体在节点上，字幕需先从该节点取回本地
+  final String? subtitleNodeId;
 
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
@@ -1480,8 +1493,9 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final uri = source.startsWith('http')
         ? source
         : Uri.file(source).toString();
-    _player!.open(Media(uri));
+    final opening = _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.single);
+    unawaited(_mountSubtitle(opening));
     _readySub = _player!.stream.videoParams.listen((params) {
       if ((params.dw ?? 0) > 0 && !_playerReady) {
         _readySub?.cancel();
@@ -1494,6 +1508,36 @@ class _VideoPreviewState extends State<_VideoPreview> {
       }
     });
     _updateNowPlaying();
+  }
+
+  /// 挂载同级字幕：本地直接读文件，远程集合先从节点取回临时文件。
+  ///
+  /// 本地也显式挂载而不依赖 mpv 的同目录自动探测——mpv 只对本地文件探测同级字幕，
+  /// 对 URL 流不做探测，两边都走这里才能保证本地/远程行为一致。
+  Future<void> _mountSubtitle(Future<void> opening) async {
+    final player = _player;
+    if (player == null) return;
+    // sub-add 要等文件装载完成后再下发：完成前当前条目还是"没有文件"，
+    // mpv 会把外挂字幕挂到空条目上直接丢掉。
+    try {
+      await opening;
+    } catch (_) {
+      return;
+    }
+    final path = await resolvePlaybackSubtitlePath(
+      mediaPath: widget.filePath,
+      nodeId: widget.subtitleNodeId,
+    );
+    // 切页/关闭后 player 已换或已 dispose，挂上去只会报错
+    if (path == null || !mounted || !identical(player, _player)) return;
+    try {
+      await player.setSubtitleTrack(
+        SubtitleTrack.uri(Uri.file(path).toString(), title: '字幕'),
+      );
+      debugPrint('[MVP] 字幕已挂载: $path');
+    } catch (e) {
+      debugPrint('[MVP] 字幕挂载失败: $path | $e');
+    }
   }
 
   @override

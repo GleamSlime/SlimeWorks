@@ -7,8 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:slime_works/pages/motion_lab/cases/motion_lab_cases.dart';
 import 'package:slime_works/pages/motion_lab/lab_kit.dart';
+import 'package:slime_works/pages/motion_lab/motion_lab_screen.dart';
 
 import 'helpers/lab_golden.dart';
+import 'helpers/page_golden.dart';
 
 // 触屏入口回归。
 //
@@ -154,6 +156,42 @@ void main() {
     await _tapWithFingerAt(tester, const Offset(160, 120));
     await _advance(tester, 500);
     expect(listEquals(await _raster(tester), idle), isTrue, reason: '再点没收回');
+    await unmountPage(tester);
+  });
+
+  // 20 号是真拖：图块吃 `onPan*`，指尖按住往上划的时候，页面那颗
+  // `SingleChildScrollView` 也在同一场竞技场里，而且它的 slop 更短 —— 不锁住
+  // 就是"拖图块"变成"滚整页"。锁在 pointer down 这一下就给出，所以拖完读数
+  // 必须归还，否则整页永久滚不动
+  testWidgets('20. 拖拽投递：指尖拖图块时整页不跟着滚', (tester) async {
+    await loadAppFonts();
+    await pumpAppPage(tester, const MotionLabScreen());
+    await advance(tester);
+
+    // 图块在拖起来之后光标就变成 basic（`canDrag: !_busy`），所以认手势不认光标
+    final tile = find.byWidgetPredicate((w) => w is GestureDetector && w.onPanStart != null);
+    await tester.ensureVisible(tile);
+    await tester.pump();
+    final page = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    final scrolled0 = page.position.pixels;
+    final top0 = tester.getTopLeft(tile).dy;
+    expect(LabTouchLock.held.value, 0, reason: '起手前锁没归零');
+
+    final g = await tester.startGesture(tester.getCenter(tile));
+    await tester.pump();
+    expect(LabTouchLock.held.value, 1, reason: '按下没锁住页面滚动');
+
+    // 一次 move 只把拖拽从"待定"推到"起步"，位移要再下一笔才算 update
+    for (final dy in const [20.0, 20.0, 30.0]) {
+      await g.moveBy(Offset(0, dy));
+      await tester.pump();
+    }
+    expect(page.position.pixels, scrolled0, reason: '拖图块把整页滚走了');
+    expect(tester.getTopLeft(tile).dy - top0, greaterThan(10), reason: '图块没跟手');
+
+    await g.up();
+    await tester.pump();
+    expect(LabTouchLock.held.value, 0, reason: '松手没归还滚动锁');
     await unmountPage(tester);
   });
 }

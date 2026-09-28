@@ -419,9 +419,18 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                     return;
                 }
                 Err(e) => {
+                    // 文件不存在必须是 404（与 hyper 路径 handle_media_request 对齐）：
+                    // 客户端靠它区分「这个字幕文件没有」与「节点出错了」，
+                    // 统一回 500 会让逐候选探测字幕的逻辑在第一候选就中断。
+                    let status_line = if e.starts_with("file not found") {
+                        "404 Not Found"
+                    } else {
+                        "500 Internal Server Error"
+                    };
                     let err_body = format!("media error: {}", e);
                     let header = format!(
-                        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                        "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                        status_line,
                         err_body.len()
                     );
                     let _ = stream.write_all(header.as_bytes());
@@ -1093,6 +1102,68 @@ mod tests {
             .starts_with("HTTP/1.1 401"));
         // /health 免鉴权：客户端要靠它区分"不在线"和"码不对"
         assert!(send("GET /health HTTP/1.1\r\nHost: x\r\n\r\n").starts_with("HTTP/1.1 200"));
+    }
+
+    /// 播放时逐候选探测同级字幕，全靠状态码区分"没有这个字幕文件"与"节点出错了"：
+    /// 不存在的媒体必须回 404（早前统一回 500，会让第一个候选就中断，有字幕也挂不上）。
+    #[test]
+    fn media_missing_file_is_404_and_existing_subtitle_serves_whole_bytes() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let send = |request: &str| -> String {
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+            stream.write_all(request.as_bytes()).expect("write");
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).expect("read");
+            String::from_utf8_lossy(&response).into_owned()
+        };
+        let media_get = |path: &str| {
+            let mut ser = url::form_urlencoded::Serializer::new(String::new());
+            ser.append_pair("path", path);
+            ser.append_pair("sw_auth", &digest);
+            send(&format!(
+                "GET /node/media?{} HTTP/1.1\r\nHost: x\r\n\r\n",
+                ser.finish()
+            ))
+        };
+
+        let dir = std::env::temp_dir().join(format!("sw_node_sub_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let srt = dir.join("a.srt");
+        let payload = "1\n00:00:01,000 --> 00:00:02,000\n你好\n";
+        std::fs::write(&srt, payload).unwrap();
+
+        let ok = media_get(srt.to_str().unwrap());
+        assert!(ok.starts_with("HTTP/1.1 20"), "实际: {}", &ok[..ok.len().min(40)]);
+        // 字幕不是音视频：整文件一次给完，不受 2MB 切片上限约束
+        assert!(ok.ends_with(payload), "字幕正文不完整");
+        assert!(
+            ok.contains(&format!("Content-Length: {}", payload.len())),
+            "实际: {ok}"
+        );
+
+        let miss = media_get("/tmp/sw_no_such_subtitle_file.srt");
+        assert!(
+            miss.starts_with("HTTP/1.1 404"),
+            "不存在的字幕必须 404，实际: {}",
+            &miss[..miss.len().min(40)]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// ping 是连通性探测用的，必须在连接线程就地回答（不进共享 runtime 队列），

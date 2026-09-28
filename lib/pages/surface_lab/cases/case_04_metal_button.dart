@@ -72,6 +72,30 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
   /// 参考页 15fps 抽帧：66.667ms 一拍
   static const frameMs = 1000.0 / 15.0;
 
+  /// 指尖那一格要 44，这一页的空隙刚好够
+  ///
+  /// 透明受理区得占一格真实布局（探出宿主盒子的那部分收不到命中，见 `svTapPads`
+  /// 的说明），所以这里不是往外探，是把脸包在里面撑大、再让相邻的空隙跟着缩 ——
+  /// 圆心距就是硬顶：左右各让半个 `gap`，上下各让半段行距，谁也不能压到邻脸。
+  /// 三行条（28 高）横向有 `px-2` 那 20 内衬，短边只剩高度，左右各探 4 就是圆心距。
+  /// 一行要探就得整行一起探：脸撑开 12、旁边的空隙让出 12，整块还是原来那么大。
+  /// 胶囊横向本来就不缺那点地方，可它也得跟着往左探 6 —— 一行里只有一颗不动的话，
+  /// 居中的那一排全跟着它平移，观感就废了；它右边不留带子，那 6 留给第一段 `gap`。
+  /// 纵向四张脸分三段 12 的行距：胶囊只缺 4、圆钮缺 12，剩下的 12+12 正好给两行条
+  /// 8+8 和 4+12 —— 每一格都凑满 44，行距一格不剩，脸也一格没挪。
+  static const pillGrow = EdgeInsets.fromLTRB(6, 0, 0, 4);
+  static const iconGrow = EdgeInsets.fromLTRB(6, 4, 6, 8);
+  static const chipGrow = EdgeInsets.fromLTRB(4, 8, 4, 8);
+  static const chipGrowLow = EdgeInsets.fromLTRB(4, 4, 4, 12);
+
+  /// 撑开一格就得让出一格：横向从 `gap` 里扣，扣完剩下 `gap - 前后两张脸探出的量`
+  static double gapAfter(EdgeInsets before, EdgeInsets after, {double lead = gap}) =>
+      lead - before.right - after.left;
+
+  /// 行距同理：上面那张脸往下探的加上下面那张往上探的，都从这一条里扣
+  static double rowGapAfter(EdgeInsets above, EdgeInsets below, {double lead = 12}) =>
+      lead - above.bottom - below.top;
+
   /// 预设表里没有、每一档共用的底料
   static const distortion = 0.1;
   static const contour = 0.4;
@@ -148,9 +172,10 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
                 ringPx: pillRing,
                 scale: pillScale,
                 inner: pillInner,
+                grow: pillGrow,
                 child: const Text('Continue'),
               ),
-              const SizedBox(width: gap),
+              SizedBox(width: gapAfter(pillGrow, iconGrow)),
               _metal(
                 Case04MetalButton.iconKey,
                 w: iconSize,
@@ -158,9 +183,10 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
                 radius: iconRadius,
                 ringPx: iconRing,
                 scale: iconScale,
+                grow: iconGrow,
                 child: const Icon(Icons.bolt_outlined, size: 14),
               ),
-              const SizedBox(width: gap),
+              SizedBox(width: gapAfter(iconGrow, iconGrow)),
               _metal(
                 Case04MetalButton.noGlowKey,
                 w: iconSize,
@@ -168,10 +194,11 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
                 radius: iconRadius,
                 ringPx: iconRing,
                 scale: iconScale,
+                grow: iconGrow,
                 glow: false,
                 child: const Icon(Icons.auto_awesome_outlined, size: 14),
               ),
-              const SizedBox(width: gap),
+              SizedBox(width: gapAfter(iconGrow, iconGrow)),
               _metal(
                 Case04MetalButton.pauseKey,
                 w: iconSize,
@@ -179,45 +206,52 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
                 radius: iconRadius,
                 ringPx: iconRing,
                 scale: iconScale,
+                grow: iconGrow,
                 onTap: () => setState(() => _paused = !_paused),
                 child: Icon(stopped ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 14),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: rowGapAfter(pillGrow, chipGrow)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final p in SvMetalPreset.values)
                 Padding(
-                  padding: EdgeInsets.only(left: p == SvMetalPreset.chromatic ? 0 : 8),
+                  padding: EdgeInsets.only(
+                    left: p == SvMetalPreset.chromatic ? 0 : gapAfter(chipGrow, chipGrow, lead: 8),
+                  ),
                   child: SvChip(
                     key: ValueKey<String>('${Case04MetalButton.presetPrefix}${p.name}'),
                     label: p.label,
+                    grow: chipGrow,
                     on: _preset == p,
                     onTap: () => setState(() => _preset = p),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: rowGapAfter(chipGrow, chipGrowLow)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final s in kSvStrengths)
                 Padding(
-                  padding: EdgeInsets.only(left: s == kSvStrengths.first ? 0 : 8),
+                  padding: EdgeInsets.only(
+                    left: s == kSvStrengths.first ? 0 : gapAfter(chipGrowLow, chipGrowLow, lead: 8),
+                  ),
                   child: SvChip(
                     key: ValueKey<String>('${Case04MetalButton.strengthPrefix}$s'),
                     label: '${(s * 100).round()}%',
                     tabular: true,
+                    grow: chipGrowLow,
                     on: _strength == s,
                     onTap: () => setState(() => _strength = s),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: rowGapAfter(chipGrowLow, EdgeInsets.zero)),
           SizedBox(
             width: swatchW,
             height: swatchH,
@@ -284,9 +318,11 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
     bool dark = false,
     bool glow = true,
     double inner = 0,
+    EdgeInsets? grow,
     VoidCallback? onTap,
   }) {
-    return SvMetal(
+    final tap = onTap ?? () {};
+    final face = SvMetal(
       key: key,
       ringKey: Case04MetalButton.ringKey(key),
       width: w,
@@ -300,9 +336,11 @@ class _Case04MetalButtonState extends State<Case04MetalButton> with SingleTicker
       strength: _strength,
       timeMs: _timeMs,
       glow: glow,
-      onTap: onTap ?? () {},
+      onTap: tap,
       child: child,
     );
+    // 暗色预览块里那两张脸点了什么也不做，就不必占布局；上面三行是真按得着的
+    return grow == null ? face : SvTapGrow(grow: grow, onTap: tap, child: face);
   }
 }
 
@@ -313,12 +351,16 @@ class SvChip extends StatefulWidget {
     required this.label,
     required this.on,
     required this.onTap,
+    this.grow = EdgeInsets.zero,
     this.tabular = false,
   });
 
   final String label;
   final bool on;
   final VoidCallback onTap;
+
+  /// 透明受理区往外探的量，由放它的那一行按 `gap` 定（见 `SvTapGrow`）
+  final EdgeInsets grow;
   final bool tabular;
 
   @override
@@ -330,38 +372,43 @@ class _SvChipState extends State<SvChip> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hov = true),
-      onExit: (_) => setState(() => _hov = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: SvEase.standard,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: widget.on
-                ? const Color(0xFF171717)
-                : (_hov ? const Color(0xFFF5F5F5) : const Color(0xFFFFFFFF)),
-            borderRadius: const BorderRadius.all(Radius.circular(10)),
-            boxShadow: widget.on
-                ? const []
-                : const [BoxShadow(color: Color(0xFFE5E5E5), spreadRadius: 1)],
-          ),
-          child: SizedBox(
-            height: 28,
-            child: Center(
-              child: Text(
-                widget.label,
-                style: TextStyle(
-                  fontFamily: SvFont.family,
-                  fontFamilyFallback: SvFont.fallback,
-                  fontSize: 12.8,
-                  fontWeight: FontWeight.w500,
-                  height: 1,
-                  fontFeatures: widget.tabular ? SvFont.tabular : const <FontFeature>[],
-                  color: widget.on ? const Color(0xFFFAFAFA) : const Color(0xFF0A0A0A),
+    // 28 高对指尖太窄：上下左右探多少由放它的那一行定（那一行同时把 `gap` 让出来）
+    return SvTapGrow(
+      grow: widget.grow,
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hov = true),
+        onExit: (_) => setState(() => _hov = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: SvEase.standard,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: widget.on
+                  ? const Color(0xFF171717)
+                  : (_hov ? const Color(0xFFF5F5F5) : const Color(0xFFFFFFFF)),
+              borderRadius: const BorderRadius.all(Radius.circular(10)),
+              boxShadow: widget.on
+                  ? const []
+                  : const [BoxShadow(color: Color(0xFFE5E5E5), spreadRadius: 1)],
+            ),
+            child: SizedBox(
+              height: 28,
+              child: Center(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontFamily: SvFont.family,
+                    fontFamilyFallback: SvFont.fallback,
+                    fontSize: 12.8,
+                    fontWeight: FontWeight.w500,
+                    height: 1,
+                    fontFeatures: widget.tabular ? SvFont.tabular : const <FontFeature>[],
+                    color: widget.on ? const Color(0xFFFAFAFA) : const Color(0xFF0A0A0A),
+                  ),
                 ),
               ),
             ),

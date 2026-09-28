@@ -97,6 +97,14 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
       SvSpring.phys(stiffness: _stiffness, damping: _damping, from: _btnH);
   final FocusNode _focus = FocusNode(debugLabel: 'surface-lab.popover');
 
+  /// 软键盘只给"带输入连接的可编辑控件"弹出，这一格的假输入走 `Focus.onKeyEvent`
+  /// （物理键盘那套），触屏上 `requestFocus()` 什么也不弹。于是常驻压一颗隐形
+  /// TextField 在 textarea 那一格里，文字经 `onChanged` 喂回 `_note`；桌面不挂这颗，
+  /// 事件仍走外层 `Focus`，golden 一像素不动。
+  static final bool _softKeyboard = SvTouch.softKeyboard;
+  final TextEditingController _editor = TextEditingController();
+  final FocusNode _fieldFocus = FocusNode(debugLabel: 'surface-lab.popover.field');
+
   /// 只有这一条弹簧要吃帧，所以表挂在 State 上而不是套一层 [SvSpringDrive]
   ///
   /// 必须在 initState 里建：`late final` 的懒初始化要是没人碰过它，
@@ -124,6 +132,8 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
     _ticker.dispose();
     _u.removeListener(_onTick);
     _focus.dispose();
+    _fieldFocus.dispose();
+    _editor.dispose();
     super.dispose();
   }
 
@@ -158,16 +168,32 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
   void _openIt() {
     if (_open) return;
     setState(() => _open = true);
-    _focus.requestFocus();
+    if (_softKeyboard) {
+      // 焦点给真输入才弹得出键盘；这颗 TextField 常驻挂在树里（收起态被 IgnorePointer
+      // 挡掉命中），所以这一刻 request 得到
+      _editor.text = _note;
+      _fieldFocus.requestFocus();
+    } else {
+      _focus.requestFocus();
+    }
     _u.aim(_panelH);
+  }
+
+  /// 唯一改 `_note` 的口
+  ///
+  /// 真输入框要跟着回写：清空/提交时它要是还留着旧字，下一次 `onChanged` 会把旧值顶回来
+  void _setNote(String next) {
+    if (_note != next) setState(() => _note = next);
+    if (_softKeyboard && _editor.text != next) _editor.text = next;
   }
 
   /// 参考稿的 `closePopover` 顺手把 note 清空
   void _close() {
     if (!_open) return;
     setState(() => _open = false);
-    _note = '';
+    _setNote('');
     _focus.unfocus();
+    _fieldFocus.unfocus();
     _u.aim(_btnH);
   }
 
@@ -180,13 +206,13 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
-      if (_note.isNotEmpty) setState(() => _note = _note.substring(0, _note.length - 1));
+      if (_note.isNotEmpty) _setNote(_note.substring(0, _note.length - 1));
       return KeyEventResult.handled;
     }
     // 输入看 `character`：`keyLabel` 是键名，字母永远大写，Shift/输入法都不算
     final ch = event.character ?? '';
     if (ch.isEmpty) return KeyEventResult.ignored;
-    setState(() => _note += ch);
+    _setNote(_note + ch);
     return KeyEventResult.handled;
   }
 
@@ -240,9 +266,14 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    // 收起态整块就是那颗按钮；展开之后这块是面板本体，不再受理点击
+                    // 收起态整块就是那颗按钮；展开之后这块是面板本体，点击不再是开合，
+                    // 而是"把收掉的键盘要回来"（textarea 那一格由真输入自己接）
                     onTap: () {
-                      if (!_open) _openIt();
+                      if (!_open) {
+                        _openIt();
+                      } else if (_softKeyboard && !_fieldFocus.hasFocus) {
+                        _fieldFocus.requestFocus();
+                      }
                     },
                     child: DecoratedBox(
                       key: Case01Popover.boxKey,
@@ -306,33 +337,54 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
           top: _contentH - _footerH,
           right: 0,
           height: _footerH,
-          child: Padding(
-            padding: _fieldPad,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // X：`flex items-center` + lucide X size=16
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _close,
-                    child: SizedBox(
-                      width: 16,
-                      height: _submitH,
-                      child: Center(
-                        child: SvIcon(
-                          paths: const ['M18 6 6 18', 'm6 6 12 12'],
-                          size: 16,
-                          color: _ink,
+          child: Stack(
+            children: [
+              // 两张脸都只有 32 高、X 更是只有 16 宽，指尖按不准：受理区压在它们底下，
+              // 上下各探 6 凑到 44（页脚 56 高，正好容得下）
+              ...svTapPads(
+                face: Rect.fromLTWH(_fieldPad.left, _fieldPad.top, 16, _submitH),
+                onTap: _close,
+                tag: 'close',
+              ),
+              ...svTapPads(
+                face: Rect.fromLTWH(
+                  _contentW - _fieldPad.right - _submitW,
+                  _fieldPad.top,
+                  _submitW,
+                  _submitH,
+                ),
+                onTap: _tapSubmit,
+                tag: 'submit',
+              ),
+              Padding(
+                padding: _fieldPad,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // X：`flex items-center` + lucide X size=16
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _close,
+                        child: const SizedBox(
+                          width: 16,
+                          height: _submitH,
+                          child: Center(
+                            child: SvIcon(
+                              paths: ['M18 6 6 18', 'm6 6 12 12'],
+                              size: 16,
+                              color: _ink,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    _submit(),
+                  ],
                 ),
-                _submit(),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         // 光标：跟着已输入的文字排，参考稿是浏览器自己的插入符（这里不闪，出图才稳定）
@@ -364,8 +416,51 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
                 style: labelStyle.copyWith(color: _open ? _mutedInk : _ink)),
           ),
         ),
+        // 真输入：压在 textarea 那一格里，字全由上面那套假文本画，所以自己隐掉。
+        // 排在最上层是因为 `Text` 自己受理命中（`RenderParagraph.hitTestSelf` 恒真），
+        // 压在它下面那一笔就进不了这颗字段；收起态由 IgnorePointer 挡掉，否则点按钮
+        // 下半侧会被它接走，键盘弹了面板却没开。
+        if (_softKeyboard)
+          Positioned(
+            left: _fieldPad.left,
+            top: _fieldPad.top,
+            width: _noteMaxW,
+            height: _contentH - _footerH - _fieldPad.top,
+            child: IgnorePointer(
+              ignoring: !_open,
+              child: Opacity(
+                opacity: 0,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: TextField(
+                    focusNode: _fieldFocus,
+                    controller: _editor,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.top,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: labelStyle,
+                    onChanged: _setNote,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
+  }
+
+  /// Submit 那一格的宽度：`px-2` 内衬 8+8、描边 1+1，再加文字本身
+  /// （页脚里那颗受理区要按它定位，改内衬记得一起改）
+  double get _submitW =>
+      18.0 + _measure('Submit', SvText.body.copyWith(fontSize: 14, height: 20 / 14));
+
+  void _tapSubmit() {
+    setState(() => _prsSubmit = false);
+    _close();
   }
 
   Widget _submit() {
@@ -376,10 +471,7 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
       onExit: (_) => setState(() => _hovSubmit = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          setState(() => _prsSubmit = false);
-          _close();
-        },
+        onTap: _tapSubmit,
         // 按下档挂在 `Listener` 上而不是 `onTapDown`：手势竞技场要到松手才判出
         // 胜负，`onTapDown` 于是也拖到松手才响；参考稿的 `active:` 是 mousedown
         // 立刻生效的。命中同样要铺满，否则按在描边那一圈上收不到。

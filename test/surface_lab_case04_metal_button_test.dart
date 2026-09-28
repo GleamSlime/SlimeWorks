@@ -178,6 +178,42 @@ void main() {
       await unmountPage(t);
     });
 
+    testWidgets('指尖受理区：外扩那一圈点得着，也不抢邻脸的点', (t) async {
+      await mount(t);
+      // 撑大的那一格必须凑满 44（脸自己不够，缺的都从缝里扣了过来）
+      for (final k in [
+        Case04MetalButton.pillKey,
+        Case04MetalButton.iconKey,
+        Case04MetalButton.noGlowKey,
+        Case04MetalButton.pauseKey,
+      ]) {
+        final grown = t.getRect(find.ancestor(of: find.byKey(k), matching: find.byType(SvTapGrow)).first);
+        expect(grown.width, greaterThanOrEqualTo(svTapMinSide), reason: '$k 横着凑不满 44');
+        expect(grown.height, greaterThanOrEqualTo(svTapMinSide), reason: '$k 竖着凑不满 44');
+      }
+      // 暂停那颗：上、下、左三条带子都算它按下去的
+      final p = face(t, Case04MetalButton.pauseKey);
+      for (final at in [Offset(p.center.dx, p.top - 2), Offset(p.center.dx, p.bottom + 2), Offset(p.left - 3, p.center.dy)]) {
+        await t.tapAt(at);
+        await run(t, 20);
+        expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget, reason: '$at 点不着');
+        await t.tapAt(p.center);
+        await run(t, 20);
+        expect(find.byIcon(Icons.pause_rounded), findsOneWidget, reason: '$at 之后回不去');
+      }
+      // 带子的外沿就停在跟邻脸的中线上：再往外 3px 是邻脸的地盘，不该替它按
+      await t.tapAt(Offset(p.left - 9, p.center.dy));
+      await run(t, 20);
+      expect(find.byIcon(Icons.pause_rounded), findsOneWidget, reason: '抢了邻脸的点');
+      // 小标签那颗 chip：`SvChip` 的根就是撑大的那一格，脸在正中，头顶 8px 是带子
+      final chip = t.getRect(find.byKey(const ValueKey<String>('${Case04MetalButton.presetPrefix}gold')));
+      expect(chip.height, greaterThanOrEqualTo(svTapMinSide));
+      await t.tapAt(Offset(chip.center.dx, chip.top + 4));
+      await run(t, 20);
+      expect(ring(t, Case04MetalButton.pillKey).preset, SvMetalPreset.gold);
+      await unmountPage(t);
+    });
+
     testWidgets('每一档画层读到的都是同一条时钟', (t) async {
       await mount(t);
       await run(t, 500);
