@@ -246,3 +246,90 @@ WindowsBackdropKind WindowsBackdropKindFromName(const char* name) {
   }
   return WindowsBackdropKind::None;
 }
+
+// —— 实时半透明：抓窗口背后的屏幕帧 ——
+
+// alpha=1 而不是 0：0 可能让 DWM 干脆跳过这个窗口，1 保证它仍走一次合成、
+// 抓帧时底下那块露出来的就是真实桌面，肉眼又完全看不出这层残留。
+// 恢复时直接摘掉 WS_EX_LAYERED：顶层窗口平时的透明全靠 Flutter 子窗口的
+// 每像素 alpha，不依赖 layered 属性，摘掉即回到原状。
+// alpha=1 而不是 0：0 可能让 DWM 干脆跳过这个窗口，1 保证它仍走一次合成、
+// 抓帧时底下那块露出来的就是真实桌面，肉眼又完全看不出这层残留。
+// 恢复时直接摘掉 WS_EX_LAYERED：顶层窗口平时的透明全靠 Flutter 子窗口的
+// 每像素 alpha，不依赖 layered 属性，摘掉即回到原状。
+int SetWindowBehindVisible(HWND hwnd, bool on) {
+  if (hwnd == nullptr) {
+    return -1;
+  }
+  const LONG_PTR ex_style = ::GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+  if (on) {
+    if ((ex_style & WS_EX_LAYERED) == 0) {
+      ::SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED);
+    }
+    if (::SetLayeredWindowAttributes(hwnd, 0, 1, LWA_ALPHA) == FALSE) {
+      return -2;
+    }
+  } else if ((ex_style & WS_EX_LAYERED) != 0) {
+    ::SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    ::SetWindowLongPtrW(hwnd, GWL_EXSTYLE,
+                        ex_style & ~static_cast<LONG_PTR>(WS_EX_LAYERED));
+  }
+  return 1;
+}
+
+std::vector<uint8_t> CaptureScreenRect(int x, int y, int w, int h,
+                                       int downscale, int* out_w, int* out_h) {
+  std::vector<uint8_t> result;
+  if (w <= 0 || h <= 0) {
+    *out_w = 0;
+    *out_h = 0;
+    return result;
+  }
+  const int scale = downscale < 1 ? 1 : downscale;
+  const int dst_w = w / scale < 1 ? 1 : w / scale;
+  const int dst_h = h / scale < 1 ? 1 : h / scale;
+  *out_w = dst_w;
+  *out_h = dst_h;
+
+  HDC screen = ::GetDC(nullptr);
+  if (screen == nullptr) {
+    return result;
+  }
+  HDC mem_dc = ::CreateCompatibleDC(screen);
+  BITMAPINFO info = {};
+  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = dst_w;
+  info.bmiHeader.biHeight = -dst_h;  // 自顶向下
+  info.bmiHeader.biPlanes = 1;
+  info.bmiHeader.biBitCount = 32;
+  info.bmiHeader.biCompression = BI_RGB;
+  void* dib_bits = nullptr;
+  HBITMAP dib = ::CreateDIBSection(mem_dc, &info, DIB_RGB_COLORS, &dib_bits,
+                                   nullptr, 0);
+  if (mem_dc != nullptr && dib != nullptr && dib_bits != nullptr) {
+    HGDIOBJ old_obj = ::SelectObject(mem_dc, dib);
+    ::SetStretchBltMode(screen, HALFTONE);
+    // 屏幕 → DIB：抓屏幕矩形 [x,y,w,h]，缩采到 dst_w×dst_h。
+    ::StretchBlt(mem_dc, 0, 0, dst_w, dst_h, screen, x, y, w, h, SRCCOPY);
+    std::vector<uint8_t> bgra(static_cast<size_t>(dst_w) * dst_h * 4);
+    if (::GetDIBits(screen, dib, 0, dst_h, bgra.data(), &info, DIB_RGB_COLORS) !=
+        0) {
+      result.resize(bgra.size());
+      for (size_t i = 0; i < bgra.size(); i += 4) {
+        result[i] = bgra[i + 2];      // R
+        result[i + 1] = bgra[i + 1];  // G
+        result[i + 2] = bgra[i];      // B
+        result[i + 3] = 255;
+      }
+    }
+    ::SelectObject(mem_dc, old_obj);
+  }
+  if (dib != nullptr) {
+    ::DeleteObject(dib);
+  }
+  if (mem_dc != nullptr) {
+    ::DeleteDC(mem_dc);
+  }
+  ::ReleaseDC(nullptr, screen);
+  return result;
+}

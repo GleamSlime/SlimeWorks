@@ -1452,6 +1452,14 @@ pub fn extract_video_scrub_frames(
     let duration = video_duration_secs(&video_path).unwrap_or(60.0).max(1.0);
     let mut paths = Vec::new();
     for i in 0..n {
+        let out = frame_dir.join(format!("frame_{:02}.jpg", i));
+        let out_str = out.to_string_lossy().into_owned();
+        // 逐帧复用：已存在的帧直接复用，不再重复生成。
+        // 避免「仅缺某一帧（如视频较短、末尾帧抽不出）就整套重抽」导致的反复重生成。
+        if out.exists() {
+            paths.push(out_str);
+            continue;
+        }
         let t = duration * i as f64 / (n - 1) as f64;
         let secs = t as u64;
         let seek = format!(
@@ -1460,8 +1468,6 @@ pub fn extract_video_scrub_frames(
             (secs % 3600) / 60,
             secs % 60
         );
-        let out = frame_dir.join(format!("frame_{:02}.jpg", i));
-        let out_str = out.to_string_lossy().into_owned();
         sw_info!(
             "[ffmpeg-start] scrub-frame {}/{} ss={} | src={}",
             i + 1,

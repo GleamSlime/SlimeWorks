@@ -203,7 +203,14 @@ class _MediaItemTileState extends State<MediaItemTile> {
 
   String? get _displaySource {
     if (_isVideo) {
-      if (widget.onRequestScrubFrames == null) return widget.source;
+      // 未提供 scrub 帧处理器时，仅远程（节点 URL）的 source 可能是服务端生成的封面缩略图；
+      // 本地视频的 source 是原始文件（如 .mp4），Image 无法解码，必须返回空占位而非原文件，
+      // 否则会把视频当图片解码而抛「Invalid image data」。
+      if (widget.onRequestScrubFrames == null) {
+        final s = widget.source;
+        if (s == null || s.isEmpty || !s.startsWith('http')) return null;
+        return s;
+      }
       final frames = _scrubFrames;
       if (frames != null && frames.isNotEmpty) {
         if (_hovering) {

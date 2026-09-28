@@ -72,6 +72,12 @@ abstract class DesktopScreenProvider {
   /// MainFlutterWindow 直接挂振动层，见 WindowGlass。
   RxBool windowsBackdropActive = false.obs;
 
+  /// Windows「实时半透明」抓帧磨砂是否正在运行（见 LiveFrost）。
+  ///
+  /// 系统材质在这台 26200 上不渲染，磨砂改由应用自绘：开着它时窗口底必须留
+  /// 透明给磨砂帧，关掉则退回不透明 Dart 底色。
+  RxBool liveFrostActive = false.obs;
+
   /// 设置窗口宽度
   void setWidth(double w);
 

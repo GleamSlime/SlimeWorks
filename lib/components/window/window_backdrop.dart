@@ -130,15 +130,15 @@ class WindowGlass {
   /// 侧栏那一栏能不能画成半透明。
   ///
   /// macOS 的 behindWindow 振动层由 MainFlutterWindow 直接挂好，必然可用；
-  /// Windows 要看 DWM 到底认了没有。
+  /// Windows 要看 DWM 到底认了没有，或者「实时半透明」的自绘磨砂帧在不在跑。
   static bool get sidebar =>
-      Platform.isMacOS || _windowsBackdropActive;
+      Platform.isMacOS || _windowsBackdropActive || _liveFrostRunning;
 
   /// 内容区（正文）能不能压半透明。
   ///
-  /// 只有 macOS 可以：正文密度高，透明度已经收敛得很低（见 [_contentAlphaMacOS]）；
-  /// Windows 这条链路还没在真机上验证过，正文保持实心。
-  static bool get content => Platform.isMacOS;
+  /// macOS 有原生振动层；Windows 的实时磨砂帧同样铺在整个窗口底，半透明面板
+  /// 压上去就是磨砂观感。其余平台窗口本身不透明，正文保持实心。
+  static bool get content => Platform.isMacOS || _liveFrostRunning;
 
   /// 内容区/页面底色的不透明度。
   ///
@@ -165,5 +165,13 @@ class WindowGlass {
       return false;
     }
     return getIt<DesktopScreenProvider>().windowsBackdropActive.value;
+  }
+
+  /// 「实时半透明」抓帧磨砂在跑（provider 由 LiveFrost 同步，见 live_frost.dart）。
+  static bool get _liveFrostRunning {
+    if (!Platform.isWindows || !getIt.isRegistered<DesktopScreenProvider>()) {
+      return false;
+    }
+    return getIt<DesktopScreenProvider>().liveFrostActive.value;
   }
 }

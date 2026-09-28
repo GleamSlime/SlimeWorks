@@ -11,6 +11,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/components/window/floating_task_progress.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
+import 'package:slime_works/components/window/live_frost.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 
@@ -46,6 +47,11 @@ class DesktopScaffold extends StatefulWidget {
     // 界面按 WindowGlass 的判断退回实心底。
     await WindowsBackdrop.probe(requested: BackdropKind.acrylic);
 
+    // 「实时半透明」是系统材质失效时的自绘兜底：偏好开着就把抓帧链路拉起来，
+    // 它会把窗口底色切成透明；必须在拼 WindowOptions 前完成，首帧就是磨砂。
+    await LiveFrost.restore();
+    final bool liveFrostOn = LiveFrost.running.value;
+
     double initWidth = positionService.windowWidth.clamp(_minWidth, double.infinity);
     double initHeight = positionService.windowHeight.clamp(_minHeight, double.infinity);
     initHeight = initWidth / _aspectRatio;
@@ -59,8 +65,11 @@ class DesktopScaffold extends StatefulWidget {
       center: false,
       titleBarStyle: TitleBarStyle.hidden,
       // macOS 下原生窗口底色必须留透明，否则 MainFlutterWindow 挂的振动层
-      // 会被这层不透明底色彻底盖住。
-      backgroundColor: WindowGlass.sidebar ? Colors.transparent : AppSemantic.light.surface,
+      // 会被这层不透明底色彻底盖住。Windows 开「实时半透明」时同理，磨砂帧
+      // 要透过窗口底显示。
+      backgroundColor: (WindowGlass.sidebar || liveFrostOn)
+          ? Colors.transparent
+          : AppSemantic.light.surface,
       windowButtonVisibility: false,
       title: desktopScreen.title.value,
     );
@@ -70,6 +79,11 @@ class DesktopScaffold extends StatefulWidget {
       await windowManager.setAspectRatio(_aspectRatio);
       // 恢复上次的窗口位置
       await positionService.restorePosition();
+      // 归位后强制补抓一帧：启动瞬间抓的那帧是在窗口还没挪到保存位置时抓的，
+      // 位置是错的；而程序化移动不会产生 WM_EXITSIZEMOVE、onWindowMoved 不触发，
+      // 不主动补抓磨砂就会一直停在错误区域（看起来像「拍了左上角、还放大了」）。
+      // refresh 内部会轮询到窗口矩形停稳再抓，赢下宽高比/最小尺寸约束的收敛竞态。
+      await LiveFrost.refresh();
       // 延迟到下一帧再计算度量，避免在 ScreenUtil 未初始化前访问它
       WidgetsBinding.instance.addPostFrameCallback((_) => AppTheme.resetMetrics());
       // await windowManager.show();
@@ -105,8 +119,20 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   void onWindowMoved() {
-    // 窗口移动时保存位置
+    // 窗口移动时保存位置。磨砂的重抓不再依赖这里——LiveFrost 心跳会自查矩形
+    // 变化，本机 window_manager 的移动/缩放事件实测不可靠。
     _positionService?.savePosition();
+  }
+
+  @override
+  void onWindowMinimize() {
+    // 看不见的时候别闪帧，也省掉无谓的抓帧开销
+    LiveFrost.setPaused(true);
+  }
+
+  @override
+  void onWindowRestore() {
+    LiveFrost.setPaused(false);
   }
 
   @override
@@ -116,7 +142,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
 
   @override
   void onWindowResized() {
-    // 窗口大小改变时保存
+    // 窗口大小改变时保存；磨砂重抓由 LiveFrost 心跳自查矩形变化驱动。
     _positionService?.savePosition();
   }
 
@@ -135,7 +161,11 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
     // macOS 桌面端不再由根层铺满不透明底色，否则侧栏永远透不出桌面内容。
     // 内容区的不透明改由 _DesktopShell 自己补——两侧职责分开：侧栏留透明，
     // 主区必须实心，否则文字会直接压在桌面上。
-    final bool bleedThroughWindow = WindowGlass.sidebar && !isMobile;
+    // Windows「实时半透明」运行中同理：磨砂帧就是窗口底，根层必须透明。
+    final bool liveFrost =
+        LiveFrost.supported && getIt<DesktopScreenProvider>().liveFrostActive.value;
+    final bool bleedThroughWindow =
+        (WindowGlass.sidebar || liveFrost) && !isMobile;
     return Material(
       color: bleedThroughWindow ? Colors.transparent : AppSemantic.of(context).canvas,
       child: isMobile
@@ -143,16 +173,21 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
           : Stack(
               children: [
                 Positioned.fill(
-                  child: Obx(() {
-                    final String path = getIt<DesktopScreenProvider>().globalBackgroundPath.value;
-                    return AnimatedSwitcher(
-                      duration: AppMotion.base,
-                      reverseDuration: AppMotion.fast,
-                      child: path.isEmpty
-                          ? const SizedBox.shrink()
-                          : _GlobalBlurBackground(key: ValueKey<String>(path), coverPath: path),
-                    );
-                  }),
+                  child: liveFrost
+                      // 系统材质在这台 26200 上不渲染，磨砂由实时抓帧自绘。
+                      ? const LiveFrostBackdrop()
+                      : Obx(() {
+                          final String path =
+                              getIt<DesktopScreenProvider>().globalBackgroundPath.value;
+                          return AnimatedSwitcher(
+                            duration: AppMotion.base,
+                            reverseDuration: AppMotion.fast,
+                            child: path.isEmpty
+                                ? const SizedBox.shrink()
+                                : _GlobalBlurBackground(
+                                    key: ValueKey<String>(path), coverPath: path),
+                          );
+                        }),
                 ),
                 widget.child,
                 const Positioned(left: 0, top: 0, child: ScreenTopBar()),

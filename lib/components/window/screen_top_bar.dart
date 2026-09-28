@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get_state_manager/src/rx_flutter/rx_obx_widget.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/components/window/live_frost.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -36,7 +37,12 @@ class ScreenTopBar extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onDoubleTap: handleDoubleTap,
-      onPanStart: (_) => windowManager.startDragging(),
+      onPanStart: (_) {
+        // 拖拽期间跟手刷新=每秒十几次隐身，必须彻底停抓；松手补一帧。
+        LiveFrost.setDragging(true);
+        windowManager.startDragging();
+      },
+      onPanEnd: (_) => LiveFrost.setDragging(false),
       child: Container(
         height: scaleH(40),
         // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),

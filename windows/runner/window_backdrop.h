@@ -3,6 +3,9 @@
 
 #include <windows.h>
 
+#include <cstdint>
+#include <vector>
+
 // 系统给了哪种背景材质。None 表示没挂/已摘掉。
 enum class WindowsBackdropKind { None, Mica, Acrylic };
 
@@ -32,5 +35,20 @@ const char* WindowsBackdropKindName(WindowsBackdropKind kind);
 
 // 解析 Dart 侧传来的材质名；无法识别时返回 None。
 WindowsBackdropKind WindowsBackdropKindFromName(const char* name);
+
+// —— 实时半透明（自绘磨砂）支撑 ——
+// 这台 26200 实测不给非 WinUI3 窗口渲染任何系统材质（DWM 背景材质/老 Accent
+// 全部只回读成功不绘制），磨砂只能应用自绘：抓窗口背后的屏幕帧、Flutter 里
+// 模糊后当窗口底。
+
+// 把顶层窗口临时降到「肉眼不可见但仍在合成」的程度（layered alpha=1），
+// 让抓帧能拿到底下的内容；on=false 时恢复原状（撤掉 layered 样式）。
+// 返回 >0 成功，<=0 为失败步骤编号（调试用）。
+int SetWindowBehindVisible(HWND hwnd, bool on);
+
+// 抓取屏幕物理像素矩形 [x,y,w,h] 的 1/downscale 缩略帧，输出 RGBA 字节。
+// 失败或矩形无效时返回空 vector。
+std::vector<uint8_t> CaptureScreenRect(int x, int y, int w, int h,
+                                       int downscale, int* out_w, int* out_h);
 
 #endif  // WINDOW_BACKDROP_H_

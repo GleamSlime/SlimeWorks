@@ -1368,6 +1368,23 @@ class MediaLibraryViewModel extends BaseViewModel {
           _currentFolderCoverKeys.remove(collectionId);
           _inFlightCoverKeys.remove(collectionId);
           try {
+            // 「预生成视频悬停帧」关闭时，只提取单帧默认封面，不抽整套 scrub 帧；
+            // 整套悬停帧仅由悬停（prefetch / hover）路径触发生成。
+            if (!mediaPrefs.videoScrubPreload.value) {
+              final single = await media_api.ensureCoverThumbnail(
+                filePath: videoPath,
+                width: mediaPrefs.localPreviewWidth.value,
+              );
+              if (single == null || single.isEmpty) {
+                _logger.info(
+                  '[VideoThumb] 单帧封面为空，不缓存: collectionId=$collectionId',
+                );
+                return;
+              }
+              _collectionVideoThumbnails[collectionId] = single;
+              _notifyCoverChanged();
+              return;
+            }
             final frames = await _doGetScrubFrames(videoPath);
             if (frames.isEmpty) {
               _logger.info('[VideoThumb] 帧为空，不缓存: collectionId=$collectionId');
@@ -1556,7 +1573,10 @@ class MediaLibraryViewModel extends BaseViewModel {
           result.add(thumb);
           videoPaths.add(p);
           final hoverKey = 'hover:${collection.id}:$i';
+          // 仅在「预生成视频悬停帧」开启时才在 build 时后台为 hover 槽位抽帧；
+          // 关闭后不预抽，整套帧只由实际悬停（prefetch / hover）路径触发。
           if (thumb == null &&
+              mediaPrefs.videoScrubPreload.value &&
               !thumbGenerationPaused.value &&
               !_coverQueue.contains(hoverKey) &&
               !_inFlightCoverKeys.contains(hoverKey)) {

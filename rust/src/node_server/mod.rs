@@ -184,8 +184,12 @@ fn reject_busy(stream: &mut TcpStream) {
 
 // ── 辅助 ─────────────────────────────────────────────────────────────────────
 
-/// 尝试清理占用端口的旧进程（仅 unix 实现，Windows 下为无害空操作）
-fn kill_process_on_port(#[cfg_attr(not(unix), allow(unused_variables))] port: u16) {
+/// 尝试清理占用端口的旧进程。
+///
+/// unix 用 lsof + kill -9；Windows 用 netstat 定位占用端口的 PID 后 taskkill /F 强杀。
+/// 两端都属"激进清理"：残留的旧节点进程若仍占着端口，bind 必然失败（Windows 上是
+/// os error 10048「每个套接字地址只允许使用一次」），此时直接把占用者杀掉再重绑。
+fn kill_process_on_port(#[cfg_attr(not(any(unix, windows)), allow(unused_variables))] port: u16) {
     #[cfg(unix)]
     {
         let _ = std::process::Command::new("sh")
@@ -195,6 +199,45 @@ fn kill_process_on_port(#[cfg_attr(not(unix), allow(unused_variables))] port: u1
                 port
             ))
             .output();
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    }
+
+    #[cfg(windows)]
+    {
+        let self_pid = std::process::id();
+        let suffix = format!(":{}", port);
+        let mut targets: Vec<u32> = Vec::new();
+
+        // netstat -ano -p tcp：数据行格式为 协议 本地地址 外部地址 状态 PID，
+        // 表头会本地化但数据行不变；只取本地地址精确匹配 :port 的行，末列即 PID。
+        if let Ok(out) = std::process::Command::new("netstat")
+            .args(["-ano", "-p", "tcp"])
+            .output()
+        {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let cols: Vec<&str> = line.split_whitespace().collect();
+                if cols.len() < 5 {
+                    continue;
+                }
+                // 本地地址（第 2 列）端口精确匹配，避免误伤连到远端 :port 的出站连接
+                if !cols[1].ends_with(&suffix) {
+                    continue;
+                }
+                if let Ok(pid) = cols[4].parse::<u32>() {
+                    // 跳过自己与 PID 0（系统保留），其余占用者一律强杀
+                    if pid != 0 && pid != self_pid && !targets.contains(&pid) {
+                        targets.push(pid);
+                    }
+                }
+            }
+        }
+
+        for pid in targets {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .output();
+        }
+        // taskkill 是异步回收端口，稍等再让调用方重绑
         std::thread::sleep(std::time::Duration::from_millis(400));
     }
 }

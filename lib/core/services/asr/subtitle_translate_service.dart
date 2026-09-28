@@ -37,13 +37,6 @@ class SubtitleTranslateService {
       ..addAll(servers);
   }
 
-  TranslateServer? get firstAvailable {
-    for (final server in _servers) {
-      if (server.enabled && server.isAvailable) return server;
-    }
-    return null;
-  }
-
   /// 探测服务是否在线：直接发一条最小翻译请求，顺带验证 api_key 是否被接受
   Future<bool> testServer(TranslateServer server) async {
     try {

@@ -276,10 +276,12 @@ class AsrSettingsService extends GetxService {
     }
   }
 
-  /// 取当前可用的翻译服务；缓存失效时再探测一轮
+  /// 取当前可用的翻译服务：每次都真探测一轮
+  ///
+  /// 这里不能像语音识别那样先用缓存标记短路——识别失败会回落本地引擎，
+  /// 而翻译没有退路：服务进程几小时前就退了、缓存还显示可用，
+  /// 整批字幕会全部走失败兜底原样写回，任务却报成功。
   Future<TranslateServer?> pickAvailableTranslateServer() async {
-    final cached = _translateService.firstAvailable;
-    if (cached != null) return cached;
     final probed = await _translateService.probeAvailableServer();
     _syncTranslateAvailabilityFromService();
     return probed;

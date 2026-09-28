@@ -210,6 +210,12 @@ class MediaCollectionDetailView extends StatelessWidget {
                     item,
                     collectionId: collectionId,
                   ),
+                  // 本地视频接上悬停帧处理器，避免把原始视频文件当图片解码抛「Invalid image data」，
+                  // 同时与瀑布流一致，受「预生成视频悬停帧」开关控制。
+                  onRequestScrubFrames:
+                      (item.kind == media_api.MediaKind.video && !isRemote)
+                          ? () => viewModel.getVideoScrubFrames(item.filePath)
+                          : null,
                   showOverlay: viewModel.showMediaOverlay.value,
                   isLost: viewModel.checkItemLost(item),
                   onSaveToGallery: (PlatformUtil.isMobile && item.kind == media_api.MediaKind.image)

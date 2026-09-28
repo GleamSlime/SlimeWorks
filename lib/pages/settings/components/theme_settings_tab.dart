@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/components/window/live_frost.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 
@@ -36,6 +37,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   ThemeMode _themeMode = ThemeMode.system;
   double _fontScale = 1.0;
   Color _accentColor = AppTheme.kFollowThemeAccent;
+  bool _liveTranslucent = false;
 
   @override
   void initState() {
@@ -43,6 +45,19 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
     _themeMode = AppTheme.themeModeObs.value;
     _accentColor = AppTheme.accentColorObs.value;
     _fontScale = AppTheme.fontScaleObs.value;
+    _loadLiveTranslucent();
+  }
+
+  Future<void> _loadLiveTranslucent() async {
+    if (!LiveFrost.supported) return;
+    final bool enabled = await LiveFrost.loadPreference();
+    if (mounted) setState(() => _liveTranslucent = enabled);
+  }
+
+  Future<void> _onLiveTranslucentChanged(bool value) async {
+    setState(() => _liveTranslucent = value);
+    // 开关即起停整条抓帧链路：开=窗口透明+实时磨砂底，关=不透明 Dart 底色。
+    await LiveFrost.setEnabled(value);
   }
 
   Future<void> _saveThemeMode(ThemeMode mode) async {
@@ -333,6 +348,46 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             ),
           ),
           SizedBox(height: m.kSpace32),
+          if (LiveFrost.supported) ...[
+            _buildSectionTitle('窗口效果', StrokeIcons.waterDrop),
+            SizedBox(height: m.kSpace4),
+            Text(
+              '开启后窗口底色实时透出并模糊桌面内容（磨砂质感）；关闭则使用不透明底色',
+              style: TextStyle(
+                fontSize: m.fontSize12,
+                height: 1.5,
+                color: theme.colorScheme.onSurface.withAlpha(120),
+              ),
+            ),
+            SizedBox(height: m.kSpace12),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+                borderRadius: m.radius12,
+                border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '实时半透明',
+                      style: TextStyle(
+                        fontSize: m.fontSize14,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: _liveTranslucent,
+                    onChanged: _onLiveTranslucentChanged,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: m.kSpace32),
+          ],
           _buildSectionTitle('预览样式', StrokeIcons.preview),
           SizedBox(height: m.kSpace12),
           Container(

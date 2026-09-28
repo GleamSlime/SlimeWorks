@@ -484,7 +484,16 @@ class TranscriptionTaskQueue {
     );
     task.cancelToken = null;
 
+    // 全量失败绝不能落盘：整份都是原文却叫 .zh.srt，
+    // 客服二次审核会拿着假译文做判断，比没有文件更糟
+    if (segments.isNotEmpty && result.untranslatedCount >= segments.length) {
+      throw Exception(
+        '字幕翻译全部失败（${segments.length} 段均未译出），未写出文件；请确认翻译服务是否正在运行',
+      );
+    }
     if (result.untranslatedCount > 0) {
+      // 标在任务卡片上，日志客服看不到
+      task.engineLabel.value = '内网 ${server.name}（${result.untranslatedCount} 段未译）';
       _logger.info(
         '[识别队列] ${task.displayName} 有 ${result.untranslatedCount} 段未翻译（已保留原文），请抽检译文',
       );
