@@ -1044,6 +1044,43 @@ String ledgerMonthEnd(String month) {
   return '$month-$lastDay';
 }
 
+/// 这个月的每一天（'YYYY-MM-DD'）
+///
+/// 日趋势图按整月排格子：只画有账的那几天，横轴就成了"有账的日子"而不是"这个月"，
+/// 三天没花钱和二十天没花钱看起来一模一样。
+List<String> ledgerMonthDays(String month) {
+  if (month.length < 7) return const <String>[];
+  final parts = month.split('-');
+  final y = int.tryParse(parts.first) ?? 1970;
+  final m = int.tryParse(parts.length > 1 ? parts[1] : '') ?? 1;
+  final lastDay = DateTime(y, m + 1, 0).day;
+  return <String>[
+    for (var d = 1; d <= lastDay; d++) '$month-${d.toString().padLeft(2, '0')}',
+  ];
+}
+
+/// 从 [from] 到 [to] 的连续月份（含两端），'YYYY-MM'
+///
+/// 统计接口只返回有账的月份，中间空掉的月份得自己补上格子：不然柱子互相错位，
+/// "这个月没花钱"看着跟"这个月没数据"一模一样。
+List<String> ledgerMonthSpan(String from, String to) {
+  final start = DateTime.tryParse('$from-01');
+  final end = DateTime.tryParse('$to-01');
+  if (from.length < 7 || to.length < 7 || start == null || end == null) {
+    return const <String>[];
+  }
+  if (end.isBefore(start)) return const <String>[];
+  final out = <String>[];
+  var cursor = start;
+  // 600 格是脏数据的兜底，不让这里跟着离谱的月份一直转
+  while (out.length < 600) {
+    out.add(ledgerMonthOf(cursor));
+    if (!cursor.isBefore(end)) break;
+    cursor = DateTime(cursor.year, cursor.month + 1);
+  }
+  return out;
+}
+
 /// "今天/昨天"友好标签，其余给月日
 String ledgerDateLabel(String date) {
   if (date.length < 10) return date;

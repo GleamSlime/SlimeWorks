@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/ledger_service.dart';
 import 'package:slime_works/pages/ledger/ledger_accounts_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_pending_screen.dart';
@@ -212,8 +213,9 @@ const List<Map<String, dynamic>> _dayRows = <Map<String, dynamic>>[
 const List<Map<String, dynamic>> _categoryRows = <Map<String, dynamic>>[
   <String, dynamic>{'category_id': 4, 'category_name': '居家', 'category_icon': 'home', 'direction': 'expense', 'total': 2600.0, 'count': 1},
   <String, dynamic>{'category_id': 3, 'category_name': '购物', 'category_icon': 'shoppingCart', 'direction': 'expense', 'total': 1247.88, 'count': 2},
-  <String, dynamic>{'category_id': 1, 'category_name': '餐饮', 'category_icon': 'restaurant', 'direction': 'expense', 'total': 64.5, 'count': 2},
+  // Rust 按金额倒序返回，桩也得照这个顺序给，不然出图看着像界面排错了序
   <String, dynamic>{'category_id': 2, 'category_name': '交通', 'category_icon': 'bus', 'direction': 'expense', 'total': 106.0, 'count': 2},
+  <String, dynamic>{'category_id': 1, 'category_name': '餐饮', 'category_icon': 'restaurant', 'direction': 'expense', 'total': 64.5, 'count': 2},
 ];
 
 const List<Map<String, dynamic>> _merchantRows = <Map<String, dynamic>>[
@@ -223,11 +225,11 @@ const List<Map<String, dynamic>> _merchantRows = <Map<String, dynamic>>[
   <String, dynamic>{'merchant': '全家便利店', 'total': 28.5, 'count': 1, 'last_date': '2026-03-27'},
 ];
 
+/// 2026-01 故意缺：那个月一笔账都没有，趋势图要留出一个空格子而不是把后面往前挪
 const List<Map<String, dynamic>> _monthRows = <Map<String, dynamic>>[
   <String, dynamic>{'month': '2025-10', 'income': 11800.0, 'expense': 9210.4, 'net': 2589.6, 'count': 42},
   <String, dynamic>{'month': '2025-11', 'income': 11800.0, 'expense': 8012.0, 'net': 3788.0, 'count': 38},
   <String, dynamic>{'month': '2025-12', 'income': 15200.0, 'expense': 11040.75, 'net': 4159.25, 'count': 51},
-  <String, dynamic>{'month': '2026-01', 'income': 12000.0, 'expense': 7620.1, 'net': 4379.9, 'count': 33},
   <String, dynamic>{'month': '2026-02', 'income': 12000.0, 'expense': 6980.0, 'net': 5020.0, 'count': 29},
   <String, dynamic>{'month': '2026-03', 'income': 12320.0, 'expense': 4061.18, 'net': 8258.82, 'count': 10},
 ];
@@ -457,12 +459,20 @@ Future<void> _pumpLedger(
       permanent: true,
     );
   }
+  // ScreenChrome 靠这个开关决定标题/标签页画在全局顶栏还是页面内的 AppBar，
+  // 而它是按 dotenv 的窗口宽一次性算死的。不跟着档位改，手机档就只剩正文，
+  // 页面标题和那排标签页根本没排过版。
+  registerPageServices();
+  final phone = window == _phoneWindow;
+  getIt<DesktopScreenProvider>()
+    ..isMobile.value = phone
+    ..isDesktop.value = !phone;
   await pumpAppPage(
     tester,
     page,
     dark: dark,
     size: window,
-    withTopBar: window == _desktopWindow,
+    withTopBar: !phone,
     designSize: design,
   );
   await advance(tester);
@@ -509,9 +519,11 @@ final List<(String, Widget)> _pages = <(String, Widget)>[
 ];
 
 void main() {
-  setUpAll(() {
+  setUpAll(() async {
     // 一个 isolate 只能 initMock 一次，桩表按用例重建就够了
     RustLib.initMock(api: _api);
+    // 不挂字体：中文全是豆腐块、描边图标全是方框，出图没法当验收依据
+    await loadAppFonts();
   });
 
   setUp(() {
@@ -584,6 +596,8 @@ void main() {
       );
       await _pinMonth(tester, find.byType(LedgerScreen), 'home');
       expect(find.text('这个月还没有账'), findsOneWidget);
+      // 空的是这个月，不是整本账：月份条必须还在，不然用户没法翻到有账的那个月
+      expect(find.text('2026年3月'), findsOneWidget);
       await expectLater(
         find.byType(LedgerScreen),
         matchesGoldenFile('goldens/ledger_home_empty.png'),

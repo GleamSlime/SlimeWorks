@@ -312,7 +312,8 @@ class _CategorySection extends StatelessWidget {
       children: <Widget>[
         SectionHeader(
           title: title,
-          subtitle: categories.isEmpty ? emptyHint : '点一下改名或换图标，长按删除',
+          // 空类别时解释只留下面那一行：这里再写一遍就是同一句话上下刷两次
+          subtitle: categories.isEmpty ? null : '点一下改名或换图标，长按删除',
           trailing: TextButton.icon(
             onPressed: onAdd,
             icon: DrawIcon(StrokeIcons.add, size: m.iconSize14),

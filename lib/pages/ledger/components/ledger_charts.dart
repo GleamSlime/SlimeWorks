@@ -72,6 +72,9 @@ class LedgerBarChart extends StatelessWidget {
                     baselineColor: s.hairline,
                     radius: scaleW(3),
                     highlightIndex: highlightIndex,
+                    labelStyle: AppTextStyles.caption(context).copyWith(
+                      color: s.textTertiary,
+                    ),
                   ),
                 );
               },
@@ -92,6 +95,7 @@ class _BarPainter extends CustomPainter {
     required this.baselineColor,
     required this.radius,
     required this.highlightIndex,
+    this.labelStyle,
   });
 
   final List<LedgerBarGroup> groups;
@@ -105,10 +109,15 @@ class _BarPainter extends CustomPainter {
   final double radius;
   final int? highlightIndex;
 
+  /// 轴标签的字；null 就不画标签（只留柱）
+  final TextStyle? labelStyle;
+
   @override
   void paint(Canvas canvas, Size size) {
     if (groups.isEmpty) return;
-    final baseline = size.height - scaleW(1);
+    final style = labelStyle;
+    final labelBand = style == null ? 0.0 : scaleW(14);
+    final baseline = size.height - labelBand - scaleW(1);
     final line = Paint()
       ..color = baselineColor
       ..strokeWidth = scaleW(1);
@@ -118,7 +127,7 @@ class _BarPainter extends CustomPainter {
     // 一组里两根柱占槽位的六成，留四成呼吸；槽位越窄呼吸比例越要收，否则柱子会贴在一起
     final fillRatio = slot > scaleW(26) ? 0.6 : 0.74;
     final barWidth = math.max(scaleW(2), slot * fillRatio / 2.6);
-    final usableHeight = size.height - scaleW(6);
+    final usableHeight = baseline - scaleW(6);
 
     for (var i = 0; i < groups.length; i++) {
       final group = groups[i];
@@ -140,6 +149,33 @@ class _BarPainter extends CustomPainter {
         dimmed ? dimIncomeColor : incomeColor,
         barWidth,
       );
+    }
+    if (style != null) _paintLabels(canvas, size, slot, baseline, style);
+  }
+
+  /// 标签按槽位抽稀：31 天全标就糊成一整条，只留每隔几根的一个
+  void _paintLabels(
+    Canvas canvas,
+    Size size,
+    double slot,
+    double baseline,
+    TextStyle style,
+  ) {
+    final every = math.max(1, (scaleW(34) / slot).ceil());
+    for (var i = 0; i < groups.length; i++) {
+      final label = groups[i].label;
+      if (label.isEmpty || i % every != 0) continue;
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final center = slot * (i + 0.5);
+      // 两端的标签贴着边会被裁掉，往里收到画布内
+      final left = math.min(
+        math.max(0.0, center - painter.width / 2),
+        math.max(0.0, size.width - painter.width),
+      );
+      painter.paint(canvas, Offset(left, baseline + scaleW(3)));
     }
   }
 
@@ -166,6 +202,10 @@ class _BarPainter extends CustomPainter {
       old.progress != progress ||
       old.maxValue != maxValue ||
       old.highlightIndex != highlightIndex ||
+      old.expenseColor != expenseColor ||
+      old.incomeColor != incomeColor ||
+      old.baselineColor != baselineColor ||
+      !identical(old.labelStyle, labelStyle) ||
       !identical(old.groups, groups);
 }
 
@@ -200,7 +240,7 @@ class LedgerDonutChart extends StatelessWidget {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final palette = ledgerVizPalette(context);
-    final box = size ?? m.kSpace48 * 2;
+    final box = size ?? m.kSpace56 * 2;
     // 只排一次：扇区绘制和点击命中必须用同一份顺序，否则点中的是隔壁那块
     final sorted = ledgerDonutOrder(rows);
 
@@ -228,17 +268,24 @@ class LedgerDonutChart extends StatelessWidget {
               trackColor: s.surfaceHover,
             ),
             child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text('合计', style: AppTextStyles.overline(context)),
-                  SizedBox(height: m.kSpace2),
-                  Text(
-                    '¥${formatLedgerAmount(total)}',
-                    style: AppTextStyles.cardTitle(context),
-                    maxLines: 1,
+              // 中心字得收在环洞里：合计一到六位数，不加约束就是横着压到环上
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: box * 0.6),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text('合计', style: AppTextStyles.overline(context)),
+                      SizedBox(height: m.kSpace2),
+                      Text(
+                        '¥${formatLedgerAmount(total)}',
+                        style: AppTextStyles.cardTitle(context),
+                        maxLines: 1,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -305,11 +352,13 @@ class _DonutPainter extends CustomPainter {
     }
 
     var start = -math.pi / 2;
+    // 缝隙按"环上 1.5 像素"折算成弧度：直接拿像素当角度减，等于每块之间空出
+    // 六十度，小扇区（3%、2%）会被整个减没。
+    final gap = (side - stroke) > 0 ? scaleW(1.5) / ((side - stroke) / 2) : 0.0;
     for (var i = 0; i < rows.length; i++) {
       final row = rows[i];
       final fullSweep = row.total / total * math.pi * 2;
-      // 扇区之间留一点缝，相邻同类色才不会糊成一块
-      final sweep = math.max(0.0, fullSweep * progress - scaleW(1.5));
+      final sweep = math.max(0.0, fullSweep * progress - gap);
       final dim = selectedId != null && selectedId != row.categoryId;
       canvas.drawArc(
         ring,

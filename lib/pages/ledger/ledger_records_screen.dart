@@ -92,18 +92,10 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
     return ScreenChrome(
       data: ScreenChromeData(
         title: '全部流水',
-        toolbar: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const LedgerTabs(current: '/ledger/records'),
-            Obx(() => _FilterBar(
-              vm: viewModel,
-              search: _search,
-              onSearch: (value) => viewModel.setKeyword(value),
-            )),
-          ],
-        ),
-        toolbarHeight: m.kSpace44 * 2,
+        // 筛选条不进工具槽：桌面端那一格是无宽度的横向滚动区，Expanded 在这种
+        // 约束下直接断言失败；它本来也该贴着列表，而不是贴着窗口标题。
+        toolbar: const LedgerTabs(current: '/ledger/records'),
+        toolbarHeight: m.kSpace44,
         actions: <Widget>[
           ToolIconButton(
             icon: StrokeIcons.refresh,
@@ -117,9 +109,20 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
           ),
         ],
       ),
-      child: RefreshIndicator(
-        onRefresh: viewModel.reload,
-        child: Obx(() => _buildList(context)),
+      child: Column(
+        children: <Widget>[
+          _FilterBar(
+            vm: viewModel,
+            search: _search,
+            onSearch: (value) => viewModel.setKeyword(value),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: viewModel.reload,
+              child: Obx(() => _buildList(context)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -195,109 +198,120 @@ class _FilterBar extends StatelessWidget {
   final TextEditingController search;
   final ValueChanged<String> onSearch;
 
+  // 读值必须发生在 Obx 自己的 builder 里：父层包 Obx 只构造本组件不算订阅，
+  // GetX 会直接报 improper use，整条工具栏被 ErrorWidget 顶掉。
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Obx(() => _content(context, vm.filter.value));
+
+  Widget _content(BuildContext context, LedgerFilter filter) {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final filter = vm.filter.value;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(m.kSpace12, 0, m.kSpace12, m.kSpace8),
+    final narrow = ledgerNarrow(context);
+    final pills = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: <Widget>[
-                  _FilterPill(
-                    label: vm.filterLabel,
-                    icon: StrokeIcons.calendarMonth,
-                    active: filter.startDate.isNotEmpty || filter.endDate.isNotEmpty,
-                    items: <PopupMenuEntry<String>>[
-                      const PopupMenuItem(value: 'month:this', child: Text('本月')),
-                      const PopupMenuItem(value: 'month:last', child: Text('上月')),
-                      const PopupMenuItem(value: 'month:quarter', child: Text('近三个月')),
-                      const PopupMenuItem(value: 'month:all', child: Text('全部时间')),
-                    ],
-                    onSelected: (value) => _pickRange(value),
-                  ),
-                  SizedBox(width: m.kSpace6),
-                  _FilterPill(
-                    label: switch (filter.direction) {
-                      'expense' => '只看支出',
-                      'income' => '只看收入',
-                      _ => '收支',
-                    },
-                    icon: StrokeIcons.exchange,
-                    active: filter.direction.isNotEmpty,
-                    items: const <PopupMenuEntry<String>>[
-                      PopupMenuItem(value: '', child: Text('收支都要')),
-                      PopupMenuItem(value: 'expense', child: Text('只看支出')),
-                      PopupMenuItem(value: 'income', child: Text('只看收入')),
-                    ],
-                    onSelected: vm.setDirection,
-                  ),
-                  SizedBox(width: m.kSpace6),
-                  _FilterPill(
-                    label: filter.accountId > 0
-                        ? _nameOfAccount(context, filter.accountId)
-                        : '账户',
-                    icon: StrokeIcons.accountBalanceWallet,
-                    active: filter.accountId > 0,
-                    items: <PopupMenuEntry<String>>[
-                      const PopupMenuItem(value: '0', child: Text('全部账户')),
-                      for (final a in vm.accounts)
-                        PopupMenuItem(value: '${a.id}', child: Text(a.name)),
-                    ],
-                    onSelected: (value) => vm.setAccount(int.tryParse(value) ?? 0),
-                  ),
-                  SizedBox(width: m.kSpace6),
-                  _FilterPill(
-                    label: filter.categoryId > 0
-                        ? _nameOfCategory(context, filter.categoryId)
-                        : '类别',
-                    icon: StrokeIcons.category,
-                    active: filter.categoryId > 0,
-                    items: <PopupMenuEntry<String>>[
-                      const PopupMenuItem(value: '0', child: Text('全部类别')),
-                      for (final c in vm.categories)
-                        PopupMenuItem(value: '${c.id}', child: Text(c.name)),
-                    ],
-                    onSelected: (value) => vm.setCategory(int.tryParse(value) ?? 0),
-                  ),
-                  if (vm.isFiltered) ...<Widget>[
-                    SizedBox(width: m.kSpace6),
-                    TextButton.icon(
-                      onPressed: () {
-                        search.clear();
-                        vm.clearFilters();
-                      },
-                      icon: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: s.textTertiary),
-                      label: Text('清空', style: AppTextStyles.caption(context)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          _FilterPill(
+            label: vm.filterLabel,
+            icon: StrokeIcons.calendarMonth,
+            active: filter.startDate.isNotEmpty || filter.endDate.isNotEmpty,
+            items: <PopupMenuEntry<String>>[
+              const PopupMenuItem(value: 'month:this', child: Text('本月')),
+              const PopupMenuItem(value: 'month:last', child: Text('上月')),
+              const PopupMenuItem(value: 'month:quarter', child: Text('近三个月')),
+              const PopupMenuItem(value: 'month:all', child: Text('全部时间')),
+            ],
+            onSelected: (value) => _pickRange(value),
           ),
-          SizedBox(width: m.kSpace8),
-          SizedBox(
-            width: ledgerNarrow(context) ? m.kSpace80 : scaleW(200),
-            child: TextField(
-              controller: search,
-              onSubmitted: onSearch,
-              style: AppTextStyles.body(context),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '搜商户/备注',
-                prefixIcon: DrawIcon(StrokeIcons.search, size: m.iconSize16, color: s.textTertiary),
-                prefixIconConstraints: BoxConstraints(minWidth: m.kSpace32),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
+          SizedBox(width: m.kSpace6),
+          _FilterPill(
+            label: switch (filter.direction) {
+              'expense' => '只看支出',
+              'income' => '只看收入',
+              _ => '收支',
+            },
+            icon: StrokeIcons.exchange,
+            active: filter.direction.isNotEmpty,
+            items: const <PopupMenuEntry<String>>[
+              PopupMenuItem(value: '', child: Text('收支都要')),
+              PopupMenuItem(value: 'expense', child: Text('只看支出')),
+              PopupMenuItem(value: 'income', child: Text('只看收入')),
+            ],
+            onSelected: vm.setDirection,
           ),
+          SizedBox(width: m.kSpace6),
+          _FilterPill(
+            label: filter.accountId > 0
+                ? _nameOfAccount(context, filter.accountId)
+                : '账户',
+            icon: StrokeIcons.accountBalanceWallet,
+            active: filter.accountId > 0,
+            items: <PopupMenuEntry<String>>[
+              const PopupMenuItem(value: '0', child: Text('全部账户')),
+              for (final a in vm.accounts)
+                PopupMenuItem(value: '${a.id}', child: Text(a.name)),
+            ],
+            onSelected: (value) => vm.setAccount(int.tryParse(value) ?? 0),
+          ),
+          SizedBox(width: m.kSpace6),
+          _FilterPill(
+            label: filter.categoryId > 0
+                ? _nameOfCategory(context, filter.categoryId)
+                : '类别',
+            icon: StrokeIcons.category,
+            active: filter.categoryId > 0,
+            items: <PopupMenuEntry<String>>[
+              const PopupMenuItem(value: '0', child: Text('全部类别')),
+              for (final c in vm.categories)
+                PopupMenuItem(value: '${c.id}', child: Text(c.name)),
+            ],
+            onSelected: (value) => vm.setCategory(int.tryParse(value) ?? 0),
+          ),
+          if (vm.isFiltered) ...<Widget>[
+            SizedBox(width: m.kSpace6),
+            TextButton.icon(
+              onPressed: () {
+                search.clear();
+                vm.clearFilters();
+              },
+              icon: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: s.textTertiary),
+              label: Text('清空', style: AppTextStyles.caption(context)),
+            ),
+          ],
         ],
       ),
+    );
+    final searchField = TextField(
+      controller: search,
+      onSubmitted: onSearch,
+      style: AppTextStyles.body(context),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: '搜商户/备注',
+        prefixIcon: DrawIcon(StrokeIcons.search, size: m.iconSize16, color: s.textTertiary),
+        prefixIconConstraints: BoxConstraints(minWidth: m.kSpace32),
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace8, m.kSpace16, m.kSpace4),
+      // 窄屏搜索框单独占一行：挤在胶囊旁边只剩 80 宽，输入什么都看不见
+      child: narrow
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                pills,
+                SizedBox(height: m.kSpace6),
+                searchField,
+              ],
+            )
+          : Row(
+              children: <Widget>[
+                Expanded(child: pills),
+                SizedBox(width: m.kSpace8),
+                SizedBox(width: scaleW(200), child: searchField),
+              ],
+            ),
     );
   }
 

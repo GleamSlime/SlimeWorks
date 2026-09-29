@@ -1,4 +1,5 @@
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use slime_logger::{sw_debug, sw_info, sw_warn};
 use std::collections::HashMap;
 use std::path::Path;
@@ -1009,6 +1010,7 @@ fn media_table_names() -> Vec<String> {
         smart_folder_table_name(),
         thumbnail_task_table_name(),
         meta_table_name(),
+        collection_stats_table_name(),
     ]
 }
 
@@ -1707,6 +1709,12 @@ fn delete_collection_from_db(collection_id: &str) {
     let _ = db_module::db_delete(collection_table_name(), collection_id.to_string());
 }
 
+/// 删除集合的聚合记录。放在条目删除之后调用，避免残留一行没人认领的体积。
+fn delete_collection_aggregate_from_db(collection_id: &str) {
+    ensure_aggregate_table_registered();
+    let _ = db_module::db_delete(collection_stats_table_name(), collection_id.to_string());
+}
+
 fn delete_folder_from_db(folder_id: &str) {
     let _ = db_module::db_delete(folder_table_name(), folder_id.to_string());
 }
@@ -1775,7 +1783,7 @@ fn upsert_collection_from_folder(
         return Err(err);
     }
 
-    {
+    let items_persisted = {
         let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
         ensure_items_loaded(&mut guard);
         let stored_items = guard.as_mut().unwrap();
@@ -1792,10 +1800,14 @@ fn upsert_collection_from_folder(
             Ok(_) => {
                 stored_items.retain(|item| item.collection_id != collection_id);
                 stored_items.extend(items.iter().cloned());
+                true
             }
-            Err(error) => sw_debug!("[media_scan] 批量写入媒体条目失败: {}", error),
+            Err(error) => {
+                sw_debug!("[media_scan] 批量写入媒体条目失败: {}", error);
+                false
+            }
         }
-    }
+    };
 
     let now = Utc::now();
     let updated_collection = MediaCollection {
@@ -1831,6 +1843,17 @@ fn upsert_collection_from_folder(
         }
     }
     persist_collection(&updated_collection)?;
+    // 条目真的落库了才写体积，否则聚合值会领先于条目表；写失败只记日志：
+    // 聚合表落后是可自愈的（下一次重扫/stat 会覆盖），不该让一次成功的导入报错。
+    if items_persisted {
+        if let Err(error) = record_collection_size(&collection_id, &items) {
+            sw_warn!(
+                "[media_stats] 记录集合体积失败 id={}: {}",
+                collection_id,
+                error
+            );
+        }
+    }
     sw_debug!(
         "[media_scan] collection persisted: id={} title={:?} item_count={}",
         updated_collection.id,
@@ -2050,6 +2073,194 @@ pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
     Ok(map.into_values().collect())
 }
 
+/// 集合体积/条数的落册表。
+///
+/// 历史做法是读的时候现算：`list_media_collections` 为了填一个 `total_size`，
+/// 要把整张 `media_items` 冷加载进内存（`ensure_items_loaded`），而那张缓存
+/// 5 分钟无访问就被 `check_and_release_if_idle` 释放 —— 闲置后的首次取数必然
+/// 重付整表代价（节点取数耗时的主要来源）。聚合值改由写入路径算好入库，
+/// 读路径只查这张小表。
+fn collection_stats_table_name() -> String {
+    "media_collection_stats".to_string()
+}
+
+/// 一个集合的聚合记录。体积有两个来源：
+/// - `recorded_size`：条目 `file_size` 的记录值合计，导入/重扫时写入；
+/// - `live_size`/`live_count`：最近一次逐文件 stat 的现存合计与条数（排除失效资源）。
+///
+/// 展示口径取 `live_size.unwrap_or(recorded_size)`：磁盘上已删的资源不计入，
+/// 而这台设备如果从未扫过就退回记录值（旧库升级后的第一次取数就是这个状态）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CollectionAggregate {
+    pub collection_id: String,
+    #[serde(default)]
+    pub recorded_size: u64,
+    #[serde(default)]
+    pub live_size: Option<u64>,
+    #[serde(default)]
+    pub live_count: Option<u32>,
+    /// live 值出自哪一次扫描（Unix 秒），None = 从未 stat 过
+    #[serde(default)]
+    pub live_checked_at: Option<i64>,
+}
+
+impl CollectionAggregate {
+    /// 展示体积：这台设备 stat 过就用现存合计，否则退回条目记录值合计。
+    pub fn display_size(&self) -> u64 {
+        self.live_size.unwrap_or(self.recorded_size)
+    }
+}
+
+fn aggregate_to_record(aggregate: &CollectionAggregate) -> Option<db_module::DbRecord> {
+    serde_json::to_string(aggregate)
+        .ok()
+        .map(|value| db_module::DbRecord {
+            key: aggregate.collection_id.clone(),
+            value,
+        })
+}
+
+/// 聚合表只注册一次。`db_register_table` 每次调用都要泄漏一个表名字符串，
+/// 而读聚合是节点每次取数都走的路径，不能放在那儿反复调。
+fn ensure_aggregate_table_registered() {
+    static REGISTERED: std::sync::Once = std::sync::Once::new();
+    REGISTERED.call_once(|| {
+        let _ = db_module::db_register_table(collection_stats_table_name());
+    });
+}
+
+/// 读全部聚合行。表还从没写过时 redb 的读事务会报错，那不是故障而是
+/// 「一条都还没有」，按空表处理 —— 否则空库上的第一次取数会直接失败。
+fn load_collection_aggregates() -> HashMap<String, CollectionAggregate> {
+    ensure_aggregate_table_registered();
+    let records = match db_module::db_list_all(collection_stats_table_name()) {
+        Ok(records) => records,
+        Err(error) => {
+            sw_debug!("[media_stats] 聚合表暂不可读，按空表处理: {}", error);
+            return HashMap::new();
+        }
+    };
+    let mut map = HashMap::new();
+    for record in records {
+        if let Ok(aggregate) = serde_json::from_str::<CollectionAggregate>(&record.value) {
+            map.insert(aggregate.collection_id.clone(), aggregate);
+        }
+    }
+    map
+}
+
+fn persist_collection_aggregates(aggregates: &[CollectionAggregate]) -> Result<(), String> {
+    if aggregates.is_empty() {
+        return Ok(());
+    }
+    ensure_aggregate_table_registered();
+    // 单事务批量写：逐条 db_set 等于每条记录一次磁盘刷写
+    let sets = aggregates
+        .iter()
+        .filter_map(aggregate_to_record)
+        .collect::<Vec<_>>();
+    db_module::db_batch_write(collection_stats_table_name(), sets, Vec::new())
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// 导入/重扫后写记录体积。`live_*` 一并作废：条目集合已经变了，
+/// 旧的 stat 结论不再描述现状，等下一次 `get_all_collection_live_stats` 重新填。
+fn record_collection_size(collection_id: &str, items: &[MediaItem]) -> Result<(), String> {
+    let aggregate = CollectionAggregate {
+        collection_id: collection_id.to_string(),
+        recorded_size: items.iter().map(|item| item.file_size).sum(),
+        live_size: None,
+        live_count: None,
+        live_checked_at: None,
+    };
+    persist_collection_aggregates(std::slice::from_ref(&aggregate))
+}
+
+/// 读全部集合的聚合值。**旧库升级兼容**：集合表里有、聚合表里没记录的，
+/// 说明这条记录早于本次改造，补算一趟整表并落册 —— 只有真缺时才付这一次
+/// 整表代价，之后无论缓存怎么释放都不会再走条目表。
+pub fn get_all_collection_aggregates() -> Result<Vec<CollectionAggregate>, String> {
+    let mut map = load_collection_aggregates();
+    let missing: Vec<String> = {
+        let collections = get_collections()
+            .lock()
+            .map_err(|error| error.to_string())?;
+        collections
+            .iter()
+            .filter(|collection| !map.contains_key(&collection.id))
+            .map(|collection| collection.id.clone())
+            .collect()
+    };
+    if missing.is_empty() {
+        return Ok(map.into_values().collect());
+    }
+
+    // 补算走整表：一趟读把所有集合的记录体积算齐，顺带修掉历史漂移
+    let sums: HashMap<String, u64> = {
+        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+        ensure_items_loaded(&mut guard);
+        guard
+            .as_ref()
+            .map(|items| {
+                let mut sums: HashMap<String, u64> = HashMap::new();
+                for item in items.iter() {
+                    *sums.entry(item.collection_id.clone()).or_default() += item.file_size;
+                }
+                sums
+            })
+            .unwrap_or_default()
+    };
+    let mut refreshed: Vec<CollectionAggregate> = Vec::with_capacity(sums.len());
+    for (collection_id, recorded_size) in sums {
+        let mut aggregate = map
+            .remove(&collection_id)
+            .unwrap_or_else(|| CollectionAggregate {
+                collection_id: collection_id.clone(),
+                ..Default::default()
+            });
+        aggregate.recorded_size = recorded_size;
+        map.insert(collection_id.clone(), aggregate.clone());
+        refreshed.push(aggregate);
+    }
+    sw_info!(
+        "[media_stats] 聚合表补齐 {} 条（本次缺少 {} 个集合的记录）",
+        refreshed.len(),
+        missing.len()
+    );
+    persist_collection_aggregates(&refreshed)?;
+    Ok(map.into_values().collect())
+}
+
+/// 把逐文件 stat 的结论回写聚合表，供读路径直接查表。
+/// 只动 `live_*`，不覆盖 `recorded_size`。
+///
+/// 两趟之间做一次比较：库没变时整批一行都不写，免得每次进媒体库都刷一次盘。
+/// 聚合表里还没有这个集合（旧库尚未补算）时不插入半行 —— 那样会把
+/// `recorded_size` 永久留在 0，补算逻辑也因为「有记录」而不再触发。
+fn persist_live_stats(stats: &[CollectionLiveStats]) -> Result<(), String> {
+    let map = load_collection_aggregates();
+    let checked_at = Utc::now().timestamp();
+    let mut changed: Vec<CollectionAggregate> = Vec::new();
+    for stat in stats {
+        let Some(existing) = map.get(&stat.collection_id) else {
+            continue;
+        };
+        if existing.live_size == Some(stat.live_size)
+            && existing.live_count == Some(stat.live_count)
+        {
+            continue;
+        }
+        changed.push(CollectionAggregate {
+            live_size: Some(stat.live_size),
+            live_count: Some(stat.live_count),
+            live_checked_at: Some(checked_at),
+            ..existing.clone()
+        });
+    }
+    persist_collection_aggregates(&changed)
+}
+
 /// Per-collection stats counting only resources that still exist on disk.
 /// 库里记录的 `file_size` 在文件被外部删除后仍是旧值，父级文件夹要如实汇总
 /// 「现存资源体积」就必须逐条 stat，而不是信数据库。
@@ -2074,11 +2285,13 @@ fn aggregate_live_stats<'a, I: IntoIterator<Item = (&'a str, Option<u64>)>>(
     }
     let mut stats = map
         .into_iter()
-        .map(|(collection_id, (live_size, live_count))| CollectionLiveStats {
-            collection_id: collection_id.to_string(),
-            live_size,
-            live_count,
-        })
+        .map(
+            |(collection_id, (live_size, live_count))| CollectionLiveStats {
+                collection_id: collection_id.to_string(),
+                live_size,
+                live_count,
+            },
+        )
         .collect::<Vec<_>>();
     stats.sort_by(|left, right| left.collection_id.cmp(&right.collection_id));
     stats
@@ -2133,7 +2346,14 @@ pub fn get_all_collection_live_stats() -> Result<Vec<CollectionLiveStats>, Strin
         }
     });
 
-    Ok(aggregate_live_stats(verdicts))
+    let stats = aggregate_live_stats(verdicts);
+    // stat 结论回写聚合表：读路径（节点 list_media_collections）由此不再需要
+    // 逐文件 stat，也不必冷加载条目表。回写失败不影响本次返回值，只降级为
+    // 「下一次仍要现算」。
+    if let Err(error) = persist_live_stats(&stats) {
+        sw_warn!("[media_stats] live 体积回写失败: {}", error);
+    }
+    Ok(stats)
 }
 
 /// 轻量级集合统计（不含文件路径列表），用于轮询检测文件数量变化。
@@ -2329,6 +2549,7 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
     delete_thumbnail_tasks_for_file_paths(&file_paths_to_clean);
 
     delete_collection_from_db(&collection_id);
+    delete_collection_aggregate_from_db(&collection_id);
     Ok(true)
 }
 
@@ -2344,9 +2565,11 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
     };
     // 同步清理关联的缩略图任务记录，避免重启后被重新入队反复重试已不存在的文件
     delete_thumbnail_tasks_for_file_path(&item_file_path);
-    // 重新导入父目录以同步数据库
+    // 重新扫描父目录以同步数据库。这里必须走 rescan：`import_media_folder`
+    // 对已导入的路径直接报「该文件夹已导入」，条目永远留在库里，集合体积/条数
+    // 也就一直停在删除前的值。
     if let Some(parent) = path.parent() {
-        let _ = import_media_folder(parent.to_string_lossy().into_owned());
+        let _ = rescan_media_folder(parent.to_string_lossy().into_owned());
     }
     Ok(deleted)
 }
@@ -2543,6 +2766,7 @@ pub fn clear_all_local_media(
         favorites_table_name(),
         smart_folder_table_name(),
         thumbnail_task_table_name(), // 同步清空缩略图任务，避免幽灵任务在重启后被重新入队
+        collection_stats_table_name(), // 聚合体积随条目一起归零，否则旧库残留会让补算逻辑跳过
     ];
     let mut cleared_tables = 0u32;
     for table_name in &tables_to_clear {
@@ -3651,6 +3875,152 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // ── 集合聚合体积：写路径入库、读路径查表 ──────────────────────────────
+
+    #[test]
+    fn db_collection_aggregate_persisted_and_read_without_items_scan() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("aggregate");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("sub/b.bmp"));
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let size_of = |p: &Path| std::fs::metadata(p).unwrap().len();
+        let size_one = size_of(&root.join("a.bmp"));
+        let size_both = size_one + size_of(&root.join("sub/b.bmp"));
+
+        // 导入即落册：聚合行不依赖读 media_items
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id).expect("导入后应立刻有聚合记录"),
+        )
+        .unwrap();
+        assert_eq!(stored.collection_id, collection.id);
+        assert_eq!(stored.recorded_size, size_both);
+        assert_eq!(stored.live_size, None, "没 stat 过不应有 live 值");
+        assert_eq!(stored.display_size(), size_both, "无 stat 结论时退回记录值");
+
+        // 读路径只查表：条目缓存被释放后取聚合，不应再冷加载整张 media_items
+        release_items_from_memory();
+        let aggregate = get_all_collection_aggregates()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.collection_id == collection.id)
+            .expect("聚合列表应包含本集合");
+        assert_eq!(aggregate.recorded_size, size_both);
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "查聚合表不应触发 media_items 整表加载"
+        );
+
+        // live stat 回写：现存合计/条数进表，展示口径随之切到 stat 结论
+        get_all_collection_live_stats().unwrap();
+        let stored: CollectionAggregate =
+            serde_json::from_str(&db_row(collection_stats_table_name(), &collection.id).unwrap())
+                .unwrap();
+        assert_eq!(stored.live_size, Some(size_both));
+        assert_eq!(stored.live_count, Some(2));
+        assert!(stored.live_checked_at.is_some());
+        assert_eq!(stored.recorded_size, size_both, "回写 live 不应覆盖记录值");
+
+        // 磁盘上删掉一个文件（库里条目还在）：失效资源不计入展示体积
+        std::fs::remove_file(root.join("sub/b.bmp")).unwrap();
+        get_all_collection_live_stats().unwrap();
+        let stored: CollectionAggregate =
+            serde_json::from_str(&db_row(collection_stats_table_name(), &collection.id).unwrap())
+                .unwrap();
+        assert_eq!(stored.live_size, Some(size_one));
+        assert_eq!(stored.live_count, Some(1));
+        assert_eq!(
+            stored.recorded_size, size_both,
+            "条目记录值不因磁盘删除而变"
+        );
+        assert_eq!(stored.display_size(), size_one, "展示取现存合计");
+
+        // 重扫：条目集合变了，旧的 stat 结论作废，记录值按新条目重算
+        let rescanned =
+            rescan_media_folder(folder_path.to_string_lossy().into_owned()).expect("重扫应成功");
+        assert_eq!(rescanned.id, collection.id);
+        let stored: CollectionAggregate =
+            serde_json::from_str(&db_row(collection_stats_table_name(), &collection.id).unwrap())
+                .unwrap();
+        assert_eq!(stored.recorded_size, size_one);
+        assert_eq!(stored.live_size, None, "重扫后旧 stat 结论不再描述现状");
+        assert_eq!(stored.live_count, None);
+        assert_eq!(stored.live_checked_at, None);
+
+        // 删集合：聚合行一并清掉
+        assert!(delete_media_collection(collection.id.clone()).unwrap());
+        assert!(
+            db_row(collection_stats_table_name(), &collection.id).is_none(),
+            "删除集合后不应残留体积"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn db_collection_aggregate_backfills_legacy_rows_once() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("aggregate_backfill");
+        write_test_image(&root.join("a.bmp"));
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let expected = std::fs::metadata(root.join("a.bmp")).unwrap().len();
+
+        // 模拟旧库：聚合行不存在，条目表仍在
+        db_module::db_delete(collection_stats_table_name(), collection.id.clone()).ok();
+        release_items_from_memory();
+
+        let aggregate = get_all_collection_aggregates()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.collection_id == collection.id)
+            .expect("缺记录时应补算出本集合");
+        assert_eq!(aggregate.recorded_size, expected);
+        assert!(
+            db_row(collection_stats_table_name(), &collection.id).is_some(),
+            "补算结果必须落册，否则每次取数都要重付整表代价"
+        );
+
+        // 落册之后再释放缓存：这次完全不碰条目表
+        release_items_from_memory();
+        get_all_collection_aggregates().unwrap();
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "补齐后不应再冷加载 media_items"
+        );
+
+        assert!(delete_media_collection(collection.id).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn db_clear_all_local_media_empties_aggregate_table() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("aggregate_clear");
+        write_test_image(&root.join("a.bmp"));
+        let collection = import_media_folder(
+            std::fs::canonicalize(&root)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .unwrap();
+        assert!(db_row(collection_stats_table_name(), &collection.id).is_some());
+
+        clear_all_local_media(false, false).unwrap();
+        assert!(
+            db_row(collection_stats_table_name(), &collection.id).is_none(),
+            "清空本地库后不应残留旧体积 —— 残留会让补算逻辑误判「已有记录」"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn db_scan_media_folders_imports_each_media_dir() {
         let _serial = lock_db_test_serial();
@@ -3740,7 +4110,10 @@ mod tests {
         save_collection_order("clear_probe_key".into(), vec!["x".into()]).unwrap();
 
         let (tables, files) = clear_all_local_media(false, true).unwrap();
-        assert_eq!(tables, 7, "应清空 7 张业务表（保留 media_meta）");
+        assert_eq!(
+            tables, 8,
+            "应清空 8 张业务表（保留 media_meta）：集合/条目/文件夹/排序/收藏/智能夹/缩略图任务/聚合体积"
+        );
         assert!(files >= 2, "stale + 封面缓存至少清掉 2 个文件, got {files}");
 
         // 原始媒体文件必须原样保留

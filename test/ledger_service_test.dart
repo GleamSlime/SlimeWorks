@@ -96,7 +96,7 @@ class _MockLedgerApi implements RustLibApi {
   /// 同步返回 void 的 FFI
   void stubVoid(String apiName) => responses[fn(apiName)] = null;
 
-  /// async FFI（联网那几个：checkRule/fetchEmails/testConnection），返回类型 Future<String>
+  /// async FFI（联网那几个：checkRule/fetchEmails/testConnection），返回 `Future<String>`
   void stubAsyncString(String apiName, String value) =>
       responses[fn(apiName)] = Future<String>.value(value);
 

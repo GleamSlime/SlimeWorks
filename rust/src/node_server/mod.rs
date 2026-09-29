@@ -1430,4 +1430,85 @@ mod tests {
         assert!(!head.contains("content-encoding"), "头部: {head}");
         assert_eq!(String::from_utf8(body_bytes).unwrap(), small);
     }
+
+    /// 端到端：从真实 socket 发一份带 `Accept-Encoding` 的请求头，走完整的
+    /// 头解析 + `/node/call` 路由，确认压缩是加在业务响应上的。
+    /// 上面那两条用例直接调 `write_json_response`，绕过了头解析和路由，
+    /// 所以「部署后实测没压缩」这一路它们覆盖不到。
+    #[test]
+    fn node_call_compresses_business_response_end_to_end() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        // 用 list_directories 当大块响应来源：不碰数据库，体积靠造目录控制
+        let dir = std::env::temp_dir().join("sw_node_gzip_e2e");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..120 {
+            std::fs::create_dir_all(dir.join(format!("素材目录_{i:04}_{}", "x".repeat(40))))
+                .unwrap();
+        }
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let body = format!(
+            "{{\"action\":\"list_directories\",\"params\":{{\"path\":\"{}\"}}}}",
+            dir.display()
+        );
+        let send = |accept_encoding: &str| -> Vec<u8> {
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+            let request = format!(
+                "POST /node/call HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nX-SW-Auth: {digest}\r\n{accept_encoding}Content-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(request.as_bytes()).expect("write");
+            let mut raw = Vec::new();
+            stream.read_to_end(&mut raw).expect("read");
+            raw
+        };
+
+        // 先取明文：既是对照基线，也用来确认样本确实过了压缩阈值
+        let (plain_head, plain_body, _) = split_response(&send(""));
+        assert!(plain_head.starts_with("http/1.1 200"), "头部: {plain_head}");
+        assert!(!plain_head.contains("content-encoding"), "头部: {plain_head}");
+        assert!(
+            plain_body.len() >= GZIP_MIN_BODY_BYTES,
+            "样本 {}B 低于阈值，本用例证明不了任何事",
+            plain_body.len()
+        );
+
+        // dart:io / Dio 实际发的是这种带空格、多 token 的值
+        let (gz_head, gz_body, gz_plain) =
+            split_response(&send("Accept-Encoding: gzip, deflate, br\r\n"));
+        assert!(gz_head.starts_with("http/1.1 200"), "头部: {gz_head}");
+        assert!(gz_head.contains("content-encoding: gzip"), "头部: {gz_head}");
+        assert!(gz_head.contains("vary: accept-encoding"), "头部: {gz_head}");
+        assert_eq!(gz_plain, plain_body, "解压结果应与明文响应逐字节一致");
+        assert!(
+            gz_body.len() * 2 < plain_body.len(),
+            "压缩比不成立: gz={} plain={}",
+            gz_body.len(),
+            plain_body.len()
+        );
+
+        // 明确拒绝压缩的客户端必须拿明文（老节点/其它语言客户端不受影响）
+        let (reject_head, reject_body, _) =
+            split_response(&send("Accept-Encoding: gzip;q=0\r\n"));
+        assert!(!reject_head.contains("content-encoding"), "头部: {reject_head}");
+        assert_eq!(reject_body, plain_body);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

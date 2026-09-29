@@ -43,7 +43,6 @@ class LedgerViewModel extends BaseViewModel {
     super.onInitAsync();
   }
 
-  @override
   Future<void> reload() async {
     busy.value = true;
     try {

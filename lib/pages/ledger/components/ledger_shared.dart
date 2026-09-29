@@ -246,6 +246,9 @@ class LedgerTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    // 窄屏只留文字：五个带图标的胶囊在 390 宽上正好溢出一截，
+    // 而这条 tab 是整页导航，宁可少几个图标也不能看不见最后一个。
+    final showIcon = !ledgerNarrow(context);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
       child: Row(
@@ -256,6 +259,7 @@ class LedgerTabs extends StatelessWidget {
               child: _LedgerTabPill(
                 label: entry.label,
                 icon: entry.icon,
+                showIcon: showIcon,
                 selected: current == entry.location,
                 onTap: () => context.go(entry.location),
               ),
@@ -270,12 +274,16 @@ class _LedgerTabPill extends StatelessWidget {
   const _LedgerTabPill({
     required this.label,
     required this.icon,
+    required this.showIcon,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
   final StrokeIcon icon;
+
+  /// 窄屏收起图标，只留名字
+  final bool showIcon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -298,12 +306,14 @@ class _LedgerTabPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            DrawIcon(
-              icon,
-              size: m.iconSize14,
-              color: selected ? s.accentText : s.textSecondary,
-            ),
-            SizedBox(width: m.kSpace6),
+            if (showIcon) ...<Widget>[
+              DrawIcon(
+                icon,
+                size: m.iconSize14,
+                color: selected ? s.accentText : s.textSecondary,
+              ),
+              SizedBox(width: m.kSpace6),
+            ],
             Text(
               label,
               style: AppTextStyles.body(context).copyWith(

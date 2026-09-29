@@ -108,17 +108,24 @@ pub async fn dispatch_action(
         "list_media_collections" => {
             let collections = media_api::get_all_media_collections()
                 .map_err(|e| format!("获取媒体集合失败: {}", e))?;
-            let stats = media_api::get_all_collection_stats()
-                .map_err(|e| format!("获取集合统计失败: {}", e))?;
-            let stats_map: std::collections::HashMap<_, _> = stats
-                .into_iter()
-                .map(|s| (s.collection_id.clone(), s))
-                .collect();
+            // 体积/条数直接查聚合表（写入路径维护），不再为了填一个 total_size
+            // 把整张 media_items 冷加载进内存 —— 那是闲置后首次取数的主要耗时。
+            let aggregates: std::collections::HashMap<_, _> =
+                media_api::get_all_collection_aggregates()
+                    .map_err(|e| format!("获取集合聚合失败: {}", e))?
+                    .into_iter()
+                    .map(|a| (a.collection_id.clone(), a))
+                    .collect();
 
             let result: Vec<Value> = collections
                 .into_iter()
                 .map(|c| {
-                    let total_size = stats_map.get(&c.id).map(|s| s.total_size).unwrap_or(0);
+                    let aggregate = aggregates.get(&c.id);
+                    // 口径与本地一致：stat 过就用现存值（失效资源不计），没 stat 过退回条目记录值
+                    let total_size = aggregate.map(|a| a.display_size()).unwrap_or(0);
+                    let item_count = aggregate
+                        .and_then(|a| a.live_count)
+                        .unwrap_or(c.item_count as u32);
                     // 时间戳与本地 FFI 保持一致（Unix 秒），避免客户端解析失败导致排序错乱
                     json!({
                         "id": c.id,
@@ -126,7 +133,7 @@ pub async fn dispatch_action(
                         "folder_path": c.folder_path,
                         "folder_id": c.folder_id,
                         "cover_path": c.cover_path,
-                        "item_count": c.item_count.to_string(),
+                        "item_count": item_count.to_string(),
                         "created_at": c.created_at.timestamp(),
                         "updated_at": c.updated_at.timestamp(),
                         "total_size": total_size.to_string(),

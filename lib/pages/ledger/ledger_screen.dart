@@ -93,62 +93,73 @@ class _LedgerScreenState extends BasePageState<LedgerViewModel, LedgerScreen> {
   Widget _buildBody(BuildContext context) {
     final m = AppTheme.metrics;
     final summary = viewModel.summary.value;
-    return LedgerStateView(
-      error: viewModel.errorMessage,
-      empty: viewModel.recent.isEmpty && summary.count == 0,
-      emptyTitle: '这个月还没有账',
-      emptyIcon: StrokeIcons.creditCard,
-      emptyAction: FilledButton.icon(
-        onPressed: _openEditor,
-        icon: DrawIcon(StrokeIcons.add, size: m.iconSize16),
-        label: const Text('记第一笔'),
-      ),
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace8, m.kSpace16, m.kSpace32),
-        children: <Widget>[
-          LedgerMonthStrip(
+    // 月份条钉在空态外面：这个月空着不等于哪个月都空着，把它一起收进空态
+    // 就等于告诉用户"没账可看"，而他其实只是站错了月份。
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace8, m.kSpace16, 0),
+          child: LedgerMonthStrip(
             monthLabel: viewModel.monthLabel,
             canGoNext: viewModel.canGoNextMonth,
             onPrevious: () => viewModel.shiftMonth(-1),
             onNext: () => viewModel.shiftMonth(1),
             onPickMonth: _pickMonth,
           ),
-          SizedBox(height: m.kSpace12),
-          _OverviewCard(
-            summary: summary,
-            dayRows: viewModel.dayRows,
-            topCategories: viewModel.topCategories,
-          ),
-          if (viewModel.pendingCount.value > 0) ...[
-            SizedBox(height: m.kSpace12),
-            _PendingBanner(
-              count: viewModel.pendingCount.value,
-              onTap: () => const LedgerPendingRoute().go(context),
+        ),
+        Expanded(
+          child: LedgerStateView(
+            error: viewModel.errorMessage,
+            empty: viewModel.recent.isEmpty && summary.count == 0,
+            emptyTitle: '这个月还没有账',
+            emptyIcon: StrokeIcons.creditCard,
+            emptyAction: FilledButton.icon(
+              onPressed: _openEditor,
+              icon: DrawIcon(StrokeIcons.add, size: m.iconSize16),
+              label: const Text('记第一笔'),
             ),
-          ],
-          SizedBox(height: m.kSpace20),
-          SectionHeader(
-            title: '最近流水',
-            trailing: TextButton(
-              onPressed: () => const LedgerRecordsRoute().go(context),
-              child: const Text('全部流水'),
-            ),
-          ),
-          AppCard(
-            padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace6),
-            child: Column(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(m.kSpace16, 0, m.kSpace16, m.kSpace32),
               children: <Widget>[
-                for (final tx in viewModel.recent)
-                  LedgerTxTile(
-                    tx: tx,
-                    onTap: () => _openEditor(tx),
-                    onLongPress: () => _confirmDelete(tx),
+                SizedBox(height: m.kSpace12),
+                _OverviewCard(
+                  summary: summary,
+                  dayRows: viewModel.dayRows,
+                  topCategories: viewModel.topCategories,
+                ),
+                if (viewModel.pendingCount.value > 0) ...[
+                  SizedBox(height: m.kSpace12),
+                  _PendingBanner(
+                    count: viewModel.pendingCount.value,
+                    onTap: () => const LedgerPendingRoute().go(context),
                   ),
+                ],
+                SizedBox(height: m.kSpace20),
+                SectionHeader(
+                  title: '最近流水',
+                  trailing: TextButton(
+                    onPressed: () => const LedgerRecordsRoute().go(context),
+                    child: const Text('全部流水'),
+                  ),
+                ),
+                AppCard(
+                  padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace6),
+                  child: Column(
+                    children: <Widget>[
+                      for (final tx in viewModel.recent)
+                        LedgerTxTile(
+                          tx: tx,
+                          onTap: () => _openEditor(tx),
+                          onLongPress: () => _confirmDelete(tx),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -191,50 +202,87 @@ class _OverviewCard extends StatelessWidget {
     final s = AppSemantic.of(context);
     final viz = AppVizSet.of(context);
     final m = AppTheme.metrics;
+    final byDate = <String, LedgerDayRow>{
+      for (final row in dayRows) row.billDate: row,
+    };
     final groups = <LedgerBarGroup>[
-      for (final row in dayRows)
-        LedgerBarGroup(label: row.billDate.substring(8), income: row.income, expense: row.expense),
+      for (final day in ledgerMonthDays(summary.month))
+        LedgerBarGroup(
+          label: day.substring(8),
+          income: byDate[day]?.income ?? 0,
+          expense: byDate[day]?.expense ?? 0,
+        ),
     ];
+
+    final headline = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text('本月结余', style: AppTextStyles.overline(context)),
+        SizedBox(height: m.kSpace4),
+        Text(
+          '¥${formatLedgerAmount(summary.net.abs())}',
+          style: AppTextStyles.metric(context).copyWith(
+            color: summary.net < 0 ? s.danger.color : viz.lagoon.base,
+          ),
+        ),
+        SizedBox(height: m.kSpace4),
+        Text(
+          summary.net < 0 ? '支出超过了收入' : '${summary.count} 笔流水',
+          style: AppTextStyles.caption(context),
+        ),
+      ],
+    );
 
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // 窄屏放不下"结余 + 两列金额"同一行：收支各占半宽挪到第二行，
+          // 否则这一行的固定部分就把卡片宽度顶爆
+          if (ledgerNarrow(context))
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                headline,
+                SizedBox(height: m.kSpace12),
+                Row(
                   children: <Widget>[
-                    Text('本月结余', style: AppTextStyles.overline(context)),
-                    SizedBox(height: m.kSpace4),
-                    Text(
-                      '¥${formatLedgerAmount(summary.net.abs())}',
-                      style: AppTextStyles.metric(context).copyWith(
-                        color: summary.net < 0 ? s.danger.color : viz.lagoon.base,
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: _MiniAmount(label: '收入', value: summary.monthIncome, income: true),
                       ),
                     ),
-                    SizedBox(height: m.kSpace4),
-                    Text(
-                      summary.net < 0 ? '支出超过了收入' : '${summary.count} 笔流水',
-                      style: AppTextStyles.caption(context),
+                    SizedBox(width: m.kSpace12),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: _MiniAmount(label: '支出', value: summary.monthExpense, income: false),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              _MiniAmount(label: '收入', value: summary.monthIncome, income: true),
-              SizedBox(width: m.kSpace16),
-              _MiniAmount(label: '支出', value: summary.monthExpense, income: false),
-            ],
-          ),
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(child: headline),
+                SizedBox(width: m.kSpace16),
+                _MiniAmount(label: '收入', value: summary.monthIncome, income: true),
+                SizedBox(width: m.kSpace16),
+                _MiniAmount(label: '支出', value: summary.monthExpense, income: false),
+              ],
+            ),
           SizedBox(height: m.kSpace16),
+          Text('每日支出', style: AppTextStyles.caption(context)),
+          SizedBox(height: m.kSpace6),
           SizedBox(
-            height: m.kSpace56,
+            // 轴标签要从这份高度里切走一截，给得太抠就只剩一根细条能长柱子
+            height: ledgerNarrow(context) ? m.kSpace56 : m.kSpace56 * 2,
             child: LedgerBarChart(groups: groups),
           ),
-          SizedBox(height: m.kSpace6),
-          Text('每日支出', style: AppTextStyles.caption(context)),
           if (topCategories.isNotEmpty) ...[
             SizedBox(height: m.kSpace16),
             const AppDivider(),

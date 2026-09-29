@@ -198,6 +198,50 @@ void main() {
     });
   });
 
+  group('ledgerMonthDays - 日趋势图的格子', () {
+    test('天数跟着大小月和闰年走', () {
+      expect(ledgerMonthDays('2026-03').length, 31);
+      expect(ledgerMonthDays('2026-04').length, 30);
+      expect(ledgerMonthDays('2026-02').length, 28);
+      expect(ledgerMonthDays('2024-02').length, 29);
+    });
+
+    test('逐日补零，首尾对齐 ledgerMonthStart/End', () {
+      final days = ledgerMonthDays('2026-01');
+      expect(days.first, '2026-01-01');
+      expect(days.last, ledgerMonthEnd('2026-01'));
+      expect(days[8], '2026-01-09');
+    });
+
+    test('月份串非法时给空列表，不让调用方拿到越界的下标', () {
+      expect(ledgerMonthDays(''), isEmpty);
+      expect(ledgerMonthDays('2026'), isEmpty);
+    });
+  });
+
+  group('ledgerMonthSpan - 把稀疏月份补成连续格子', () {
+    test('跨年连续', () {
+      expect(
+        ledgerMonthSpan('2025-11', '2026-02'),
+        <String>['2025-11', '2025-12', '2026-01', '2026-02'],
+      );
+    });
+
+    test('首尾相同就是一格', () {
+      expect(ledgerMonthSpan('2026-03', '2026-03'), <String>['2026-03']);
+    });
+
+    test('倒着传、非法串都返回空', () {
+      expect(ledgerMonthSpan('2026-03', '2026-01'), isEmpty);
+      expect(ledgerMonthSpan('', ''), isEmpty);
+      expect(ledgerMonthSpan('abc', '2026-01'), isEmpty);
+    });
+
+    test('离谱的区间有上限兜底，不会转个不停', () {
+      expect(ledgerMonthSpan('1970-01', '2026-03').length, 600);
+    });
+  });
+
   // ══════════════════════════════════════════════════════════════════════════
   // formatLedgerAmount
   // ══════════════════════════════════════════════════════════════════════════

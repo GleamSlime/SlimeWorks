@@ -221,7 +221,16 @@ class _CategoryCard extends StatelessWidget {
               children: <Widget>[
                 donut,
                 SizedBox(width: m.kSpace24),
-                Expanded(child: Column(children: legend)),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      // 图例拉到整张卡那么宽，名字和金额之间就只剩一段没人看的空白
+                      constraints: BoxConstraints(maxWidth: scaleW(480)),
+                      child: Column(children: legend),
+                    ),
+                  ),
+                ),
               ],
             )
           else
@@ -316,8 +325,15 @@ class _TrendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    // 接口只回有账的月份，中间空掉的月份按月份序列补成空格子
+    final keys = rows.map((row) => row.month).toList()..sort();
+    final byMonth = <String, LedgerMonthRow>{for (final row in rows) row.month: row};
+    final series = <LedgerMonthRow>[
+      for (final key in ledgerMonthSpan(keys.isEmpty ? '' : keys.first, keys.isEmpty ? '' : keys.last))
+        byMonth[key] ?? LedgerMonthRow(month: key),
+    ];
     final groups = <LedgerBarGroup>[
-      for (final row in rows)
+      for (final row in series)
         LedgerBarGroup(label: row.shortLabel, income: row.income, expense: row.expense),
     ];
     return AppCard(
@@ -339,14 +355,14 @@ class _TrendCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: m.kSpace16),
-          LedgerBarChart(groups: groups, highlightIndex: rows.isEmpty ? null : rows.length - 1),
+          LedgerBarChart(groups: groups, highlightIndex: series.isEmpty ? null : series.length - 1),
           SizedBox(height: m.kSpace8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              Text(rows.isEmpty ? '' : rows.first.month, style: AppTextStyles.caption(context)),
+              Text(series.isEmpty ? '' : series.first.month, style: AppTextStyles.caption(context)),
               const _BarLegend(),
-              Text(rows.isEmpty ? '' : rows.last.month, style: AppTextStyles.caption(context)),
+              Text(series.isEmpty ? '' : series.last.month, style: AppTextStyles.caption(context)),
             ],
           ),
         ],

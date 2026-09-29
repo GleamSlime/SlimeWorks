@@ -34,7 +34,6 @@ class LedgerPendingViewModel extends BaseViewModel {
     super.onInitAsync();
   }
 
-  @override
   Future<void> reload() async {
     setLoading(true);
     try {
