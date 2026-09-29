@@ -1,19 +1,17 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/asr/asr_models.dart';
 import 'package:slime_works/core/services/asr/asr_settings_service.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/utils/format.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
-import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MediaItemTile extends StatefulWidget {
@@ -91,9 +89,6 @@ class _MediaItemTileState extends State<MediaItemTile> {
   bool _loadingFrames = false;
   String? _audioCoverPath;
   bool _loadingAudioCover = false;
-
-  static const Duration _kAnimDur = Duration(milliseconds: 200);
-  static const Curve _kAnimCurve = Curves.easeOut;
 
   Worker? _privacyWorker;
 
@@ -200,6 +195,10 @@ class _MediaItemTileState extends State<MediaItemTile> {
 
   bool get _isVideo => widget.item.kind == media_api.MediaKind.video;
   bool get _isAudio => widget.item.kind == media_api.MediaKind.audio;
+  bool get _isImage => widget.item.kind == media_api.MediaKind.image;
+
+  /// 左下镂空标签用的类型名
+  String get _kindLabel => _isAudio ? '音频' : _isVideo ? '视频' : '图片';
 
   String? get _displaySource {
     if (_isVideo) {
@@ -381,287 +380,105 @@ class _MediaItemTileState extends State<MediaItemTile> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
+    final item = widget.item;
     final src = _coverEffectiveSrc(_displaySource);
-    final showCoverAnyway = src != null && src.isNotEmpty && !widget.isLost;
-    final privacyOn = getIt<MediaPrefsService>().privacyMode.value;
-    final blurSigma = getIt<MediaPrefsService>().privacyBlurSigma.value;
+    final showTimeline =
+        _hovering && _isVideo && (_scrubFrames?.isNotEmpty ?? false);
+
+    // 正文这行是"这一格是什么"：分辨率 + 扩展名 + 体积，缺哪项就少哪项
+    final dot = item.filePath.lastIndexOf('.');
+    final ext = (dot > 0 && dot < item.filePath.length - 1)
+        ? item.filePath.substring(dot + 1).toUpperCase()
+        : '';
+    final meta = <String>[
+      if (item.width != null && item.height != null && item.height! > 0)
+        '${item.width}×${item.height}',
+      if (ext.isNotEmpty) ext,
+      formatFileSize(item.fileSize),
+    ];
+    final durationMs = item.durationMs;
+    // 时长是这一格唯一算得上"读数"的东西，放右上深色标签；图片没有就不挖这一块
+    final duration =
+        (!_isImage && durationMs != null && durationMs > BigInt.zero)
+        ? _formatDuration(durationMs)
+        : null;
 
     final hasMenuActions =
         widget.onOpenFolder != null ||
         widget.onDeleteFile != null ||
         widget.onDeleteNodeLocalFile != null ||
         widget.onSaveToGallery != null;
-    final tile = AnimatedScale(
-      scale: _hovering ? 1.03 : 1.0,
-      duration: _kAnimDur,
-      curve: _kAnimCurve,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onSecondaryTapDown: hasMenuActions
-            ? (details) => _showContextMenu(context, details.globalPosition)
-            : null,
-        onLongPressStart: (PlatformUtil.isMobile && hasMenuActions)
-            ? (details) => _showContextMenu(context, details.globalPosition)
-            : null,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) {
-            setState(() => _hovering = true);
-            if (_isVideo && widget.onRequestScrubFrames != null) _loadScrubFrames();
-          },
-          onHover: (event) {
-            if (!_isVideo || _scrubFrames == null || _scrubFrames!.isEmpty) return;
-            final box = context.findRenderObject() as RenderBox?;
-            if (box == null) return;
-            final ratio = (event.localPosition.dx / box.size.width).clamp(0.0, 1.0);
-            final newIdx = (ratio * (_scrubFrames!.length - 1)).round();
-            final curIdx = (_hoverRatio * (_scrubFrames!.length - 1)).round();
-            if (newIdx != curIdx) setState(() => _hoverRatio = ratio);
-          },
-          onExit: (_) => setState(() {
-            _hovering = false;
-            _hoverRatio = 0.0;
-          }),
-          child: Card(
-            elevation: _hovering ? 4 : 0,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(borderRadius: appMetrics.radius8),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                AnimatedScale(
-                  scale: _hovering ? 1.05 : 1.0,
-                  duration: _kAnimDur,
-                  curve: _kAnimCurve,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          theme.colorScheme.surfaceContainerHighest,
-                          theme.colorScheme.surfaceContainerLow,
-                        ],
-                      ),
-                    ),
-                    child: showCoverAnyway
-                        ? (privacyOn
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.zero,
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      src.startsWith('http')
-                                          ? Image.network(src, fit: BoxFit.cover)
-                                          : Image.file(
-                                              File(src),
-                                              fit: BoxFit.cover,
-                                              cacheWidth: () {
-                                                final w = getIt<MediaPrefsService>()
-                                                    .localPreviewWidth
-                                                    .value;
-                                                return w > 0 ? w : null;
-                                              }(),
-                                            ),
-                                      BackdropFilter(
-                                        filter: ImageFilter.blur(
-                                          sigmaX: blurSigma,
-                                          sigmaY: blurSigma,
-                                        ),
-                                        child: Container(color: Colors.transparent),
-                                      ),
-                                      Center(
-                                        child: Container(
-                                          padding: EdgeInsets.all(appMetrics.kSpace6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withAlpha(120),
-                                            borderRadius: AppTheme.metrics.radius999,
-                                          ),
-                                          child: DrawIcon(StrokeIcons.lockOutline,
-                                            size: appMetrics.iconSize16,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : src.startsWith('http')
-                              ? Image.network(
-                                  src,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Center(
-                                    child: DrawIcon(
-                                      _isAudio
-                                          ? StrokeIcons.musicNote
-                                          : StrokeIcons.smartDisplay,
-                                      size: scaleW(44),
-                                      color: theme.colorScheme.primary.withAlpha(180),
-                                    ),
-                                  ),
-                                )
-                              : Image.file(
-                                  File(src),
-                                  fit: BoxFit.cover,
-                                  cacheWidth: () {
-                                    final w = getIt<MediaPrefsService>().localPreviewWidth.value;
-                                    return w > 0 ? w : null;
-                                  }(),
-                                ))
-                        : Center(
-                            child: DrawIcon(
-                              _isAudio ? StrokeIcons.musicNote : StrokeIcons.smartDisplay,
-                              size: scaleW(44),
-                              color: theme.colorScheme.primary.withAlpha(180),
-                            ),
-                          ),
-                  ),
-                ),
-                if (widget.isLost)
-                  Positioned.fill(
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                theme.colorScheme.surfaceContainerHighest,
-                                theme.colorScheme.surfaceContainerLow,
-                              ],
-                            ),
-                          ),
-                          child: Center(
-                            child: DrawIcon(StrokeIcons.brokenImage,
-                              size: scaleW(44),
-                              color: theme.colorScheme.primary.withAlpha(180),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: appMetrics.kSpace8,
-                          top: appMetrics.kSpace8,
-                          child: const LostBadge(),
-                        ),
-                      ],
-                    ),
-                  ),
-                // 悬停时视频进度条指示器
-                if (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: LinearProgressIndicator(
-                      value: _hoverRatio,
-                      minHeight: scaleW(3),
-                      backgroundColor: Colors.white24,
-                      valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-                    ),
-                  ),
-                if (widget.showOverlay)
-                  Positioned(
-                    right: appMetrics.kSpace8,
-                    top: appMetrics.kSpace8,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isMobile ? appMetrics.kSpace6 : appMetrics.kSpace10,
-                        vertical: isMobile ? appMetrics.kSpace3 : appMetrics.kSpace5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(140),
-                        borderRadius: AppTheme.metrics.radius999,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          DrawIcon(
-                            widget.item.kind == media_api.MediaKind.image
-                                ? StrokeIcons.image
-                                : widget.item.kind == media_api.MediaKind.audio
-                                ? StrokeIcons.musicNote
-                                : StrokeIcons.playCircleOutline,
-                            size: scaleW(10),
-                            color: Colors.white.withAlpha(200),
-                          ),
-                          SizedBox(width: appMetrics.kSpace3),
-                          Text(
-                            widget.item.kind == media_api.MediaKind.image
-                                ? '图片'
-                                : widget.item.kind == media_api.MediaKind.audio
-                                ? '音频'
-                                : '视频',
-                            style: TextStyle(
-                              color: Colors.white.withAlpha(200),
-                              fontSize: appMetrics.fontSize9,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (widget.showOverlay)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom:
-                        (_hovering && _isVideo && _scrubFrames != null && _scrubFrames!.isNotEmpty)
-                        ? scaleW(3)
-                        : 0,
-                    child: ClipRRect(
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? appMetrics.kSpace8 : appMetrics.kSpace12,
-                              vertical: isMobile ? appMetrics.kSpace4 : appMetrics.kSpace8,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    widget.item.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: isMobile
-                                          ? appMetrics.fontSize9
-                                          : appMetrics.fontSize12,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                ),
-                                if ((_isAudio || _isVideo) &&
-                                    widget.item.durationMs != null &&
-                                    widget.item.durationMs! > BigInt.zero) ...[
-                                  SizedBox(width: appMetrics.kSpace4),
-                                  Text(
-                                    _formatDuration(widget.item.durationMs!),
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: appMetrics.fontSize9,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+    final tile = GestureDetector(
+      onTap: widget.onTap,
+      onSecondaryTapDown: hasMenuActions
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
+      onLongPressStart: (PlatformUtil.isMobile && hasMenuActions)
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) {
+          setState(() => _hovering = true);
+          if (_isVideo && widget.onRequestScrubFrames != null) {
+            _loadScrubFrames();
+          }
+        },
+        onHover: (event) {
+          if (!_isVideo || _scrubFrames == null || _scrubFrames!.isEmpty) return;
+          final box = context.findRenderObject() as RenderBox?;
+          if (box == null) return;
+          final ratio = (event.localPosition.dx / box.size.width).clamp(0.0, 1.0);
+          final newIdx = (ratio * (_scrubFrames!.length - 1)).round();
+          final curIdx = (_hoverRatio * (_scrubFrames!.length - 1)).round();
+          if (newIdx != curIdx) setState(() => _hoverRatio = ratio);
+        },
+        onExit: (_) => setState(() {
+          _hovering = false;
+          _hoverRatio = 0.0;
+        }),
+        child: MediaCutoutCard(
+          hovered: _hovering,
+          withFoot: false,
+          // 「隐藏叠加信息」只管图上这两块（类型标签、时长）。标题和元信息现在排在
+          // 实色文字区里、不糊在图上，而且关掉它卡片高度也要跟着变，所以留着不动。
+          label: widget.showOverlay ? _kindLabel : '',
+          tagLabel: widget.showOverlay ? duration : null,
+          tagIcon: duration != null ? StrokeIcons.schedule : null,
+          title: item.title,
+          body: meta.join(' · '),
+          media: MediaCardCover(
+            source: src,
+            placeholderIcon: _isAudio ? StrokeIcons.musicNote : StrokeIcons.smartDisplay,
+            lostIcon: StrokeIcons.brokenImage,
+            isLost: widget.isLost,
           ),
+          mediaOverlay: (widget.isLost || showTimeline)
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (widget.isLost)
+                      Positioned(
+                        left: appMetrics.kSpace8,
+                        top: appMetrics.kSpace8,
+                        child: const LostBadge(),
+                      ),
+                    if (showTimeline)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: LinearProgressIndicator(
+                          value: _hoverRatio,
+                          minHeight: scaleW(3),
+                          backgroundColor: s.surface,
+                          valueColor: AlwaysStoppedAnimation<Color>(s.accent),
+                        ),
+                      ),
+                  ],
+                )
+              : null,
         ),
       ),
     );

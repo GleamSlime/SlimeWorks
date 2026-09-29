@@ -343,11 +343,9 @@ pub async fn dispatch_action(
         // ── 目录扫描 ─────────────────────────────────────────────────────────
         // 反推「把本地目录拖进远程文件夹」时的落点：MediaFolder 只有库内 ID，没有磁盘路径，
         // 因此从该文件夹下已有集合的磁盘位置反推（集合目录的父目录 = 文件夹目录）。
+        // 空 folder_id 表示「媒体库根目录」：所有集合的父目录即库根候选。
         "resolve_folder_upload_target" => {
             let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
-            if folder_id.trim().is_empty() {
-                return Err("缺少 folder_id".to_string());
-            }
             let (target_dir, candidates) = resolve_folder_target_dir(&folder_id)?;
             Ok(json!({
                 "target_dir": target_dir,
@@ -1566,6 +1564,18 @@ mod folder_target_tests {
     }
 
     #[test]
+    fn empty_folder_id_means_library_root() {
+        // 空 folder_id 表示「媒体库根目录」：无匹配集合 → 空 target + 全部库根候选
+        let collections = vec![
+            collection("c1", "/library/A/x", Some("f1")),
+            collection("c2", "/media/B/y", Some("f2")),
+        ];
+        let (target, candidates) = pick_folder_target_dir("", &collections);
+        assert_eq!(target, "");
+        assert_eq!(candidates, vec!["/library/A".to_string(), "/media/B".to_string()]);
+    }
+
+    #[test]
     fn collection_without_parent_is_skipped() {
         let collections = vec![collection("c1", "orphan", Some("f1"))];
         let (target, candidates) = pick_folder_target_dir("f1", &collections);
@@ -1657,16 +1667,6 @@ mod dispatch_action_tests {
             call("search_all_novels", json!({})).unwrap(),
             json!([])
         );
-    }
-
-    #[test]
-    fn resolve_folder_upload_target_requires_folder_id() {
-        // 缺 folder_id / 全空白时先报参数错，不会走到 DB 查询
-        let missing = call("resolve_folder_upload_target", json!({})).unwrap_err();
-        assert_eq!(missing, "缺少 folder_id");
-        let blank = call("resolve_folder_upload_target", json!({"folder_id": "   "}))
-            .unwrap_err();
-        assert_eq!(blank, "缺少 folder_id");
     }
 
     #[test]

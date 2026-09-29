@@ -18,12 +18,19 @@ pub fn lan_transfer_init() -> Result<()> {
 /// 创建并启动传输管理器
 ///
 /// [pre_trusted_json] 为预加载的信任设备 JSON 列表，在 TCP 监听开始前注入，避免竞态信任遗漏。
+/// [access_code] 为本机接入授权码（None = 关闭校验），用于阻止陌生设备未经授权发起传输。
 pub async fn lan_transfer_start(
     port: u16,
     save_dir: String,
     pre_trusted_json: Vec<String>,
+    access_code: Option<String>,
 ) -> Result<()> {
-    lan_transfer::lan_transfer_start(port, save_dir, pre_trusted_json).await
+    lan_transfer::lan_transfer_start(port, save_dir, pre_trusted_json, access_code).await
+}
+
+/// 运行时更新接入授权码（空 = 关闭校验）
+pub async fn lan_transfer_set_access_code(code: Option<String>) -> Result<()> {
+    lan_transfer::lan_transfer_set_access_code(code).await
 }
 
 /// 停止传输管理器

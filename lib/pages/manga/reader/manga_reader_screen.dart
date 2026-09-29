@@ -16,6 +16,8 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/services/node/node_models.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -321,6 +323,8 @@ class _MangaReaderScreenState
               ),
               onTap: () {
                 Navigator.of(ctx).pop();
+                // 释放菜单弹层占用的标志位，否则下载弹层会被同一把锁拦住
+                _isBottomSheetOpen = false;
                 _showDownloadSheet(context);
               },
             ),
@@ -383,6 +387,13 @@ class _MangaReaderScreenState
       final dl = getIt<MangaDownloadService>();
       final selected = <int>{};
 
+      // 下载目标：local（本机）/ node（推送到节点媒体库）
+      String destMode = 'local';
+      NodeEndpoint? pickedNode;
+      String? nodeTargetDir;
+      String? nodeBaseFolderId;
+      String? nodeFolderLabel;
+
       // ignore: use_build_context_synchronously
       showModalBottomSheet(
         // ignore: use_build_context_synchronously
@@ -395,6 +406,178 @@ class _MangaReaderScreenState
         builder: (ctx) {
           return StatefulBuilder(
             builder: (ctx2, setSheetState) {
+              // 选择节点：列出已启用节点，选中后清空目录选择
+              Future<void> pickNode() async {
+                final nodes = getIt<NodeSettingsService>();
+                final node = await showModalBottomSheet<NodeEndpoint>(
+                  context: ctx2,
+                  useRootNavigator: true,
+                  showDragHandle: true,
+                  builder: (sheetCtx) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                          child: Text(
+                            '选择节点',
+                            style: TextStyle(
+                              fontSize: AppTheme.metrics.fontSize15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (nodes.enabledRemoteNodes.isEmpty)
+                          const ListTile(title: Text('暂无已启用的节点')),
+                        ...nodes.enabledRemoteNodes.map((n) => ListTile(
+                          leading: DrawIcon(StrokeIcons.deviceHub),
+                          title: Text(n.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(
+                            n.effectiveApiBaseUrl,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTheme.metrics.fontSize11,
+                            ),
+                          ),
+                          trailing: n.id == pickedNode?.id
+                              ? Icon(Icons.check, size: AppTheme.metrics.iconSize18)
+                              : null,
+                          onTap: () => Navigator.of(sheetCtx).pop(n),
+                        )),
+                        SizedBox(height: AppTheme.metrics.kSpace8),
+                      ],
+                    ),
+                  ),
+                );
+                if (node != null) {
+                  setSheetState(() {
+                    pickedNode = node;
+                    nodeTargetDir = null;
+                    nodeBaseFolderId = null;
+                    nodeFolderLabel = null;
+                  });
+                }
+              }
+
+              // 选择节点媒体库目录：列出库内文件夹 + 根目录，再反推磁盘落点
+              Future<void> pickFolder() async {
+                if (pickedNode == null) return;
+                final nodes = getIt<NodeSettingsService>();
+                final node = pickedNode!;
+                final folder = await showModalBottomSheet<(String, String)>(
+                  context: ctx2,
+                  useRootNavigator: true,
+                  showDragHandle: true,
+                  builder: (sheetCtx) => FutureBuilder<List<Map<String, dynamic>>>(
+                    future: nodes.fetchNodeMediaFolders(node),
+                    builder: (_, snap) {
+                      final folders = snap.data ?? const <Map<String, dynamic>>[];
+                      return SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                              child: Text(
+                                '选择节点媒体库目录',
+                                style: TextStyle(
+                                  fontSize: AppTheme.metrics.fontSize15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (snap.connectionState != ConnectionState.done)
+                              const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(child: CircularProgressIndicator()),
+                              )
+                            else ...[
+                              ListTile(
+                                leading: DrawIcon(StrokeIcons.folder),
+                                title: const Text('媒体库根目录'),
+                                onTap: () =>
+                                    Navigator.of(sheetCtx).pop(('', '媒体库根目录')),
+                              ),
+                              if (folders.isEmpty)
+                                const ListTile(
+                                  title: Text('节点媒体库暂无文件夹（仍可选择根目录）'),
+                                )
+                              else
+                                ...folders.map((f) => ListTile(
+                                  leading: DrawIcon(StrokeIcons.folder),
+                                  title: Text(
+                                    (f['title'] ?? f['name'] ?? '').toString(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () => Navigator.of(sheetCtx).pop((
+                                    (f['id'] ?? '').toString(),
+                                    (f['title'] ?? f['name'] ?? '').toString(),
+                                  )),
+                                )),
+                            ],
+                            SizedBox(height: AppTheme.metrics.kSpace8),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+                if (folder == null) return;
+                final resolved = await nodes.resolveNodeUploadTarget(
+                  nodeId: node.id,
+                  folderId: folder.$1,
+                );
+                String targetDir = resolved.targetDir;
+                if (targetDir.isEmpty && resolved.candidates.isNotEmpty) {
+                  // 落点歧义/根目录多候选：让用户确认具体目录
+                  final picked = await showModalBottomSheet<String>(
+                    // ignore: use_build_context_synchronously
+                    context: ctx2,
+                    useRootNavigator: true,
+                    showDragHandle: true,
+                    builder: (sheetCtx) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                            child: Text(
+                              '选择目标目录',
+                              style: TextStyle(
+                                fontSize: AppTheme.metrics.fontSize15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          ...resolved.candidates.map((c) => ListTile(
+                            title: Text(c, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            onTap: () => Navigator.of(sheetCtx).pop(c),
+                          )),
+                          SizedBox(height: AppTheme.metrics.kSpace8),
+                        ],
+                      ),
+                    ),
+                  );
+                  if (picked != null) targetDir = picked;
+                }
+                if (targetDir.isEmpty) {
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('节点媒体库为空或无法解析目标目录')),
+                  );
+                  return;
+                }
+                setSheetState(() {
+                  nodeTargetDir = targetDir;
+                  nodeBaseFolderId = folder.$1.isEmpty ? null : folder.$1;
+                  nodeFolderLabel = folder.$2;
+                });
+              }
+
               return DraggableScrollableSheet(
                 expand: false,
                 initialChildSize: 0.6,
@@ -436,6 +619,145 @@ class _MangaReaderScreenState
                           ],
                         ),
                       ),
+                      // 下载目标：本机 / 节点
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Row(
+                          children: [
+                            Text(
+                              '下载到',
+                              style: TextStyle(
+                                fontSize: AppTheme.metrics.fontSize12,
+                                color: Theme.of(
+                                  ctx2,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            ChoiceChip(
+                              label: const Text('本机'),
+                              visualDensity: VisualDensity.compact,
+                              selected: destMode == 'local',
+                              onSelected: (_) =>
+                                  setSheetState(() => destMode = 'local'),
+                            ),
+                            const SizedBox(width: 8),
+                            ChoiceChip(
+                              label: const Text('节点'),
+                              visualDensity: VisualDensity.compact,
+                              selected: destMode == 'node',
+                              onSelected: (_) =>
+                                  setSheetState(() => destMode = 'node'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (destMode == 'node') ...[
+                        // 节点选择行
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          child: InkWell(
+                            borderRadius: AppTheme.metrics.radius8,
+                            onTap: pickNode,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '节点',
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize12,
+                                      color: Theme.of(
+                                        ctx2,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      pickedNode?.name ?? '选择节点',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: AppTheme.metrics.fontSize13,
+                                        color: pickedNode == null
+                                            ? Theme.of(
+                                                ctx2,
+                                              ).colorScheme.primary
+                                            : Theme.of(
+                                                ctx2,
+                                              ).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  DrawIcon(
+                                    StrokeIcons.chevronRight,
+                                    size: AppTheme.metrics.iconSize16,
+                                    color: Theme.of(
+                                      ctx2,
+                                    ).colorScheme.outline,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // 目标目录行
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          child: InkWell(
+                            borderRadius: AppTheme.metrics.radius8,
+                            onTap: pickFolder,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '目标目录',
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize12,
+                                      color: Theme.of(
+                                        ctx2,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      nodeFolderLabel ?? '选择目录',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: AppTheme.metrics.fontSize13,
+                                        color: nodeFolderLabel == null
+                                            ? Theme.of(
+                                                ctx2,
+                                              ).colorScheme.primary
+                                            : Theme.of(
+                                                ctx2,
+                                              ).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  DrawIcon(
+                                    StrokeIcons.chevronRight,
+                                    size: AppTheme.metrics.iconSize16,
+                                    color: Theme.of(
+                                      ctx2,
+                                    ).colorScheme.outline,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       Expanded(
                         child: GridView.builder(
                           controller: controller,
@@ -505,7 +827,11 @@ class _MangaReaderScreenState
                           child: SizedBox(
                             width: double.infinity,
                             child: FilledButton(
-                              onPressed: selected.isEmpty
+                              onPressed:
+                                  selected.isEmpty ||
+                                      (destMode == 'node' &&
+                                          (pickedNode == null ||
+                                              nodeTargetDir == null))
                                   ? null
                                   : () {
                                       Navigator.of(ctx).pop();
@@ -514,10 +840,24 @@ class _MangaReaderScreenState
                                             (e) => selected.contains(e.order),
                                           )
                                           .toList();
-                                      dl.downloadEpsMultiple(comic, eps);
+                                      if (destMode == 'node') {
+                                        _startNodePush(
+                                          context,
+                                          dl,
+                                          comic,
+                                          eps,
+                                          pickedNode!.id,
+                                          nodeTargetDir!,
+                                          nodeBaseFolderId,
+                                        );
+                                      } else {
+                                        dl.downloadEpsMultiple(comic, eps);
+                                      }
                                     },
                               child: Text(
-                                '下载 ${selected.isEmpty ? '' : selected.length} 章',
+                                destMode == 'node'
+                                    ? '下载并推送 ${selected.isEmpty ? '' : selected.length} 章'
+                                    : '下载 ${selected.isEmpty ? '' : selected.length} 章',
                               ),
                             ),
                           ),
@@ -532,6 +872,75 @@ class _MangaReaderScreenState
         },
       ).whenComplete(() => _isBottomSheetOpen = false);
     });
+  }
+
+  /// 下载章节并推送到节点：先弹常驻进度对话框，推送完成后关闭并汇总结果。
+  void _startNodePush(
+    BuildContext screenContext,
+    MangaDownloadService dl,
+    MangaComic comic,
+    List<MangaEps> eps,
+    String nodeId,
+    String targetDir,
+    String? baseFolderId,
+  ) {
+    final navigator = Navigator.of(screenContext, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(screenContext);
+    showDialog(
+      context: screenContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Obx(() {
+        return AlertDialog(
+          title: const Text('下载并推送到节点'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                dl.nodePushStage.value.isEmpty
+                    ? '准备中...'
+                    : dl.nodePushStage.value,
+                style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace12),
+              LinearProgressIndicator(
+                value: dl.nodePushTotal.value > 0
+                    ? (dl.nodePushDone.value / dl.nodePushTotal.value)
+                        .clamp(0.0, 1.0)
+                        .toDouble()
+                    : null,
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace8),
+              Text(
+                '${dl.nodePushDone.value}/${dl.nodePushTotal.value}',
+                style: TextStyle(
+                  fontSize: AppTheme.metrics.fontSize11,
+                  color: Theme.of(
+                    dialogCtx,
+                  ).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+    dl
+        .downloadEpsToNode(
+          comic,
+          eps,
+          nodeId: nodeId,
+          targetDir: targetDir,
+          baseFolderId: baseFolderId,
+        )
+        .then((result) {
+          if (navigator.canPop()) navigator.pop();
+          if (!mounted) return;
+          final msg = result.fail == 0
+              ? '成功推送 ${result.success} 章到节点'
+              : '推送完成：成功 ${result.success} 章，失败 ${result.fail} 章';
+          messenger.showSnackBar(SnackBar(content: Text(msg)));
+        });
   }
 
   void _showSettingsSheet(BuildContext context) {
@@ -795,33 +1204,36 @@ class _BarBtn extends StatelessWidget {
           horizontal: AppTheme.metrics.kSpace16,
           vertical: AppTheme.metrics.kSpace6,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            DrawIcon(icon, color: iconColor, size: AppTheme.metrics.iconSize20),
-            SizedBox(height: AppTheme.metrics.kSpace2),
-            Text(
-              label,
-              style: TextStyle(
-                color: labelColor,
-                fontSize: AppTheme.metrics.fontSize10,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.2,
-              ),
-            ),
-            if (badge != null) ...[
-              SizedBox(height: AppTheme.metrics.kSpace1),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              DrawIcon(icon, color: iconColor, size: AppTheme.metrics.iconSize20),
+              SizedBox(height: AppTheme.metrics.kSpace2),
               Text(
-                badge!,
+                label,
                 style: TextStyle(
-                  color: badgeColor,
-                  fontSize: AppTheme.metrics.fontSize9,
-                  fontWeight: FontWeight.w400,
+                  color: labelColor,
+                  fontSize: AppTheme.metrics.fontSize10,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.2,
                 ),
               ),
+              if (badge != null) ...[
+                SizedBox(height: AppTheme.metrics.kSpace1),
+                Text(
+                  badge!,
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: AppTheme.metrics.fontSize9,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

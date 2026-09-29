@@ -75,6 +75,8 @@ pub struct TransferService {
     pending_accept: Arc<RwLock<HashMap<String, oneshot::Sender<bool>>>>,
     /// 接收文件保存目录（由 Dart 注入 path_provider 的 documents 路径）
     save_dir: Arc<RwLock<String>>,
+    /// 接入授权码（非信任设备需携带正确授权码才允许发起传输；空 = 关闭校验）
+    access_code: Arc<RwLock<Option<String>>>,
     event_sender: Sender<TransferEvent>,
     #[allow(dead_code)]
     event_receiver: Receiver<TransferEvent>,
@@ -98,6 +100,7 @@ impl TransferService {
             trusted_devices: Arc::new(RwLock::new(HashMap::new())),
             pending_accept: Arc::new(RwLock::new(HashMap::new())),
             save_dir: Arc::new(RwLock::new(save_dir)),
+            access_code: Arc::new(RwLock::new(None)),
             event_sender,
             event_receiver,
             listener: Some(listener),
@@ -110,6 +113,17 @@ impl TransferService {
     pub async fn set_save_dir(&self, dir: String) {
         sw_info!("文件保存目录: {}", dir);
         *self.save_dir.write().await = dir;
+    }
+
+    /// 设置接入授权码（空 = 关闭校验）
+    pub async fn set_access_code(&self, code: Option<String>) {
+        sw_info!("接入授权码已更新: {}", if code.is_some() { "已设置" } else { "未设置" });
+        *self.access_code.write().await = code;
+    }
+
+    /// 获取当前接入授权码（供发起连接时携带）
+    async fn get_access_code(&self) -> Option<String> {
+        self.access_code.read().await.clone()
     }
 
     /// 开始监听连接
@@ -128,6 +142,7 @@ impl TransferService {
         let trusted_devices = self.trusted_devices.clone();
         let pending_accept = self.pending_accept.clone();
         let save_dir = self.save_dir.clone();
+        let access_code = self.access_code.clone();
         let event_sender = self.event_sender.clone();
         let device_id = self.device_id.clone();
         let device_name = self.device_name.clone();
@@ -147,6 +162,7 @@ impl TransferService {
                                 let trusted_devices = trusted_devices.clone();
                                 let pending_accept = pending_accept.clone();
                                 let save_dir = save_dir.clone();
+                                let access_code = access_code.clone();
                                 let event_sender = event_sender.clone();
                                 let device_id = device_id.clone();
                                 let device_name = device_name.clone();
@@ -158,6 +174,7 @@ impl TransferService {
                                         trusted_devices,
                                         pending_accept,
                                         save_dir,
+                                        access_code,
                                         event_sender,
                                         device_id,
                                         device_name,
@@ -224,6 +241,7 @@ impl TransferService {
         text: String,
     ) -> Result<String> {
         let transfer_id = Uuid::new_v4().to_string();
+        let access_code = self.get_access_code().await;
 
         let request = TransferRequest {
             transfer_id: transfer_id.clone(),
@@ -233,6 +251,7 @@ impl TransferService {
             file_name: None,
             file_size: None,
             text_content: Some(text.clone()),
+            access_code,
         };
 
         let item = TransferItem {
@@ -301,6 +320,7 @@ impl TransferService {
         };
 
         let transfer_id = Uuid::new_v4().to_string();
+        let access_code = self.get_access_code().await;
 
         let request = TransferRequest {
             transfer_id: transfer_id.clone(),
@@ -310,6 +330,7 @@ impl TransferService {
             file_name: Some(file_name.clone()),
             file_size: Some(file_size),
             text_content: None,
+            access_code,
         };
 
         let item = TransferItem {
@@ -813,6 +834,7 @@ async fn handle_connection(
     trusted_devices: Arc<RwLock<HashMap<String, TrustedDevice>>>,
     pending_accept: Arc<RwLock<HashMap<String, oneshot::Sender<bool>>>>,
     save_dir: Arc<RwLock<String>>,
+    access_code: Arc<RwLock<Option<String>>>,
     event_sender: Sender<TransferEvent>,
     device_id: String,
     device_name: String,
@@ -860,6 +882,21 @@ async fn handle_connection(
                 .read()
                 .await
                 .contains_key(&request.sender_device_id);
+
+            // 非信任设备必须携带正确的本机授权码；无权则直接拒绝，不进入待确认
+            if !is_trusted {
+                let expected = access_code.read().await.clone();
+                if let Some(expected_code) = expected {
+                    let provided = request.access_code.as_deref().unwrap_or("");
+                    if provided != expected_code {
+                        sw_warn!(
+                            "拒绝未授权连接: 来自 {}, 授权码不匹配",
+                            request.sender_device_name
+                        );
+                        return Err(anyhow!("授权码验证失败"));
+                    }
+                }
+            }
 
             // 初始化接收方传输记录
             let initial_status = if is_trusted {
@@ -989,7 +1026,8 @@ async fn handle_connection(
             let saved_path = if is_file_transfer {
                 if let Some(file_name) = &request.file_name {
                     let dir = save_dir.read().await.clone();
-                    let save_path = format!("{}/{}", dir, file_name);
+                    // 净化文件名，防止路径穿越，且保证最终路径落在保存目录内
+                    let save_path = sanitize_save_path(&dir, file_name);
                     match receive_file_from_stream(
                         &mut stream,
                         &save_path,
@@ -1159,6 +1197,32 @@ async fn receive_file_from_stream(
     file.flush().await?;
     sw_info!("文件接收完成: {} ({} bytes)", save_path, bytes_received);
     Ok(())
+}
+
+/// 净化并对齐文件保存路径，杜绝路径穿越 / 非法字符
+///
+/// 仅取文件名的 basename，剔除路径分隔符与非法字符，并保证最终路径位于 [save_dir] 下。
+fn sanitize_save_path(save_dir: &str, file_name: &str) -> String {
+    // 只取 basename，去掉任何目录前缀（含 ../ 穿越）
+    let base = Path::new(file_name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
+    // 剔除 Windows 非法字符与控制字符
+    let clean: String = base
+        .chars()
+        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') && !c.is_control())
+        .collect();
+    let name = if clean.is_empty() { "unnamed".to_string() } else { clean };
+
+    let dir_path = Path::new(save_dir);
+    let candidate = dir_path.join(&name);
+    // 保险：二次校验结果仍在保存目录内，否则回退为目录内的 "unnamed"
+    if candidate.starts_with(dir_path) {
+        candidate.to_string_lossy().to_string()
+    } else {
+        dir_path.join("unnamed").to_string_lossy().to_string()
+    }
 }
 
 /// 判断是否为图片文件

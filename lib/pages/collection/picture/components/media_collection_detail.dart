@@ -7,6 +7,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/asr/subtitle_action.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/pages/collection/picture/components/media_viewer_page.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -188,15 +189,28 @@ class MediaCollectionDetailView extends StatelessWidget {
               onConfirmDelete: onConfirmDelete,
               onConfirmDeleteNodeLocalFile: isRemote ? onConfirmDeleteNodeLocalFile : null,
             )
-          : GridView.builder(
-              key: ValueKey('grid_$collectionId'),
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columnCount,
-                mainAxisSpacing: AppTheme.metrics.kSpace12,
-                crossAxisSpacing: AppTheme.metrics.kSpace12,
-                childAspectRatio: 0.75,
-              ),
+          : LayoutBuilder(
+              // 镂空卡的文字区定高、封面按比例，卡片总高必须按真实格宽反推，
+              // 所以这里要先量一次宽度再交给 delegate
+              builder: (context, constraints) {
+                final spacing = AppTheme.metrics.kSpace12;
+                final cellWidth =
+                    (constraints.maxWidth -
+                        2 * spacing -
+                        spacing * (columnCount - 1)) /
+                    columnCount;
+                return GridView.builder(
+                  key: ValueKey('grid_$collectionId'),
+                  padding: EdgeInsets.all(spacing),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columnCount,
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    childAspectRatio: MediaCutoutGeometry.aspectFor(
+                      cellWidth,
+                      withFoot: false,
+                    ),
+                  ),
               itemCount: sortedItems.length,
               itemBuilder: (context, index) {
                 final item = sortedItems[index];
@@ -285,9 +299,11 @@ class MediaCollectionDetailView extends StatelessWidget {
                           displayName: item.title,
                         )
                       : null,
-                );
-              },
-            );
+                  );
+                },
+              );
+            },
+          );
 
       // ── 瀑布流 + 进度条 ───────────────────────────────────────────────────
       return Stack(

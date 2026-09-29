@@ -118,6 +118,8 @@ pub struct TransferRequest {
     pub file_name: Option<String>,
     pub file_size: Option<u64>,
     pub text_content: Option<String>,
+    /// 发送方本机授权码（用于陌生设备接入校验，信任设备豁免）
+    pub access_code: Option<String>,
 }
 
 /// 传输响应数据
@@ -247,6 +249,7 @@ mod tests {
             file_name: None,
             file_size: None,
             text_content: Some("Hello, world!".to_string()),
+            access_code: None,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         let restored: TransferRequest = serde_json::from_str(&json).expect("deserialize");
@@ -265,6 +268,7 @@ mod tests {
             file_name: Some("photo.jpg".to_string()),
             file_size: Some(1024 * 1024),
             text_content: None,
+            access_code: None,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         let restored: TransferRequest = serde_json::from_str(&json).expect("deserialize");

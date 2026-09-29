@@ -7,7 +7,7 @@ import 'package:slime_works/core/routes/app_routes.dart';
 
 /// 历史上没有侧边栏的页面。侧栏全局化后它们并入外壳，但进入时默认落在
 /// 隐藏态——只剩内容区左缘一根指示条，阅读/工具类页面的沉浸感才和过去一致。
-/// 已登记进侧栏条目的页面（动效实验室、漫画历史）不算：从侧栏点进去
+/// 已登记进侧栏条目的页面（动效实验室）不算：从侧栏点进去
 /// 又被立刻藏起来，等于自相矛盾。
 const Set<String> kSidebarDefaultHiddenPaths = {
   '/novel-library',
@@ -75,7 +75,6 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const GameCategoriesRoute(),
     const GameStatsRoute(),
     const GameSettingsRoute(),
-    const MangaHistoryRoute(),
   ];
 
   bool visible(AppRouteData route) {

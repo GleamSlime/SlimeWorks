@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -10,12 +7,10 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/format.dart';
-import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
-import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
-import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MediaCollectionCard extends StatefulWidget {
   const MediaCollectionCard({
@@ -119,9 +114,6 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
   /// 滑动预览当前进度 [0,1]，映射到 hoverCoverSources 索引。
   double _swipeFraction = 0.5;
 
-  static const Duration _kAnimDur = Duration(milliseconds: 200);
-  static const Curve _kAnimCurve = Curves.easeOut;
-
   Worker? _privacyWorker;
 
   @override
@@ -176,87 +168,6 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
       }
     }
     return widget.coverSource;
-  }
-
-  Widget _buildCoverImage(String? src, ThemeData theme) {
-    if (widget.isLost && src != null && src.isNotEmpty) {
-      return const _CollectionPlaceholder(icon: StrokeIcons.brokenImage);
-    }
-    if (src == null || src.isEmpty) {
-      return const _CollectionPlaceholder(icon: StrokeIcons.collections);
-    }
-    final cacheW = () {
-      if (src.startsWith('http')) return null;
-      final prefs = getIt.isRegistered<MediaPrefsService>()
-          ? getIt.get<MediaPrefsService>()
-          : null;
-      final w = prefs?.localPreviewWidth.value ?? 480;
-      return w > 0 ? w : null;
-    }();
-    final privacyOn = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().privacyMode.value
-        : false;
-    final blurSigma = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().privacyBlurSigma.value
-        : 15.0;
-    final image = src.startsWith('http')
-        ? Image.network(
-            src,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (_, _, _) =>
-                const _CollectionPlaceholder(icon: StrokeIcons.brokenImage),
-          )
-        : Image.file(
-            File(src),
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            cacheWidth: cacheW,
-            errorBuilder: (_, _, _) =>
-                const _CollectionPlaceholder(icon: StrokeIcons.brokenImage),
-          );
-    Widget cover = Stack(
-      fit: StackFit.expand,
-      children: [
-        image,
-        if (kDebugMode)
-          Positioned(
-            right: AppTheme.metrics.kSpace4,
-            bottom: AppTheme.metrics.kSpace4,
-            child: DebugImageSizeBadge(src: src),
-          ),
-      ],
-    );
-    if (privacyOn) {
-      cover = ClipRect(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            image,
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-              child: Container(color: Colors.transparent),
-            ),
-            Center(
-              child: Container(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(120),
-                  borderRadius: AppTheme.metrics.radius999,
-                ),
-                child: DrawIcon(StrokeIcons.lockOutline,
-                  size: AppTheme.metrics.iconSize20,
-                  color: Colors.white70,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    return cover;
   }
 
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
@@ -377,442 +288,174 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final displaySource = _activeDisplaySource();
+    final previewing =
+        (_hovering && _hoverPreviewActive) || _swipePreviewActive;
+    final timelineFraction = _cardWidth > 0
+        ? (_swipePreviewActive
+                  ? _swipeFraction
+                  : _hoverLocalX / _cardWidth)
+              .clamp(0.0, 1.0)
+        : 0.0;
+    // 时间线只在"真的在翻封面序列"时画；多选态下框选会打断它，不如不画
+    final showTimeline =
+        previewing &&
+        !widget.isSelecting &&
+        (widget.hoverCoverSources?.length ?? 0) > 1;
 
-    return AnimatedScale(
-      scale: _hovering ? 1.03 : 1.0,
-      duration: _kAnimDur,
-      curve: _kAnimCurve,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onLongPress: PlatformUtil.isMobile ? null : widget.onLongPress,
-        onLongPressStart: PlatformUtil.isMobile
-            ? (details) => _showContextMenu(context, details.globalPosition)
-            : null,
-        onSecondaryTapDown: (details) =>
-            _showContextMenu(context, details.globalPosition),
-        // ── 移动端水平滑动预览 ──────────────────────────────────────────────
-        onHorizontalDragStart:
-            PlatformUtil.isMobile &&
-                (widget.hoverCoverSources?.isNotEmpty ?? false)
-            ? (d) {
-                // 触发预取（对应鼠标 onHoverEnter）
-                if (!_hoverPreviewActive) {
-                  _hoverPreviewActive = true;
-                  widget.onHoverEnter?.call();
-                }
-                setState(() {
-                  _swipePreviewActive = true;
-                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(
-                    0.0,
-                    1.0,
-                  );
-                });
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: PlatformUtil.isMobile ? null : widget.onLongPress,
+      onLongPressStart: PlatformUtil.isMobile
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
+      onSecondaryTapDown: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      // ── 移动端水平滑动预览 ──────────────────────────────────────────────
+      onHorizontalDragStart:
+          PlatformUtil.isMobile &&
+              (widget.hoverCoverSources?.isNotEmpty ?? false)
+          ? (d) {
+              // 触发预取（对应鼠标 onHoverEnter）
+              if (!_hoverPreviewActive) {
+                _hoverPreviewActive = true;
+                widget.onHoverEnter?.call();
               }
-            : null,
-        onHorizontalDragUpdate:
-            PlatformUtil.isMobile &&
-                (widget.hoverCoverSources?.isNotEmpty ?? false)
-            ? (d) {
-                if (!_swipePreviewActive) return;
-                setState(() {
-                  _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(
-                    0.0,
-                    1.0,
-                  );
-                });
-              }
-            : null,
-        onHorizontalDragEnd:
-            PlatformUtil.isMobile &&
-                (widget.hoverCoverSources?.isNotEmpty ?? false)
-            ? (_) {
-                setState(() => _swipePreviewActive = false);
-              }
-            : null,
-        onHorizontalDragCancel:
-            PlatformUtil.isMobile &&
-                (widget.hoverCoverSources?.isNotEmpty ?? false)
-            ? () {
-                setState(() => _swipePreviewActive = false);
-              }
-            : null,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) {
-            setState(() => _hovering = true);
-            // 3s 后触发预取，避免进入就拉满 CPU
-            _hoverTimer?.cancel();
-            _hoverPreviewActive = false;
-            _hoverTimer = Timer(const Duration(seconds: 3), () {
-              if (!mounted) return;
-              setState(() => _hoverPreviewActive = true);
-              widget.onHoverEnter?.call();
-            });
-          },
-          onExit: (_) {
-            _hoverTimer?.cancel();
-            _hoverTimer = null;
-            setState(() {
-              _hovering = false;
-              _hoverLocalX = 0;
-              _realtimeVideoFrame = null;
-              _hoverPreviewActive = false;
-            });
-          },
-          onHover: (e) {
-            setState(() => _hoverLocalX = e.localPosition.dx);
-            if (_hoverPreviewActive &&
-                widget.onRequestVideoFrame != null &&
-                _cardWidth > 0) {
-              final fraction = (e.localPosition.dx / _cardWidth).clamp(
-                0.0,
-                1.0,
-              );
-              final frame = widget.onRequestVideoFrame!(fraction);
-              if (frame != null && frame != _realtimeVideoFrame) {
-                setState(() => _realtimeVideoFrame = frame);
-              }
+              setState(() {
+                _swipePreviewActive = true;
+                _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(
+                  0.0,
+                  1.0,
+                );
+              });
             }
+          : null,
+      onHorizontalDragUpdate:
+          PlatformUtil.isMobile &&
+              (widget.hoverCoverSources?.isNotEmpty ?? false)
+          ? (d) {
+              if (!_swipePreviewActive) return;
+              setState(() {
+                _swipeFraction = (d.localPosition.dx / _cardWidth).clamp(
+                  0.0,
+                  1.0,
+                );
+              });
+            }
+          : null,
+      onHorizontalDragEnd:
+          PlatformUtil.isMobile &&
+              (widget.hoverCoverSources?.isNotEmpty ?? false)
+          ? (_) {
+              setState(() => _swipePreviewActive = false);
+            }
+          : null,
+      onHorizontalDragCancel:
+          PlatformUtil.isMobile &&
+              (widget.hoverCoverSources?.isNotEmpty ?? false)
+          ? () {
+              setState(() => _swipePreviewActive = false);
+            }
+          : null,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) {
+          setState(() => _hovering = true);
+          // 3s 后触发预取，避免进入就拉满 CPU
+          _hoverTimer?.cancel();
+          _hoverPreviewActive = false;
+          _hoverTimer = Timer(const Duration(seconds: 3), () {
+            if (!mounted) return;
+            setState(() => _hoverPreviewActive = true);
+            widget.onHoverEnter?.call();
+          });
+        },
+        onExit: (_) {
+          _hoverTimer?.cancel();
+          _hoverTimer = null;
+          setState(() {
+            _hovering = false;
+            _hoverLocalX = 0;
+            _realtimeVideoFrame = null;
+            _hoverPreviewActive = false;
+          });
+        },
+        onHover: (e) {
+          setState(() => _hoverLocalX = e.localPosition.dx);
+          if (_hoverPreviewActive &&
+              widget.onRequestVideoFrame != null &&
+              _cardWidth > 0) {
+            final fraction = (e.localPosition.dx / _cardWidth).clamp(
+              0.0,
+              1.0,
+            );
+            final frame = widget.onRequestVideoFrame!(fraction);
+            if (frame != null && frame != _realtimeVideoFrame) {
+              setState(() => _realtimeVideoFrame = frame);
+            }
+          }
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            _cardWidth = constraints.maxWidth > 0 ? constraints.maxWidth : 1;
+            return MediaCutoutCard(
+              selected: widget.isSelected,
+              hovered: _hovering || _swipePreviewActive,
+              label: '集合',
+              // 主读数走右上标签：条数是这一格最该被扫见的数
+              tagLabel: '${widget.resourceCount} 项',
+              tagIcon: StrokeIcons.photoLibrary,
+              title: widget.collection.title,
+              // 目录整条留给正文：以前它哪都没露，恰恰是找文件时最想要的
+              body: widget.collection.folderPath,
+              footIcon: widget.isRemote ? StrokeIcons.cloud : StrokeIcons.computer,
+              footName: widget.isRemote ? (widget.nodeName ?? '远程节点') : '本机',
+              footReadout: formatFileSize(widget.totalSize),
+              trailingIcon: widget.isFavorited
+                  ? StrokeIcons.favorite
+                  : StrokeIcons.favoriteBorder,
+              trailingOnTap: widget.onToggleFavorite,
+              // 已收藏的要一直看得见，不能只在悬停时露一下
+              trailingAtRest: widget.isFavorited,
+              media: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 120),
+                // 悬停翻封面时按图源换页，不做淡入淡出会变成硬切闪屏
+                child: MediaCardCover(
+                  key: ValueKey('${widget.collection.id}_$displaySource'),
+                  source: displaySource,
+                  placeholderIcon: StrokeIcons.collections,
+                  lostIcon: StrokeIcons.brokenImage,
+                  isLost: widget.isLost,
+                ),
+              ),
+              mediaOverlay: (widget.isLost || showTimeline)
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (widget.isLost)
+                          Positioned(
+                            left: appMetrics.kSpace8,
+                            top: appMetrics.kSpace8,
+                            child: const LostBadge(),
+                          ),
+                        if (showTimeline)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: LinearProgressIndicator(
+                              value: timelineFraction,
+                              minHeight: scaleW(3),
+                              backgroundColor: s.surface,
+                              valueColor: AlwaysStoppedAnimation<Color>(s.accent),
+                            ),
+                          ),
+                      ],
+                    )
+                  : null,
+            );
           },
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              _cardWidth = constraints.maxWidth > 0 ? constraints.maxWidth : 1;
-              return Card(
-                elevation: _hovering ? 4 : 0,
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: appMetrics.radius8,
-                  side: widget.isSelected
-                      ? BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: scaleW(2),
-                        )
-                      : BorderSide.none,
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // ── 全封面背景图（hover/swipe 时微缩放）────────────────
-                    AnimatedScale(
-                      scale: _hovering || _swipePreviewActive ? 1.05 : 1.0,
-                      duration: _kAnimDur,
-                      curve: _kAnimCurve,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 120),
-                        child: KeyedSubtree(
-                          key: ValueKey(
-                            '${widget.collection.id}_$displaySource',
-                          ),
-                          child: _buildCoverImage(displaySource, theme),
-                        ),
-                      ),
-                    ),
-
-                    // ── 丢失 tag + 数量/大小 badge
-                    Positioned(
-                      left: appMetrics.kSpace8,
-                      top: appMetrics.kSpace8,
-                      child: AnimatedOpacity(
-                        opacity: _hovering ? 1.0 : 0.75,
-                        duration: _kAnimDur,
-                        curve: _kAnimCurve,
-                        child: AnimatedScale(
-                          scale: _hovering ? 1.0 : 0.88,
-                          duration: _kAnimDur,
-                          curve: _kAnimCurve,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.isLost) const LostBadge(),
-                              if (widget.isLost)
-                                SizedBox(width: appMetrics.kSpace4),
-                              ClipRRect(
-                                borderRadius: appMetrics.radius12,
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(
-                                    sigmaX: 6,
-                                    sigmaY: 6,
-                                  ),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: appMetrics.kSpace8,
-                                      vertical: appMetrics.kSpace4,
-                                    ),
-                                    color: _hovering
-                                        ? Colors.black.withAlpha(130)
-                                        : Colors.black.withAlpha(90),
-                                    child: Text(
-                                      // 类型徽章：计数与体积统一放在底部信息栏，和文件夹卡同构
-                                      '集合',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: appMetrics.fontSize9,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // ── 远程节点名 badge（右上角）────────────────────────
-                    if (widget.isRemote && widget.nodeName != null)
-                      Positioned(
-                        right: appMetrics.kSpace8,
-                        top: appMetrics.kSpace8,
-                        child: ClipRRect(
-                          borderRadius: appMetrics.radius12,
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: appMetrics.kSpace8,
-                                vertical: appMetrics.kSpace4,
-                              ),
-                              color: theme.colorScheme.primaryContainer
-                                  .withAlpha(200),
-                              child: Text(
-                                widget.nodeName!,
-                                style: TextStyle(
-                                  fontSize: appMetrics.fontSize9,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    // ── 收藏按钮（本地：右上角；远程：左下角避开节点名 badge）
-                    Positioned(
-                      right: widget.isRemote ? null : appMetrics.kSpace8,
-                      left: widget.isRemote ? appMetrics.kSpace8 : null,
-                      top: widget.isRemote ? null : appMetrics.kSpace8,
-                      bottom: widget.isRemote ? appMetrics.kSpace40 : null,
-                      child: AnimatedOpacity(
-                        opacity: (_hovering || PlatformUtil.isMobile)
-                            ? 1.0
-                            : (widget.isFavorited ? 0.9 : 0.0),
-                        duration: _kAnimDur,
-                        curve: _kAnimCurve,
-                        child: AnimatedScale(
-                          scale: (_hovering || PlatformUtil.isMobile)
-                              ? 1.0
-                              : 0.7,
-                          duration: _kAnimDur,
-                          curve: _kAnimCurve,
-                          child: GestureDetector(
-                            onTap: widget.onToggleFavorite,
-                            child: ClipRRect(
-                              borderRadius: appMetrics.radius12,
-                              child: TweenAnimationBuilder<double>(
-                                duration: _kAnimDur,
-                                curve: _kAnimCurve,
-                                tween: Tween(
-                                  begin: _hovering ? 8.0 : 0.0,
-                                  end: _hovering ? 0.0 : 8.0,
-                                ),
-                                builder: (_, sigma, child) => BackdropFilter(
-                                  filter: ImageFilter.blur(
-                                    sigmaX: sigma,
-                                    sigmaY: sigma,
-                                  ),
-                                  child: child,
-                                ),
-                                child: Container(
-                                  padding: EdgeInsets.all(appMetrics.kSpace4),
-                                  color: _hovering
-                                      ? Colors.black.withAlpha(150)
-                                      : Colors.transparent,
-                                  child: DrawIcon(
-                                    widget.isFavorited
-                                        ? StrokeIcons.favorite
-                                        : StrokeIcons.favoriteBorder,
-                                    color: widget.isFavorited
-                                        ? Colors.redAccent
-                                        : Colors.white70,
-                                    size: scaleW(16),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // ── 悬停预览进度条————————————————————————————
-                    if ((_hovering && _hoverPreviewActive ||
-                            _swipePreviewActive) &&
-                        !widget.isSelecting &&
-                        widget.hoverCoverSources != null &&
-                        widget.hoverCoverSources!.length > 1)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: LinearProgressIndicator(
-                          value: _swipePreviewActive
-                              ? _swipeFraction
-                              : (_cardWidth > 0
-                                    ? (_hoverLocalX / _cardWidth).clamp(
-                                        0.0,
-                                        1.0,
-                                      )
-                                    : 0),
-                          minHeight: scaleW(3),
-                          backgroundColor: Colors.white24,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            Colors.white70,
-                          ),
-                        ),
-                      ),
-
-                    // ── 底部磨砂标题栏（hover 时高度扩展）───────────────
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: TweenAnimationBuilder<double>(
-                        duration: _kAnimDur,
-                        curve: _kAnimCurve,
-                        tween: Tween(
-                          begin: _hovering ? 4.0 : 3.0,
-                          end: _hovering ? 3.0 : 4.0,
-                        ),
-                        builder: (_, blurSigma, child) => ClipRRect(
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: appMetrics.radius8.bottomLeft,
-                            bottomRight: appMetrics.radius8.bottomRight,
-                          ),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(
-                              sigmaX: blurSigma,
-                              sigmaY: blurSigma,
-                            ),
-                            child: child,
-                          ),
-                        ),
-                        child: AnimatedContainer(
-                          duration: _kAnimDur,
-                          curve: _kAnimCurve,
-                          color: _hovering
-                              ? Colors.black.withAlpha(140)
-                              : Colors.black.withAlpha(100),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: appMetrics.kSpace10,
-                            vertical: appMetrics.kSpace10,
-                          ),
-                          child: AnimatedSlide(
-                            offset: _hovering
-                                ? Offset.zero
-                                : const Offset(0, 0.05),
-                            duration: _kAnimDur,
-                            curve: _kAnimCurve,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  widget.collection.title,
-                                  maxLines: _hovering ? 3 : 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: appMetrics.fontSize12,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.3,
-                                  ),
-                                ),
-                                SizedBox(height: appMetrics.kSpace4),
-                                Row(
-                                  children: [
-                                    DrawIcon(StrokeIcons.photoLibrary,
-                                      size: scaleW(12),
-                                      color: Colors.white.withAlpha(180),
-                                    ),
-                                    SizedBox(width: appMetrics.kSpace4),
-                                    Flexible(
-                                      child: Text(
-                                        '${widget.resourceCount} 项',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: Colors.white.withAlpha(180),
-                                          fontSize: appMetrics.fontSize9,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: appMetrics.kSpace8),
-                                    DrawIcon(StrokeIcons.sdCard,
-                                      size: scaleW(12),
-                                      color: Colors.white.withAlpha(180),
-                                    ),
-                                    SizedBox(width: appMetrics.kSpace4),
-                                    Flexible(
-                                      child: Text(
-                                        formatFileSize(widget.totalSize),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: Colors.white.withAlpha(180),
-                                          fontSize: appMetrics.fontSize9,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 集合/文件夹封面为空或加载失败时显示的默认占位图标。
-class _CollectionPlaceholder extends StatelessWidget {
-  const _CollectionPlaceholder({required this.icon});
-  final StrokeIcon icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary.withAlpha(42),
-            theme.colorScheme.secondary.withAlpha(28),
-          ],
-        ),
-      ),
-      child: Center(
-        child: DrawIcon(icon,
-          size: AppTheme.metrics.iconSize48,
-          color: theme.colorScheme.primary.withAlpha(150),
         ),
       ),
     );

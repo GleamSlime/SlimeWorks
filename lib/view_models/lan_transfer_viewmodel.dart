@@ -78,7 +78,7 @@ class LanTransferViewModel extends BaseViewModel {
       return;
     }
     await super.onInitAsync();
-    await startService();
+    // 默认不启动服务，需用户手动开启
   }
 
   /// 启动服务
@@ -188,6 +188,12 @@ class LanTransferViewModel extends BaseViewModel {
       handleError(e, '停止服务失败');
     }
   }
+
+  /// 读取当前本机接入授权码（未设置返回 null）
+  Future<String?> getAccessCode() => _service.getAccessCode();
+
+  /// 更新本机接入授权码；[code] 为空则关闭授权校验
+  Future<void> setAccessCode(String? code) => _service.setAccessCode(code);
 
   /// 刷新设备列表（仅在 isScanning 时有效）
   Future<void> refreshDevices() async {

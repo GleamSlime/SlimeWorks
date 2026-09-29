@@ -32,6 +32,7 @@ pub async fn lan_transfer_start(
     port: u16,
     save_dir: String,
     pre_trusted_json: Vec<String>,
+    access_code: Option<String>,
 ) -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
 
@@ -41,10 +42,11 @@ pub async fn lan_transfer_start(
     }
 
     sw_info!(
-        "lan_transfer_start begin, port={}, save_dir={}, pre_trusted={}",
+        "lan_transfer_start begin, port={}, save_dir={}, pre_trusted={}, access_code={}",
         port,
         save_dir,
-        pre_trusted_json.len()
+        pre_trusted_json.len(),
+        if access_code.is_some() { "set" } else { "off" }
     );
 
     // 加载或创建持久化设备 ID，确保换网络/重启 App 后设备 ID 不变
@@ -53,6 +55,7 @@ pub async fn lan_transfer_start(
 
     let manager = LanTransferManager::new(port).await?;
     manager.set_save_dir(save_dir).await;
+    manager.set_access_code(access_code.clone()).await;
 
     // 在 TCP 监听启动前注入预加载的信任设备，确保第一个连接就能被正确识别
     for json_str in &pre_trusted_json {
@@ -128,6 +131,18 @@ pub async fn lan_transfer_stop() -> Result<()> {
     sw_info!("lan_transfer_stop done");
 
     Ok(())
+}
+
+/// 运行时更新接入授权码（空 = 关闭校验）
+pub async fn lan_transfer_set_access_code(code: Option<String>) -> Result<()> {
+    let manager_guard = MANAGER.read().await;
+
+    if let Some(manager) = manager_guard.as_ref() {
+        manager.set_access_code(code).await;
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Manager not started"))
+    }
 }
 
 /// 获取本机设备信息
@@ -428,7 +443,7 @@ mod tests {
             .join(format!("lan_transfer_api_test_{}_{}", std::process::id(), nanos));
         let save_dir_str = save_dir.to_str().unwrap().to_string();
 
-        let res = crate::api::lan_transfer_start(0, save_dir_str.clone(), vec![]).await;
+        let res = crate::api::lan_transfer_start(0, save_dir_str.clone(), vec![], None).await;
         assert!(res.is_ok(), "双 init 应幂等返回 Ok: {:?}", res);
         assert!(
             !save_dir.join("device_id.txt").exists(),

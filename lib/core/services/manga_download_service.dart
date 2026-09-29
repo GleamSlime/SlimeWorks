@@ -8,14 +8,18 @@ library;
 ///  3. 通过 RxMap / RxBool 触发 UI 响应
 ///  4. 下载进度元数据使用 SharedPreferences 持久化
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/src/rust/api/extract.dart' as extract_api;
 
 import 'package:slime_works/pages/manga/models/manga_download_model.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
@@ -41,6 +45,16 @@ class MangaDownloadService {
 
   /// 是否有任何下载正在进行
   bool get hasActiveDownloads => _activeKeys.isNotEmpty;
+
+  /// 节点推送是否进行中（下载→打包→上传→节点导入）
+  final RxBool nodePushRunning = false.obs;
+
+  /// 节点推送当前阶段提示（如「下载 2/10：第3话」）
+  final RxString nodePushStage = ''.obs;
+
+  /// 节点推送已完成章节数 / 总章节数
+  final RxInt nodePushDone = 0.obs;
+  final RxInt nodePushTotal = 0.obs;
 
   /// ---- 初始化 ----
 
@@ -84,6 +98,57 @@ class MangaDownloadService {
     for (final eps in epsList) {
       await downloadEps(comic, eps);
     }
+  }
+
+  /// 下载章节并推送到远程节点媒体库（每章一个 zip，逐章增量）。
+  ///
+  /// 流程：本地下载 → zip 打包 → 上传节点解压 → 节点导入媒体库 → 删除本地章节。
+  /// 返回（成功数, 失败数）；推送失败保留本地文件，不打断其它章节。
+  Future<({int success, int fail})> downloadEpsToNode(
+    MangaComic comic,
+    List<MangaEps> epsList, {
+    required String nodeId,
+    required String targetDir,
+    String? baseFolderId,
+  }) async {
+    if (epsList.isEmpty) return (success: 0, fail: 0);
+    nodePushTotal.value = epsList.length;
+    nodePushDone.value = 0;
+    nodePushRunning.value = true;
+    int success = 0;
+    int fail = 0;
+    try {
+      for (int i = 0; i < epsList.length; i++) {
+        final eps = epsList[i];
+        final index = i + 1;
+        nodePushStage.value = '下载 $index/${epsList.length}：${eps.title}';
+        await downloadEps(comic, eps);
+        final downloaded = await _waitEpsDone(comic.id, eps.order);
+        if (!downloaded) {
+          fail++;
+          nodePushDone.value++;
+          continue;
+        }
+        final pushed = await _pushEpsToNode(
+          comicId: comic.id,
+          epsOrder: eps.order,
+          epsTitle: eps.title,
+          nodeId: nodeId,
+          targetDir: targetDir,
+          baseFolderId: baseFolderId,
+        );
+        if (pushed) {
+          success++;
+        } else {
+          fail++;
+        }
+        nodePushDone.value++;
+      }
+    } finally {
+      nodePushRunning.value = false;
+      nodePushStage.value = '';
+    }
+    return (success: success, fail: fail);
   }
 
   /// 重试出错的章节（直接用 comicId + epsOrder）
@@ -225,6 +290,91 @@ class MangaDownloadService {
   Future<Directory> _comicDir(String comicId) async {
     final docs = await getApplicationDocumentsDirectory();
     return Directory('${docs.path}/manga_downloads/$comicId');
+  }
+
+  /// 等待单章下载结束（completed/error），返回是否成功；带 30 分钟超时兜底。
+  Future<bool> _waitEpsDone(String comicId, int epsOrder) async {
+    final info = entries[comicId]?.episodes[epsOrder];
+    if (info == null) return false;
+    if (info.isCompleted) return true;
+    if (info.status == MangaDownloadStatus.error) return false;
+
+    final completer = Completer<bool>();
+    final sub = entries.listen((_) {
+      final cur = entries[comicId]?.episodes[epsOrder];
+      if (cur == null) return;
+      if (cur.isCompleted) {
+        completer.complete(true);
+      } else if (cur.status == MangaDownloadStatus.error) {
+        completer.complete(false);
+      }
+    });
+    final timer = Timer(const Duration(minutes: 30), () {
+      if (!completer.isCompleted) completer.complete(false);
+    });
+    final ok = await completer.future;
+    timer.cancel();
+    sub.cancel();
+    return ok;
+  }
+
+  /// 把已下载的单章 zip 打包上传到节点并导入媒体库；成功后删除本地章节。
+  Future<bool> _pushEpsToNode({
+    required String comicId,
+    required int epsOrder,
+    required String epsTitle,
+    required String nodeId,
+    required String targetDir,
+    String? baseFolderId,
+  }) async {
+    String? zipPath;
+    try {
+      final dir = await _epsDir(comicId, epsOrder);
+      if (!await dir.exists()) return false;
+      final entryName = _sanitizeDirName(epsTitle, fallback: '第$epsOrder话');
+
+      nodePushStage.value = '打包：$entryName';
+      zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir.path, entryRoot: entryName);
+
+      final nodes = getIt<NodeSettingsService>();
+      nodePushStage.value = '上传：$entryName';
+      await nodes.uploadArchiveToNode(nodeId: nodeId, zipPath: zipPath, destDir: targetDir);
+
+      nodePushStage.value = '节点导入：$entryName';
+      await nodes.importNodeMediaFolder(
+        nodeId: nodeId,
+        folderPath: _joinNodePath(targetDir, entryName),
+        generateThumbnails: true,
+        baseFolderId: baseFolderId,
+      );
+
+      // 推送成功 → 删除本地章节（含下载记录）
+      await deleteDownload(comicId, epsOrder: epsOrder);
+      return true;
+    } catch (e) {
+      _logger.error('漫画章节推送节点失败 $comicId/$epsOrder: $e');
+      return false;
+    } finally {
+      if (zipPath != null) {
+        try {
+          File(zipPath).deleteSync();
+        } catch (_) {
+          // 临时 zip 删不掉交给系统清理，不打断推送流程
+        }
+      }
+    }
+  }
+
+  /// 清洗章节名作为节点目录名（去掉 Windows 非法字符）
+  String _sanitizeDirName(String title, {required String fallback}) {
+    final cleaned = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    return cleaned.isEmpty ? fallback : cleaned;
+  }
+
+  /// 拼接节点侧路径：节点可能是 Windows，'/' 在 Win32 同样有效，统一用 '/' 拼接。
+  String _joinNodePath(String dir, String name) {
+    final base = dir.replaceAll(RegExp(r'[/\\]+$'), '');
+    return '$base/$name';
   }
 
   Future<Directory> _epsDir(String comicId, int epsOrder) async {

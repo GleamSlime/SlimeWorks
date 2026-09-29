@@ -407,6 +407,10 @@ class _CollectionPictureScreenState
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
+                      layoutBuilder: (currentChild, previousChildren) => Stack(
+                        alignment: Alignment.topLeft,
+                        children: [...previousChildren, ?currentChild],
+                      ),
                       transitionBuilder: (child, animation) {
                         return _AnimatedSwitcherWrapper(
                           animation: animation,

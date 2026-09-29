@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
@@ -36,10 +37,15 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
   /// 防止「附近设备」弹层被多次创建
   bool _isDeviceSheetOpen = false;
 
+  /// 防止「授权码」对话框被多次创建
+  bool _isAccessCodeSheetOpen = false;
+
+  /// 网络重连：保持手动启停语义，仅当服务已在运行时刷新设备
   @override
   Future<void> onNetworkReconnected() async {
-    await viewModel.startService();
-    if (viewModel.isScanning.value) await viewModel.refreshDevices();
+    if (viewModel.isServiceRunning.value) {
+      await viewModel.refreshDevices();
+    }
   }
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
@@ -50,68 +56,108 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     return ScreenChromeData(
       title: '互传',
       toolbarHeight: m.kSpace48,
-      leading: Obx(() {
-        final isRunning = viewModel.isServiceRunning.value;
+      toolbar: Align(
+        alignment: Alignment.centerRight,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          reverse: true,
+          child: Obx(() {
+            final isRunning = viewModel.isServiceRunning.value;
 
-        return GestureDetector(
-          onTap: isRunning ? viewModel.stopService : viewModel.startService,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
-            decoration: BoxDecoration(
-              gradient: isRunning
-                  ? null
-                  : LinearGradient(
-                      colors: [
-                        Colors.green.withValues(alpha: 0.25),
-                        Colors.green.withValues(alpha: 0.1),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+            return GestureDetector(
+              onTap: isRunning ? viewModel.stopService : viewModel.startService,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
+                decoration: BoxDecoration(
+                  gradient: isRunning
+                      ? null
+                      : LinearGradient(
+                          colors: [
+                            Colors.green.withValues(alpha: 0.25),
+                            Colors.green.withValues(alpha: 0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                  color: isRunning ? Theme.of(context).colorScheme.error.withValues(alpha: 0.12) : null,
+                  borderRadius: m.radius8,
+                  border: Border.all(
+                    color: isRunning
+                        ? Theme.of(context).colorScheme.error.withValues(alpha: 0.2)
+                        : Colors.green.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: m.kSpace6,
+                      height: m.kSpace6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isRunning ? Colors.red : Colors.green,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isRunning ? Colors.red : Colors.green).withValues(alpha: 0.4),
+                            blurRadius: scaleW(4),
+                          ),
+                        ],
+                      ),
                     ),
-              color: isRunning ? Theme.of(context).colorScheme.error.withValues(alpha: 0.12) : null,
+                    SizedBox(width: m.kSpace6),
+                    Text(
+                      isRunning ? '停止服务' : '启动服务',
+                      style: TextStyle(
+                        fontSize: m.fontSize11,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: isRunning ? Colors.red : Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+      actions: [
+        // 接入授权码配置
+        GestureDetector(
+          onTap: _showAccessCodeDialog,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace6),
+            decoration: BoxDecoration(
+              color: isDark ? DarkColors.background2 : LightColors.background2,
               borderRadius: m.radius8,
               border: Border.all(
-                color: isRunning
-                    ? Theme.of(context).colorScheme.error.withValues(alpha: 0.2)
-                    : Colors.green.withValues(alpha: 0.3),
+                color: primaryColor.withValues(alpha: 0.15),
                 width: 1,
               ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: m.kSpace6,
-                  height: m.kSpace6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isRunning ? Colors.red : Colors.green,
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isRunning ? Colors.red : Colors.green).withValues(alpha: 0.4),
-                        blurRadius: scaleW(4),
-                      ),
-                    ],
-                  ),
+                DrawIcon(StrokeIcons.key,
+                  size: m.iconSize14,
+                  color: primaryColor.withValues(alpha: 0.8),
                 ),
-                SizedBox(width: m.kSpace6),
+                const SizedBox(width: 4),
                 Text(
-                  isRunning ? '停止服务' : '启动服务',
+                  '授权码',
                   style: TextStyle(
                     fontSize: m.fontSize11,
                     height: 1.4,
-                    fontWeight: FontWeight.w600,
-                    color: isRunning ? Colors.red : Colors.green,
+                    color: isDark ? DarkColors.white80 : LightColors.black80,
                   ),
                 ),
               ],
             ),
           ),
-        );
-      }),
-      actions: [
+        ),
         Obx(() {
           final isScanning = viewModel.isScanning.value;
           final deviceCount = viewModel.discoveredDevices.length;
@@ -209,6 +255,89 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
         );
       }),
     );
+  }
+
+  /// 弹出接入授权码配置对话框
+  Future<void> _showAccessCodeDialog() async {
+    if (_isAccessCodeSheetOpen) return;
+    _isAccessCodeSheetOpen = true;
+    // 读取当前授权码
+    final current = await viewModel.getAccessCode();
+    if (!mounted) return;
+    final TextEditingController controller = TextEditingController(text: current ?? '');
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final isDark = Get.isDarkMode;
+        final m = AppTheme.metrics;
+        return AlertDialog(
+          backgroundColor: isDark ? DarkColors.background2 : LightColors.white100,
+          shape: RoundedRectangleBorder(borderRadius: m.radius16),
+          title: const Text('接入授权码'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '其他设备需输入与本机相同的授权码才能向你发起传输；信任设备不受限制。',
+                style: TextStyle(
+                  fontSize: m.fontSize12,
+                  height: 1.5,
+                  color: isDark ? DarkColors.white60 : LightColors.black60,
+                ),
+              ),
+              SizedBox(height: m.kSpace16),
+              TextField(
+                controller: controller,
+                maxLength: 12,
+                decoration: InputDecoration(
+                  labelText: '授权码',
+                  hintText: '留空则关闭授权校验',
+                  counterText: '',
+                  border: OutlineInputBorder(borderRadius: m.radius10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('disable'),
+              child: const Text('关闭校验'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('regenerate'),
+              child: const Text('随机生成'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    _isAccessCodeSheetOpen = false;
+    if (result == null || !mounted) return;
+
+    if (result == 'disable') {
+      await viewModel.setAccessCode(null);
+      viewModel.showSuccess('已关闭接入授权校验');
+    } else if (result == 'regenerate') {
+      // 复用服务层的随机生成逻辑
+      final newCode = _generateAccessCode();
+      await viewModel.setAccessCode(newCode);
+      viewModel.showSuccess('已生成新的授权码：$newCode');
+    } else {
+      await viewModel.setAccessCode(result);
+      viewModel.showSuccess('接入授权码已更新');
+    }
+  }
+
+  /// 生成 6 位可读随机授权码（与服务层一致）
+  String _generateAccessCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rnd = Random();
+    return List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
   }
 
   /// 弹出「附近设备」浮层面板

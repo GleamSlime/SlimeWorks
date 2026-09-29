@@ -94,94 +94,102 @@ class _CollectionLibraryScreenState
       toolbar: Obx(() {
         final activeTagCount = viewModel.selectedFilterTags.length;
         final isFavoritesOnly = viewModel.showFavoritesOnly.value;
-        return Row(
-          spacing: AppTheme.metrics.kSpace8,
-          children: [
-            DesktopHeadToolsButton(
-              icon: DrawIcon(StrokeIcons.refresh),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () => _confirmClearAll(context),
-            ),
-            DesktopHeadToolsButton(
-              icon: DrawIcon(StrokeIcons.createNewFolder),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () => _showCreateFolderDialog(context),
-            ),
-            DesktopHeadToolsButton(
-              icon: DrawIcon(
-                isFavoritesOnly ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
-                color: isFavoritesOnly ? Colors.red : null,
-              ),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () {
-                viewModel.showFavoritesOnly.value = !viewModel.showFavoritesOnly.value;
-              },
-            ),
-            Stack(
-              clipBehavior: Clip.none,
+        return Align(
+          alignment: Alignment.centerRight,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            reverse: true,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: AppTheme.metrics.kSpace8,
               children: [
-                Builder(
-                  builder: (tagBtnCtx) => DesktopHeadToolsButton(
-                    icon: DrawIcon(StrokeIcons.labelOutline,
-                      color: activeTagCount > 0 ? Theme.of(context).colorScheme.primary : null,
-                    ),
-                    size: AppTheme.metrics.kSpace40,
-                    onTap: () => _showTagFilterMenu(tagBtnCtx),
-                  ),
+                DesktopHeadToolsButton(
+                  icon: DrawIcon(StrokeIcons.refresh),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () => _confirmClearAll(context),
                 ),
-                if (activeTagCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: IgnorePointer(
-                      child: Container(
-                        padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: AppTheme.metrics.radius10,
+                DesktopHeadToolsButton(
+                  icon: DrawIcon(StrokeIcons.createNewFolder),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () => _showCreateFolderDialog(context),
+                ),
+                DesktopHeadToolsButton(
+                  icon: DrawIcon(
+                    isFavoritesOnly ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
+                    color: isFavoritesOnly ? Colors.red : null,
+                  ),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () {
+                    viewModel.showFavoritesOnly.value = !viewModel.showFavoritesOnly.value;
+                  },
+                ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Builder(
+                      builder: (tagBtnCtx) => DesktopHeadToolsButton(
+                        icon: DrawIcon(StrokeIcons.labelOutline,
+                          color: activeTagCount > 0 ? Theme.of(context).colorScheme.primary : null,
                         ),
-                        constraints: BoxConstraints(
-                          minWidth: AppTheme.metrics.kSpace16,
-                          minHeight: AppTheme.metrics.kSpace16,
-                        ),
-                        child: Text(
-                          '$activeTagCount',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: AppTheme.metrics.fontSize10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                        size: AppTheme.metrics.kSpace40,
+                        onTap: () => _showTagFilterMenu(tagBtnCtx),
                       ),
                     ),
+                    if (activeTagCount > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
+                              borderRadius: AppTheme.metrics.radius10,
+                            ),
+                            constraints: BoxConstraints(
+                              minWidth: AppTheme.metrics.kSpace16,
+                              minHeight: AppTheme.metrics.kSpace16,
+                            ),
+                            child: Text(
+                              '$activeTagCount',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: AppTheme.metrics.fontSize10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                Builder(
+                  builder: (sortBtnCtx) => DesktopHeadToolsButton(
+                    icon: DrawIcon(StrokeIcons.sort),
+                    size: AppTheme.metrics.kSpace40,
+                    onTap: () => _showSortMenu(sortBtnCtx),
                   ),
+                ),
+                DesktopHeadToolsButton(
+                  icon: DrawIcon(StrokeIcons.autoAwesome),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () => _showKeywordRulesDialog(),
+                ),
+                DesktopHeadToolsButton(
+                  icon: DrawIcon(StrokeIcons.deviceHub),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () => context.go('/lan-transfer'),
+                ),
+                DesktopHeadToolsButton(
+                  icon: DrawIcon(StrokeIcons.cloudSync),
+                  size: AppTheme.metrics.kSpace40,
+                  onTap: () => viewModel.refreshRemoteNovels(),
+                ),
+                LibraryBookAppendButton(viewModel: viewModel),
               ],
             ),
-            Builder(
-              builder: (sortBtnCtx) => DesktopHeadToolsButton(
-                icon: DrawIcon(StrokeIcons.sort),
-                size: AppTheme.metrics.kSpace40,
-                onTap: () => _showSortMenu(sortBtnCtx),
-              ),
-            ),
-            DesktopHeadToolsButton(
-              icon: DrawIcon(StrokeIcons.autoAwesome),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () => _showKeywordRulesDialog(),
-            ),
-            DesktopHeadToolsButton(
-              icon: DrawIcon(StrokeIcons.deviceHub),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () => context.go('/lan-transfer'),
-            ),
-            DesktopHeadToolsButton(
-              icon: DrawIcon(StrokeIcons.cloudSync),
-              size: AppTheme.metrics.kSpace40,
-              onTap: () => viewModel.refreshRemoteNovels(),
-            ),
-            LibraryBookAppendButton(viewModel: viewModel),
-          ],
+          ),
         );
       }),
     );

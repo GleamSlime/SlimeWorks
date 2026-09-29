@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cue/cue.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/collection/picture/components/masonry_media_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_card.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/pages/collection/picture/components/media_folder_card.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
@@ -109,7 +111,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           child: IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: appMetrics.radius8,
+                borderRadius: appMetrics.radiusCard,
                 border: Border.all(color: color, width: scaleW(3)),
                 color: color.withAlpha(40),
               ),
@@ -121,6 +123,23 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
   }
 
   // ── 桌面端框选 ────────────────────────────────────────────────────────────
+
+  /// 网格实际排出的列数与格宽
+  ///
+  /// 复刻 [SliverGridDelegateWithMaxCrossAxisExtent] 的取整方式（含 [MediaCutoutGeometry]
+  /// 的格宽上限与 kSpace12 内边距），让 delegate 和框选命中用同一份数：
+  /// 两边各写一份字面量时窗口一窄就差出一列，选中样式会落到隔壁卡片上。
+  (int columns, double cellWidth) _gridColumns(double viewportWidth) {
+    final spacing = appMetrics.kSpace12;
+    final gridWidth = viewportWidth - 2 * spacing;
+    if (gridWidth <= 0) return (0, 0);
+    final columns = math.max(
+      1,
+      (gridWidth / (MediaCutoutGeometry.maxCellWidth + spacing)).ceil(),
+    );
+    final usable = math.max(0.0, gridWidth - spacing * (columns - 1));
+    return (columns, usable / columns);
+  }
 
   void _updateSelectionByBox() {
     if (_selectionBoxStart == null || _selectionBoxEnd == null) return;
@@ -134,20 +153,14 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
 
     final items = vm.visibleItems;
     final newSelection = <String>{};
-    // 必须与下方 SliverGridDelegateWithMaxCrossAxisExtent 的几何参数一致：
-    // maxCrossAxisExtent=scaleW(220)、childAspectRatio=0.68、
-    // crossAxisCount = ceil(gridWidth / maxCrossAxisExtent)，
-    // 否则框选命中矩形与实际卡片位置错位，导致选中样式不生效。
-    final maxCrossAxisExtent = scaleW(220);
-    final spacing = appMetrics.kSpace12;
-    final padding = appMetrics.kSpace12;
-    final gridWidth = gridRenderBox.size.width - 2 * padding;
-    final crossAxisCount = (gridWidth / maxCrossAxisExtent).ceil();
+    // 列数与格宽走同一条公式（见 [_gridColumns]）：这里是拿来判命中的矩形，
+    // 和 delegate 差一列就会选中隔壁那张卡。
+    final (crossAxisCount, itemWidth) = _gridColumns(gridRenderBox.size.width);
     if (crossAxisCount <= 0) return;
 
-    final itemWidth =
-        (gridWidth - (crossAxisCount - 1) * spacing) / crossAxisCount;
-    final itemHeight = itemWidth / 0.68;
+    final spacing = appMetrics.kSpace12;
+    final padding = appMetrics.kSpace12;
+    final itemHeight = itemWidth / MediaCutoutGeometry.aspectFor(itemWidth);
 
     for (int index = 0; index < items.length; index++) {
       final row = index ~/ crossAxisCount;
@@ -477,33 +490,40 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
         );
       }
 
-      final grid = GridView.builder(
-        key: _gridKey,
-        controller: widget.scrollController,
-        padding: EdgeInsets.all(appMetrics.kSpace12),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: scaleW(220),
-          childAspectRatio: 0.68,
-          mainAxisSpacing: appMetrics.kSpace12,
-          crossAxisSpacing: appMetrics.kSpace12,
-        ),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
-          // 前 40 项加入场动画，超出部分跳过以免卡顿
-          final delay = index < 40 ? index * 15 : 0;
-          // 以集合/文件夹 id 作为 Element key：排序或拖拽重排后卡片按身份复用，
-          // 否则按索引匹配会让选中态、封面等 State 错位到别的卡片上。
-          return KeyedSubtree(
-            key: ValueKey(item.id),
-            child: Cue.onMount(
-              motion: const .smooth(),
-              child: Actor(
-                delay: Duration(milliseconds: delay),
-                acts: [const .fadeIn(), const .slideY(from: 0.12)],
-                child: _buildCard(context, item),
-              ),
+      // 镂空卡是「定高文字区 + 比例封面」，卡片总高得按真实格宽反推，
+      // 所以这里先量一次宽度，再把它同时喂给 delegate 和框选命中。
+      final grid = LayoutBuilder(
+        builder: (context, constraints) {
+          final cellWidth = _gridColumns(constraints.maxWidth).$2;
+          return GridView.builder(
+            key: _gridKey,
+            controller: widget.scrollController,
+            padding: EdgeInsets.all(appMetrics.kSpace12),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: MediaCutoutGeometry.maxCellWidth,
+              childAspectRatio: MediaCutoutGeometry.aspectFor(cellWidth),
+              mainAxisSpacing: appMetrics.kSpace12,
+              crossAxisSpacing: appMetrics.kSpace12,
             ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              // 前 40 项加入场动画，超出部分跳过以免卡顿
+              final delay = index < 40 ? index * 15 : 0;
+              // 以集合/文件夹 id 作为 Element key：排序或拖拽重排后卡片按身份复用，
+              // 否则按索引匹配会让选中态、封面等 State 错位到别的卡片上。
+              return KeyedSubtree(
+                key: ValueKey(item.id),
+                child: Cue.onMount(
+                  motion: const .smooth(),
+                  child: Actor(
+                    delay: Duration(milliseconds: delay),
+                    acts: [const .fadeIn(), const .slideY(from: 0.12)],
+                    child: _buildCard(context, item),
+                  ),
+                ),
+              );
+            },
           );
         },
       );

@@ -10,9 +10,9 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // 激活音频会话以支持后台播放
+    // 预配置音频会话类别以支持后台播放；不主动 setActive，
+    // 避免启动时抢占打断正在播放的其他 App 音乐，实际播放时由播放器自行激活。
     try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-    try? AVAudioSession.sharedInstance().setActive(true)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

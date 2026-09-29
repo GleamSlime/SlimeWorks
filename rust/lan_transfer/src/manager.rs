@@ -94,6 +94,11 @@ impl LanTransferManager {
         self.transfer.read().await.set_save_dir(dir).await;
     }
 
+    /// 设置接入授权码（空 = 关闭校验）
+    pub async fn set_access_code(&self, code: Option<String>) {
+        self.transfer.read().await.set_access_code(code).await;
+    }
+
     /// 获取已发现的设备列表
     pub async fn get_discovered_devices(&self) -> Vec<DeviceInfo> {
         self.discovery.read().await.get_discovered_devices().await

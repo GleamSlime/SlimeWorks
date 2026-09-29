@@ -13,15 +13,22 @@ void lanTransferInit() =>
 /// 创建并启动传输管理器
 ///
 /// [pre_trusted_json] 为预加载的信任设备 JSON 列表，在 TCP 监听开始前注入，避免竞态信任遗漏。
+/// [access_code] 为本机接入授权码（None = 关闭校验），用于阻止陌生设备未经授权发起传输。
 Future<void> lanTransferStart({
   required int port,
   required String saveDir,
   required List<String> preTrustedJson,
+  String? accessCode,
 }) => RustLib.instance.api.crateApiLanTransferLanTransferStart(
   port: port,
   saveDir: saveDir,
   preTrustedJson: preTrustedJson,
+  accessCode: accessCode,
 );
+
+/// 运行时更新接入授权码（空 = 关闭校验）
+Future<void> lanTransferSetAccessCode({String? code}) => RustLib.instance.api
+    .crateApiLanTransferLanTransferSetAccessCode(code: code);
 
 /// 停止传输管理器
 Future<void> lanTransferStop() =>

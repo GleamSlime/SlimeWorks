@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/asr/subtitle_action.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
@@ -225,7 +226,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     } else {
       ar = defaultAr;
     }
-    final tileHeight = (colWidth / ar).clamp(60.0, colWidth * 2.5);
+    // 镂空卡的封面按真实宽高比走，下面那块实色文字区是定高：卡片总高 = 图高 + 文字区
+    final tileHeight =
+        (colWidth / ar).clamp(60.0, colWidth * 2.5) +
+        MediaCutoutGeometry.contentExtent(withFoot: false);
 
     // 仅对本地非视频且没有已知尺寸的 items 才异步解码真实宽高比（兜底）。
     // 音频封面由 _audioCoverPath 异步返回，不从 source(原始音频文件)解码宽高比。
@@ -298,7 +302,8 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
               duration: const Duration(milliseconds: 400),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(scaleW(11)),
+                  // 和卡片自己的圆角同源，否则高亮环会在角上露出缝隙
+                  borderRadius: appMetrics.radiusCard,
                   border: Border.all(
                     color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
                     width: 3,

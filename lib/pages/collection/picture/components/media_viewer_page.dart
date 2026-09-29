@@ -14,13 +14,9 @@ import 'package:media_kit_video/media_kit_video_controls/media_kit_video_control
     as media_controls;
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/index.dart';
-import 'package:slime_works/core/services/asr/subtitle_mount.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
-import 'package:slime_works/components/icons/draw_icon.dart';
-import 'package:slime_works/components/icons/stroke_icons.g.dart';
-import 'package:slime_works/components/icons/stroke_geometry.dart';
 
 class MediaViewerPage extends StatefulWidget {
   const MediaViewerPage({
@@ -40,8 +36,7 @@ class MediaViewerPage extends StatefulWidget {
   State<MediaViewerPage> createState() => _MediaViewerPageState();
 }
 
-class _MediaViewerPageState extends State<MediaViewerPage>
-    with TickerProviderStateMixin {
+class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderStateMixin {
   int _currentIndex = 0;
   String? _currentItemId;
 
@@ -90,12 +85,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   // 内层 Listener 永远收不到事件，因此缩放由外层判定后经此 Notifier 定向通知。
   // 元组含义：(序号, 目标页 index, 鼠标位置, 滚轮 dy)
   int _wheelZoomSeq = 0;
-  final _wheelZoomNotifier = ValueNotifier<(int, int, Offset, double)>((
-    0,
-    -1,
-    Offset.zero,
-    0,
-  ));
+  final _wheelZoomNotifier = ValueNotifier<(int, int, Offset, double)>((0, -1, Offset.zero, 0));
 
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
 
@@ -135,10 +125,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     _currentIsVideo =
         widget.items[_currentIndex].kind == media_api.MediaKind.video ||
         widget.items[_currentIndex].kind == media_api.MediaKind.audio;
-    _snapCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 260),
-    );
+    _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
     _snapCtrl.addListener(_onSnapTick);
     _snapCtrl.addStatusListener(_onSnapStatus);
     if (Platform.isAndroid || Platform.isIOS) {
@@ -151,9 +138,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   void didUpdateWidget(MediaViewerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.items != oldWidget.items && _currentItemId != null) {
-      final newIndex = widget.items.indexWhere(
-        (item) => item.id == _currentItemId,
-      );
+      final newIndex = widget.items.indexWhere((item) => item.id == _currentItemId);
       if (newIndex != -1 && newIndex != _currentIndex) {
         _currentIndex = newIndex;
         _prevPageWidget = null;
@@ -197,13 +182,9 @@ class _MediaViewerPageState extends State<MediaViewerPage>
           _currPageWidget = null;
           _nextPageWidget = null;
           _currentIndex = pending;
-          _currentItemId = widget.items.isNotEmpty
-              ? widget.items[_currentIndex].id
-              : null;
+          _currentItemId = widget.items.isNotEmpty ? widget.items[_currentIndex].id : null;
           final kind = widget.items[_currentIndex].kind;
-          _currentIsVideo =
-              kind == media_api.MediaKind.video ||
-              kind == media_api.MediaKind.audio;
+          _currentIsVideo = kind == media_api.MediaKind.video || kind == media_api.MediaKind.audio;
         }
         _dragOffset = 0.0;
         _isDragging = false;
@@ -259,9 +240,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     final frac = _dragOffset / screenExtent;
     int? next;
     // 正 offset = 当前页右移/下移 = "往回翻"（看上一项）
-    if (_dragOffset > 0 &&
-        (frac > _kDragCommitFraction || velocity > 400) &&
-        _currentIndex > 0) {
+    if (_dragOffset > 0 && (frac > _kDragCommitFraction || velocity > 400) && _currentIndex > 0) {
       next = _currentIndex - 1;
     } else if (_dragOffset < 0 &&
         (-frac > _kDragCommitFraction || velocity < -400) &&
@@ -296,8 +275,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     if (_isDragging) return;
     final ctrlPressed = HardwareKeyboard.instance.isControlPressed;
     // 中键按下（以事件自身 buttons 兜底，防止 down/up 监听遗漏）
-    final middleHeld =
-        _middleButtonHeld || (event.buttons & kMiddleMouseButton) != 0;
+    final middleHeld = _middleButtonHeld || (event.buttons & kMiddleMouseButton) != 0;
     // 按住 Ctrl 或鼠标中键：禁用翻页；图片页时滚轮作为缩放（视频页无缩放，忽略）
     if (ctrlPressed || middleHeld) {
       if (!_currentIsVideo) _requestZoom(event);
@@ -353,22 +331,14 @@ class _MediaViewerPageState extends State<MediaViewerPage>
 
   // ── 页面构建 ─────────────────────────────────────────────────────────────
 
-  Widget _buildPageContent(
-    BuildContext context,
-    int index, {
-    bool isActive = true,
-  }) {
+  Widget _buildPageContent(BuildContext context, int index, {bool isActive = true}) {
     if (index < 0 || index >= widget.items.length) {
       return const SizedBox.expand();
     }
     final isMobile = Platform.isAndroid || Platform.isIOS;
     final item = widget.items[index];
-    final source = widget.viewModel.buildMediaSource(
-      item,
-      collectionId: widget.collectionId,
-    );
-    if (item.kind == media_api.MediaKind.video ||
-        item.kind == media_api.MediaKind.audio) {
+    final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
+    if (item.kind == media_api.MediaKind.video || item.kind == media_api.MediaKind.audio) {
       // 构建封面 URL：本地视频用文件路径，远程视频用节点封面 URL（mode=cover）
       final coverSource = widget.viewModel.buildMediaSource(
         item,
@@ -377,17 +347,12 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       );
       return _VideoPreview(
         source: source,
-        filePath: item.filePath,
-        subtitleNodeId: widget.viewModel.isRemoteCollection(widget.collectionId)
-            ? widget.viewModel.getRemoteNodeId(widget.collectionId)
-            : null,
         title: item.title,
         coverSource: coverSource,
         isActive: isActive,
         onDragStart: () => _onDragStart(horizontal: false),
         onDragUpdate: (dy) => _onDragUpdate(dy),
-        onDragEnd: (velocity, screenExtent) =>
-            _onDragEnd(velocity, screenExtent),
+        onDragEnd: (velocity, screenExtent) => _onDragEnd(velocity, screenExtent),
         isAudio: item.kind == media_api.MediaKind.audio,
       );
     }
@@ -414,10 +379,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
   Future<void> _saveCurrentItem(BuildContext context) async {
     final item = widget.items[_currentIndex];
     if (item.kind != media_api.MediaKind.image) return;
-    final source = widget.viewModel.buildMediaSource(
-      item,
-      collectionId: widget.collectionId,
-    );
+    final source = widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
     if (source == null || source.isEmpty) return;
 
     const maxAttempts = 3;
@@ -444,17 +406,13 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       String localPath;
       File? tmpFile;
       if (source.startsWith('http')) {
-        final resp = await http
-            .get(Uri.parse(source))
-            .timeout(const Duration(seconds: 30));
+        final resp = await http.get(Uri.parse(source)).timeout(const Duration(seconds: 30));
         if (resp.statusCode != 200) {
           throw Exception('HTTP ${resp.statusCode}');
         }
         final tmpDir = await getTemporaryDirectory();
         final ext = source.split('?').first.split('.').last.toLowerCase();
-        final validExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext)
-            ? ext
-            : 'jpg';
+        final validExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext) ? ext : 'jpg';
         tmpFile = File(
           '${tmpDir.path}/slimeworks_img_${DateTime.now().millisecondsSinceEpoch}.$validExt',
         );
@@ -467,20 +425,14 @@ class _MediaViewerPageState extends State<MediaViewerPage>
       tmpFile?.delete().ignore();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('已保存到相册'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('已保存到相册'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存失败: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存失败: $e'), behavior: SnackBarBehavior.floating));
       }
     }
   }
@@ -493,21 +445,13 @@ class _MediaViewerPageState extends State<MediaViewerPage>
     final isImage = item.kind == media_api.MediaKind.image;
 
     // 懒填充：只建还没构建的槽，已有的直接复用
-    _currPageWidget ??= _buildPageContent(
-      context,
-      _currentIndex,
-      isActive: true,
-    );
+    _currPageWidget ??= _buildPageContent(context, _currentIndex, isActive: true);
     if (_currentIndex > 0) {
       if (_prevPageWidget == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           setState(() {
-            _prevPageWidget = _buildPageContent(
-              context,
-              _currentIndex - 1,
-              isActive: false,
-            );
+            _prevPageWidget = _buildPageContent(context, _currentIndex - 1, isActive: false);
           });
         });
       }
@@ -519,11 +463,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           setState(() {
-            _nextPageWidget = _buildPageContent(
-              context,
-              _currentIndex + 1,
-              isActive: false,
-            );
+            _nextPageWidget = _buildPageContent(context, _currentIndex + 1, isActive: false);
           });
         });
       }
@@ -608,34 +548,25 @@ class _MediaViewerPageState extends State<MediaViewerPage>
                   if (event is PointerScrollEvent) _handlePointerScroll(event);
                 },
                 child: GestureDetector(
-                  // 移动端：水平拖动（图片缩放时禁用，由 _ImageViewer 内部处理平移）
-                  onHorizontalDragStart: (isMobile && !_imageIsZoomed)
+                  // 移动端：水平拖动（图片翻项；视频页改为内部水平拖动快进/快退）
+                  onHorizontalDragStart: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (_) => _onDragStart(horizontal: true)
                       : null,
-                  onHorizontalDragUpdate: (isMobile && !_imageIsZoomed)
+                  onHorizontalDragUpdate: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (d) => _onDragUpdate(d.delta.dx)
                       : null,
-                  onHorizontalDragEnd: (isMobile && !_imageIsZoomed)
-                      ? (d) => _onDragEnd(
-                          d.velocity.pixelsPerSecond.dx,
-                          size.width,
-                        )
+                  onHorizontalDragEnd: (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                      ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dx, size.width)
                       : null,
                   // 移动端：垂直拖动（图片缩放时禁用）
-                  onVerticalDragStart:
-                      (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                  onVerticalDragStart: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (_) => _onDragStart(horizontal: false)
                       : null,
-                  onVerticalDragUpdate:
-                      (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                  onVerticalDragUpdate: (isMobile && !_imageIsZoomed && !_currentIsVideo)
                       ? (d) => _onDragUpdate(d.delta.dy)
                       : null,
-                  onVerticalDragEnd:
-                      (isMobile && !_imageIsZoomed && !_currentIsVideo)
-                      ? (d) => _onDragEnd(
-                          d.velocity.pixelsPerSecond.dy,
-                          size.height,
-                        )
+                  onVerticalDragEnd: (isMobile && !_imageIsZoomed && !_currentIsVideo)
+                      ? (d) => _onDragEnd(d.velocity.pixelsPerSecond.dy, size.height)
                       : null,
                   // 单击空白区域切换 UI 可见性
                   onTap: _toggleUi,
@@ -659,11 +590,12 @@ class _MediaViewerPageState extends State<MediaViewerPage>
               ),
             ),
 
-            // ── 右下角：浮动操作菜单 ─────────────────────────────────────────
-            Positioned(
-              bottom: MediaQuery.paddingOf(context).bottom + 24,
-              left: AppTheme.metrics.kSpace16,
-              right: AppTheme.metrics.kSpace16,
+            // ── 右下角：浮动操作菜单（视频/音频页自带控制栏，隐藏以免遮挡）────
+            if (!_currentIsVideo)
+              Positioned(
+                bottom: MediaQuery.paddingOf(context).bottom + 24,
+                left: AppTheme.metrics.kSpace16,
+                right: AppTheme.metrics.kSpace16,
               child: AnimatedOpacity(
                 opacity: _uiVisible ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 300),
@@ -673,16 +605,11 @@ class _MediaViewerPageState extends State<MediaViewerPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _GlassChip(
-                        current: _currentIndex,
-                        total: widget.items.length,
-                      ),
+                      _GlassChip(current: _currentIndex, total: widget.items.length),
                       _FloatingActionMenu(
                         canGoPrev: _currentIndex > 0,
                         canGoNext: _currentIndex < widget.items.length - 1,
-                        onSave: isImage
-                            ? () => _saveCurrentItem(context)
-                            : null,
+                        onSave: isImage ? () => _saveCurrentItem(context) : null,
                         onPrev: () => _jumpInstant(-1),
                         onNext: () => _jumpInstant(1),
                       ),
@@ -705,7 +632,7 @@ class _MediaViewerPageState extends State<MediaViewerPage>
                   child: Row(
                     children: [
                       _GlassIconButton(
-                        icon: StrokeIcons.arrowBack,
+                        icon: Icons.arrow_back_rounded,
                         tooltip: '返回',
                         onTap: () => Navigator.of(context).maybePop(),
                       ),
@@ -750,13 +677,9 @@ class _MediaViewerPageState extends State<MediaViewerPage>
 // ── 玻璃磨砂 icon 按钮 ─────────────────────────────────────────────────────
 
 class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-  });
+  const _GlassIconButton({required this.icon, required this.onTap, this.tooltip});
 
-  final StrokeIcon icon;
+  final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
 
@@ -773,10 +696,7 @@ class _GlassIconButton extends StatelessWidget {
             height: 42,
             color: Colors.black.withValues(alpha: 0.42),
             alignment: Alignment.center,
-            child: DrawIcon(icon,
-              color: Colors.white,
-              size: AppTheme.metrics.iconSize22,
-            ),
+            child: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
           ),
         ),
       ),
@@ -835,13 +755,10 @@ class _GlassChipState extends State<_GlassChip> {
                   final begin = isIncoming
                       ? Offset(0, _goingForward ? 1.0 : -1.0)
                       : Offset(0, _goingForward ? -1.0 : 1.0);
-                  final pos = Tween<Offset>(begin: begin, end: Offset.zero)
-                      .animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      );
+                  final pos = Tween<Offset>(
+                    begin: begin,
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
                   return ClipRect(
                     child: SlideTransition(position: pos, child: child),
                   );
@@ -849,19 +766,13 @@ class _GlassChipState extends State<_GlassChip> {
                 child: Text(
                   '${widget.current + 1}',
                   key: ValueKey(widget.current),
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: AppTheme.metrics.fontSize13,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
                 ),
               ),
               // 总数静止，无动画
               Text(
                 ' / ${widget.total}',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: AppTheme.metrics.fontSize13,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
               ),
             ],
           ),
@@ -903,10 +814,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
   }
 
   @override
@@ -950,7 +858,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
 
   /// 构建一个独立的圆形玻璃按钮，带 fade+scale 动画。
   Widget _actionBtn({
-    required StrokeIcon icon,
+    required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
     required int delayMs,
@@ -965,11 +873,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
           parent: _animController,
           curve: Interval(delayMs / 300.0, 1.0, curve: Curves.easeOutBack),
         ),
-        child: _GlassIconButton(
-          icon: icon,
-          tooltip: tooltip,
-          onTap: () => _handleAction(onTap),
-        ),
+        child: _GlassIconButton(icon: icon, tooltip: tooltip, onTap: () => _handleAction(onTap)),
       ),
     );
   }
@@ -982,7 +886,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     if (widget.onSave != null) {
       actionBtns.add(
         _actionBtn(
-          icon: StrokeIcons.saveAlt,
+          icon: Icons.save_alt_rounded,
           tooltip: '保存到相册',
           onTap: widget.onSave!,
           delayMs: delay,
@@ -993,7 +897,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     if (widget.canGoPrev) {
       actionBtns.add(
         _actionBtn(
-          icon: StrokeIcons.expandLess,
+          icon: Icons.expand_less_rounded,
           tooltip: '上一项',
           onTap: widget.onPrev,
           delayMs: delay,
@@ -1004,7 +908,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     if (widget.canGoNext) {
       actionBtns.add(
         _actionBtn(
-          icon: StrokeIcons.expandMore,
+          icon: Icons.expand_more_rounded,
           tooltip: '下一项',
           onTap: widget.onNext,
           delayMs: delay,
@@ -1018,14 +922,11 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
       children: [
         // 展开的独立圆形按钮，每个之间有 10px 间距
         if (_expanded) ...[
-          for (final btn in actionBtns) ...[
-            btn,
-            SizedBox(height: AppTheme.metrics.kSpace10),
-          ],
+          for (final btn in actionBtns) ...[btn, SizedBox(height: AppTheme.metrics.kSpace10)],
         ],
         // 常驻折叠/展开总按钮
         _GlassIconButton(
-          icon: StrokeIcons.moreVert,
+          icon: Icons.more_vert_rounded,
           tooltip: _expanded ? '收起' : '更多操作',
           onTap: _toggle,
         ),
@@ -1137,10 +1038,7 @@ class _ImageViewerState extends State<_ImageViewer> {
   }
 
   bool get _isTransformed =>
-      _scale > 1.02 ||
-      _rotation.abs() > 0.05 ||
-      _offsetX.abs() > 5 ||
-      _offsetY.abs() > 5;
+      _scale > 1.02 || _rotation.abs() > 0.05 || _offsetX.abs() > 5 || _offsetY.abs() > 5;
 
   void _reset() {
     setState(() {
@@ -1150,28 +1048,6 @@ class _ImageViewerState extends State<_ImageViewer> {
       _offsetY = 0.0;
     });
     widget.onZoomChanged?.call(false);
-  }
-
-  /// 双击位置（onDoubleTapDown 记录，供放大锚点使用）。
-  Offset? _doubleTapPos;
-
-  /// 双击：未缩放时以双击位置为锚点放大 1.3 倍；已缩放时复原。
-  void _onDoubleTap() {
-    if (_isTransformed) {
-      _reset();
-      return;
-    }
-    const targetScale = 1.3;
-    final pos = _doubleTapPos ?? Offset(_layoutW / 2, _layoutH / 2);
-    final cx = _layoutW / 2;
-    final cy = _layoutH / 2;
-    final k = targetScale / _scale;
-    setState(() {
-      _offsetX = pos.dx - cx - (pos.dx - _offsetX - cx) * k;
-      _offsetY = pos.dy - cy - (pos.dy - _offsetY - cy) * k;
-      _scale = targetScale;
-    });
-    widget.onZoomChanged?.call(true);
   }
 
   void _onScaleStart(ScaleStartDetails d) {
@@ -1285,8 +1161,7 @@ class _ImageViewerState extends State<_ImageViewer> {
       fit: StackFit.expand,
       children: [
         GestureDetector(
-          onDoubleTapDown: (details) => _doubleTapPos = details.localPosition,
-          onDoubleTap: _onDoubleTap,
+          onDoubleTap: _reset,
           onLongPress: widget.onSave,
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
@@ -1314,8 +1189,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       String label;
                       if (total != null) {
                         final pctInt = (pct! * 100).toStringAsFixed(0);
-                        label =
-                            '${_fmtBytes(loaded)} / ${_fmtBytes(total)} ($pctInt%)';
+                        label = '${_fmtBytes(loaded)} / ${_fmtBytes(total)} ($pctInt%)';
                       } else {
                         label = _fmtBytes(loaded);
                       }
@@ -1341,7 +1215,8 @@ class _ImageViewerState extends State<_ImageViewer> {
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: DrawIcon(StrokeIcons.brokenImage,
+                      child: Icon(
+                        Icons.broken_image_outlined,
                         size: AppTheme.metrics.iconSize64,
                         color: Colors.white38,
                       ),
@@ -1359,15 +1234,13 @@ class _ImageViewerState extends State<_ImageViewer> {
                         alignment: Alignment.center,
                         children: [
                           child,
-                          const CircularProgressIndicator(
-                            color: Colors.white70,
-                            strokeWidth: 2.5,
-                          ),
+                          const CircularProgressIndicator(color: Colors.white70, strokeWidth: 2.5),
                         ],
                       );
                     },
                     errorBuilder: (_, _, _) => Center(
-                      child: DrawIcon(StrokeIcons.brokenImage,
+                      child: Icon(
+                        Icons.broken_image_outlined,
                         size: AppTheme.metrics.iconSize64,
                         color: Colors.white38,
                       ),
@@ -1401,9 +1274,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: FilledButton.icon(
                     onPressed: _reset,
-                    icon: DrawIcon(StrokeIcons.zoomOutMap,
-                      size: AppTheme.metrics.iconSize18,
-                    ),
+                    icon: Icon(Icons.zoom_out_map_rounded, size: AppTheme.metrics.iconSize18),
                     label: const Text('重置缩放'),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.black.withAlpha(42),
@@ -1425,7 +1296,6 @@ class _ImageViewerState extends State<_ImageViewer> {
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
     required this.source,
-    required this.filePath,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
@@ -1433,13 +1303,9 @@ class _VideoPreview extends StatefulWidget {
     this.isAudio = false,
     this.title,
     this.coverSource,
-    this.subtitleNodeId,
   });
 
   final String? source;
-
-  /// 媒体文件的原始路径（本地路径或节点侧路径），用于定位同级字幕
-  final String filePath;
   final VoidCallback onDragStart;
   final void Function(double dy) onDragUpdate;
   final void Function(double velocity, double screenExtent) onDragEnd;
@@ -1456,9 +1322,6 @@ class _VideoPreview extends StatefulWidget {
   /// 封面图路径或 URL（用于系统播放控件显示）
   final String? coverSource;
 
-  /// 非空表示媒体在节点上，字幕需先从该节点取回本地
-  final String? subtitleNodeId;
-
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
 }
@@ -1470,6 +1333,19 @@ class _VideoPreviewState extends State<_VideoPreview> {
   bool _swiping = false;
   bool _playerReady = false;
   StreamSubscription? _readySub;
+
+  // 应用内迷你悬浮窗（画中画）：复用同一 Player 的第二个视频输出
+  VideoController? _miniController;
+  bool _miniMode = false;
+  Offset _miniOffset = const Offset(16, 88);
+
+  // 水平拖动快进/快退
+  bool _seeking = false;
+  double _seekAccumDx = 0.0;
+  Duration _seekStart = Duration.zero;
+
+  // 音量面板是否展开
+  bool _showVolumePanel = false;
 
   /// 原生 Media Session / Now Playing 通道（iOS + Android）
   static const _mediaChannel = MethodChannel('slime_works/media_session');
@@ -1486,16 +1362,11 @@ class _VideoPreviewState extends State<_VideoPreview> {
     debugPrint('[MVP] _VideoPreview._initPlayer source=$source');
     _playerReady = false;
     _readySub?.cancel();
-    _player = Player(
-      configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024),
-    );
+    _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));
     _videoController = VideoController(_player!);
-    final uri = source.startsWith('http')
-        ? source
-        : Uri.file(source).toString();
-    final opening = _player!.open(Media(uri));
+    final uri = source.startsWith('http') ? source : Uri.file(source).toString();
+    _player!.open(Media(uri));
     _player!.setPlaylistMode(PlaylistMode.single);
-    unawaited(_mountSubtitle(opening));
     _readySub = _player!.stream.videoParams.listen((params) {
       if ((params.dw ?? 0) > 0 && !_playerReady) {
         _readySub?.cancel();
@@ -1510,36 +1381,6 @@ class _VideoPreviewState extends State<_VideoPreview> {
     _updateNowPlaying();
   }
 
-  /// 挂载同级字幕：本地直接读文件，远程集合先从节点取回临时文件。
-  ///
-  /// 本地也显式挂载而不依赖 mpv 的同目录自动探测——mpv 只对本地文件探测同级字幕，
-  /// 对 URL 流不做探测，两边都走这里才能保证本地/远程行为一致。
-  Future<void> _mountSubtitle(Future<void> opening) async {
-    final player = _player;
-    if (player == null) return;
-    // sub-add 要等文件装载完成后再下发：完成前当前条目还是"没有文件"，
-    // mpv 会把外挂字幕挂到空条目上直接丢掉。
-    try {
-      await opening;
-    } catch (_) {
-      return;
-    }
-    final path = await resolvePlaybackSubtitlePath(
-      mediaPath: widget.filePath,
-      nodeId: widget.subtitleNodeId,
-    );
-    // 切页/关闭后 player 已换或已 dispose，挂上去只会报错
-    if (path == null || !mounted || !identical(player, _player)) return;
-    try {
-      await player.setSubtitleTrack(
-        SubtitleTrack.uri(Uri.file(path).toString(), title: '字幕'),
-      );
-      debugPrint('[MVP] 字幕已挂载: $path');
-    } catch (e) {
-      debugPrint('[MVP] 字幕挂载失败: $path | $e');
-    }
-  }
-
   @override
   void didUpdateWidget(_VideoPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1550,22 +1391,25 @@ class _VideoPreviewState extends State<_VideoPreview> {
     }
     if (!widget.isActive && oldWidget.isActive) {
       _readySub?.cancel();
+      _miniController = null;
       _player?.dispose();
       _player = null;
       _videoController = null;
       _playerReady = false;
+      _miniMode = false;
       return;
     }
     // 活跃状态下 source 变化
     if (widget.isActive) {
       final oldEmpty = oldWidget.source == null || oldWidget.source!.isEmpty;
       final newEmpty = widget.source == null || widget.source!.isEmpty;
-      final sourceChanged =
-          !oldEmpty && !newEmpty && oldWidget.source != widget.source;
+      final sourceChanged = !oldEmpty && !newEmpty && oldWidget.source != widget.source;
       debugPrint(
         '[MVP] _VideoPreview.didUpdateWidget oldSource=${oldWidget.source}, newSource=${widget.source}, oldEmpty=$oldEmpty, newEmpty=$newEmpty, sourceChanged=$sourceChanged',
       );
       if ((oldEmpty && !newEmpty) || sourceChanged) {
+        _miniController = null;
+        _miniMode = false;
         _player?.dispose();
         _player = null;
         _videoController = null;
@@ -1591,9 +1435,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
       final cover = widget.coverSource;
       if (cover != null && cover.isNotEmpty) {
         if (cover.startsWith('http')) {
-          final resp = await http
-              .get(Uri.parse(cover))
-              .timeout(const Duration(seconds: 10));
+          final resp = await http.get(Uri.parse(cover)).timeout(const Duration(seconds: 10));
           if (resp.statusCode == 200) artBytes = resp.bodyBytes;
         } else {
           final f = File(cover);
@@ -1610,28 +1452,66 @@ class _VideoPreviewState extends State<_VideoPreview> {
     }
   }
 
-  /// 请求进入画中画（Picture-in-Picture）模式。
-  Future<void> _enterPip(BuildContext context) async {
-    if (!Platform.isAndroid && !Platform.isIOS) return;
-    try {
-      final supported =
-          await _mediaChannel.invokeMethod<bool>('isPipSupported') ?? false;
-      if (!supported) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('当前设备不支持画中画')));
-        }
-        return;
-      }
-      await _mediaChannel.invokeMethod<void>('enterPip');
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('无法进入画中画模式')));
-      }
+  /// 切换应用内迷你悬浮窗（画中画）。
+  /// media_kit 基于 Flutter 纹理渲染，无法做系统级 PiP，故用第二个 VideoController
+  /// 复用同一 Player 渲染成可拖动的小窗。
+  void _toggleMini() {
+    final player = _player;
+    if (player == null) return;
+    if (_miniMode) {
+      _miniController = null;
+      setState(() => _miniMode = false);
+    } else {
+      _miniController = VideoController(player);
+      setState(() => _miniMode = true);
     }
+  }
+
+  // ── 水平拖动快进/快退 ────────────────────────────────────────────────
+
+  void _beginSeek() {
+    final p = _player;
+    if (p == null) return;
+    _seekStart = p.state.position;
+    _seekAccumDx = 0.0;
+    setState(() => _seeking = true);
+  }
+
+  void _updateSeek(double dx) {
+    _seekAccumDx += dx;
+    if (_seeking) setState(() {});
+  }
+
+  void _commitSeek() {
+    final p = _player;
+    if (p == null || !_seeking) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final span = 60.0; // 一个屏幕宽度对应的快进时长（秒）
+    final durMs = p.state.duration.inMilliseconds;
+    final base = _seekStart.inMilliseconds;
+    final targetMs = (base + _seekAccumDx / width * span * 1000).round().clamp(0, durMs);
+    p.seek(Duration(milliseconds: targetMs));
+    setState(() => _seeking = false);
+  }
+
+  void _cancelSeek() {
+    if (_seeking) setState(() => _seeking = false);
+  }
+
+  /// 快进/快退反馈的屏幕方位（向右拖 = 右侧，向左拖 = 左侧）。
+  Alignment get _seekAlign =>
+      _seekAccumDx >= 0 ? Alignment.centerRight : Alignment.centerLeft;
+
+  /// 拖动中的目标时间点（null = 未在拖动）。
+  Duration? get _seekTarget {
+    final p = _player;
+    if (p == null || !_seeking) return null;
+    final width = MediaQuery.sizeOf(context).width;
+    final span = 60.0; // 一个屏幕宽度对应的快进时长（秒）
+    final durMs = p.state.duration.inMilliseconds;
+    final base = _seekStart.inMilliseconds;
+    final ms = (base + _seekAccumDx / width * span * 1000).round().clamp(0, durMs);
+    return Duration(milliseconds: ms);
   }
 
   @override
@@ -1655,7 +1535,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
                 color: Colors.white.withValues(alpha: 0.08),
               ),
               alignment: Alignment.center,
-              child: DrawIcon(StrokeIcons.errorOutline,
+              child: Icon(
+                Icons.error_outline_rounded,
                 color: LightColors.primary.withValues(alpha: 0.7),
                 size: 28,
               ),
@@ -1663,10 +1544,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             SizedBox(height: AppTheme.metrics.kSpace12),
             Text(
               '无法加载视频',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: AppTheme.metrics.fontSize13,
-              ),
+              style: TextStyle(color: Colors.white54, fontSize: AppTheme.metrics.fontSize13),
             ),
           ],
         ),
@@ -1684,19 +1562,20 @@ class _VideoPreviewState extends State<_VideoPreview> {
       _VideoSpeedButton(player: player),
       _VideoFitButton(
         currentFit: _videoFit,
-        onToggle: () => setState(
-          () => _videoFit = _videoFit == BoxFit.contain
-              ? BoxFit.cover
-              : BoxFit.contain,
-        ),
+        onToggle: () =>
+            setState(() => _videoFit = _videoFit == BoxFit.contain ? BoxFit.cover : BoxFit.contain),
       ),
-      _VideoVolumeButton(player: player),
-      // 窗口播放（画中画）
+      _VideoVolumeButton(
+        player: player,
+        panelOpen: _showVolumePanel,
+        onTogglePanel: () => setState(() => _showVolumePanel = !_showVolumePanel),
+      ),
+      // 应用内画中画（迷你悬浮窗）
       if (isMobile)
         _GlassControlIcon(
-          icon: StrokeIcons.pictureInPictureAlt,
-          tooltip: '画中画',
-          onTap: () => _enterPip(context),
+          icon: _miniMode ? Icons.close_fullscreen_rounded : Icons.picture_in_picture_alt_rounded,
+          tooltip: _miniMode ? '退出画中画' : '画中画',
+          onTap: _toggleMini,
         ),
       const media_controls.MaterialFullscreenButton(),
     ];
@@ -1739,11 +1618,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF12101E),
-                    Color(0xFF1A1632),
-                    Color(0xFF0D0B15),
-                  ],
+                  colors: [Color(0xFF12101E), Color(0xFF1A1632), Color(0xFF0D0B15)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -1751,24 +1626,18 @@ class _VideoPreviewState extends State<_VideoPreview> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Opacity(
-                      opacity: 0.04,
-                      child: CustomPaint(painter: _AudioWavePainter()),
-                    ),
+                    child: Opacity(opacity: 0.04, child: CustomPaint(painter: _AudioWavePainter())),
                   ),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (widget.coverSource != null &&
-                          widget.coverSource!.isNotEmpty)
+                      if (widget.coverSource != null && widget.coverSource!.isNotEmpty)
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: AppTheme.metrics.radius16,
                             boxShadow: [
                               BoxShadow(
-                                color: LightColors.primary.withValues(
-                                  alpha: 0.2,
-                                ),
+                                color: LightColors.primary.withValues(alpha: 0.2),
                                 blurRadius: 40,
                                 offset: const Offset(0, 20),
                               ),
@@ -1782,15 +1651,12 @@ class _VideoPreviewState extends State<_VideoPreview> {
                                     width: 200,
                                     height: 200,
                                     fit: BoxFit.cover,
-                                    // 只按显示尺寸解码：封面原图可能是数百 MB 的大图
-                                    cacheWidth: 400,
                                   )
                                 : Image.file(
                                     File(widget.coverSource!),
                                     width: 200,
                                     height: 200,
                                     fit: BoxFit.cover,
-                                    cacheWidth: 400,
                                   ),
                           ),
                         )
@@ -1801,12 +1667,11 @@ class _VideoPreviewState extends State<_VideoPreview> {
                           decoration: BoxDecoration(
                             borderRadius: AppTheme.metrics.radius16,
                             color: Colors.white.withValues(alpha: 0.05),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
-                            ),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                           ),
                           alignment: Alignment.center,
-                          child: DrawIcon(StrokeIcons.musicNote,
+                          child: Icon(
+                            Icons.music_note_rounded,
                             color: LightColors.primary.withValues(alpha: 0.4),
                             size: AppTheme.metrics.iconSize64,
                           ),
@@ -1814,9 +1679,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                       SizedBox(height: AppTheme.metrics.kSpace24),
                       if (widget.title != null && widget.title!.isNotEmpty)
                         Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppTheme.metrics.kSpace40,
-                          ),
+                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace40),
                           child: Text(
                             widget.title!,
                             style: TextStyle(
@@ -1850,14 +1713,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
               child: AnimatedOpacity(
                 opacity: _playerReady ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 300),
-                child:
-                    widget.coverSource != null && widget.coverSource!.isNotEmpty
+                child: widget.coverSource != null && widget.coverSource!.isNotEmpty
                     ? (widget.coverSource!.startsWith('http')
                           ? Image.network(widget.coverSource!, fit: _videoFit)
-                          : Image.file(
-                              File(widget.coverSource!),
-                              fit: _videoFit,
-                            ))
+                          : Image.file(File(widget.coverSource!), fit: _videoFit))
                     : Container(
                         color: Colors.black,
                         child: const Center(child: _GlassPulseLoader()),
@@ -1865,28 +1724,101 @@ class _VideoPreviewState extends State<_VideoPreview> {
               ),
             ),
           ),
-        IgnorePointer(ignoring: _swiping, child: videoWidget),
-        if (isMobile)
+        // ── 迷你悬浮窗（画中画）──────────────────────────────────────
+        if (_miniMode && _miniController != null) ...[
           Positioned.fill(
-            child: _VideoSwipeListener(
-              onDragStart: () {
-                setState(() => _swiping = true);
-                widget.onDragStart();
-              },
-              onDragUpdate: widget.onDragUpdate,
-              onDragEnd: (velocity, screenExtent) {
-                widget.onDragEnd(velocity, screenExtent);
-                setState(() => _swiping = false);
-              },
-              onDragCancel: () {
-                setState(() => _swiping = false);
-              },
-              screenExtent: () {
-                final box = context.findRenderObject() as RenderBox;
-                return box.size.height;
-              },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggleMini,
+              child: Container(
+                color: Colors.black,
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.fullscreen_rounded, color: Colors.white54, size: 56),
+                    SizedBox(height: AppTheme.metrics.kSpace12),
+                    Text(
+                      '已进入画中画，点击画面或小窗恢复全屏',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: AppTheme.metrics.fontSize13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+          Positioned(
+            left: _miniOffset.dx.clamp(0.0, (MediaQuery.sizeOf(context).width - 200.0).clamp(0.0, 1e9)),
+            top: _miniOffset.dy
+                .clamp(0.0, (MediaQuery.sizeOf(context).height - 116.0 - viewPad.top - 60).clamp(0.0, 1e9)),
+            child: _MiniPipWindow(
+              controller: _miniController!,
+              player: player,
+              onExpand: _toggleMini,
+              onPan: (delta) => setState(() => _miniOffset += delta),
+            ),
+          ),
+        ] else ...[
+          IgnorePointer(ignoring: _swiping, child: videoWidget),
+          // 音量面板（点击音量按钮展开）
+          if (_showVolumePanel)
+            Positioned(
+              right: AppTheme.metrics.kSpace8,
+              bottom: bottomInset + 12 + buttonBarH + 6,
+              child: _VolumePanel(
+                player: player,
+                onClose: () => setState(() => _showVolumePanel = false),
+              ),
+            ),
+          if (isMobile)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              // 排除底部控制栏区域，避免拖动进度条时误触发上下翻页
+              bottom: bottomInset + 12 + buttonBarH + 24,
+              child: _VideoSwipeListener(
+                onDragStart: () {
+                  setState(() => _swiping = true);
+                  widget.onDragStart();
+                },
+                onDragUpdate: widget.onDragUpdate,
+                onDragEnd: (velocity, screenExtent) {
+                  widget.onDragEnd(velocity, screenExtent);
+                  setState(() => _swiping = false);
+                },
+                onDragCancel: () => setState(() => _swiping = false),
+                screenExtent: () {
+                  final box = context.findRenderObject() as RenderBox;
+                  return box.size.height;
+                },
+                onSeekStart: _beginSeek,
+                onSeekUpdate: _updateSeek,
+                onSeekEnd: _commitSeek,
+                onSeekCancel: _cancelSeek,
+                screenWidth: () {
+                  final box = context.findRenderObject() as RenderBox;
+                  return box.size.width;
+                },
+              ),
+            ),
+          // 水平拖动快进/快退反馈层
+          if (_seeking)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                  alignment: _seekAlign,
+                  child: _SeekIndicator(
+                    player: player,
+                    target: _seekTarget,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -1899,13 +1831,25 @@ class _VideoSwipeListener extends StatefulWidget {
     required this.onDragEnd,
     required this.onDragCancel,
     required this.screenExtent,
+    required this.onSeekStart,
+    required this.onSeekUpdate,
+    required this.onSeekEnd,
+    required this.onSeekCancel,
+    required this.screenWidth,
   });
 
+  // 垂直滑动 = 翻页
   final VoidCallback onDragStart;
   final void Function(double dy) onDragUpdate;
   final void Function(double velocity, double screenExtent) onDragEnd;
   final VoidCallback onDragCancel;
   final double Function() screenExtent;
+  // 水平滑动 = 快进/快退
+  final VoidCallback onSeekStart;
+  final void Function(double dx) onSeekUpdate;
+  final VoidCallback onSeekEnd;
+  final VoidCallback onSeekCancel;
+  final double Function() screenWidth;
 
   @override
   State<_VideoSwipeListener> createState() => _VideoSwipeListenerState();
@@ -1913,12 +1857,17 @@ class _VideoSwipeListener extends StatefulWidget {
 
 class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
   int? _activePointerId;
+  double _lastX = 0.0;
   double _lastY = 0.0;
-  double _accumulatedDelta = 0.0;
+  double _accH = 0.0;
+  double _accV = 0.0;
   DateTime? _lastMoveTime;
   double _lastVelocity = 0.0;
   static const double _kThreshold = 12.0;
-  bool _dragStarted = false;
+
+  /// null = 尚未判定轴；true = 水平，false = 垂直。
+  bool? _axis;
+  bool get _horizontal => _axis == true;
 
   @override
   Widget build(BuildContext context) {
@@ -1934,41 +1883,50 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
   void _onPointerDown(PointerDownEvent event) {
     if (_activePointerId != null) return;
     _activePointerId = event.pointer;
+    _lastX = event.position.dx;
     _lastY = event.position.dy;
-    _accumulatedDelta = 0.0;
+    _accH = 0.0;
+    _accV = 0.0;
     _lastMoveTime = null;
     _lastVelocity = 0.0;
-    _dragStarted = false;
-    debugPrint(
-      '[MVP] _VideoSwipeListener.onPointerDown pointer=${event.pointer}',
-    );
+    _axis = null;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
     if (event.pointer != _activePointerId) return;
+    final dx = event.position.dx - _lastX;
     final dy = event.position.dy - _lastY;
+    _lastX = event.position.dx;
     _lastY = event.position.dy;
 
     final now = DateTime.now();
     if (_lastMoveTime != null) {
       final dt = now.difference(_lastMoveTime!).inMicroseconds;
       if (dt > 0) {
-        _lastVelocity = dy / (dt / 1e6);
+        final delta = _horizontal ? dx : dy;
+        _lastVelocity = delta / (dt / 1e6);
       }
     }
     _lastMoveTime = now;
 
-    if (!_dragStarted) {
-      _accumulatedDelta += dy;
-      if (_accumulatedDelta.abs() > _kThreshold) {
-        _dragStarted = true;
-        debugPrint(
-          '[MVP] _VideoSwipeListener drag started accumulatedDelta=$_accumulatedDelta',
-        );
-        widget.onDragStart();
-        widget.onDragUpdate(_accumulatedDelta);
-        _accumulatedDelta = 0.0;
+    if (_axis == null) {
+      _accH += dx;
+      _accV += dy;
+      if (_accH.abs() > _kThreshold || _accV.abs() > _kThreshold) {
+        // 首次超过阈值的方向定为拖动轴
+        _axis = _accH.abs() >= _accV.abs();
+        if (_horizontal) {
+          widget.onSeekStart();
+          widget.onSeekUpdate(_accH);
+        } else {
+          widget.onDragStart();
+          widget.onDragUpdate(_accV);
+        }
+        _accH = 0.0;
+        _accV = 0.0;
       }
+    } else if (_horizontal) {
+      widget.onSeekUpdate(dx);
     } else {
       widget.onDragUpdate(dy);
     }
@@ -1976,10 +1934,9 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
 
   void _onPointerUp(PointerUpEvent event) {
     if (event.pointer != _activePointerId) return;
-    debugPrint(
-      '[MVP] _VideoSwipeListener.onPointerUp dragStarted=$_dragStarted, velocity=${_lastVelocity * 1000}',
-    );
-    if (_dragStarted) {
+    if (_axis == true) {
+      widget.onSeekEnd();
+    } else if (_axis == false) {
       widget.onDragEnd(_lastVelocity * 1000.0, widget.screenExtent());
     }
     _reset();
@@ -1987,10 +1944,9 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
 
   void _onPointerCancel(PointerCancelEvent event) {
     if (event.pointer != _activePointerId) return;
-    debugPrint(
-      '[MVP] _VideoSwipeListener.onPointerCancel dragStarted=$_dragStarted',
-    );
-    if (_dragStarted) {
+    if (_axis == true) {
+      widget.onSeekCancel();
+    } else if (_axis == false) {
       widget.onDragCancel();
     }
     _reset();
@@ -1998,9 +1954,10 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
 
   void _reset() {
     _activePointerId = null;
-    _accumulatedDelta = 0.0;
+    _accH = 0.0;
+    _accV = 0.0;
     _lastVelocity = 0.0;
-    _dragStarted = false;
+    _axis = null;
     _lastMoveTime = null;
   }
 }
@@ -2016,21 +1973,20 @@ class _VideoSpeedButton extends StatelessWidget {
       initialData: player.state.rate,
       builder: (context, snapshot) {
         final rate = snapshot.data ?? 1.0;
-        final label = (rate == rate.truncateToDouble())
-            ? '${rate.toInt()}x'
-            : '${rate}x';
+        final label = (rate == rate.truncateToDouble()) ? '${rate.toInt()}x' : '${rate}x';
         return PopupMenuButton<double>(
           tooltip: '播放速度',
-          // 原来这里写死 Colors.black87：切到亮色主题就成了一块黑斑，而且绕开了
-          // 全站浮层的圆角、描边和投影。交给 popupMenuTheme。
+          color: Colors.black87,
           itemBuilder: (_) => [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
               .map(
-                (r) => GlassMenuItem<double>(
+                (r) => PopupMenuItem<double>(
                   value: r,
-                  label: (r == r.truncateToDouble())
-                      ? '${r.toInt()}x'
-                      : '${r}x',
-                  selected: r == rate,
+                  child: Text(
+                    (r == r.truncateToDouble()) ? '${r.toInt()}x' : '${r}x',
+                    style: TextStyle(
+                      color: r == rate ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                  ),
                 ),
               )
               .toList(),
@@ -2042,10 +1998,7 @@ class _VideoSpeedButton extends StatelessWidget {
             ),
             child: Text(
               label,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: AppTheme.metrics.fontSize13,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize13),
             ),
           ),
         );
@@ -2066,8 +2019,8 @@ class _VideoFitButton extends StatelessWidget {
     final isCover = currentFit == BoxFit.cover;
     return IconButton(
       tooltip: isCover ? '适应屏幕' : '填充屏幕',
-      icon: DrawIcon(
-        isCover ? StrokeIcons.fitScreen : StrokeIcons.crop,
+      icon: Icon(
+        isCover ? Icons.fit_screen_rounded : Icons.crop_rounded,
         color: Colors.white,
         size: AppTheme.metrics.iconSize22,
       ),
@@ -2076,11 +2029,17 @@ class _VideoFitButton extends StatelessWidget {
   }
 }
 
-// ── 视频音量按钮（点击静音/取消静音）──────────────────────────────────────
+// ── 视频音量按钮（点击展开音量面板）────────────────────────────────────
 
 class _VideoVolumeButton extends StatelessWidget {
-  const _VideoVolumeButton({required this.player});
+  const _VideoVolumeButton({
+    required this.player,
+    required this.panelOpen,
+    required this.onTogglePanel,
+  });
   final Player player;
+  final bool panelOpen;
+  final VoidCallback onTogglePanel;
 
   @override
   Widget build(BuildContext context) {
@@ -2090,63 +2049,265 @@ class _VideoVolumeButton extends StatelessWidget {
       builder: (context, snapshot) {
         final vol = snapshot.data ?? 100.0;
         final icon = vol == 0
-            ? StrokeIcons.volumeOff
-            : (vol < 50 ? StrokeIcons.volumeDown : StrokeIcons.volumeUp);
+            ? Icons.volume_off_rounded
+            : (vol < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
         return IconButton(
-          tooltip: vol == 0 ? '取消静音' : '静音',
-          icon: DrawIcon(icon,
-            color: Colors.white,
-            size: AppTheme.metrics.iconSize22,
-          ),
-          onPressed: () => player.setVolume(vol == 0 ? 100.0 : 0.0),
-          onLongPress: () => _showVolumeSlider(context),
+          tooltip: '音量',
+          icon: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
+          onPressed: onTogglePanel,
+          color: panelOpen ? LightColors.primary : null,
         );
       },
     );
   }
+}
 
-  void _showVolumeSlider(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.black87,
-      builder: (_) => Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppTheme.metrics.kSpace24,
-          vertical: AppTheme.metrics.kSpace16,
-        ),
-        child: Row(
-          children: [
-            DrawIcon(StrokeIcons.volumeDown, color: Colors.white70),
-            Expanded(
-              child: StreamBuilder<double>(
-                stream: player.stream.volume,
-                initialData: player.state.volume,
-                builder: (context, snapshot) {
-                  final vol = snapshot.data ?? 100.0;
-                  return Slider(
-                    value: vol.clamp(0.0, 100.0),
-                    min: 0,
-                    max: 100,
-                    onChanged: player.setVolume,
-                  );
-                },
+// ── 音量滑块面板（面板形式，可拖动调节 + 静音）───────────────────────
+
+class _VolumePanel extends StatelessWidget {
+  const _VolumePanel({required this.player, required this.onClose});
+  final Player player;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: AppTheme.metrics.radius12,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          width: 220,
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.metrics.kSpace12,
+            vertical: AppTheme.metrics.kSpace8,
+          ),
+          color: Colors.black.withValues(alpha: 0.62),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.volume_up_rounded,
+                      color: Colors.white70,
+                      size: AppTheme.metrics.iconSize20,
+                    ),
+                    onPressed: () => player.setVolume(100.0),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<double>(
+                      stream: player.stream.volume,
+                      initialData: player.state.volume,
+                      builder: (context, snapshot) {
+                        final vol = (snapshot.data ?? 100.0).clamp(0.0, 100.0);
+                        return Slider(
+                          value: vol,
+                          min: 0,
+                          max: 100,
+                          activeColor: LightColors.primary,
+                          onChanged: player.setVolume,
+                        );
+                      },
+                    ),
+                  ),
+                  SizedBox(width: AppTheme.metrics.kSpace8),
+                  GestureDetector(
+                    onTap: onClose,
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: Colors.white54,
+                      size: AppTheme.metrics.iconSize20,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            DrawIcon(StrokeIcons.volumeUp, color: Colors.white70),
-          ],
+              Align(
+                alignment: Alignment.center,
+                child: StreamBuilder<double>(
+                  stream: player.stream.volume,
+                  initialData: player.state.volume,
+                  builder: (context, snapshot) {
+                    final vol = (snapshot.data ?? 100.0).round();
+                    return Text(
+                      '$vol%',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: AppTheme.metrics.fontSize13,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _GlassControlIcon extends StatelessWidget {
-  const _GlassControlIcon({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
+// ── 迷你悬浮窗（画中画）：可拖动、可播放/暂停、点击还原 ─────────────────
+
+class _MiniPipWindow extends StatelessWidget {
+  const _MiniPipWindow({
+    required this.controller,
+    required this.player,
+    required this.onExpand,
+    required this.onPan,
   });
-  final StrokeIcon icon;
+
+  final VideoController controller;
+  final Player player;
+  final VoidCallback onExpand;
+  final ValueChanged<Offset> onPan;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onExpand,
+      onPanUpdate: (d) => onPan(d.delta),
+      child: ClipRRect(
+        borderRadius: AppTheme.metrics.radius12,
+        child: Container(
+          width: 200,
+          height: 112,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Video(controller: controller, fit: BoxFit.cover),
+              // 顶部播放状态半透明遮罩
+              Positioned(
+                top: 0,
+                right: 0,
+                child: StreamBuilder<bool>(
+                  stream: player.stream.playing,
+                  initialData: player.state.playing,
+                  builder: (context, snapshot) {
+                    final playing = snapshot.data ?? false;
+                    return _MiniPipBadge(
+                      icon: playing ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                    );
+                  },
+                ),
+              ),
+              // 底部进度条
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: StreamBuilder<Duration>(
+                  stream: player.stream.position,
+                  initialData: player.state.position,
+                  builder: (context, snapshot) {
+                    final pos = snapshot.data ?? Duration.zero;
+                    final dur = player.state.duration;
+                    final ratio = dur.inMilliseconds > 0
+                        ? (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0)
+                        : 0.0;
+                    return LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 3,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniPipBadge extends StatelessWidget {
+  const _MiniPipBadge({required this.icon});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.5),
+        borderRadius: AppTheme.metrics.radius8,
+      ),
+      child: Icon(icon, color: Colors.white70, size: 14),
+    );
+  }
+}
+
+// ── 快进/快退反馈指示器 ─────────────────────────────────────────────
+
+class _SeekIndicator extends StatelessWidget {
+  const _SeekIndicator({required this.player, required this.target});
+  final Player player;
+  final Duration? target;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = target ?? player.state.position;
+    final deltaMs = t.inMilliseconds - player.state.position.inMilliseconds;
+    final deltaSec = deltaMs ~/ 1000;
+    final sign = deltaSec > 0 ? '+' : (deltaSec < 0 ? '-' : '');
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppTheme.metrics.kSpace16,
+        vertical: AppTheme.metrics.kSpace8,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: AppTheme.metrics.radius10,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$sign${deltaSec.abs()}s',
+            style: TextStyle(
+              color: LightColors.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: AppTheme.metrics.fontSize17,
+            ),
+          ),
+          SizedBox(height: AppTheme.metrics.kSpace4),
+          Text(
+            _fmt(t),
+            style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _fmt(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+        : '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class _GlassControlIcon extends StatelessWidget {
+  const _GlassControlIcon({required this.icon, required this.onTap, this.tooltip});
+  final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
 
@@ -2154,7 +2315,8 @@ class _GlassControlIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
-      icon: DrawIcon(icon,
+      icon: Icon(
+        icon,
         color: Colors.white.withValues(alpha: 0.85),
         size: AppTheme.metrics.iconSize20,
       ),
@@ -2171,16 +2333,13 @@ class _GlassPulseLoader extends StatefulWidget {
   State<_GlassPulseLoader> createState() => _GlassPulseLoaderState();
 }
 
-class _GlassPulseLoaderState extends State<_GlassPulseLoader>
-    with SingleTickerProviderStateMixin {
+class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
   }
 
   @override
@@ -2209,7 +2368,8 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader>
               ),
             ),
             alignment: Alignment.center,
-            child: DrawIcon(StrokeIcons.playArrow,
+            child: Icon(
+              Icons.play_arrow_rounded,
               color: Colors.white.withValues(alpha: opacity),
               size: 24,
             ),

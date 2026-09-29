@@ -1,7 +1,3 @@
-import 'dart:io';
-import 'dart:ui';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -9,10 +5,9 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/format.dart';
-import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
-import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
 class MediaFolderCard extends StatefulWidget {
@@ -69,9 +64,6 @@ class MediaFolderCard extends StatefulWidget {
 
 class _MediaFolderCardState extends State<MediaFolderCard> {
   bool _hovering = false;
-
-  static const Duration _kAnimDur = Duration(milliseconds: 200);
-  static const Curve _kAnimCurve = Curves.easeOut;
 
   Worker? _privacyWorker;
 
@@ -162,296 +154,51 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final resolvedCover = widget.coverSource;
-    final hasCover = resolvedCover != null && resolvedCover.isNotEmpty;
-    final privacyOn = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().privacyMode.value
-        : false;
-    final blurSigma = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().privacyBlurSigma.value
-        : 15.0;
-    return AnimatedScale(
-      scale: _hovering ? 1.03 : 1.0,
-      duration: _kAnimDur,
-      curve: _kAnimCurve,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onLongPress: PlatformUtil.isMobile ? null : widget.onLongPress,
-        onLongPressStart: PlatformUtil.isMobile
-            ? (details) => _showContextMenu(context, details.globalPosition)
-            : null,
-        onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hovering = true),
-          onExit: (_) => setState(() => _hovering = false),
-          child: Card(
-            elevation: _hovering ? 4 : 0,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: appMetrics.radius8,
-              side: widget.isSelected
-                  ? BorderSide(color: theme.colorScheme.primary, width: scaleW(2))
-                  : BorderSide.none,
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                AnimatedScale(
-                  scale: _hovering ? 1.05 : 1.0,
-                  duration: _kAnimDur,
-                  curve: _kAnimCurve,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          theme.colorScheme.primary.withAlpha(44),
-                          theme.colorScheme.secondary.withAlpha(26),
-                        ],
-                      ),
-                    ),
-                    child: hasCover && widget.isLost
-                        ? Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              const _FolderPlaceholder(),
-                              Positioned(
-                                left: AppTheme.metrics.kSpace8,
-                                top: AppTheme.metrics.kSpace8,
-                                child: LostBadge(),
-                              ),
-                            ],
-                          )
-                        : hasCover
-                        ? (() {
-                            final cacheW = resolvedCover.startsWith('http')
-                                ? null
-                                : () {
-                                    final prefs = getIt.isRegistered<MediaPrefsService>()
-                                        ? getIt.get<MediaPrefsService>()
-                                        : null;
-                                    final w = prefs?.localPreviewWidth.value ?? 480;
-                                    return w > 0 ? w : null;
-                                  }();
-                            final image = resolvedCover.startsWith('http')
-                                ? Image.network(
-                                    resolvedCover,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => const _FolderPlaceholder(),
-                                  )
-                                : Image.file(
-                                    File(resolvedCover),
-                                    fit: BoxFit.cover,
-                                    cacheWidth: cacheW,
-                                    errorBuilder: (_, _, _) => const _FolderPlaceholder(),
-                                  );
-                            if (privacyOn) {
-                              return ClipRect(
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    image,
-                                    BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                        sigmaX: blurSigma,
-                                        sigmaY: blurSigma,
-                                      ),
-                                      child: Container(color: Colors.transparent),
-                                    ),
-                                    Center(
-                                      child: Container(
-                                        padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withAlpha(120),
-                                          borderRadius: AppTheme.metrics.radius999,
-                                        ),
-                                        child: DrawIcon(StrokeIcons.lockOutline,
-                                          size: AppTheme.metrics.iconSize16,
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                image,
-                                if (kDebugMode)
-                                  Positioned(
-                                    right: AppTheme.metrics.kSpace4,
-                                    bottom: AppTheme.metrics.kSpace4,
-                                    child: DebugImageSizeBadge(src: resolvedCover),
-                                  ),
-                              ],
-                            );
-                          }())
-                        : Center(
-                            child: DrawIcon(StrokeIcons.folder,
-                              size: scaleW(54),
-                              color: theme.colorScheme.primary.withAlpha(180),
-                            ),
-                          ),
-                  ),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withAlpha(150)],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: appMetrics.kSpace10,
-                  top: appMetrics.kSpace10,
-                  child: RepaintBoundary(
-                    child: ClipRRect(
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: appMetrics.kSpace8,
-                            vertical: appMetrics.kSpace4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withAlpha(120),
-                            borderRadius: AppTheme.metrics.radius999,
-                          ),
-                          child: Text(
-                            widget.typeLabel,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: appMetrics.fontSize9,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (widget.isRemote && widget.nodeName != null)
-                  Positioned(
-                    right: appMetrics.kSpace10,
-                    top: appMetrics.kSpace10,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: appMetrics.kSpace8,
-                        vertical: appMetrics.kSpace4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer.withAlpha(220),
-                        borderRadius: AppTheme.metrics.radius999,
-                      ),
-                      child: Text(
-                        widget.nodeName!,
-                        style: TextStyle(
-                          fontSize: appMetrics.fontSize9,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: ClipRect(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: appMetrics.kSpace10,
-                            vertical: appMetrics.kSpace10,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.folder.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: appMetrics.fontSize13,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.3,
-                                ),
-                              ),
-                              SizedBox(height: appMetrics.kSpace4),
-                              Row(
-                                children: [
-                                  DrawIcon(StrokeIcons.folder,
-                                    size: scaleW(12),
-                                    color: Colors.white.withAlpha(180),
-                                  ),
-                                  SizedBox(width: appMetrics.kSpace4),
-                                  Flexible(
-                                    child: Text(
-                                      // 计数与体积合成一段再省略：分成两个 Text
-                                      // 时窄卡会把行撑爆，省略号也没地方落
-                                      widget.resourceCount > 0
-                                          ? '${widget.itemCount} 项 · 共 ${widget.resourceCount} 资源 · ${formatFileSize(widget.totalSize)}'
-                                          : '${widget.itemCount} 项 · 共 ${widget.resourceCount} 资源',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white.withAlpha(180),
-                                        fontSize: appMetrics.fontSize9,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: PlatformUtil.isMobile ? null : widget.onLongPress,
+      onLongPressStart: PlatformUtil.isMobile
+          ? (details) => _showContextMenu(context, details.globalPosition)
+          : null,
+      onSecondaryTapDown: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: MediaCutoutCard(
+          selected: widget.isSelected,
+          hovered: _hovering,
+          label: widget.typeLabel,
+          // 「N 项」是点开能看到的卡片数，和正文里的「共 N 资源」两个口径，
+          // 分放右上标签和正文正好各自说一件事
+          tagLabel: '${widget.itemCount} 项',
+          tagIcon: StrokeIcons.folder,
+          title: widget.folder.name,
+          body: widget.resourceCount > 0
+              ? '共 ${widget.resourceCount} 资源'
+              : '暂无资源',
+          footIcon: widget.isRemote ? StrokeIcons.cloud : StrokeIcons.computer,
+          footName: widget.isRemote ? (widget.nodeName ?? '远程节点') : '本机',
+          footReadout: formatFileSize(widget.totalSize),
+          media: MediaCardCover(
+            source: widget.coverSource,
+            placeholderIcon: StrokeIcons.folder,
+            lostIcon: StrokeIcons.folderOff,
+            isLost: widget.isLost,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FolderPlaceholder extends StatelessWidget {
-  const _FolderPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary.withAlpha(42),
-            theme.colorScheme.secondary.withAlpha(28),
-          ],
-        ),
-      ),
-      child: Center(
-        child: DrawIcon(StrokeIcons.folderOff,
-          size: AppTheme.metrics.iconSize48,
-          color: theme.colorScheme.primary.withAlpha(150),
+          mediaOverlay: widget.isLost
+              ? Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: appMetrics.kSpace8,
+                      top: appMetrics.kSpace8,
+                    ),
+                    child: const LostBadge(),
+                  ),
+                )
+              : null,
         ),
       ),
     );

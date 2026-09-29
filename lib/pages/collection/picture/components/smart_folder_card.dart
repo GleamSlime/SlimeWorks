@@ -1,20 +1,20 @@
-import 'dart:io';
-import 'dart:ui';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/format.dart';
-import 'package:slime_works/pages/collection/picture/components/debug_image_size_badge.dart';
 import 'package:slime_works/pages/collection/picture/components/lost_badge.dart';
+import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
-import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
-class SmartFolderCard extends StatelessWidget {
+/// 智能文件夹卡
+///
+/// 从 StatelessWidget 改成 StatefulWidget：镂空样式靠悬停拉开层次（描边加深 +
+/// 封面推近），这张卡原来一点悬停反馈都没有，和三张兄弟卡摆在一起像坏了。
+class SmartFolderCard extends StatefulWidget {
   const SmartFolderCard({
     super.key,
     required this.smartFolder,
@@ -52,12 +52,41 @@ class SmartFolderCard extends StatelessWidget {
   final String? coverSource;
   final VoidCallback? onTransfer;
 
-  /// 非空表示这是远程节点的智能文件夹，显示节点名 badge。
+  /// 非空表示这是远程节点的智能文件夹，来源行显示节点名。
   final String? nodeName;
 
   final bool isLost;
 
+  @override
+  State<SmartFolderCard> createState() => _SmartFolderCardState();
+}
+
+class _SmartFolderCardState extends State<SmartFolderCard> {
+  bool _hovering = false;
+
+  Worker? _privacyWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = getIt.isRegistered<MediaPrefsService>()
+        ? getIt.get<MediaPrefsService>()
+        : null;
+    if (prefs != null) {
+      _privacyWorker = ever(prefs.privacyMode, (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _privacyWorker?.dispose();
+    super.dispose();
+  }
+
   void _showContextMenu(BuildContext context, Offset globalPosition) async {
+    if (!mounted) return;
     // 将全局坐标转为 Overlay 的本地坐标，正确处理侧边栏等布局偏移
     final overlayState = Overlay.of(context);
     final overlayBox = overlayState.context.findRenderObject()! as RenderBox;
@@ -72,19 +101,19 @@ class SmartFolderCard extends StatelessWidget {
         overlaySize.height - localPos.dy,
       ),
       items: [
-        if (onRename != null)
+        if (widget.onRename != null)
           GlassMenuItem<String>(
             value: 'rename',
             label: '重命名',
             icon: StrokeIcons.driveFileRenameOutline,
           ),
-        if (onEdit != null)
+        if (widget.onEdit != null)
           GlassMenuItem<String>(
             value: 'edit',
             label: '编辑智能文件夹',
             icon: StrokeIcons.autoAwesome,
           ),
-        if (onTransfer != null)
+        if (widget.onTransfer != null)
           GlassMenuItem<String>(
             value: 'transfer',
             label: '转移集合到...',
@@ -96,7 +125,7 @@ class SmartFolderCard extends StatelessWidget {
             label: '进入多选',
             icon: StrokeIcons.checklist,
           ),
-        if (onDelete != null) ...[
+        if (widget.onDelete != null) ...[
           const PopupMenuDivider(),
           GlassMenuItem<String>(
             value: 'delete',
@@ -107,319 +136,76 @@ class SmartFolderCard extends StatelessWidget {
         ],
       ],
     );
+    if (!mounted) return;
     if (action == 'rename') {
-      onRename?.call();
+      widget.onRename?.call();
     } else if (action == 'edit') {
-      onEdit?.call();
+      widget.onEdit?.call();
     } else if (action == 'transfer') {
-      onTransfer?.call();
+      widget.onTransfer?.call();
     } else if (action == 'delete') {
-      onDelete?.call();
+      widget.onDelete?.call();
     } else if (action == 'select') {
-      onLongPress();
+      widget.onLongPress();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final sf = widget.smartFolder;
+    final pattern = sf.effectivePattern;
     return GestureDetector(
-      onTap: onTap,
-      onLongPress: PlatformUtil.isMobile ? null : onLongPress,
+      onTap: widget.onTap,
+      onLongPress: PlatformUtil.isMobile ? null : widget.onLongPress,
       onLongPressStart: PlatformUtil.isMobile
           ? (details) => _showContextMenu(context, details.globalPosition)
           : null,
-      onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
-      child: Card(
-        elevation: 0,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: appMetrics.radius8,
-          side: isSelected
-              ? BorderSide(color: theme.colorScheme.primary, width: scaleW(2))
-              : BorderSide.none,
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Background: cover image (if available) or gradient
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    theme.colorScheme.tertiary.withAlpha(55),
-                    theme.colorScheme.secondary.withAlpha(30),
-                  ],
-                ),
-              ),
-              child: (() {
-                final src = coverSource;
-                final privacyOn = getIt.isRegistered<MediaPrefsService>()
-                    ? getIt<MediaPrefsService>().privacyMode.value
-                    : false;
-                final blurSigma = getIt.isRegistered<MediaPrefsService>()
-                    ? getIt<MediaPrefsService>().privacyBlurSigma.value
-                    : 15.0;
-                if (src != null && src.isNotEmpty && isLost) {
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      const _SmartPlaceholder(),
-                      Positioned(
-                        left: AppTheme.metrics.kSpace8,
-                        top: AppTheme.metrics.kSpace8,
-                        child: LostBadge(),
-                      ),
-                    ],
-                  );
-                }
-                if (src != null && src.isNotEmpty) {
-                  final cacheW = src.startsWith('http')
-                      ? null
-                      : () {
-                          final prefs = getIt.isRegistered<MediaPrefsService>()
-                              ? getIt.get<MediaPrefsService>()
-                              : null;
-                          final w = prefs?.localPreviewWidth.value ?? 480;
-                          return w > 0 ? w : null;
-                        }();
-                  final image = src.startsWith('http')
-                      ? Image.network(
-                          src,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const _SmartPlaceholder(),
-                        )
-                      : Image.file(
-                          File(src),
-                          fit: BoxFit.cover,
-                          cacheWidth: cacheW,
-                          errorBuilder: (_, _, _) => const _SmartPlaceholder(),
-                        );
-                  if (privacyOn) {
-                    return ClipRect(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          image,
-                          BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-                            child: Container(color: Colors.transparent),
-                          ),
-                          Center(
-                            child: Container(
-                              padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withAlpha(120),
-                                borderRadius: AppTheme.metrics.radius999,
-                              ),
-                              child: DrawIcon(StrokeIcons.lockOutline,
-                                size: AppTheme.metrics.iconSize16,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      image,
-                      if (kDebugMode)
-                        Positioned(
-                          right: AppTheme.metrics.kSpace4,
-                          bottom: AppTheme.metrics.kSpace4,
-                          child: DebugImageSizeBadge(src: src),
-                        ),
-                    ],
-                  );
-                }
-                return Center(
-                  child: DrawIcon(StrokeIcons.autoAwesome,
-                    size: scaleW(54),
-                    color: theme.colorScheme.tertiary.withAlpha(180),
-                  ),
-                );
-              })(),
-            ),
-            // Bottom fade
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withAlpha(150)],
-                ),
-              ),
-            ),
-            // 类型徽章 (top-left)
-            Positioned(
-              left: appMetrics.kSpace10,
-              top: appMetrics.kSpace10,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: appMetrics.kSpace8,
-                  vertical: appMetrics.kSpace4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(120),
-                  borderRadius: AppTheme.metrics.radius999,
-                ),
-                child: Text(
-                  '智能文件夹',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: appMetrics.fontSize9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            // Smart badge (top-right): "正则" for local, node name for remote
-            Positioned(
-              right: appMetrics.kSpace10,
-              top: appMetrics.kSpace10,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: appMetrics.kSpace8,
-                  vertical: appMetrics.kSpace4,
-                ),
-                decoration: BoxDecoration(
-                  color: nodeName != null
-                      ? theme.colorScheme.secondaryContainer.withAlpha(220)
-                      : theme.colorScheme.tertiaryContainer.withAlpha(220),
-                  borderRadius: AppTheme.metrics.radius999,
-                ),
-                child: Text(
-                  nodeName ?? '正则',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: appMetrics.fontSize9,
-                    fontWeight: FontWeight.w600,
-                    color: nodeName != null
-                        ? theme.colorScheme.onSecondaryContainer
-                        : theme.colorScheme.onTertiaryContainer,
-                  ),
-                ),
-              ),
-            ),
-            // Title + pattern
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: appMetrics.kSpace10,
-                        vertical: appMetrics.kSpace10,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            smartFolder.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: appMetrics.fontSize13,
-                              fontWeight: FontWeight.w700,
-                              height: 1.3,
-                            ),
-                          ),
-                          SizedBox(height: appMetrics.kSpace4),
-                          Row(
-                            children: [
-                              DrawIcon(StrokeIcons.autoAwesome,
-                                size: scaleW(12),
-                                color: Colors.white.withAlpha(180),
-                              ),
-                              SizedBox(width: appMetrics.kSpace4),
-                              // 计数 + 体积一段话：拆成两个 Text 时窄卡会撑爆行
-                              Flexible(
-                                child: Text(
-                                  resourceCount > 0
-                                      ? '$matchCount 项 · 共 $resourceCount 资源 · ${formatFileSize(totalSize)}'
-                                      : '$matchCount 项 · 共 $resourceCount 资源',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white.withAlpha(180),
-                                    fontSize: appMetrics.fontSize9,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              if (smartFolder.regexPattern.isNotEmpty) ...[
-                                SizedBox(width: appMetrics.kSpace8),
-                                DrawIcon(StrokeIcons.code,
-                                  size: scaleW(12),
-                                  color: Colors.white.withAlpha(180),
-                                ),
-                                SizedBox(width: appMetrics.kSpace4),
-                                // 正则只当线索用，封顶 46：做成非 flex 的定宽件，
-                                // 计数那段才能拿到整行剩下的宽度
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(maxWidth: scaleW(46)),
-                                  child: Text(
-                                    smartFolder.regexPattern,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white.withAlpha(150),
-                                      fontSize: appMetrics.fontSize9,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
+      onSecondaryTapDown: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: MediaCutoutCard(
+          selected: widget.isSelected,
+          hovered: _hovering,
+          label: '智能文件夹',
+          tagLabel: '${widget.matchCount} 项',
+          tagIcon: StrokeIcons.category,
+          title: sf.name,
+          // 模式是这张卡的身份，占正文；没有模式（全量聚合）时才让位给资源摘要。
+          // 命中集合里的资源条数不再上卡面：正文只有两行，体积已经说了「多少」。
+          body: pattern.isNotEmpty
+              ? pattern
+              : (widget.resourceCount > 0
+                    ? '共 ${widget.resourceCount} 资源'
+                    : '暂无资源'),
+          bodyMono: pattern.isNotEmpty,
+          footIcon: widget.nodeName != null
+              ? StrokeIcons.cloud
+              : StrokeIcons.computer,
+          footName: widget.nodeName ?? '本机',
+          footReadout: formatFileSize(widget.totalSize),
+          trailingIcon: StrokeIcons.edit,
+          trailingOnTap: widget.onEdit,
+          media: MediaCardCover(
+            source: widget.coverSource,
+            placeholderIcon: StrokeIcons.autoAwesome,
+            lostIcon: StrokeIcons.brokenImage,
+            isLost: widget.isLost,
+          ),
+          mediaOverlay: widget.isLost
+              ? Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: appMetrics.kSpace8,
+                      top: appMetrics.kSpace8,
                     ),
+                    child: const LostBadge(),
                   ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SmartPlaceholder extends StatelessWidget {
-  const _SmartPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.tertiary.withAlpha(42),
-            theme.colorScheme.primary.withAlpha(28),
-          ],
-        ),
-      ),
-      child: Center(
-        child: DrawIcon(StrokeIcons.autoAwesome,
-          size: AppTheme.metrics.iconSize48,
-          color: theme.colorScheme.tertiary.withAlpha(150),
+                )
+              : null,
         ),
       ),
     );

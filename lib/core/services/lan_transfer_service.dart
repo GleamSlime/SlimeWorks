@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/src/rust/api/lan_transfer.dart' as rust_api;
@@ -281,6 +283,9 @@ class TrustedDevice {
 class LanTransferService {
   static const int kDefaultPort = 8889;
 
+  /// 本机接入授权码持久化键
+  static const String kAccessCodeKey = 'lan_transfer_access_code';
+
   bool _isRunning = false;
   Timer? _deviceRefreshTimer;
   bool _isRefreshing = false; // 防止定时器回调堆积
@@ -352,7 +357,13 @@ class LanTransferService {
       // 获取 documents 目录才能在 iOS 等移动端保存文件
       final docsDir = await getApplicationDocumentsDirectory();
       final saveDir = '${docsDir.path}/LanTransfer';
-      await rust_api.lanTransferStart(port: port, saveDir: saveDir, preTrustedJson: preTrustedJson);
+      final accessCode = await getAndPersistAccessCode();
+      await rust_api.lanTransferStart(
+        port: port,
+        saveDir: saveDir,
+        preTrustedJson: preTrustedJson,
+        accessCode: accessCode,
+      );
       _isRunning = true;
 
       // 定期刷新设备列表
@@ -371,6 +382,7 @@ class LanTransferService {
         const retryDelays = [400, 800, 1500];
         final docsDir = await getApplicationDocumentsDirectory();
         final saveDir = '${docsDir.path}/LanTransfer';
+        final accessCode = await getAndPersistAccessCode();
         for (int attempt = 0; attempt < retryDelays.length; attempt++) {
           await Future<void>.delayed(Duration(milliseconds: retryDelays[attempt]));
           try {
@@ -378,6 +390,7 @@ class LanTransferService {
               port: port,
               saveDir: saveDir,
               preTrustedJson: preTrustedJson,
+              accessCode: accessCode,
             );
             _isRunning = true;
             _startDeviceRefresh();
@@ -511,6 +524,50 @@ class LanTransferService {
 
     _logger.info('LAN Transfer self-check: ${jsonEncode(report)}');
     return report;
+  }
+
+  /// 读取或创建持久化的本机接入授权码（首次自动生成随机码）
+  Future<String> getAndPersistAccessCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(kAccessCodeKey);
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+    final generated = _generateAccessCode();
+    await prefs.setString(kAccessCodeKey, generated);
+    _logger.info('已生成并持久化接入授权码');
+    return generated;
+  }
+
+  /// 读取当前授权码（未设置返回 null）
+  Future<String?> getAccessCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getString(kAccessCodeKey);
+    return (code == null || code.isEmpty) ? null : code;
+  }
+
+  /// 更新授权码；[code] 为空则关闭授权校验
+  Future<void> setAccessCode(String? code) async {
+    final normalized = (code == null || code.trim().isEmpty) ? null : code.trim();
+    final prefs = await SharedPreferences.getInstance();
+    if (normalized == null) {
+      await prefs.remove(kAccessCodeKey);
+    } else {
+      await prefs.setString(kAccessCodeKey, normalized);
+    }
+    try {
+      await _ensureRustReady();
+      await rust_api.lanTransferSetAccessCode(code: normalized);
+    } catch (e) {
+      _logger.error('推送授权码到 Rust 失败', error: e);
+    }
+  }
+
+  /// 生成 6 位可读随机授权码
+  String _generateAccessCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rnd = Random();
+    return List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
   }
 
   bool shouldRunEmptyDevicesSelfCheck() {
