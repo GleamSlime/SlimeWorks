@@ -291,6 +291,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     let mut content_length: usize = 0;
     let mut range_header: Option<String> = None;
     let mut auth_header: Option<String> = None;
+    let mut accept_gzip = false;
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
@@ -307,6 +308,8 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             range_header = Some(line[6..].trim().to_string());
         } else if lower.starts_with("x-sw-auth:") {
             auth_header = Some(line[10..].trim().to_string());
+        } else if lower.starts_with("accept-encoding:") {
+            accept_gzip = accepts_gzip(&line[16..]);
         }
     }
 
@@ -793,13 +796,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         ),
     };
 
-    let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
-        status_text(status),
-        body_str.len(),
-        body_str
-    );
-    let _ = stream.write_all(response.as_bytes());
+    write_json_response(&mut stream, status, &body_str, accept_gzip).ok();
     // 【临时埋点】从 accept 到写完响应的整段占用时间（含读请求体）
     trace_elapsed(
         conn_started,
@@ -808,6 +805,84 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
 
     // suppress unused warning
     let _ = peer;
+}
+
+/// JSON 响应压缩阈值：比这更小的包，gzip 的头部（18 字节）和 CPU 比省下的带宽还多。
+/// 更要紧的是 `ping`/连通性探测走的也是这条写回路径 —— 探测响应一旦被压缩排队，
+/// 节点就会在忙的时候被误判成失联。
+const GZIP_MIN_BODY_BYTES: usize = 1024;
+
+/// 请求头的 `Accept-Encoding` 是否表示接受 gzip。
+///
+/// 按逗号拆 token、容忍 `gzip;q=0.5` 这类带权重的写法，`gzip;q=0` 是明确拒绝不算接受；
+/// 不认通配 `*`（客户端用 `*` 通常只是占位，压缩与否则应由它自己声明 gzip 决定）。
+fn accepts_gzip(value: &str) -> bool {
+    value.split(',').any(|token| {
+        let mut parts = token.trim().split(';');
+        let name = parts.next().unwrap_or("").trim().to_ascii_lowercase();
+        if name != "gzip" {
+            return false;
+        }
+        // 权重解析不出来时按接受处理：宁可多发一次压缩，也别把请求卡死
+        parts
+            .find_map(|p| {
+                p.trim()
+                    .strip_prefix("q=")
+                    .and_then(|q| q.trim().parse::<f32>().ok())
+            })
+            .map_or(true, |q| q > 0.0)
+    })
+}
+
+/// 用 flate2 的纯 Rust 后端压缩响应体。
+fn gzip_body(raw: &[u8]) -> std::io::Result<Vec<u8>> {
+    use flate2::{write::GzEncoder, Compression};
+    let mut encoder = GzEncoder::new(Vec::with_capacity(raw.len() / 3), Compression::new(6));
+    encoder.write_all(raw)?;
+    encoder.finish()
+}
+
+/// 写出 JSON 响应：客户端接受 gzip 且体积过阈值时改发压缩体。
+///
+/// 压缩失败（内存吃紧等）回退明文，绝不让一个已经算出来的响应凭空变成连接错误。
+/// 明文回退必须发生在写任何字节之前，否则 `Content-Length` 已经按压缩长度发出去了。
+fn write_json_response(
+    stream: &mut TcpStream,
+    status: u16,
+    body_str: &str,
+    accept_gzip: bool,
+) -> std::io::Result<()> {
+    let mut head = String::with_capacity(256);
+    head.push_str(&format!(
+        "HTTP/1.1 {}\r\nContent-Type: application/json; charset=utf-8\r\n",
+        status_text(status)
+    ));
+
+    let mut payload: Vec<u8> = Vec::new();
+    let mut gzipped = false;
+    if accept_gzip && body_str.len() >= GZIP_MIN_BODY_BYTES {
+        if let Ok(compressed) = gzip_body(body_str.as_bytes()) {
+            // 压缩反而更大（已经是高熵内容）时不如直接发明文
+            if compressed.len() < body_str.len() {
+                payload = compressed;
+                gzipped = true;
+            }
+        }
+    }
+    if !gzipped {
+        payload = body_str.as_bytes().to_vec();
+    }
+    if gzipped {
+        // Vary 不能省：中间缓存（将来若走 CDN）按这个头区分两种编码的副本
+        head.push_str("Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n");
+    }
+    head.push_str(&format!(
+        "Content-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+        payload.len()
+    ));
+
+    stream.write_all(head.as_bytes())?;
+    stream.write_all(&payload)
 }
 
 fn status_text(code: u16) -> &'static str {
@@ -1254,5 +1329,105 @@ mod tests {
         ));
         assert!(response.starts_with("HTTP/1.1 200"), "响应: {response}");
         assert!(response.contains("\"pong\":true"), "响应: {response}");
+    }
+
+    // ── gzip 响应压缩 ────────────────────────────────────────────────────────
+
+    #[test]
+    fn accept_encoding_tokens_parsed_correctly() {
+        assert!(accepts_gzip("gzip"));
+        assert!(accepts_gzip("GZIP"));
+        assert!(accepts_gzip("  gzip , deflate"));
+        assert!(accepts_gzip("deflate, gzip;q=0.5"));
+        assert!(accepts_gzip("gzip;x=1")); // 解析不出的权重按接受处理
+        assert!(!accepts_gzip("deflate, br"));
+        assert!(!accepts_gzip(""));
+        // 明确拒绝，和「客户端没提」不是一回事
+        assert!(!accepts_gzip("gzip;q=0"));
+        assert!(!accepts_gzip("gzip;q=0.0"));
+        // 不认通配：要不要压缩由客户端显式声明 gzip 决定
+        assert!(!accepts_gzip("*"));
+    }
+
+    /// 走真实的 `write_json_response` 写回，收端按原始字节读（gzip 体过不了 `read_to_string`）
+    fn round_trip(body: &str, accept_gzip: bool) -> Vec<u8> {
+        use std::io::Read;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let body_owned = body.to_string();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            write_json_response(&mut stream, 200, &body_owned, accept_gzip).expect("write");
+        });
+
+        let mut client = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+        let mut raw = Vec::new();
+        client.read_to_end(&mut raw).expect("read");
+        server.join().expect("server 线程");
+        raw
+    }
+
+    /// 拆成 (头部小写文本, body, gzip 解压后的 body)
+    fn split_response(raw: &[u8]) -> (String, Vec<u8>, Vec<u8>) {
+        let split_at = raw
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .expect("响应应含头尾分隔");
+        let head = String::from_utf8_lossy(&raw[..split_at]).to_ascii_lowercase();
+        let body = raw[split_at + 4..].to_vec();
+        use std::io::Read;
+        let mut plain = Vec::new();
+        flate2::read::GzDecoder::new(&body[..])
+            .read_to_end(&mut plain)
+            .ok();
+        (head, body, plain)
+    }
+
+    /// 与真实集合列表同数量级的样本（3226 条 ≈ 1.6MB），刻意做成每条不同的内容，
+    /// 免得全同的字符串把压缩比刷成虚高。
+    fn sample_json_body() -> String {
+        (0..30_000)
+            .map(|i| format!("[\"media_collection_{i:016x}\",\"素材整理 {i}\",{}]", 1759000000 + i))
+            .collect::<String>()
+    }
+
+    #[test]
+    fn large_json_response_is_gzipped_when_accepted() {
+        let body = sample_json_body();
+        let (head, body_bytes, plain) = split_response(&round_trip(&body, true));
+
+        assert!(head.contains("content-encoding: gzip"), "头部: {head}");
+        assert!(head.contains("vary: accept-encoding"), "头部: {head}");
+        let declared: usize = head
+            .lines()
+            .find(|l| l.starts_with("content-length:"))
+            .unwrap()
+            .split(':')
+            .nth(1)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // 长度必须按压缩后的实际字节声明，声明错了客户端会挂在读上
+        assert_eq!(declared, body_bytes.len());
+        assert_eq!(plain.len(), body.len(), "解压后应与原文等长");
+        assert_eq!(String::from_utf8(plain).unwrap(), body);
+        assert!(body_bytes.len() * 2 < body.len(), "压缩没生效，收益不成立");
+    }
+
+    #[test]
+    fn small_or_non_accepting_client_gets_plain_json() {
+        let big_body = sample_json_body();
+
+        // 客户端没声明 gzip（例如 Rust 侧 reqwest 未开 gzip 特性）→ 明文，且能正常解析
+        let (head, body_bytes, _) = split_response(&round_trip(&big_body, false));
+        assert!(!head.contains("content-encoding"), "头部: {head}");
+        assert_eq!(String::from_utf8(body_bytes).unwrap(), big_body);
+
+        // 明文小响应（ping/探测那一路）低于阈值 → 不压缩，快速返回
+        let small = r#"{"success":true,"data":{"pong":true}}"#;
+        let (head, body_bytes, _) = split_response(&round_trip(small, true));
+        assert!(!head.contains("content-encoding"), "头部: {head}");
+        assert_eq!(String::from_utf8(body_bytes).unwrap(), small);
     }
 }

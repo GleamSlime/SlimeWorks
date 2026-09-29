@@ -967,6 +967,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
+name = "email_module"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "chardetng",
+ "chrono",
+ "encoding_rs",
+ "flutter_rust_bridge",
+ "lazy_static",
+ "native-tls",
+ "regex",
+ "serde",
+ "serde_json",
+ "slime_logger",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2028,6 +2046,22 @@ name = "leb128fmt"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
+name = "ledger_module"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "email_module",
+ "flutter_rust_bridge",
+ "lazy_static",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "slime_logger",
+]
 
 [[package]]
 name = "libbz2-rs-sys"
@@ -3134,13 +3168,16 @@ dependencies = [
  "chrono",
  "db_module",
  "dotenv",
+ "email_module",
  "extract_module",
+ "flate2",
  "flutter_rust_bridge",
  "game_library",
  "http_bridge",
  "hyper 0.14.32",
  "lan_transfer",
  "lazy_static",
+ "ledger_module",
  "libloading",
  "manga_module",
  "md5",

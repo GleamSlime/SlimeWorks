@@ -57,6 +57,12 @@ import 'package:slime_works/pages/aliyun_ddns/aliyun_ddns_screen.dart';
 import 'package:slime_works/pages/power_stats/power_stats_screen.dart';
 import 'package:slime_works/pages/music_player/music_player_screen.dart';
 import 'package:slime_works/pages/ncm_decrypt/ncm_decrypt_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_records_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_stats_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_pending_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_settings_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_accounts_screen.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/power_stats_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
@@ -77,6 +83,7 @@ part 'routes/lan_transfer_routes.dart';
 part 'routes/manga_routes.dart';
 part 'routes/game_library_routes.dart';
 part 'routes/music_player_routes.dart';
+part 'routes/ledger_routes.dart';
 
 const Loggers _logger = Loggers(name: '路由');
 
@@ -103,6 +110,12 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<MangaHomeRoute>(path: '/manga'),
     TypedGoRoute<MangaDownloadsRoute>(path: '/manga/downloads'),
     TypedGoRoute<MusicPlayerRoute>(path: '/music'),
+    TypedGoRoute<LedgerRoute>(path: '/ledger'),
+    TypedGoRoute<LedgerRecordsRoute>(path: '/ledger/records'),
+    TypedGoRoute<LedgerStatsRoute>(path: '/ledger/stats'),
+    TypedGoRoute<LedgerPendingRoute>(path: '/ledger/pending'),
+    TypedGoRoute<LedgerSettingsRoute>(path: '/ledger/settings'),
+    TypedGoRoute<LedgerAccountsRoute>(path: '/ledger/accounts'),
     TypedGoRoute<LanTransferRoute>(path: '/lan-transfer'),
     TypedGoRoute<SettingsRoute>(path: '/settings'),
     TypedGoRoute<AboutRoute>(path: '/about'),
@@ -176,6 +189,12 @@ class AppRoutes {
     const MangaHomeRoute(),
     const MangaDownloadsRoute(),
     const MusicPlayerRoute(),
+    const LedgerRoute(),
+    const LedgerRecordsRoute(),
+    const LedgerStatsRoute(),
+    const LedgerPendingRoute(),
+    const LedgerSettingsRoute(),
+    const LedgerAccountsRoute(),
     const LanTransferRoute(),
     const SettingsRoute(),
     const AboutRoute(),

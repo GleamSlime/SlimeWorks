@@ -1,0 +1,24 @@
+[package]
+name = "email_module"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flutter_rust_bridge = "=2.11.1"
+slime_logger = { path = "../slime_logger" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = { version = "1.0", features = ["backtrace"] }
+chrono = { version = "0.4", features = ["serde"] }
+native-tls = "0.2"
+base64 = "0.22"
+encoding_rs = "0.8"
+chardetng = "0.1"
+regex = "1"
+lazy_static = "1.5"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

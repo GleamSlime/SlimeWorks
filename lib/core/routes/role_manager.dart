@@ -29,6 +29,7 @@ enum Permission {
   accessHttpBridgeTest,
   accessWebSocketTest,
   accessCollection,
+  accessLedger,
   accessDemo,
   accessManga,
   accessTools,

@@ -912,6 +912,11 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
     倒放。方向感要靠**单调**：载波坐标取 `|u − 0.5| − speed·t`，`speed` 是每圈走的整数个周期，接缝上
     两帧重合，压根没有倒退那一段；"往两边开"的闸门只涨不落，收尾只降高度。验方向也别比两张静止帧——
     连拍的每列包络叠成时空图，条纹一路往外斜才是往外走（往内是反斜，来回是横纹）。
+    推论：往这一类波上再加调制（随机峰高、包络起伏）时，**只许挂在载波坐标上**（跟着波一起走），
+    一旦挂成时间，它就是第二路会回头的运动。
+17. **`Wrap` 里的子项会铺满整幅**：`Center` / `Align`（`widthFactor` 为空）见着**有界**宽度就撑满，
+    而 `Wrap` 给子项的正是有界约束 → 药丸一颗变整幅、多颗叠成一列。动效页那颗 `Animate` 早就是整幅宽，
+    只是单颗看不出来；一排档位药丸要按内容收，得换 `Row`（给子项无界宽）。
 
 形变面板另有一条：CSS 的 `overflow: hidden` 在 Flutter 里要给子节点按**展开尺寸**定死
 `Positioned(width/height)`、由外层 `ClipRRect` 裁掉多出来的部分；`Positioned.fill` 和

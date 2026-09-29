@@ -18,6 +18,7 @@ import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
+import 'package:slime_works/core/services/ledger_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/system_tray_service.dart';
 import 'package:slime_works/core/services/time_consumption_test.dart';
@@ -160,6 +161,15 @@ Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
 
   // 启动系统资源监控（持续采集，不依赖 Dashboard 页面是否打开）
   getIt<SystemMetricsService>().start();
+
+  // 流水账：打开数据库并把邮箱口令预热进 Rust 内存，
+  // 否则"每日到点自动收账单"要等用户先进记账页面才开始生效。
+  unawaited(
+    getIt<LedgerService>().ensureInitialized().catchError((Object e) {
+      // 失败已在服务层记过日志，这里只是不让它变成未捕获的异步异常；
+      // 用户进记账页时会再试一次。
+    }),
+  );
 
   desktopTest.end();
 }

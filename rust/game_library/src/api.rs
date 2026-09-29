@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
-use chrono::Datelike;
+use chrono::{Datelike, TimeZone};
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
@@ -41,6 +41,17 @@ const SYSTEM_FAVORITES_ID: &str = "system:favorites";
 
 fn now_ts() -> i64 {
     chrono::Utc::now().timestamp()
+}
+
+/// 本地零点对应的 Unix 秒。`date_naive().and_utc()` 会把本地午夜当成 UTC 午夜，
+/// 东八区就整整晚 8 小时，凌晨玩的时间全都落不进"今日"，必须按本地时区换算。
+fn local_day_start_ts(date: chrono::NaiveDate) -> i64 {
+    let midnight = date.and_hms_opt(0, 0, 0).unwrap_or_default();
+    chrono::Local
+        .from_local_datetime(&midnight)
+        .earliest()
+        .unwrap_or_default()
+        .timestamp()
 }
 
 fn open_db(db_path: &str) -> Result<Connection> {
@@ -646,19 +657,10 @@ pub async fn game_library_get_stats(start_ts: i64, end_ts: i64) -> Result<GameSt
             .context("统计会话数失败")?;
 
         let now = chrono::Local::now();
-        let today_start = now
-            .date_naive()
-            .and_hms_opt(0, 0, 0)
-            .context("构建今日起始时间失败")?
-            .and_utc()
-            .timestamp();
-        let week_start = (now
-            - chrono::Duration::days(i64::from(now.weekday().num_days_from_monday())))
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .context("构建本周起始时间失败")?
-        .and_utc()
-        .timestamp();
+        let today_start = local_day_start_ts(now.date_naive());
+        let monday =
+            now.date_naive() - chrono::Duration::days(i64::from(now.weekday().num_days_from_monday()));
+        let week_start = local_day_start_ts(monday);
 
         let today_play_time_sec: i64 = conn
             .query_row(
@@ -808,19 +810,10 @@ pub async fn game_library_get_home_page_data() -> Result<HomePageData> {
             .context("统计总游玩时长失败")?;
 
         let now = chrono::Local::now();
-        let today_start = now
-            .date_naive()
-            .and_hms_opt(0, 0, 0)
-            .context("构建今日起始时间失败")?
-            .and_utc()
-            .timestamp();
-        let week_start = (now
-            - chrono::Duration::days(i64::from(now.weekday().num_days_from_monday())))
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .context("构建本周起始时间失败")?
-        .and_utc()
-        .timestamp();
+        let today_start = local_day_start_ts(now.date_naive());
+        let monday =
+            now.date_naive() - chrono::Duration::days(i64::from(now.weekday().num_days_from_monday()));
+        let week_start = local_day_start_ts(monday);
 
         let today_play_time_sec: i64 = conn
             .query_row(

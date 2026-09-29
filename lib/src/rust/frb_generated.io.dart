@@ -11,6 +11,7 @@ import 'api/ffmpeg.dart';
 import 'api/game_library.dart';
 import 'api/http_bridge.dart';
 import 'api/lan_transfer.dart';
+import 'api/ledger.dart';
 import 'api/logger.dart';
 import 'api/manga.dart';
 import 'api/media_collection.dart';

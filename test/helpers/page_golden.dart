@@ -110,6 +110,7 @@ Future<void> pumpAppPage(
   bool dark = false,
   Size size = kTestWindowSize,
   bool withTopBar = false,
+  Size? designSize,
 }) async {
   registerPageServices();
 
@@ -117,32 +118,44 @@ Future<void> pumpAppPage(
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
+  // 给了 designSize 就是声明"这是一台真实窗口"：真机按 1920x1080(桌面)/375x815(手机)
+  // 出设计稿，窗口比设计稿窄系数就 <1。此时必须重算 AppTheme.metrics——它是静态快照，
+  // 不重算量到的是上一台窗口的数，报出来的溢出是铺垫造成的假案。
+  final faithful = designSize != null;
+
   await tester.pumpWidget(
     ScreenUtilInit(
-      designSize: size,
-      builder: (context, _) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
-        // 真实窗口里这层画布由 DesktopScaffold 的根 Material 铺；测试直接挂页面
-        // 的话背景是透明的，卡片和画布的分层在图上根本看不出来。
-        // 必须用 Builder 里的 context 取语义色：ScreenUtilInit 的 context 在
-        // MaterialApp 之上，那儿还读不到主题，暗色版会拿成亮色画布。
-        home: Builder(
-          builder: (context) => ColoredBox(
-            color: AppSemantic.of(context).canvas,
-            child: withTopBar
-                ? Column(
-                    children: [
-                      const DesktopTopBar(),
-                      Expanded(child: page),
-                    ],
-                  )
-                : page,
+      designSize: designSize ?? size,
+      minTextAdapt: faithful,
+      splitScreenMode: faithful,
+      builder: (context, _) {
+        if (faithful) AppTheme.resetMetrics();
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+          // 真实窗口里这层画布由 DesktopScaffold 的根 Material 铺，所以这里也用
+          // Material 而不是 ColoredBox：少了它，页面里的 InkWell 一族（胶囊按钮、
+          // 标签页）第一帧就报 No Material widget found，而报错兜底出来的
+          // ErrorWidget 宽是 10 万，接着就是一眼看上去像布局炸了的天量溢出。
+          // 必须用 Builder 里的 context 取语义色：ScreenUtilInit 的 context 在
+          // MaterialApp 之上，那儿还读不到主题，暗色版会拿成亮色画布。
+          home: Builder(
+            builder: (context) => Material(
+              color: AppSemantic.of(context).canvas,
+              child: withTopBar
+                  ? Column(
+                      children: [
+                        const DesktopTopBar(),
+                        Expanded(child: page),
+                      ],
+                    )
+                  : page,
+            ),
           ),
-        ),
-      ),
+        );
+      },
     ),
   );
 }

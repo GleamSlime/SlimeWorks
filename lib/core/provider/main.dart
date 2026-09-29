@@ -18,6 +18,7 @@ import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/power_stats_service.dart';
+import 'package:slime_works/core/services/ledger_service.dart';
 import 'package:slime_works/core/services/app_update_service.dart';
 import 'package:slime_works/core/services/asr/asr_service.dart';
 import 'package:slime_works/core/services/asr/asr_settings_service.dart';
@@ -91,6 +92,9 @@ void getItInit() {
 
   // 电力定时统计服务
   getIt.registerLazySingleton<PowerStatsService>(() => PowerStatsService());
+
+  // 流水账服务（手工记账 + 邮件账单自动入账）
+  getIt.registerLazySingleton<LedgerService>(() => LedgerService());
 
   // 应用更新服务
   getIt.registerLazySingleton<AppUpdateService>(() => AppUpdateService());

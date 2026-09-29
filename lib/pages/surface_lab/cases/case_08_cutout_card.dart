@@ -179,7 +179,9 @@ class _Shell extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(Case08CutoutCard.edge),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(Case08CutoutCard.cardRadius - Case08CutoutCard.edge),
+            borderRadius: BorderRadius.circular(
+              Case08CutoutCard.cardRadius - Case08CutoutCard.edge,
+            ),
             child: SizedBox(
               width: Case08CutoutCard.bodyW,
               height: Case08CutoutCard.bodyH,
@@ -239,7 +241,7 @@ class _Media extends StatelessWidget {
               ),
             ),
             // 标签：白底 + 它那两块垫角，整组贴着图的左下角
-            const Positioned(left: 0, bottom: 0, child: _InsetLabel()),
+            const Positioned(left: 0, bottom: -1, child: _InsetLabel()),
             // 深色标签：同一块弧的另一头，整组贴着图的右上角
             const Positioned(right: 0, top: 0, child: _Tag()),
           ],
@@ -295,7 +297,9 @@ class _InsetLabel extends StatelessWidget {
           child: const DecoratedBox(
             decoration: BoxDecoration(
               color: _white,
-              borderRadius: BorderRadius.only(topRight: Radius.circular(Case08CutoutCard.labelRadius)),
+              borderRadius: BorderRadius.only(
+                topRight: Radius.circular(Case08CutoutCard.labelRadius),
+              ),
             ),
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: Case08CutoutCard.labelPad),
@@ -321,13 +325,19 @@ class _InsetLabel extends StatelessWidget {
         Positioned(
           left: -1,
           top: -31,
-          child: _Flare(key: Case08CutoutCard.flareKey('label-top'), side: Case08CutoutCard.labelFlare),
+          child: _Flare(
+            key: Case08CutoutCard.flareKey('label-top'),
+            side: Case08CutoutCard.labelFlare,
+          ),
         ),
         // 右边外侧那块：同样尖角左下，内凹斜边从标签右上角扫到图的下边
         Positioned(
           right: -31,
           bottom: -1,
-          child: _Flare(key: Case08CutoutCard.flareKey('label-right'), side: Case08CutoutCard.labelFlare),
+          child: _Flare(
+            key: Case08CutoutCard.flareKey('label-right'),
+            side: Case08CutoutCard.labelFlare,
+          ),
         ),
       ],
     );
@@ -359,7 +369,9 @@ class _Tag extends StatelessWidget {
           child: DecoratedBox(
             decoration: const BoxDecoration(
               color: _dark,
-              borderRadius: BorderRadius.only(bottomLeft: Radius.circular(Case08CutoutCard.pinRadius)),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(Case08CutoutCard.pinRadius),
+              ),
               boxShadow: _shadow,
             ),
             child: const Padding(
@@ -493,12 +505,7 @@ class _Foot extends StatelessWidget {
       height: 32,
       child: Row(
         children: <Widget>[
-          SizedBox(
-            key: Case08CutoutCard.avatarKey,
-            width: 32,
-            height: 32,
-            child: _Avatar(),
-          ),
+          SizedBox(key: Case08CutoutCard.avatarKey, width: 32, height: 32, child: _Avatar()),
           SizedBox(width: 12),
           Text(
             'Sarah Chen',
@@ -550,7 +557,12 @@ class _Avatar extends StatelessWidget {
           // ring-2：只画环不占位，所以那一行还是 32 高
           BoxShadow(color: _white, blurRadius: 0, spreadRadius: 2),
           BoxShadow(color: Color(0x1A000000), blurRadius: 3, offset: Offset(0, 1)),
-          BoxShadow(color: Color(0x0A000000), blurRadius: 2, offset: Offset(0, 1), spreadRadius: -1),
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+            spreadRadius: -1,
+          ),
         ],
       ),
     );
@@ -583,8 +595,18 @@ class _Action extends StatelessWidget {
                 color: _dark,
                 borderRadius: BorderRadius.all(Radius.circular(Case08CutoutCard.actionH / 2)),
                 boxShadow: <BoxShadow>[
-                  BoxShadow(color: Color(0x1A0A0A0A), blurRadius: 6, offset: Offset(0, 4), spreadRadius: -1),
-                  BoxShadow(color: Color(0x140A0A0A), blurRadius: 4, offset: Offset(0, 2), spreadRadius: -2),
+                  BoxShadow(
+                    color: Color(0x1A0A0A0A),
+                    blurRadius: 6,
+                    offset: Offset(0, 4),
+                    spreadRadius: -1,
+                  ),
+                  BoxShadow(
+                    color: Color(0x140A0A0A),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    spreadRadius: -2,
+                  ),
                 ],
               ),
               child: Center(

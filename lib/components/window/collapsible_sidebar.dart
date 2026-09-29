@@ -145,10 +145,7 @@ class SidebarController extends GetxController {
     final ratio = scaleW(100) / 100;
     if (!isExpanded.value) {
       if (!following.value) _beginFollow();
-      followWidth.value = (followWidth.value + deltaLogical / ratio).clamp(
-        0.0,
-        kMaxExpandedWidth,
-      );
+      followWidth.value = (followWidth.value + deltaLogical / ratio).clamp(0.0, kMaxExpandedWidth);
       _syncHiddenWithFollowWidth();
       return;
     }
@@ -184,10 +181,7 @@ class SidebarController extends GetxController {
       // 过半才认：拖到最小展开宽的六成算"要展开"，往回弹是手滑
       if (followWidth.value >= kMinExpandedWidth * 0.6) {
         // 落点宽直接接手跟手宽：松手瞬间不许跳
-        expandedWidth.value = followWidth.value.clamp(
-          kMinExpandedWidth,
-          kMaxExpandedWidth,
-        );
+        expandedWidth.value = followWidth.value.clamp(kMinExpandedWidth, kMaxExpandedWidth);
         _routeForcedHidden = false;
         isHidden.value = false;
         openSidebar();
@@ -513,9 +507,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
               ),
               // 只剩右侧一条发丝分隔线：四周描边在贴边布局下会被窗口蒙版裁掉半截
               // 线宽固定 1，不吃窗口缩放——缩放后不足 1 物理像素会被抗锯齿冲淡。
-              border: chromeHidden
-                  ? null
-                  : Border(right: BorderSide(color: s.glassBorder)),
+              border: chromeHidden ? null : Border(right: BorderSide(color: s.glassBorder)),
             ),
             child: chromeHidden
                 ? const SizedBox.shrink()
@@ -634,10 +626,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
     return AnimatedContainer(
       duration: widget.animationDuration,
       curve: AppMotion.standard,
-      padding: EdgeInsets.symmetric(
-        horizontal: m.kSpace8,
-        vertical: m.kSpace8,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace8),
       child: Row(
         // 收起态把把手和上面的灯、下面的图标条对齐到同一条中轴；展开态才是"字标在左、把手在右"
         mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
@@ -717,9 +706,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: bottomGroup.items
-                .map(
-                  (item) => _buildMenuItem(context, controller, item, isExpanded, showExtends),
-                )
+                .map((item) => _buildMenuItem(context, controller, item, isExpanded, showExtends))
                 .toList(),
           ),
         ),
@@ -891,10 +878,10 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                   duration: AppMotion.base,
                                   curve: AppMotion.standard,
                                   padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? s.accentContainer : Colors.transparent,
-                                    borderRadius: AppTheme.metrics.radius8,
-                                  ),
+                                  // decoration: BoxDecoration(
+                                  //   color: isSelected ? s.accentContainer : Colors.transparent,
+                                  //   borderRadius: AppTheme.metrics.radius8,
+                                  // ),
                                   child: DrawIcon(
                                     item.route.sidebarIcon!,
                                     size: AppTheme.metrics.fontSize18,
@@ -910,7 +897,10 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                       curve: AppMotion.standard,
                                       // 内边距只到 kSpace4：这一格横向只余 32 设计像素，
                                       // 图标 22 再加两侧各 6 就已经撑破
-                                      padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                                      padding: EdgeInsets.only(
+                                        left: AppTheme.metrics.kSpace6,
+                                        right: AppTheme.metrics.kSpace4,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: isSelected && isExpanded
                                             ? s.accentContainer
@@ -972,9 +962,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                             minWidth: AppTheme.metrics.kSpace18,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: isSelected
-                                                ? s.accentContainer
-                                                : s.surfaceHover,
+                                            color: isSelected ? s.accentContainer : s.surfaceHover,
                                             borderRadius: AppTheme.metrics.radius8,
                                           ),
                                           child: Text(
@@ -983,9 +971,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                             style: TextStyle(
                                               fontSize: AppTheme.metrics.fontSize9,
                                               fontWeight: FontWeight.w600,
-                                              color: isSelected
-                                                  ? s.accentText
-                                                  : s.textSecondary,
+                                              color: isSelected ? s.accentText : s.textSecondary,
                                             ),
                                             maxLines: 1,
                                           ),
@@ -994,18 +980,14 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                     if (item.route.sidebarBadgeWidget(context) != null)
                                       _trailing(
                                         Padding(
-                                          padding: EdgeInsets.only(
-                                            left: AppTheme.metrics.kSpace4,
-                                          ),
+                                          padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
                                           child: item.route.sidebarBadgeWidget(context)!,
                                         ),
                                       ),
                                     if (item.route.sidebarStatusWidget(context) != null)
                                       _trailing(
                                         Padding(
-                                          padding: EdgeInsets.only(
-                                            left: AppTheme.metrics.kSpace4,
-                                          ),
+                                          padding: EdgeInsets.only(left: AppTheme.metrics.kSpace4),
                                           child: item.route.sidebarStatusWidget(context)!,
                                         ),
                                       ),
@@ -1045,12 +1027,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                             for (final child in item.children!)
                               _SidebarChildItem(
                                 item: child,
-                                selected:
-                                    controller.selectedRoute.value == child.route.location,
-                                onTap: () => _navigateAndMaybeClose(
-                                  controller,
-                                  child.route.location,
-                                ),
+                                selected: controller.selectedRoute.value == child.route.location,
+                                onTap: () =>
+                                    _navigateAndMaybeClose(controller, child.route.location),
                               ),
                             SizedBox(height: AppTheme.metrics.kSpace4),
                           ],
@@ -1213,11 +1192,7 @@ class _SidebarLogo extends StatelessWidget {
 /// 否则连接线和白卡会打架——到底是这行被选中，还是这一族被选中，读不出来。
 /// 子项的反馈只有水洗 + 文字升色，够用了。
 class _SidebarChildItem extends StatefulWidget {
-  const _SidebarChildItem({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
+  const _SidebarChildItem({required this.item, required this.selected, required this.onTap});
 
   final SidebarMenuItem item;
   final bool selected;
@@ -1339,19 +1314,15 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
               // 选中项不再染一层品牌色，而是抬起成一张白卡：侧栏底就是画布色，
               // 白卡 + 1px 描边 + 一层极轻投影本身就是它的选中态。
               color: widget.isSelected
-                  ? s.surface
+                  ? s.surface.withAlpha(100)
                   : _hovered
                   ? s.surfaceHover
                   : Colors.transparent,
               borderRadius: m.radiusControl,
               // 只有选中项描边：每行都套一个框的话，一列看下去全是格子，
               // 抬升关系反而读不出来；悬停有水洗，未选中不需要常驻描边。
-              border: widget.isSelected
-                  ? Border.all(color: s.accentContainerBorder)
-                  : null,
-              boxShadow: [
-                if (widget.isSelected) ...s.elevation(Elevation.raised),
-              ],
+              border: widget.isSelected ? Border.all(color: s.accentContainerBorder) : null,
+              boxShadow: [if (widget.isSelected) ...s.elevation(Elevation.raised)],
             ),
             child: Row(
               spacing: m.kSpace8,

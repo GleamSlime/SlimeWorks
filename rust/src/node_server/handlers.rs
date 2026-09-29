@@ -9,12 +9,82 @@ use std::convert::Infallible;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+// ── 流水账（ledger）动作的公共收口 ────────────────────────────────────────────
+
+fn s_field(params: &Value, key: &str) -> String {
+    params[key].as_str().unwrap_or("").to_string()
+}
+
+fn i_field(params: &Value, key: &str) -> i64 {
+    params[key].as_i64().unwrap_or(0)
+}
+
+fn b_field(params: &Value, key: &str) -> bool {
+    params[key].as_bool().unwrap_or(false)
+}
+
+fn u_field(params: &Value, key: &str) -> u64 {
+    params[key].as_u64().unwrap_or(0)
+}
+
+/// 收信与连接自检走的是 std::net 的阻塞 TLS，必须挪出 tokio worker 线程
+async fn ledger_blocking<T>(what: &str, f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String>
+where
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("{}后台任务失败: {}", what, e))?
+}
+
+/// 节点侧账本兜底：桌面端从没打开过记账页时，用本节点数据目录自己开一份，
+/// 否则移动端第一次调用只会吃一句"未初始化"。
+fn ensure_ledger_ready() -> Result<(), String> {
+    if ledger_module::api::ledger_is_ready() {
+        return Ok(());
+    }
+    let path = get_app_data_path("ledger/ledger.db");
+    let cfg = json!({ "db_path": path.to_string_lossy().to_string() });
+    ledger_module::api::ledger_init(cfg.to_string())?;
+    Ok(())
+}
+
+/// ledger 的 FFI 面统一是 JSON 文本，这里集中解码并把错误文案包好
+fn ledger_json(raw: Result<String, String>, what: &str) -> Result<Value, String> {
+    let text = raw.map_err(|e| format!("{}失败: {}", what, e))?;
+    serde_json::from_str(&text).map_err(|e| format!("解析{}结果失败: {}", what, e))
+}
+
+fn ledger_text(raw: Result<String, String>, what: &str) -> Result<Value, String> {
+    let text = raw.map_err(|e| format!("{}失败: {}", what, e))?;
+    Ok(json!({ "text": text }))
+}
+
+fn ledger_scalar(raw: Result<i64, String>, key: &str, what: &str) -> Result<Value, String> {
+    let v = raw.map_err(|e| format!("{}失败: {}", what, e))?;
+    Ok(json!({ key: v }))
+}
+
+fn ledger_flag(raw: Result<bool, String>, what: &str) -> Result<Value, String> {
+    let v = raw.map_err(|e| format!("{}失败: {}", what, e))?;
+    Ok(json!({ "value": v }))
+}
+
+fn ledger_void(raw: Result<(), String>, what: &str) -> Result<Value, String> {
+    raw.map_err(|e| format!("{}失败: {}", what, e))?;
+    Ok(json!({ "ok": true }))
+}
+
 /// 分发动作到对应的处理函数
 pub async fn dispatch_action(
     action: &str,
     params: Value,
     config: &NodeServerConfig,
 ) -> Result<Value, String> {
+    // 账本动作统一先确保库已打开：移动端不会替节点做初始化，兜底见 ensure_ledger_ready
+    if action.starts_with("ledger_") {
+        ensure_ledger_ready()?;
+    }
     match action {
         // ── 状态查询 ─────────────────────────────────────────────────────────
         "ping" => Ok(json!({"pong": true})),
@@ -1012,6 +1082,201 @@ pub async fn dispatch_action(
                 .map_err(|e| format!("删除均衡器预设失败: {}", e))?;
             Ok(json!({"ok": true}))
         }
+
+        // ── 流水账（记账 + 邮件账单自动入账）───────────────────────────────────
+        "ledger_list_accounts" => ledger_json(ledger_module::api::ledger_list_accounts(), "获取账户列表"),
+        "ledger_upsert_account" => ledger_scalar(
+            ledger_module::api::ledger_upsert_account(s_field(&params, "account_json")),
+            "id",
+            "保存账户",
+        ),
+        "ledger_delete_account" => ledger_text(ledger_module::api::ledger_delete_account(i_field(&params, "id")), "删除账户"),
+
+        "ledger_list_categories" => ledger_json(
+            ledger_module::api::ledger_list_categories(s_field(&params, "direction")),
+            "获取类别列表",
+        ),
+        "ledger_upsert_category" => ledger_scalar(
+            ledger_module::api::ledger_upsert_category(s_field(&params, "category_json")),
+            "id",
+            "保存类别",
+        ),
+        "ledger_delete_category" => ledger_text(ledger_module::api::ledger_delete_category(i_field(&params, "id")), "删除类别"),
+        "ledger_list_merchant_memory" => {
+            ledger_json(ledger_module::api::ledger_list_merchant_memory(), "获取商户记忆")
+        }
+        "ledger_forget_merchant" => ledger_void(
+            ledger_module::api::ledger_forget_merchant(s_field(&params, "merchant_key")),
+            "清除商户记忆",
+        ),
+
+        "ledger_list_transactions" => ledger_json(
+            ledger_module::api::ledger_list_transactions(s_field(&params, "filter_json")),
+            "获取流水",
+        ),
+        "ledger_count_transactions" => ledger_scalar(
+            ledger_module::api::ledger_count_transactions(s_field(&params, "filter_json")),
+            "count",
+            "统计流水条数",
+        ),
+        "ledger_add_transaction" => ledger_scalar(
+            ledger_module::api::ledger_add_transaction(s_field(&params, "tx_json")),
+            "id",
+            "新增流水",
+        ),
+        "ledger_update_transaction" => ledger_void(
+            ledger_module::api::ledger_update_transaction(s_field(&params, "tx_json")),
+            "修改流水",
+        ),
+        "ledger_delete_transaction" => ledger_flag(
+            ledger_module::api::ledger_delete_transaction(i_field(&params, "id")),
+            "删除流水",
+        ),
+        "ledger_check_duplicate" => ledger_json(
+            ledger_module::api::ledger_check_duplicate(s_field(&params, "dup_json")),
+            "流水查重",
+        ),
+
+        "ledger_stats_by_day" => ledger_json(
+            ledger_module::api::ledger_stats_by_day(s_field(&params, "filter_json")),
+            "按天统计",
+        ),
+        "ledger_stats_by_category" => ledger_json(
+            ledger_module::api::ledger_stats_by_category(s_field(&params, "filter_json")),
+            "按类别统计",
+        ),
+        "ledger_stats_by_merchant" => ledger_json(
+            ledger_module::api::ledger_stats_by_merchant(
+                s_field(&params, "filter_json"),
+                i_field(&params, "top"),
+            ),
+            "按商户统计",
+        ),
+        "ledger_stats_summary" => ledger_json(
+            ledger_module::api::ledger_stats_summary(s_field(&params, "filter_json")),
+            "区间汇总",
+        ),
+        "ledger_stats_by_month" => ledger_json(
+            ledger_module::api::ledger_stats_by_month(i_field(&params, "months")),
+            "按月统计",
+        ),
+
+        "ledger_list_rules" => ledger_json(ledger_module::api::ledger_list_rules(), "获取邮箱规则"),
+        "ledger_upsert_rule" => ledger_scalar(
+            ledger_module::api::ledger_upsert_rule(
+                s_field(&params, "rule_json"),
+                s_field(&params, "password"),
+            ),
+            "id",
+            "保存邮箱规则",
+        ),
+        "ledger_delete_rule" => {
+            ledger_void(ledger_module::api::ledger_delete_rule(i_field(&params, "id")), "删除邮箱规则")
+        }
+        "ledger_set_rule_enabled" => ledger_void(
+            ledger_module::api::ledger_set_rule_enabled(i_field(&params, "id"), b_field(&params, "enabled")),
+            "切换邮箱规则开关",
+        ),
+        "ledger_has_rule_password" => ledger_flag(
+            ledger_module::api::ledger_has_rule_password(i_field(&params, "rule_id")),
+            "查询邮箱口令状态",
+        ),
+        "ledger_templates" => ledger_json(ledger_module::api::ledger_templates(), "获取解析模板"),
+        "ledger_parse_preview" => ledger_text(
+            ledger_module::api::ledger_parse_preview(
+                s_field(&params, "html"),
+                s_field(&params, "template_id"),
+                s_field(&params, "template_config"),
+            ),
+            "解析预览",
+        ),
+
+        // 联网的三个动作：阻塞 TLS 必须离开 worker 线程，口令只在这一跳短暂出现
+        "ledger_check_rule" => {
+            let rule_id = i_field(&params, "rule_id");
+            let password = s_field(&params, "password");
+            let text = ledger_blocking("邮件收信", move || {
+                ledger_module::api::ledger_check_rule(rule_id, password)
+            })
+            .await?;
+            Ok(json!({ "text": text }))
+        }
+        "ledger_fetch_emails" => {
+            let config_json = s_field(&params, "config_json");
+            let password = s_field(&params, "password");
+            let limit = u_field(&params, "limit");
+            let text = ledger_blocking("邮件试收取", move || {
+                ledger_module::api::ledger_fetch_emails(config_json, password, limit)
+            })
+            .await?;
+            ledger_json(Ok(text), "邮件试收取")
+        }
+        "ledger_test_connection" => {
+            let config_json = s_field(&params, "config_json");
+            let password = s_field(&params, "password");
+            let want_folders = b_field(&params, "want_folders");
+            let text = ledger_blocking("邮箱连接自检", move || {
+                ledger_module::api::ledger_test_connection(config_json, password, want_folders)
+            })
+            .await?;
+            ledger_json(Ok(text), "邮箱连接自检")
+        }
+
+        "ledger_list_pending" => ledger_json(
+            ledger_module::api::ledger_list_pending(i_field(&params, "limit")),
+            "获取待确认账单",
+        ),
+        "ledger_list_received_emails" => ledger_json(
+            ledger_module::api::ledger_list_received_emails(i_field(&params, "limit")),
+            "获取已收邮件",
+        ),
+        "ledger_email_transactions" => ledger_json(
+            ledger_module::api::ledger_email_transactions(i_field(&params, "email_id")),
+            "获取邮件对应流水",
+        ),
+        "ledger_pending_count" => {
+            ledger_scalar(ledger_module::api::ledger_pending_count(), "count", "统计待确认数")
+        }
+        "ledger_confirm_tx" => ledger_void(
+            ledger_module::api::ledger_confirm_tx(
+                i_field(&params, "tx_id"),
+                s_field(&params, "patch_json"),
+            ),
+            "确认入账",
+        ),
+        "ledger_confirm_all" => ledger_scalar(
+            ledger_module::api::ledger_confirm_all(
+                i_field(&params, "email_id"),
+                s_field(&params, "patch_json"),
+            ),
+            "count",
+            "整封确认入账",
+        ),
+        "ledger_ignore_tx" => ledger_void(
+            ledger_module::api::ledger_ignore_tx(i_field(&params, "tx_id")),
+            "忽略流水",
+        ),
+        "ledger_ignore_email" => ledger_scalar(
+            ledger_module::api::ledger_ignore_email(i_field(&params, "email_id")),
+            "count",
+            "忽略整封邮件",
+        ),
+        "ledger_purge_email" => ledger_scalar(
+            ledger_module::api::ledger_purge_email(i_field(&params, "email_id")),
+            "count",
+            "清除邮件流水",
+        ),
+
+        "ledger_scheduler_start" => ledger_void(ledger_module::api::ledger_scheduler_start(), "启动自动收信"),
+        "ledger_scheduler_stop" => ledger_void(ledger_module::api::ledger_scheduler_stop(), "停止自动收信"),
+        "ledger_scheduler_status" => {
+            ledger_json(ledger_module::api::ledger_scheduler_status(), "获取调度状态")
+        }
+        "ledger_get_logs" => ledger_json(
+            ledger_module::api::ledger_get_logs(i_field(&params, "limit")),
+            "获取收信日志",
+        ),
+        "ledger_clear_logs" => ledger_void(ledger_module::api::ledger_clear_logs(), "清空收信日志"),
 
         // ── 未知动作 ─────────────────────────────────────────────────────────
         _ => Err(format!("不支持的动作: {}", action)),

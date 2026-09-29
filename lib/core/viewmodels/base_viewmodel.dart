@@ -25,6 +25,9 @@ import 'package:get/get.dart';
 /// 基于 GetX 的基础 ViewModel
 ///
 /// 所有 ViewModel 应继承此类，提供统一的生命周期管理和状态管理
+///
+/// 别把子类里"重新加载数据"的方法命名为 `refresh()`：GetX 的 `update()` 内部就是调
+/// `refresh()` 通知监听者，同名覆写会走成 update→refresh→update 的无界重入。
 abstract class BaseViewModel extends GetxController {
   bool _isInitialized = false;
 

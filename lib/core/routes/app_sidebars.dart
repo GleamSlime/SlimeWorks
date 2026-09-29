@@ -57,6 +57,12 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const LanTransferRoute(),
     const MangaHomeRoute(),
     const MusicPlayerRoute(),
+    const LedgerRoute(),
+    const LedgerRecordsRoute(),
+    const LedgerStatsRoute(),
+    const LedgerPendingRoute(),
+    const LedgerSettingsRoute(),
+    const LedgerAccountsRoute(),
     const CollectionPictureRoute(),
     const CollectionLibraryRoute(),
     const GameLibraryRoute(),
@@ -120,6 +126,8 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
       permission: Permission.accessCollection,
     ),
     'music': _GroupConfig(id: 'music', sort: 42, permission: Permission.accessCollection),
+    // 流水账单独一段、不给标题：顶层那格就叫"流水账"，再挂一个同名分组头是重复。
+    'ledger': _GroupConfig(id: 'ledger', sort: 44, permission: Permission.accessLedger),
     'tools': _GroupConfig(id: 'tools', title: '工具', sort: 45, permission: Permission.accessTools),
     // 实验室单独一段：两页都是"看的东西，不是用的东西"，混进工具里读起来像功能入口。
     // 排在 50 之后：没在下面登记过的分组（游戏库）会落到默认 50 且没有标题，

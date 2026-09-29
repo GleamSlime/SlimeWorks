@@ -6,6 +6,7 @@ pub mod ffmpeg;
 pub mod game_library;
 pub mod http_bridge;
 pub mod lan_transfer;
+pub mod ledger; // 流水账模块（手工记账 + 邮件账单自动入账）
 pub mod logger;
 // pub mod module_api;         // 已删除 - 依赖旧module_manager结构
 pub mod manga; // Manga 漫画平台模块

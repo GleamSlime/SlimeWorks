@@ -42,6 +42,10 @@ import '../lab_kit.dart';
 /// 一路被 [_taper] 那扇窗压着往下走，到端点正好归零 —— "扩散直至消失"是窗给的，不是
 /// 另加一档淡出。
 ///
+/// 一圈 [_loopMs] 6000ms：`speed` 只能取整数，所以**想放慢波速只能拉长这一圈**。
+/// 起幅/收尾那两档因此按**绝对毫秒**写（[_gapMs] / [_attackMs] / [_releaseMs]），
+/// 不然波一慢，"开始说"的手感也跟着被拖慢。
+///
 /// 之前两版错在都带一档**会回头**的东西：胀缩是 `sin²`（推出去还要收回来），音量波是
 /// 高斯包（长起来还要落下去）—— 眼睛锁定的那一排腹于是会中途换成前一排，读出来就是
 /// 倒播。改成单调外推之后没有可锁定的第二选了。
@@ -50,6 +54,16 @@ import '../lab_kit.dart';
 /// `g` 从中间往两边开，方向与外推一致。`g = 1` 时它恒等于 1，量到的形状一个字都没改。
 ///
 /// 两档都只吃主时钟，不读麦克风、不读 `DateTime.now()`，任何一帧都可复现。
+///
+/// 舞台下方三档状态（[_Mode]）：
+/// -  常态 —— 上面这条路，一圈说完一句
+/// -  静音 —— 载波不推、包络停在谷底（[_Band.silent]），只剩一层有高度的静束。
+///    那档高度就是参考稿**末尾波浪**的量：束在最外端早已只剩谷底，所以直接取谷底
+/// -  讲话 —— 载波照旧外推，但每个腹另乘一个随机峰高（[_Voice.gain]）。随机数是
+///    **挂在载波坐标上的**：腹在 `a` 空间里带着自己那一档往外走，而中轴每 1/10 圈
+///    换一档 —— 于是一句"每生成一波就随机一次峰值"
+///
+/// 静音与讲话把高度钉在 1（没有说完收回那一段），常态才走起幅/收尾的弧。
 ///
 /// 五层**不许是等差的一叠副本**：每层的载波中心、带宽、横向错相各抖一档
 /// （[_Layer.dc] / [sig] / [shift]），两翼还故意不做镜像（[_waveLean]）—— 于是腹与腹
@@ -76,11 +90,23 @@ const _captionGap = 61.0;
 /// 上滑多少算进"取消"档
 const _armTravel = 28.0;
 
+/// 主时钟一圈的时长
+///
+/// 载波每圈只走整数个周期（见 [_waveSpeed]），所以想放慢波速**只能拉长这一档**。
+/// 6000 = 一腹从中轴走到端点 3000ms
+const _loopMs = 6000;
+
+/// 起幅/收尾那两档吃的是**绝对毫秒**，不跟着 [_loopMs] 一起被拖慢：
+/// 波速要慢，但"开始说"和"说完"的手感跟波速无关
+const _gapMs = 250;
+const _attackMs = 520;
+const _releaseMs = 580;
+
 /// 载波每圈往外走几个**完整周期**
 ///
 /// 必须是整数：一圈的位移正好是周期的整倍数，接缝上两帧重合，既不用倒退也不会跳。
-/// 1 = 一腹从中轴走到端点 2100ms（波形盒 256px、一腹 26px → 折算过去约 61px/s，
-/// 任一固定点上约 420ms 过一个腹，跟"说话"的节奏对得上）
+/// 1 = 一腹从中轴走到端点 3000ms（波形盒 256px、一腹 26px → 折算过去约 43px/s，
+/// 任一固定点上约 600ms 过一个腹）
 const _waveSpeed = 1;
 
 /// 镜像的破缺量：给有符号的那一段加这点偏置，两翼的腹距与波速各差约 6%
@@ -222,8 +248,41 @@ abstract final class _Band {
 
   static const _base = 0.24;
 
+  /// 静音档吃的那一档 = 两腹之间的谷底
+  ///
+  /// 参考稿的束走到最外端早就只剩谷底了（实测端点整高 14~17、标称 50），所以"没有波浪
+  /// 但有一定高度、按末尾波浪的高度算"就是**整束都停在谷底**：外层标称 18、出图实测整高 20
+  static const silent = _base;
+
   /// S 形的陡峭度
   static const _peak = 2.2;
+}
+
+/// 讲话档的随机峰高：一个腹一档
+///
+/// 随机数**挂在载波坐标上**而不是挂在时间上 —— 腹在 `a` 空间里是跟着自己往外走的，
+/// 于是每一波顶到的那档一路带着走，而中轴每 1/10 圈换到下一档，读出来就是
+/// "每生成一波、峰值随机一次"。表长 = 一个周期里的腹数（10），一圈走完正好回到表头，
+/// 接缝照旧闭合；seed 固定，任何一帧可复现。
+abstract final class _Voice {
+  static const _seed = 20260928;
+  static const _slots = 10;
+
+  static final List<double> _peaks = () {
+    final r = math.Random(_seed);
+    final v = [for (var k = 0; k < _slots; k++) 0.30 + 0.70 * r.nextDouble()];
+    // 归一到"最响那一档 = 标称满高"：不归一的话整束会比常态矮一截，随机反倒读成了音量小
+    final mx = v.reduce(math.max);
+    return [for (final e in v) e / mx];
+  }();
+
+  /// 相邻两档之间余弦过渡：腹与腹的峰高是圆着换的，不硬切
+  static double gain(double a) {
+    final x = a * _slots;
+    final k = x.floor();
+    final w = (1 - math.cos(math.pi * (x - k))) / 2;
+    return _peaks[k % _slots] * (1 - w) + _peaks[(k + 1) % _slots] * w;
+  }
 }
 
 /// 纺锤窗：参考稿的束不是从波形盒左沿就起，实测上沿到 u≈0.14 才离开中轴、右端
@@ -254,7 +313,7 @@ double _spread(double u, double g) {
 /// 第 [i] 层在 [u] 处该读谐波表的哪一个横坐标：**从中轴生出来、往两侧走**
 ///
 /// `|u − 0.5|` 把中轴钉成原点、两翼对称地往外长（整幅正好铺满一个周期 → 一翼 5 个腹），
-/// 减 `speed·t` 让整幅图案一路往外推：某个腹从中轴出来，走到端点要 2100ms，而每圈走的
+/// 减 `speed·t` 让整幅图案一路往外推：某个腹从中轴出来，走到端点要 3000ms，而每圈走的
 /// 位移是整数个周期，所以接缝上两帧重合 —— 没有"退回去"这一段，倒播无从发生。
 ///
 /// `_waveLean` 给有符号的那一段加偏置：纯镜像会让左右严丝合缝地一起动，一眼是复制粘贴；
@@ -270,6 +329,22 @@ double _arg(int i, double u, double t, {required bool upper}) {
       t * _waveSpeed;
 }
 
+/// 舞台下方那三档状态
+enum _Mode {
+  /// 一圈说完一句：起幅 → 外推 → 收尾
+  wave('常态'),
+
+  /// 没有波浪，只剩一层有高度的静束
+  silent('静音'),
+
+  /// 一直在说，每波的峰值随机
+  talking('讲话');
+
+  const _Mode(this.label);
+
+  final String label;
+}
+
 class Case44VoiceWaveform extends StatefulWidget {
   const Case44VoiceWaveform({super.key});
 
@@ -283,7 +358,7 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
   /// 所以离屏按 16ms 推进就能逐帧复现，不需要真的有人按着
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 4200),
+    duration: const Duration(milliseconds: _loopMs),
   )..addListener(() => setState(() {}));
 
   /// 按住时把高度与横向闸门顶到满：松手收回，循环那两档自己走
@@ -292,17 +367,27 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
     duration: const Duration(milliseconds: 320),
   )..addListener(() => setState(() {}));
 
+  _Mode _mode = _Mode.wave;
+
   int? _pointer;
   Offset _downAt = Offset.zero;
   bool _armed = false;
   bool _locked = false;
 
   /// 循环里的**高度**包络：两头各留一段平的空档，中间是"正在说"
+  ///
+  /// 阈值写的是**绝对毫秒**：一圈拉长只该让波变慢，不该把"开始说"的手感也拖慢
   static double _level(double t) {
-    if (t < 0.06) return 0;
-    if (t < 0.18) return LabEase.smoothOut.transform((t - 0.06) / 0.12);
-    if (t < 0.80) return 1;
-    if (t < 0.94) return 1 - Curves.easeIn.transform((t - 0.80) / 0.14);
+    final ms = t * _loopMs;
+    if (ms < _gapMs) return 0;
+    if (ms < _gapMs + _attackMs) {
+      return LabEase.smoothOut.transform((ms - _gapMs) / _attackMs);
+    }
+    final release = _loopMs - _gapMs - _releaseMs;
+    if (ms < release) return 1;
+    if (ms < _loopMs - _gapMs) {
+      return 1 - Curves.easeIn.transform((ms - release) / _releaseMs);
+    }
     return 0;
   }
 
@@ -310,9 +395,13 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
   ///
   /// 一句话收尾时束要消失，但"往中间收"是个反向动作，眼睛会把它读成倒播 —— 所以收那
   /// 一程只降高度，闸门一路停在 1。它落回 0 的那一瞬间高度也正好是 0（上面那档的
-  /// t < 0.06 空档），画布上什么都没有，接缝看不出来。
-  static double _attack(double t) =>
-      t < 0.06 ? 0 : LabEase.smoothOut.transform(((t - 0.06) / 0.12).clamp(0.0, 1.0));
+  /// [_gapMs] 那一段空档），画布上什么都没有，接缝看不出来。
+  static double _attack(double t) {
+    final ms = t * _loopMs;
+    return ms < _gapMs
+        ? 0
+        : LabEase.smoothOut.transform(((ms - _gapMs) / _attackMs).clamp(0.0, 1.0));
+  }
 
   void _lock() {
     if (_locked) return;
@@ -367,71 +456,102 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
 
   @override
   Widget build(BuildContext context) {
-    final level = math.max(_level(_c.value), _held.value);
+    // 静音/讲话没有"说完收回"那一段：高度与闸门一直钉满，只有常态走循环里那两档弧
+    final auto = _mode == _Mode.wave;
+    final level = math.max(auto ? _level(_c.value) : 1.0, _held.value);
     // 闸门只涨不落（见 [_attack]）：束收回去那一段只降高度，不往中间挤
-    final open = math.max(_attack(_c.value), _held.value);
+    final open = math.max(auto ? _attack(_c.value) : 1.0, _held.value);
     final armed = _armed ? 1.0 : 0.0;
     final caption = _armed
         ? '松开取消'
-        : level <= 0.01
+        : _mode == _Mode.silent || level <= 0.01
               ? '按住说话'
               : '上滑取消发送';
     return LabStage(
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: _down,
-        onPointerMove: _move,
-        onPointerUp: _release,
-        onPointerCancel: _release,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _WavePainter(
-                    phase: _c.value,
-                    level: level,
-                    open: open,
-                    armed: armed,
-                  ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: _down,
+              onPointerMove: _move,
+              onPointerUp: _release,
+              onPointerCancel: _release,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _WavePainter(
+                          mode: _mode,
+                          phase: _c.value,
+                          level: level,
+                          open: open,
+                          armed: armed,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: _axisY + _captionGap - 8,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 120),
+                        transitionBuilder: (child, t) => FadeTransition(
+                          opacity: t,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.28),
+                              end: Offset.zero,
+                            ).animate(t),
+                            child: child,
+                          ),
+                        ),
+                        child: Text(
+                          caption,
+                          key: ValueKey(caption),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: LabFont.family,
+                            fontFamilyFallback: LabFont.fallback,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                            height: 16 / 11,
+                            color: Color(0xFF989898),
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                top: _axisY + _captionGap - 8,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 120),
-                  transitionBuilder: (child, t) => FadeTransition(
-                    opacity: t,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.28),
-                        end: Offset.zero,
-                      ).animate(t),
-                      child: child,
-                    ),
-                  ),
-                  child: Text(
-                    caption,
-                    key: ValueKey(caption),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontFamily: LabFont.family,
-                      fontFamilyFallback: LabFont.fallback,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      height: 16 / 11,
-                      color: Color(0xFF989898),
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          // 档位放在 Listener 之外：点档位不该顺带触发一次"按住说话"
+          //
+          // 没走 LabStageFooter：那颗 Wrap 给子项的是**有界**宽度，药丸里的 Center 一见
+          // 有界就铺满，三枚于是撑成整幅、叠成一列。Row 给的是无界宽，药丸才按内容收
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final (i, m) in _Mode.values.indexed) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  _ModeChip(
+                    mode: m,
+                    selected: m == _mode,
+                    onSelect: () => setState(() => _mode = m),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -439,11 +559,15 @@ class _Case44VoiceWaveformState extends State<Case44VoiceWaveform>
 
 class _WavePainter extends CustomPainter {
   const _WavePainter({
+    required this.mode,
     required this.phase,
     required this.level,
     required this.open,
     required this.armed,
   });
+
+  /// 三档状态：静音不吃载波读数、讲话给读数乘一档随机峰高（见 [_Mode]）
+  final _Mode mode;
 
   /// 主时钟（0..1 一圈 = 一次说话），载波的外推只吃它
   final double phase;
@@ -471,10 +595,16 @@ class _WavePainter extends CustomPainter {
   );
 
   /// 第 [i] 层在 [u] 处的上/下沿。横坐标过 [_arg]（从中轴往两侧外推的载波 + 该层的
-  /// 静态错相，下沿再叠 [skew]）；振幅吃 [_taper]、底厚吃 [_body]，两个窗分开；
+  /// 静态错相，下沿再叠 [skew]）；读数按档位分岔（静音取谷底、讲话再乘一档随机峰高）；
+  /// 振幅吃 [_taper]、底厚吃 [_body]，两个窗分开；
   /// 高度再乘 [g]（起幅）与 [_spread]（按下那一段往两边开的横向范围）
   double _edge(int i, double u, double g, {required bool upper}) {
-    final v = _Band.read(i, _arg(i, u, phase, upper: upper));
+    final a = _arg(i, u, phase, upper: upper);
+    final v = switch (mode) {
+      _Mode.silent => _Band.silent,
+      _Mode.talking => _Band.read(i, a) * _Voice.gain(a),
+      _Mode.wave => _Band.read(i, a),
+    };
     final l = _layers[i];
     final half = l.floor * _body(u) + (1 - l.floor) * v * _taper(u);
     return _axisY +
@@ -561,8 +691,82 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter old) =>
+      old.mode != mode ||
       old.phase != phase ||
       old.level != level ||
       old.open != open ||
       old.armed != armed;
+}
+
+/// 档位药丸：选中那枚抬到白底 + 1px 内描边，从 #f9f9f9 的舞台上分出来
+class _ModeChip extends StatefulWidget {
+  const _ModeChip({
+    required this.mode,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final _Mode mode;
+  final bool selected;
+  final VoidCallback onSelect;
+
+  @override
+  State<_ModeChip> createState() => _ModeChipState();
+}
+
+class _ModeChipState extends State<_ModeChip> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = _pressed
+        ? LabColor.chipPressed
+        : _hovered
+              ? LabColor.chipHover
+              : widget.selected
+                    ? LabColor.card
+                    : LabColor.chip;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onSelect,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.ease,
+          // 档位是这一格唯一的可点入口，高度跟着 kit 的按钮档位走（36），别缩成 28 的
+          // 小药丸——触屏上那就是个误点源
+          height: LabSize.animateBtnH,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(40),
+            // 描边常驻（透明也占位），切换档位时药丸不跳宽
+            border: Border.all(
+              color: widget.selected ? LabColor.border : const Color(0x00000000),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              widget.mode.label,
+              style: LabText.title.copyWith(
+                fontWeight: FontWeight.w500,
+                height: 16 / 13,
+                color: widget.selected ? LabColor.text : LabColor.iconMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
