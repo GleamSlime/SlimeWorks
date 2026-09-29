@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slime_works/components/dialogs/node_directory_picker.dart';
+import 'package:slime_works/components/dialogs/node_media_folder_picker.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
@@ -412,6 +414,7 @@ class _MangaReaderScreenState
                 final node = await showModalBottomSheet<NodeEndpoint>(
                   context: ctx2,
                   useRootNavigator: true,
+                  isScrollControlled: true,
                   showDragHandle: true,
                   builder: (sheetCtx) => SafeArea(
                     child: Column(
@@ -429,23 +432,48 @@ class _MangaReaderScreenState
                           ),
                         ),
                         if (nodes.enabledRemoteNodes.isEmpty)
-                          const ListTile(title: Text('暂无已启用的节点')),
-                        ...nodes.enabledRemoteNodes.map((n) => ListTile(
-                          leading: DrawIcon(StrokeIcons.deviceHub),
-                          title: Text(n.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(
-                            n.effectiveApiBaseUrl,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppTheme.metrics.fontSize11,
+                          const ListTile(title: Text('暂无已启用的节点'))
+                        else
+                          // 节点多时内部滚动，避免超出弹层高度溢出
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.of(sheetCtx).size.height * 0.6,
+                            ),
+                            child: ListView(
+                              shrinkWrap: true,
+                              children: [
+                                ...nodes.enabledRemoteNodes.map(
+                                  (n) => ListTile(
+                                    leading: DrawIcon(StrokeIcons.deviceHub),
+                                    title: Text(
+                                      n.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      n.effectiveApiBaseUrl,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize:
+                                            AppTheme.metrics.fontSize11,
+                                      ),
+                                    ),
+                                    trailing: n.id == pickedNode?.id
+                                        ? Icon(
+                                            Icons.check,
+                                            size:
+                                                AppTheme.metrics.iconSize18,
+                                          )
+                                        : null,
+                                    onTap: () =>
+                                        Navigator.of(sheetCtx).pop(n),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          trailing: n.id == pickedNode?.id
-                              ? Icon(Icons.check, size: AppTheme.metrics.iconSize18)
-                              : null,
-                          onTap: () => Navigator.of(sheetCtx).pop(n),
-                        )),
                         SizedBox(height: AppTheme.metrics.kSpace8),
                       ],
                     ),
@@ -461,124 +489,61 @@ class _MangaReaderScreenState
                 }
               }
 
-              // 选择节点媒体库目录：列出库内文件夹 + 根目录，再反推磁盘落点
+              // 选择节点目录：复用媒体库导入的目录浏览器，逐层进入后确认目标目录
               Future<void> pickFolder() async {
                 if (pickedNode == null) return;
                 final nodes = getIt<NodeSettingsService>();
                 final node = pickedNode!;
-                final folder = await showModalBottomSheet<(String, String)>(
+                // 尽量从媒体库根目录开始浏览，解析失败则从节点根开始
+                String initial = '/';
+                try {
+                  final root = await nodes.resolveNodeUploadTarget(
+                    nodeId: node.id,
+                    folderId: '',
+                  );
+                  if (root.targetDir.isNotEmpty) {
+                    initial = root.targetDir;
+                  } else if (root.candidates.isNotEmpty) {
+                    initial = root.candidates.first;
+                  }
+                } catch (_) {
+                  // 拿不到库根就从节点根目录开始浏览
+                }
+                final dir = await showDialog<String>(
+                  // ignore: use_build_context_synchronously
                   context: ctx2,
-                  useRootNavigator: true,
-                  showDragHandle: true,
-                  builder: (sheetCtx) => FutureBuilder<List<Map<String, dynamic>>>(
-                    future: nodes.fetchNodeMediaFolders(node),
-                    builder: (_, snap) {
-                      final folders = snap.data ?? const <Map<String, dynamic>>[];
-                      return SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                              child: Text(
-                                '选择节点媒体库目录',
-                                style: TextStyle(
-                                  fontSize: AppTheme.metrics.fontSize15,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            if (snap.connectionState != ConnectionState.done)
-                              const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(child: CircularProgressIndicator()),
-                              )
-                            else ...[
-                              ListTile(
-                                leading: DrawIcon(StrokeIcons.folder),
-                                title: const Text('媒体库根目录'),
-                                onTap: () =>
-                                    Navigator.of(sheetCtx).pop(('', '媒体库根目录')),
-                              ),
-                              if (folders.isEmpty)
-                                const ListTile(
-                                  title: Text('节点媒体库暂无文件夹（仍可选择根目录）'),
-                                )
-                              else
-                                ...folders.map((f) => ListTile(
-                                  leading: DrawIcon(StrokeIcons.folder),
-                                  title: Text(
-                                    (f['title'] ?? f['name'] ?? '').toString(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  onTap: () => Navigator.of(sheetCtx).pop((
-                                    (f['id'] ?? '').toString(),
-                                    (f['title'] ?? f['name'] ?? '').toString(),
-                                  )),
-                                )),
-                            ],
-                            SizedBox(height: AppTheme.metrics.kSpace8),
-                          ],
-                        ),
-                      );
-                    },
+                  builder: (_) => NodeDirectoryPicker(
+                    nodeId: node.id,
+                    nodeSettingsService: nodes,
+                    initialPath: initial,
+                  ),
+                );
+                if (dir == null || dir.isEmpty) return;
+                setSheetState(() {
+                  nodeTargetDir = dir;
+                });
+              }
+
+              // 选择导入归位的媒体库文件夹（可选）：逐层浏览节点媒体库文件夹树
+              Future<void> pickMediaFolder() async {
+                if (pickedNode == null) return;
+                final nodes = getIt<NodeSettingsService>();
+                // ignore: use_build_context_synchronously
+                final folder = await showDialog<(String, String)>(
+                  context: ctx2,
+                  builder: (_) => NodeMediaFolderPicker(
+                    nodeId: pickedNode!.id,
+                    nodeSettingsService: nodes,
                   ),
                 );
                 if (folder == null) return;
-                final resolved = await nodes.resolveNodeUploadTarget(
-                  nodeId: node.id,
-                  folderId: folder.$1,
-                );
-                String targetDir = resolved.targetDir;
-                if (targetDir.isEmpty && resolved.candidates.isNotEmpty) {
-                  // 落点歧义/根目录多候选：让用户确认具体目录
-                  final picked = await showModalBottomSheet<String>(
-                    // ignore: use_build_context_synchronously
-                    context: ctx2,
-                    useRootNavigator: true,
-                    showDragHandle: true,
-                    builder: (sheetCtx) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                            child: Text(
-                              '选择目标目录',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          ...resolved.candidates.map((c) => ListTile(
-                            title: Text(c, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            onTap: () => Navigator.of(sheetCtx).pop(c),
-                          )),
-                          SizedBox(height: AppTheme.metrics.kSpace8),
-                        ],
-                      ),
-                    ),
-                  );
-                  if (picked != null) targetDir = picked;
-                }
-                if (targetDir.isEmpty) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('节点媒体库为空或无法解析目标目录')),
-                  );
-                  return;
-                }
                 setSheetState(() {
-                  nodeTargetDir = targetDir;
                   nodeBaseFolderId = folder.$1.isEmpty ? null : folder.$1;
                   nodeFolderLabel = folder.$2;
                 });
               }
 
-              return DraggableScrollableSheet(
+            return DraggableScrollableSheet(
                 expand: false,
                 initialChildSize: 0.6,
                 maxChildSize: 0.9,
@@ -730,7 +695,59 @@ class _MangaReaderScreenState
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      nodeFolderLabel ?? '选择目录',
+                                      nodeTargetDir ?? '选择目录',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: AppTheme.metrics.fontSize13,
+                                        color: nodeTargetDir == null
+                                            ? Theme.of(
+                                                ctx2,
+                                              ).colorScheme.primary
+                                            : Theme.of(
+                                                ctx2,
+                                              ).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  DrawIcon(
+                                    StrokeIcons.chevronRight,
+                                    size: AppTheme.metrics.iconSize16,
+                                    color: Theme.of(
+                                      ctx2,
+                                    ).colorScheme.outline,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // 归入的媒体库文件夹行（可选）
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          child: InkWell(
+                            borderRadius: AppTheme.metrics.radius8,
+                            onTap: pickMediaFolder,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '归入文件夹',
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize12,
+                                      color: Theme.of(
+                                        ctx2,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      nodeFolderLabel ?? '媒体库根目录（可选）',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(

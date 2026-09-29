@@ -648,14 +648,17 @@ class MediaCardCover extends StatelessWidget {
             final w = prefs?.localPreviewWidth.value ?? 480;
             return w > 0 ? w : null;
           }();
-    final image = isHttp
-        ? Image.network(src, fit: BoxFit.cover, errorBuilder: (_, _, _) => broken)
-        : Image.file(
-            File(src),
-            fit: BoxFit.cover,
-            cacheWidth: cacheWidth,
-            errorBuilder: (_, _, _) => broken,
-          );
+    // 封面与 debug 徽标共用同一个 provider，徽标才不会触发第二次下载/解码
+    final provider = ResizeImage.resizeIfNeeded(
+      cacheWidth,
+      null,
+      isHttp ? NetworkImage(src) : FileImage(File(src)),
+    );
+    final image = Image(
+      image: provider,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => broken,
+    );
 
     if (prefs?.privacyMode.value ?? false) {
       final sigma = prefs?.privacyBlurSigma.value ?? 15.0;
@@ -684,7 +687,7 @@ class MediaCardCover extends StatelessWidget {
       );
     }
     if (!kDebugMode) return image;
-    // debug 档标一枚解码尺寸，出图时靠它核对预览宽度设置有没有生效
+    // 右下角标一枚真实解码尺寸，用来核对「本地/远程清晰度」到底生效了没
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -692,7 +695,7 @@ class MediaCardCover extends StatelessWidget {
         Positioned(
           right: appMetrics.kSpace4,
           bottom: appMetrics.kSpace4,
-          child: DebugImageSizeBadge(src: src),
+          child: DebugImageSizeBadge(provider: provider),
         ),
       ],
     );

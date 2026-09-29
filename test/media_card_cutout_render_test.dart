@@ -220,6 +220,11 @@ void main() {
     for (final element in find.byType(RawImage).evaluate()) {
       expect((element.widget as RawImage).image, isNotNull, reason: '封面未解码，出图等于没拍到图');
     }
+    // debug 徽标只许报真实解码尺寸：曾经它对远程源发 HEAD 取 Content-Length，
+    // 而节点 /node/media 只路由 GET，于是每张卡都报那枚 404 响应体的长度（恒定 37B）
+    final decoded = (find.byType(RawImage).evaluate().first.widget as RawImage).image!;
+    expect(find.text('${decoded.width}×${decoded.height}'), findsWidgets,
+        reason: '徽标数字与解码尺寸不符 = 又在报某个响应头，不是图本身');
   });
 }
 

@@ -78,6 +78,96 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
     _loadDirectory(parent.isEmpty ? '/' : parent);
   }
 
+  /// 拼接路径：base 尾斜杠统一去掉，根目录下直接拼接。
+  String _join(String base, String name) {
+    final b = base.replaceAll(RegExp(r'[/\\]+$'), '');
+    if (b.isEmpty) return '/$name';
+    return '$b/$name';
+  }
+
+  Future<String?> _promptName(String title, String initial) {
+    final controller = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '名称'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 在当前路径下新建子目录并刷新列表。
+  Future<void> _createFolder() async {
+    final name = await _promptName('新建文件夹', '');
+    if (name == null || name.isEmpty || !mounted) return;
+    bool ok = false;
+    try {
+      ok = await widget.nodeSettingsService.createNodeDirectory(
+        nodeId: widget.nodeId,
+        path: _join(_currentPath, name),
+      );
+    } catch (e) {
+      _showOpError('新建文件夹失败', e);
+      return;
+    }
+    if (!mounted) return;
+    if (ok) {
+      await _loadDirectory(_currentPath);
+    } else {
+      _showOpError('新建文件夹失败', null);
+    }
+  }
+
+  /// 重命名当前目录（根目录下禁用），成功后切换到新路径。
+  Future<void> _renameFolder() async {
+    final parts = _currentPath.replaceAll(RegExp(r'[/\\]+$'), '').split(RegExp(r'[/\\]'));
+    if (parts.isEmpty) return;
+    final currentName = parts.last;
+    final newName = await _promptName('重命名文件夹', currentName);
+    if (newName == null || newName.isEmpty || newName == currentName || !mounted) return;
+    final parent = parts.sublist(0, parts.length - 1).join('/');
+    final newPath = parent.isEmpty ? '/$newName' : '$parent/$newName';
+    bool ok = false;
+    try {
+      ok = await widget.nodeSettingsService.renameNodeDirectory(
+        nodeId: widget.nodeId,
+        oldPath: _currentPath,
+        newPath: newPath,
+      );
+    } catch (e) {
+      _showOpError('重命名文件夹失败', e);
+      return;
+    }
+    if (!mounted) return;
+    if (ok) {
+      await _loadDirectory(newPath);
+    } else {
+      _showOpError('重命名文件夹失败', null);
+    }
+  }
+
+  /// 目录操作失败提示：带原因（节点版本过旧/网络异常等）。
+  void _showOpError(String action, Object? error) {
+    if (!mounted) return;
+    final reason = error == null
+        ? '操作未生效'
+        : error.toString().split('\n').first;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$action：$reason（请确认节点已升级且可访问）')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -105,6 +195,21 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: _loading ? null : _navigateUp,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.create_new_folder, size: 18),
+                    tooltip: '新建文件夹',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: _loading ? null : _createFolder,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.drive_file_rename_outline, size: 18),
+                    tooltip: '重命名文件夹',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed:
+                        _loading || _currentPath.trim() == '/' ? null : _renameFolder,
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Expanded(

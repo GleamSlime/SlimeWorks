@@ -117,6 +117,27 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
         } catch (_) {
           return <String>[];
         }
+      case 'create_directory':
+        // 在节点指定路径创建目录（媒体库逻辑文件夹不受影响）
+        final path = (params['path'] ?? '').toString();
+        if (path.isEmpty) return false;
+        try {
+          Directory(path).createSync(recursive: true);
+          return true;
+        } catch (_) {
+          return false;
+        }
+      case 'rename_directory':
+        // 重命名节点上物理目录（new_path 为完整新路径）
+        final oldPath = (params['old_path'] ?? '').toString();
+        final newPath = (params['new_path'] ?? '').toString();
+        if (oldPath.isEmpty || newPath.isEmpty) return false;
+        try {
+          Directory(oldPath).renameSync(newPath);
+          return true;
+        } catch (_) {
+          return false;
+        }
       case 'list_smart_folders':
         // 将本机的智能文件夹列表暴露给远程节点客户端
         try {

@@ -5,9 +5,10 @@ use async_channel::{Receiver, Sender};
 use chrono::Utc;
 use slime_logger::{sw_error, sw_info, sw_warn};
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, RwLock};
@@ -17,6 +18,22 @@ use uuid::Uuid;
 const CHUNK_SIZE: usize = 256 * 1024; // 256KB 分块
 const MAX_JSON_MSG: usize = 32 * 1024 * 1024; // 32MB JSON 上限（支持超大文本）
 const USER_ACCEPT_TIMEOUT_SECS: u64 = 120; // 用户响应传输请求超时（秒）
+
+/// 全局最大并发入站连接数，防止 DoS 耗尽资源
+const MAX_CONCURRENT_CONNECTIONS: usize = 32;
+/// 单 IP 最大活跃连接数
+const MAX_CONNECTIONS_PER_IP: usize = 8;
+/// 单 IP 两次入站连接的间隔下限（毫秒），低于则视为扫描/攻击丢弃
+const IP_CONNECT_INTERVAL_MS: u128 = 200;
+
+/// 单 IP 连接限速与并发统计
+#[derive(Debug)]
+struct IpRateTrack {
+    /// 当前活跃连接数（存在 handle_connection 尚未结束）
+    active: usize,
+    /// 最近一次建立连接的时间
+    last: Instant,
+}
 
 // ── 底层 I/O 帧化工具 ──────────────────────────────────────────────────────
 
@@ -147,6 +164,11 @@ impl TransferService {
         let device_id = self.device_id.clone();
         let device_name = self.device_name.clone();
         let listen_port = self.port;
+        // 全局并发连接信号量，防止 DoS 耗尽资源
+        let conn_semaphore = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS));
+        // 单 IP 限速与活跃连接统计
+        let ip_limiter: Arc<RwLock<HashMap<IpAddr, IpRateTrack>>> =
+            Arc::new(RwLock::new(HashMap::new()));
 
         let handle = tokio::spawn(async move {
             loop {
@@ -158,6 +180,45 @@ impl TransferService {
                     result = listener.accept() => {
                         match result {
                             Ok((stream, addr)) => {
+                                // 单 IP 限速：连接间隔过近或活跃数超限则丢弃
+                                let ip = addr.ip();
+                                let allow_conn = {
+                                    let mut limiter = ip_limiter.write().await;
+                                    let entry = limiter.entry(ip).or_insert_with(|| IpRateTrack {
+                                        active: 0,
+                                        last: Instant::now() - Duration::from_millis(1000),
+                                    });
+                                    if entry.last.elapsed().as_millis() < IP_CONNECT_INTERVAL_MS
+                                        || entry.active >= MAX_CONNECTIONS_PER_IP
+                                    {
+                                        false
+                                    } else {
+                                        entry.last = Instant::now();
+                                        entry.active += 1;
+                                        true
+                                    }
+                                };
+                                if !allow_conn {
+                                    sw_warn!("频繁连接或超限，丢弃来自 {} 的连接", ip);
+                                    drop(stream);
+                                    continue;
+                                }
+
+                                // 全局并发上限：超限则释放计数并丢弃
+                                let Ok(permit) = conn_semaphore.clone().try_acquire_owned() else {
+                                    {
+                                        let mut limiter = ip_limiter.write().await;
+                                        if let Some(e) = limiter.get_mut(&ip) {
+                                            e.active = e.active.saturating_sub(1);
+                                        }
+                                    }
+                                    sw_warn!("达到全局并发上限，丢弃来自 {} 的连接", ip);
+                                    drop(stream);
+                                    continue;
+                                };
+                                // permit 随任务结束自动释放全局并发额度
+                                let _permit = permit;
+
                                 let transfers = transfers.clone();
                                 let trusted_devices = trusted_devices.clone();
                                 let pending_accept = pending_accept.clone();
@@ -166,9 +227,10 @@ impl TransferService {
                                 let event_sender = event_sender.clone();
                                 let device_id = device_id.clone();
                                 let device_name = device_name.clone();
+                                let ip_limiter_inner = ip_limiter.clone();
 
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_connection(
+                                    let result = handle_connection(
                                         stream,
                                         transfers,
                                         trusted_devices,
@@ -180,8 +242,15 @@ impl TransferService {
                                         device_name,
                                         listen_port,
                                     )
-                                    .await
+                                    .await;
+                                    // 连接结束，释放单 IP 活跃计数
                                     {
+                                        let mut limiter = ip_limiter_inner.write().await;
+                                        if let Some(e) = limiter.get_mut(&ip) {
+                                            e.active = e.active.saturating_sub(1);
+                                        }
+                                    }
+                                    if let Err(e) = result {
                                         let msg = e.to_string();
                                         if !msg.contains("connection reset")
                                             && !msg.contains("unexpected eof")

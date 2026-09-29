@@ -133,6 +133,7 @@ class MangaDownloadService {
           comicId: comic.id,
           epsOrder: eps.order,
           epsTitle: eps.title,
+          comicTitle: comic.title,
           nodeId: nodeId,
           targetDir: targetDir,
           baseFolderId: baseFolderId,
@@ -319,10 +320,14 @@ class MangaDownloadService {
   }
 
   /// 把已下载的单章 zip 打包上传到节点并导入媒体库；成功后删除本地章节。
+  ///
+  /// zip 内路径为 `{漫画名}/{章节名}/图`，解压到目标目录后自然形成层级，
+  /// 导入媒体库即呈现为「选择的文件夹 / 漫画名 / 章节名」。
   Future<bool> _pushEpsToNode({
     required String comicId,
     required int epsOrder,
     required String epsTitle,
+    required String comicTitle,
     required String nodeId,
     required String targetDir,
     String? baseFolderId,
@@ -332,18 +337,20 @@ class MangaDownloadService {
       final dir = await _epsDir(comicId, epsOrder);
       if (!await dir.exists()) return false;
       final entryName = _sanitizeDirName(epsTitle, fallback: '第$epsOrder话');
+      final comicName = _sanitizeDirName(comicTitle, fallback: '未命名漫画');
+      final entryRoot = '$comicName/$entryName';
 
-      nodePushStage.value = '打包：$entryName';
-      zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir.path, entryRoot: entryName);
+      nodePushStage.value = '打包：$entryRoot';
+      zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir.path, entryRoot: entryRoot);
 
       final nodes = getIt<NodeSettingsService>();
-      nodePushStage.value = '上传：$entryName';
+      nodePushStage.value = '上传：$entryRoot';
       await nodes.uploadArchiveToNode(nodeId: nodeId, zipPath: zipPath, destDir: targetDir);
 
-      nodePushStage.value = '节点导入：$entryName';
+      nodePushStage.value = '节点导入：$entryRoot';
       await nodes.importNodeMediaFolder(
         nodeId: nodeId,
-        folderPath: _joinNodePath(targetDir, entryName),
+        folderPath: _joinNodePath(targetDir, entryRoot),
         generateThumbnails: true,
         baseFolderId: baseFolderId,
       );

@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart' show IOHttpClientAdapter;
 import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
@@ -47,7 +48,7 @@ class NodeSettingsService extends GetxService {
 
   SharedPreferences? _prefs;
   // 服务器实例已迁移到 Rust 管理，不再需要 Dart 端的 HttpServer
-  final Dio _dio = Dio(
+  final Dio _dio = _createNodeDio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 3),
       receiveTimeout: const Duration(seconds: 12),
@@ -55,13 +56,24 @@ class NodeSettingsService extends GetxService {
     ),
   );
 
-  final Dio _probeDio = Dio(
+  final Dio _probeDio = _createNodeDio(
     BaseOptions(
       connectTimeout: _probeFastTimeout,
       receiveTimeout: _probeFastTimeout,
       sendTimeout: _probeFastTimeout,
     ),
   );
+
+  /// 节点专用 Dio：绕过系统代理直连。iOS/Android 设备上的代理（如 MITM）会
+  /// 掐断 keep-alive 长连接，导致 "Connection closed while receiving data"。
+  static Dio _createNodeDio(BaseOptions options) =>
+      Dio(options)..httpClientAdapter = IOHttpClientAdapter(
+            createHttpClient: () {
+              final client = HttpClient();
+              client.findProxy = (_) => 'DIRECT';
+              return client;
+            },
+          );
 
   /// 常规连通性探测的超时档：图快，启动阶段多个节点并发探测也不拖慢页面。
   static const Duration _probeFastTimeout = Duration(milliseconds: 200);
@@ -856,6 +868,34 @@ class NodeSettingsService extends GetxService {
     final data = response['data'];
     if (data is! List) return <String>[];
     return data.whereType<String>().toList();
+  }
+
+  /// 在节点 [path] 创建物理目录，成功返回 true。
+  Future<bool> createNodeDirectory({required String nodeId, required String path}) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'create_directory',
+      params: <String, dynamic>{'path': path},
+    );
+    return response['data'] == true;
+  }
+
+  /// 重命名节点上物理目录（[oldPath] 与 [newPath] 均为完整路径），成功返回 true。
+  Future<bool> renameNodeDirectory({
+    required String nodeId,
+    required String oldPath,
+    required String newPath,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'rename_directory',
+      params: <String, dynamic>{'old_path': oldPath, 'new_path': newPath},
+    );
+    return response['data'] == true;
   }
 
   Future<Map<String, dynamic>?> importNodeMediaFolder({

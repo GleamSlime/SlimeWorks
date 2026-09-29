@@ -5,12 +5,16 @@ library;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slime_works/components/dialogs/node_directory_picker.dart';
+import 'package:slime_works/components/dialogs/node_media_folder_picker.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/services/node/node_models.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -685,7 +689,15 @@ class _MangaComicDetailScreenState
     if (comic == null || viewModel.eps.isEmpty) return;
 
     final dl = getIt<MangaDownloadService>();
+    final messenger = ScaffoldMessenger.of(context);
     final selected = <int>{};
+
+    // 下载目标：local（本机）/ node（推送到节点媒体库）
+    String destMode = 'local';
+    NodeEndpoint? pickedNode;
+    String? nodeTargetDir;
+    String? nodeBaseFolderId;
+    String? nodeFolderLabel;
 
     showModalBottomSheet(
       context: context,
@@ -696,6 +708,138 @@ class _MangaComicDetailScreenState
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            // 选择节点：列出已启用节点，选中后清空目录选择
+            Future<void> pickNode() async {
+              final nodes = getIt<NodeSettingsService>();
+              final node = await showModalBottomSheet<NodeEndpoint>(
+                context: ctx,
+                useRootNavigator: true,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (sheetCtx) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: Text(
+                          '选择节点',
+                          style: TextStyle(
+                            fontSize: AppTheme.metrics.fontSize15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (nodes.enabledRemoteNodes.isEmpty)
+                        const ListTile(title: Text('暂无已启用的节点'))
+                      else
+                        // 节点多时内部滚动，避免超出弹层高度溢出
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight:
+                                MediaQuery.of(sheetCtx).size.height * 0.6,
+                          ),
+                          child: ListView(
+                            shrinkWrap: true,
+                            children: [
+                              ...nodes.enabledRemoteNodes.map(
+                                (n) => ListTile(
+                                  leading: DrawIcon(StrokeIcons.deviceHub),
+                                  title: Text(
+                                    n.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    n.effectiveApiBaseUrl,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize11,
+                                    ),
+                                  ),
+                                  trailing: n.id == pickedNode?.id
+                                      ? Icon(
+                                          Icons.check,
+                                          size: AppTheme.metrics.iconSize18,
+                                        )
+                                      : null,
+                                  onTap: () => Navigator.of(sheetCtx).pop(n),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      SizedBox(height: AppTheme.metrics.kSpace8),
+                    ],
+                  ),
+                ),
+              );
+              if (node != null) {
+                setSheetState(() {
+                  pickedNode = node;
+                  nodeTargetDir = null;
+                  nodeBaseFolderId = null;
+                  nodeFolderLabel = null;
+                });
+              }
+            }
+
+            // 选择节点目录：复用媒体库导入的目录浏览器，逐层进入后确认目标目录
+            Future<void> pickFolder() async {
+              if (pickedNode == null) return;
+              final nodes = getIt<NodeSettingsService>();
+              final node = pickedNode!;
+              // 尽量从媒体库根目录开始浏览，解析失败则从节点根开始
+              String initial = '/';
+              try {
+                final root = await nodes.resolveNodeUploadTarget(
+                  nodeId: node.id,
+                  folderId: '',
+                );
+                if (root.targetDir.isNotEmpty) {
+                  initial = root.targetDir;
+                } else if (root.candidates.isNotEmpty) {
+                  initial = root.candidates.first;
+                }
+              } catch (_) {
+                // 拿不到库根就从节点根目录开始浏览
+              }
+              final dir = await showDialog<String>(
+                // ignore: use_build_context_synchronously
+                context: ctx,
+                builder: (_) => NodeDirectoryPicker(
+                  nodeId: node.id,
+                  nodeSettingsService: nodes,
+                  initialPath: initial,
+                ),
+              );
+              if (dir == null || dir.isEmpty) return;
+              setSheetState(() {
+                nodeTargetDir = dir;
+              });
+            }
+
+            // 选择导入归位的媒体库文件夹（可选）：逐层浏览节点媒体库文件夹树
+            Future<void> pickMediaFolder() async {
+              if (pickedNode == null) return;
+              final nodes = getIt<NodeSettingsService>();
+              // ignore: use_build_context_synchronously
+              final folder = await showDialog<(String, String)>(
+                context: ctx,
+                builder: (_) => NodeMediaFolderPicker(
+                  nodeId: pickedNode!.id,
+                  nodeSettingsService: nodes,
+                ),
+              );
+              if (folder == null) return;
+              setSheetState(() {
+                nodeBaseFolderId = folder.$1.isEmpty ? null : folder.$1;
+                nodeFolderLabel = folder.$2;
+              });
+            }
+
             return DraggableScrollableSheet(
               expand: false,
               initialChildSize: 0.6,
@@ -730,6 +874,173 @@ class _MangaComicDetailScreenState
                         ],
                       ),
                     ),
+                    // 下载目标：本机 / 节点
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Row(
+                        children: [
+                          Text(
+                            '下载到',
+                            style: TextStyle(
+                              fontSize: AppTheme.metrics.fontSize12,
+                              color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ChoiceChip(
+                            label: const Text('本机'),
+                            visualDensity: VisualDensity.compact,
+                            selected: destMode == 'local',
+                            onSelected: (_) =>
+                                setSheetState(() => destMode = 'local'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('节点'),
+                            visualDensity: VisualDensity.compact,
+                            selected: destMode == 'node',
+                            onSelected: (_) =>
+                                setSheetState(() => destMode = 'node'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (destMode == 'node') ...[
+                      // 节点选择行
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: InkWell(
+                          borderRadius: AppTheme.metrics.radius8,
+                          onTap: pickNode,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '节点',
+                                  style: TextStyle(
+                                    fontSize: AppTheme.metrics.fontSize12,
+                                    color: Theme.of(ctx)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    pickedNode?.name ?? '选择节点',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize13,
+                                      color: pickedNode == null
+                                          ? Theme.of(ctx).colorScheme.primary
+                                          : Theme.of(ctx).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                DrawIcon(
+                                  StrokeIcons.chevronRight,
+                                  size: AppTheme.metrics.iconSize16,
+                                  color: Theme.of(ctx).colorScheme.outline,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 目标目录行
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: InkWell(
+                          borderRadius: AppTheme.metrics.radius8,
+                          onTap: pickFolder,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '目标目录',
+                                  style: TextStyle(
+                                    fontSize: AppTheme.metrics.fontSize12,
+                                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    nodeTargetDir ?? '选择目录',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize13,
+                                      color: nodeTargetDir == null
+                                          ? Theme.of(ctx).colorScheme.primary
+                                          : Theme.of(ctx).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                DrawIcon(
+                                  StrokeIcons.chevronRight,
+                                  size: AppTheme.metrics.iconSize16,
+                                  color: Theme.of(ctx).colorScheme.outline,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 归入的媒体库文件夹行（可选）
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: InkWell(
+                          borderRadius: AppTheme.metrics.radius8,
+                          onTap: pickMediaFolder,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '归入文件夹',
+                                  style: TextStyle(
+                                    fontSize: AppTheme.metrics.fontSize12,
+                                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    nodeFolderLabel ?? '媒体库根目录（可选）',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTheme.metrics.fontSize13,
+                                      color: nodeFolderLabel == null
+                                          ? Theme.of(ctx).colorScheme.primary
+                                          : Theme.of(ctx).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                DrawIcon(
+                                  StrokeIcons.chevronRight,
+                                  size: AppTheme.metrics.iconSize16,
+                                  color: Theme.of(ctx).colorScheme.outline,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     Expanded(
                       child: GridView.builder(
                         controller: controller,
@@ -790,20 +1101,43 @@ class _MangaComicDetailScreenState
                           vertical: AppTheme.metrics.kSpace8,
                         ),
                         child: FilledButton(
-                          onPressed: selected.isEmpty
+                          onPressed: selected.isEmpty ||
+                                  (destMode == 'node' &&
+                                      (pickedNode == null ||
+                                          nodeTargetDir == null))
                               ? null
                               : () {
                                   Navigator.of(ctx).pop();
                                   final selectedEps = viewModel.eps
                                       .where((e) => selected.contains(e.order))
                                       .toList();
-                                  dl.downloadEpsMultiple(comic, selectedEps);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('已加入下载队列：${selectedEps.length} 章')),
-                                  );
+                                  if (destMode == 'node') {
+                                    _startNodePush(
+                                      context,
+                                      dl,
+                                      comic,
+                                      selectedEps,
+                                      pickedNode!.id,
+                                      nodeTargetDir!,
+                                      nodeBaseFolderId,
+                                    );
+                                  } else {
+                                    dl.downloadEpsMultiple(comic, selectedEps);
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '已加入下载队列：${selectedEps.length} 章',
+                                        ),
+                                      ),
+                                    );
+                                  }
                                 },
                           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
-                          child: Text('下载选中的 ${selected.length} 章'),
+                          child: Text(
+                            destMode == 'node'
+                                ? '下载并推送 ${selected.length} 章'
+                                : '下载选中的 ${selected.length} 章',
+                          ),
                         ),
                       ),
                     ),
@@ -815,6 +1149,73 @@ class _MangaComicDetailScreenState
         );
       },
     );
+  }
+
+  /// 下载章节并推送到节点：先弹常驻进度对话框，推送完成后关闭并汇总结果。
+  void _startNodePush(
+    BuildContext screenContext,
+    MangaDownloadService dl,
+    MangaComic comic,
+    List<MangaEps> eps,
+    String nodeId,
+    String targetDir,
+    String? baseFolderId,
+  ) {
+    final navigator = Navigator.of(screenContext, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(screenContext);
+    showDialog(
+      context: screenContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Obx(() {
+        return AlertDialog(
+          title: const Text('下载并推送到节点'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                dl.nodePushStage.value.isEmpty
+                    ? '准备中...'
+                    : dl.nodePushStage.value,
+                style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace12),
+              LinearProgressIndicator(
+                value: dl.nodePushTotal.value > 0
+                    ? (dl.nodePushDone.value / dl.nodePushTotal.value)
+                        .clamp(0.0, 1.0)
+                        .toDouble()
+                    : null,
+              ),
+              SizedBox(height: AppTheme.metrics.kSpace8),
+              Text(
+                '${dl.nodePushDone.value}/${dl.nodePushTotal.value}',
+                style: TextStyle(
+                  fontSize: AppTheme.metrics.fontSize11,
+                  color: Theme.of(dialogCtx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+    dl
+        .downloadEpsToNode(
+          comic,
+          eps,
+          nodeId: nodeId,
+          targetDir: targetDir,
+          baseFolderId: baseFolderId,
+        )
+        .then((result) {
+          if (navigator.canPop()) navigator.pop();
+          if (!mounted) return;
+          final msg = result.fail == 0
+              ? '成功推送 ${result.success} 章到节点'
+              : '推送完成：成功 ${result.success} 章，失败 ${result.fail} 章';
+          messenger.showSnackBar(SnackBar(content: Text(msg)));
+        });
   }
 }
 

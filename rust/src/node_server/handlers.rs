@@ -372,6 +372,26 @@ pub async fn dispatch_action(
             Ok(json!(entries))
         }
 
+        "create_directory" => {
+            let path = params["path"].as_str().unwrap_or("");
+            if path.is_empty() {
+                return Ok(json!(false));
+            }
+            fs::create_dir_all(Path::new(path)).map_err(|e| format!("创建目录失败: {}", e))?;
+            Ok(json!(true))
+        }
+
+        "rename_directory" => {
+            let old_path = params["old_path"].as_str().unwrap_or("");
+            let new_path = params["new_path"].as_str().unwrap_or("");
+            if old_path.is_empty() || new_path.is_empty() {
+                return Ok(json!(false));
+            }
+            fs::rename(Path::new(old_path), Path::new(new_path))
+                .map_err(|e| format!("重命名目录失败: {}", e))?;
+            Ok(json!(true))
+        }
+
         // ── 小说操作 ─────────────────────────────────────────────────────────
         "list_novels" => {
             let novels =

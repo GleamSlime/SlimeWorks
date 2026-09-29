@@ -1131,12 +1131,14 @@ static EMPTY_SMART_FOLDERS: OnceLock<Arc<Mutex<Vec<SmartFolder>>>> = OnceLock::n
 fn app_data_base() -> String {
     #[cfg(windows)]
     return std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-    #[cfg(target_os = "macos")]
+    // iOS 与 macOS 共用 Apple 标准可写目录（容器内 Library/Application Support），
+    // 不能用 Linux 的 XDG 约定（$HOME/.local/share 在 iOS 沙盒里建目录会被拒）。
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     return {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         format!("{}/Library/Application Support", home)
     };
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(any(windows, target_os = "macos", target_os = "ios")))]
     return std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         format!("{}/.local/share", home)
@@ -1429,7 +1431,8 @@ pub fn initialize_db() -> Result<(), String> {
             Ok(())
         }
         Err(e) => {
-            sw_info!("[media_db] DB init failed: {}", e);
+            // {:?} 打出 anyhow 全链，定位到具体 OS 错误（权限/路径）
+            sw_info!("[media_db] DB init failed: {:?}", e);
             Err(e)
         }
     }

@@ -1,93 +1,85 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:slime_works/core/theme/app_theme.dart';
 
-/// Debug 模式下显示在封面右下角的图片大小 badge。
-/// Release 模式下渲染为零尺寸 [SizedBox.shrink]。
+/// Debug 模式下显示在封面右下角的**解码尺寸**徽标（像素宽×高）。
+///
+/// 解码尺寸才是「本地/远程清晰度设置有没有生效」的证据。这里曾经改成对 http 源发
+/// HEAD 取 Content-Length，而节点 `/node/media` 只路由 GET，HEAD 一律落到 404，
+/// 于是每张远程卡显示的都是那枚 404 响应体的长度（恒定 37B）。
+///
+/// [provider] 必须和封面用的是同一个对象：resolve 命中的就是 Image 那条缓存条目，
+/// 不会多一次下载或多一次解码。Release 模式下渲染为零尺寸 [SizedBox.shrink]。
 class DebugImageSizeBadge extends StatefulWidget {
-  const DebugImageSizeBadge({super.key, required this.src});
+  const DebugImageSizeBadge({super.key, required this.provider});
 
-  final String? src;
+  final ImageProvider<Object> provider;
 
   @override
   State<DebugImageSizeBadge> createState() => _DebugImageSizeBadgeState();
 }
 
 class _DebugImageSizeBadgeState extends State<DebugImageSizeBadge> {
-  int? _bytes;
-
-  /// 每个 State 实例独有的 ID，防止不同 badge 实例的 AnimatedSwitcher key 相互冲撞。
-  final int _instanceId = Object().hashCode;
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+  ImageInfo? _info;
 
   @override
   void initState() {
     super.initState();
-    if (kDebugMode) _fetchSize();
+    if (kDebugMode) _attach();
+  }
+
+  /// 复用封面那条缓存条目，所以换 provider（缩略图生成完、hover 轮换封面）时要重挂
+  void _attach() {
+    _detach();
+    final listener = ImageStreamListener(_onFrame);
+    _listener = listener;
+    _info = null;
+    _stream = widget.provider.resolve(ImageConfiguration.empty)
+      ..addListener(listener);
+  }
+
+  void _detach() {
+    final listener = _listener;
+    if (listener != null) _stream?.removeListener(listener);
+  }
+
+  void _onFrame(ImageInfo info, bool _) {
+    if (mounted) setState(() => _info = info);
   }
 
   @override
   void didUpdateWidget(DebugImageSizeBadge old) {
     super.didUpdateWidget(old);
-    if (old.src != widget.src) {
-      _bytes = null;
-      if (kDebugMode) _fetchSize();
-    }
+    if (kDebugMode && old.provider != widget.provider) _attach();
   }
 
-  Future<void> _fetchSize() async {
-    final src = widget.src;
-    if (src == null || src.isEmpty) return;
-    try {
-      int size;
-      if (src.startsWith('http')) {
-        // HTTP HEAD 请求获取 Content-Length，不下载 body
-        final resp = await http.head(Uri.parse(src)).timeout(const Duration(seconds: 4));
-        final lenStr = resp.headers['content-length'];
-        size = (lenStr != null && lenStr.isNotEmpty) ? (int.tryParse(lenStr) ?? 0) : 0;
-      } else {
-        final f = File(src);
-        size = f.existsSync() ? f.lengthSync() : 0;
-      }
-      if (mounted) setState(() => _bytes = size);
-    } catch (_) {}
-  }
-
-  String _fmt(int bytes) {
-    if (bytes <= 0) return '?';
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)}MB';
+  @override
+  void dispose() {
+    _detach();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!kDebugMode) return const SizedBox.shrink();
-    final b = _bytes;
-    // 用 src+bytes 作 key，避免多个相同大小的图片在同一 AnimatedSwitcher Stack 产生 key 冲突
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      child: b == null
-          ? SizedBox.shrink(key: ValueKey('${_instanceId}_empty'))
-          : Container(
-              key: ValueKey('${_instanceId}_$b'),
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace5, vertical: AppTheme.metrics.kSpace2),
-              decoration: BoxDecoration(
-                color: Colors.deepPurple.withAlpha(210),
-                borderRadius: AppTheme.metrics.radius4,
-              ),
-              child: Text(
-                _fmt(b),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: AppTheme.metrics.fontSize9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ),
+    final image = _info?.image;
+    if (!kDebugMode || image == null) return const SizedBox.shrink();
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace5, vertical: AppTheme.metrics.kSpace2),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withAlpha(210),
+        borderRadius: AppTheme.metrics.radius4,
+      ),
+      child: Text(
+        '${image.width}×${image.height}',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: AppTheme.metrics.fontSize9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
     );
   }
 }
