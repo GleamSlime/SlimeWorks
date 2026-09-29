@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -234,14 +235,15 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                         : [accent.withAlpha(40), accent.withAlpha(20)],
                   ),
                 ),
-                child: () {
+                // Obx 包一层：隐私模式 / 伪封面开关一切换，封面格立刻重绘，不用等整页重建
+                child: Obx(() {
                   final coverPaths = widget.viewModel.getFolderCovers(widget.folder.id);
-                  final privacyOn = getIt.isRegistered<MediaPrefsService>()
-                      ? getIt<MediaPrefsService>().privacyMode.value
-                      : false;
-                  final blurSigma = getIt.isRegistered<MediaPrefsService>()
-                      ? getIt<MediaPrefsService>().privacyBlurSigma.value
-                      : 15.0;
+                  final prefs = getIt.isRegistered<MediaPrefsService>()
+                      ? getIt<MediaPrefsService>()
+                      : null;
+                  final fakeOn = prefs?.fakeCover.value ?? false;
+                  final privacyOn = prefs?.privacyMode.value ?? false;
+                  final blurSigma = prefs?.privacyBlurSigma.value ?? 15.0;
                   if (!widget.isBookHover && coverPaths.isNotEmpty) {
                     final grid = Stack(
                       fit: StackFit.expand,
@@ -323,6 +325,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                         ],
                       );
                     }
+                    // 伪封面：整块九宫格换成那张无害图片，真实封面连解码都不参与
+                    if (fakeOn) return const FakeCover();
                     if (privacyOn) {
                       return ClipRect(
                         child: Stack(
@@ -352,8 +356,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     }
                     return grid;
                   }
-                  return null;
-                }(),
+                  // Obx 的构建器必须返回 Widget，原来 IIFE 返回 null 的位置换成空占位
+                  return const SizedBox.shrink();
+                }),
               ),
 
               // 文件夹内容（图标+名称），使用Column居中

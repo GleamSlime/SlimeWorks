@@ -121,6 +121,26 @@ void FlutterWindow::RegisterBackdropChannel() {
           result->Success(flutter::EncodableValue(rc));
           return;
         }
+        if (method == "setWindowCaptureExcluded") {
+          bool on = false;
+          const flutter::EncodableValue* argument = call.arguments();
+          if (argument != nullptr) {
+            if (const bool* direct = std::get_if<bool>(argument)) {
+              on = *direct;
+            } else if (const auto* map =
+                           std::get_if<flutter::EncodableMap>(argument)) {
+              const auto it = map->find(flutter::EncodableValue("on"));
+              if (it != map->end()) {
+                if (const bool* v = std::get_if<bool>(&it->second)) {
+                  on = *v;
+                }
+              }
+            }
+          }
+          const int rc = SetWindowCaptureExcluded(GetHandle(), on);
+          result->Success(flutter::EncodableValue(rc));
+          return;
+        }
         if (method == "captureBehindWindow") {
           // 抓的是本窗口矩形：物理像素直接问 Win32，省掉 Dart 侧换算 DPI。
           RECT rect = {};

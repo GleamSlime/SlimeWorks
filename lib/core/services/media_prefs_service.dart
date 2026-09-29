@@ -97,7 +97,21 @@ class MediaPrefsService {
   /// 隐私模糊强度（sigma值），默认 15.0，范围 5.0-40.0。
   final privacyBlurSigma = 15.0.obs;
 
+  /// 伪封面（默认关闭）。开启后真实封面整张换成 [fakeCoverPath] 指定的那张无害图片，
+  /// 不模糊也不加锁角标，旁人看不出这里藏着内容。开启时优先于 [privacyMode] 的高斯模糊。
+  final fakeCover = false.obs;
+
+  /// 伪封面使用的本地图片路径，可在媒体设置里换成任意图片。
+  final fakeCoverPath = defaultFakeCoverPath.obs;
+
   static const _keyFileCheckDepth = 'media_file_check_depth';
+  static const _keyFakeCover = 'media_fake_cover';
+  static const _keyFakeCoverPath = 'media_fake_cover_path';
+
+  /// 伪封面的出厂默认图：只是开发机上的一张壁纸，换台机器读不到时封面退成实色底，
+  /// 在媒体设置里换成任意本地图片即可。
+  static const String defaultFakeCoverPath =
+      r'C:\Users\47888\OneDrive\图片\ROG-OLED-Monitor-Wallpaper_16x9.jpg';
 
   final fileCheckDepth = FileCheckDepth.coverOnly.obs;
 
@@ -167,6 +181,8 @@ class MediaPrefsService {
     privacyMode.value = prefs.getBool(_keyPrivacyMode) ?? false;
     videoScrubPreload.value = prefs.getBool(_keyVideoScrubPreload) ?? true;
     privacyBlurSigma.value = (prefs.getDouble(_keyPrivacyBlurSigma) ?? 15.0).clamp(5.0, 40.0);
+    fakeCover.value = prefs.getBool(_keyFakeCover) ?? false;
+    fakeCoverPath.value = prefs.getString(_keyFakeCoverPath) ?? defaultFakeCoverPath;
     final depthStr = prefs.getString(_keyFileCheckDepth) ?? 'coverOnly';
     fileCheckDepth.value = FileCheckDepth.values.firstWhere(
       (e) => e.name == depthStr,
@@ -231,6 +247,20 @@ class MediaPrefsService {
     privacyBlurSigma.value = v.clamp(5.0, 40.0);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyPrivacyBlurSigma, privacyBlurSigma.value);
+  }
+
+  /// 设置伪封面开关。
+  Future<void> setFakeCover(bool v) async {
+    fakeCover.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyFakeCover, v);
+  }
+
+  /// 设置伪封面使用的本地图片路径。
+  Future<void> setFakeCoverPath(String v) async {
+    fakeCoverPath.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyFakeCoverPath, v);
   }
 
   Future<void> setFileCheckDepth(FileCheckDepth v) async {

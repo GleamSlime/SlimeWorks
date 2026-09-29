@@ -1051,7 +1051,10 @@ class _CollectionLibraryScreenState
       final double h = w / 0.65;
 
       Widget cover;
-      if (meta.coverPath != null && File(meta.coverPath!).existsSync()) {
+      if (FakeCover.enabled && meta.coverPath != null) {
+        // 伪封面：拖拽浮影是最容易被旁人看到的一处，同样不能带出真实封面
+        cover = const FakeCover();
+      } else if (meta.coverPath != null && File(meta.coverPath!).existsSync()) {
         final privacyOn = getIt.isRegistered<MediaPrefsService>()
             ? getIt<MediaPrefsService>().privacyMode.value
             : false;

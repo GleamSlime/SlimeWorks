@@ -305,10 +305,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             builder: (context, child) {
               if (child == null) return const SizedBox.shrink();
               if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-                return EasyLoading.init()(
-                  context,
-                  DesktopScaffold(child: child),
-                );
+                Widget content = DesktopScaffold(child: child);
+                if (Platform.isWindows) {
+                  // 规避 Flutter Windows 无障碍桥 AXTree 失配崩溃：
+                  // UIA 客户端（输入法/PowerToys/读屏工具等）激活语义后，
+                  // 页面切换或大列表重建会使引擎 accessibility_bridge 的
+                  // AXTree 与框架语义树失配（"NN will not be in the tree and
+                  // is not the new root"），语义更新持续报错最终导致进程
+                  // 崩溃（Lost connection to device），属引擎级老 bug。
+                  // 本应用无读屏适配需求，Windows 端全局排除语义后语义树
+                  // 为空，引擎无更新可失配，报错与崩溃链路直接消失。
+                  // 如需恢复无障碍支持，删除此包裹即可。
+                  content = ExcludeSemantics(child: content);
+                }
+                return EasyLoading.init()(context, content);
               }
               return EasyLoading.init()(context, child);
             },

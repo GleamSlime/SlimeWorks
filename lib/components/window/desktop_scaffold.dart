@@ -82,7 +82,8 @@ class DesktopScaffold extends StatefulWidget {
       // 归位后强制补抓一帧：启动瞬间抓的那帧是在窗口还没挪到保存位置时抓的，
       // 位置是错的；而程序化移动不会产生 WM_EXITSIZEMOVE、onWindowMoved 不触发，
       // 不主动补抓磨砂就会一直停在错误区域（看起来像「拍了左上角、还放大了」）。
-      // refresh 内部会轮询到窗口矩形停稳再抓，赢下宽高比/最小尺寸约束的收敛竞态。
+      // refresh 作废旧矩形逼心跳立即重抓，跟帧循环会一直跟到宽高比/最小尺寸
+      // 约束的收敛结束。
       await LiveFrost.refresh();
       // 延迟到下一帧再计算度量，避免在 ScreenUtil 未初始化前访问它
       WidgetsBinding.instance.addPostFrameCallback((_) => AppTheme.resetMetrics());
@@ -122,6 +123,13 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
     // 窗口移动时保存位置。磨砂的重抓不再依赖这里——LiveFrost 心跳会自查矩形
     // 变化，本机 window_manager 的移动/缩放事件实测不可靠。
     _positionService?.savePosition();
+  }
+
+  @override
+  void onWindowFocus() {
+    // 失焦期间背后的桌面可能已经变了（别的窗口开关、移动、换内容），心跳只盯
+    // 自身矩形发现不了这些；重新聚焦时强制补抓一帧，让磨砂和桌面保持同步。
+    LiveFrost.refresh();
   }
 
   @override

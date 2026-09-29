@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -633,14 +634,27 @@ class MediaCardCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 用 Obx 自己监听隐私开关，而不是靠宿主卡片那几个 ever(prefs.privacyMode) worker：
+    // 伪封面是新增的第三条通路，四类卡都从这里过，一处监听就够了。
+    return Obx(() => _cover(context));
+  }
+
+  Widget _cover(BuildContext context) {
     final s = AppSemantic.of(context);
     final src = source;
-    final broken = _CoverPlaceholder(icon: lostIcon ?? placeholderIcon, background: s.surfaceSunken);
-    if (isLost || src == null || src.isEmpty) return broken;
-
     final prefs = getIt.isRegistered<MediaPrefsService>()
         ? getIt.get<MediaPrefsService>()
         : null;
+    // 两个开关在任何提前 return 之前无条件读一遍：Obx 只登记本次构建真读到的 Rx，
+    // 写在 return 后面会让没有封面的卡片这次构建漏听，之后切换开关不再重绘。
+    final fakeCover = prefs?.fakeCover.value ?? false;
+    final privacyOn = prefs?.privacyMode.value ?? false;
+    final broken = _CoverPlaceholder(icon: lostIcon ?? placeholderIcon, background: s.surfaceSunken);
+    if (isLost || src == null || src.isEmpty) return broken;
+
+    // 伪封面：整张换成设置里指定的那张无害图片，不糊也不加锁角标，优先于隐私模糊
+    if (fakeCover) return const FakeCover();
+
     final isHttp = src.startsWith('http');
     final cacheWidth = isHttp
         ? null
@@ -660,7 +674,7 @@ class MediaCardCover extends StatelessWidget {
       errorBuilder: (_, _, _) => broken,
     );
 
-    if (prefs?.privacyMode.value ?? false) {
+    if (privacyOn) {
       final sigma = prefs?.privacyBlurSigma.value ?? 15.0;
       return Stack(
         fit: StackFit.expand,

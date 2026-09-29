@@ -35,3 +35,4 @@ export 'widgets/glass_menu.dart';
 export 'widgets/page_container.dart';
 export 'widgets/breadcrumb.dart';
 export 'widgets/tree_connector.dart';
+export 'widgets/fake_cover.dart';

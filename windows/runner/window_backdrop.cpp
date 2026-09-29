@@ -277,6 +277,34 @@ int SetWindowBehindVisible(HWND hwnd, bool on) {
   return 1;
 }
 
+// —— 实时半透明的零闪烁抓帧路径 ——
+//
+// 隐身再抓（SetWindowBehindVisible）每次都要让窗口在屏幕上消失一到两个合成
+// 帧，用户看到的就是「闪一下」。WDA_EXCLUDEFROMCAPTURE 是更好的工具：DWM 在
+// 合成管线层面把窗口分进「只给物理屏幕、不给捕获客户端」的一层，屏幕上窗口
+// 本体一动不动，而 BitBlt（以及 DXGI/WGC 等一切走 DWM 的捕获）抓到的正是它
+// 背后的桌面——恰好就是磨砂要的内容。排除发生在合成阶段而不是在成品帧上
+// 贴黑块，所以捕获里不会出现空洞或残影。
+//
+// 代价：Dart 侧把整个拖拽跟帧过程做成一场「排除会话」（期间保持排除、连拍
+// 多帧换流畅度），所以拖拽期间若有第三方在录屏/共享屏幕（OBS、Zoom 等），
+// 本窗口会在对方画面里消失到松手为止。相比每次移动窗口都肉眼可见地闪烁，
+// 这是更划算的取舍。
+//
+// WDA_EXCLUDEFROMCAPTURE = 0x00000011，Win10 2004（19041）起支持；较旧 SDK
+// 头文件里没有定义，按官方取值自己补。老系统上 SetWindowDisplayAffinity 返回
+// FALSE（ERROR_INVALID_PARAMETER），Dart 侧据此退回隐身路径。
+constexpr DWORD kWdaNone = 0x00000000;
+constexpr DWORD kWdaExcludeFromCapture = 0x00000011;
+
+int SetWindowCaptureExcluded(HWND hwnd, bool exclude) {
+  if (hwnd == nullptr) {
+    return -1;
+  }
+  const DWORD affinity = exclude ? kWdaExcludeFromCapture : kWdaNone;
+  return ::SetWindowDisplayAffinity(hwnd, affinity) != FALSE ? 1 : -2;
+}
+
 std::vector<uint8_t> CaptureScreenRect(int x, int y, int w, int h,
                                        int downscale, int* out_w, int* out_h) {
   std::vector<uint8_t> result;

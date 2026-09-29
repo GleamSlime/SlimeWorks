@@ -20,11 +20,12 @@ const Loggers _logger = Loggers(name: 'LiveFrost');
 
 /// 「实时半透明」的开关与抓帧服务。
 ///
-/// 背景：这台机器的 Windows 26200 实测不给非 WinUI3 窗口渲染任何系统材质
+/// 背景：这台机器的 Windows 26200 实测不给非 WinUi3 窗口渲染任何系统材质
 /// （DWMWA_SYSTEMBACKDROP_TYPE、老 Accent 全部只回读成功、不绘制），磨砂只能
-/// 自绘：把窗口短暂隐到 alpha=1 → 抓窗口所在屏幕区域 → 恢复窗口 → 在 Flutter
-/// 里把这一帧缩小放大 + 高斯模糊当窗口底。关掉开关则整条链路停止，窗口退回
-/// 不透明的 Dart 底色。
+/// 自绘：把窗口从屏幕捕获里排除（WDA_EXCLUDEFROMCAPTURE，屏幕上完全可见）→
+/// 抓窗口所在屏幕区域 → 恢复捕获归属 → 在 Flutter 里把这一帧缩小放大 + 高斯
+/// 模糊当窗口底，全程肉眼零闪烁；Win10 2004 之前的老系统退回「短暂隐到
+/// alpha=1 再抓」的旧路径。关掉开关则整条链路停止，窗口退回不透明的 Dart 底色。
 class LiveFrost {
   LiveFrost._();
 
@@ -47,15 +48,27 @@ class LiveFrost {
   /// 的约 3 倍影响半径（10*3*downscale=120）再留点余量。
   static const int _captureMargin = 128;
 
-  /// 心跳间隔与「隐身→抓帧」之间给合成器留的时间。
+  /// 心跳间隔。
   ///
-  /// 抓帧必须把窗口短暂隐到 alpha=1，每次隐身都是一次可感知的闪。所以节奏是：
   /// 心跳只问一次窗口矩形（一个 platform call，便宜），**矩形和上次成功抓帧时
-  /// 一样就立刻返回**——静止时一次都不闪。间隔短只影响「多久发现窗口动了」，
-  /// 不会增加闪烁，所以取 400ms：拖完窗口到磨砂跟上不超过半秒。
-  /// grace 只保证合成器把隐身帧落下去再 BitBlt，一帧（16ms）足矣，越短闪得越轻。
-  static const Duration _interval = Duration(milliseconds: 400);
+  /// 一样就立刻返回**——静止时一次抓帧都不发生。拖拽/缩放期间的实时跟帧由
+  /// `_tick` 内部的跟帧循环直接驱动、不占心跳；心跳只负责「发现窗口动了」
+  /// （程序化移动、贴边、启动归位）和失败重试，取 200ms 让变化尽快被发现。
+  static const Duration _interval = Duration(milliseconds: 200);
+
+  /// 「切换捕获归属 → 抓帧」之间给合成器留的时间：等 DWM 把「排除捕获」
+  /// （或退回路径里的隐身帧）落到合成里再开始抓。跟帧会话只在首帧等这一拍，
+  /// 之后归属状态不变、无需再等；屏幕上什么都不变，纯属正确性保险。
   static const Duration _hideGrace = Duration(milliseconds: 16);
+
+  /// 拖拽跟帧的最小步进间隔，只是防小窗口空转的上限帧率闸门（约 60fps）。
+  /// 正常窗口下抓帧整段本身有耗时（BitBlt + 解码 + 模糊），这个值基本不生效。
+  static const Duration _followPace = Duration(milliseconds: 16);
+
+  /// 跟帧循环的兜底时长：矩形持续变化超过这么久先收手（释放 _busy），交给
+  /// 下一跳心跳重新进入，避免极端情况（窗口被脚本拖着不停动）永远占着链路。
+  /// 正常拖拽远短于此值。
+  static const Duration _followTimeout = Duration(seconds: 10);
 
   static bool get supported => Platform.isWindows;
 
@@ -87,9 +100,9 @@ class LiveFrost {
 
   /// 轮询窗口矩形直到它停稳：连续两次取值相同才算停，返回停稳时的矩形。
   ///
-  /// 窗口在动的时候抓，抓到的是移动中的瞬态矩形，画出来就是「磨砂跟窗口错位」；
-  /// 而且最大化/贴边/恢复这类程序化动作还会让矩形在若干帧里收敛（最小尺寸与宽高
-  /// 比约束），所以必须等它不动了再抓。超时仍在动就返回 null，交给下一跳心跳。
+  /// 老系统（不支持排除捕获）专用：隐身抓帧路径抓一次闪一次，窗口动个不停
+  /// 就不能跟帧，只能等停了再抓；新路径的跟帧循环自己会跟上收敛过程。超时
+  /// 仍在动就返回 null，交给下一跳心跳。
   static Future<Rect?> _waitSettled() async {
     Rect? prev;
     final DateTime deadline = DateTime.now().add(_settleTimeout);
@@ -104,8 +117,10 @@ class LiveFrost {
     return null;
   }
 
-  /// 立即强制补抓一帧。启动归位后调用：程序化移动不会产生 WM_EXITSIZEMOVE、
-  /// window_manager 的 onWindowMoved 也不触发，光靠事件永远等不到重抓。
+  /// 立即强制补抓一帧。启动归位后调用（程序化移动不会产生 WM_EXITSIZEMOVE、
+  /// window_manager 的 onWindowMoved 也不触发，光靠事件永远等不到重抓）；
+  /// 窗口重新聚焦时也调用（失焦期间背后的桌面可能已经变了，心跳只盯自身
+  /// 矩形发现不了）。
   static Future<void> refresh() async {
     if (!running.value) {
       return;
@@ -171,9 +186,10 @@ class LiveFrost {
     }
   }
 
-  /// 拖拽窗口期间不做任何特殊处理：不挂「拖拽中」标志，靠心跳发现矩形在变就不抓、
-  /// 停下才补一帧。之前那种标志写法在这里必翻车——startDragging 把指针交给系统后
-  /// Flutter 收不到 onPanEnd，标志永久卡在 true，磨砂从此再也不更新。
+  /// 拖拽/缩放期间的更新策略：不挂「拖拽中」标志（startDragging 把指针交给系统
+  /// 后 Flutter 收不到 onPanEnd，标志会永久卡死，之前那种写法必翻车），靠心跳
+  /// 发现矩形在变、再由 _tick 里的跟帧循环边动边抓；老系统（无排除捕获）保持
+  /// 「动个不停就不跟、停稳补一帧」。
 
   /// 启动时按已存偏好恢复（在 initManager 拼 WindowOptions 之前 await）。
   static Future<void> restore() async {
@@ -184,41 +200,130 @@ class LiveFrost {
   }
 
   static Future<void> _tick() async {
-    // 上一轮「等停稳+抓帧」还没收尾时直接跳过（拖拽期间每跳都会撞进来，
-    // 串行标志就是天然的「动个不停就不抓」闸门）。
+    // 上一轮跟帧还没收尾时直接跳过（拖拽期间每跳都会撞进来，串行标志保证
+    // 同一时刻只有一套抓帧链路在跑）。
     if (_busy || !running.value) {
       return;
     }
     // 心跳自己问矩形，不依赖 window_manager 的移动/缩放事件（实测这些事件在本机
     // 不触发，磨砂会永远停在启动那一帧的位置，窗口一动就错位、像放大）。
     final Rect now = await windowManager.getBounds();
-    // 矩形和上次成功抓帧时一样 → 窗口底下的桌面没变，直接返回，静止时零闪烁。
+    // 矩形和上次成功抓帧时一样 → 窗口底下的桌面没变，直接返回，静止时零抓帧。
     if (_capturedRect == now) {
       return;
     }
     _busy = true;
+    try {
+      // 开一场「跟帧会话」：排除捕获在整个跟帧期间保持开启，每帧就只剩
+      // BitBlt + 解码 + 模糊的成本——不用每帧切两次捕获归属、也不用每帧等
+      // grace，帧率直接翻倍。代价是拖拽全程本窗口从第三方录屏里消失（换
+      // 流畅度，值得）。
+      if (!await _beginExclusion()) {
+        // 老系统（探测就失败）或此刻调用异常（罕见）：退回「等停稳 + 隐身
+        // 抓一帧」的老节奏——隐身路径抓一次闪一次，不能跟帧连拍。
+        final Rect? settled = await _waitSettled();
+        if (settled == null) {
+          return; // 还在动，交给下一跳心跳
+        }
+        await _captureAt(settled);
+        return;
+      }
+      try {
+        // 会话首帧等一拍：DWM 把「排除捕获」落到捕获管线后再开始连拍，
+        // 之后每帧归属状态没变，无需再等。
+        await Future<void>.delayed(_hideGrace);
+        // 拖拽/缩放实时跟帧：边动边抓，每轮抓完再取一次矩形：还在变就继续跟
+        // （磨砂拖着走，停稳时最后一帧自然对齐）；没变说明停稳，刚抓的就是
+        // 终帧。原生抓的是 BitBlt 当刻的真实窗口矩形（比这里的观测值还新鲜），
+        // 渲染锚定与它一致，不会错位放大。最大化/贴边这类程序化动作的矩形
+        // 收敛也由这个循环自然吃掉。
+        Rect rect = now;
+        final DateTime deadline = DateTime.now().add(_followTimeout);
+        while (running.value) {
+          if (!await _grabFrame(rect)) {
+            return; // 抓失败保持「未抓」，下一跳心跳再试
+          }
+          final Rect next = await windowManager.getBounds();
+          if (next == rect || DateTime.now().isAfter(deadline)) {
+            return; // 停稳（或超出兜底时长）：交给下一跳心跳继续盯
+          }
+          rect = next;
+          await Future<void>.delayed(_followPace);
+        }
+      } finally {
+        // 会话收尾必须恢复捕获归属，否则本窗口会一直从第三方录屏/截图里消失。
+        await _endExclusion();
+      }
+    } finally {
+      _busy = false;
+    }
+  }
+
+  /// 开启「排除捕获」（WDA_EXCLUDEFROMCAPTURE）：窗口在屏幕上完全可见、一动
+  /// 不动，只是 BitBlt 抓不到它、抓到的是背后的桌面——零闪烁。Win10 2004
+  /// 之前的老系统这个调用会失败（rc != 1）；调用本身抛异常（比如原生侧还是
+  /// 没有这个方法的旧二进制）也同样按失败处理，由调用方退回隐身路径。
+  static Future<bool> _beginExclusion() async {
+    try {
+      final int? rc = await _channel.invokeMethod<int>(
+          'setWindowCaptureExcluded', <String, Object?>{'on': true});
+      return rc == 1;
+    } on Object catch (_) {
+      return false;
+    }
+  }
+
+  /// 关闭「排除捕获」。恢复失败（通道已死之类）只吞掉：窗口销毁时归属
+  /// 自动复位，不会残留。
+  static Future<void> _endExclusion() async {
+    try {
+      await _channel.invokeMethod<int>(
+          'setWindowCaptureExcluded', <String, Object?>{'on': false});
+    } on Object catch (_) {
+      // 忽略：收尾路径上的异常没有可挽回的动作
+    }
+  }
+
+  /// 老系统单帧路径：隐身 → 等一拍 → 抓一帧 → 恢复。抓一次闪一次，只在
+  /// 不支持排除捕获的机器上使用。
+  static Future<bool> _captureAt(Rect rect) async {
     bool hidden = false;
     try {
-      // 窗口刚动过：先等它彻底停下再抓。抓移动中的瞬态矩形就是「磨砂错位」。
-      final Rect? settled = await _waitSettled();
-      if (settled == null) {
-        return; // 还在动，交给下一跳心跳
-      }
       await _channel.invokeMethod<int>(
           'setWindowBehindVisible', <String, Object?>{'on': true});
       hidden = true;
       await Future<void>.delayed(_hideGrace);
+      return await _grabFrame(rect);
+    } on PlatformException catch (error) {
+      // 抓帧失败不算致命：finally 会恢复窗口可见，磨砂停在上一帧。
+      _logger.error('实时磨砂抓帧失败: $error');
+      return false;
+    } finally {
+      // 隐身路径必须恢复，否则窗口永久留在 alpha=1 的隐身态（比闪烁更严重的
+      // 「窗口消失」）。
+      if (hidden) {
+        await _channel.invokeMethod<int>(
+            'setWindowBehindVisible', <String, Object?>{'on': false});
+      }
+    }
+  }
+
+  /// 抓一帧并换上（假定捕获归属已由调用方切换好）：BitBlt → 解码 → 模糊 →
+  /// 换帧。成功后把 [_capturedRect] 记为 [rect] 并返回 true；失败返回 false、
+  /// 保持「未抓」，交给调用方重试。
+  static Future<bool> _grabFrame(Rect rect) async {
+    try {
       final Map<Object?, Object?>? shot = await _channel.invokeMethod<
           Map<Object?, Object?>>('captureBehindWindow',
           <String, Object?>{'downscale': _downscale, 'margin': _captureMargin});
       if (shot == null) {
-        return; // 抓失败保持「未抓」，下一跳再试
+        return false; // 抓失败保持「未抓」，下一跳再试
       }
       final int width = shot['width'] as int? ?? 0;
       final int height = shot['height'] as int? ?? 0;
       final Uint8List? bytes = shot['pixels'] as Uint8List?;
       if (width == 0 || height == 0 || bytes == null || bytes.isEmpty) {
-        return;
+        return false;
       }
       // 四边外扩量（屏幕像素）换算到图像像素，得到窗口本体的内区。原生已把
       // 整块（含外扩圈）按 downscale 缩小，所以 pad 同比例除即可。
@@ -235,19 +340,13 @@ class LiveFrost {
       _retireFrame();
       frame = await _blurred(image);
       // 记下这帧对应的窗口矩形，直到窗口再次移动前不再重复抓帧。
-      _capturedRect = settled;
+      _capturedRect = rect;
       frameVersion.value++;
+      return true;
     } on PlatformException catch (error) {
-      // 抓帧失败不算致命：窗口下一跳会恢复可见，磨砂停在上一帧。
+      // 抓帧失败不算致命：磨砂停在上一帧，调用方决定重试节奏。
       _logger.error('实时磨砂抓帧失败: $error');
-    } finally {
-      // 无论如何都要把窗口恢复可见，否则抓帧异常会把窗口永久留在 alpha=1
-      // 的隐身态（比闪烁更严重的「窗口消失」）。
-      if (hidden) {
-        await _channel.invokeMethod<int>(
-            'setWindowBehindVisible', <String, Object?>{'on': false});
-      }
-      _busy = false;
+      return false;
     }
   }
 

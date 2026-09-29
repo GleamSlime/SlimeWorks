@@ -21,20 +21,31 @@ class WindowPositionService extends GetxService {
 
   late SharedPreferences? _pref;
 
+  /// 安全读取 double：历史版本可能把窗口尺寸存成 int（早期用 setInt），
+  /// SharedPreferences.getDouble 遇到 int 会抛
+  /// "type 'int' is not a subtype of type 'double?' in type cast"，
+  /// 该异常在引擎层无兜底、直接炸掉启动流程。这里统一把 num 转成 double，
+  /// int/老数据也能正常读出，避免启动崩溃。
+  double? _readDouble(String key) {
+    final v = _pref?.get(key);
+    if (v is! num) return null;
+    return v.toDouble();
+  }
+
   double get windowWidth {
-    return _pref?.getDouble(_keyWidth) ?? getIt.get<DesktopScreenProvider>().width.value;
+    return _readDouble(_keyWidth) ?? getIt.get<DesktopScreenProvider>().width.value;
   }
 
   double get windowHeight {
-    return _pref?.getDouble(_keyHeight) ?? getIt.get<DesktopScreenProvider>().height.value;
+    return _readDouble(_keyHeight) ?? getIt.get<DesktopScreenProvider>().height.value;
   }
 
   double get windowX {
-    return _pref?.getDouble(_keyX) ?? 0;
+    return _readDouble(_keyX) ?? 0;
   }
 
   double get windowY {
-    return _pref?.getDouble(_keyY) ?? 0;
+    return _readDouble(_keyY) ?? 0;
   }
 
   /// 初始化服务
@@ -85,10 +96,10 @@ class WindowPositionService extends GetxService {
       return;
     }
 
-    final x = _pref!.getDouble(_keyX);
-    final y = _pref!.getDouble(_keyY);
-    final width = _pref!.getDouble(_keyWidth);
-    final height = _pref!.getDouble(_keyHeight);
+    final x = _readDouble(_keyX);
+    final y = _readDouble(_keyY);
+    final width = _readDouble(_keyWidth);
+    final height = _readDouble(_keyHeight);
     if (x != null && y != null && width != null && height != null) {
       // 检查保存的位置是否仍然有效（屏幕可能已改变）
       if (await _isPositionValid(x, y, width, height)) {

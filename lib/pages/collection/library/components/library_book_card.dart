@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -754,7 +755,12 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     );
   }
 
-  Widget _buildCoverImage() {
+  /// 封面区：伪封面 > 隐私高斯模糊 > 真实封面
+  ///
+  /// 整块包在 Obx 里，隐私模式/伪封面任一开关一切换这里就重绘，不用等整个网格重建。
+  Widget _buildCoverImage() => Obx(_coverImage);
+
+  Widget _coverImage() {
     if (widget.isLost && widget.metadata.coverPath != null) {
       return Positioned.fill(
         child: Stack(
@@ -770,17 +776,19 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         ),
       );
     }
-    final privacyOn = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().privacyMode.value
-        : false;
-    final blurSigma = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().privacyBlurSigma.value
-        : 15.0;
+    final prefs = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>()
+        : null;
+    final fakeOn = prefs?.fakeCover.value ?? false;
+    final privacyOn = prefs?.privacyMode.value ?? false;
+    final blurSigma = prefs?.privacyBlurSigma.value ?? 15.0;
     // 网格封面按预览宽度解码，避免每张原图（可达数 MB）整幅进内存
-    final previewWidth = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>().localPreviewWidth.value
-        : 480;
+    final previewWidth = prefs?.localPreviewWidth.value ?? 480;
     final cacheWidth = previewWidth > 0 ? previewWidth : null;
+    // 伪封面排在真实封面之前：直接换成那张无害图片，真实封面连解码都不参与
+    if (fakeOn && widget.metadata.coverPath != null) {
+      return Positioned.fill(child: const FakeCover());
+    }
     try {
       final coverPath = widget.metadata.coverPath;
       Widget coverWidget;

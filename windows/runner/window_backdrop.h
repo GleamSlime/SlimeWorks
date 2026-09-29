@@ -46,6 +46,12 @@ WindowsBackdropKind WindowsBackdropKindFromName(const char* name);
 // 返回 >0 成功，<=0 为失败步骤编号（调试用）。
 int SetWindowBehindVisible(HWND hwnd, bool on);
 
+// 零闪烁抓帧路径：把窗口从屏幕捕获里排除（WDA_EXCLUDEFROMCAPTURE），屏幕上
+// 完全可见、BitBlt 抓到的是它背后的桌面。Win10 2004 起支持，失败时（老系统）
+// 返回 <=0，调用方应退回 SetWindowBehindVisible 的隐身路径。
+// 返回 >0 成功，<=0 为失败步骤编号（调试用）。
+int SetWindowCaptureExcluded(HWND hwnd, bool exclude);
+
 // 抓取屏幕物理像素矩形 [x,y,w,h] 的 1/downscale 缩略帧，输出 RGBA 字节。
 // 失败或矩形无效时返回空 vector。
 std::vector<uint8_t> CaptureScreenRect(int x, int y, int w, int h,

@@ -1,11 +1,14 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/fake_cover.dart';
 import 'package:slime_works/pages/settings/components/asr_subtitle_section.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -57,6 +60,17 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
     ).showSnackBar(const SnackBar(content: Text('缓存已清除'), duration: Duration(seconds: 2)));
   }
 
+  /// 选一张本地图片当作伪封面
+  Future<void> _pickFakeCoverImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    final path = result?.files.single.path;
+    if (path == null) return;
+    await _prefs.setFakeCoverPath(path);
+  }
+
   Future<void> _openCachePath() async {
     final dir = Directory(_cachePath);
     if (!dir.existsSync()) {
@@ -105,6 +119,8 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
           child: Obx(() {
             final on = _prefs.privacyMode.value;
             final sigma = _prefs.privacyBlurSigma.value;
+            final fake = _prefs.fakeCover.value;
+            final fakePath = _prefs.fakeCoverPath.value;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -129,7 +145,8 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                     Switch(value: on, onChanged: (v) => _prefs.setPrivacyMode(v)),
                   ],
                 ),
-                if (on) ...[
+                // 伪封面开着的时候糊不糊都看不见，强度滑块就别占位了
+                if (on && !fake) ...[
                   SizedBox(height: AppTheme.metrics.kSpace12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -177,6 +194,68 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                       ),
                       Text('强', style: theme.textTheme.labelSmall),
                     ],
+                  ),
+                ],
+                SizedBox(height: AppTheme.metrics.kSpace12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('伪封面', style: theme.textTheme.titleSmall),
+                          SizedBox(height: AppTheme.metrics.kSpace4),
+                          Text(
+                            '开启后用一张无害图片整张顶替真实封面：不模糊、不加锁角标，'
+                            '旁人看不出这里藏着内容。开启时优先于隐私模式的高斯模糊。',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withAlpha(150),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(value: fake, onChanged: (v) => _prefs.setFakeCover(v)),
+                  ],
+                ),
+                if (fake) ...[
+                  SizedBox(height: AppTheme.metrics.kSpace8),
+                  Row(
+                    children: [
+                      // 小样直接复用真机上的同一个组件，这里看到的就是卡片上的效果
+                      ClipRRect(
+                        borderRadius: AppTheme.metrics.radius4,
+                        child: SizedBox(
+                          width: scaleW(96),
+                          height: scaleW(64),
+                          child: const FakeCover(),
+                        ),
+                      ),
+                      SizedBox(width: AppTheme.metrics.kSpace12),
+                      Expanded(
+                        child: Text(
+                          fakePath.isEmpty ? '未选择图片' : fakePath,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withAlpha(150),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: AppTheme.metrics.kSpace8),
+                      OutlinedButton(
+                        onPressed: _pickFakeCoverImage,
+                        child: const Text('更换图片'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppTheme.metrics.kSpace4),
+                  Text(
+                    '图片文件读不到时封面退成纯色底，不会回落到真实封面。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(150),
+                    ),
                   ),
                 ],
               ],
