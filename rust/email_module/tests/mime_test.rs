@@ -137,7 +137,16 @@ Content-Type: text/html; charset=utf-8\r\n\
     assert_eq!(msg.from_name, "招商银行信用卡每日账单");
     assert_eq!(msg.message_id, "<abc@cmb>");
     assert_eq!(msg.subject, "招商银行信用卡每日账单");
-    assert_eq!(msg.date, "2026-08-29 08:15:34");
+    // 本机时区不固定（CI 是 UTC），只比"同一时刻"：把归一化后的墙上时间按本地时区还原再对
+    let naive = chrono::NaiveDateTime::parse_from_str(&msg.date, "%Y-%m-%d %H:%M:%S")
+        .unwrap_or_else(|_| panic!("date 没有归一化成 YYYY-MM-DD HH:MM:SS，实际 [{}]", msg.date));
+    let got = Local.from_local_datetime(&naive).single().unwrap();
+    assert_eq!(
+        got,
+        chrono::DateTime::parse_from_rfc2822("Sat, 29 Aug 2026 08:15:34 +0800")
+            .unwrap()
+            .with_timezone(&Local)
+    );
     assert!(msg.body_html.contains("17.10"));
     assert_eq!(msg.size_bytes, raw.len() as u64);
     assert_eq!(msg.body_text, "");

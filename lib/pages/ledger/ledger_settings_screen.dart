@@ -155,26 +155,64 @@ class _SchedulerCard extends StatelessWidget {
             Text('最近一轮：${status.lastSummary}', style: AppTextStyles.caption(context)),
           ],
           SizedBox(height: m.kSpace8),
-          SwitchListTile(
+          _SwitchRow(
             value: status.enabled,
             onChanged: vm.setSchedulerEnabled,
-            contentPadding: EdgeInsets.zero,
-            title: Text('在本机定时收信', style: AppTextStyles.rowTitle(context)),
-            subtitle: Text(
-              '关掉后规则仍然生效，只是不会自己跑',
-              style: AppTextStyles.caption(context),
-            ),
+            title: '在本机定时收信',
+            subtitle: '关掉后规则仍然生效，只是不会自己跑',
           ),
-          SwitchListTile(
+          _SwitchRow(
             value: vm.autoOpenScheduler.value,
             onChanged: vm.setAutoOpenScheduler,
-            contentPadding: EdgeInsets.zero,
-            title: Text('启动应用时自动打开', style: AppTextStyles.rowTitle(context)),
-            subtitle: Text(
-              '打开后每次启动都会按规则去收一次信',
-              style: AppTextStyles.caption(context),
+            title: '启动应用时自动打开',
+            subtitle: '打开后每次启动都会按规则去收一次信',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 卡片里的开关行
+///
+/// 不用 SwitchListTile：它把墨水画在最近的 Material 祖先上，而 AppCard 是用
+/// DecoratedBox 上色的，Flutter 3.47 起这条会被断言拦下。
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: m.kSpace4),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: AppTextStyles.rowTitle(context)),
+                Text(
+                  subtitle,
+                  style: AppTextStyles.caption(context).copyWith(
+                    color: AppSemantic.of(context).textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
+          SizedBox(width: m.kSpace8),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );

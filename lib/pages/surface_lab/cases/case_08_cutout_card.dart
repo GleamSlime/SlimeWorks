@@ -241,7 +241,7 @@ class _Media extends StatelessWidget {
               ),
             ),
             // 标签：白底 + 它那两块垫角，整组贴着图的左下角
-            const Positioned(left: 0, bottom: -1, child: _InsetLabel()),
+            const Positioned(left: 0, bottom: 0, child: _InsetLabel()),
             // 深色标签：同一块弧的另一头，整组贴着图的右上角
             const Positioned(right: 0, top: 0, child: _Tag()),
           ],

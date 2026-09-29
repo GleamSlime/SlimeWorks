@@ -878,10 +878,10 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                   duration: AppMotion.base,
                                   curve: AppMotion.standard,
                                   padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
-                                  // decoration: BoxDecoration(
-                                  //   color: isSelected ? s.accentContainer : Colors.transparent,
-                                  //   borderRadius: AppTheme.metrics.radius8,
-                                  // ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? s.accentContainer : Colors.transparent,
+                                    borderRadius: AppTheme.metrics.radius8,
+                                  ),
                                   child: DrawIcon(
                                     item.route.sidebarIcon!,
                                     size: AppTheme.metrics.fontSize18,
@@ -897,10 +897,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                       curve: AppMotion.standard,
                                       // 内边距只到 kSpace4：这一格横向只余 32 设计像素，
                                       // 图标 22 再加两侧各 6 就已经撑破
-                                      padding: EdgeInsets.only(
-                                        left: AppTheme.metrics.kSpace6,
-                                        right: AppTheme.metrics.kSpace4,
-                                      ),
+                                      padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                                       decoration: BoxDecoration(
                                         color: isSelected && isExpanded
                                             ? s.accentContainer
