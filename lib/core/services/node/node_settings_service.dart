@@ -602,13 +602,18 @@ class NodeSettingsService extends GetxService {
   /// 同节点的并发请求共用这一次复探，避免一屏封面刷出十几个 ping。
   Future<void> _ensureNodeReachable(NodeEndpoint node) async {
     if (!_circuitBreakedNodes.contains(node.id)) return;
-    final trace = TimingTrace('熔断节点业务请求前复探', scope: node.name);
+    // 复探已经单飞，打点不能再单飞：跟着等的请求各自 end 一次，
+    // 同一条判定会在同一毫秒刷出 N 行（N = 本屏并发请求数）。
+    final isOwner = _nodeBreakChecks[node.id] == null;
+    final trace = isOwner
+        ? TimingTrace('熔断节点业务请求前复探', scope: node.name)
+        : null;
     final alive = await (_nodeBreakChecks[node.id] ??= _reprobeNode(node).whenComplete(() {
       // 必须用块体：箭头写法会把 remove() 返回的那个 Future（正是本 Future）
       // 当成 whenComplete 的后续去等，自锁后永不完成。
       _nodeBreakChecks.remove(node.id);
     }));
-    trace.end(note: '结果=$alive');
+    trace?.end(note: '结果=$alive');
     if (alive == _ProbeResult.ok) {
       _circuitBreakedNodes.remove(node.id);
       nodeConnectivity[node.id] = true;

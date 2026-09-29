@@ -45,7 +45,7 @@ lib/
 └── src/rust/                 # FRB 自动生成（勿改）
 
 rust/
-├── src/                      # 主库（api/ 转发 17 子模块 + node_server/）
+├── src/                      # 主库（api/ 转发各子模块 + node_server/）
 │   ├── api/                  # FRB 绑定入口
 │   └── node_server/          # HTTP 服务器（mod.rs/router.rs/handlers.rs/media_handler.rs）
 ├── db_module/                # redb KV 数据库（基础层，无依赖）
@@ -59,6 +59,8 @@ rust/
 ├── http_bridge/              # HTTP 桥接（移动端中转，无内部依赖）
 ├── ws_module/                # WebSocket（条件编译，无内部依赖）
 ├── module_manager/           # 模块管理/动态加载（无内部依赖）
+├── email_module/             # 邮件协议层 IMAP/POP3/SMTP+MIME，TLS 强制（无内部依赖）
+├── ledger_module/            # 流水账（自建 SQLite + 账单模板解析 + 收信调度）→ 依赖 email_module
 └── capture_proxy/            # 抓包代理（cdylib 动态库，仅桌面端）
 ```
 
@@ -68,11 +70,13 @@ rust/
 
 ```
 基础层（无内部依赖）: db_module, http_bridge, lan_transfer, ws_module,
-                      manga_module, sentry_log, game_library, module_manager, capture_proxy
+                      manga_module, sentry_log, game_library, module_manager, capture_proxy,
+                      email_module
 
 业务层:  media_collection → db_module
          novel_reader → db_module + http_bridge
          extract_module → db_module
+         ledger_module → email_module
 
 聚合层:  rust_lib_slime_works → 所有子模块
 ```
@@ -97,6 +101,7 @@ rust/
 | `SystemTrayService` | 系统托盘（桌面端） | tray_manager |
 | `WindowPositionService` | 窗口位置持久化 | SharedPreferences |
 | `WebSocketManager` | WS 服务器(桌面)/客户端(移动) | Rust FFI |
+| `LedgerService` | 流水账 FFI 包装/邮箱口令安全存储/移动端节点中转 | Rust FFI / NodeSettingsService |
 
 ---
 
@@ -111,6 +116,7 @@ rust/
 | 传输 | LanTransferViewModel | 设备发现/传输管理 |
 | 抓包 | CaptureScreenViewModel | 代理控制/流量展示 |
 | 日志 | SentryLogViewModel | 日志查询/过滤 |
+| 流水账 | Home / Records / Stats / Pending / Settings / Accounts | 概览/明细/统计/待确认入账/邮箱规则/账户类别 |
 
 ---
 
@@ -124,6 +130,8 @@ rust/
 | `POST /manga/api` | Manga API 中转 |
 | `GET /manga/img` | Manga 图片中转 |
 | `POST /api/{id}/store\|envelope` | Sentry 兼容端点 |
+
+`POST /node/call` 的 `action` 用扁平命名（`list_media_collections` / `get_novel_content` / …）；流水账统一带 `ledger_` 前缀，分发前先 `ensure_ledger_ready` 让节点自己建库。`init/is_ready/version/set_rule_password/rule_detail` 五个不转发（本机专属）。详见 [docs/ledger.md](docs/ledger.md)。
 
 ---
 

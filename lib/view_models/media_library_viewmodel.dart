@@ -221,6 +221,11 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 缩略图生成失败的文件路径集合（不重试，继续显示原图）。
   final _itemThumbFailed = <String>{};
 
+  /// 音频封面提取返回空的集合 id（文件里确实没有内嵌封面）。
+  /// 页内多次刷新会反复入队同一集合，而重建 VM 又要重新付一次 FFI 往返；
+  /// 落盘的负缓存标记由 Rust 侧按文件身份维护，这里只做本页实例内的去重。
+  final _audioCoverEmptyCollections = <String>{};
+
   /// 正在执行中的封面任务 key（contains() 只覆盖等待中任务，运行中任务需单独去重）。
   final _inFlightCoverKeys = <String>{};
 
@@ -1297,6 +1302,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         return _collectionVideoThumbnails[collection.id];
       }
       if (!thumbGenerationPaused.value &&
+          !_audioCoverEmptyCollections.contains(collection.id) &&
           !_coverQueue.contains(collection.id) &&
           !_inFlightCoverKeys.contains(collection.id)) {
         _generateCollectionAudioCoverAsync(collection.id, coverPath);
@@ -1423,6 +1429,8 @@ class MediaLibraryViewModel extends BaseViewModel {
           try {
             final coverPath = await getAudioCoverSource(audioPath);
             if (coverPath == null || coverPath.isEmpty) {
+              // 文件没变就不可能从无封面变成有封面：记住，页内不再重投
+              _audioCoverEmptyCollections.add(collectionId);
               _logger.info('[AudioCover] 无嵌入封面: collectionId=$collectionId');
               return;
             }
@@ -2042,7 +2050,16 @@ class MediaLibraryViewModel extends BaseViewModel {
     } catch (e) {
       _logger.error('[媒体库] _prewarmCollectionCaches stats 失败: $e');
     }
-    // Phase 2: 批量检查本地集合的封面路径存在性，填充 _lostCollections
+    // Phase 2 是逐资源所在卷的 stat：外置卷闲置后首次 stat 实测要 4.0s（唤醒开销），
+    // 挂在首屏 await 链上等于让整个网格等磁盘醒来。`checkCollectionLost` 缓存未命中
+    // 时按「未丢失」出图、落地后再重建，所以这趟放后台跑，结果到达时再通知 UI。
+    unawaited(_prewarmCollectionCoverLoss(cols));
+  }
+
+  /// 批量检查本地集合的封面路径存在性，填充 _lostCollections（由预热后台调用）。
+  Future<void> _prewarmCollectionCoverLoss(
+    List<media_api.MediaCollection> cols,
+  ) async {
     try {
       final coverPaths = <String>[];
       final coverOwners = <String>[];
@@ -2058,13 +2075,14 @@ class MediaLibraryViewModel extends BaseViewModel {
         coverPaths.add(p);
         coverOwners.add(c.id);
       }
-      if (coverPaths.isNotEmpty) {
-        final exists = await media_api.checkPathsExist(paths: coverPaths);
-        for (int i = 0; i < coverOwners.length; i++) {
-          _lostCollections[coverOwners[i]] = !exists[i];
-          _checkTimestamps[coverOwners[i]] = now;
-        }
+      if (coverPaths.isEmpty) return;
+      final exists = await media_api.checkPathsExist(paths: coverPaths);
+      for (int i = 0; i < coverOwners.length; i++) {
+        _lostCollections[coverOwners[i]] = !exists[i];
+        _checkTimestamps[coverOwners[i]] = now;
       }
+      // 首屏已按「未丢失」出图，这里结论落地要让卡片重算一次
+      _notifyCoverChanged();
     } catch (e) {
       _logger.error('[媒体库] _prewarmCollectionCaches 封面存在性失败: $e');
     }

@@ -62,11 +62,13 @@ static THUMB_PERMITS: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
 /// 注册 ffmpeg 子进程并发上限。由 Flutter 端 mediaPrefs.concurrency 调用。
 pub fn register_ffmpeg_concurrency(limit: usize) {
     let effective = limit.max(1);
-    sw_info!(
-        "[thumb-permit] 并发上限更新: {} → {}",
-        max_concurrent_ffmpeg(),
-        effective
-    );
+    let previous = max_concurrent_ffmpeg();
+    if previous == effective {
+        // 每次进媒体页 Dart 都会重推一遍同一个值，照原样打点等于把同一条判定
+        // 反复刷屏；值确实变了才值得记一笔。
+        return;
+    }
+    sw_info!("[thumb-permit] 并发上限更新: {} → {}", previous, effective);
     if let Ok(mut guard) = FFMPEG_CONCURRENCY.write() {
         *guard = effective;
     }
@@ -255,6 +257,94 @@ fn is_valid_cache_hit(cache_path: &std::path::Path) -> bool {
     }
 }
 
+/// 音频「内嵌封面确实不存在」的负缓存。
+///
+/// 没有专辑封面的音频，每次显示都会重跑一趟 ffmpeg 抽取（实测 110ms/次，还占着
+/// 缩略图并发信号量）。文件内容没变就不可能从无封面变成有封面，所以按文件身份
+/// （大小 + mtime）记住这个结论：进程内记一份，资源旁再落一个 `.noart` 小标记，
+/// 让结论跨重启有效。身份变了（改过标签、换过文件）自然失配、重新抽取。
+static AUDIO_COVER_ABSENT: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+fn audio_cover_absent_map() -> &'static Mutex<HashMap<String, String>> {
+    AUDIO_COVER_ABSENT.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 文件身份：`大小|mtime 秒`。任一项变化即视为换过内容。
+fn file_identity(meta: &std::fs::Metadata) -> String {
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    format!("{}|{}", meta.len(), mtime)
+}
+
+/// 负缓存标记路径：与缩略图同目录，`<资源旁 .SlimeWorks/tmp>/<文件名>.noart`。
+/// 不带宽度后缀——「没有封面」是文件本身的属性，与各缩放宽度无关。
+fn audio_cover_absence_marker_path(src: &std::path::Path) -> Option<std::path::PathBuf> {
+    let parent = src.parent()?;
+    let file_name = src.file_name()?.to_string_lossy();
+    if file_name.is_empty() {
+        return None;
+    }
+    Some(
+        parent
+            .join(".SlimeWorks")
+            .join("tmp")
+            .join(format!("{}.noart", file_name)),
+    )
+}
+
+/// 只查进程内那份。节点取缩略图走这一层：节点的产物一律不落盘。
+fn audio_cover_absent_in_memory(src: &str, identity: &str) -> bool {
+    let map = audio_cover_absent_map()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    map.get(src).map(String::as_str) == Some(identity)
+}
+
+fn remember_audio_cover_absent(src: &str, identity: &str) {
+    let mut map = audio_cover_absent_map()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    map.insert(src.to_string(), identity.to_string());
+}
+
+/// 进程内没命中时读资源旁标记；命中则灌回内存，后续连 stat 都省掉。
+fn audio_cover_absent_on_disk(src: &std::path::Path, identity: &str) -> bool {
+    let Some(marker) = audio_cover_absence_marker_path(src) else {
+        return false;
+    };
+    let recorded = std::fs::read_to_string(marker).ok();
+    let hit = recorded.as_deref().map(str::trim) == Some(identity);
+    if hit {
+        remember_audio_cover_absent(&src.to_string_lossy(), identity);
+    }
+    hit
+}
+
+/// 记下「无封面」并落盘标记。写失败不影响正确性，最多下次再抽一遍。
+/// 目录与缩略图共用（`.SlimeWorks/tmp`），生成路径上通常已建好，这里补齐以防
+/// 单独调用（例如节点路径之外的预生成）时落空。
+fn record_audio_cover_absent(src: &str, identity: &str) {
+    remember_audio_cover_absent(src, identity);
+    let Some(marker) = audio_cover_absence_marker_path(std::path::Path::new(src)) else {
+        return;
+    };
+    let Some(dir) = marker.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    #[cfg(target_os = "windows")]
+    if let Some(sw_dir) = dir.parent() {
+        ensure_hidden_attr(sw_dir);
+    }
+    let _ = std::fs::write(&marker, identity);
+}
+
 /// 在集合目录树内搜索 `.SlimeWorks` 缓存目录（广度优先，限深限条目）。
 ///
 /// 缓存目录按 `<资源父目录>/.SlimeWorks/tmp/` 规则建立在媒体文件实际所在目录旁，
@@ -396,9 +486,30 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
         }
     }
 
-    // 记录原始文件大小（仅供生成阶段的耗时/压缩比日志使用）：
+    // 记录原始文件元数据（生成阶段的耗时日志 + 音频负缓存的文件身份都要用）：
     // 放在缓存命中判断之后，避免命中时也付一次 stat。
-    let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+    let src_meta = std::fs::metadata(&file_path).ok();
+    let orig_size = src_meta.as_ref().map(|m| m.len()).unwrap_or(0);
+
+    // 音频负缓存前置检查：已经确认「没有内嵌封面」的文件直接返回。
+    // 必须放在取信号量 / 标记任务 running 之前——命中也算任务结束，
+    // 那时守卫会写一条 failed，启动恢复反而把它当成待重试的活儿。
+    let audio_identity = if is_audio {
+        src_meta.as_ref().map(file_identity)
+    } else {
+        None
+    };
+    if let Some(audio_identity) = audio_identity.as_deref() {
+        if audio_cover_absent_in_memory(&file_path, audio_identity)
+            || audio_cover_absent_on_disk(src_path, audio_identity)
+        {
+            sw_debug!(
+                "[thumb] audio 无内嵌封面（负缓存命中，跳过抽取）| src={}",
+                file_path
+            );
+            return None;
+        }
+    }
 
     // ③b 确定写入目标：相邻缓存目录；创建失败（只读盘等）时无法生成缓存
     let cache_path: std::path::PathBuf = match adjacent_path.as_ref() {
@@ -441,7 +552,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     let mut task_guard = ThumbTaskGuard {
         file_path: file_path.clone(),
         width,
-        success: false,
+        settled: false,
     }; // drop 时自动调用 complete_thumbnail_task 持久化最终状态
 
     let t0 = std::time::Instant::now();
@@ -455,7 +566,7 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     // ⑤ for videos: extract a frame via ffmpeg (seek to 3s, fallback to 0s)
     if is_video {
         if try_ffmpeg_video_frame(&file_path, &cache_path, width, t0, orig_size) {
-            task_guard.success = true;
+            task_guard.settled = true;
             return Some(cache_path.to_string_lossy().into_owned());
         }
         sw_warn!("[thumb] video frame extraction failed | src={}", file_path);
@@ -464,15 +575,29 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
 
     // ④b for audio: extract embedded cover art via ffmpeg
     if is_audio {
-        if try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
-            task_guard.success = true;
-            return Some(cache_path.to_string_lossy().into_owned());
+        match try_ffmpeg_audio_cover(&file_path, &cache_path, width, t0, orig_size) {
+            AudioCoverOutcome::Found => {
+                task_guard.settled = true;
+                return Some(cache_path.to_string_lossy().into_owned());
+            }
+            AudioCoverOutcome::NoArt => {
+                if let Some(audio_identity) = audio_identity.as_deref() {
+                    record_audio_cover_absent(&file_path, audio_identity);
+                }
+                sw_debug!(
+                    "[thumb] audio has no embedded cover art | src={}",
+                    file_path
+                );
+                // 「没有封面」是终局结论，不是等着重试的失败：任务记录照旧销掉，
+                // 否则启动恢复会把它当 failed 反复入队。
+                task_guard.settled = true;
+                return None;
+            }
+            AudioCoverOutcome::Failed => {
+                sw_warn!("[thumb] audio cover extraction failed | src={}", file_path);
+                return None;
+            }
         }
-        sw_debug!(
-            "[thumb] audio has no embedded cover art | src={}",
-            file_path
-        );
-        return None;
     }
 
     // ⑦ 统一 ffmpeg 优先（含常规位图）：未打包的 debug 构建里 image crate 慢一个数量级
@@ -480,14 +605,14 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     //    profile 影响。代价是位图也占 ffmpeg 信号量、批量生成按并发上限串行，
     //    且 ffmpeg 缺失时仍会回退纯 Rust，不会丢功能。
     if try_ffmpeg_resize(&file_path, &cache_path, width, t0, orig_size) {
-        task_guard.success = true;
+        task_guard.settled = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
     // ⑧ fallback: ffmpeg 不可用/解码失败时释放信号量，回退纯 Rust `image` crate
     drop(_permit);
     if try_rust_image_resize(&file_path, &cache_path, width, t0, orig_size) {
-        task_guard.success = true;
+        task_guard.settled = true;
         return Some(cache_path.to_string_lossy().into_owned());
     }
 
@@ -500,17 +625,32 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     None
 }
 
+/// 音频抽封面的结局。三态是负缓存的前提：只有 `NoArt`（文件里确实没有图像流）
+/// 才值得记住；ffmpeg 缺失、解码出错都是环境问题，记住就把这个资源的封面永久封死了。
+enum AudioCoverOutcome {
+    Found,
+    NoArt,
+    Failed,
+}
+
+/// ffmpeg 报「没有可映射的图像流」的原文（实测 48kHz mp3：
+/// `Stream map '' matches no streams.`）。除此以外的失败不当成「无封面」。
+fn ffmpeg_reports_no_image_stream(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr);
+    text.contains("matches no streams") || text.contains("does not contain any stream")
+}
+
 fn try_ffmpeg_audio_cover(
     src: &str,
     dst: &std::path::Path,
     width: u32,
     t0: std::time::Instant,
     orig_size: u64,
-) -> bool {
+) -> AudioCoverOutcome {
     // Extract embedded album art from audio file using ffmpeg.
     // The artwork is stored as a video stream (stream 0:v:0) in most formats.
     sw_info!("[ffmpeg-start] audio-cover | src={}", src);
-    let ok = run_tracked_command(
+    let output = run_tracked_command_output(
         std::process::Command::new(ffmpeg_cmd())
             .args([
                 "-nostdin",
@@ -529,11 +669,16 @@ fn try_ffmpeg_audio_cover(
             ])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null()),
-    )
-    .map(|s| s.success())
-    .unwrap_or(false);
-    let success = ok && dst.exists() && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
+            // stderr 要留下来判断到底是「没封面」还是「抽失败」
+            .stderr(std::process::Stdio::piped()),
+    );
+    let Ok(output) = output else {
+        sw_debug!("[thumb] audio-cover 无法启动 ffmpeg | src={}", src);
+        return AudioCoverOutcome::Failed;
+    };
+    let success = output.status.success()
+        && dst.exists()
+        && dst.metadata().map(|m| m.len() > 0).unwrap_or(false);
     if success {
         let thumb_size = dst.metadata().map(|m| m.len()).unwrap_or(0);
         sw_debug!(
@@ -543,17 +688,21 @@ fn try_ffmpeg_audio_cover(
             width,
             t0.elapsed()
         );
+        return AudioCoverOutcome::Found;
+    }
+    if dst.exists() {
+        let _ = std::fs::remove_file(dst);
+    }
+    if ffmpeg_reports_no_image_stream(&output.stderr) {
+        AudioCoverOutcome::NoArt
     } else {
-        if dst.exists() {
-            let _ = std::fs::remove_file(dst);
-        }
         sw_debug!(
-            "[thumb] audio-cover failed (no embedded art?) | src={} | elapsed={:?}",
+            "[thumb] audio-cover failed | src={} | elapsed={:?}",
             src,
             t0.elapsed()
         );
+        AudioCoverOutcome::Failed
     }
-    success
 }
 
 fn try_ffmpeg_video_frame(
@@ -915,12 +1064,30 @@ fn generate_via_ffmpeg_temp(
         seq,
         width
     ));
+    // 无封面的音频每来一次请求就重抽一趟 ffmpeg：先查进程内负缓存。
+    // 节点侧一律不落磁盘产物，所以这份结论只在本进程有效（重启后重抽一次即可恢复）。
+    let audio_identity = if is_audio {
+        std::fs::metadata(src).ok().map(|m| file_identity(&m))
+    } else {
+        None
+    };
+    if let Some(audio_identity) = audio_identity.as_deref() {
+        if audio_cover_absent_in_memory(src, audio_identity) {
+            return None;
+        }
+    }
     acquire_thumb_permit();
     let _permit = ThumbPermit;
     let ok = if is_video {
         try_ffmpeg_video_frame(src, &dst, width, t0, orig_size)
     } else if is_audio {
-        try_ffmpeg_audio_cover(src, &dst, width, t0, orig_size)
+        let outcome = try_ffmpeg_audio_cover(src, &dst, width, t0, orig_size);
+        if matches!(outcome, AudioCoverOutcome::NoArt) {
+            if let Some(audio_identity) = audio_identity.as_deref() {
+                remember_audio_cover_absent(src, audio_identity);
+            }
+        }
+        matches!(outcome, AudioCoverOutcome::Found)
     } else {
         try_ffmpeg_resize(src, &dst, width, t0, orig_size)
     };
@@ -1109,12 +1276,12 @@ fn mark_thumbnail_task_running(file_path: &str, width: u32) {
     }
 }
 
-/// 标记缩略图任务完成（成功或失败）。
-/// - 成功：删除任务记录（磁盘缓存即真相，无需保留任务状态）
+/// 标记缩略图任务结束（结论已定或失败）。
+/// - 结论已定：删除任务记录（磁盘缓存/负缓存标记即真相，无需保留任务状态）
 /// - 失败：更新为 failed 状态保留记录以便重启时重投重试
-fn complete_thumbnail_task(file_path: &str, width: u32, success: bool) {
+fn complete_thumbnail_task(file_path: &str, width: u32, settled: bool) {
     let key = thumb_task_key(file_path, width);
-    if success {
+    if settled {
         forget_thumb_retry_count(&key);
         let _ = db_module::db_delete(thumbnail_task_table_name(), key);
         return;
@@ -1195,6 +1362,12 @@ fn delete_thumbnail_tasks_for_file_paths(file_paths: &[String]) {
             map.remove(key);
         }
     }
+    // 音频「无封面」的进程内负缓存同理：文件都没了，结论也就没必要留着
+    if let Ok(mut map) = audio_cover_absent_map().lock() {
+        for target in targets.iter() {
+            map.remove(*target);
+        }
+    }
     if let Err(error) = db_module::db_batch_write(thumbnail_task_table_name(), Vec::new(), keys) {
         sw_debug!("[thumb-task] 批量清理任务记录失败: {}", error);
         return;
@@ -1207,16 +1380,18 @@ fn delete_thumbnail_tasks_for_file_paths(file_paths: &[String]) {
 }
 
 /// RAII 守卫：drop 时自动调用 complete_thumbnail_task 标记任务完成状态。
-/// 配合 `success` 字段，调用方在 return 前设置 success=true 即可让 drop 自动持久化。
+/// 配合 `settled` 字段，调用方在 return 前设置 settled=true 即可让 drop 自动销掉记录。
 struct ThumbTaskGuard {
     file_path: String,
     width: u32,
-    success: bool,
+    /// true = 结论已定（出了图，或确认资源根本没有封面），删除任务记录；
+    /// false = 失败，保留 failed 供重启重试。
+    settled: bool,
 }
 
 impl Drop for ThumbTaskGuard {
     fn drop(&mut self) {
-        complete_thumbnail_task(&self.file_path, self.width, self.success);
+        complete_thumbnail_task(&self.file_path, self.width, self.settled);
     }
 }
 
@@ -4233,6 +4408,107 @@ mod tests {
         assert!(!zero.exists(), "零字节缓存残留应被删除");
         // 目录不是有效命中
         assert!(!is_valid_cache_hit(&root));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 音频「无内嵌封面」负缓存 ───────────────────────────────────────────
+
+    #[test]
+    fn ffmpeg_no_image_stream_signature_reads_real_output() {
+        // 本机 ffmpeg 对无封面 mp3 的原文
+        assert!(ffmpeg_reports_no_image_stream(
+            b"Stream map '' matches no streams.\r\nTo ignore this, add a trailing '?' to the map.\r\n"
+        ));
+        assert!(ffmpeg_reports_no_image_stream(
+            b"Output file #0 does not contain any stream"
+        ));
+        // 真故障绝不能当成「没封面」：一次环境问题会把这资源的封面永久封死
+        assert!(!ffmpeg_reports_no_image_stream(
+            b"Invalid data found when processing input"
+        ));
+        assert!(!ffmpeg_reports_no_image_stream(b""));
+    }
+
+    #[test]
+    fn audio_cover_absence_marker_tracks_file_identity() {
+        let root = fake_media_root("audio_noart");
+        let song = root.join("song.mp3");
+        std::fs::write(&song, b"not-really-audio").unwrap();
+        let src = song.to_string_lossy().into_owned();
+        let identity = file_identity(&std::fs::metadata(&song).unwrap());
+
+        // 没记过：两层都不认
+        assert!(!audio_cover_absent_in_memory(&src, &identity));
+        assert!(!audio_cover_absent_on_disk(&song, &identity));
+
+        record_audio_cover_absent(&src, &identity);
+        assert!(audio_cover_absent_in_memory(&src, &identity));
+        // 标记与缩略图同目录，内容就是文件身份
+        let marker = audio_cover_absence_marker_path(&song).unwrap();
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), identity);
+
+        // 内容变了（这里改大小）→ 身份失配，负缓存必须让路、重新抽一次
+        std::fs::write(&song, b"not-really-audio-but-id3-with-art").unwrap();
+        let fresh = file_identity(&std::fs::metadata(&song).unwrap());
+        assert!(!audio_cover_absent_in_memory(&src, &fresh));
+        assert!(!audio_cover_absent_on_disk(&song, &fresh));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn audio_cover_negative_cache_stops_repeated_ffmpeg_extraction() {
+        use std::os::unix::fs::PermissionsExt;
+        // 要改全局 ffmpeg 路径，必须与其它用例串行
+        let _serial = lock_db_test_serial();
+        let original = ffmpeg_cmd();
+        let root = fake_media_root("audio_noart_e2e");
+        let song = root.join("song.mp3");
+        std::fs::write(&song, b"pretend-mp3-no-art").unwrap();
+        // 假 ffmpeg：每被起一次就往 sentinel 记一笔，然后照抄真 ffmpeg 的「无图像流」原文失败
+        let sentinel = root.join("ffmpeg_calls");
+        let stub = root.join("fake_ffmpeg.sh");
+        std::fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\necho call >> '{}'\necho \"Stream map '' matches no streams.\" >&2\nexit 1\n",
+                sentinel.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        register_ffmpeg_path(stub.to_string_lossy().into_owned());
+
+        let call_count = || -> usize {
+            std::fs::read_to_string(&sentinel)
+                .map(|s| s.lines().count())
+                .unwrap_or(0)
+        };
+        let src = song.to_string_lossy().into_owned();
+
+        // 第一次：真的起进程抽封面，抽完确认「没有」
+        assert!(ensure_cover_thumbnail(src.clone(), 300).is_none());
+        assert_eq!(call_count(), 1, "首次应当真抽一次");
+        let marker = audio_cover_absence_marker_path(&song).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&marker).unwrap(),
+            file_identity(&std::fs::metadata(&song).unwrap()),
+            "标记内容就是文件身份"
+        );
+
+        // 之后再显示多少次都不该再起进程
+        assert!(ensure_cover_thumbnail(src.clone(), 300).is_none());
+        assert_eq!(call_count(), 1, "负缓存没生效，又起了一次 ffmpeg");
+        // 「没有封面」与宽度无关，换宽度同样短路
+        assert!(ensure_cover_thumbnail(src.clone(), 640).is_none());
+        assert_eq!(call_count(), 1);
+
+        // 文件内容变了 → 身份失配 → 允许重抽一次（这是唯一该付的重复劳动）
+        std::fs::write(&song, b"pretend-mp3-now-it-has-id3-art-worked").unwrap();
+        assert!(ensure_cover_thumbnail(src, 300).is_none());
+        assert_eq!(call_count(), 2, "文件变了应当重新抽一次");
+
+        register_ffmpeg_path(original);
         let _ = std::fs::remove_dir_all(&root);
     }
 

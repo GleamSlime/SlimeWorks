@@ -14,7 +14,7 @@
 | GetIt | 业务服务（Service/Repository）的依赖注入 |
 | GoRouter + TypedGoRoute | 路由跳转 |
 | SharedPreferences | 用户偏好持久化 |
-| SQLite（Rust 侧） | 媒体库、书库数据存储 |
+| SQLite（Rust 侧） | 媒体库、书库、游戏库、流水账数据存储 |
 
 ---
 
@@ -30,6 +30,7 @@
 | 设置 | [docs/settings.md](settings.md) | `lib/pages/settings/` · `lib/core/services/node/` |
 | Manga 漫画 | [docs/manga.md](manga.md) | `lib/pages/manga/` · `rust/manga_module/` |
 | 音乐播放器 | [docs/music_player.md](music_player.md) | `lib/pages/music_player/` · `rust/music_player/` |
+| 流水账 | [docs/ledger.md](ledger.md) | `lib/pages/ledger/` · `lib/core/services/ledger_service.dart` · `rust/ledger_module/` · `rust/email_module/` |
 | 节点服务安全（**仅方案文档，未实施**） | [docs/node_server_security.md](node_server_security.md) | `rust/src/node_server/` · `lib/core/services/node/` |
 
 ---
@@ -60,6 +61,7 @@
 | `lib/core/services/lan_transfer_service.dart` | 互传 Dart Service，含端口重试逻辑 |
 | `lib/core/services/media_prefs_service.dart` | 媒体质量偏好设置 |
 | `lib/core/services/game_library_service.dart` | 游戏库聚合服务（游戏、分类、统计、备份） |
+| `lib/core/services/ledger_service.dart` | 流水账：FFI JSON 包装 + 邮箱口令（`flutter_secure_storage`）+ 移动端节点中转 |
 
 ### Rust 层
 
@@ -72,6 +74,8 @@
 | `rust/novel_reader/` | 书库（TXT/EPUB 解析、搜索、进度管理） |
 | `rust/game_library/` | 游戏库核心（SQLite、分类、游玩会话、统计） |
 | `rust/music_player/` | 音乐播放器（播放列表、扫描、CUE 解析、封面提取、均衡器） |
+| `rust/ledger_module/` | 流水账（`storage.rs` SQLite、`parser.rs` 账单模板、`scheduler.rs` 收信调度、`api.rs` FFI 面） |
+| `rust/email_module/` | 邮件协议层（`imap.rs`/`pop3.rs`/`smtp.rs`、`mime.rs` 解码、`types.rs` TLS 准入策略） |
 | `rust/src/frb_generated.rs` | FRB 自动生成，**勿直接修改** |
 | `lib/src/rust/` | Dart FFI 自动生成，**勿直接修改** |
 

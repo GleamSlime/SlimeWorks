@@ -32,6 +32,7 @@
   - [7.6 解压工具（Extract）](#76-解压工具extract)
   - [7.7 Sentry 日志收集](#77-sentry-日志收集)
   - [7.8 抓包代理（Capture Proxy）](#78-抓包代理capture-proxy)
+  - [7.9 流水账（Ledger）](#79-流水账ledger)
 - [8. 服务层详解](#8-服务层详解)
 - [9. ViewModel 层详解](#9-viewmodel-层详解)
 - [10. 通用组件库](#10-通用组件库)
@@ -198,6 +199,7 @@ slime_works/
 │   │   │       ├── demo_routes.dart
 │   │   │       ├── game_library_routes.dart
 │   │   │       ├── lan_transfer_routes.dart
+│   │   │       ├── ledger_routes.dart
 │   │   │       ├── novel_routes.dart
 │   │   │       ├── manga_routes.dart
 │   │   │       ├── placeholder_routes.dart
@@ -210,6 +212,7 @@ slime_works/
 │   │   │   ├── game_library_metadata_api.dart # 元数据搜索(Steam/VNDB/Bangumi)
 │   │   │   ├── game_process_tracker.dart  # 游戏进程追踪
 │   │   │   ├── lan_transfer_service.dart  # 局域网传输服务
+│   │   │   ├── ledger_service.dart        # 流水账（FFI 包装 + 邮箱口令 + 节点中转）
 │   │   │   ├── media_prefs_service.dart   # 媒体偏好设置
 │   │   │   ├── manga_service.dart        # Manga 业务服务
 │   │   │   ├── manga_download_service.dart # Manga 下载管理
@@ -271,6 +274,7 @@ slime_works/
 │   │   ├── demo/                 # 演示页面
 │   │   ├── game_library/         # 游戏库
 │   │   ├── lan_transfer/         # 局域网传输
+│   │   ├── ledger/               # 流水账（6 页 + components + models）
 │   │   ├── novel_library/        # 小说库
 │   │   ├── novel_reader/         # 小说阅读器
 │   │   ├── manga/               # Manga 漫画
@@ -295,6 +299,7 @@ slime_works/
 │   │       ├── game_library.dart
 │   │       ├── http_bridge.dart
 │   │       ├── lan_transfer.dart
+│   │       ├── ledger.dart
 │   │       ├── logger.dart
 │   │       ├── media_collection.dart
 │   │       ├── module_downloader.dart
@@ -315,10 +320,12 @@ slime_works/
 │   ├── build.rs                  # 构建脚本
 │   ├── capture_proxy/            # 抓包代理（cdylib 动态库）
 │   ├── db_module/                # 通用数据库模块 (redb)
+│   ├── email_module/             # 邮件协议层（IMAP/POP3/SMTP + MIME，TLS 强制）
 │   ├── extract_module/           # 解压工具模块
 │   ├── game_library/             # 游戏库模块 (rusqlite)
 │   ├── http_bridge/              # HTTP 桥接模块
 │   ├── lan_transfer/             # 局域网传输模块
+│   ├── ledger_module/            # 流水账模块 (rusqlite + 账单模板解析 + 调度)
 │   ├── media_collection/         # 媒体集合模块
 │   ├── module_manager/           # 模块管理系统
 │   ├── novel_reader/             # 小说阅读器模块
@@ -947,6 +954,38 @@ dart_output: lib/src/rust
 - `server.rs` — 代理服务器
 - `system_proxy.rs` — 系统代理设置
 
+#### email_module — 邮件协议层
+
+| 项目 | 说明 |
+| ------ | ------ |
+| 类型 | 静态链接（crate-type: staticlib + rlib） |
+| 功能 | IMAP / POP3 收信、SMTP 连接自检、MIME multipart 解码、TLS 准入策略 |
+| 依赖 | 内部仅 slime_logger；协议栈是**手写**的（`net.rs` 直接架在 native-tls 上），不引 imap/lettre/mailparse 这类客户端 crate，只借 encoding_rs + chardetng 解字符集 |
+| 占位 | `eas.rs`（Exchange）、`carddav.rs` 只返回可操作的"尚未实现"文案 |
+
+**安全口径**：`types.rs` 的 `is_tls_required_by_policy()` 规定非 loopback 主机必须 TLS，`accept_invalid_certs` 只能由用户显式勾选；`dispatch.rs` 拒绝用 SMTP 收信；口令只作为调用参数存在，不入库、不入日志。
+
+源文件结构：`api.rs`（`email_fetch_json` / `email_probe_json` / `email_list_folders_json` / `email_summarize_json`）、`dispatch.rs`（按协议分发）、`imap.rs` / `pop3.rs` / `smtp.rs`、`mime.rs`、`net.rs`、`types.rs`。
+
+#### ledger_module — 流水账
+
+| 项目 | 说明 |
+| ------ | ------ |
+| 类型 | 静态链接 |
+| 功能 | 账户/类别/流水 CRUD、区间统计、账单邮件模板解析、收信规则与后台调度 |
+| 依赖 | email_module（收信）+ slime_logger；存储用自带 `rusqlite(bundled)`，与 db_module 无关 |
+| 数据库 | `ledger/ledger.db`（WAL）：accounts / categories / transactions / email_rules / email_rule_secrets / emails / fetch_logs / merchant_memory |
+
+关键机制：
+
+- **去重三层**：`transactions` 上 `UNIQUE (rule_id, email_uid, dedup_key) WHERE source='email'` 保证邮件重投幂等；抓取前按 `known_email_uids` 跳过整封已知邮件；手动录入用 `find_soft_duplicate`（同日+同账户+同商户+金额差<0.005）只做提示
+- **状态机**：`pending`（待确认，不进任何统计）→ `posted` / `ignored`；所有 `stats_*` 硬带 `status='posted'`
+- **模板**：`cmb_daily_bill`（招行每日账单，按 `fixBand4` 切明细区）、`generic_keyword`、`custom_regex`，规则默认 `auto` 靠邮件指纹选模板
+- **调度**：`scheduler.rs` 自带线程每 60 秒（分片 1 秒睡眠）跑 `run_due_rules()`，口令常驻内存 `SECRETS`，故后台自动收信仅本机模式可用
+- **习惯记忆**：`merchant_memory` 表记住"商户 → 类别"，确认一次后同类商户自动归类
+
+源文件结构：`api.rs`（约 50 个 `ledger_*` FFI 面）、`storage.rs`（建库/播种/CRUD/统计）、`parser.rs` + `parser_types.rs`（模板引擎）、`parse_glue.rs`（邮件→流水的粘合）、`scheduler.rs`、`types.rs`。
+
 ### 6.3 Node Server
 
 **文件**: `rust/src/node_server/`
@@ -1246,6 +1285,42 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 
 ---
 
+### 7.9 流水账（Ledger）
+
+**Flutter 页面**: `pages/ledger/`（home / records / stats / pending / settings / accounts）
+**服务**: `core/services/ledger_service.dart` · **Rust**: `rust/ledger_module/` + `rust/email_module/`
+**详细文档**: [docs/ledger.md](docs/ledger.md)
+
+**数据流**:
+
+```text
+手动记账  → LedgerViewModel ─┐
+                            ├─→ LedgerService（本地 FFI / 远程节点 /node/call）
+账单邮件  → scheduler(60s) ──┘        │
+   └→ email_module 收信 → 模板解析 → transactions(status=pending)
+                                     └→ 待确认队列 → posted（进统计）/ ignored
+```
+
+**关键功能**:
+
+- 账户（信用卡/储蓄卡/现金/存款/其他）+ 22 个内置类别，图标走 `DrawIcon(StrokeIcons.*)`
+- 邮件规则：发件人与标题匹配（可正则）、三种解析模板、间隔轮询或每日时点、`auto_apply` 可跳过待确认直接入账
+- 待确认队列带邮件溯源（发件人/标题/收取时间/笔数/可用额度/积分/告警）
+- 统计：日趋势、月度趋势、类别环图、商户 TopN，全部自绘 `CustomPainter`
+- 移动端：数据面 `ledger_*` 动作在节点侧同名转发（`init/is_ready/version/set_rule_password/rule_detail` 五个本机专属，不转发），节点自己建库；口令只随单次请求过网、不落盘
+
+**页面组件**:
+
+| 组件 | 说明 |
+| ------ | ------ |
+| `LedgerTabs` | 六页之间的胶囊 tab（窄屏收图标）|
+| `LedgerMonthStrip` | 月份导航，钉在空态组件外面 |
+| `LedgerBarChart` / 环图 | 自绘图表（像素↔弧度需按半径折算）|
+| `LedgerStateView` | 加载/错误/空态统一壳 |
+| `LedgerTxEditor` / `LedgerRuleEditor` / `LedgerManageEditor` | 记账 / 规则 / 账户类别编辑 |
+
+---
+
 ## 8. 服务层详解
 
 | 服务类 | 注册方式 | 职责 |
@@ -1262,6 +1337,7 @@ HTTP 流量 → capture_proxy (MITM) → CapturedItem
 | `GameLibraryService` | GetIt | 游戏库数据管理（依赖 MetadataApi） |
 | `GameProcessTracker` | GetIt | 游戏进程追踪（依赖 GameLibraryService） |
 | `ExtractService` | GetIt | 压缩包解压管理 |
+| `LedgerService` | GetIt | 流水账：FFI JSON 包装、邮箱口令存 `flutter_secure_storage`、移动端中转节点、按需拉起后台调度 |
 | `SentrySettingsService` | GetIt | Sentry 日志设置与远程 API |
 | `SystemTrayService` | GetX (Get.putAsync) | 系统托盘管理（桌面端） |
 | `WindowPositionService` | GetX | 窗口位置持久化 |
@@ -1278,6 +1354,8 @@ NodeSettingsService ──→ Rust FFI (node_server)
 MangaDownloadService ──→ MangaService ──→ Rust FFI (manga_module)
 ExtractService ──→ Rust FFI (extract_module)
 LanTransferService ──→ Rust FFI (lan_transfer)
+LedgerService ──→ Rust FFI (ledger_module) 或 NodeSettingsService（远程节点 /node/call）
+LedgerService ──→ FlutterSecureStorage（邮箱口令，绝不落 SharedPreferences）
 
 ```text
 
@@ -1346,6 +1424,12 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | `LanTransferViewModel` | 局域网传输 | 设备发现、传输管理 |
 | `CaptureScreenViewModel` | 抓包录屏 | 代理控制、流量展示 |
 | `SentryLogViewModel` | Sentry 日志 | 日志查询、过滤、统计 |
+| `LedgerViewModel` | 流水账首页 | 月度概览、日趋势、最近流水 |
+| `LedgerRecordsViewModel` | 流水明细 | 筛选、分页、增删改、重复提示 |
+| `LedgerStatsViewModel` | 记账统计 | 类别/商户/月度聚合展示 |
+| `LedgerPendingViewModel` | 待确认账单 | 邮件溯源、逐笔确认、整封忽略 |
+| `LedgerSettingsViewModel` | 账单邮箱 | 规则 CRUD、模板预览、连接自检、抓取日志、调度开关 |
+| `LedgerAccountsViewModel` | 账户与类别 | 账户/类别维护、商户记忆 |
 | `DemoScreenViewModel` | 演示 | 演示功能 |
 
 ---
@@ -1439,8 +1523,8 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 
 | 层级 | 模块 | 说明 |
 | ------ | ------ | ------ |
-| 基础层 | db_module, http_bridge, lan_transfer, module_manager, ws_module, manga_module, sentry_log, game_library, capture_proxy | 无内部依赖 |
-| 业务层 | media_collection → db_module; novel_reader → db_module + http_bridge; extract_module → db_module | 依赖基础层 |
+| 基础层 | db_module, http_bridge, lan_transfer, module_manager, ws_module, manga_module, sentry_log, game_library, capture_proxy, email_module | 无内部依赖 |
+| 业务层 | media_collection → db_module; novel_reader → db_module + http_bridge; extract_module → db_module; ledger_module → email_module | 依赖基础层 |
 | 聚合层 | rust_lib_slime_works | 依赖所有子模块 |
 
 **各模块关键外部依赖**:
@@ -1459,6 +1543,8 @@ LanTransferService ──→ Rust FFI (lan_transfer)
 | ws_module | (条件编译) |
 | module_manager | libloading |
 | capture_proxy | (独立 cdylib) |
+| email_module | native-tls, encoding_rs, chardetng, base64, regex |
+| ledger_module | email_module, rusqlite (bundled), regex, chrono |
 
 ### Flutter 层依赖
 
@@ -1533,6 +1619,7 @@ flutter build apk
 
 # FlutterGen（资源引用）
 
+dart run tool/stroke_icons/generate.dart
 flutter pub run build_runner build
 flutter pub run build_runner watch
 flutter pub run build_runner clean && flutter pub run build_runner build --delete-conflicting-outputs
@@ -1568,8 +1655,11 @@ flutter test --coverage                         # 覆盖率
 cd rust && cargo test --workspace               # 全部
 cd rust/media_collection && cargo test          # 媒体集合 (28 用例)
 cd rust/lan_transfer && cargo test              # 局域网传输 (6 用例)
+cd rust && cargo test -p ledger_module -p email_module   # 流水账 + 邮件协议层 (70 用例)
 
 ```text
+
+**流水账测试**：Dart 侧 `test/ledger_{models,service,icons,render}_test.dart`（226 用例，其中 15 张桌面/手机 golden），Rust 侧 `rust/{ledger_module,email_module}/tests/*.rs`。收信用例全部走桩，**尚未对真实邮件服务器验证过**。
 
 ### CI 一键执行
 
@@ -1829,6 +1919,25 @@ info!("操作完成: {}", detail);
 | `getSystemResourceSnapshot()` | `SystemResourceSnapshot` | 获取系统资源快照 |
 
 `SystemResourceSnapshot` 字段：`cpuUsagePercent`, `memoryUsedMb`, `memoryTotalMb`, `rxKbps`, `txKbps`
+
+### ledger.dart
+
+FFI 面以 **JSON 文本进（入参 `xxxJson`）/ JSON 文本出**为主，由 `LedgerService` 解成 Dart 模型；计数与写入类接口直接返回 `int`，删除/开关类返回 `bool` 或无返回；`id` 一律 `PlatformInt64`。
+
+| 分组 | 函数 |
+| ------ | ------ |
+| 初始化 | `ledgerInit(dbPathJson)` / `ledgerIsReady()` / `ledgerVersion()` |
+| 账户 | `ledgerListAccounts` / `ledgerUpsertAccount` / `ledgerDeleteAccount` |
+| 类别 | `ledgerListCategories(direction)` / `ledgerUpsertCategory` / `ledgerDeleteCategory` |
+| 商户记忆 | `ledgerListMerchantMemory` / `ledgerForgetMerchant` |
+| 流水 | `ledgerListTransactions` / `ledgerCountTransactions` / `ledgerAddTransaction` / `ledgerUpdateTransaction` / `ledgerDeleteTransaction` / `ledgerCheckDuplicate` |
+| 统计 | `ledgerStatsByDay` / `ledgerStatsByCategory` / `ledgerStatsByMerchant(top)` / `ledgerStatsSummary` / `ledgerStatsByMonth(months)` |
+| 邮件规则 | `ledgerListRules` / `ledgerUpsertRule(ruleJson, password)` / `ledgerDeleteRule` / `ledgerSetRuleEnabled` / `ledgerSetRulePassword` / `ledgerHasRulePassword` / `ledgerRuleDetail` |
+| 解析与收信 | `ledgerTemplates` / `ledgerParsePreview(html, templateId, templateConfig)` / `ledgerCheckRule(ruleId, password)` / `ledgerFetchEmails` / `ledgerTestConnection` / `ledgerListFolders` |
+| 待确认 | `ledgerListPending` / `ledgerListReceivedEmails` / `ledgerEmailTransactions` / `ledgerPendingCount` / `ledgerConfirmTx` / `ledgerConfirmAll` / `ledgerIgnoreEmail` / `ledgerIgnoreTx` / `ledgerPurgeEmail` |
+| 调度与日志 | `ledgerSchedulerStart` / `ledgerSchedulerStop` / `ledgerSchedulerStatus` / `ledgerGetLogs` / `ledgerClearLogs` |
+
+口令只作为 `password` 参数临时存在，Rust 侧写进内存 `SECRETS`，库里只留 `secret_ref`。
 
 ---
 
