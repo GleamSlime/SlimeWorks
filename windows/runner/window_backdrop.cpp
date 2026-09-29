@@ -308,7 +308,11 @@ std::vector<uint8_t> CaptureScreenRect(int x, int y, int w, int h,
                                    nullptr, 0);
   if (mem_dc != nullptr && dib != nullptr && dib_bits != nullptr) {
     HGDIOBJ old_obj = ::SelectObject(mem_dc, dib);
-    ::SetStretchBltMode(screen, HALFTONE);
+    // 缩放模式是**目标 DC** 的属性，设在 screen（源）上等于没设，落到默认的
+    // BLACKONWHITE —— 缩小时它按 COLORONCOLOR 抽像素，深色桌面里会采出一片
+    // 噪点，模糊完就是「脏」。HALFTONE 才是真正的面积平均。
+    ::SetStretchBltMode(mem_dc, HALFTONE);
+    ::SetBrushOrgEx(mem_dc, 0, 0, nullptr);
     // 屏幕 → DIB：抓屏幕矩形 [x,y,w,h]，缩采到 dst_w×dst_h。
     ::StretchBlt(mem_dc, 0, 0, dst_w, dst_h, screen, x, y, w, h, SRCCOPY);
     std::vector<uint8_t> bgra(static_cast<size_t>(dst_w) * dst_h * 4);

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get_state_manager/src/rx_flutter/rx_obx_widget.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
-import 'package:slime_works/components/window/live_frost.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -38,11 +37,12 @@ class ScreenTopBar extends StatelessWidget {
       behavior: HitTestBehavior.translucent,
       onDoubleTap: handleDoubleTap,
       onPanStart: (_) {
-        // 拖拽期间跟手刷新=每秒十几次隐身，必须彻底停抓；松手补一帧。
-        LiveFrost.setDragging(true);
+        // 只交给系统拖拽。磨砂那边不需要在这里挂「拖拽中」标志：startDragging
+        // 一旦把指针交给系统，Flutter 就再也收不到 onPanEnd，那个标志会永久卡在
+        // true，把重抓彻底锁死（实测拖一次窗口之后磨砂就再也不更新）。
+        // 不锁也不闪：LiveFrost 心跳发现矩形在变就不抓，等它停下才补一帧。
         windowManager.startDragging();
       },
-      onPanEnd: (_) => LiveFrost.setDragging(false),
       child: Container(
         height: scaleH(40),
         // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),

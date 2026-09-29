@@ -150,12 +150,23 @@ class WindowGlass {
   /// 页面内分区面板（播放器头部、歌单侧栏这类）：色块比正文稀疏，可以再透一点。
   static const int _panelAlphaMacOS = 200;
 
+  /// 「实时半透明」专用：自绘磨砂帧自己就压了一层薄纱（见 LiveFrostBackdrop），
+  /// 内容区再按 macOS 的 180 压一遍，两层混下来磨砂就糊没了——实测只有侧栏透得出
+  /// 桌面，正文那一片是死白，用户看到的就是「侧栏里贴了张放大的模糊截图」。
+  /// 这里让磨砂独自承担调色，内容/面板只补一层很淡的底。
+  static const int _contentAlphaLiveFrost = 100;
+  static const int _panelAlphaLiveFrost = 130;
+
   /// 浮层（菜单、对话框、底部抽屉）压在内容之上，几乎实心才不会和底下的字糊在一起。
   static const int _overlayAlpha = 242;
 
-  static int get contentAlpha => content ? _contentAlphaMacOS : 255;
+  static int get contentAlpha => content
+      ? (_liveFrostRunning ? _contentAlphaLiveFrost : _contentAlphaMacOS)
+      : 255;
 
-  static int get panelAlpha => content ? _panelAlphaMacOS : 255;
+  static int get panelAlpha => content
+      ? (_liveFrostRunning ? _panelAlphaLiveFrost : _panelAlphaMacOS)
+      : 255;
 
   /// 没有磨砂可透的平台就保持原来的实心浮层，别为了半透明牺牲可读性。
   static int get overlayAlpha => sidebar ? _overlayAlpha : 255;
