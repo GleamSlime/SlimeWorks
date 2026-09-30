@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:cue/cue.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -508,20 +507,14 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
-              // 前 40 项加入场动画，超出部分跳过以免卡顿
-              final delay = index < 40 ? index * 15 : 0;
               // 以集合/文件夹 id 作为 Element key：排序或拖拽重排后卡片按身份复用，
               // 否则按索引匹配会让选中态、封面等 State 错位到别的卡片上。
+              // 注意：这里不再包 Cue.onMount → Actor 入场动画。每次 Obx 重建网格时，
+              // 若卡片重新挂载会触发 mounted 动画风暴（60fps × 每卡 15ms 错峰），
+              // 引发大量 _firstBuild，最终导致 UI 线程被拖死（Lost connection to device）。
               return KeyedSubtree(
                 key: ValueKey(item.id),
-                child: Cue.onMount(
-                  motion: const .smooth(),
-                  child: Actor(
-                    delay: Duration(milliseconds: delay),
-                    acts: [const .fadeIn(), const .slideY(from: 0.12)],
-                    child: _buildCard(context, item),
-                  ),
-                ),
+                child: _buildCard(context, item),
               );
             },
           );

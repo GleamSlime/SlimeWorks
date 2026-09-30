@@ -734,9 +734,8 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   List<media_api.MediaCollection> get currentCollections {
     final folderId = currentFolderId.value;
-    _logger.info(
-      '[currentCollections] folderId=$folderId, isSmartFolder=${folderId != null && isSmartFolder(folderId)}, smartFolderCount=${smartFolders.length}, localCollections=${collections.length}, remoteCollections=${remoteCollections.length}',
-    );
+    // 注意：此 getter 在每次 visibleItems / 网格 Obx 重建时都会被读取。不要在里头做同步
+    // 日志或重活——媒体量大时（数千集合）会在 UI 线程上刷屏式写日志，放大卡顿与主线程阻塞。
     // Read version to register as reactive dependency so Obx rebuilds on reorder
     collectionOrderVersion.value;
     // Read sort order to register reactive dependency
@@ -762,9 +761,6 @@ class MediaLibraryViewModel extends BaseViewModel {
         return [];
       }
       var filtered = List.of(collectionsMatchingSmartFolder(sf));
-      _logger.info(
-        '[currentCollections] 智能文件夹=${sf.name}, folderId=$folderId, matched=${filtered.length}, regexTarget=${sf.regexTarget}, targetFolderIds=${sf.targetFolderIds}, regexPattern=${sf.regexPattern}, keywords=${sf.keywords}',
-      );
       if (favOnly) {
         filtered = filtered.where((c) => favIds.contains(c.id)).toList();
       }

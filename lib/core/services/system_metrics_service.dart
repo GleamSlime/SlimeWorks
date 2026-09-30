@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
@@ -11,7 +13,7 @@ const int kMetricsHistoryLength = 60;
 ///
 /// 将资源监控数据采集从 Dashboard 页面提升到 Service 层，
 /// 即使 Dashboard 页面未打开也持续采集，确保打开时即可看到完整历史曲线。
-class SystemMetricsService {
+class SystemMetricsService extends ChangeNotifier {
   Timer? _timer;
   rust_sys.SystemResourceSnapshot? _lastSnapshot;
   final NodeSettingsService _nodeSettingsService = getIt<NodeSettingsService>();
@@ -52,9 +54,9 @@ class SystemMetricsService {
   void start() {
     if (_isRunning) return;
     _isRunning = true;
-    _refresh();
+    unawaited(_refresh());
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _refresh();
+      unawaited(_refresh());
     });
   }
 
@@ -65,9 +67,14 @@ class SystemMetricsService {
     _isRunning = false;
   }
 
-  void _refresh() {
+  Future<void> _refresh() async {
     try {
-      final next = rust_sys.getSystemResourceSnapshot();
+      // 系统资源快照（sysinfo 的 CPU/内存/进程扫描）是较重的同步 FFI，
+      // 直接放在主线程会在每周期造成一段阻塞，撞上 VS Code DDS 的 VM Service
+      // 心跳导致“Lost connection to device”。改到后台 isolate 执行，不阻塞
+      // 主线程 Dart 事件循环。生成的 SystemResourceSnapshot 是普通数据类，
+      // 可跨 isolate 传递。
+      final next = await Isolate.run(rust_sys.getSystemResourceSnapshot);
       _nodeSettingsService.syncTrafficDisplayNow();
       final rxKbps = _nodeSettingsService.appRxKbps.value;
       final txKbps = _nodeSettingsService.appTxKbps.value;
@@ -87,6 +94,8 @@ class SystemMetricsService {
       _appendHistory(rxHistory, rxKbps);
       _appendHistory(txHistory, txKbps);
       _appendHistory(reqHistory, reqDelta);
+      // 通知订阅者（Dashboard 指标区）指标已更新，让 UI 按需重建
+      notifyListeners();
     } catch (_) {}
   }
 }

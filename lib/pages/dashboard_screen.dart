@@ -25,7 +25,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
-  Timer? _uiRefreshTimer;
   final SystemMetricsService _metricsService = getIt<SystemMetricsService>();
 
   late final AnimationController _entranceController;
@@ -51,10 +50,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       );
     });
 
-    // 定时从 Service 拉取最新数据以刷新 UI
-    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    // 系统指标由 SystemMetricsService 按秒采集并 notifyListeners，
+    // 这里不再用每秒全页 setState 重建整棵 dashboard 树（避免每秒一次全量 rebuild 拖住主线程）。
+    // 指标区通过 ListenableBuilder 只订阅指标变化自身重建，功能模块/头部保持静态。
 
     Future.delayed(AppMotion.fast, () {
       if (mounted) _entranceController.forward();
@@ -63,7 +61,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   @override
   void dispose() {
-    _uiRefreshTimer?.cancel();
     _entranceController.dispose();
     super.dispose();
   }
@@ -96,7 +93,14 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
             SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20),
-              sliver: SliverToBoxAdapter(child: _buildMetricSection(context)),
+              sliver: SliverToBoxAdapter(
+                // 只订阅 SystemMetricsService 的按秒通知，指标变化时仅重建指标区，
+                // 不再拖动整棵 dashboard 树重建。
+                child: ListenableBuilder(
+                  listenable: _metricsService,
+                  builder: (context, _) => _buildMetricSection(context),
+                ),
+              ),
             ),
             SliverPadding(
               padding: EdgeInsets.fromLTRB(

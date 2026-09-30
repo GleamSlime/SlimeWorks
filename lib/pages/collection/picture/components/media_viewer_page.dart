@@ -1713,14 +1713,19 @@ class _VideoPreviewState extends State<_VideoPreview> {
               child: AnimatedOpacity(
                 opacity: _playerReady ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 300),
-                child: widget.coverSource != null && widget.coverSource!.isNotEmpty
-                    ? (widget.coverSource!.startsWith('http')
-                          ? Image.network(widget.coverSource!, fit: _videoFit)
-                          : Image.file(File(widget.coverSource!), fit: _videoFit))
-                    : Container(
-                        color: Colors.black,
-                        child: const Center(child: _GlassPulseLoader()),
-                      ),
+                // 播放器就绪后静音封面层的动画 ticker：
+                // 避免不可见的脉冲加载动画仍每帧驱动重绘（隐形动画泄漏）
+                child: TickerMode(
+                  enabled: !_playerReady,
+                  child: widget.coverSource != null && widget.coverSource!.isNotEmpty
+                      ? (widget.coverSource!.startsWith('http')
+                            ? Image.network(widget.coverSource!, fit: _videoFit)
+                            : Image.file(File(widget.coverSource!), fit: _videoFit))
+                      : Container(
+                          color: Colors.black,
+                          child: const Center(child: _GlassPulseLoader()),
+                        ),
+                ),
               ),
             ),
           ),
@@ -2333,6 +2338,36 @@ class _GlassPulseLoader extends StatefulWidget {
   State<_GlassPulseLoader> createState() => _GlassPulseLoaderState();
 }
 
+/// 脉冲加载指示器画笔：通过 repaint 直接监听动画，
+/// 每帧只重绘合成层，不触发 element rebuild（避免查看器大树上每帧 markNeedsBuild）。
+class _GlassPulsePainter extends CustomPainter {
+  _GlassPulsePainter(this.animation) : super(repaint: animation);
+
+  final Animation<double> animation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+    final scale = 0.8 + 0.4 * (0.5 + 0.5 * t);
+    final opacity = 0.4 + 0.4 * t;
+    final diameter = 56.0 * scale;
+    final center = size.center(Offset.zero);
+    final radius = diameter / 2;
+    // 半透明填充
+    final fill = Paint()..color = LightColors.primary.withValues(alpha: opacity * 0.15);
+    canvas.drawCircle(center, radius, fill);
+    // 边框
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = LightColors.primary.withValues(alpha: opacity * 0.5);
+    canvas.drawCircle(center, radius, stroke);
+  }
+
+  @override
+  bool shouldRepaint(_GlassPulsePainter oldDelegate) => false;
+}
+
 class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   @override
@@ -2350,32 +2385,18 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerP
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, _) {
-        final scale = 0.8 + 0.4 * (0.5 + 0.5 * _ctrl.value);
-        final opacity = 0.4 + 0.4 * _ctrl.value;
-        return Center(
-          child: Container(
-            width: 56 * scale,
-            height: 56 * scale,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: LightColors.primary.withValues(alpha: opacity * 0.15),
-              border: Border.all(
-                color: LightColors.primary.withValues(alpha: opacity * 0.5),
-                width: 2,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.play_arrow_rounded,
-              color: Colors.white.withValues(alpha: opacity),
-              size: 24,
-            ),
+    // RepaintBoundary 限定重绘范围；播放图标保持静态，不随动画重建
+    return RepaintBoundary(
+      child: SizedBox(
+        width: 68,
+        height: 68,
+        child: CustomPaint(
+          painter: _GlassPulsePainter(_ctrl),
+          child: const Center(
+            child: Icon(Icons.play_arrow_rounded, color: Colors.white60, size: 24),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

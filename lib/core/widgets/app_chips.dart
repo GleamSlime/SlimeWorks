@@ -267,6 +267,32 @@ class _PulseDot extends StatefulWidget {
   State<_PulseDot> createState() => _PulseDotState();
 }
 
+/// 脉冲圆点画笔：通过 repaint 直接监听动画，
+/// 每帧只重绘合成层，不触发 element rebuild（列表多实例时避免每帧重建子树）。
+class _PulseDotPainter extends CustomPainter {
+  _PulseDotPainter(this.animation, this.color) : super(repaint: animation);
+
+  final Animation<double> animation;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+    // 画布为 size*2 见方，实心点直径占一半
+    final d = size.shortestSide / 2;
+    final center = size.center(Offset.zero);
+    // 扩散脉冲圈：从实心点大小扩散到两倍并淡出
+    final pulse = Paint()..color = color.withValues(alpha: (1 - t) * 0.35);
+    canvas.drawCircle(center, (d + d * t) / 2, pulse);
+    // 实心点
+    final dot = Paint()..color = color;
+    canvas.drawCircle(center, d / 2, dot);
+  }
+
+  @override
+  bool shouldRepaint(_PulseDotPainter oldDelegate) => oldDelegate.color != color;
+}
+
 class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -281,38 +307,12 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-        return SizedBox(
-          width: widget.size * 2,
-          height: widget.size * 2,
-          child: Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: widget.size + widget.size * t,
-                  height: widget.size + widget.size * t,
-                  decoration: BoxDecoration(
-                    color: widget.color.withValues(alpha: (1 - t) * 0.35),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Container(
-                  width: widget.size,
-                  height: widget.size,
-                  decoration: BoxDecoration(
-                    color: widget.color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    // RepaintBoundary 限定重绘范围；动画推进只触发 repaint，不 rebuild
+    return RepaintBoundary(
+      child: CustomPaint(
+        size: Size(widget.size * 2, widget.size * 2),
+        painter: _PulseDotPainter(_controller, widget.color),
+      ),
     );
   }
 }

@@ -761,6 +761,17 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   Widget _buildCoverImage() => Obx(_coverImage);
 
   Widget _coverImage() {
+    // 偏好项必须在任何提前 return 之前读一遍：Obx 本次构建没读到一个 Rx 会直接抛
+    // "improper use of Obx"，丢失封面那条分支正好一个都不读。
+    final prefs = getIt.isRegistered<MediaPrefsService>()
+        ? getIt<MediaPrefsService>()
+        : null;
+    final fakeOn = prefs?.fakeCover.value ?? false;
+    final privacyOn = prefs?.privacyMode.value ?? false;
+    final blurSigma = prefs?.privacyBlurSigma.value ?? 15.0;
+    // 网格封面按预览宽度解码，避免每张原图（可达数 MB）整幅进内存
+    final previewWidth = prefs?.localPreviewWidth.value ?? 480;
+    final cacheWidth = previewWidth > 0 ? previewWidth : null;
     if (widget.isLost && widget.metadata.coverPath != null) {
       return Positioned.fill(
         child: Stack(
@@ -776,15 +787,6 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         ),
       );
     }
-    final prefs = getIt.isRegistered<MediaPrefsService>()
-        ? getIt<MediaPrefsService>()
-        : null;
-    final fakeOn = prefs?.fakeCover.value ?? false;
-    final privacyOn = prefs?.privacyMode.value ?? false;
-    final blurSigma = prefs?.privacyBlurSigma.value ?? 15.0;
-    // 网格封面按预览宽度解码，避免每张原图（可达数 MB）整幅进内存
-    final previewWidth = prefs?.localPreviewWidth.value ?? 480;
-    final cacheWidth = previewWidth > 0 ? previewWidth : null;
     // 伪封面排在真实封面之前：直接换成那张无害图片，真实封面连解码都不参与
     if (fakeOn && widget.metadata.coverPath != null) {
       return Positioned.fill(child: const FakeCover());

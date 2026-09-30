@@ -305,7 +305,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             builder: (context, child) {
               if (child == null) return const SizedBox.shrink();
               if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-                Widget content = DesktopScaffold(child: child);
+                // EasyLoading 的包装层在 ExcludeSemantics 之外：它的加载弹层
+                // 也会挂语义节点（开关、进度），漏在包裹外面就仍有一条会重建的
+                // 语义子树。这里把最外层整体包住，语义树才是真正的空。
+                Widget content = EasyLoading.init()(
+                  context,
+                  DesktopScaffold(child: child),
+                );
                 if (Platform.isWindows) {
                   // 规避 Flutter Windows 无障碍桥 AXTree 失配崩溃：
                   // UIA 客户端（输入法/PowerToys/读屏工具等）激活语义后，
@@ -318,7 +324,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   // 如需恢复无障碍支持，删除此包裹即可。
                   content = ExcludeSemantics(child: content);
                 }
-                return EasyLoading.init()(context, content);
+                return content;
               }
               return EasyLoading.init()(context, child);
             },
