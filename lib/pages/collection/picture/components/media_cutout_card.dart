@@ -77,6 +77,23 @@ abstract final class MediaCutoutGeometry {
     if (cellWidth <= 0) return 1;
     return cellWidth / (cellWidth / mediaRatio + contentExtent(withFoot: withFoot));
   }
+
+  /// 浏览网格按视口宽度推出的列数与格宽（复刻 SliverGridDelegateWithMaxCrossAxisExtent
+  /// 的取整方式，含 kSpace12 内边距）。
+  ///
+  /// 网格 delegate、框选命中、拖拽高亮都按同一份数算列：两边各写一份字面量时
+  /// 窗口一窄就差出一列，选中样式会落到隔壁卡片上。
+  static (int columns, double cellWidth) gridColumnsFor(double viewportWidth) {
+    final spacing = appMetrics.kSpace12;
+    final gridWidth = viewportWidth - 2 * spacing;
+    if (gridWidth <= 0) return (0, 0);
+    final columns = math.max(
+      1,
+      (gridWidth / (maxCellWidth + spacing)).ceil(),
+    );
+    final usable = math.max(0.0, gridWidth - spacing * (columns - 1));
+    return (columns, usable / columns);
+  }
 }
 
 /// 媒体库四类卡共用的外壳：封面挖洞 + 实色文字区

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +28,7 @@ part 'media_library_vm_remote.dart';
 part 'media_library_vm_smart_folders.dart';
 part 'media_library_vm_collections.dart';
 part 'media_library_vm_cover_check.dart';
+part 'media_library_vm_selection.dart';
 
 enum MediaItemSortOrder {
   nameAsc,
@@ -87,6 +89,36 @@ class MediaLibraryViewModel extends BaseViewModel {
   final currentItems = <media_api.MediaItem>[].obs;
   final selectedIds = <String>{}.obs;
   final isSelecting = false.obs;
+
+  // ── 浏览层派生缓存（详见 media_library_vm_selection.dart） ──────────────────
+  /// 浏览层派生数据的重算代数：visibleItems / currentCollections 的任一输入变化时自增。
+  /// 浏览网格的唯一数据 Obx 只订阅它（订阅面收敛为 1 个 Rx），
+  /// 替代旧结构「外层大 Obx + 每卡一个 Obx」的多路重查。
+  final visibleVersion = 0.obs;
+
+  /// visibleItems 派生缓存：缓存命中时网格 build 不再重跑过滤+排序+同名分组聚合。
+  List<MediaLibraryItem>? _visibleItemsOut;
+
+  /// currentCollections 派生缓存（visibleItems 的上游，一并失效）。
+  List<media_api.MediaCollection>? _currentCollectionsOut;
+
+  /// 浏览卡片派生数据懒缓存（key = item.id），与上面两个缓存同代失效。
+  /// 卡片 build 从这里拿纯数据快照，不再逐卡回查 VM 的各个查询方法。
+  final Map<String, BrowseCardData> _browseCardCache = {};
+
+  /// 卡片级选中通知器缓存：id → ValueNotifier(isSelected)。
+  /// 选择变化时只通知真正变化的卡片（diff），而不是让全部卡片重查。
+  /// removed 的 notifier 置 false 后保留在表里：正在订阅的 ListenableBuilder
+  /// 仍持有它，清表会让后续再选中时卡片收不到通知（描述见 selectionOf 注释）。
+  final _selectionNotifiers = <String, ValueNotifier<bool>>{};
+
+  /// isSelecting 的 Listenable 代理：GetX 的 RxBool 不是 Flutter Listenable
+  /// （RxInterface 是 GetX 自己的接口），浏览卡片外壳的 ListenableBuilder
+  /// 需要订阅它来感知选择模式进出，由下方 worker 从 RxBool 单向同步。
+  final isSelectingProxy = ValueNotifier<bool>(false);
+
+  /// isSelecting → isSelectingProxy 的同步 worker。
+  Worker? _isSelectingWorker;
 
   /// 鼠标当前悬停的集合 ID（浏览层，供 Delete 快捷键定位目标）
   final hoveredCollectionId = RxnString();
@@ -322,6 +354,16 @@ class MediaLibraryViewModel extends BaseViewModel {
   Worker? _nodeMutationWorker;
   Future<void>? _refreshAllFuture;
 
+  /// 进页面触发的远程刷新节流窗口：距上次远程刷新完成不足此时长时跳过远程部分。
+  /// 强制全量路径（首次初始化 / 节点变更 tick / 手动刷新按钮）不走这个窗口。
+  static const _kRemoteRefreshThrottle = Duration(seconds: 60);
+
+  /// 上次远程刷新完成时刻（[refreshAllOnEnter] 的节流基准）。
+  DateTime? _lastRemoteRefreshAt;
+
+  /// 浏览层派生缓存失效监听的 worker 列表（onClose 时统一销毁）。
+  List<Worker>? _visibleInvalidationWorkers;
+
   /// 远程节点缩略图进度轮询定时器（每 2 秒）。
   Timer? _remoteThumbPollTimer;
 
@@ -401,12 +443,40 @@ class MediaLibraryViewModel extends BaseViewModel {
     ) async {
       await refreshAll();
     });
+    // isSelecting → Listenable 代理的单向同步（代理本体常驻，worker 幂等重建）
+    _isSelectingWorker ??= ever<bool>(isSelecting, (v) {
+      isSelectingProxy.value = v;
+    });
+    isSelectingProxy.value = isSelecting.value;
+    // 浏览层派生缓存失效监听：任一派生输入变化 → 清缓存 + visibleVersion++。
+    // 网格唯一数据 Obx 只订阅 visibleVersion，Rx 变化从「N 路全网格重建」
+    // 收敛为「1 路一次重建」。_itemPathsEpoch 为非 Rx 计数，在写入点手动调用失效。
+    _visibleInvalidationWorkers ??= [
+      ever<String?>(currentFolderId, (_) => _invalidateVisible()),
+      ever<String>(searchQuery, (_) => _invalidateVisible()),
+      ever<String>(similarSearchQuery, (_) => _invalidateVisible()),
+      ever<CollectionSortOrder>(collectionSortOrder, (_) => _invalidateVisible()),
+      ever<int>(collectionOrderVersion, (_) => _invalidateVisible()),
+      ever<bool>(showFavoritesOnly, (_) => _invalidateVisible()),
+      ever<Set<String>>(favoriteCollectionIds, (_) => _invalidateVisible()),
+      ever<List<media_api.MediaFolder>>(folders, (_) => _invalidateVisible()),
+      ever<List<media_api.MediaFolder>>(remoteFolders, (_) => _invalidateVisible()),
+      ever<List<media_api.MediaCollection>>(collections, (_) => _invalidateVisible()),
+      ever<List<media_api.MediaCollection>>(remoteCollections, (_) => _invalidateVisible()),
+      ever<List<SmartFolder>>(smartFolders, (_) => _invalidateVisible()),
+      ever<Map<String, List<SmartFolder>>>(_remoteSmartFolders, (_) => _invalidateVisible()),
+      ever<int>(_searchVersion, (_) => _invalidateVisible()),
+      // 封面/存活统计落地后需要卡片换图换数（32ms 节流后的全局版本）
+      ever<int>(_asyncCoverVersion, (_) => _invalidateVisible()),
+      ever<int>(liveStatsVersion, (_) => _invalidateVisible()),
+    ];
     if (isInitialized) {
       // 永久 ViewModel 再次进入页面时：刷新数据 + 重新加载智能文件夹（磁盘上的数据描和内存始终保持同步）
       _logger.info('[媒体库] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
       // _loadSmartFolders 已在 refreshAll 内部调用，此处不重复调，避免重复读 redb
       await _loadFavorites();
-      await refreshAll();
+      // 进页面走节流入口：本地 FFI 始终刷，远程节点 60s 窗口内不重复打接口
+      await refreshAllOnEnter();
       return;
     }
     await super.onInitAsync();
@@ -458,6 +528,15 @@ class MediaLibraryViewModel extends BaseViewModel {
   void onClose() {
     _nodeMutationWorker?.dispose();
     _nodeMutationWorker = null;
+    _isSelectingWorker?.dispose();
+    _isSelectingWorker = null;
+    isSelectingProxy.dispose();
+    // 浏览层派生缓存失效监听一并销毁（permanent ViewModel 理论上不关闭，此为兜底）
+    final invalidationWorkers = _visibleInvalidationWorkers;
+    _visibleInvalidationWorkers = null;
+    for (final w in invalidationWorkers ?? const <Worker>[]) {
+      w.dispose();
+    }
     _remoteThumbPollTimer?.cancel();
     _remoteThumbPollTimer = null;
     _trimCacheTimer?.cancel();
@@ -733,9 +812,19 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   List<media_api.MediaCollection> get currentCollections {
-    final folderId = currentFolderId.value;
     // 注意：此 getter 在每次 visibleItems / 网格 Obx 重建时都会被读取。不要在里头做同步
     // 日志或重活——媒体量大时（数千集合）会在 UI 线程上刷屏式写日志，放大卡顿与主线程阻塞。
+    // 派生缓存：网格的 Obx 只订阅 visibleVersion，缓存命中时这里直接返回上一轮结果，
+    // 不再重跑过滤+排序；缓存由 _invalidateVisible() 统一失效（输入变化 ever 监听）。
+    final cached = _currentCollectionsOut;
+    if (cached != null) return cached;
+    final result = _computeCurrentCollections();
+    _currentCollectionsOut = result;
+    return result;
+  }
+
+  List<media_api.MediaCollection> _computeCurrentCollections() {
+    final folderId = currentFolderId.value;
     // Read version to register as reactive dependency so Obx rebuilds on reorder
     collectionOrderVersion.value;
     // Read sort order to register reactive dependency
@@ -847,6 +936,16 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   List<MediaLibraryItem> get visibleItems {
+    // 派生缓存：网格 Obx 只订阅 visibleVersion，命中时不重跑过滤/排序/同名分组。
+    // 缓存由 _invalidateVisible() 在任一派生输入变化时统一失效（见 onInitAsync 的 ever 注册）。
+    final cached = _visibleItemsOut;
+    if (cached != null) return cached;
+    final result = _computeVisibleItems();
+    _visibleItemsOut = result;
+    return result;
+  }
+
+  List<MediaLibraryItem> _computeVisibleItems() {
     // 相似查找激活时：按名称亲和度层级筛选当前层级 + 子孙文件夹内的集合
     final similar = similarSearchQuery.value.trim();
     if (similar.isNotEmpty) {
@@ -1938,14 +2037,21 @@ class MediaLibraryViewModel extends BaseViewModel {
     return items;
   }
 
-  Future<void> refreshAll() async {
+  /// 强制全量刷新（手动刷新按钮 / 节点变更 tick / 首次初始化）：远程部分不做节流。
+  Future<void> refreshAll() => _refreshAll(throttleRemote: false);
+
+  /// 进页面专用刷新：本地 FFI（快）始终执行；远程节点刷新带 60s 节流，
+  /// 频繁进出页面不再反复打节点接口。
+  Future<void> refreshAllOnEnter() => _refreshAll(throttleRemote: true);
+
+  Future<void> _refreshAll({required bool throttleRemote}) async {
     final inFlight = _refreshAllFuture;
     if (inFlight != null) {
       await inFlight;
       return;
     }
 
-    final future = _refreshAllInternal();
+    final future = _refreshAllInternal(throttleRemote: throttleRemote);
     _refreshAllFuture = future;
     try {
       await future;
@@ -1956,7 +2062,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     }
   }
 
-  Future<void> _refreshAllInternal() async {
+  Future<void> _refreshAllInternal({required bool throttleRemote}) async {
     // Phase 1: 立即加载本地数据，使 UI 快速可用
     final trace = TimingTrace('媒体库 refreshAll');
     await _loadSmartFolders();
@@ -1968,11 +2074,19 @@ class MediaLibraryViewModel extends BaseViewModel {
     await loadCurrentCollectionItems();
     trace.end(note: '本地数据完成，转入远程');
     // Phase 2: 后台异步加载远程节点数据，不阻塞 UI
-    _refreshRemoteBackground();
+    _refreshRemoteBackground(throttled: throttleRemote);
   }
 
-  void _refreshRemoteBackground() {
+  void _refreshRemoteBackground({bool throttled = false}) {
     if (isLoadingRemote.value) return; // 已有后台任务在跑
+    if (throttled) {
+      final last = _lastRemoteRefreshAt;
+      if (last != null &&
+          DateTime.now().difference(last) < _kRemoteRefreshThrottle) {
+        // 60s 内刚刷新过远程：跳过本次，避免频繁进出页面反复打节点接口
+        return;
+      }
+    }
     isLoadingRemote.value = true;
     final trace = TimingTrace('远程媒体库后台刷新');
     // 离线/熔断节点的复活探测挂在这里：只有进页面和点刷新才付这一次，没有后台定时轮询。
@@ -1985,6 +2099,7 @@ class MediaLibraryViewModel extends BaseViewModel {
         })
         .whenComplete(() {
           trace.end();
+          _lastRemoteRefreshAt = DateTime.now();
           isLoadingRemote.value = false;
         });
   }
@@ -2043,6 +2158,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       }
       // 文件路径是文件名模式匹配的唯一输入，写入后必须让智能文件夹缓存失效
       _itemPathsEpoch++;
+      // _itemPathsEpoch 为非 Rx 计数：浏览层派生缓存在此手动失效
+      _invalidateVisible();
     } catch (e) {
       _logger.error('[媒体库] _prewarmCollectionCaches stats 失败: $e');
     }
@@ -2340,38 +2457,38 @@ class MediaLibraryViewModel extends BaseViewModel {
   }
 
   void enterSelection(String firstId) {
-    isSelecting.value = true;
-    selectedIds.add(firstId);
+    // 选择写点一律走 syncSelectionTo 收口：diff 通知卡片级 notifier，只重建真正变化的卡
+    syncSelectionTo({firstId}, selecting: true);
   }
 
   void exitSelection() {
-    isSelecting.value = false;
-    selectedIds.clear();
+    syncSelectionTo(const <String>{}, selecting: false);
   }
 
   void toggleSelection(String id) {
     if (selectedIds.contains(id)) {
-      selectedIds.remove(id);
-      if (selectedIds.isEmpty) {
-        exitSelection();
+      // 移除后为空则退出选择模式（保持旧语义）
+      final next = {...selectedIds}..remove(id);
+      if (next.isEmpty) {
+        syncSelectionTo(next, selecting: false);
+        return;
       }
+      syncSelectionTo(next);
       return;
     }
-    selectedIds.add(id);
-    if (selectedIds.isNotEmpty) {
-      isSelecting.value = true;
-    }
+    syncSelectionTo({...selectedIds, id}, selecting: true);
   }
 
   void toggleSelectAll() {
     final items = visibleItems;
     if (selectedIds.length == items.length) {
-      selectedIds.clear();
-      isSelecting.value = false;
+      syncSelectionTo(const <String>{}, selecting: false);
       return;
     }
-    selectedIds.assignAll(items.map((item) => item.id).toSet());
-    isSelecting.value = items.isNotEmpty;
+    syncSelectionTo(
+      items.map((item) => item.id).toSet(),
+      selecting: items.isNotEmpty,
+    );
   }
 
   /// 取消所有选择，并选中当前文件夹内全部未收藏的集合（批量操作入口）。
@@ -2398,8 +2515,7 @@ class MediaLibraryViewModel extends BaseViewModel {
     _logger.info(
       'selectUnfavoritedCollections: folderId=$folderId, scope=${scope.length}, unfavorited=${unfavoritedIds.length}',
     );
-    isSelecting.value = true;
-    selectedIds.assignAll(unfavoritedIds);
+    syncSelectionTo(unfavoritedIds, selecting: true);
   }
 
   /// 返回视频的悬停悔放帧列表（异步缓存，重复调用直接返回）。
