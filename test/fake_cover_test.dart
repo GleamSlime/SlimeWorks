@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
-import 'package:slime_works/core/widgets/fake_cover.dart';
 import 'package:slime_works/pages/collection/picture/components/media_cutout_card.dart';
 
 /// 一张 1x1 的 PNG，够 Image 解码成功，又不用真准备两张不同的图
