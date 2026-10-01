@@ -24,6 +24,9 @@ class LedgerPendingViewModel extends BaseViewModel {
   final RxInt defaultAccountId = 0.obs;
   final RxString lastResult = ''.obs;
 
+  /// 有一条抓取链路正在跑（立即收取 / 回补历史），顶栏两枚胶囊据此禁用
+  final RxBool fetching = false.obs;
+
   /// 展开态：已加载的明细直接读缓存
   List<LedgerTx> detailsOf(int emailId) => _details[emailId] ?? const <LedgerTx>[];
 
@@ -130,11 +133,39 @@ class LedgerPendingViewModel extends BaseViewModel {
   }
 
   Future<void> checkRuleNow(int ruleId) async {
+    if (fetching.value) {
+      return;
+    }
+    fetching.value = true;
     try {
       lastResult.value = await _service.checkRule(ruleId);
       await reload();
     } catch (e) {
       setError('收取失败: $e');
+    } finally {
+      fetching.value = false;
+    }
+  }
+
+  /// 回补历史邮件：把收件箱里积压的老账单一次性补录进待确认队列。
+  ///
+  /// 和 [checkRuleNow] 只差扫描深度（0 表示用 Rust 侧的默认 200 封），落库走同一
+  /// 套去重，所以这一步是幂等的、可以放心反复点。两个动作共用 [fetching]：它们
+  /// 跑的是同一条抓取链路，并发点两次只会让服务器看到两套交错的任务。
+  Future<void> backfillRuleNow(int ruleId, {int limit = 0}) async {
+    if (fetching.value) {
+      return;
+    }
+    fetching.value = true;
+    lastResult.value = '正在回补历史邮件…';
+    try {
+      lastResult.value = await _service.backfillHistory(ruleId, limit: limit);
+      await reload();
+    } catch (e) {
+      lastResult.value = '';
+      setError('历史回补失败: $e');
+    } finally {
+      fetching.value = false;
     }
   }
 

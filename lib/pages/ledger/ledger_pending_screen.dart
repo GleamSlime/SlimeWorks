@@ -48,7 +48,45 @@ class _LedgerPendingScreenState
           SizedBox(width: m.kSpace8),
           Padding(
             padding: EdgeInsets.only(right: m.kSpace12),
-            child: _FetchButton(vm: viewModel),
+            // Obx 里同时读 rules/fetching：两枚胶囊共用一套「选哪条规则」的菜单，
+            // 抓取跑起来时一起收掉，免得并发点开两条抓取链路。
+            child: Obx(() {
+              final rules = viewModel.rules
+                  .where((r) => r.enabled && r.protocolSupported)
+                  .toList(growable: false);
+              final busy = viewModel.fetching.value;
+              return Row(
+                children: <Widget>[
+                  _RulePickPill(
+                    icon: StrokeIcons.mail,
+                    label: '立即收取',
+                    tooltip: '选择要立即收取的邮箱',
+                    menuPrefix: '收取',
+                    rules: rules,
+                    busy: busy,
+                    onRun: viewModel.checkRuleNow,
+                  ),
+                  SizedBox(width: m.kSpace6),
+                  _RulePickPill(
+                    icon: StrokeIcons.history,
+                    label: '回补历史',
+                    tooltip: '选择要回补历史邮件的邮箱',
+                    menuPrefix: '回补',
+                    rules: rules,
+                    busy: busy,
+                    onRun: (ruleId) async {
+                      final name = viewModel.rules
+                          .firstWhereOrNull((r) => r.id == ruleId)
+                          ?.name;
+                      if (!await confirmLedgerBackfill(context, name ?? '该邮箱')) {
+                        return;
+                      }
+                      await viewModel.backfillRuleNow(ruleId);
+                    },
+                  ),
+                ],
+              );
+            }),
           ),
         ],
       ),
@@ -103,37 +141,54 @@ class _LedgerPendingScreenState
   }
 }
 
-/// 立即收取：一条规则直接跑，多条给菜单
-class _FetchButton extends StatelessWidget {
-  const _FetchButton({required this.vm});
+/// 顶栏「挑一条规则触发一次收取」的胶囊：一条规则直接跑，多条给菜单。
+///
+/// 立即收取和回补历史只差扫描深度、选规则的交互一模一样，所以共用这个壳；
+/// [busy] 期间整枚胶囊禁用（[StrokeIcons.history] 那枚还会在确认框里再问一次）。
+class _RulePickPill extends StatelessWidget {
+  const _RulePickPill({
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.menuPrefix,
+    required this.rules,
+    required this.onRun,
+    required this.busy,
+  });
 
-  final LedgerPendingViewModel vm;
+  final StrokeIcon icon;
+  final String label;
+  final String tooltip;
+
+  /// 多条规则时菜单项的前缀，例如「收取「招行」」/「回补「招行」」
+  final String menuPrefix;
+  final List<LedgerRule> rules;
+  final void Function(int ruleId) onRun;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
-    final rules = vm.rules
-        .where((r) => r.enabled && r.protocolSupported)
-        .toList(growable: false);
     if (rules.length > 1) {
       return PopupMenuButton<int>(
         color: s.surfaceRaised,
-        tooltip: '选择要立即收取的邮箱',
-        onSelected: vm.checkRuleNow,
+        tooltip: busy ? null : tooltip,
+        enabled: !busy,
+        onSelected: onRun,
         itemBuilder: (context) => <PopupMenuEntry<int>>[
           for (final rule in rules)
-            PopupMenuItem(value: rule.id, child: Text('收取「${rule.name}」')),
+            PopupMenuItem(value: rule.id, child: Text('$menuPrefix「${rule.name}」')),
         ],
         // 这里不能给胶囊自己的 InkWell 装 onTap：它会和 PopupMenuButton
         // 的外层手势抢同一次点击，结果是菜单永远弹不出来。
-        child: const _Pill(icon: StrokeIcons.mail, label: '立即收取'),
+        child: _Pill(icon: icon, label: label, enabled: !busy),
       );
     }
     return _Pill(
-      icon: StrokeIcons.mail,
-      label: '立即收取',
-      enabled: rules.length == 1,
-      onTap: rules.isEmpty ? null : () => vm.checkRuleNow(rules.first.id),
+      icon: icon,
+      label: label,
+      enabled: !busy && rules.length == 1,
+      onTap: rules.isEmpty ? null : () => onRun(rules.first.id),
     );
   }
 }

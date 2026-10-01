@@ -66,6 +66,112 @@ fn cmb_daily_bill_parses_every_transaction() {
     assert!(result.warnings.is_empty(), "意外警告: {:?}", result.warnings);
 }
 
+/// 月度电子账单（2026 版）的回归样本：合成数据，结构与真实邮件同形
+fn cmb_statement_html() -> String {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/cmb_monthly_statement_sample.html");
+    std::fs::read_to_string(path).expect("读不到招行月度账单 fixture")
+}
+
+/// 真实留档账单只能本地验：里面是本人姓名、商户和金额，绝不进仓库。
+/// 用法：`CMB_STATEMENT_SAMPLE=<留档 html 路径> cargo test -p ledger_module cmb_statement_sample -- --ignored --nocapture`
+#[test]
+#[ignore = "样本是本机留档的真实账单，只在本地按需跑"]
+fn cmb_statement_sample_parses() {
+    let path = std::env::var("CMB_STATEMENT_SAMPLE").expect("先设 CMB_STATEMENT_SAMPLE 指向留档 HTML");
+    let html = std::fs::read_to_string(&path).expect("读不到样本");
+    let result = parse_cmb_daily_bill(&html).expect("真实样本解析失败");
+    // 只报结构不报内容：金额、商户、姓名都不往测试输出里印
+    let dates: Vec<&str> =
+        result.transactions.iter().filter(|t| t.datetime.len() >= 10).map(|t| &t.datetime[..10]).collect();
+    println!(
+        "解析 {} 笔，账单日 {}，警告 {} 条，能定到具体日期的 {} 笔，日期跨度 {} ~ {}",
+        result.transactions.len(),
+        result.bill_date,
+        result.warnings.len(),
+        dates.len(),
+        dates.iter().min().unwrap_or(&""),
+        dates.iter().max().unwrap_or(&""),
+    );
+    for w in &result.warnings {
+        println!("警告：{}", w);
+    }
+    assert!(result.transactions.iter().all(|t| t.datetime.len() >= 10), "有流水没定到具体日期");
+}
+
+#[test]
+fn cmb_monthly_statement_reads_positional_columns() {
+    let result = parse_cmb_daily_bill(&cmb_statement_html()).expect("月度账单解析失败");
+    assert_eq!(result.template_id, "cmb_daily_bill");
+    // 账单日取期间结束日，不是期间开始日
+    assert_eq!(result.bill_date, "2026-01-21");
+
+    let rows: Vec<(String, f64, String, String, String, String)> = result
+        .transactions
+        .iter()
+        .map(|t| {
+            (
+                t.datetime.clone(),
+                t.amount,
+                t.entry_type.clone(),
+                t.direction.clone(),
+                t.card_tail.clone(),
+                t.merchant.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            // 还款行没有交易日，退回入账日；负数按收入
+            ("2026-01-21 00:00:00".into(), 3000.00, "还款".into(), "income".into(), "0001".into(), "自动还款".into()),
+            ("2026-01-05 00:00:00".into(), 33.00, "支付".into(), "expense".into(), "0001".into(), "示例支付-京东商城业务".into()),
+            // 同日同额同商户的第二笔：真实重复扣款，必须还在
+            ("2026-01-05 00:00:00".into(), 33.00, "支付".into(), "expense".into(), "0001".into(), "示例支付-京东商城业务".into()),
+            ("2026-01-08 00:00:00".into(), 35.00, String::new(), "expense".into(), "0001".into(), "示例外卖平台示例烧烤店".into()),
+            // 期间跨到去年 12 月的行，年份要退回期间起始那年
+            ("2025-12-25 00:00:00".into(), 12.00, "退款".into(), "income".into(), "0002".into(), "示例支付-示例游戏平台退款".into()),
+            // 外币行按银行折算好的人民币金额入账，行尾多出的空白格不能把列位带偏
+            ("2026-01-12 00:00:00".into(), 30.45, "消费".into(), "expense".into(), "0001".into(), "示例境外平台消费".into()),
+        ]
+    );
+    assert!(result.transactions.iter().all(|t| t.currency == "CNY"));
+    assert!(result.available_credit.is_none() && result.points_balance.is_none());
+    // 只允许"摘要没有类型词"那一条聚合警告，逐行噪声不算成功
+    assert_eq!(result.warnings.len(), 1, "警告不符: {:?}", result.warnings);
+    assert!(result.warnings[0].contains("没有已知交易类型"));
+}
+
+#[test]
+fn cmb_monthly_statement_email_hits_cmb_fingerprint() {
+    // 月度账单的栏目名全是图片，只有标题里的"电子账单"能认，正文靠招行资源域名定性
+    let html = cmb_statement_html();
+    assert_eq!(resolve_template_id(&rule(), "招商银行信用卡电子账单", &html), "cmb_daily_bill");
+    // 没有招行特征的正文即使标题带"账单"也不该被内置模板认领
+    assert_eq!(resolve_template_id(&rule(), "您的账单已出", "<html>没有任何招行特征</html>"), "generic_keyword");
+}
+
+#[test]
+fn identical_statement_rows_keep_distinct_dedup_keys() {
+    // 月账单没有时分，同一天两笔 33.00 的同商户扣款只能靠行序分开
+    let result = parse_cmb_daily_bill(&cmb_statement_html()).expect("月度账单解析失败");
+    let rule = EmailRule {
+        id: 7,
+        ..Default::default()
+    };
+    let keys: Vec<String> = result
+        .transactions
+        .iter()
+        .enumerate()
+        .map(|(seq, t)| {
+            ledger_module::parse_glue::tx_from_parsed(t, &rule, "6873", "2026-01-21", 1, seq).dedup_key
+        })
+        .collect();
+    let stem = |k: &str| k.rsplit_once('|').map(|(s, _)| s).unwrap_or(k).to_string();
+    // 去掉行序尾巴后两笔一模一样，说明它们本来会撞在同一个去重键上
+    assert_eq!(stem(&keys[1]), stem(&keys[2]));
+    assert_ne!(keys[1], keys[2], "重复扣款的去重键撞车了: {:?}", (&keys[1], &keys[2]));
+}
+
 #[test]
 fn cmb_email_is_recognised_by_fingerprint() {
     let html = cmb_html();

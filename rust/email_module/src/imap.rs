@@ -140,9 +140,16 @@ impl ImapSession {
         }
     }
 
+    /// 列出可打开的邮箱。`\Noselect` 的节点（Gmail 的 `[Gmail]`、只当目录用的父节点）
+    /// 过滤掉：它们 SELECT 不进去，摆到界面上就是个会把用户带进坑的按钮。
     pub fn list(&mut self) -> Result<Vec<String>, String> {
         let lines = self.run("LIST \"\" \"*\"")?;
-        let mut folders: Vec<String> = lines.iter().filter_map(|l| parse_list_name(l)).collect();
+        let mut folders: Vec<String> = lines
+            .iter()
+            .filter_map(|l| parse_list_entry(l))
+            .filter(|(_, no_select)| !no_select)
+            .map(|(name, _)| name)
+            .collect();
         folders.sort();
         folders.dedup();
         Ok(folders)
@@ -275,25 +282,101 @@ fn mailbox_name(mailbox: &str) -> String {
     }
 }
 
-/// `LIST (\HasNoChildren) "/" "INBOX"` → INBOX
-fn parse_list_name(line: &str) -> Option<String> {
-    let rest = line.strip_prefix("LIST")?.trim_start();
-    let after_flags = if let Some((_, tail)) = rest.split_once(')') {
-        tail.trim_start()
+/// 跳过分隔用的空白。
+fn skip_ws(bytes: &[u8], i: &mut usize) {
+    while matches!(bytes.get(*i), Some(b' ' | b'\t')) {
+        *i += 1;
+    }
+}
+
+/// 读一个 atom：以空白结尾的一段裸文本。读不到内容返回 None。
+fn read_atom(bytes: &[u8], i: &mut usize) -> Option<String> {
+    let start = *i;
+    while !matches!(bytes.get(*i), None | Some(b' ') | Some(b'\t')) {
+        *i += 1;
+    }
+    if *i == start {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&bytes[start..*i]).into_owned())
+}
+
+/// 读 `(` 到配对 `)` 之间的内容（flags 段没有转义，也不会嵌套）。
+fn read_paren(bytes: &[u8], i: &mut usize) -> Option<String> {
+    if bytes.get(*i) != Some(&b'(') {
+        return None;
+    }
+    let start = *i + 1;
+    let end = start + bytes[start..].iter().position(|b| *b == b')')?;
+    *i = end + 1;
+    Some(String::from_utf8_lossy(&bytes[start..end]).into_owned())
+}
+
+/// 读一个「值」：带引号的字符串（还原 `\"` `\\`）或裸 atom。
+fn read_value(bytes: &[u8], i: &mut usize) -> Option<String> {
+    if bytes.get(*i) != Some(&b'"') {
+        return read_atom(bytes, i);
+    }
+    *i += 1;
+    let mut out = Vec::new();
+    while let Some(&b) = bytes.get(*i) {
+        match b {
+            b'"' => {
+                *i += 1;
+                return Some(String::from_utf8_lossy(&out).into_owned());
+            }
+            // quoted string 里只有 \ 和 " 需要转义，其余字节原样保留
+            b'\\' => match bytes.get(*i + 1) {
+                Some(_) => {
+                    out.push(bytes[*i + 1]);
+                    *i += 2;
+                }
+                None => return None,
+            },
+            _ => {
+                out.push(b);
+                *i += 1;
+            }
+        }
+    }
+    None // 引号没闭合
+}
+
+/// 解析 LIST 的一条未打标响应，返回 `(邮箱名, 是否 \Noselect)`。
+///
+/// 响应结构是 `LIST (flags) "分隔符" "邮箱名"`：三段各自可能是 quoted 或裸
+/// atom（单层目录的分隔符会回 `NIL`），名字本身还可能带转义引号。
+/// 早期实现按「第 1 个引号到第 2 个引号」取名字，取到的其实是**分隔符**
+/// （`"/" "INBOX"` 里两个引号夹着的就是 `/`），于是整棵目录树全被解析成 `/`、
+/// 去重后只剩一个假目录，用户点一下就把邮箱填成 `/`，SELECT 必然报
+/// `Folder not exist`。所以这里老老实实逐段扫描，名字取最后一段。
+fn parse_list_entry(line: &str) -> Option<(String, bool)> {
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    // 命令名：少数服务器用 XLIST 应答 LIST
+    let cmd = read_atom(bytes, &mut i)?;
+    if !cmd.eq_ignore_ascii_case("LIST") && !cmd.eq_ignore_ascii_case("XLIST") {
+        return None;
+    }
+    skip_ws(bytes, &mut i);
+    let flags = if bytes.get(i) == Some(&b'(') {
+        read_paren(bytes, &mut i)?
     } else {
-        rest.strip_prefix("NIL")?.trim_start()
+        read_atom(bytes, &mut i)? // NIL
     };
-    let after_sep = if let Some((_, tail)) = after_flags.split_once('"') {
-        tail.trim_start()
-    } else {
-        after_flags.strip_prefix("NIL")?.trim_start()
-    };
-    let (name, _) = after_sep.split_once('"')?;
+    skip_ws(bytes, &mut i);
+    read_value(bytes, &mut i)?; // 分隔符，用不上但必须吃掉
+    skip_ws(bytes, &mut i);
+    // 名字写成字面量 {N} 时，正文在下一行且由 run() 当普通行处理了，这里不猜
+    if bytes.get(i) == Some(&b'{') {
+        return None;
+    }
+    let name = read_value(bytes, &mut i)?;
     if name.is_empty() {
         return None;
     }
     // LIST 回来的名字是 modified UTF-7，展示前要还原
-    Some(decode_mutf7(name))
+    Some((decode_mutf7(&name), flags.to_ascii_uppercase().contains("\\NOSELECT")))
 }
 
 // ── modified UTF-7（IMAP 邮箱名的非 ASCII 编码）──────────────────────────────
@@ -415,4 +498,123 @@ pub fn probe(cfg: &EmailAccountConfig, want_folders: bool) -> Result<ConnectionR
     };
     session.close();
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 只取邮箱名，方便断言
+    fn name(line: &str) -> Option<String> {
+        parse_list_entry(line).map(|(n, _)| n)
+    }
+
+    /// 回归：老实现按「第 1 个引号到第 2 个引号」取名，取到的是分隔符 `/`，
+    /// 整棵目录树去重后只剩一个假目录，点一下就把邮箱填成 `/`。
+    #[test]
+    fn list_name_is_the_last_quoted_field_not_the_delimiter() {
+        assert_eq!(
+            name(r#"LIST (\HasNoChildren) "/" "INBOX""#).as_deref(),
+            Some("INBOX")
+        );
+    }
+
+    /// 一整棵目录树要各自解析出自己的名字，不能全塌成同一个值
+    #[test]
+    fn list_name_keeps_every_folder_distinct() {
+        let lines = [
+            r#"LIST (\HasNoChildren) "/" "INBOX""#,
+            r#"LIST (\HasNoChildren) "/" "Drafts""#,
+            r#"LIST (\HasNoChildren) "/" "Junk""#,
+            r#"LIST (\HasChildren) "/" "Archives""#,
+            r#"LIST (\HasNoChildren) "/" "Archives/2026""#,
+        ];
+        let got: Vec<Option<String>> = lines.iter().map(|l| name(l)).collect();
+        assert_eq!(
+            got,
+            vec![
+                Some("INBOX".to_string()),
+                Some("Drafts".to_string()),
+                Some("Junk".to_string()),
+                Some("Archives".to_string()),
+                Some("Archives/2026".to_string()),
+            ]
+        );
+    }
+
+    /// flags / 分隔符都可能写成 NIL 或裸 atom，名字也可能是 atom
+    #[test]
+    fn list_name_handles_nil_and_atom_forms() {
+        assert_eq!(name("LIST NIL . INBOX").as_deref(), Some("INBOX"));
+        assert_eq!(name(r"LIST (\HasNoChildren) NIL INBOX").as_deref(), Some("INBOX"));
+        // 多位分隔符也不能骗过扫描器：名字里带着它照样完整取出
+        assert_eq!(
+            name(r#"LIST (\HasNoChildren) "//" "A//B""#).as_deref(),
+            Some("A//B")
+        );
+    }
+
+    /// 名字里的引号是 `\"` 转义，闭合引号不能提前截断
+    #[test]
+    fn list_name_unescapes_quoted_characters() {
+        assert_eq!(
+            name(r#"LIST (\HasNoChildren) "/" "说\"真的""#).as_deref(),
+            Some("说\"真的")
+        );
+        assert_eq!(
+            name(r#"LIST (\HasNoChildren) "/" "a\\b""#).as_deref(),
+            Some("a\\b")
+        );
+        // 名字含空格：quoted 段必须整段保留
+        assert_eq!(
+            name(r#"LIST (\HasNoChildren) "/" "Foo Bar""#).as_deref(),
+            Some("Foo Bar")
+        );
+    }
+
+    /// `\Noselect` 只当目录用、SELECT 不进去，要标出来给上层过滤掉
+    #[test]
+    fn list_name_flags_noselect() {
+        let got = parse_list_entry(r#"LIST (\Noselect \HasChildren) "/" "Archives""#);
+        assert_eq!(got, Some(("Archives".to_string(), true)));
+        // 服务器大小写不固定
+        let lower = parse_list_entry(r#"LIST (\noselect) "/" "X""#);
+        assert_eq!(lower, Some(("X".to_string(), true)));
+        assert_eq!(
+            parse_list_entry(r#"LIST (\HasNoChildren) "/" "INBOX""#),
+            Some(("INBOX".to_string(), false))
+        );
+    }
+
+    /// 中文目录走 modified UTF-7，还原后才能直接拿去 SELECT
+    #[test]
+    fn list_name_decodes_modified_utf7() {
+        for mailbox in ["已发送", "垃圾邮件", "草稿箱", "已发送&存档"] {
+            let line = format!(r#"LIST (\HasNoChildren) "/" "{}""#, encode_mutf7(mailbox));
+            assert_eq!(name(&line).as_deref(), Some(mailbox), "line = {line}");
+        }
+    }
+
+    /// 不是 LIST 应答的行（能力行、计数行、字面量续行）一律不产出目录
+    #[test]
+    fn list_name_rejects_other_responses() {
+        assert_eq!(name("CAPABILITY IMAP4 IMAP4rev1 AUTH=PLAIN"), None);
+        assert_eq!(name("123 EXISTS"), None);
+        assert_eq!(name(""), None);
+        // 根目录（名字为空）没有可选意义
+        assert_eq!(name(r#"LIST (\Noselect) "/" """#), None);
+        // 名字是字面量 {N}：正文在下一行，不猜
+        assert_eq!(name(r#"LIST (\HasNoChildren) "/" {5}"#), None);
+        // 引号没闭合（响应被截断）
+        assert_eq!(name(r#"LIST (\HasNoChildren) "/" "INBOX"#), None);
+    }
+
+    /// XLIST 应答也要认（部分国内服务器只对 LIST 回 XLIST 前缀）
+    #[test]
+    fn list_name_accepts_xlist_prefix() {
+        assert_eq!(
+            name(r#"XLIST (\HasNoChildren) "/" "INBOX""#).as_deref(),
+            Some("INBOX")
+        );
+    }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:slime_works/components/dialogs/confirm_dialog.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -12,6 +13,19 @@ import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 /// 窄屏（移动端 + 桌面端窄窗）判定：账本这类列表页在 720 以下要收列
 bool ledgerNarrow(BuildContext context) =>
     PlatformUtil.isMobile || MediaQuery.of(context).size.width < 720;
+
+/// 「回补历史邮件」的二次确认。
+///
+/// 这一笔点下去是逐封下载几十到几百封全文的批量抓取，几十秒起步；没有确认框
+/// 的话界面半天不动，很容易被当成卡死再点一次。已入账的邮件由 Rust 侧按 UID
+/// 与流水唯一索引双重跳过，所以重复点不会重复记账。
+Future<bool> confirmLedgerBackfill(BuildContext context, String ruleName) => showConfirmDialog(
+      context,
+      title: '回补「$ruleName」的历史邮件？',
+      message: '日常收取只看收件箱最新 10 封，这里会把最近的历史邮件逐封下载并匹配账单，'
+          '可能要几十秒到几分钟。已经入过账的会自动跳过，重复点不会记两遍。',
+      confirmLabel: '开始回补',
+    );
 
 /// 金额字：正负号由方向决定，颜色只用语义角色
 ///

@@ -178,6 +178,16 @@ pub async fn ledger_check_rule(rule_id: i64, password: String) -> Result<String,
     ledger_module::api::ledger_check_rule(rule_id, password)
 }
 
+/// 历史回补：一次拉几百封全文逐封解析，比日常收取慢一个数量级，
+/// 必须离开 async worker 线程，否则整段 TLS 抓取会占死 runtime。
+pub async fn ledger_backfill_rule(rule_id: i64, password: String, limit: u64) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        ledger_module::api::ledger_backfill_rule(rule_id, password, limit)
+    })
+    .await
+    .map_err(|e| format!("历史回补任务调度失败: {}", e))?
+}
+
 pub async fn ledger_fetch_emails(config_json: String, password: String, limit: u64) -> Result<String, String> {
     ledger_module::api::ledger_fetch_emails(config_json, password, limit)
 }

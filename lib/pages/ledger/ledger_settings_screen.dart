@@ -304,6 +304,19 @@ class _RuleCard extends StatelessWidget {
                 child: const Text('立即收取'),
               ),
               TextButton.icon(
+                // 回补是几十秒起步的批量抓取，先确认再跑；probing 期间整排按钮一起收掉
+                onPressed: busy
+                    ? null
+                    : () async {
+                        if (!await confirmLedgerBackfill(context, rule.name)) {
+                          return;
+                        }
+                        await vm.backfillRule(rule.id);
+                      },
+                icon: DrawIcon(StrokeIcons.history, size: m.iconSize14),
+                label: const Text('回补历史'),
+              ),
+              TextButton.icon(
                 onPressed: () => showLedgerRuleEditor(context, vm: vm, initial: rule),
                 icon: DrawIcon(StrokeIcons.edit, size: m.iconSize14),
                 label: const Text('编辑'),

@@ -162,6 +162,23 @@ class LedgerSettingsViewModel extends BaseViewModel {
     }
   }
 
+  /// 回补历史邮件：日常收取只看最新 10 封，这里把最近的历史邮件逐封匹配补录。
+  ///
+  /// 已入过账的邮件由 Rust 侧按 UID 跳过、流水表又有唯一索引兜底，所以重复点
+  /// 不会记两遍；代价是几十秒到几分钟的批量下载，界面上用 [probing] 挡住重入。
+  Future<void> backfillRule(int ruleId) async {
+    probing.value = true;
+    lastMessage.value = '正在回补历史邮件…';
+    try {
+      lastMessage.value = await _service.backfillHistory(ruleId);
+      await reload();
+    } catch (e) {
+      setError('历史回补失败: $e');
+    } finally {
+      probing.value = false;
+    }
+  }
+
   Future<void> setSchedulerEnabled(bool enabled) async {
     try {
       if (enabled) {

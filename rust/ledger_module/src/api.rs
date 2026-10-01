@@ -11,6 +11,10 @@ use crate::types::*;
 /// 收信条数上限：账单邮件一天一封，取最近几封足够补漏
 const DEFAULT_FETCH_LIMIT: u64 = 10;
 
+/// 历史回补的默认扫描条数：一次手动点按要把大半年的账单都过一遍，
+/// 又不至于把上千封全文拖下 TLS（每封一次 UID FETCH 往返）。
+const BACKFILL_FETCH_LIMIT: u64 = 200;
+
 fn json<T: serde::Serialize>(v: &T) -> Result<String, String> {
     serde_json::to_string(v).map_err(|e| format!("序列化失败: {}", e))
 }
@@ -328,7 +332,24 @@ pub fn ledger_check_rule(rule_id: i64, password: String) -> Result<String, Strin
     check_by_rule(rule_id, &password)
 }
 
+/// 历史回补：从收件箱最近的 `limit` 封里（传 0 用 [BACKFILL_FETCH_LIMIT]）把命中
+/// 规则的账单邮件全部补录入账。
+///
+/// 定时收取只看最新 10 封：账单一来就够快，但首次配规则、口令失效停摆几天、
+/// 或者那 10 封里恰好夹了广告时，过去的账单就永远补不回来——银行邮件是有历史
+/// 价值的，不能只认"从此刻开始收"。重复入账由两道现有兜底挡住：已收 UID 直接
+/// 跳过，流水表的 UNIQUE(rule_id, email_uid, dedup_key) 又挡一遍，所以这个入口
+/// 可以放心反复点。
+pub fn ledger_backfill_rule(rule_id: i64, password: String, limit: u64) -> Result<String, String> {
+    let limit = if limit == 0 { BACKFILL_FETCH_LIMIT } else { limit };
+    check_with_limit(rule_id, &password, limit, true)
+}
+
 pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
+    check_with_limit(rule_id, password, DEFAULT_FETCH_LIMIT, false)
+}
+
+fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> Result<String, String> {
     let rule = storage::get_email_rule(rule_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("规则 {} 不存在", rule_id))?;
@@ -337,7 +358,7 @@ pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
 
     let cfg = EmailAccountWire::of(&rule, password);
     let cfg_json = json(&cfg)?;
-    let outcome: WireFetchOutcome = match email_module::api::email_fetch_json(cfg_json.clone(), DEFAULT_FETCH_LIMIT) {
+    let outcome: WireFetchOutcome = match email_module::api::email_fetch_json(cfg_json.clone(), limit) {
         Ok(text) => from_json(&text, "收信结果")?,
         Err(e) => {
             let detail = format!("收信失败: {}", e);
@@ -350,6 +371,8 @@ pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
     let mut new_emails = 0i64;
     let mut new_tx = 0i64;
     let mut skipped = 0i64;
+    // 命中规则却解析不了的封数：单独记，改版要有数可看
+    let mut parse_failed = 0i64;
     let known = storage::known_email_uids(rule_id).unwrap_or_default();
 
     for msg in &outcome.messages {
@@ -358,6 +381,8 @@ pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
         }
         let template_id =
             parse_glue::resolve_template_id(&rule, &msg.subject, &msg.body_html);
+        // 留档要留解析器真正吃过的那份：没 HTML 时它退而用纯文本
+        let body = if msg.body_html.is_empty() { msg.body_text.as_str() } else { msg.body_html.as_str() };
         let parsed = match parse_glue::parse_message(
             &template_id,
             &rule.template_config,
@@ -366,13 +391,28 @@ pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
         ) {
             Ok(p) => p,
             Err(e) => {
-                sw_warn!("[ledger] 邮件《{}》解析失败: {}", msg.subject, e);
+                let archived = archive_parse_failure(rule_id, &msg.uid, &msg.subject, body);
+                sw_warn!(
+                    "[ledger] 邮件《{}》解析失败: {}{}",
+                    msg.subject,
+                    e,
+                    match &archived {
+                        Some(p) => format!("；原文已留档 {}", p.display()),
+                        None => String::new(),
+                    }
+                );
+                if archived.is_some() {
+                    parse_failed += 1;
+                }
                 skipped += 1;
                 continue;
             }
         };
         if parsed.transactions.is_empty() {
             // 命中了规则却没解析出任何一笔：多半是银行改了模板，必须可见
+            if archive_parse_failure(rule_id, &msg.uid, &msg.subject, body).is_some() {
+                parse_failed += 1;
+            }
             skipped += 1;
             continue;
         }
@@ -384,13 +424,14 @@ pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
         let bill_date = pick_bill_date(&parsed.bill_date, &received);
 
         let mut stored_tx = 0i64;
-        for item in &parsed.transactions {
+        for (seq, item) in parsed.transactions.iter().enumerate() {
             let mut tx = parse_glue::tx_from_parsed(
                 item,
                 &rule,
                 &msg.uid,
                 &bill_date,
                 resolve_account(&rule, &item.card_tail)?,
+                seq,
             );
             tx.bill_date = bill_date.clone();
             if rule.auto_apply {
@@ -438,10 +479,33 @@ pub fn check_by_rule(rule_id: i64, password: &str) -> Result<String, String> {
     }
 
     let elapsed = started.elapsed().as_secs();
-    let detail = format!(
-        "收取 {} 封新邮件，新增 {} 笔流水，跳过 {} 笔（{} 秒）",
-        new_emails, new_tx, skipped, elapsed
-    );
+    let scanned = outcome.messages.len();
+    // 解析失败要留档：银行一改模板，没有原文就只能靠猜，猜一次错一次
+    let archive_note = if parse_failed > 0 {
+        match storage::db_dir() {
+            Some(dir) => format!(
+                "，{} 封解析失败（原文已存 {}，把这里的文件发给作者才改得动模板）",
+                parse_failed,
+                dir.join("parse_failures").display()
+            ),
+            None => format!("，{} 封解析失败", parse_failed),
+        }
+    } else {
+        String::new()
+    };
+    let detail = if history {
+        // 扫描条数要写出来：「扫了 200 封一封没命中」和「只扫到 10 封」在日志里
+        // 长得一样，用户就会以为回补没生效。
+        format!(
+            "历史回补：扫描 {} 封，新增 {} 封账单 / {} 笔流水，跳过 {} 笔（{} 秒）{}",
+            scanned, new_emails, new_tx, skipped, elapsed, archive_note
+        )
+    } else {
+        format!(
+            "收取 {} 封新邮件，新增 {} 笔流水，跳过 {} 笔（{} 秒）{}",
+            new_emails, new_tx, skipped, elapsed, archive_note
+        )
+    };
     finish_log(log_id, true, new_emails, new_tx, skipped, &detail);
     let _ = storage::touch_rule_run(rule_id, &detail);
     sw_info!("[ledger] 规则《{}》检查完成：{}", rule.name, detail);
@@ -512,6 +576,31 @@ pub fn ledger_fetch_emails(config_json: String, password: String, limit: u64) ->
         "total_seen": outcome.total_seen,
         "messages": out,
     }))
+}
+
+/// 命中规则却解析不了的邮件，原文留到账本旁边的 `parse_failures/`。
+///
+/// 银行一改模板，"解析失败"这四个字对修模板毫无帮助，只有原文能说明新结构长什么样；
+/// 反过来，没命中规则的邮件一封都不落盘，免得把整个收件箱抄到磁盘上。
+/// 同名文件（同规则同 UID）直接覆盖，磁盘上始终每封一份。
+fn archive_parse_failure(rule_id: i64, uid: &str, subject: &str, body: &str) -> Option<std::path::PathBuf> {
+    if body.trim().is_empty() {
+        return None;
+    }
+    let dir = storage::db_dir()?.join("parse_failures");
+    std::fs::create_dir_all(&dir).ok()?;
+    // 主题里可能有 / \ : 这类不能进文件名的字符，替掉但不删内容，认得出是哪封
+    let slug: String = subject
+        .chars()
+        .take(40)
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | ' ' => '_',
+            other => other,
+        })
+        .collect();
+    let file = dir.join(format!("rule{}_{}_{}.html", rule_id, uid, slug));
+    std::fs::write(&file, body).ok()?;
+    Some(file)
 }
 
 /// 连接自检（IMAP/POP3/SMTP），同时可列出邮箱目录
@@ -710,4 +799,39 @@ pub fn ledger_clear_logs() -> Result<(), String> {
 
 pub fn ledger_version() -> String {
     "ledger_module 0.1.0（邮件协议：email_module ".to_string() + &email_module::api::email_version() + "）"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 留档落在账本旁边、文件名认得出是哪封、没正文不建空文件
+    #[test]
+    fn parse_failure_archive_lands_next_to_the_ledger() {
+        let dir = std::env::temp_dir().join(format!("sw_ledger_archive_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        storage::init_db(dir.join("ledger.db").to_str().unwrap()).unwrap();
+
+        let file = archive_parse_failure(
+            3,
+            "8123",
+            "招商银行信用卡/电子账单 2026-09",
+            "<html>正文</html>",
+        )
+        .expect("留档要成功");
+        assert_eq!(file.parent().unwrap(), dir.join("parse_failures").as_path());
+        assert_eq!(
+            file.file_name().unwrap().to_str().unwrap(),
+            "rule3_8123_招商银行信用卡_电子账单_2026-09.html"
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "<html>正文</html>");
+        assert!(
+            archive_parse_failure(3, "8124", "空正文", "").is_none(),
+            "没有正文就别在磁盘上留一个空文件"
+        );
+
+        storage::close_db();
+        assert!(archive_parse_failure(3, "8125", "未初始化", "<b/>").is_none(), "账本没开就别写盘");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

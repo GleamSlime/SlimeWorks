@@ -854,6 +854,21 @@ void main() {
       expect(mock.lastCall('ledgerCheckRule').arg('password'), '表单里现填的');
     });
 
+    test('backfillHistory：口令同 checkRule，limit 0 交给 Rust 侧默认，走 BigInt', () async {
+      await service.saveRulePassword(5, kFakeSecret);
+      mock.stubAsyncString('ledgerBackfillRule', '历史回补：扫描 200 封，新增 3 封');
+      expect(await service.backfillHistory(5), '历史回补：扫描 200 封，新增 3 封');
+      final _MockCall auto = mock.lastCall('ledgerBackfillRule');
+      expect(auto.arg('password'), kFakeSecret);
+      expect(auto.arg('limit'), BigInt.zero);
+
+      mock.calls.clear();
+      await service.backfillHistory(5, password: '现填的', limit: 500);
+      final _MockCall given = mock.lastCall('ledgerBackfillRule');
+      expect(given.arg('password'), '现填的');
+      expect(given.arg('limit'), BigInt.from(500));
+    });
+
     test('fetchEmails/testConnection：rule_id>0 才回落安全存储，limit 走 BigInt', () async {
       await service.saveRulePassword(6, kFakeSecret);
       mock.stubAsyncString('ledgerFetchEmails', '[]');
@@ -1191,6 +1206,21 @@ void main() {
       expect(await service.deleteAccount(7), '账户已删除（3 笔流水归入其他）');
       expect(server.lastRequest.action, 'ledger_delete_account');
       expect(server.lastRequest.params, <String, dynamic>{'id': 7});
+    });
+
+    test('backfillHistory：远程只发 snake_case 的 rule_id/password/limit', () async {
+      server.responder = (FakeNodeRequest req) =>
+          FakeNodeReply.successData(<String, dynamic>{'text': '历史回补：扫描 200 封，新增 3 封'});
+      expect(
+        await service.backfillHistory(9, password: '现填的', limit: 50),
+        '历史回补：扫描 200 封，新增 3 封',
+      );
+      expect(server.lastRequest.action, 'ledger_backfill_rule');
+      expect(
+        server.lastRequest.params,
+        <String, dynamic>{'rule_id': 9, 'password': '现填的', 'limit': 50},
+      );
+      expect(mock.calls, isEmpty);
     });
 
     test('_text：节点回裸字符串时原样返回，回别的结构时重新编码成 JSON 文本', () async {

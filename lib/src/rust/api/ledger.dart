@@ -146,6 +146,18 @@ Future<String> ledgerCheckRule({
   password: password,
 );
 
+/// 历史回补：一次拉几百封全文逐封解析，比日常收取慢一个数量级，
+/// 必须离开 async worker 线程，否则整段 TLS 抓取会占死 runtime。
+Future<String> ledgerBackfillRule({
+  required PlatformInt64 ruleId,
+  required String password,
+  required BigInt limit,
+}) => RustLib.instance.api.crateApiLedgerLedgerBackfillRule(
+  ruleId: ruleId,
+  password: password,
+  limit: limit,
+);
+
 Future<String> ledgerFetchEmails({
   required String configJson,
   required String password,

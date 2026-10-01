@@ -11,6 +11,8 @@ use crate::types::*;
 // 所有读写都过这把锁，SQLite 单写多读的特性下够用，也避免各处传 Connection。
 lazy_static! {
     static ref DB_CONN: Mutex<Option<Connection>> = Mutex::new(None);
+    /// 账本文件路径：解析失败留档这类旁路写盘要知道"账本在哪，就写在旁边"
+    static ref DB_PATH: Mutex<String> = Mutex::new(String::new());
 }
 
 /// 列表查询用的联查形态：账户名/类别名一次带出
@@ -165,6 +167,7 @@ pub fn init_db(db_path: &str) -> Result<()> {
 
     let mut guard = DB_CONN.lock().unwrap();
     *guard = Some(conn);
+    *DB_PATH.lock().unwrap() = db_path.to_string();
     Ok(())
 }
 
@@ -236,6 +239,16 @@ pub fn is_ready() -> bool {
 pub fn close_db() {
     let mut guard = DB_CONN.lock().unwrap();
     *guard = None;
+    *DB_PATH.lock().unwrap() = String::new();
+}
+
+/// 账本文件所在目录；未初始化时 None，调用方自己决定降级成什么
+pub fn db_dir() -> Option<PathBuf> {
+    let path = DB_PATH.lock().unwrap().clone();
+    if path.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(path).parent()?.to_path_buf())
 }
 
 /// 取连接引用；未初始化返回错误而不是 panic

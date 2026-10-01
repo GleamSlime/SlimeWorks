@@ -27,6 +27,15 @@ lazy_static! {
     static ref HEADER_NOISE: Regex =
         Regex::new(r"(交易时间|记账日期|交易日期|金额|币种|摘要|说明|类型|商户|序号)").unwrap();
     static ref WS: Regex = Regex::new(r"[ \t\r\n\u{000b}\u{000c}]+").unwrap();
+    /// 表格单元格：非贪婪，嵌套层级交给 leaf_cells 自己筛
+    static ref TD_CELL: Regex = Regex::new(r"(?is)<td[^>]*>(.*?)</td>").unwrap();
+    /// 表格行
+    static ref TR_ROW: Regex = Regex::new(r"(?is)<tr[^>]*>(.*?)</tr>").unwrap();
+    /// band 容器的 id 值：引号可省（`<SPAN id=fixBand15>`），值形如 `fixBand4_AnEw_4`
+    static ref BAND_ID: Regex = Regex::new(r#"(?i)<span[^>]*\bid="?([A-Za-z][A-Za-z0-9_-]*)"#).unwrap();
+    /// 账单期间：`2026-08-22-2026-09-21`（招行月账单明细行只有 MMDD，年份靠这个区间补）
+    static ref PERIOD: Regex =
+        Regex::new(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s*[-–~至]\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})").unwrap();
 }
 
 /// 文本里读到的一个金额
@@ -222,8 +231,7 @@ pub fn strip_datetime(text: &str) -> String {
 /// 按 `<span id="前缀` 切片，返回 (首段, 每段正文)。
 /// 尾缀是银行每次渲染随机的串，所以只认前缀；每段以该 marker 开头。
 pub fn split_by_marker(html: &str, marker: &str) -> (String, Vec<String>) {
-    let pat = format!("<span id=\"{}", marker);
-    let positions = find_all(html, pat.as_bytes());
+    let positions = band_positions(html, marker);
     let head = positions
         .first()
         .map(|p| html[..*p].to_string())
@@ -235,6 +243,105 @@ pub fn split_by_marker(html: &str, marker: &str) -> (String, Vec<String>) {
         chunks.push(html[start..end].to_string());
     }
     (head, chunks)
+}
+
+/// 找出每个 band 容器的起点，兼容招行两种写法：
+/// `<span id="fixBand4_x_4">`（带引号、带每次渲染随机的中段）和 `<span id=fixBand15>`（不带引号）。
+/// 结尾只排除数字，否则 `fixBand4` 会咬进 `fixBand40`，把不相干的容器当明细行。
+pub fn band_positions(html: &str, marker: &str) -> Vec<usize> {
+    let lower_marker = marker.to_ascii_lowercase();
+    BAND_ID
+        .captures_iter(html)
+        .filter_map(|caps| {
+            let id = caps.get(1)?.as_str().to_ascii_lowercase();
+            if !id.starts_with(&lower_marker) {
+                return None;
+            }
+            // 紧跟数字的是另一个容器（fixBand4 不该咬中 fixBand40），
+            // 银行渲染随机的中段以 `_` 开头，不在排除之列
+            if id[lower_marker.len()..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                return None;
+            }
+            caps.get(0).map(|m| m.start())
+        })
+        .collect()
+}
+
+/// 取片段里所有"叶子单元格"的纯文本，顺序即列序。
+///
+/// 账单表格是 TD 套 TABLE 再套 TD，外层单元格的正文会把整张子表都吞进来，
+/// 所以只认不含嵌套 TD 的那一层——列数就稳定，改版后也能靠列位对得上。
+pub fn leaf_cells(fragment: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for caps in TD_CELL.captures_iter(fragment) {
+        let inner = match caps.get(1) {
+            Some(m) => m.as_str(),
+            None => continue,
+        };
+        if inner.to_ascii_lowercase().contains("<td") {
+            continue;
+        }
+        out.push(normalize_spaces(&html_to_text(inner)));
+    }
+    out
+}
+
+/// 整篇 HTML 的表格行 → 每行的叶子单元格（顺序即列序）。
+///
+/// 2026 版招行电子账单的明细单元格一个 id 都没有，band 编号也每版在变，
+/// 唯一稳定的是"一行 `<tr>` 七个叶子 `<td>`"，所以按行切、由调用方校验列形。
+/// 注意 `<tr>` 里再套 `<table>` 时，非贪婪会把外层行截断在内层 `</tr>`，
+/// 截出来的行形状对不上、会被调用方丢弃，实测不会误吞真实明细行。
+pub fn table_rows(html: &str) -> Vec<Vec<String>> {
+    TR_ROW
+        .captures_iter(html)
+        .filter_map(|caps| caps.get(1).map(|m| leaf_cells(m.as_str())))
+        .collect()
+}
+
+/// 账单期间，返回 (起, 止) 两个 `YYYY-MM-DD`
+pub fn extract_period(text: &str) -> Option<(String, String)> {
+    let caps = PERIOD.captures(text)?;
+    let pick = |i: usize| caps.get(i).and_then(|m| m.as_str().parse::<u32>().ok());
+    let (sy, sm, sd) = (pick(1)?, pick(2)?, pick(3)?);
+    let (ey, em, ed) = (pick(4)?, pick(5)?, pick(6)?);
+    if !(1980..=2200).contains(&sy) || !(1980..=2200).contains(&ey) {
+        return None;
+    }
+    if !(1..=12).contains(&sm) || !(1..=12).contains(&em) || !(1..=31).contains(&sd) || !(1..=31).contains(&ed) {
+        return None;
+    }
+    Some((
+        format!("{:04}-{:02}-{:02}", sy, sm, sd),
+        format!("{:04}-{:02}-{:02}", ey, em, ed),
+    ))
+}
+
+/// 把明细行的 `0822` 补成完整日期。
+///
+/// 月账单跨年前后都在同一个区间里，判断依据是"月日比区间结束日还晚"的那些行
+/// 只能属于区间起始那年（`2025-12-22-2026-01-21` 里的 1225 → 2025）。
+pub fn expand_mmdd(cell: &str, period_start: &str, period_end: &str) -> Option<String> {
+    let digits: String = cell.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() != 4 {
+        return None;
+    }
+    let month: u32 = digits[..2].parse().ok()?;
+    let day: u32 = digits[2..].parse().ok()?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let start = DATE_ISO.captures(period_start)?;
+    let end = DATE_ISO.captures(period_end)?;
+    let md = month * 100 + day;
+    let end_md: u32 = end.get(2)?.as_str().parse::<u32>().ok()? * 100
+        + end.get(3)?.as_str().parse::<u32>().ok()?;
+    let year: i32 = if md > end_md {
+        start.get(1)?.as_str().parse().ok()?
+    } else {
+        end.get(1)?.as_str().parse().ok()?
+    };
+    Some(format!("{:04}-{:02}-{:02}", year, month, day))
 }
 
 /// 逐字节查找所有出现位置（pattern 为 ASCII，边界安全）
@@ -380,7 +487,7 @@ pub const INCOME_TYPES: &[&str] = &["退款", "退货", "冲正", "撤销", "溢
 /// 已知的支出类交易类型：不在表内也照支出记，但要吼一声
 pub const KNOWN_EXPENSE_TYPES: &[&str] = &[
     "消费", "取现", "提现", "分期", "利息", "费用", "年费", "违约金", "逾期", "手续费", "购物", "还款", "转账", "扣费",
-    "支付",
+    "支付", "财付通",
 ];
 
 /// 交易类型 → 方向；返回 (方向, 警告)

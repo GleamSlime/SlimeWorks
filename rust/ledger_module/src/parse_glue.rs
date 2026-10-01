@@ -159,7 +159,7 @@ pub fn template_list() -> Vec<TemplateInfo> {
 
 fn template_name(id: &str) -> &'static str {
     match id {
-        "cmb_daily_bill" => "招商银行每日账单",
+        "cmb_daily_bill" => "招商银行账单（每日明细 / 月度电子账单）",
         "generic_keyword" => "通用关键字匹配",
         "custom_regex" => "自定义正则",
         _ => "未知模板",
@@ -168,7 +168,8 @@ fn template_name(id: &str) -> &'static str {
 
 fn template_hint(id: &str) -> &'static str {
     match id {
-        "cmb_daily_bill" => "招行账单每日消费明细邮件：时间 + CNY 金额 + 尾号XXXX 类型 商户 三段式",
+        "cmb_daily_bill" => "招行账单邮件内置模板：每日明细走 时间 + CNY 金额 + 尾号XXXX 类型 商户 三段式，\
+                              月度电子账单走七列位置表（交易日/入账日/摘要/交易金额/卡号/币种/人民币金额）",
         "generic_keyword" => "按日期/金额/摘要关键字抓行，适合格式已知但没有内置模板的账单邮件",
         "custom_regex" => "一条带命名组的正则吃整行，最灵活也最容易写错，改完务必用预览验证",
         _ => "该模板无内置说明",
@@ -181,7 +182,12 @@ pub fn resolve_template_id(rule: &EmailRule, subject: &str, html: &str) -> Strin
         return rule.template_id.clone();
     }
     let text = format!("{} {}", subject, html);
-    let is_cmb = (text.contains("每日账单") || text.contains("消费明细") || text.contains("交易明细"))
+    // 「电子账单」是 2026 版月度账单只在标题里出现的说法，正文的栏目名全是图片；
+    // 真正定性靠后面的招行资源域名，缺一律不走内置模板。
+    let is_cmb = (text.contains("每日账单")
+        || text.contains("消费明细")
+        || text.contains("交易明细")
+        || text.contains("电子账单"))
         && (text.contains("bill_templet_resource")
             || text.contains("s3gw.cmbimg.com")
             || text.contains("cmbchina")
@@ -243,12 +249,15 @@ fn compile_ci(pat: &str) -> Option<regex::Regex> {
 }
 
 /// 解析出的一笔 → 待入账流水
+///
+/// `seq` 是这一笔在邮件里的行序，只用来把去重键分开，不参与展示。
 pub fn tx_from_parsed(
     parsed: &ParsedTx,
     rule: &EmailRule,
     email_uid: &str,
     fallback_date: &str,
     account_id: i64,
+    seq: usize,
 ) -> Transaction {
     let occurred = if parsed.datetime.len() >= 19 {
         parsed.datetime.chars().take(19).collect()
@@ -265,7 +274,11 @@ pub fn tx_from_parsed(
     };
     // 邮件行必须精确到时刻去重：同一天两笔 33.00 的 示例游戏平台消费是真实重复扣款，
     // 若只按"日期+金额+商户"去重就会把第二笔当重复挡掉。
-    let dedup_key = format!("{}|{:.2}|{}|{}", occurred, parsed.amount, parsed.merchant, parsed.entry_type);
+    // 招行的月账单连时分都不给，同日的重复扣款只剩行序能分开，所以把行序也编进键。
+    let dedup_key = format!(
+        "{}|{:.2}|{}|{}|r{}",
+        occurred, parsed.amount, parsed.merchant, parsed.entry_type, seq
+    );
     Transaction {
         id: 0,
         occurred_at: occurred,

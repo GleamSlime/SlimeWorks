@@ -1226,6 +1226,16 @@ pub async fn dispatch_action(
             .await?;
             Ok(json!({ "text": text }))
         }
+        "ledger_backfill_rule" => {
+            let rule_id = i_field(&params, "rule_id");
+            let password = s_field(&params, "password");
+            let limit = u_field(&params, "limit");
+            let text = ledger_blocking("邮件历史回补", move || {
+                ledger_module::api::ledger_backfill_rule(rule_id, password, limit)
+            })
+            .await?;
+            Ok(json!({ "text": text }))
+        }
         "ledger_fetch_emails" => {
             let config_json = s_field(&params, "config_json");
             let password = s_field(&params, "password");

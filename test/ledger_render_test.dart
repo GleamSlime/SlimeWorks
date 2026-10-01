@@ -401,6 +401,11 @@ void _seedFull() {
       fn('ledgerListReceivedEmails'): _json(_receivedEmails),
       fn('ledgerEmailTransactions'): _json(_txs.take(2).toList()),
       fn('ledgerListRules'): _json(_rules),
+      // 这两个是异步接口（FRB 生成的是 Future<String>），桩必须给 Future，
+      // 给裸字符串会在返回值上做类型检查时炸掉
+      fn('ledgerCheckRule'): Future<String>.value('收取 1 封新邮件，新增 6 笔流水，跳过 0 笔（2 秒）'),
+      fn('ledgerBackfillRule'):
+          Future<String>.value('历史回补：扫描 200 封，新增 3 封账单 / 6 笔流水，跳过 0 笔（41 秒）'),
       fn('ledgerGetLogs'): _json(_logs),
       fn('ledgerListMerchantMemory'): _json(_merchantMemory),
       fn('ledgerSchedulerStatus'): jsonEncode(_scheduler),
@@ -683,6 +688,73 @@ void main() {
       );
       expect(find.text('您的信用卡账单已生成（2026年3月）'), findsOneWidget);
       expect(find.text('已入账的邮件（1）'), findsOneWidget);
+      await unmountPage(tester);
+    });
+
+    testWidgets('待确认：回补历史挨着立即收取，点了先确认再真跑', (tester) async {
+      await _pumpLedger(
+        tester,
+        const LedgerPendingScreen(),
+        window: _desktopWindow,
+        design: _desktopDesign,
+      );
+      // 桩里只有一条启用规则，所以两枚胶囊都是"直接跑"，不套菜单
+      final now = find.text('立即收取');
+      final history = find.text('回补历史');
+      expect(now, findsOneWidget);
+      expect(history, findsOneWidget);
+      // 位置也钉住：同一行、回补在立即收取右边——用户找的就是"旁边那个"
+      expect(
+        tester.getTopLeft(history).dy,
+        closeTo(tester.getTopLeft(now).dy, 1.0),
+        reason: '两枚胶囊必须在同一条顶栏带上',
+      );
+      expect(
+        tester.getTopLeft(history).dx,
+        greaterThan(tester.getTopLeft(now).dx),
+        reason: '回补历史排在立即收取右边',
+      );
+
+      await tester.tap(history);
+      await advance(tester);
+      expect(find.textContaining('回补「信用卡账单收信」的历史邮件'), findsOneWidget);
+
+      await tester.tap(find.text('开始回补'));
+      // 收取是异步 FFI：桩里的 Future 要真事件循环才翻得过来，
+      // fake async 的 pump 只会把它一直吊在「正在回补历史邮件…」。
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await advance(tester);
+      // 这句概况来自 mock 的 ledger_backfill_rule 桩：能看见就说明
+      // 按钮 → 确认框 → 服务 → FFI 整条链路真的走通了，而不只是画了个按钮
+      expect(find.textContaining('历史回补：扫描 200 封'), findsOneWidget);
+      await unmountPage(tester);
+    });
+
+    testWidgets('设置：每条规则都配一个回补历史入口', (tester) async {
+      await _pumpLedger(
+        tester,
+        const LedgerSettingsScreen(),
+        window: _desktopWindow,
+        design: _desktopDesign,
+      );
+      expect(find.text('立即收取'), findsNWidgets(2));
+      expect(find.text('回补历史'), findsNWidgets(2));
+      await unmountPage(tester);
+    });
+
+    testWidgets('设置：回补历史要先确认，取消就什么都不发', (tester) async {
+      await _pumpLedger(
+        tester,
+        const LedgerSettingsScreen(),
+        window: _desktopWindow,
+        design: _desktopDesign,
+      );
+      await tester.tap(find.text('回补历史').first);
+      await advance(tester);
+      expect(find.textContaining('已经入过账的会自动跳过'), findsOneWidget);
+      await tester.tap(find.text('取消'));
+      await advance(tester);
+      expect(find.textContaining('回补「'), findsNothing);
       await unmountPage(tester);
     });
 

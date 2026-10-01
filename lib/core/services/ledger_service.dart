@@ -438,6 +438,29 @@ class LedgerService extends GetxService {
     );
   }
 
+  /// 历史回补：从收件箱最近的 [limit] 封里（0 用 Rust 侧默认 200 封）把命中规则的
+  /// 账单邮件全部补录入账，返回概况文本。
+  ///
+  /// 日常定时收取只看最新 10 封，够快但补不了过去：第一次配规则、口令失效停摆
+  /// 几天，历史账单就永远进不来。这一路是幂等的（已收 UID 跳过 + 流水唯一索引），
+  /// 所以点两次不会记两遍。
+  Future<String> backfillHistory(
+    int ruleId, {
+    String password = '',
+    int limit = 0,
+  }) async {
+    final pwd = await _passwordFor(ruleId, password);
+    return _text(
+      'ledger_backfill_rule',
+      <String, dynamic>{'rule_id': ruleId, 'password': pwd, 'limit': limit},
+      () => rust_api.ledgerBackfillRule(
+        ruleId: ruleId,
+        password: pwd,
+        limit: BigInt.from(limit),
+      ),
+    );
+  }
+
   /// 试收取：规则还没保存时也能用当前表单直接连一次
   Future<List<LedgerFetchedEmail>> fetchEmails({
     required Map<String, dynamic> config,

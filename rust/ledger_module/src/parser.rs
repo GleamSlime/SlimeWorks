@@ -28,11 +28,22 @@ pub fn template_ids() -> Vec<String> {
 
 pub fn parse_cmb_daily_bill(html: &str) -> Result<ParseResult, String> {
     let (head, rows) = pt::split_by_marker(html, "fixBand4");
-    if rows.is_empty() {
-        return Err("没找到账单明细行（fixBand4），招行的邮件模板可能已改版".to_string());
-    }
+    // fixBand4 在两种版式里都存在（月度账单里它只是页脚的一个容器，不是明细行），
+    // 光看容器在不在选不对分支：先按每日版式试，谁能真解析出笔数就听谁的。
+    let daily_err = if rows.is_empty() {
+        "没有 fixBand4 明细行容器".to_string()
+    } else {
+        match parse_cmb_daily_rows(&head, &rows) {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        }
+    };
+    parse_cmb_statement(html).map_err(|e| format!("{}（每日版式：{}）", e, daily_err))
+}
 
-    let head_text = pt::html_to_text(&head);
+/// 每日账单（fixBand4 行容器 + 带 id 的单元格）
+fn parse_cmb_daily_rows(head: &str, rows: &[String]) -> Result<ParseResult, String> {
+    let head_text = pt::html_to_text(head);
     let bill_date = pt::extract_date(&head_text).unwrap_or_default();
     let available_credit = extract_after_keyword(&head_text, "可用额度").and_then(|s| pt::extract_amount(&s).map(|a| a.value));
     let points_balance = extract_after_keyword(&head_text, "积分余额")
@@ -106,6 +117,142 @@ pub fn parse_cmb_daily_bill(html: &str) -> Result<ParseResult, String> {
         return Err(format!("命中了招行账单模板但一笔都没解析出来（共 {} 行），请先用预览核对模板", rows.len()));
     }
     Ok(result)
+}
+
+/// 2026 版月度电子账单：明细行一个单元格 id 都没有、表头整排是图片，
+/// 能靠的只有列的相对顺序 `交易日 | 入账日 | 摘要 | 交易金额 | 卡号末四位 | 币种 | 人民币金额`。
+///
+/// 列位从行尾倒推而不是写死下标：招行习惯在明细前后留空白格，
+/// 多一列就会让写死的下标整体错位、把金额读成卡号。
+/// 入账取人民币金额列（外币行银行已折算），币种列不参与记账；
+/// 日期只有 MMDD，年份靠账单期间补。
+struct StmtCols {
+    trade: usize,
+    post: usize,
+    desc: usize,
+    txn: usize,
+    card: usize,
+    cny: usize,
+}
+
+/// 校验这一行是不是明细行；不是就 None（表头、说明、小计都走这条路被挡掉）。
+/// 顺带把人民币金额解出来，省得调用方再解析一遍。
+fn stmt_columns(cells: &[String]) -> Option<(StmtCols, pt::AmountToken)> {
+    // 人民币金额是行里最后一个金额列，它右边不该再有"像钱"的格
+    let cny = cells.iter().rposition(|c| pt::extract_amount(c).is_some())?;
+    if cny < 6 {
+        return None;
+    }
+    let cols = StmtCols {
+        trade: cny - 6,
+        post: cny - 5,
+        desc: cny - 4,
+        txn: cny - 3,
+        card: cny - 2,
+        cny,
+    };
+    // 交易金额列必须也是钱：七列表格不止明细有，缺这一眼就说明不是交易行
+    if pt::extract_amount(&cells[cols.txn]).is_none() {
+        return None;
+    }
+    if cells[cols.desc].is_empty() {
+        return None;
+    }
+    // 日期列要么空（还款行），要么是 MMDD；两个都空说明读错了列
+    if pick_date_cell(&cells[cols.trade], &cells[cols.post]).is_none() {
+        return None;
+    }
+    let amount = pt::extract_amount(&cells[cols.cny])?;
+    Some((cols, amount))
+}
+
+fn parse_cmb_statement(html: &str) -> Result<ParseResult, String> {
+    let text = pt::html_to_text(html);
+    let period = pt::extract_period(&text);
+    let bill_date = period.as_ref().map(|(_, end)| end.clone()).unwrap_or_default();
+    let mut result = ParseResult {
+        template_id: "cmb_daily_bill".to_string(),
+        bill_date,
+        ..Default::default()
+    };
+    if period.is_none() {
+        result.warnings.push("没读到账单期间，明细行的 MMDD 无法补年份，流水日期将退回邮件接收日期".to_string());
+    }
+
+    let (period_start, period_end) = period.unwrap_or_default();
+    let mut unknown_type = 0usize;
+    let mut near_miss = 0usize;
+    for cells in pt::table_rows(html) {
+        let Some((cols, amount)) = stmt_columns(&cells) else {
+            // 格数够多却对不上列形的行要留数：改版往往就是这个形状
+            // （额度、最低还款那些汇总行只有几列，不该跟着一起喊）
+            if cells.len() >= 7 {
+                near_miss += 1;
+            }
+            continue;
+        };
+        let desc = cells[cols.desc].clone();
+        let date = match pick_date_cell(&cells[cols.trade], &cells[cols.post]) {
+            Some(mmdd) => pt::expand_mmdd(&mmdd, &period_start, &period_end).unwrap_or_default(),
+            None => String::new(),
+        };
+        let entry_type = stmt_entry_type(&desc);
+        if entry_type.is_empty() {
+            unknown_type += 1;
+        }
+        let (direction, _) = pt::classify_direction(&entry_type, amount.negative);
+
+        result.transactions.push(ParsedTx {
+            time: String::new(),
+            datetime: pt::assemble_datetime(&date, ""),
+            currency: "CNY".to_string(),
+            amount: amount.value,
+            raw_amount: amount.raw,
+            description: desc.clone(),
+            card_tail: digits_of(&cells[cols.card]),
+            entry_type,
+            merchant: pt::tidy_merchant(&desc),
+            direction,
+        });
+    }
+
+    if unknown_type > 0 {
+        result.warnings.push(format!("{} 行的摘要里没有已知交易类型，已按金额正负判定方向，请抽查", unknown_type));
+    }
+    if near_miss > 0 {
+        result.warnings.push(format!("{} 行像明细行但列形对不上，已跳过；若确实漏了流水，请用预览核对列序", near_miss));
+    }
+    if result.transactions.is_empty() {
+        return Err(format!(
+            "没找到招行账单明细行：既没有 fixBand4 行容器，也没有列形对得上的明细表格（候选行 {} 行），招行的邮件模板可能已改版",
+            near_miss
+        ));
+    }
+    Ok(result)
+}
+
+/// 还款、费用这类行没有交易日，只有入账日
+fn pick_date_cell(trade: &str, post: &str) -> Option<String> {
+    [trade, post]
+        .into_iter()
+        .map(pt::normalize_spaces)
+        .find(|c| c.len() == 4 && c.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+fn digits_of(cell: &str) -> String {
+    let digits: String = cell.chars().filter(|c| c.is_ascii_digit()).collect();
+    // 只认 3~4 位的末四位：招行这一列就是 4 位，长了说明读错了列
+    if (3..=4).contains(&digits.len()) { digits } else { String::new() }
+}
+
+/// 摘要里能认出的第一个交易类型词；认不出留空，由方向判定兜底
+fn stmt_entry_type(desc: &str) -> String {
+    for k in pt::INCOME_TYPES.iter().chain(pt::KNOWN_EXPENSE_TYPES.iter()) {
+        if desc.contains(*k) {
+            return (*k).to_string();
+        }
+    }
+    String::new()
 }
 
 /// 在正文里定位关键字，返回关键字之后的内容（用于"可用额度 ￥50,000.00"这类标签-数值对）
