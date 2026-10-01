@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -8,13 +9,14 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/theme/app_viz.dart';
 import 'package:slime_works/pages/ledger/components/ledger_charts.dart';
 import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
+import 'package:slime_works/pages/ledger/components/ledger_tx_editor.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_stats_viewmodel.dart';
 
-/// 统计页：类别占比环图 + 月度双柱趋势 + 商户排行。
+/// 统计页：区间预设 + 聚合轴趋势三线 + 类别占比环 + 商户排行 + 净资产曲线。
 ///
-/// 收支两个方向分开看：把 12 个月的收入和一个月的支出塞进同一张饼，
-/// 得出的百分比没有任何意义，所以方向游标放在最上面，占比卡跟着它走。
+/// 区间和聚合轴是这一页的两个自由度，其余卡片都跟着区间走；方向游标只影响
+/// 占比与趋势，不影响净资产——钱进口袋这件事本来就不分收支。
 class LedgerStatsScreen extends BasePage<LedgerStatsViewModel> {
   const LedgerStatsScreen({super.key});
 
@@ -36,8 +38,12 @@ class _LedgerStatsScreenState
     return ScreenChrome(
       data: ScreenChromeData(
         title: '记账统计',
-        toolbar: const LedgerTabs(current: '/ledger/stats'),
+        toolbar: ledgerBottomNavMode(context)
+            ? null
+            : const LedgerTabs(current: '/ledger/stats'),
         toolbarHeight: m.kSpace44,
+        bottomBar: LedgerBottomNav(current: '/ledger/stats', onAdd: () => ledgerQuickAdd(context)),
+        bottomBarHeight: m.kSpace56,
         actions: <Widget>[
           ToolIconButton(
             icon: StrokeIcons.refresh,
@@ -54,76 +60,129 @@ class _LedgerStatsScreenState
     );
   }
 
-  Future<void> _pickMonth() async {
-    final now = DateTime.now();
-    final parts = viewModel.month.value.split('-');
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(int.parse(parts.first), int.parse(parts.last), 1),
-      firstDate: DateTime(now.year - 10),
-      lastDate: now,
-    );
-    if (picked != null) viewModel.goToMonth(ledgerMonthOf(picked));
-  }
-
   Widget _buildBody(BuildContext context) {
     final m = AppTheme.metrics;
-    final categories = viewModel.categoryRows;
-    final trend = viewModel.monthRows;
     return ListView(
       padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace8, m.kSpace16, m.kSpace32),
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: LedgerMonthStrip(
-                monthLabel: viewModel.monthLabel,
-                canGoNext: viewModel.canGoNextMonth,
-                onPrevious: () => viewModel.shiftMonth(-1),
-                onNext: () => viewModel.shiftMonth(1),
-                onPickMonth: _pickMonth,
-              ),
-            ),
-            _DirectionSwitch(
-              expense: viewModel.isExpense,
-              onChanged: viewModel.setDirection,
-            ),
-          ],
-        ),
+        _RangeBar(vm: viewModel),
         SizedBox(height: m.kSpace12),
         LedgerStateView(
           error: viewModel.errorMessage,
-          empty: categories.isEmpty && trend.isEmpty,
-          emptyTitle: '还没有可统计的流水',
+          // 只看这一区间的笔数：轴上的格子是按日期铺满的，一根流水没有也照样有
+          // 31 格，用 axisRows 判空等于永远不空
+          empty: viewModel.summary.value.count == 0,
+          emptyTitle: '这段时间还没有流水',
           emptyIcon: StrokeIcons.chartPie,
           onRetry: viewModel.reload,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              _SummaryCard(vm: viewModel),
+              SizedBox(height: m.kSpace16),
+              _TrendCard(vm: viewModel),
+              SizedBox(height: m.kSpace16),
               _CategoryCard(
-                rows: categories,
+                rows: viewModel.categoryRows,
                 total: viewModel.categoryTotal,
                 selectedId: viewModel.selectedCategory.value,
                 onSelect: viewModel.toggleCategory,
                 directionLabel: viewModel.directionLabel,
-                monthLabel: viewModel.monthLabel,
+                rangeLabel: viewModel.rangeLabel,
                 wide: !ledgerNarrow(context),
               ),
-              SizedBox(height: m.kSpace16),
-              _TrendCard(
-                rows: trend,
-                months: viewModel.trendMonths.value,
-                onSelect: viewModel.setTrendMonths,
-              ),
-              if (viewModel.merchantRows.isNotEmpty) ...[
+              if (viewModel.merchantRows.isNotEmpty) ...<Widget>[
                 SizedBox(height: m.kSpace16),
-                _MerchantCard(rows: viewModel.merchantRows),
+                _MerchantCard(rows: viewModel.merchantRows, directionLabel: viewModel.directionLabel),
               ],
+              SizedBox(height: m.kSpace16),
+              _AssetCard(vm: viewModel),
             ],
           ),
         ),
       ],
     );
+  }
+}
+
+/// 区间预设 + 方向游标。
+///
+/// 预设做成明面上的胶囊而不是菜单：这一页所有卡片都被它牵着，藏起来等于让用户
+/// 以为自己看的是"全部"。
+class _RangeBar extends StatelessWidget {
+  const _RangeBar({required this.vm});
+
+  final LedgerStatsViewModel vm;
+
+  static const List<LedgerRangePreset> _presets = <LedgerRangePreset>[
+    LedgerRangePreset.last30,
+    LedgerRangePreset.thisMonth,
+    LedgerRangePreset.lastMonth,
+    LedgerRangePreset.thisQuarter,
+    LedgerRangePreset.thisYear,
+    LedgerRangePreset.all,
+    LedgerRangePreset.custom,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: <Widget>[
+                    for (final preset in _presets) ...<Widget>[
+                      TagChip(
+                        label: kLedgerRangeLabels[preset] ?? preset.name,
+                        selected: vm.preset.value == preset,
+                        onTap: () => _pick(context, preset),
+                      ),
+                      SizedBox(width: m.kSpace6),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: m.kSpace8),
+            _DirectionSwitch(
+              expense: vm.isExpense,
+              onChanged: vm.setDirection,
+            ),
+          ],
+        ),
+        SizedBox(height: m.kSpace6),
+        Text(vm.rangeLabel, style: AppTextStyles.caption(context)),
+      ],
+    );
+  }
+
+  Future<void> _pick(BuildContext context, LedgerRangePreset preset) async {
+    if (preset != LedgerRangePreset.custom) {
+      await vm.setPreset(preset);
+      return;
+    }
+    final now = DateTime.now();
+    final start = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 10),
+      lastDate: now,
+    );
+    if (start == null || !context.mounted) return;
+    final end = await showDatePicker(
+      context: context,
+      initialDate: start,
+      firstDate: start,
+      lastDate: now,
+    );
+    if (end != null) await vm.setCustomRange(start, end);
   }
 }
 
@@ -155,6 +214,296 @@ class _DirectionSwitch extends StatelessWidget {
   }
 }
 
+/// 区间汇总：三个数字 + 笔数，先给结论再给图
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.vm});
+
+  final LedgerStatsViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    final s = vm.summary.value;
+    final viz = AppVizSet.of(context);
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          // 区间那句话区间条下面已经写着，这里再抄一行就成了满屏的 "3.1 - 3.31"
+          _StatTrio(
+            cells: <_StatItem>[
+              _StatItem(
+                label: '收入',
+                amount: s.income,
+                tone: AppSemantic.of(context).success.color,
+              ),
+              _StatItem(label: '支出', amount: s.expense),
+              _StatItem(label: '结余', amount: s.net, tone: s.net < 0 ? viz.coral.base : null),
+            ],
+          ),
+          SizedBox(height: m.kSpace8),
+          Text('${s.count} 笔', style: AppTextStyles.caption(context)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem {
+  const _StatItem({required this.label, required this.amount, this.tone});
+
+  final String label;
+  final double amount;
+  final Color? tone;
+}
+
+/// 一组并列的数字：宽处横着排，窄处叠成"标签……金额"三行。
+///
+/// 手机上一格只有 100 来逻辑像素，"¥12,320.00" 会被省略号截成 "¥12,3…"，
+/// 而这几格要回答的恰恰是精确到分的数，缩不得。
+class _StatTrio extends StatelessWidget {
+  const _StatTrio({required this.cells});
+
+  final List<_StatItem> cells;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (box.maxWidth / cells.length >= scaleW(132)) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final cell in cells)
+                Expanded(
+                  child: _StatCell(
+                    label: cell.label,
+                    amount: cell.amount,
+                    tone: cell.tone,
+                  ),
+                ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            for (final cell in cells)
+              Padding(
+                padding: EdgeInsets.only(bottom: m.kSpace8),
+                child: _StatCell(
+                  label: cell.label,
+                  amount: cell.amount,
+                  tone: cell.tone,
+                  inline: true,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  const _StatCell({
+    required this.label,
+    required this.amount,
+    this.tone,
+    this.inline = false,
+  });
+
+  final String label;
+  final double amount;
+  final Color? tone;
+
+  /// 窄屏档：标签和金额同一行，金额独占整行宽度才不会被截断
+  final bool inline;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    final value = Text(
+      '¥${formatLedgerAmount(amount)}',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTextStyles.metric(context).copyWith(color: tone ?? s.textPrimary),
+    );
+    if (inline) {
+      return Row(
+        children: <Widget>[
+          Text(label, style: AppTextStyles.caption(context)),
+          SizedBox(width: m.kSpace8),
+          Expanded(child: value),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label, style: AppTextStyles.caption(context)),
+        SizedBox(height: m.kSpace4),
+        value,
+      ],
+    );
+  }
+}
+
+/// 趋势三线：收入 / 支出 / 结余。
+///
+/// 结余单独一条而不是"看两根柱子的高低差"：眼睛比不了两根柱子之间那点距离，
+/// 却一眼看得出第三条线有没有掉到 0 轴下面。
+class _TrendCard extends StatelessWidget {
+  const _TrendCard({required this.vm});
+
+  final LedgerStatsViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    final viz = AppVizSet.of(context);
+    final rows = vm.axisRows;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(child: Text('收支趋势', style: AppTextStyles.sectionTitle(context))),
+              _AxisPicker(axis: vm.axis.value, onChanged: vm.setAxis),
+            ],
+          ),
+          SizedBox(height: m.kSpace4),
+          Text(vm.rangeLabel, style: AppTextStyles.caption(context)),
+          SizedBox(height: m.kSpace12),
+          LedgerLineChart(
+            labels: vm.axisLabels,
+            series: <LedgerLineSeries>[
+              LedgerLineSeries(
+                label: '收入',
+                color: s.success.color,
+                values: vm.axisIncome,
+              ),
+              LedgerLineSeries(
+                label: '支出',
+                color: viz.lagoon.base,
+                values: vm.axisExpense,
+              ),
+              LedgerLineSeries(
+                label: '结余',
+                color: viz.amber.base,
+                values: vm.axisNet,
+              ),
+            ],
+          ),
+          SizedBox(height: m.kSpace8),
+          _LineLegend(
+            items: <(String, Color)>[
+              ('收入', s.success.color),
+              ('支出', viz.lagoon.base),
+              ('结余', viz.amber.base),
+            ],
+          ),
+          if (rows.isNotEmpty) ...<Widget>[
+            SizedBox(height: m.kSpace6),
+            Text(
+              _busiest(context),
+              style: AppTextStyles.caption(context).copyWith(color: s.textTertiary),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 最忙那一格的说法：按日时横轴刻度只剩一个"28"，句子得说全"3月28日"
+  String _busiest(BuildContext context) {
+    final top = vm.busiestBucket;
+    if (top == null) return '';
+    final value = vm.isExpense ? top.expense : top.income;
+    if (value <= 0) return '这段时间没有$directionWord';
+    final label = vm.axis.value == LedgerAxis.day ? ledgerDateLabel(top.date) : top.label;
+    return '最忙的是$label：$directionWord ¥${formatLedgerAmount(value)}';
+  }
+
+  String get directionWord => vm.isExpense ? '支出' : '收入';
+}
+
+/// 聚合轴：五档全给。区间和轴不匹配时（比如"全部"按日）图会糊，但用户有权糊着看
+class _AxisPicker extends StatelessWidget {
+  const _AxisPicker({required this.axis, required this.onChanged});
+
+  final LedgerAxis axis;
+  final ValueChanged<LedgerAxis> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return PopupMenuButton<LedgerAxis>(
+      tooltip: '聚合轴',
+      color: s.surfaceRaised,
+      initialValue: axis,
+      onSelected: onChanged,
+      itemBuilder: (context) => <PopupMenuEntry<LedgerAxis>>[
+        for (final entry in kLedgerAxisLabels.entries)
+          PopupMenuItem<LedgerAxis>(value: entry.key, child: Text(entry.value)),
+      ],
+      child: Container(
+        height: m.kSpace24,
+        padding: EdgeInsets.symmetric(horizontal: m.kSpace10),
+        decoration: BoxDecoration(
+          color: s.surfaceSunken,
+          borderRadius: m.radiusPill,
+          border: Border.all(color: s.hairline),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(kLedgerAxisLabels[axis] ?? '', style: AppTextStyles.caption(context)),
+            SizedBox(width: m.kSpace4),
+            DrawIcon(StrokeIcons.expandMore, size: m.iconSize12, color: s.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 折线图图例：线色取自各自画刷的同一处出处
+class _LineLegend extends StatelessWidget {
+  const _LineLegend({required this.items});
+
+  final List<(String, Color)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
+    return Wrap(
+      spacing: m.kSpace12,
+      runSpacing: m.kSpace4,
+      children: <Widget>[
+        for (final item in items)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: m.kSpace14,
+                height: m.kSpace2,
+                decoration: BoxDecoration(color: item.$2, borderRadius: m.radius2),
+              ),
+              SizedBox(width: m.kSpace6),
+              Text(item.$1, style: AppTextStyles.caption(context)),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
 /// 类别占比：环图 + 图例。点扇区或图例都会把其余部分压暗。
 class _CategoryCard extends StatelessWidget {
   const _CategoryCard({
@@ -163,7 +512,7 @@ class _CategoryCard extends StatelessWidget {
     required this.selectedId,
     required this.onSelect,
     required this.directionLabel,
-    required this.monthLabel,
+    required this.rangeLabel,
     required this.wide,
   });
 
@@ -172,7 +521,7 @@ class _CategoryCard extends StatelessWidget {
   final int selectedId;
   final ValueChanged<int> onSelect;
   final String directionLabel;
-  final String monthLabel;
+  final String rangeLabel;
 
   /// 宽屏图例与环左右并排，窄屏改成上下叠
   final bool wide;
@@ -213,7 +562,7 @@ class _CategoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text('$monthLabel$directionLabel构成', style: AppTextStyles.sectionTitle(context)),
+          Text('$rangeLabel$directionLabel构成', style: AppTextStyles.sectionTitle(context)),
           SizedBox(height: m.kSpace16),
           if (wide)
             Row(
@@ -312,114 +661,12 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-/// 月度趋势：双柱 + 跨度切换。最后一组高亮，它代表"本月"。
-class _TrendCard extends StatelessWidget {
-  const _TrendCard({required this.rows, required this.months, required this.onSelect});
-
-  final List<LedgerMonthRow> rows;
-  final int months;
-  final ValueChanged<int> onSelect;
-
-  static const List<int> _spans = <int>[6, 12, 24];
-
-  @override
-  Widget build(BuildContext context) {
-    final m = AppTheme.metrics;
-    // 接口只回有账的月份，中间空掉的月份按月份序列补成空格子
-    final keys = rows.map((row) => row.month).toList()..sort();
-    final byMonth = <String, LedgerMonthRow>{for (final row in rows) row.month: row};
-    final series = <LedgerMonthRow>[
-      for (final key in ledgerMonthSpan(keys.isEmpty ? '' : keys.first, keys.isEmpty ? '' : keys.last))
-        byMonth[key] ?? LedgerMonthRow(month: key),
-    ];
-    final groups = <LedgerBarGroup>[
-      for (final row in series)
-        LedgerBarGroup(label: row.shortLabel, income: row.income, expense: row.expense),
-    ];
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(child: Text('月度趋势', style: AppTextStyles.sectionTitle(context))),
-              for (final span in _spans)
-                Padding(
-                  padding: EdgeInsets.only(left: m.kSpace6),
-                  child: TagChip(
-                    label: '近$span月',
-                    selected: months == span,
-                    onTap: () => onSelect(span),
-                  ),
-                ),
-            ],
-          ),
-          SizedBox(height: m.kSpace16),
-          LedgerBarChart(groups: groups, highlightIndex: series.isEmpty ? null : series.length - 1),
-          SizedBox(height: m.kSpace8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text(series.isEmpty ? '' : series.first.month, style: AppTextStyles.caption(context)),
-              const _BarLegend(),
-              Text(series.isEmpty ? '' : series.last.month, style: AppTextStyles.caption(context)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 双柱图的图例：颜色与柱子的出处一致（支出用流水账身份色，收入用成功色）
-class _BarLegend extends StatelessWidget {
-  const _BarLegend();
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppSemantic.of(context);
-    final viz = AppVizSet.of(context);
-    final m = AppTheme.metrics;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        _LegendItem(label: '支出', color: viz.lagoon.base),
-        SizedBox(width: m.kSpace12),
-        _LegendItem(label: '收入', color: s.success.color),
-      ],
-    );
-  }
-}
-
-class _LegendItem extends StatelessWidget {
-  const _LegendItem({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = AppTheme.metrics;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Container(
-          width: m.kSpace8,
-          height: m.kSpace8,
-          decoration: BoxDecoration(color: color, borderRadius: m.radius2),
-        ),
-        SizedBox(width: m.kSpace4),
-        Text(label, style: AppTextStyles.caption(context)),
-      ],
-    );
-  }
-}
-
 /// 商户排行：钱花在了谁身上。条长按第一名归一化，绝对值仍在右侧给出。
 class _MerchantCard extends StatelessWidget {
-  const _MerchantCard({required this.rows});
+  const _MerchantCard({required this.rows, required this.directionLabel});
 
   final List<LedgerMerchantRow> rows;
+  final String directionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -431,7 +678,7 @@ class _MerchantCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('商户排行', style: AppTextStyles.sectionTitle(context)),
+          Text('商户排行$directionLabel', style: AppTextStyles.sectionTitle(context)),
           SizedBox(height: m.kSpace12),
           for (var i = 0; i < rows.length; i++)
             Padding(
@@ -488,6 +735,64 @@ class _MerchantCard extends StatelessWidget {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 净资产曲线：当前余额往回倒推，每个月末一个点。
+///
+/// 上面那三个数是实时算出来的真数（各账户余额相加），下面这条线才是回推的，
+/// 所以卡片里必须写明它不算什么：转账、余额调整、外币换算都不在里面。
+class _AssetCard extends StatelessWidget {
+  const _AssetCard({required this.vm});
+
+  final LedgerStatsViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    final viz = AppVizSet.of(context);
+    final points = vm.assetPoints;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('净资产', style: AppTextStyles.sectionTitle(context)),
+          SizedBox(height: m.kSpace12),
+          _StatTrio(
+            cells: <_StatItem>[
+              _StatItem(label: '资产', amount: vm.assetNow),
+              _StatItem(label: '负债', amount: vm.liabilityNow),
+              _StatItem(
+                label: '净资产',
+                amount: vm.netWorthNow,
+                tone: vm.netWorthNow < 0 ? viz.coral.base : s.success.color,
+              ),
+            ],
+          ),
+          SizedBox(height: m.kSpace16),
+          LedgerLineChart(
+            // 窗口只有 12 个月，月份名撞不了车，刻度就不用补年份
+            labels: <String>[for (final point in points) ledgerMonthTick(point.date)],
+            series: <LedgerLineSeries>[
+              LedgerLineSeries(
+                label: '净资产',
+                color: viz.lagoon.base,
+                values: <double>[for (final point in points) point.netWorth],
+              ),
+            ],
+            emptyText: '还没有可回推的月份',
+          ),
+          SizedBox(height: m.kSpace8),
+          Text(
+            vm.assetLabel.isEmpty
+                ? '曲线按"当前余额 − 之后各月净收支"回推，转账与余额调整不在其中'
+                : '曲线按"当前余额 − 之后各月净收支"回推；${vm.assetLabel}',
+            style: AppTextStyles.caption(context).copyWith(color: s.textTertiary),
+          ),
         ],
       ),
     );

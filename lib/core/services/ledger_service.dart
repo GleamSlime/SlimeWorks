@@ -9,6 +9,7 @@ import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:slime_works/core/services/ledger_stub_store.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
@@ -86,6 +87,9 @@ class LedgerService extends GetxService {
     _initCompleter = completer;
     try {
       await _loadPrefs();
+      // 增强部分（标签/模板/定时/附件）现在还是本机桩数据，但和账本共用同一次初始化：
+      // 分两处加载就会出现"页面先建、数据后到"的空白帧。
+      await LedgerStubStore.instance.init();
       if (isLocal) await _initLocal();
       _isInitialized = true;
       completer.complete();

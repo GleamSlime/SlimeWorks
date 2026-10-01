@@ -206,15 +206,38 @@ void main() {
   // ══════════════════════════════════════════════════════════════════════════
 
   group('kLedgerAccountTypes 与 ledgerAccountIconOf 分支', () {
-    test('值域与 Rust Account.type 的注释口径一致（credit_card|debit_card|cash|deposit|other）', () {
+    test('九种账户类型按"先资产、后负债、其他垫底"排，值域与 Rust Account.type 一致', () {
       expect(kLedgerAccountTypes.keys, <String>[
-        'credit_card',
-        'debit_card',
         'cash',
+        'debit_card',
+        'credit_card',
+        'e_wallet',
         'deposit',
+        'invest',
+        'loan',
+        'receivable',
         'other',
       ]);
-      expect(kLedgerAccountTypes.values, <String>['信用卡', '储蓄卡', '现金', '存款', '其他']);
+      expect(kLedgerAccountTypes.values, <String>[
+        '现金',
+        '储蓄卡',
+        '信用卡',
+        '电子钱包',
+        '存款',
+        '投资',
+        '借贷',
+        '应收款',
+        '其他',
+      ]);
+    });
+
+    test('负债类只有信用卡与借贷，账户中心按这一条把账户分成资产/负债两组', () {
+      expect(kLedgerLiabilityTypes, <String>{'credit_card', 'loan'});
+      expect(ledgerAccountIsLiability('credit_card'), isTrue);
+      expect(ledgerAccountIsLiability('loan'), isTrue);
+      // 储蓄卡哪怕名字叫"信用卡"也不算负债：判定只看 type，不看名字
+      expect(ledgerAccountIsLiability('debit_card'), isFalse);
+      expect(ledgerAccountIsLiability('不知道什么类型'), isFalse);
     });
 
     test('四个显式分支各自拿到不同的图标', () {

@@ -6,16 +6,17 @@ import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
-import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/pages/ledger/components/ledger_icons.dart';
 import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
 import 'package:slime_works/pages/ledger/components/ledger_tx_editor.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_records_viewmodel.dart';
 
-/// 全部流水：搜索 + 四组筛选 + 按天分组 + 触底续读。
+/// 全部流水：多维筛选 + 月/日两级分组 + 列表与日历双页型 + 触底续读。
 ///
-/// 筛选只改 ViewModel 里的一个 [LedgerFilter]，界面不自己缓存结果——
+/// 筛选条件全部落在 ViewModel 的一个 [LedgerFilter] 上，界面不自己缓存结果——
 /// 条件一变就重查第一页，列表回到顶部由 ListView 的自然行为承担。
 class LedgerRecordsScreen extends BasePage<LedgerRecordsViewModel> {
   const LedgerRecordsScreen({super.key});
@@ -76,6 +77,41 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
     }
   }
 
+  /// 行上的三个动作。长按出菜单而不是滑动：滑动手势要和竖向滚动、下拉刷新
+  /// 抢同一块区域，做不好就是"想滚动结果删了一笔"，代价比省一次点击大。
+  Future<void> _rowActions(LedgerTx tx) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppSemantic.of(context).surfaceRaised,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final entry in <(String, StrokeIcon, String)>[
+              ('copy', StrokeIcons.copy, '再记一笔同样的'),
+              ('edit', StrokeIcons.edit, '编辑'),
+              ('delete', StrokeIcons.delete, '删除'),
+            ])
+              ListTile(
+                leading: DrawIcon(entry.$2, size: AppTheme.metrics.iconSize18),
+                title: Text(entry.$3),
+                onTap: () => Navigator.of(ctx).pop(entry.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'copy':
+        await _openEditor(tx.asDraft);
+      case 'edit':
+        await _openEditor(tx);
+      case 'delete':
+        await _confirmDelete(tx);
+    }
+  }
+
   Future<void> _confirmDelete(LedgerTx tx) async {
     final ok = await showConfirmDialog(
       context,
@@ -94,8 +130,12 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
         title: '全部流水',
         // 筛选条不进工具槽：桌面端那一格是无宽度的横向滚动区，Expanded 在这种
         // 约束下直接断言失败；它本来也该贴着列表，而不是贴着窗口标题。
-        toolbar: const LedgerTabs(current: '/ledger/records'),
+        toolbar: ledgerBottomNavMode(context)
+            ? null
+            : const LedgerTabs(current: '/ledger/records'),
         toolbarHeight: m.kSpace44,
+        bottomBar: LedgerBottomNav(current: '/ledger/records', onAdd: _openEditor),
+        bottomBarHeight: m.kSpace56,
         actions: <Widget>[
           ToolIconButton(
             icon: StrokeIcons.refresh,
@@ -114,12 +154,14 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
           _FilterBar(
             vm: viewModel,
             search: _search,
-            onSearch: (value) => viewModel.setKeyword(value),
+            onSearch: viewModel.setKeyword,
           ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: viewModel.reload,
-              child: Obx(() => _buildList(context)),
+              child: Obx(() => viewModel.calendarMode.value
+                  ? _buildCalendar(context)
+                  : _buildList(context)),
             ),
           ),
         ],
@@ -127,61 +169,76 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
     );
   }
 
-  Widget _buildList(BuildContext context) {
-    final s = AppSemantic.of(context);
+  Widget _buildCalendar(BuildContext context) {
     final m = AppTheme.metrics;
-    final groups = viewModel.groups;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(m.kSpace12, m.kSpace8, m.kSpace12, m.kSpace32),
+      child: ConstrainedBox(
+        // 宽屏不铺满：日历拉成 1400 宽的一格一天就没法看了
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Center(
+          child: LedgerCalendarMonth(
+            month: viewModel.calendarMonth.value,
+            rows: List<LedgerDayRow>.of(viewModel.dayRows),
+            focused: viewModel.dayFocus.value,
+            onPickDay: viewModel.focusDay,
+            onShiftMonth: viewModel.shiftCalendarMonth,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
+    final m = AppTheme.metrics;
+    final months = viewModel.monthGroups;
     return LedgerStateView(
       error: viewModel.errorMessage,
-      empty: groups.isEmpty,
+      empty: months.isEmpty,
       emptyTitle: viewModel.isFiltered ? '没有符合条件的流水' : '还没有流水',
       emptyIcon: StrokeIcons.list,
       onRetry: viewModel.reload,
       child: ListView.builder(
         controller: _scroll,
         padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace8, m.kSpace16, m.kSpace32),
-        itemCount: groups.length + 1,
+        // 尾部一格：续读提示 + 只在本地筛时的说明
+        itemCount: months.length + 1,
         itemBuilder: (context, index) {
-          if (index == groups.length) {
-            return Padding(
-              padding: EdgeInsets.only(top: m.kSpace12),
-              child: Center(
-                child: viewModel.hasMore
-                    ? AppLoading(
-                        message: viewModel.loadingMore.value ? '继续读取…' : '上拉加载更多',
-                        size: m.iconSize18,
-                      )
-                    : Text(
-                        '共 ${viewModel.totalCount.value} 笔',
-                        style: AppTextStyles.caption(context).copyWith(color: s.textTertiary),
-                      ),
-              ),
-            );
-          }
-          final day = groups[index];
+          if (index == months.length) return _Tail(vm: viewModel);
+          final month = months[index];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              LedgerDayHeader(
-                date: day.date,
-                income: day.income,
-                expense: day.expense,
-                count: day.txs.length,
-              ),
-              AppCard(
-                padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace6),
-                child: Column(
-                  children: <Widget>[
-                    for (final tx in day.txs)
-                      LedgerTxTile(
-                        tx: tx,
-                        onTap: () => _openEditor(tx),
-                        onLongPress: () => _confirmDelete(tx),
-                      ),
-                  ],
+              // 单月区间不用重复报月份，日组头已经够密了
+              if (months.length > 1)
+                LedgerMonthHeader(
+                  title: month.title,
+                  income: month.income,
+                  expense: month.expense,
+                  count: month.count,
                 ),
-              ),
-              SizedBox(height: m.kSpace12),
+              for (final day in month.days) ...<Widget>[
+                LedgerDayHeader(
+                  date: day.date,
+                  income: day.income,
+                  expense: day.expense,
+                  count: day.txs.length,
+                ),
+                AppCard(
+                  padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace6),
+                  child: Column(
+                    children: <Widget>[
+                      for (final tx in day.txs)
+                        LedgerTxTile(
+                          tx: tx,
+                          onTap: () => _openEditor(tx),
+                          onLongPress: () => _rowActions(tx),
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: m.kSpace12),
+              ],
             ],
           );
         },
@@ -190,13 +247,50 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
   }
 }
 
-/// 一行筛选器：时间 / 方向 / 账户 / 类别 + 搜索框
+/// 列表尾巴：还有多少笔、以及"这几项是本地筛的"那句实话
+class _Tail extends StatelessWidget {
+  const _Tail({required this.vm});
+
+  final LedgerRecordsViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Padding(
+      padding: EdgeInsets.only(top: m.kSpace12),
+      child: Column(
+        children: <Widget>[
+          if (vm.hasClientFilters)
+            Text(
+              '类型/标签/金额这几项后端还没建列，是在已读到的 ${vm.items.length} 笔里筛的',
+              style: AppTextStyles.caption(context).copyWith(color: s.textTertiary),
+              textAlign: TextAlign.center,
+            ),
+          SizedBox(height: m.kSpace6),
+          if (vm.hasMore)
+            AppLoading(
+              message: vm.loadingMore.value ? '继续读取…' : '上拉加载更多',
+              size: m.iconSize18,
+            )
+          else
+            Text(
+              '共 ${vm.totalCount.value} 笔',
+              style: AppTextStyles.caption(context).copyWith(color: s.textTertiary),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 一行筛选器：区间 / 收支 / 类型 / 账户 / 类别 / 标签 / 金额 + 页型 + 搜索
 class _FilterBar extends StatelessWidget {
   const _FilterBar({required this.vm, required this.search, required this.onSearch});
 
   final LedgerRecordsViewModel vm;
   final TextEditingController search;
-  final ValueChanged<String> onSearch;
+  final Future<void> Function(String) onSearch;
 
   // 读值必须发生在 Obx 自己的 builder 里：父层包 Obx 只构造本组件不算订阅，
   // GetX 会直接报 improper use，整条工具栏被 ErrorWidget 顶掉。
@@ -207,21 +301,20 @@ class _FilterBar extends StatelessWidget {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final narrow = ledgerNarrow(context);
+    final tags = filter.tagIds;
     final pills = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: <Widget>[
           _FilterPill(
-            label: vm.filterLabel,
+            label: _rangeLabel(),
             icon: StrokeIcons.calendarMonth,
-            active: filter.startDate.isNotEmpty || filter.endDate.isNotEmpty,
+            active: !vm.period.value.isAll,
             items: <PopupMenuEntry<String>>[
-              const PopupMenuItem(value: 'month:this', child: Text('本月')),
-              const PopupMenuItem(value: 'month:last', child: Text('上月')),
-              const PopupMenuItem(value: 'month:quarter', child: Text('近三个月')),
-              const PopupMenuItem(value: 'month:all', child: Text('全部时间')),
+              for (final p in LedgerRangePreset.values)
+                PopupMenuItem(value: p.name, child: Text(kLedgerRangeLabels[p] ?? p.name)),
             ],
-            onSelected: (value) => _pickRange(value),
+            onSelected: (value) => _pickRange(context, value),
           ),
           SizedBox(width: m.kSpace6),
           _FilterPill(
@@ -241,9 +334,21 @@ class _FilterBar extends StatelessWidget {
           ),
           SizedBox(width: m.kSpace6),
           _FilterPill(
-            label: filter.accountId > 0
-                ? _nameOfAccount(context, filter.accountId)
-                : '账户',
+            label: filter.txType.isEmpty
+                ? '类型'
+                : ledgerTxTypeLabel(filter.txType),
+            icon: ledgerUiIconOf('filter'),
+            active: filter.txType.isNotEmpty,
+            items: <PopupMenuEntry<String>>[
+              const PopupMenuItem(value: '', child: Text('全部类型')),
+              for (final t in kLedgerTxTypes)
+                PopupMenuItem(value: t, child: Text(ledgerTxTypeLabel(t))),
+            ],
+            onSelected: vm.setTxType,
+          ),
+          SizedBox(width: m.kSpace6),
+          _FilterPill(
+            label: _accountName(vm.accounts, filter.accountId),
             icon: StrokeIcons.accountBalanceWallet,
             active: filter.accountId > 0,
             items: <PopupMenuEntry<String>>[
@@ -255,9 +360,7 @@ class _FilterBar extends StatelessWidget {
           ),
           SizedBox(width: m.kSpace6),
           _FilterPill(
-            label: filter.categoryId > 0
-                ? _nameOfCategory(context, filter.categoryId)
-                : '类别',
+            label: _categoryName(vm.categories, filter.categoryId),
             icon: StrokeIcons.category,
             active: filter.categoryId > 0,
             items: <PopupMenuEntry<String>>[
@@ -267,6 +370,43 @@ class _FilterBar extends StatelessWidget {
             ],
             onSelected: (value) => vm.setCategory(int.tryParse(value) ?? 0),
           ),
+          SizedBox(width: m.kSpace6),
+          _FilterPill(
+            label: tags.isEmpty ? '标签' : '标签 ${tags.length}',
+            icon: ledgerUiIconOf('tag'),
+            active: tags.isNotEmpty,
+            items: const <PopupMenuEntry<String>>[
+              PopupMenuItem(value: 'pick', child: Text('挑选标签')),
+            ],
+            onSelected: (_) => _pickTags(context),
+          ),
+          SizedBox(width: m.kSpace6),
+          _FilterPill(
+            label: filter.minAmount > 0 || filter.maxAmount > 0
+                ? '${filter.minAmount > 0 ? _y(filter.minAmount) : '不限'} ~ '
+                      '${filter.maxAmount > 0 ? _y(filter.maxAmount) : '不限'}'
+                : '金额',
+            icon: StrokeIcons.money,
+            active: filter.minAmount > 0 || filter.maxAmount > 0,
+            items: const <PopupMenuEntry<String>>[
+              PopupMenuItem(value: 'pick', child: Text('设定区间')),
+              PopupMenuItem(value: 'clear', child: Text('不限金额')),
+            ],
+            onSelected: (value) async {
+              if (value == 'clear') {
+                await vm.setAmountRange(0, 0);
+              } else {
+                await _pickAmount(context);
+              }
+            },
+          ),
+          if (vm.dayFocus.value.isNotEmpty) ...<Widget>[
+            SizedBox(width: m.kSpace6),
+            LedgerTagChip(
+              label: '只看 ${ledgerDateLabel(vm.dayFocus.value)}',
+              onTap: () => vm.focusDay(vm.dayFocus.value),
+            ),
+          ],
           if (vm.isFiltered) ...<Widget>[
             SizedBox(width: m.kSpace6),
             TextButton.icon(
@@ -278,6 +418,12 @@ class _FilterBar extends StatelessWidget {
               label: Text('清空', style: AppTextStyles.caption(context)),
             ),
           ],
+          SizedBox(width: m.kSpace6),
+          // 页型切换放在胶囊行的末尾：它换的是"怎么看"，不是"看哪些"
+          _ViewToggle(
+            calendar: vm.calendarMode.value,
+            onChanged: (value) => vm.setCalendarMode(value),
+          ),
         ],
       ),
     );
@@ -315,37 +461,172 @@ class _FilterBar extends StatelessWidget {
     );
   }
 
-  String _nameOfAccount(BuildContext context, int id) {
-    for (final a in vm.accounts) {
-      if (a.id == id) return a.name;
-    }
-    return '账户';
+  static String _y(double amount) => '¥${amount.toStringAsFixed(0)}';
+
+  /// 区间胶囊的文案。自定义只报日期——"自定义 · 3.1-3.31"里前三个字没信息量
+  String _rangeLabel() {
+    final p = vm.period.value;
+    if (p.isAll) return '全部时间';
+    if (p.preset == LedgerRangePreset.custom) return p.shortLabel;
+    return '${kLedgerRangeLabels[p.preset]} · ${p.shortLabel}';
   }
 
-  String _nameOfCategory(BuildContext context, int id) {
-    for (final c in vm.categories) {
-      if (c.id == id) return c.name;
-    }
-    return '类别';
+  static String _accountName(List<LedgerAccount> rows, int id) {
+    if (id == 0) return '账户';
+    return rows.firstWhereOrNull((a) => a.id == id)?.name ?? '账户';
   }
 
-  void _pickRange(String value) {
-    final now = DateTime.now();
-    switch (value) {
-      case 'month:this':
-        vm.setMonth(ledgerMonthOf(now));
-      case 'month:last':
-        vm.setMonth(ledgerMonthShift(ledgerMonthOf(now), -1));
-      case 'month:quarter':
-        vm.applyFilter(
-          vm.filter.value.copyWith(
-            startDate: ledgerMonthStart(ledgerMonthShift(ledgerMonthOf(now), -2)),
-            endDate: ledgerMonthEnd(ledgerMonthOf(now)),
+  static String _categoryName(List<LedgerCategory> rows, int id) {
+    if (id == 0) return '类别';
+    return rows.firstWhereOrNull((c) => c.id == id)?.name ?? '类别';
+  }
+
+  Future<void> _pickRange(BuildContext context, String name) async {
+    final preset = LedgerRangePreset.values.firstWhere(
+      (p) => p.name == name,
+      orElse: () => LedgerRangePreset.all,
+    );
+    if (preset == LedgerRangePreset.custom) {
+      final now = DateTime.now();
+      final start = await showDatePicker(
+        context: context,
+        initialDate: now,
+        firstDate: DateTime(now.year - 10),
+        lastDate: now,
+      );
+      if (start == null || !context.mounted) return;
+      final end = await showDatePicker(
+        context: context,
+        initialDate: start,
+        firstDate: start,
+        lastDate: now,
+      );
+      if (end != null) await vm.setCustomRange(start, end);
+      return;
+    }
+    await vm.setPreset(preset);
+  }
+
+  Future<void> _pickTags(BuildContext context) async {
+    final picked = await showLedgerTagPicker(
+      context,
+      selected: vm.filter.value.tagIds.toSet(),
+      title: '按标签筛',
+    );
+    if (picked != null) await vm.setTags(picked);
+  }
+
+  Future<void> _pickAmount(BuildContext context) async {
+    final current = vm.filter.value;
+    final m = AppTheme.metrics;
+    final min = TextEditingController(
+      text: current.minAmount > 0 ? current.minAmount.toStringAsFixed(0) : '',
+    );
+    final max = TextEditingController(
+      text: current.maxAmount > 0 ? current.maxAmount.toStringAsFixed(0) : '',
+    );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('金额区间'),
+        content: Row(
+          children: <Widget>[
+            Expanded(child: LedgerInput(min, hint: '最低', keyboardType: TextInputType.number)),
+            SizedBox(width: m.kSpace12),
+            const Text('~'),
+            SizedBox(width: m.kSpace12),
+            Expanded(child: LedgerInput(max, hint: '最高', keyboardType: TextInputType.number)),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, true), child: const Text('就这么筛')),
+        ],
+      ),
+    );
+    final lo = double.tryParse(min.text.trim()) ?? 0;
+    final hi = double.tryParse(max.text.trim()) ?? 0;
+    min.dispose();
+    max.dispose();
+    if (ok == true) await vm.setAmountRange(lo, hi);
+  }
+}
+
+/// 列表 / 日历两态
+class _ViewToggle extends StatelessWidget {
+  const _ViewToggle({required this.calendar, required this.onChanged});
+
+  final bool calendar;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Container(
+      height: m.kSpace32,
+      padding: EdgeInsets.symmetric(horizontal: m.kSpace2),
+      decoration: BoxDecoration(
+        color: s.surfaceSunken,
+        borderRadius: m.radiusPill,
+        border: Border.all(color: s.hairline),
+      ),
+      child: Row(
+        children: <Widget>[
+          _Segment(
+            icon: StrokeIcons.list,
+            tooltip: '列表',
+            selected: !calendar,
+            onTap: () => onChanged(false),
           ),
-        );
-      default:
-        vm.applyFilter(vm.filter.value.copyWith(startDate: '', endDate: ''));
-    }
+          _Segment(
+            icon: StrokeIcons.calendarViewWeek,
+            tooltip: '日历',
+            selected: calendar,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final StrokeIcon icon;
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: m.radiusPill,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
+          decoration: BoxDecoration(
+            color: selected ? s.accentContainer : Colors.transparent,
+            borderRadius: m.radiusPill,
+          ),
+          child: DrawIcon(
+            icon,
+            size: m.iconSize14,
+            color: selected ? s.accentText : s.textTertiary,
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -9,6 +9,7 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
+import 'package:slime_works/pages/ledger/components/ledger_tx_editor.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_pending_viewmodel.dart';
 
@@ -37,8 +38,12 @@ class _LedgerPendingScreenState
     return ScreenChrome(
       data: ScreenChromeData(
         title: '待确认账单',
-        toolbar: const LedgerTabs(current: '/ledger/pending'),
+        toolbar: ledgerBottomNavMode(context)
+            ? null
+            : const LedgerTabs(current: '/ledger/pending'),
         toolbarHeight: m.kSpace44,
+        bottomBar: LedgerBottomNav(current: '/ledger/pending', onAdd: () => ledgerQuickAdd(context)),
+        bottomBarHeight: m.kSpace56,
         actions: <Widget>[
           ToolIconButton(
             icon: StrokeIcons.refresh,

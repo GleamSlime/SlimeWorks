@@ -64,8 +64,12 @@ class _LedgerScreenState extends BasePageState<LedgerViewModel, LedgerScreen> {
     return ScreenChrome(
       data: ScreenChromeData(
         title: '流水账',
-        toolbar: const LedgerTabs(current: '/ledger'),
+        toolbar: ledgerBottomNavMode(context)
+            ? null
+            : const LedgerTabs(current: '/ledger'),
         toolbarHeight: m.kSpace44,
+        bottomBar: LedgerBottomNav(current: '/ledger', onAdd: _openEditor),
+        bottomBarHeight: m.kSpace56,
         actions: <Widget>[
           ToolIconButton(
             icon: StrokeIcons.refresh,

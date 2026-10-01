@@ -9,6 +9,7 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/ledger/components/ledger_rule_editor.dart';
 import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
+import 'package:slime_works/pages/ledger/components/ledger_tx_editor.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_settings_viewmodel.dart';
 
@@ -52,8 +53,12 @@ class _LedgerSettingsScreenState
     return ScreenChrome(
       data: ScreenChromeData(
         title: '账单邮箱',
-        toolbar: const LedgerTabs(current: '/ledger/settings'),
+        toolbar: ledgerBottomNavMode(context)
+            ? null
+            : const LedgerTabs(current: '/ledger/settings'),
         toolbarHeight: m.kSpace44,
+        bottomBar: LedgerBottomNav(current: '/ledger/settings', onAdd: () => ledgerQuickAdd(context)),
+        bottomBarHeight: m.kSpace56,
         actions: <Widget>[
           ToolIconButton(
             icon: StrokeIcons.refresh,
@@ -112,9 +117,30 @@ class _LedgerSettingsScreenState
         SizedBox(height: m.kSpace8),
         LedgerNavTile(
           icon: StrokeIcons.accountBalanceWallet,
-          title: '账户与类别',
-          subtitle: '管理记账用的账户、收支类别和自动归类',
+          title: '账户',
+          subtitle: '管理记账用的账户和商户自动归类习惯',
           onTap: () => const LedgerAccountsRoute().go(context),
+        ),
+        SizedBox(height: m.kSpace4),
+        LedgerNavTile(
+          icon: StrokeIcons.category,
+          title: '分类与标签',
+          subtitle: '收支类别的两级树、标签与标签分组',
+          onTap: () => const LedgerOrganizeRoute().go(context),
+        ),
+        SizedBox(height: m.kSpace4),
+        LedgerNavTile(
+          icon: StrokeIcons.eventRepeat,
+          title: '模板与定时',
+          subtitle: '常记的那几笔存成模板，再配一条到点自动记的规则',
+          onTap: () => const LedgerTemplatesRoute().go(context),
+        ),
+        SizedBox(height: m.kSpace4),
+        LedgerNavTile(
+          icon: StrokeIcons.assetLibraryImport,
+          title: '导入与导出',
+          subtitle: '把流水写成 CSV/JSON 带走，或从一份表格导进账本',
+          onTap: () => const LedgerDataRoute().go(context),
         ),
         SizedBox(height: m.kSpace20),
         _LogSection(vm: viewModel),

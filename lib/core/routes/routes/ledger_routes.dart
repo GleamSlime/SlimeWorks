@@ -135,7 +135,7 @@ class LedgerAccountsRoute extends AppRouteData with $LedgerAccountsRoute {
   const LedgerAccountsRoute();
 
   @override
-  String get title => '账户与类别';
+  String get title => '账户';
 
   @override
   StrokeIcon get sidebarIcon => StrokeIcons.category;
@@ -154,5 +154,86 @@ class LedgerAccountsRoute extends AppRouteData with $LedgerAccountsRoute {
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return AppRoutes.buildPage(context, state, const LedgerAccountsScreen());
+  }
+}
+
+/// 分类与标签：类别的两级树和标签分组都在这一页
+class LedgerOrganizeRoute extends AppRouteData with $LedgerOrganizeRoute {
+  const LedgerOrganizeRoute();
+
+  @override
+  String get title => '分类与标签';
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.label;
+
+  @override
+  String get sidebarParent => '/ledger';
+
+  @override
+  String get sidebarGroupId => 'ledger';
+
+  static const Permission routePermission = Permission.accessLedger;
+
+  @override
+  Permission get permission => LedgerOrganizeRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const LedgerOrganizeScreen());
+  }
+}
+
+/// 模板与定时记账：常记的那几笔存成模板，到点自动照模板记
+class LedgerTemplatesRoute extends AppRouteData with $LedgerTemplatesRoute {
+  const LedgerTemplatesRoute();
+
+  @override
+  String get title => '模板与定时';
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.eventRepeat;
+
+  @override
+  String get sidebarParent => '/ledger';
+
+  @override
+  String get sidebarGroupId => 'ledger';
+
+  static const Permission routePermission = Permission.accessLedger;
+
+  @override
+  Permission get permission => LedgerTemplatesRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const LedgerTemplatesScreen());
+  }
+}
+
+/// 导入与导出：账本进出都从这一页走，读写的都是 Rust 的真账
+class LedgerDataRoute extends AppRouteData with $LedgerDataRoute {
+  const LedgerDataRoute();
+
+  @override
+  String get title => '导入与导出';
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.assetLibraryImport;
+
+  @override
+  String get sidebarParent => '/ledger';
+
+  @override
+  String get sidebarGroupId => 'ledger';
+
+  static const Permission routePermission = Permission.accessLedger;
+
+  @override
+  Permission get permission => LedgerDataRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const LedgerDataScreen());
   }
 }

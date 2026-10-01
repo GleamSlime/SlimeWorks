@@ -13,7 +13,10 @@ import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_accounts_viewmodel.dart';
 
-/// 账户与类别：卡/钱包、收支类别、商户自动归类的记忆表。
+/// 账户：卡/钱包，加上商户自动归类的记忆表。
+///
+/// 类别管理搬到了「分类与标签」——那一页要把两级树和标签分组放在一起，
+/// 挤在这一页里会让"账户"两字标题下的东西越来越不像账户。
 ///
 /// 删除操作的影响面由 Rust 决定并返回中文说明（"这个账户还有 N 笔流水，已改为停用"），
 /// 这一页只负责把那段说明原样显示出来——界面自己猜后果，就会和库里的实际状态对不上。
@@ -37,18 +40,6 @@ class _LedgerAccountsScreenState
     if (result != null) await viewModel.saveAccount(result);
   }
 
-  Future<void> _editCategory([
-    LedgerCategory? category,
-    String direction = kLedgerDirectionExpense,
-  ]) async {
-    final result = await showLedgerCategoryEditor(
-      context,
-      initial: category,
-      direction: category?.direction ?? direction,
-    );
-    if (result != null) await viewModel.saveCategory(result);
-  }
-
   Future<void> _deleteAccount(LedgerAccount account) async {
     final ok = await showConfirmDialog(
       context,
@@ -58,19 +49,6 @@ class _LedgerAccountsScreenState
       confirmColor: AppSemantic.of(context).danger.color,
     );
     if (ok) await viewModel.deleteAccount(account);
-  }
-
-  Future<void> _deleteCategory(LedgerCategory category) async {
-    final ok = await showConfirmDialog(
-      context,
-      title: '删除「${category.name}」？',
-      message: category.isBuiltin
-          ? '内置类别删不掉，只会告诉你为什么删不掉。'
-          : '它的流水会归到"其他支出"，商户归类记忆一起清掉。',
-      confirmLabel: '删除',
-      confirmColor: AppSemantic.of(context).danger.color,
-    );
-    if (ok) await viewModel.deleteCategory(category);
   }
 
   Future<void> _forgetMerchant(String key) async {
@@ -88,7 +66,7 @@ class _LedgerAccountsScreenState
     final m = AppTheme.metrics;
     return ScreenChrome(
       data: ScreenChromeData(
-        title: '账户与类别',
+        title: '账户',
         leading: appBarBackButton(context, prevRoutePath: '/ledger/settings'),
         actions: <Widget>[
           ToolIconButton(
@@ -157,22 +135,11 @@ class _LedgerAccountsScreenState
             SizedBox(height: m.kSpace10),
           ],
         SizedBox(height: m.kSpace12),
-        _CategorySection(
-          title: '支出类别',
-          categories: vm.expenseCategories(),
-          onAdd: () => _editCategory(),
-          onEdit: _editCategory,
-          onDelete: _deleteCategory,
-          emptyHint: '内置类别删不掉，自己加的几个想改图标、改名都在这里。',
-        ),
-        SizedBox(height: m.kSpace20),
-        _CategorySection(
-          title: '收入类别',
-          categories: vm.incomeCategories(),
-          onAdd: () => _editCategory(null, kLedgerDirectionIncome),
-          onEdit: _editCategory,
-          onDelete: _deleteCategory,
-          emptyHint: '工资、报销、利息——收进来的钱单独一类，统计才不会和支出混在一起。',
+        LedgerNavTile(
+          icon: ledgerUiIconOf('organize'),
+          title: '分类与标签',
+          subtitle: '收支类别的两级树、标签分组都在这里管',
+          onTap: () => const LedgerOrganizeRoute().go(context),
         ),
         SizedBox(height: m.kSpace20),
         _MerchantMemorySection(
@@ -281,112 +248,6 @@ class _AccountCard extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 一组类别：胶囊平铺，点=改，长按=删
-class _CategorySection extends StatelessWidget {
-  const _CategorySection({
-    required this.title,
-    required this.categories,
-    required this.onAdd,
-    required this.onEdit,
-    required this.onDelete,
-    required this.emptyHint,
-  });
-
-  final String title;
-  final List<LedgerCategory> categories;
-  final VoidCallback onAdd;
-  final ValueChanged<LedgerCategory> onEdit;
-  final ValueChanged<LedgerCategory> onDelete;
-  final String emptyHint;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = AppTheme.metrics;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        SectionHeader(
-          title: title,
-          // 空类别时解释只留下面那一行：这里再写一遍就是同一句话上下刷两次
-          subtitle: categories.isEmpty ? null : '点一下改名或换图标，长按删除',
-          trailing: TextButton.icon(
-            onPressed: onAdd,
-            icon: DrawIcon(StrokeIcons.add, size: m.iconSize14),
-            label: const Text('添加'),
-          ),
-        ),
-        if (categories.isEmpty)
-          Padding(
-            padding: EdgeInsets.only(top: m.kSpace4),
-            child: Text(emptyHint, style: AppTextStyles.caption(context)),
-          )
-        else
-          Padding(
-            padding: EdgeInsets.only(top: m.kSpace4),
-            child: Wrap(
-              spacing: m.kSpace8,
-              runSpacing: m.kSpace8,
-              children: <Widget>[
-                for (final category in categories)
-                  _CategoryChip(
-                    category: category,
-                    onTap: () => onEdit(category),
-                    onLongPress: () => onDelete(category),
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
-    required this.category,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  final LedgerCategory category;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppSemantic.of(context);
-    final m = AppTheme.metrics;
-    return Tooltip(
-      message: category.isBuiltin ? '${category.name}（内置，不可删除）' : category.name,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: m.radiusPill,
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace6),
-          decoration: BoxDecoration(
-            color: s.surfaceSunken,
-            borderRadius: m.radiusPill,
-            border: Border.all(color: s.hairline),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              LedgerIconBadge(
-                iconKey: category.icon,
-                income: category.isIncome,
-                size: m.kSpace24,
-              ),
-              SizedBox(width: m.kSpace8),
-              Text(category.name, style: AppTextStyles.body(context)),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -209,6 +209,198 @@ class _BarPainter extends CustomPainter {
       !identical(old.groups, groups);
 }
 
+/// 一条折线：名字 + 颜色 + 与轴标签等长的一串数值
+class LedgerLineSeries {
+  const LedgerLineSeries({required this.label, required this.color, required this.values});
+
+  final String label;
+  final Color color;
+  final List<double> values;
+}
+
+/// 多序列折线图（趋势三线、资产曲线共用）。
+///
+/// 趋势不用柱子画：结余有正负，柱状得在 0 轴上下两头长，看着像两张图；折线天然
+/// 容得下负值，三条线压在同一个坐标系里才看得出收入和支出是齐涨还是背离。
+/// 项目没有图表依赖，所以这里就是全部实现。
+class LedgerLineChart extends StatelessWidget {
+  const LedgerLineChart({
+    super.key,
+    required this.labels,
+    required this.series,
+    this.height,
+    this.emptyText = '这段时间还没有流水',
+  });
+
+  final List<String> labels;
+  final List<LedgerLineSeries> series;
+
+  /// 不给就用默认档：桌面 208 / 窄屏 154
+  final double? height;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    final box = height ?? (ledgerNarrow(context) ? m.kSpace14 * 11 : m.kSpace16 * 13);
+    final points = series.isEmpty ? 0 : series.first.values.length;
+    if (labels.isEmpty || points == 0) {
+      return SizedBox(
+        height: box,
+        child: Center(child: Text(emptyText, style: AppTextStyles.caption(context))),
+      );
+    }
+    return SizedBox(
+      height: box,
+      child: TweenAnimationBuilder<double>(
+        // 进场从 0 轴长出来，和双柱图同一套动作：数字先给、形状后到
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: AppMotion.slow,
+        curve: AppMotion.decelerate,
+        builder: (context, progress, _) => CustomPaint(
+          size: Size.infinite,
+          painter: _LinePainter(
+            labels: labels,
+            series: series,
+            progress: progress,
+            gridColor: s.hairline,
+            zeroColor: s.textTertiary,
+            labelStyle: AppTextStyles.caption(context).copyWith(color: s.textTertiary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LinePainter extends CustomPainter {
+  const _LinePainter({
+    required this.labels,
+    required this.series,
+    required this.progress,
+    required this.gridColor,
+    required this.zeroColor,
+    required this.labelStyle,
+  });
+
+  final List<String> labels;
+  final List<LedgerLineSeries> series;
+  final double progress;
+  final Color gridColor;
+  final Color zeroColor;
+  final TextStyle labelStyle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final points = series.first.values.length;
+    final labelBand = scaleW(14);
+    final top = scaleW(10);
+    final bottom = size.height - labelBand;
+    final plotWidth = size.width;
+    if (plotWidth <= 0 || bottom <= top) return;
+
+    var hi = 0.0;
+    var lo = 0.0;
+    for (final line in series) {
+      for (final value in line.values) {
+        if (value > hi) hi = value;
+        if (value < lo) lo = value;
+      }
+    }
+    if (hi - lo < 1) hi = lo + 1;
+
+    double yOf(double value) => top + (hi - value) / (hi - lo) * (bottom - top);
+    double xOf(int index) =>
+        points == 1 ? plotWidth / 2 : index / (points - 1) * plotWidth;
+
+    final grid = Paint()
+      ..color = gridColor
+      ..strokeWidth = scaleW(1);
+    canvas.drawLine(Offset(0, yOf(hi)), Offset(size.width, yOf(hi)), grid);
+    // 0 轴：结余线和资产曲线都会穿到负的那一侧，没有这条线就分不清"少花"和"倒贴"
+    final zeroY = yOf(0);
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, zeroY)
+        ..lineTo(size.width, zeroY),
+      Paint()
+        ..color = zeroColor.withValues(alpha: 0.4)
+        ..strokeWidth = scaleW(1)
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+
+    _paintText(canvas, ledgerCompactAmountLabel(hi), labelStyle, Offset(0, top - scaleW(12)));
+
+    final showDots = points <= 31;
+    for (final line in series) {
+      final path = Path();
+      for (var i = 0; i < points; i++) {
+        final value = i < line.values.length ? line.values[i] : 0.0;
+        // 从 0 轴往外长：progress=0 时整条线贴在 0 轴上
+        final grown = zeroY + (yOf(value) - zeroY) * progress;
+        final point = Offset(xOf(i), grown);
+        if (i == 0) {
+          path.moveTo(point.dx, point.dy);
+        } else {
+          path.lineTo(point.dx, point.dy);
+        }
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = line.color
+          ..strokeWidth = scaleW(2)
+          ..style = PaintingStyle.stroke
+          ..strokeJoin = StrokeJoin.round
+          ..strokeCap = StrokeCap.round,
+      );
+      if (!showDots) continue;
+      for (var i = 0; i < points; i++) {
+        final value = i < line.values.length ? line.values[i] : 0.0;
+        canvas.drawCircle(
+          Offset(xOf(i), zeroY + (yOf(value) - zeroY) * progress),
+          scaleW(2.4),
+          Paint()..color = line.color,
+        );
+      }
+    }
+
+    final slot = points == 1 ? plotWidth : plotWidth / (points - 1);
+    final every = math.max(1, (scaleW(46) / slot).ceil());
+    for (var i = 0; i < points && i < labels.length; i++) {
+      final label = labels[i];
+      // 两头必须留：中间抽稀没问题，但"从哪年到哪年"就看这两格
+      if (label.isEmpty || (i % every != 0 && i != points - 1)) continue;
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: slot * 2);
+      final left = math.min(
+        math.max(0.0, xOf(i) - painter.width / 2),
+        math.max(0.0, size.width - painter.width),
+      );
+      painter.paint(canvas, Offset(left, bottom + scaleW(3)));
+    }
+  }
+
+  void _paintText(Canvas canvas, String text, TextStyle style, Offset offset) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, offset);
+  }
+
+  @override
+  bool shouldRepaint(_LinePainter old) =>
+      old.progress != progress ||
+      old.gridColor != gridColor ||
+      !identical(old.series, series) ||
+      !identical(old.labels, labels);
+}
+
 /// 环图扇区的顺序：金额从大到小。
 ///
 /// 页面画"哪一类花了多少"的图例时必须用同一份顺序，

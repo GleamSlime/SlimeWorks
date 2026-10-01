@@ -102,6 +102,7 @@ rust/
 | `WindowPositionService` | 窗口位置持久化 | SharedPreferences |
 | `WebSocketManager` | WS 服务器(桌面)/客户端(移动) | Rust FFI |
 | `LedgerService` | 流水账 FFI 包装/邮箱口令安全存储/移动端节点中转 | Rust FFI / NodeSettingsService |
+| `LedgerStubStore` | 记账增强桩仓库（标签/分组/模板/定时/附件/备份/CSV，进程级单例，后端未接入） | SharedPreferences |
 
 ---
 
@@ -116,7 +117,7 @@ rust/
 | 传输 | LanTransferViewModel | 设备发现/传输管理 |
 | 抓包 | CaptureScreenViewModel | 代理控制/流量展示 |
 | 日志 | SentryLogViewModel | 日志查询/过滤 |
-| 流水账 | Home / Records / Stats / Pending / Settings / Accounts | 概览/明细/统计/待确认入账/邮箱规则/账户类别 |
+| 流水账 | Home / Records / Stats / Pending / Settings / Accounts / Organize / Templates / Data | 概览/明细/统计/待确认入账/邮箱规则/账户/分类与标签/模板与定时/导入导出 |
 
 ---
 

@@ -63,6 +63,9 @@ import 'package:slime_works/pages/ledger/ledger_stats_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_pending_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_settings_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_accounts_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_organize_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_templates_screen.dart';
+import 'package:slime_works/pages/ledger/ledger_data_screen.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/power_stats_service.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
@@ -116,6 +119,9 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<LedgerPendingRoute>(path: '/ledger/pending'),
     TypedGoRoute<LedgerSettingsRoute>(path: '/ledger/settings'),
     TypedGoRoute<LedgerAccountsRoute>(path: '/ledger/accounts'),
+    TypedGoRoute<LedgerOrganizeRoute>(path: '/ledger/organize'),
+    TypedGoRoute<LedgerTemplatesRoute>(path: '/ledger/templates'),
+    TypedGoRoute<LedgerDataRoute>(path: '/ledger/data'),
     TypedGoRoute<LanTransferRoute>(path: '/lan-transfer'),
     TypedGoRoute<SettingsRoute>(path: '/settings'),
     TypedGoRoute<AboutRoute>(path: '/about'),
@@ -195,6 +201,9 @@ class AppRoutes {
     const LedgerPendingRoute(),
     const LedgerSettingsRoute(),
     const LedgerAccountsRoute(),
+    const LedgerOrganizeRoute(),
+    const LedgerTemplatesRoute(),
+    const LedgerDataRoute(),
     const LanTransferRoute(),
     const SettingsRoute(),
     const AboutRoute(),
