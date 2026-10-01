@@ -238,6 +238,11 @@ fn backfill_consumption(
             continue;
         }
         let gap = (ci - pi) as f64;
+        // curr 桶里已经装着整段 diff（桶内 compute_consumption 按相邻差值累加过它），
+        // 分摊是"把这一段拆开铺到中间各桶"，不是"再加一遍"。所以先扣回再铺：
+        // 60 秒采样配 60 秒桶时每对相邻点恰好跨一个桶（gap=1），漏掉这一步
+        // 整条"每小时"曲线连同电费都会翻成真实值的两倍。
+        buckets[ci].consumption_kwh -= diff;
         // 按比例分摊到中间各桶（含 curr 桶，不含 prev 桶）
         let share = diff / gap;
         for j in (pi + 1)..=ci {
@@ -412,8 +417,8 @@ mod tests {
         }
     }
 
-    /// 跨空桶分摊：两点相隔 30 个桶时，中间空桶按 diff/30 分摊
-    /// 注：末桶同时保留「相邻差值」与「分摊份额」，这是当前实现的叠加行为
+    /// 跨空桶分摊：两点相隔 30 个桶时，diff 整段被拆开铺到 pi+1..=ci，
+    /// 每桶 diff/30，各桶之和恰好等于真实下降量（不叠加、不翻倍）
     #[test]
     fn aggregate_backfills_consumption_across_empty_buckets() {
         // last_ts = BASE-1800 ⇒ start_ts = BASE-5400，共 61 个桶；
@@ -423,19 +428,17 @@ mod tests {
         assert_eq!(got.buckets.len(), 61);
         assert!(approx(got.buckets[30].consumption_kwh, 0.0), "首点所在桶无相邻差值");
         let share = 6.0 / 30.0;
-        for idx in 31..60 {
+        for idx in 31..=60 {
             assert!(
                 approx(got.buckets[idx].consumption_kwh, share),
                 "桶 {idx} 应分摊 {share}，实际 {}",
                 got.buckets[idx].consumption_kwh
             );
         }
-        // 末桶：相邻差值 6 + 分摊份额 0.2（现行为，含叠加）
-        assert!(approx(got.buckets[60].consumption_kwh, 6.0 + share));
         // 分摊范围之外的空桶保持为 0
         assert!(approx(got.buckets[10].consumption_kwh, 0.0));
-        // 总消耗 = 6 + 分摊叠加 6 = 12
-        assert!((got.total_consumption - 12.0).abs() < 1e-9);
+        // 总消耗恰好等于下降量 6（曾经会是 6+6=12）
+        assert!(approx(got.total_consumption, 6.0));
         // 分摊后每桶仍满足 cost = consumption * price（price=1）
         for b in &got.buckets {
             assert!(approx(b.cost_yuan, b.consumption_kwh));
@@ -468,19 +471,47 @@ mod tests {
         assert_eq!(got.buckets.len(), 61, "未知 range 应回退成 hour 的 61 个 60 秒桶");
     }
 
-    /// 7days 范围：桶宽 86400 ⇒ 8 个桶；跨天下降应被分摊
+    /// 7days 范围：桶宽 86400 ⇒ 8 个桶；跨天下降被摊成每天 1.0
     #[test]
     fn aggregate_day_range_bucket_count() {
         let samples = vec![s(BASE - 7 * 86_400, 50.0), s(BASE, 43.0)];
         let got = aggregate(&samples, "7days", 1.0);
         assert_eq!(got.buckets.len(), 8);
         assert_eq!(got.buckets[1].timestamp - got.buckets[0].timestamp, 86_400);
-        // 差值 7 分摊到桶 1..=7（每桶 1.0），桶 7 额外带相邻差值 7
-        for idx in 1..7 {
+        // 差值 7 摊到桶 1..=7（每桶 1.0），末桶不再叠加自己那份
+        for idx in 1..=7 {
             assert!(approx(got.buckets[idx].consumption_kwh, 1.0));
         }
-        assert!(approx(got.buckets[7].consumption_kwh, 8.0));
+        assert!(approx(got.total_consumption, 7.0));
         assert_eq!(got.sample_count, 2);
+    }
+
+    /// 回归：60 秒采样 + "每小时"视图（桶宽同为 60 秒）时，每对相邻点都恰好
+    /// 跨一个桶，分摊曾把差值在 curr 桶再叠一遍，导致电费是真实值的两倍。
+    #[test]
+    fn aggregate_minute_sampling_hour_view_does_not_double_count() {
+        // 61 个点、每分钟一个，一小时内共用掉 15.0 kWh（每点 0.25，二进制精确）
+        let samples: Vec<PowerSample> = (0..=60)
+            .map(|i| {
+                let v = 30.0 - i as f64 * 0.25;
+                sy(BASE - (60 - i) * 60, v, v, 1.0)
+            })
+            .collect();
+        let got = aggregate(&samples, "hour", 1.0);
+        assert!(
+            approx(got.total_consumption, 15.0),
+            "总耗电应为 15.0，实际 {}",
+            got.total_consumption
+        );
+        assert!(
+            approx(got.total_cost, 15.0),
+            "电费应与余额下降一致，实际 {}",
+            got.total_cost
+        );
+        // 逐桶也不能翻倍：每个有值的桶恰好 0.25
+        for b in got.buckets.iter().filter(|b| b.consumption_kwh > 0.0) {
+            assert!(approx(b.consumption_kwh, 0.25), "桶 {} = {}", b.label, b.consumption_kwh);
+        }
     }
 
     // ── compute_summary ────────────────────────────────────────────────────

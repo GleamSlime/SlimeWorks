@@ -177,10 +177,37 @@ class PowerStatsService extends GetxService {
     }
   }
 
+  /// 应用启动预热：建库 + 按已保存的配置把定时轮询拉起来。
+  ///
+  /// 表号一旦存过，"要不要采样"就已经是用户的决定了，不该每天开机再进页面
+  /// 点一次"启动轮询"。这里排在 runApp 之后跑，页面开不开都照采。
+  /// [enabled] 仍是唯一的总开关：手动关掉的人不该在下次启动时被偷偷打开。
+  Future<void> warmUpAfterLaunch() async {
+    await ensureInitialized();
+    if (!isLocal) return;
+    if (meterId.value.trim().isEmpty) return;
+    if (!enabled.value) {
+      _logger.info('电力统计开关已关闭，跳过启动轮询');
+      return;
+    }
+    await startPolling();
+  }
+
+  /// 保存表号。
+  ///
+  /// 填了表号就等于"我要统计"：顺手把总开关打开并拉起轮询，不再要求用户
+  /// 回页面里手动点一次"启动轮询"。清空表号则反过来——没什么可采的了。
   Future<void> setMeterId(String value) async {
-    meterId.value = value;
+    meterId.value = value.trim();
+    if (meterId.value.isNotEmpty) enabled.value = true;
     await _savePrefs();
     await updateConfig();
+    if (!isLocal) return;
+    if (meterId.value.isEmpty) {
+      await stopPolling();
+    } else {
+      await startPolling();
+    }
   }
 
   Future<void> setIntervalSecs(int value) async {

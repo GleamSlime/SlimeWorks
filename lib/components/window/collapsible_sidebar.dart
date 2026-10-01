@@ -613,8 +613,10 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
 
   /// 构建侧边栏头部：产品身份位 + 折叠开关
   ///
-  /// 展开态是一条 Row（字标在左、把手在右）；收起态只剩把手一枚，居中放，
+  /// 展开态是一条 Row（字标在左、把手在右）；收起态只留 logo 一枚，居中放，
   /// 和上面的窗口灯、下面的图标条对齐到同一条中轴。
+  /// 收起态不再画展开把手：那一格交给 logo 当身份位，展开改用左缘指示条
+  /// （[SidebarController.cycleVisibility] 的 展开→收起→隐藏 三态循环）。
   /// 展开↔收起之间不换 Column/Row 结构，整条头部才不会重排。
   Widget _buildHeader(BuildContext context, SidebarController controller, bool isExpanded) {
     if (desktopScreen.isMobile.value) {
@@ -628,21 +630,20 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
       curve: AppMotion.standard,
       padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace8),
       child: Row(
-        // 收起态把把手和上面的灯、下面的图标条对齐到同一条中轴；展开态才是"字标在左、把手在右"
+        // 收起态把 logo 和上面的灯、下面的图标条对齐到同一条中轴；展开态才是"字标在左、把手在右"
         mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
-          // 图标条只有 75 设计像素，装不下产品身份位：收起态直接不画，
-          // 而不是缩成一枚挤在把手旁边
-          if (isExpanded) const _SidebarLogo(),
+          const _SidebarLogo(),
           if (isExpanded) Expanded(child: SizedBox(width: m.kSpace4)),
-          StrokeIconButton(
-            // 展开/收起是同一支笔换字形：旧的擦回去、新的描出来，比硬切更能读出"栏宽变了"
-            isExpanded ? StrokeIcons.assetSidebarOpen : StrokeIcons.assetSidebarClose,
-            size: scaleW(22),
-            onTap: controller.toggleSidebar,
-            color: Theme.of(context).iconTheme.color,
-            semanticLabel: isExpanded ? '收起侧栏' : '展开侧栏',
-          ),
+          if (isExpanded)
+            StrokeIconButton(
+              // 展开/收起是同一支笔换字形：旧的擦回去、新的描出来，比硬切更能读出"栏宽变了"
+              StrokeIcons.assetSidebarOpen,
+              size: scaleW(22),
+              onTap: controller.toggleSidebar,
+              color: Theme.of(context).iconTheme.color,
+              semanticLabel: '收起侧栏',
+            ),
         ],
       ),
     );
@@ -1132,6 +1133,12 @@ class _SidebarLogo extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
+          // 收起态栏内没有别的展开入口（那枚把手已经让位给 logo），点 logo 先展开；
+          // 已经展开时才回到它一贯的含义——回首页。
+          if (!controller.isExpanded.value) {
+            controller.openSidebar();
+            return;
+          }
           controller.selectItem(const DashboardRoute().location);
           goRouter.go(const DashboardRoute().location);
         },

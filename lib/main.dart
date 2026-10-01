@@ -17,6 +17,7 @@ import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/power_stats_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/services/ledger_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
@@ -168,6 +169,14 @@ Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
     getIt<LedgerService>().ensureInitialized().catchError((Object e) {
       // 失败已在服务层记过日志，这里只是不让它变成未捕获的异步异常；
       // 用户进记账页时会再试一次。
+    }),
+  );
+
+  // 电力统计：表号存过就在后台把定时轮询拉起来，
+  // 否则每天得先进一次电力页面、再点一次"启动轮询"才开始有数据。
+  unawaited(
+    getIt<PowerStatsService>().warmUpAfterLaunch().catchError((Object e) {
+      // 服务层已记日志；进电力页面时 ensureInitialized 会再走一遍。
     }),
   );
 

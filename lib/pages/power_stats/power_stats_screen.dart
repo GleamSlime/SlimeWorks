@@ -696,6 +696,15 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           sumText = '${sumValue.toStringAsFixed(2)}$unit';
       }
 
+      // 图表只画有值的采样桶：这类"流量"型指标（耗电量/电费）绝大多数桶是 0，
+      // 留着会把曲线压成一地锯齿，也撑不满纵轴。余额是"存量"，0 也是有效读数，不过滤。
+      // 上面的合计/区间变化仍用完整 buckets，过滤不能影响它们。
+      final chartBuckets = switch (metric) {
+        PowerChartMetric.balance => buckets,
+        // 全是 0 时退回原始桶：空图比一条 0 平线更难读
+        _ => _withoutZeroBuckets(buckets, metric),
+      };
+
       return Container(
         padding: EdgeInsets.all(m.kSpace16),
         decoration: BoxDecoration(
@@ -763,10 +772,10 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             SizedBox(height: m.kSpace16),
             SizedBox(
               height: isNarrow ? 200 : 260,
-              child: buckets.isEmpty
+              child: chartBuckets.isEmpty
                   ? _buildEmptyChart(theme, m)
                   : _InteractivePowerChart(
-                      buckets: buckets,
+                      buckets: chartBuckets,
                       metric: metric,
                       color: color,
                       unit: unit,
@@ -776,6 +785,23 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
         ),
       );
     });
+  }
+
+  /// 过滤掉数值为 0 的采样桶，让趋势线只反映真实发生的用量。
+  ///
+  /// 阈值取 0.0001：浮点累加的噪声（0.0000001 度）在人眼里就是 0，
+  /// 但精确相等判不掉，会留下一条肉眼看不见的锯齿。
+  List<PowerStatBucket> _withoutZeroBuckets(
+    List<PowerStatBucket> buckets,
+    PowerChartMetric metric,
+  ) {
+    final nonZero = buckets.where((b) {
+      final v = metric == PowerChartMetric.consumption
+          ? b.consumptionKwh
+          : b.costYuan;
+      return v.abs() > 0.0001;
+    }).toList();
+    return nonZero.isEmpty ? buckets : nonZero;
   }
 
   Widget _buildEmptyChart(ThemeData theme, ThemeMetrics m) {
@@ -1002,12 +1028,13 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   borderRadius: m.radius8,
                   child: InkWell(
                     borderRadius: m.radius8,
-                    onTap: () {
+                    onTap: () async {
                       final val = _meterIdController.text.trim();
-                      if (val.isNotEmpty) {
-                        _viewModel.saveMeterId(val);
-                        _viewModel.fetchOnce();
-                      }
+                      if (val.isEmpty) return;
+                      // 保存即开轮询：Rust 侧的调度器起来后第一件事就是抓一次，
+                      // 这里再 fetchOnce 就成了对同一张电表页的重复请求。
+                      await _viewModel.saveMeterId(val);
+                      _viewModel.refreshAll();
                     },
                     child: Container(
                       padding: EdgeInsets.symmetric(
@@ -1015,7 +1042,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                         vertical: m.kSpace12,
                       ),
                       child: Text(
-                        '保存并抓取',
+                        '保存表号',
                         style: TextStyle(
                           fontSize: m.fontSize12,
                           fontWeight: FontWeight.w600,
@@ -1473,143 +1500,140 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
       changeColor = LightColors.blue;
     }
 
-    final tp = TextPainter(
-      text: TextSpan(
-        text: bucket.label,
-        style: TextStyle(
-          fontSize: m.fontSize11,
-          color: theme.colorScheme.onSurface.withAlpha(160),
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: ui.TextDirection.ltr,
-    )..layout();
-    final labelW = tp.width;
-
-    final tp2 = TextPainter(
-      text: TextSpan(
-        text: valueText,
-        style: TextStyle(
-          fontSize: m.fontSize13,
-          fontWeight: FontWeight.w700,
-          color: widget.color,
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: ui.TextDirection.ltr,
-    )..layout();
-    final valueW = tp2.width;
-
-    // 加宽：取最大内容宽度，并设置最小宽度
-    final innerW = math.max(math.max(labelW, valueW), 96.0);
-    final tooltipW = innerW + m.kSpace20 + m.kSpace8;
-    final tooltipH = changeText != null ? 72.0 : 60.0;
-
-    // tooltip 定位：优先在数据点上方，越界时翻转/夹紧
-    double left = p.dx - tooltipW / 2;
-    if (left < 2) left = 2;
-    if (left + tooltipW > size.width - 2) {
-      left = size.width - tooltipW - 2;
-    }
-    double top = p.dy - tooltipH - 10;
-    if (top < 2) top = p.dy + 10;
-
-    return Positioned(
-      left: left,
-      top: top,
-      width: tooltipW,
+    // 不再用 TextPainter 估宽：估少一点，数值就被行内的压缩规则挤成 "0.0…"，
+    // 而 monospace 的真实字宽还受 textScaler/字体回退影响，估算注定不准。
+    // 改成让内容按自然宽度排布，定位交给 CustomSingleChildLayout 用实测尺寸夹紧。
+    return Positioned.fill(
       child: IgnorePointer(
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: m.kSpace10,
-            vertical: m.kSpace8,
-          ),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withAlpha(248),
-            borderRadius: m.radius8,
-            border: Border.all(color: widget.color.withAlpha(120), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(60),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+        child: CustomSingleChildLayout(
+          delegate: _TooltipLayoutDelegate(anchor: p),
+          child: ConstrainedBox(
+            // 太短的读数（如 "0.000 kWh"）也给 tooltip 一个体面的最小宽度，
+            // 免得只剩一枚孤零零的小标签。
+            constraints: const BoxConstraints(minWidth: 96.0),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: m.kSpace10,
+                vertical: m.kSpace8,
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                bucket.label,
-                style: TextStyle(
-                  fontSize: m.fontSize11,
-                  color: theme.colorScheme.onSurface.withAlpha(160),
-                  fontFamily: 'monospace',
-                ),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withAlpha(248),
+                borderRadius: m.radius8,
+                border: Border.all(color: widget.color.withAlpha(120), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(60),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              SizedBox(height: m.kSpace4),
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: m.kSpace8,
-                    height: m.kSpace8,
-                    decoration: BoxDecoration(
-                      color: widget.color,
-                      shape: BoxShape.circle,
+                  Text(
+                    bucket.label,
+                    style: TextStyle(
+                      fontSize: m.fontSize11,
+                      color: theme.colorScheme.onSurface.withAlpha(160),
+                      fontFamily: 'monospace',
                     ),
                   ),
-                  SizedBox(width: m.kSpace8),
-                  Expanded(
-                    child: Text(
-                      valueText,
-                      style: TextStyle(
-                        fontSize: m.fontSize13,
-                        fontWeight: FontWeight.w700,
-                        color: widget.color,
-                        fontFamily: 'monospace',
+                  SizedBox(height: m.kSpace4),
+                  // 不收 Expanded/Flexible：父约束是无界的，flex 子项在无限宽下会
+                  // 直接断言失败；自然宽度下也不会有任何东西被截断。
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: m.kSpace8,
+                        height: m.kSpace8,
+                        decoration: BoxDecoration(
+                          color: widget.color,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (changeText != null && changeColor != null) ...[
-                    SizedBox(width: m.kSpace8),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: m.kSpace6,
-                        vertical: m.kSpace2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: changeColor.withAlpha(20),
-                        borderRadius: m.radius4,
-                      ),
-                      child: Text(
-                        changeText,
+                      SizedBox(width: m.kSpace8),
+                      Text(
+                        valueText,
                         style: TextStyle(
-                          fontSize: m.fontSize10,
+                          fontSize: m.fontSize13,
                           fontWeight: FontWeight.w700,
-                          color: changeColor,
+                          color: widget.color,
                           fontFamily: 'monospace',
                         ),
                       ),
+                      if (changeText != null && changeColor != null) ...[
+                        SizedBox(width: m.kSpace8),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: m.kSpace6,
+                            vertical: m.kSpace2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: changeColor.withAlpha(20),
+                            borderRadius: m.radius4,
+                          ),
+                          child: Text(
+                            changeText,
+                            style: TextStyle(
+                              fontSize: m.fontSize10,
+                              fontWeight: FontWeight.w700,
+                              color: changeColor,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  SizedBox(height: m.kSpace4),
+                  Text(
+                    metricLabel,
+                    style: TextStyle(
+                      fontSize: m.fontSize10,
+                      color: theme.colorScheme.onSurface.withAlpha(120),
                     ),
-                  ],
+                  ),
                 ],
               ),
-              SizedBox(height: m.kSpace4),
-              Text(
-                metricLabel,
-                style: TextStyle(
-                  fontSize: m.fontSize10,
-                  color: theme.colorScheme.onSurface.withAlpha(120),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// 把 tooltip 摆到锚点上方，越界时翻转或夹紧。
+///
+/// 尺寸由 child 自己量出来（getConstraintsForChild 松绑约束），所以这里的
+/// childSize 就是真实渲染尺寸，不存在"估宽估少了把文字挤断"的可能。
+class _TooltipLayoutDelegate extends SingleChildLayoutDelegate {
+  const _TooltipLayoutDelegate({required this.anchor});
+
+  final Offset anchor;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen();
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    double left = anchor.dx - childSize.width / 2;
+    if (left < 2) left = 2;
+    if (left + childSize.width > size.width - 2) {
+      left = size.width - childSize.width - 2;
+    }
+    double top = anchor.dy - childSize.height - 10;
+    if (top < 2) top = anchor.dy + 10;
+    return Offset(left, top);
+  }
+
+  @override
+  bool shouldRelayout(_TooltipLayoutDelegate oldDelegate) =>
+      oldDelegate.anchor != anchor;
 }
 
 class _ChartCanvas extends CustomPainter {
@@ -1711,12 +1735,20 @@ class _ChartCanvas extends CustomPainter {
       );
     }
 
-    // 渐变填充区域
+    // 渐变填充区域：折线 → 右下角 → 左下角 → 回到折线起点，闭合出一条沿底边的带。
+    // 不能用 addPolygon：它会 moveTo(points.first) 另起一条子路径，把前面那个
+    // "从底边起步"的点甩在另一条子路径里，之后的 lineTo/close 于是接在折线尾巴上，
+    // 闭合线变成从右下角斜着拉回左上角第一个点——屏幕上就是一块大三角。
     if (points.length >= 2) {
+      final baseY = padTop + chartH;
       final fillPath = Path()
-        ..moveTo(points.first.dx, padTop + chartH)
-        ..addPolygon(points, false)
-        ..lineTo(points.last.dx, padTop + chartH)
+        ..moveTo(points.first.dx, baseY)
+        ..lineTo(points.first.dx, points.first.dy);
+      for (final pt in points.skip(1)) {
+        fillPath.lineTo(pt.dx, pt.dy);
+      }
+      fillPath
+        ..lineTo(points.last.dx, baseY)
         ..close();
       final fillPaint = Paint()
         ..shader = LinearGradient(

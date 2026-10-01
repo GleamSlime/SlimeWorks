@@ -183,4 +183,68 @@ extension BrowseSelectionExt on MediaLibraryViewModel {
       matchCount: collectionsMatchingSmartFolder(sf).length,
     );
   }
+
+  // ── 选择模式进出与批量选择 ────────────────────────────────────────────────
+
+  void enterSelection(String firstId) {
+    // 选择写点一律走 syncSelectionTo 收口：diff 通知卡片级 notifier，只重建真正变化的卡
+    syncSelectionTo({firstId}, selecting: true);
+  }
+
+  void exitSelection() {
+    syncSelectionTo(const <String>{}, selecting: false);
+  }
+
+  void toggleSelection(String id) {
+    if (selectedIds.contains(id)) {
+      // 移除后为空则退出选择模式（保持旧语义）
+      final next = {...selectedIds}..remove(id);
+      if (next.isEmpty) {
+        syncSelectionTo(next, selecting: false);
+        return;
+      }
+      syncSelectionTo(next);
+      return;
+    }
+    syncSelectionTo({...selectedIds, id}, selecting: true);
+  }
+
+  void toggleSelectAll() {
+    final items = visibleItems;
+    if (selectedIds.length == items.length) {
+      syncSelectionTo(const <String>{}, selecting: false);
+      return;
+    }
+    syncSelectionTo(
+      items.map((item) => item.id).toSet(),
+      selecting: items.isNotEmpty,
+    );
+  }
+
+  /// 取消所有选择，并选中当前文件夹内全部未收藏的集合（批量操作入口）。
+  /// 智能文件夹下按其过滤规则确定范围；无未收藏集合时保持选择模式且选中为空。
+  void selectUnfavoritedCollections() {
+    final folderId = currentFolderId.value;
+    List<media_api.MediaCollection> scope;
+    if (folderId != null && isDupGroup(folderId)) {
+      scope = dupGroupCollections(folderId);
+    } else if (folderId != null && isSmartFolder(folderId)) {
+      final sf = getSmartFolder(folderId);
+      scope = sf == null
+          ? <media_api.MediaCollection>[]
+          : mergedCollections
+                .where((c) => collectionMatchesSmartFolder(sf, c))
+                .toList();
+    } else {
+      scope = mergedCollections.where((c) => c.folderId == folderId).toList();
+    }
+    final unfavoritedIds = scope
+        .where((c) => !favoriteCollectionIds.contains(c.id))
+        .map((c) => c.id)
+        .toSet();
+    _logger.info(
+      'selectUnfavoritedCollections: folderId=$folderId, scope=${scope.length}, unfavorited=${unfavoritedIds.length}',
+    );
+    syncSelectionTo(unfavoritedIds, selecting: true);
+  }
 }

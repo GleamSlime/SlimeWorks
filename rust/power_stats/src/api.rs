@@ -247,16 +247,16 @@ pub async fn power_stats_start_polling() -> Result<(), String> {
     let interval = Duration::from_secs(interval_secs.max(30));
 
     let mgr = manager.clone();
+    // 调度任务一建立就算"在轮询"：原先要等首次抓取返回才置位，而抓取要一两秒，
+    // 这期间前端 refreshStatus 读到 false，自动启动后界面会闪一下"未轮询"。
+    if let Ok(mut s) = manager.status.write() {
+        s.polling = true;
+    }
     let handle = tokio::spawn(async move {
         sw_info!("[power_stats] 定时轮询已启动，间隔{}秒", interval_secs);
         // 立即执行一次
         if let Err(e) = mgr.fetch_once_inner().await {
             sw_warn!("[power_stats] 轮询首次抓取失败: {}", e);
-        }
-        {
-            if let Ok(mut s) = mgr.status.write() {
-                s.polling = true;
-            }
         }
         loop {
             tokio::time::sleep(interval).await;

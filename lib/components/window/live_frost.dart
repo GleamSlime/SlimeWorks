@@ -458,6 +458,12 @@ class LiveFrostBackdrop extends StatelessWidget {
         builder: (context, constraints) => Stack(
           fit: StackFit.expand,
           children: [
+            // 磨砂帧的不透明垫底：最大化/全屏时采集矩形已经被屏幕边夹死，
+            // 向外扩的那一圈拿不到真实桌面像素（原生如实回报 pad*=0），
+            // decal 模糊于是把窗口边缘几十像素糊成了透明——那条边直接看穿到
+            // 真实桌面，像磨砂在边缘被啃掉一块。垫一层画布色，透明部分就渐到
+            // 这层上：浅色主题≈白，深色主题≈黑，跟着主题走而不是写死白色。
+            ColoredBox(color: canvas),
             _layer(
                 image, constraints.biggest, MediaQuery.devicePixelRatioOf(context)),
             // 一层薄纱：纯模糊帧对比度太高会抢正文的可读性；没帧时铺实底。
