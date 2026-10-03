@@ -14,7 +14,7 @@ const Loggers _logger = Loggers(name: '窗口位置');
 class WindowPositionService extends GetxService {
   static const String _keyX = 'window_position_x';
   static const String _keyY = 'window_position_y';
-  static const String _key  Width = 'window_width';
+  static const String _keyWidth = 'window_width';
   static const String _keyHeight = 'window_height';
   static const String _keyScreenLeft = 'window_screen_left';
   static const String _keyScreenTop = 'window_screen_top';
