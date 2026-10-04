@@ -170,17 +170,26 @@ void main() {
   group('PowerStatsService.checkNodePowerStatsAvailable', () {
     late FakeNodeServer server;
     late PowerStatsService svc;
+    late NodeSettingsService nodeService;
     late int deadPort;
 
     setUp(() async {
       server = await FakeNodeServer.start();
       deadPort = await freeLoopbackPort();
+      // 节点请求的 Dio 现在向 NodeSettingsService 要（那条路上才带 X-SW-Auth 摘要），
+      // 所以这一组用例得先把节点服务摆进 GetIt。
+      nodeService = NodeSettingsService();
+      nodeService.remoteNodes.add(
+        NodeEndpoint(id: 'n1', name: '假节点', apiBaseUrl: server.baseUrl, authCode: ''),
+      );
+      getIt.registerSingleton<NodeSettingsService>(nodeService);
       svc = PowerStatsService();
     });
 
     tearDown(() async {
       await server.dispose();
       svc.onClose();
+      getIt.unregister<NodeSettingsService>();
     });
 
     test('节点回 {success:true} 判为可用，且请求打 /node/call + 正确 action', () async {
@@ -189,6 +198,36 @@ void main() {
       expect(req.path, '/node/call');
       expect(req.action, 'power_stats_get_status');
       expect(req.params, isEmpty);
+    });
+
+    test('节点设了授权码：探测带上 X-SW-Auth，不把 401 误判成"不支持此功能"', () async {
+      // 复刻真节点的鉴权（rust/src/node_server/mod.rs::is_authorized）：/health 放行，
+      // 其余路由缺 X-SW-Auth 或对不上摘要就 401。这一条就是移动端切电力统计节点
+      // 弹「该节点不支持此功能」的成因：探测走不带授权头的裸 Dio，节点在线、
+      // 功能也开着，照样被 401 挡在门外。
+      const String authCode = 'ABCD-1234';
+      nodeService.remoteNodes.add(
+        NodeEndpoint(
+          id: 'n2',
+          name: '带码节点',
+          apiBaseUrl: server.baseUrl,
+          authCode: authCode,
+        ),
+      );
+      server.responder = (FakeNodeRequest r) {
+        if (r.path == '/health') {
+          return FakeNodeReply.successData(<String, dynamic>{});
+        }
+        return r.headers['x-sw-auth'] == NodeSettingsService.authCodeDigest(authCode)
+            ? FakeNodeReply.successData(<String, dynamic>{'meter_name': '总表'})
+            : FakeNodeReply.unauthorized();
+      };
+
+      expect(await svc.checkNodePowerStatsAvailable(server.baseUrl), isTrue);
+      expect(
+        server.lastRequest.headers['x-sw-auth'],
+        NodeSettingsService.authCodeDigest(authCode),
+      );
     });
 
     test('节点回 success:false 判为不可用', () async {

@@ -254,8 +254,11 @@ class NodeSwitcherButton extends StatelessWidget {
                               return;
                             }
                             if (availabilityChecker != null) {
+                              // 用服务层的"最近应答地址"，不用配置里内网优先的那一条：
+                              // 手机出了局域网，内网地址根本够不着，探测超时就会被
+                              // 误报成「该节点不支持此功能」。
                               final available = await availabilityChecker!(
-                                node.effectiveApiBaseUrl,
+                                nodeService.getNodeEffectiveBaseUrl(node.id),
                               );
                               if (!sheetCtx.mounted) return;
                               if (!available) {

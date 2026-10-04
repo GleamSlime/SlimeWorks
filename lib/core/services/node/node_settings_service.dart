@@ -80,7 +80,10 @@ class NodeSettingsService extends GetxService {
 
   /// 熔断前确认用的超时档。200ms 是给"空闲节点"用的：节点正在批量生成缩略图
   /// 或解压刚上传的归档时，ping 完全可能压线超时，据此熔断会把健康节点判死。
-  static const Duration _probeConfirmTimeout = Duration(milliseconds: 1500);
+  ///
+  /// 业务服务层的单发能力探测（电力统计/阿里云/Sentry 的 checkNodeXxxAvailable）
+  /// 也用它：那种探测同样只允许"慢"，不许把慢误报成"该节点不支持此功能"。
+  static const Duration probeConfirmTimeout = Duration(milliseconds: 1500);
 
   /// 节点回「并发已满」(503/429) 时的重试次数：连接是通的，只是服务端在背压。
   static const int _nodeBusyRetries = 2;
@@ -95,10 +98,25 @@ class NodeSettingsService extends GetxService {
   final RxString localNodeAuthCode = ''.obs;
 
   void _attachAuthInterceptor() {
-    final interceptor = _NodeAuthInterceptor(_authDigestForUrl);
-    _dio.interceptors.add(interceptor);
-    _probeDio.interceptors.add(interceptor);
+    _dio.interceptors.add(_authInterceptor);
+    _probeDio.interceptors.add(_authInterceptor);
   }
+
+  /// 授权摘要拦截器单例：本服务的两条 Dio 和业务服务层向 [createNodeDio]
+  /// 要的那些共用同一份，按 URL 找节点补头。
+  late final _NodeAuthInterceptor _authInterceptor = _NodeAuthInterceptor(
+    _authDigestForUrl,
+  );
+
+  /// 业务服务层访问远程节点用的 Dio：既带 `X-SW-Auth` 摘要，也绕开系统代理直连。
+  ///
+  /// 电力统计/阿里云/Sentry 原先各自 `Dio(BaseOptions(...))`，两条都缺：
+  /// 没有授权头时，节点一设授权码就统一 401——连"该节点支持不支持这个功能"的
+  /// 探测也被误判成不支持，端侧就是一句「该节点不支持此功能」；没有 DIRECT 时，
+  /// 移动端上的系统代理/抓包代理还会掐断 keep-alive 长连接。
+  /// 节点请求一律从这里取，别再造裸 Dio。
+  Dio createNodeDio(BaseOptions options) =>
+      _createNodeDio(options)..interceptors.add(_authInterceptor);
 
   /// 按请求 URL 找到对应节点，返回其授权码摘要；无授权码时返回 null。
   String? _authDigestForUrl(String url) {
@@ -599,7 +617,7 @@ class NodeSettingsService extends GetxService {
         .where((b) => b.isNotEmpty)
         .toList(growable: false);
     final results = await Future.wait(
-      bases.map((base) => _probeNodeUrl(base, timeout: _probeConfirmTimeout)),
+      bases.map((base) => _probeNodeUrl(base, timeout: probeConfirmTimeout)),
     );
     if (results.contains(_ProbeResult.ok)) {
       _nodeAnsweredBase[node.id] = bases[results.indexOf(_ProbeResult.ok)];
@@ -1518,7 +1536,7 @@ class NodeSettingsService extends GetxService {
     };
     final total = probeUrls.values.map((l) => l.length).fold(0, (a, b) => a + b);
     if (total == 0) return false;
-    const timeout = _probeConfirmTimeout;
+    const timeout = probeConfirmTimeout;
     for (final entry in probeUrls.entries) {
       for (final url in entry.value) {
         try {

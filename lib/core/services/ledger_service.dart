@@ -44,7 +44,11 @@ class LedgerService extends GetxService {
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  final Dio _dio = Dio(
+  /// 中转远程节点用的 Dio：向 [NodeSettingsService] 要，那条路上才带 `X-SW-Auth`
+  /// 摘要并绕开系统代理直连。裸 `Dio(...)` 少了授权头，节点一设授权码，移动端的
+  /// 记账中转会整片 401（和电力统计/阿里云/Sentry 踩的是同一个坑）。
+  /// late：构造本服务时 NodeSettingsService 未必已注册，第一次发请求才组装。
+  late final Dio _dio = GetIt.instance.get<NodeSettingsService>().createNodeDio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 6),
       receiveTimeout: const Duration(seconds: 60),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -296,6 +297,28 @@ class AppTheme {
   /// 暗色主题
   static ThemeData get darkTheme => _buildBase(AppSemantic.dark);
 
+  // ── 系统状态栏配色（移动端）──────────────────────────────────────────
+  // 必须显式钉住主题，不能交给 Material 去猜：本项目的 AppBar 底色是
+  // transparent，AppBar 会用 `estimateBrightnessForColor(transparent)` 推断
+  // 背景明暗，透明色亮度为 0 → 当成深色背景 → 无论亮色还是暗色主题都发白色
+  // 图标，亮色主题下时间/电量直接糊在白底上看不见。
+  // 只声明 statusBar* 三项，导航条字段留空，免得 AppBar 的 AnnotatedRegion
+  // 顺手把底部导航条刷成不透明白/黑。
+
+  /// 亮色主题：浅色页面配近黑图标。
+  static const SystemUiOverlayStyle _statusBarLight = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+  );
+
+  /// 暗色主题：深色页面配白色图标。
+  static const SystemUiOverlayStyle _statusBarDark = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  );
+
   /// 唯一的主题构建入口：明暗只在 [AppSemantic] 里不同，结构完全一致。
   static ThemeData _buildBase(AppSemantic s) {
     final m = metrics;
@@ -356,6 +379,8 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         foregroundColor: s.textPrimary,
+        // 状态栏图标配色跟着主题走：亮色压黑、暗色提白（见 _statusBarLight 注释）
+        systemOverlayStyle: s.isDark ? _statusBarDark : _statusBarLight,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,

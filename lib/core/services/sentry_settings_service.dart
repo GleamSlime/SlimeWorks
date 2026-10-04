@@ -20,7 +20,11 @@ class SentrySettingsService extends GetxService {
   final RxInt refreshIntervalSeconds = 30.obs;
 
   SharedPreferences? _prefs;
-  final Dio _dio = Dio(
+  /// 节点请求专用 Dio：向 [NodeSettingsService] 要，那条路上才带 `X-SW-Auth`
+  /// 摘要并绕开系统代理直连。裸 `Dio(...)` 少了授权头，节点一设授权码，
+  /// 远程日志查询连同"该节点支持不支持"的探测会全部吃 401。
+  /// late：构造本服务时 NodeSettingsService 未必已注册，第一次发请求才组装。
+  late final Dio _dio = GetIt.instance.get<NodeSettingsService>().createNodeDio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 6),
       receiveTimeout: const Duration(seconds: 12),
@@ -207,9 +211,11 @@ class SentrySettingsService extends GetxService {
       final response = await _dio.get<Map<String, dynamic>>(
         '$baseUrl/sentry/stats',
         options: Options(
-          connectTimeout: const Duration(milliseconds: 200),
+          // 面板只对"已探到在线"的节点发这颗探测，慢不等于不支持：原先照搬
+          // 连通性快速档的 200ms，手机走外网时 DNS + 握手就能压线超时。
+          connectTimeout: NodeSettingsService.probeConfirmTimeout,
           sendTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 5),
         ),
       );
       return response.statusCode == 200;

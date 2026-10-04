@@ -105,7 +105,12 @@ class NodeInlineSelector extends StatelessWidget {
         if (nodeId.isNotEmpty && availabilityChecker != null) {
           final node = nodeService.getNodeById(nodeId);
           if (node == null) return;
-          final available = await availabilityChecker!(node.effectiveApiBaseUrl);
+          // 探的是"这台设备此刻真能用的那一路地址"：effectiveApiBaseUrl 是配置里的
+          // 内网优先，手机出了局域网就压死在够不着的内网地址上，节点明明开着这个
+          // 功能也会被回一句「该节点不支持」。走服务层的最近应答地址，和真实请求同路。
+          final available = await availabilityChecker!(
+            nodeService.getNodeEffectiveBaseUrl(nodeId),
+          );
           if (!available) {
             if (!context.mounted) return;
             ScaffoldMessenger.of(context)
