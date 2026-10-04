@@ -288,7 +288,6 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 分组 ID → 所属父文件夹 ID（null = 根目录），在 visibleItems 构建时登记。
   final _dupGroupParents = <String, String?>{};
 
-
   /// 用于集合封面生成的串行队列。
   /// 并发数与 Rust 端全局 ffmpeg 信号量一致，双重保障 ffmpeg 进程数不超限。
   final _coverQueue = VideoThumbQueue(concurrency: 2);
@@ -368,6 +367,49 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 避免从 (n-1)/n 直接消失，给用户视觉反馈再清空。
   Timer? _thumbCompleteTimer;
 
+  /// 浏览层派生缓存失效监听：任一派生输入变化 → 清缓存 + visibleVersion++。
+  /// 网格唯一数据 Obx 只订阅 visibleVersion，Rx 变化从「N 路全网格重建」
+  /// 收敛为「1 路一次重建」。_itemPathsEpoch 为非 Rx 计数，在写入点手动调用失效。
+  ///
+  /// 必须在构造时就绑定：派生缓存的读写不依赖 Get 生命周期，若只等 onInitAsync
+  /// 才注册，未经该生命周期的实例（如单测直接 new）会永远读到失效前的陈旧缓存。
+  void _bindVisibleInvalidation() {
+    _visibleInvalidationWorkers ??= [
+      ever<String?>(currentFolderId, (_) => _invalidateVisible()),
+      ever<String>(searchQuery, (_) => _invalidateVisible()),
+      ever<String>(similarSearchQuery, (_) => _invalidateVisible()),
+      ever<CollectionSortOrder>(
+        collectionSortOrder,
+        (_) => _invalidateVisible(),
+      ),
+      ever<int>(collectionOrderVersion, (_) => _invalidateVisible()),
+      ever<bool>(showFavoritesOnly, (_) => _invalidateVisible()),
+      ever<Set<String>>(favoriteCollectionIds, (_) => _invalidateVisible()),
+      ever<List<media_api.MediaFolder>>(folders, (_) => _invalidateVisible()),
+      ever<List<media_api.MediaFolder>>(
+        remoteFolders,
+        (_) => _invalidateVisible(),
+      ),
+      ever<List<media_api.MediaCollection>>(
+        collections,
+        (_) => _invalidateVisible(),
+      ),
+      ever<List<media_api.MediaCollection>>(
+        remoteCollections,
+        (_) => _invalidateVisible(),
+      ),
+      ever<List<SmartFolder>>(smartFolders, (_) => _invalidateVisible()),
+      ever<Map<String, List<SmartFolder>>>(
+        _remoteSmartFolders,
+        (_) => _invalidateVisible(),
+      ),
+      ever<int>(_searchVersion, (_) => _invalidateVisible()),
+      // 封面/存活统计落地后需要卡片换图换数（32ms 节流后的全局版本）
+      ever<int>(_asyncCoverVersion, (_) => _invalidateVisible()),
+      ever<int>(liveStatsVersion, (_) => _invalidateVisible()),
+    ];
+  }
+
   /// 将并发量同步到 Rust 端全局 ffmpeg 信号量，同时更新 Flutter 端队列并发限制。
   void _syncConcurrency(int v) {
     _coverQueue.concurrency = v;
@@ -378,6 +420,11 @@ class MediaLibraryViewModel extends BaseViewModel {
     } catch (e) {
       _logger.error('[FFmpeg] 同步并发上限到 Rust 端失败: $e');
     }
+  }
+
+  /// 构造即绑定派生缓存失效监听，见 [_bindVisibleInvalidation]。
+  MediaLibraryViewModel() {
+    _bindVisibleInvalidation();
   }
 
   @override
@@ -439,28 +486,8 @@ class MediaLibraryViewModel extends BaseViewModel {
       isSelectingProxy.value = v;
     });
     isSelectingProxy.value = isSelecting.value;
-    // 浏览层派生缓存失效监听：任一派生输入变化 → 清缓存 + visibleVersion++。
-    // 网格唯一数据 Obx 只订阅 visibleVersion，Rx 变化从「N 路全网格重建」
-    // 收敛为「1 路一次重建」。_itemPathsEpoch 为非 Rx 计数，在写入点手动调用失效。
-    _visibleInvalidationWorkers ??= [
-      ever<String?>(currentFolderId, (_) => _invalidateVisible()),
-      ever<String>(searchQuery, (_) => _invalidateVisible()),
-      ever<String>(similarSearchQuery, (_) => _invalidateVisible()),
-      ever<CollectionSortOrder>(collectionSortOrder, (_) => _invalidateVisible()),
-      ever<int>(collectionOrderVersion, (_) => _invalidateVisible()),
-      ever<bool>(showFavoritesOnly, (_) => _invalidateVisible()),
-      ever<Set<String>>(favoriteCollectionIds, (_) => _invalidateVisible()),
-      ever<List<media_api.MediaFolder>>(folders, (_) => _invalidateVisible()),
-      ever<List<media_api.MediaFolder>>(remoteFolders, (_) => _invalidateVisible()),
-      ever<List<media_api.MediaCollection>>(collections, (_) => _invalidateVisible()),
-      ever<List<media_api.MediaCollection>>(remoteCollections, (_) => _invalidateVisible()),
-      ever<List<SmartFolder>>(smartFolders, (_) => _invalidateVisible()),
-      ever<Map<String, List<SmartFolder>>>(_remoteSmartFolders, (_) => _invalidateVisible()),
-      ever<int>(_searchVersion, (_) => _invalidateVisible()),
-      // 封面/存活统计落地后需要卡片换图换数（32ms 节流后的全局版本）
-      ever<int>(_asyncCoverVersion, (_) => _invalidateVisible()),
-      ever<int>(liveStatsVersion, (_) => _invalidateVisible()),
-    ];
+    // 浏览层派生缓存失效监听（构造时已绑定，onClose 销毁后此处重建）
+    _bindVisibleInvalidation();
     if (isInitialized) {
       // 永久 ViewModel 再次进入页面时：刷新数据 + 重新加载智能文件夹（磁盘上的数据描和内存始终保持同步）
       _logger.info('[媒体库] onInitAsync: 已初始化，重新加载智能文件夹 + 执行数据刷新');
