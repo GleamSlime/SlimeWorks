@@ -3,7 +3,8 @@ use chrono::{Local, TimeZone};
 use crate::types::{AggregatedStats, PowerSample, StatBucket, StatsSummary};
 
 /// 时间范围定义：返回 (范围秒数, 桶秒数, 标签格式)
-fn range_config(range: &str) -> (i64, i64, &'static str) {
+/// pub(crate)：api 层按同一个表决定 SQL 取数窗口，避免两处各写一份秒数
+pub(crate) fn range_config(range: &str) -> (i64, i64, &'static str) {
     match range {
         "hour" => (3600, 60, "%H:%M"),
         "1day" => (86_400, 3600, "%H:%M"),
@@ -176,34 +177,45 @@ pub fn aggregate(samples: &[PowerSample], range: &str, price: f64) -> Aggregated
     }
 }
 
-/// 计算指定时间范围内的耗电量（基于最后一个采样点）
-/// 包含 start 之前的最后一个采样点作为基准，避免丢失首个差值
-fn consumption_in_range(samples: &[PowerSample], secs: i64) -> f64 {
-    if samples.len() < 2 {
-        return 0.0;
+/// 一次算出多个时间窗口的耗电量（各窗口都基于最后一个采样点往前回溯 secs）
+///
+/// 相邻采样点之间的"下降量"在链上是可加的，所以先做一次前缀和，再对每个窗口
+/// 二分定位起点相减即可。原先每个窗口都要重扫全表并临时拼一个 chain Vec，
+/// compute_summary 一次调 7 个窗口 = 21 遍遍历 + 7 次分配。
+///
+/// 与单窗口版本语义完全一致：窗口起点之前那条采样点必须作为基准计入，
+/// 否则首段下降会凭空丢掉。
+fn consumption_in_ranges(samples: &[PowerSample], windows_secs: &[i64]) -> Vec<f64> {
+    let n = samples.len();
+    if n < 2 {
+        return vec![0.0; windows_secs.len()];
     }
-    let last_ts = samples.last().unwrap().timestamp;
-    let start = last_ts - secs;
-    // 找到 start 之前的最后一个采样点作为基准
-    let mut chain: Vec<&PowerSample> = samples
-        .iter()
-        .filter(|s| s.timestamp < start)
-        .last()
-        .map(|s| vec![s])
-        .unwrap_or_default();
-    chain.extend(samples.iter().filter(|s| s.timestamp >= start));
-    if chain.len() < 2 {
-        return 0.0;
-    }
-    // 累加相邻差值（只算下降部分）
-    let mut total = 0.0;
-    for i in 1..chain.len() {
-        let diff = chain[i - 1].remaining_kwh - chain[i].remaining_kwh;
+    let last_ts = samples[n - 1].timestamp;
+    // decum[i] = samples[0] 累加到 samples[i] 的下降电量（decum[0] 恒为 0）
+    let mut decum: Vec<f64> = Vec::with_capacity(n);
+    let mut acc = 0.0;
+    decum.push(acc);
+    for i in 1..n {
+        let diff = samples[i - 1].remaining_kwh - samples[i].remaining_kwh;
         if diff > 0.0 {
-            total += diff;
+            acc += diff;
         }
+        decum.push(acc);
     }
-    total
+    windows_secs
+        .iter()
+        .map(|&secs| {
+            let start = last_ts - secs;
+            // 升序序列上第一个落在窗口内的下标
+            let first = samples.partition_point(|s| s.timestamp < start);
+            if first >= n {
+                return 0.0; // 全部数据都在窗口之前
+            }
+            // 基准行就是窗口内首条的前一条；没有基准行时从首条开始
+            let begin = first.saturating_sub(1);
+            decum[n - 1] - decum[begin]
+        })
+        .collect()
 }
 
 /// 耗电量分摊：两个采样点跨多个空桶时，按时间比例把下降差值分摊到中间各桶
@@ -217,6 +229,22 @@ fn backfill_consumption(
     if buckets.is_empty() || in_range.len() < 2 {
         return;
     }
+    // 桶是 contiguous 的（首桶起点对齐、每步 bucket_secs），所以按下标直接算，
+    // 不用像原先那样对每对相邻点都 buckets.iter().position() 线性找——
+    // "30 天"视图下那是 4 万对 × 2 次 × 平均扫半个桶数组的量级
+    let base_ts = buckets[0].timestamp;
+    let bucket_count = buckets.len();
+    let bucket_idx = |ts: i64| -> Option<usize> {
+        if ts < base_ts {
+            return None;
+        }
+        let idx = ((ts - base_ts) / bucket_secs) as usize;
+        if idx < bucket_count {
+            Some(idx)
+        } else {
+            None
+        }
+    };
     // 遍历相邻采样点对，找到它们之间的空桶并分摊
     for i in 1..in_range.len() {
         let prev = in_range[i - 1];
@@ -225,13 +253,7 @@ fn backfill_consumption(
         if diff <= 0.0 {
             continue; // 上升（充值）或不变，不分摊
         }
-        let prev_bucket_idx = buckets
-            .iter()
-            .position(|b| b.timestamp <= prev.timestamp && prev.timestamp < b.timestamp + bucket_secs);
-        let curr_bucket_idx = buckets
-            .iter()
-            .position(|b| b.timestamp <= curr.timestamp && curr.timestamp < b.timestamp + bucket_secs);
-        let (Some(pi), Some(ci)) = (prev_bucket_idx, curr_bucket_idx) else {
+        let (Some(pi), Some(ci)) = (bucket_idx(prev.timestamp), bucket_idx(curr.timestamp)) else {
             continue;
         };
         if ci <= pi {
@@ -257,13 +279,16 @@ pub fn compute_summary(samples: &[PowerSample], meter_id: &str, meter_name: &str
     let price = samples.last().map(|s| s.price).unwrap_or(1.0);
     let latest = samples.last();
 
-    let hour_cons = consumption_in_range(samples, 3600);
-    let day_cons = consumption_in_range(samples, 86_400);
-    let week_cons = consumption_in_range(samples, 7 * 86_400);
-    let fifteen_cons = consumption_in_range(samples, 15 * 86_400);
-    let sixteen_cons = consumption_in_range(samples, 16 * 86_400);
-    let thirty_cons = consumption_in_range(samples, 30 * 86_400);
-    let minute_cons = consumption_in_range(samples, 60);
+    // 一次前缀和算完 7 个窗口，顺序与下面的解构一一对应
+    let windows: [i64; 7] = [60, 3600, 86_400, 7 * 86_400, 15 * 86_400, 16 * 86_400, 30 * 86_400];
+    let cons = consumption_in_ranges(samples, &windows);
+    let minute_cons = cons[0];
+    let hour_cons = cons[1];
+    let day_cons = cons[2];
+    let week_cons = cons[3];
+    let fifteen_cons = cons[4];
+    let sixteen_cons = cons[5];
+    let thirty_cons = cons[6];
 
     let last_update = latest
         .map(|s| {
@@ -603,7 +628,7 @@ mod tests {
         assert!(approx(got.current_kwh, 6.0));
     }
 
-    /// 样本不足两点时 consumption_in_range 直接返回 0（通过 summary 间接覆盖）
+    /// 样本不足两点时 consumption_in_ranges 直接返回 0（通过 summary 间接覆盖）
     #[test]
     fn compute_summary_two_samples_only_counts_single_diff() {
         let samples = vec![sy(BASE - 100, 12.0, 12.0, 1.0), sy(BASE, 9.0, 9.0, 1.0)];
@@ -612,5 +637,129 @@ mod tests {
         assert!(approx(got.hour_consumption, 3.0));
         // 超出窗口范围（day 窗口起点 = BASE-86400 之前无点，两点均在窗口内）⇒ 仍是 3
         assert!(approx(got.day_consumption, 3.0));
+    }
+
+    /// 取数窗口化的等价性护栏：api 层不再把整张表交给聚合器，只喂
+    /// 「窗口内采样 + 窗口前最后一条基准」。这个用例锁死少喂更早的历史
+    /// **不改变输出**，否则第 4 项优化就是偷偷改了计算结果。
+    ///
+    /// 两种消费者的窗口不一样，必须分开验证：
+    /// - 图表 aggregate：跟着用户选的 range 走（hour 就只喂 1 小时）
+    /// - 卡片 compute_summary：最长要 30 天，api 层固定按 30 天取数，
+    ///   所以只有按 30 天切出来的窗口才能和全量等价
+    #[test]
+    fn aggregate_and_summary_are_identical_on_windowed_input() {
+        // 45 天、每 5 分钟一条 = 12961 条，保证 30 天窗口是全集的真子集；
+        // 最后一条时间戳正好是 BASE，与 aggregate 的"锚定最新采样"一致
+        let step = 300i64;
+        let n = 12_961usize;
+        let all: Vec<PowerSample> = (0..n)
+            .map(|i| {
+                // 稳定下降（耗电）+ 第 9000 条处整体抬高 40（充值），
+                // 同时覆盖"只累加下降部分"和跨空桶分摊两条路径；
+                // 5 分钟采样配 60 秒桶还能顺带铺出大量空桶
+                let bump = if i >= 9000 { 40.0 } else { 0.0 };
+                let kwh = 300.0 - i as f64 * 0.01 + bump;
+                sy(BASE - (n as i64 - 1 - i as i64) * step, kwh, kwh * 0.9, 0.9)
+            })
+            .collect();
+        let last_ts = all[n - 1].timestamp;
+        let price = 0.9;
+
+        // 按窗口秒数切出「基准行 + 窗口内」
+        let cut_at = |secs: i64| -> &[PowerSample] {
+            let first = all.partition_point(|s| s.timestamp < last_ts - secs);
+            &all[first.saturating_sub(1)..]
+        };
+
+        for range in ["hour", "1day", "7days", "15days", "30days"] {
+            let (secs, _, _) = range_config(range);
+            let windowed = cut_at(secs);
+            assert!(
+                windowed.len() < all.len(),
+                "{}：窗口化必须真的少喂数据",
+                range
+            );
+
+            let full = aggregate(&all, range, price);
+            let cut = aggregate(windowed, range, price);
+            assert_eq!(full.buckets.len(), cut.buckets.len(), "{}：桶数变了", range);
+            assert_eq!(full.sample_count, cut.sample_count, "{}：样本数变了", range);
+            for (i, (a, b)) in full.buckets.iter().zip(cut.buckets.iter()).enumerate() {
+                assert_eq!(a.label, b.label, "{}：第{}桶标签", range, i);
+                assert_eq!(a.timestamp, b.timestamp, "{}：第{}桶时间", range, i);
+                assert!(
+                    approx(a.consumption_kwh, b.consumption_kwh),
+                    "{}：第{}桶耗电",
+                    range,
+                    i
+                );
+                assert!(approx(a.cost_yuan, b.cost_yuan), "{}：第{}桶电费", range, i);
+                assert!(
+                    approx(a.balance_yuan, b.balance_yuan),
+                    "{}：第{}桶余额",
+                    range,
+                    i
+                );
+                assert!(
+                    approx(a.balance_kwh, b.balance_kwh),
+                    "{}：第{}桶电量",
+                    range,
+                    i
+                );
+            }
+            assert!(
+                approx(full.total_consumption, cut.total_consumption),
+                "{}：总耗电",
+                range
+            );
+            assert!(approx(full.total_cost, cut.total_cost), "{}：总电费", range);
+            assert!(
+                approx(full.avg_balance, cut.avg_balance),
+                "{}：平均余额",
+                range
+            );
+            assert!(
+                approx(full.current_balance, cut.current_balance),
+                "{}：当前余额",
+                range
+            );
+        }
+
+        // 卡片：按 30 天窗口取数后，7 个统计窗口的结果必须与全量一致
+        let summary_cut = cut_at(30 * 86_400);
+        let s_full = compute_summary(&all, "m", "表");
+        let s_cut = compute_summary(summary_cut, "m", "表");
+        for (name, a, b) in [
+            (
+                "minute",
+                s_full.minute_consumption,
+                s_cut.minute_consumption,
+            ),
+            ("hour", s_full.hour_consumption, s_cut.hour_consumption),
+            ("day", s_full.day_consumption, s_cut.day_consumption),
+            ("week", s_full.week_consumption, s_cut.week_consumption),
+            (
+                "15d",
+                s_full.fifteen_day_consumption,
+                s_cut.fifteen_day_consumption,
+            ),
+            (
+                "16d",
+                s_full.sixteen_day_consumption,
+                s_cut.sixteen_day_consumption,
+            ),
+            (
+                "30d",
+                s_full.thirty_day_consumption,
+                s_cut.thirty_day_consumption,
+            ),
+        ] {
+            assert!(approx(a, b), "{} 窗口耗电 {} != {}", name, a, b);
+        }
+        assert!(approx(s_full.current_kwh, s_cut.current_kwh));
+        assert!(approx(s_full.current_yuan, s_cut.current_yuan));
+        assert!(approx(s_full.price, s_cut.price));
+        assert_eq!(s_full.last_update, s_cut.last_update);
     }
 }

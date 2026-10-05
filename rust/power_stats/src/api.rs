@@ -29,9 +29,31 @@ fn get_manager() -> Result<Arc<PowerStatsManager>, String> {
         .ok_or("电力统计模块未初始化".to_string())
 }
 
+/// 采样保留期：比最长的统计窗口（30 天）留足余量，避免裁剪掉窗口基准行
+const RETENTION_SECS: i64 = 90 * 86_400;
+
+/// 统计卡片需要的最长窗口（compute_summary 里最大的是 30 天）
+const SUMMARY_WINDOW_SECS: i64 = 30 * 86_400;
+
 /// 将时间戳截断到分钟
 fn truncate_to_minute(ts: i64) -> i64 {
     ts - (ts % 60)
+}
+
+/// 从内存缓存里切出窗口数据（非持久化模式用），语义与 SQL 窗口查询一致：
+/// 锚定最新采样时间，窗口前只带回最后一条作为耗电基准
+fn window_from_memory(samples: &[PowerSample], range_secs: i64) -> Vec<PowerSample> {
+    let Some(last_ts) = samples.last().map(|s| s.timestamp) else {
+        return Vec::new();
+    };
+    let start_ts = last_ts - range_secs;
+    let mut out: Vec<PowerSample> = Vec::new();
+    // rposition 从尾部找，升序序列上一步就命中，不用像 filter().last() 那样扫完前半段
+    if let Some(bi) = samples.iter().rposition(|s| s.timestamp < start_ts) {
+        out.push(samples[bi].clone());
+    }
+    out.extend(samples.iter().filter(|s| s.timestamp >= start_ts).cloned());
+    out
 }
 
 impl PowerStatsManager {
@@ -88,6 +110,10 @@ impl PowerStatsManager {
         if persist && storage::is_ready() {
             if let Err(e) = storage::insert_sample(&meter_id, &sample) {
                 sw_warn!("[power_stats] 持久化采样失败: {}", e);
+            } else if let Err(e) = storage::purge_samples_before(&meter_id, sample.timestamp - RETENTION_SECS) {
+                // 库只增不删会一路涨到统计窗口之外；每次抓取顺手清掉保留期之前的行。
+                // 走 (meter_id,timestamp) 唯一索引，绝大多数时候删除 0 行，成本可忽略
+                sw_warn!("[power_stats] 清理过期采样失败: {}", e);
             }
         }
 
@@ -135,13 +161,14 @@ impl PowerStatsManager {
         }
     }
 
-    /// 读取全部采样（优先从数据库）
-    fn load_samples(&self) -> Vec<PowerSample> {
+    /// 读取指定时间窗口内的采样（含窗口前最后一条基准），而非整张表
+    fn load_window(&self, range_secs: i64) -> Vec<PowerSample> {
         let config = self.config.read().unwrap();
         if config.persist && storage::is_ready() {
-            storage::get_all_samples(&config.meter_id, 50_000).unwrap_or_default()
+            storage::get_samples_window(&config.meter_id, range_secs).unwrap_or_default()
         } else {
-            self.samples.read().unwrap().clone()
+            let all = self.samples.read().unwrap();
+            window_from_memory(&all, range_secs)
         }
     }
 }
@@ -305,7 +332,9 @@ pub fn power_stats_get_status() -> Result<String, String> {
 /// 获取图表聚合数据
 pub fn power_stats_get_aggregated(range: String) -> Result<String, String> {
     let manager = get_manager()?;
-    let samples = manager.load_samples();
+    // 只读当前 range 需要的窗口：原先不管选什么都把整张表读进内存再丢弃
+    let (range_secs, _, _) = aggregator::range_config(&range);
+    let samples = manager.load_window(range_secs);
     let price = samples.last().map(|s| s.price).unwrap_or(1.0);
     let aggregated = aggregator::aggregate(&samples, &range, price);
     serde_json::to_string(&aggregated).map_err(|e| format!("序列化聚合数据失败: {}", e))
@@ -314,7 +343,8 @@ pub fn power_stats_get_aggregated(range: String) -> Result<String, String> {
 /// 获取统计卡片汇总
 pub fn power_stats_get_summary() -> Result<String, String> {
     let manager = get_manager()?;
-    let samples = manager.load_samples();
+    // compute_summary 最长的窗口是 30 天，读更久没有意义（基准行由查询自带）
+    let samples = manager.load_window(SUMMARY_WINDOW_SECS);
     let config = manager.config.read().map_err(|e| format!("{}", e))?;
     let status = manager.status.read().map_err(|e| format!("{}", e))?;
     let summary = aggregator::compute_summary(&samples, &config.meter_id, &status.meter_name);
