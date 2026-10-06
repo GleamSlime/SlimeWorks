@@ -307,6 +307,46 @@ void main() {
       expect(items.map((i) => i.id).toSet(), {'a', 'c'});
     });
 
+    test('分组内集合卡显示父级目录名，用于区分同名来源', () {
+      vm.collections.assignAll([
+        col('a', title: '同人', folderPath: '/x/1/同人'),
+        col('c', title: '同人', folderPath: '/x/2/同人'),
+      ]);
+      vm.visibleItems; // 登记分组父目录
+      vm.currentFolderId.value = 'dup-group:同人';
+      vm.visibleItems;
+      expect(vm.dupGroupDisplayTitle('a'), '1');
+      expect(vm.dupGroupDisplayTitle('c'), '2');
+    });
+
+    test('父级目录也同名时升级成更长的祖先路径直到不撞名', () {
+      vm.collections.assignAll([
+        col('a', title: '同人', folderPath: '/p/1/同人'),
+        col('c', title: '同人', folderPath: '/q/1/同人'),
+      ]);
+      vm.visibleItems;
+      vm.currentFolderId.value = 'dup-group:同人';
+      vm.visibleItems;
+      expect(vm.dupGroupDisplayTitle('a'), 'p/1');
+      expect(vm.dupGroupDisplayTitle('c'), 'q/1');
+    });
+
+    test('没有可区分的父级或退出分组后展示名回 null，卡片用集合标题', () {
+      vm.collections.assignAll([
+        col('a', title: '同人', folderPath: '/同人'),
+        col('c', title: '同人', folderPath: '/x/1/同人'),
+      ]);
+      vm.visibleItems;
+      vm.currentFolderId.value = 'dup-group:同人';
+      vm.visibleItems;
+      expect(vm.dupGroupDisplayTitle('a'), isNull);
+      expect(vm.dupGroupDisplayTitle('c'), '1');
+      // 回到父层级：上一轮的映射必须清空
+      vm.currentFolderId.value = null;
+      vm.visibleItems;
+      expect(vm.dupGroupDisplayTitle('c'), isNull);
+    });
+
     test('collectionCountInFolder：分组按分组成员数，普通文件夹按 folderId 计数', () {
       vm.collections.assignAll([
         col('a', title: '同人', folderId: null),

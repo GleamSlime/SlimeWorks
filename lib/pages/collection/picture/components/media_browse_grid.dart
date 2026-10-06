@@ -359,6 +359,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       totalSize: data.totalSize,
       isFavorited: data.isFavorited,
       isLost: data.isLost,
+      displayTitle: data.displayTitle,
       hoverCoverSources: isRemote
           ? null
           : vm.buildCollectionHoverSources(collection),

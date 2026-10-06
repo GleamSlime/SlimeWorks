@@ -18,9 +18,13 @@ class BrowseCardData {
     required this.totalSize,
     required this.childCount,
     required this.matchCount,
+    this.displayTitle,
   });
 
   final MediaLibraryItem item;
+
+  /// 同名集合分组内用来区分来源的展示名（父级目录名）；其余场景为 null，卡片回落集合标题。
+  final String? displayTitle;
 
   /// 封面源（三类卡各自的封面派生结果）
   final String? coverSource;
@@ -144,6 +148,7 @@ extension BrowseSelectionExt on MediaLibraryViewModel {
         totalSize: live.size,
         childCount: 0,
         matchCount: 0,
+        displayTitle: dupGroupDisplayTitle(collection.id),
       );
     }
     if (item is MediaLibraryFolderItem) {

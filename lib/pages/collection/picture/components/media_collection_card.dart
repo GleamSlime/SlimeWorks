@@ -40,9 +40,13 @@ class MediaCollectionCard extends StatefulWidget {
     this.onHoverEnter,
     this.onRequestVideoFrame,
     this.isLost = false,
+    this.displayTitle,
   });
 
   final media_api.MediaCollection collection;
+
+  /// 同名集合分组内的区分性标题（父级目录名）；为 null 时显示集合原标题。
+  final String? displayTitle;
   final String? coverSource;
   final bool isSelected;
   final bool isSelecting;
@@ -406,7 +410,8 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
               // 主读数走右上标签：条数是这一格最该被扫见的数
               tagLabel: '${widget.resourceCount} 项',
               tagIcon: StrokeIcons.photoLibrary,
-              title: widget.collection.title,
+              // 同名分组内的集合卡显示父级目录名（xxx/1/哈哈哈 → 1），组内才分得清来源
+              title: widget.displayTitle ?? widget.collection.title,
               // 目录整条留给正文：以前它哪都没露，恰恰是找文件时最想要的
               body: widget.collection.folderPath,
               footIcon: widget.isRemote ? StrokeIcons.cloud : StrokeIcons.computer,

@@ -34,6 +34,60 @@ extension MediaLibraryBrowseExt on MediaLibraryViewModel {
         .toList(growable: false);
   }
 
+  /// 同名分组内集合卡的展示名（父级目录名），非分组内或无父级可显示时为 null。
+  String? dupGroupDisplayTitle(String collectionId) =>
+      _dupGroupDisplayTitles[collectionId];
+
+  /// 算出同名分组内每个集合的展示名。
+  ///
+  /// 分组里各集合的目录末段都是同一个标题（xxx/1/哈哈哈、xxx/2/哈哈哈），能区分来源的
+  /// 只有它上面的祖先目录，所以取「组内不撞名的最短祖先路径」：正常情况下就是父目录名
+  /// 1、2、3；a/1/哈哈哈 与 b/1/哈哈哈 这种父级也同名的，自动升级成 a/1、b/1。
+  Map<String, String> _buildDupGroupDisplayTitles(
+    String groupTitle,
+    List<media_api.MediaCollection> members,
+  ) {
+    final ancestors = <String, List<String>>{
+      for (final c in members) c.id: _ancestorSegments(c.folderPath),
+    };
+    // 取该集合最内层 depth 级祖先拼成的标签；祖先不够深（或这一级仍是同名标题）时为空串
+    String labelAt(String id, int depth) {
+      final segs = ancestors[id]!;
+      if (depth > segs.length) return '';
+      final label = segs.sublist(segs.length - depth).join('/');
+      return label == groupTitle ? '' : label;
+    }
+
+    final out = <String, String>{};
+    for (final c in members) {
+      final maxDepth = ancestors[c.id]!.length;
+      var depth = 1;
+      while (depth <= maxDepth) {
+        final own = labelAt(c.id, depth);
+        final clashes = members.any(
+          (o) => o.id != c.id && labelAt(o.id, depth) == own,
+        );
+        if (own.isNotEmpty && !clashes) {
+          out[c.id] = own;
+          break;
+        }
+        depth++;
+      }
+      // 根目录下直接放的集合（无祖先段）没有可区分的父级，交回 UI 用集合标题显示
+    }
+    return out;
+  }
+
+  /// 集合目录路径中可用来区分来源的祖先段：去掉末段（集合自身目录），兼容两种分隔符。
+  List<String> _ancestorSegments(String folderPath) {
+    final segs = folderPath
+        .split(RegExp(r'[\\/]'))
+        .where((s) => s.isNotEmpty)
+        .toList(growable: false);
+    if (segs.length <= 1) return const [];
+    return segs.sublist(0, segs.length - 1);
+  }
+
   // ── 合并数据源 ────────────────────────────────────────────────────────────
 
   List<media_api.MediaFolder> get mergedFolders {
@@ -425,6 +479,8 @@ extension MediaLibraryBrowseExt on MediaLibraryViewModel {
   }
 
   List<MediaLibraryItem> _computeVisibleItems() {
+    // 同名分组展示名每轮重算：非分组视图一律清空，避免陈旧映射串到别的层级
+    _dupGroupDisplayTitles = const {};
     // 相似查找激活时：按名称亲和度层级筛选当前层级 + 子孙文件夹内的集合
     final similar = similarSearchQuery.value.trim();
     if (similar.isNotEmpty) {
@@ -444,6 +500,13 @@ extension MediaLibraryBrowseExt on MediaLibraryViewModel {
     // 同名集合分组：分组内部不再嵌套分组，直接平铺显示集合卡片；
     // 智能文件夹内集合来自跨目录匹配，也不做同名聚合。
     if (folderId != null && (isDupGroup(folderId) || isSmartFolder(folderId))) {
+      final groupTitle = dupGroupTitle(folderId);
+      if (groupTitle != null) {
+        _dupGroupDisplayTitles = _buildDupGroupDisplayTitles(
+          groupTitle,
+          collections,
+        );
+      }
       return <MediaLibraryItem>[
         ...currentChildFolders.map(MediaLibraryFolderItem.new),
         ...sfItems,

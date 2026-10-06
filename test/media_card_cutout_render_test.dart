@@ -226,6 +226,22 @@ void main() {
     expect(find.text('${decoded.width}×${decoded.height}'), findsWidgets,
         reason: '徽标数字与解码尺寸不符 = 又在报某个响应头，不是图本身');
   });
+
+  testWidgets('同名分组内：集合卡显示父级目录名而不是重复的集合标题', (tester) async {
+    await _mount(
+      tester,
+      cards: [
+        _collectionCard(warmCover, displayTitle: '1'),
+        _collectionCard(coolCover, displayTitle: '2'),
+      ],
+    );
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    // 两卡的真实标题都是同一个「黄昏城市实拍作品集」，直接铺出来等于没区分
+    expect(find.text('黄昏城市实拍作品集'), findsNothing);
+    // 正文仍留完整目录，来源可核对
+    expect(find.text('/Users/shilaimu/Movies/黄昏城市实拍集'), findsNWidgets(2));
+  });
 }
 
 // ── 出图铺垫 ──────────────────────────────────────────────────────────────
@@ -340,6 +356,7 @@ Widget _collectionCard(
   bool lost = false,
   bool noCover = false,
   List<String>? hoverCovers,
+  String? displayTitle,
 }) {
   return MediaCollectionCard(
     collection: media_api.MediaCollection(
@@ -361,6 +378,7 @@ Widget _collectionCard(
     isFavorited: favorited,
     isLost: lost,
     hoverCoverSources: hoverCovers,
+    displayTitle: displayTitle,
     onTap: () {},
     onLongPress: () {},
     onRename: () {},

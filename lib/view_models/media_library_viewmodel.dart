@@ -288,6 +288,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 分组 ID → 所属父文件夹 ID（null = 根目录），在 visibleItems 构建时登记。
   final _dupGroupParents = <String, String?>{};
 
+  /// collectionId → 同名分组内集合卡的展示名，在 visibleItems 构建时登记。
+  /// 组内每张卡的目录末段都是同一个标题，只有父级目录能区分来源。
+  Map<String, String> _dupGroupDisplayTitles = const {};
+
   /// 用于集合封面生成的串行队列。
   /// 并发数与 Rust 端全局 ffmpeg 信号量一致，双重保障 ffmpeg 进程数不超限。
   final _coverQueue = VideoThumbQueue(concurrency: 2);
