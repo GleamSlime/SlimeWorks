@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 import '../kit.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 1 号 Popover：一颗按钮形变成一张面板，文字是同一块飞过去的
 ///
@@ -432,7 +433,7 @@ class _Case01PopoverState extends State<Case01Popover> with SingleTickerProvider
                 opacity: 0,
                 child: Material(
                   type: MaterialType.transparency,
-                  child: TextField(
+                  child: AppTextField(
                     focusNode: _fieldFocus,
                     controller: _editor,
                     maxLines: null,

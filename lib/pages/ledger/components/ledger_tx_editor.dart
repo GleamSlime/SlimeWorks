@@ -12,6 +12,7 @@ import 'package:slime_works/core/services/ledger_stub_store.dart';
 import 'package:slime_works/pages/ledger/components/ledger_icons.dart';
 import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 底部导航中间那颗"记一笔"。
 ///
@@ -521,7 +522,7 @@ class _LedgerTxEditorState extends State<_LedgerTxEditor> {
                 ),
               ),
               SizedBox(height: m.kSpace16),
-              TextField(
+              AppTextField(
                 controller: _merchant,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
@@ -530,7 +531,7 @@ class _LedgerTxEditorState extends State<_LedgerTxEditor> {
                 ),
               ),
               SizedBox(height: m.kSpace12),
-              TextField(
+              AppTextField(
                 controller: _note,
                 maxLines: 2,
                 decoration: const InputDecoration(labelText: '备注（可选）'),
@@ -686,7 +687,7 @@ class _AmountField extends StatelessWidget {
           ),
           SizedBox(width: m.kSpace8),
           Expanded(
-            child: TextField(
+            child: AppTextField(
               controller: controller,
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -729,7 +730,7 @@ class _DestAmountField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: <Widget>[
         Expanded(
-          child: TextField(
+          child: AppTextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: <TextInputFormatter>[

@@ -10,6 +10,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/ledger_stub_store.dart';
 import 'package:slime_works/pages/ledger/components/ledger_icons.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 窄屏（移动端 + 桌面端窄窗）判定：账本这类列表页在 720 以下要收列
 bool ledgerNarrow(BuildContext context) =>
@@ -1050,11 +1051,10 @@ class LedgerInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return AppTextField(
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: formatter == null ? null : <TextInputFormatter>[formatter!],
-      style: AppTextStyles.body(context),
       decoration: InputDecoration(isDense: true, hintText: hint),
     );
   }
@@ -1195,7 +1195,7 @@ class LedgerTagPickerState extends State<LedgerTagPicker> {
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: TextField(
+                    child: AppTextField(
                       controller: _newTag,
                       onSubmitted: (_) => _create(),
                       decoration: const InputDecoration(isDense: true, hintText: '新建标签名'),

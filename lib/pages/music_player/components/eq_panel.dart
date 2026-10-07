@@ -5,6 +5,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 均衡器面板
 class EqPanel extends StatefulWidget {
@@ -156,7 +157,7 @@ class _EqPanelState extends State<EqPanel> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('保存均衡器预设'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '预设名称', isDense: true),
         ),

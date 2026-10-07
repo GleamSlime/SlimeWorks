@@ -18,6 +18,7 @@ import 'package:slime_works/view_models/music_player_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 播放列表侧边栏（桌面端左侧）
 class PlaylistSidebar extends StatelessWidget {
@@ -185,7 +186,7 @@ class PlaylistSidebar extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('新建播放列表'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
         ),
@@ -210,7 +211,7 @@ class PlaylistSidebar extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('新建子目录'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '目录名称', isDense: true),
         ),
@@ -354,7 +355,7 @@ class _FolderTile extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('重命名目录'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '目录名称', isDense: true),
         ),
@@ -454,7 +455,7 @@ class _PlaylistTile extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('重命名'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '播放列表名称', isDense: true),
         ),

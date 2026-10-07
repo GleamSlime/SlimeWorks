@@ -16,6 +16,7 @@ import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class GameLibraryScreen extends BasePage<GameLibraryViewModel> {
   const GameLibraryScreen({super.key});
@@ -73,7 +74,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
           children: <Widget>[
             SizedBox(
               width: 220,
-              child: TextField(
+              child: AppTextField(
                 decoration: const InputDecoration(
                   hintText: '搜索游戏 / 公司 / 标签',
                   prefixIcon: DrawIcon(StrokeIcons.search),
@@ -448,31 +449,31 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      TextField(
+                      AppTextField(
                         controller: nameController,
                         decoration: const InputDecoration(labelText: '游戏名'),
                       ),
-                      TextField(
+                      AppTextField(
                         controller: companyController,
                         decoration: const InputDecoration(labelText: '公司'),
                       ),
-                      TextField(
+                      AppTextField(
                         controller: summaryController,
                         decoration: const InputDecoration(labelText: '简介'),
                       ),
-                      TextField(
+                      AppTextField(
                         controller: ratingController,
                         decoration: const InputDecoration(labelText: '评分 (0-10)'),
                         keyboardType: TextInputType.number,
                       ),
-                      TextField(
+                      AppTextField(
                         controller: releaseDateController,
                         decoration: const InputDecoration(labelText: '发售日期 (YYYY-MM-DD)'),
                       ),
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: TextField(
+                            child: AppTextField(
                               controller: pathController,
                               decoration: const InputDecoration(labelText: '启动路径（桌面端可用）'),
                             ),
@@ -495,7 +496,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                           ),
                         ],
                       ),
-                      TextField(
+                      AppTextField(
                         controller: coverController,
                         decoration: const InputDecoration(labelText: '封面路径（可选）'),
                       ),

@@ -14,6 +14,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class WebSocketTestPage extends StatefulWidget {
   const WebSocketTestPage({super.key});
@@ -323,7 +324,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: AppTextField(
                       controller: _hostController,
                       decoration: const InputDecoration(
                         labelText: '主机',
@@ -334,7 +335,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   SizedBox(
                     width: 100,
-                    child: TextField(
+                    child: AppTextField(
                       controller: _portController,
                       decoration: const InputDecoration(
                         labelText: '端口',
@@ -496,7 +497,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: AppTextField(
                       controller: _messageController,
                       decoration: const InputDecoration(
                         labelText: '消息',

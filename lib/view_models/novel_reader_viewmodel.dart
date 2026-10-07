@@ -11,6 +11,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:slime_works/core/widgets/app_text_field.dart';
 const Loggers _logger = Loggers(name: '书籍');
 
 
@@ -386,7 +387,7 @@ class NovelReaderViewModel extends GetxController {
       context: ctx,
       builder: (dlgCtx) => AlertDialog(
         title: const Text('搜索内容'),
-        content: TextField(
+        content: AppTextField(
           autofocus: true,
           controller: controller,
           decoration: const InputDecoration(hintText: '输入关键词', border: OutlineInputBorder()),

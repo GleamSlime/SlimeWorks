@@ -22,6 +22,7 @@ import 'package:slime_works/core/widgets/page_container.dart';
 import 'package:slime_works/core/widgets/section_header.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 设计系统总览（原"主题预览"）
 ///
@@ -522,11 +523,11 @@ class _ComponentsTab extends StatelessWidget {
             width: scaleW(320),
             child: Column(
               children: [
-                const TextField(
+                const AppTextField(
                   decoration: InputDecoration(labelText: '标签', hintText: '占位文本'),
                 ),
                 SizedBox(height: m.kSpace12),
-                const TextField(
+                const AppTextField(
                   decoration: InputDecoration(
                     labelText: '错误态',
                     errorText: '这里需要填写',

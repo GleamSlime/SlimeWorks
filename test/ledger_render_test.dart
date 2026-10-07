@@ -20,6 +20,7 @@ import 'package:slime_works/core/services/ledger_service.dart';
 import 'package:slime_works/core/services/ledger_stub_store.dart';
 import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/app_chips.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 import 'package:slime_works/pages/ledger/ledger_accounts_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_data_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_organize_screen.dart';
@@ -1220,7 +1221,7 @@ void main() {
       await reveal(tester, find.text('添加分组'));
       await tester.tap(find.text('添加分组'));
       await advance(tester);
-      await tester.enterText(find.byType(TextField), '实验');
+      await tester.enterText(find.bySubtype<TextField>(), '实验');
       await tester.tap(find.text('保存'));
       await advance(tester);
       expect(find.text('实验'), findsOneWidget);
@@ -1463,7 +1464,7 @@ void main() {
       // 模板里没有日期这一栏，画出来只会让人以为这张模板固定在某天
       expect(find.text(ledgerDateOf(DateTime.now())), findsNothing);
       expect(find.text('同时存为模板'), findsNothing);
-      await tester.enterText(find.widgetWithText(TextField, '商户 / 说明'), '手冲咖啡');
+      await tester.enterText(find.widgetWithText(AppTextField, '商户 / 说明'), '手冲咖啡');
       await tester.tap(dialogText('保存模板'));
       await advance(tester);
       expect(find.text('已记下一笔'), findsNothing);
@@ -1513,7 +1514,7 @@ void main() {
       expect(dialogText('新建定时规则'), findsOneWidget);
       // LedgerField 的标签是独立 Text，不是 labelText：弹窗里第一个输入框就是名字
       await tester.enterText(
-        find.descendant(of: find.byType(Dialog), matching: find.byType(TextField)).first,
+        find.descendant(of: find.byType(Dialog), matching: find.bySubtype<TextField>()).first,
         '每月宽带',
       );
       final chips = tester.widgetList<TagChip>(

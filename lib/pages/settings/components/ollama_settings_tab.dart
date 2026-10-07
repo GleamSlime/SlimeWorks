@@ -9,6 +9,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class OllamaSettingsTab extends StatefulWidget {
   const OllamaSettingsTab({super.key});
@@ -358,7 +359,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            AppTextField(
               controller: urlController,
               decoration: const InputDecoration(
                 labelText: '服务器 URL',
@@ -366,7 +367,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
               ),
             ),
             SizedBox(height: appMetrics.spacingMedium),
-            TextField(
+            AppTextField(
               controller: apiKeyController,
               decoration: const InputDecoration(labelText: 'API Key（可选）'),
               obscureText: true,
@@ -416,12 +417,12 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            AppTextField(
               controller: urlController,
               decoration: const InputDecoration(labelText: '服务器 URL'),
             ),
             SizedBox(height: appMetrics.spacingMedium),
-            TextField(
+            AppTextField(
               controller: apiKeyController,
               decoration: const InputDecoration(labelText: 'API Key（可选）'),
               obscureText: true,

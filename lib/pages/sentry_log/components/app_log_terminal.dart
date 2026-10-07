@@ -8,6 +8,7 @@ import 'package:slime_works/view_models/sentry_log/app_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class AppLogTerminal extends StatefulWidget {
   final AppLogViewModel viewModel;
@@ -147,7 +148,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                   width: 0.5,
                 ),
               ),
-              child: TextField(
+              child: AppTextField(
                 controller: _searchController,
                 style: TextStyle(fontSize: m.fontSize11, height: 1.4, fontFamily: 'monospace'),
                 decoration: InputDecoration(

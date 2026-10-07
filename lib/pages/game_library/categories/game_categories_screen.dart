@@ -8,6 +8,7 @@ import 'package:slime_works/pages/game_library/models/game_library_models.dart';
 import 'package:slime_works/view_models/game_library/game_library_categories_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class GameCategoriesScreen extends BasePage<GameLibraryCategoriesViewModel> {
   const GameCategoriesScreen({super.key});
@@ -36,7 +37,7 @@ class _GameCategoriesScreenState
       ],
       toolbar: SizedBox(
         width: 280,
-        child: TextField(
+        child: AppTextField(
           decoration: const InputDecoration(
             hintText: '搜索分类',
             prefixIcon: DrawIcon(StrokeIcons.search),
@@ -118,11 +119,11 @@ class _GameCategoriesScreenState
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              TextField(
+              AppTextField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: '分类名'),
               ),
-              TextField(
+              AppTextField(
                 controller: emojiController,
                 decoration: const InputDecoration(labelText: 'Emoji'),
               ),
@@ -159,11 +160,11 @@ class _GameCategoriesScreenState
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              TextField(
+              AppTextField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: '分类名'),
               ),
-              TextField(
+              AppTextField(
                 controller: emojiController,
                 decoration: const InputDecoration(labelText: 'Emoji'),
               ),

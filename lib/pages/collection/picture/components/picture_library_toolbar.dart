@@ -6,6 +6,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 图片库操作工具栏。
 ///
@@ -339,14 +340,26 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
 
+  /// 搜索词也会被导航改动（进集合收起、退出集合恢复），VM 一变就回灌输入框。
+  Worker? _searchQueryWorker;
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.viewModel.searchQuery.value);
+    _searchQueryWorker = ever<String>(widget.viewModel.searchQuery, (value) {
+      if (!mounted || _controller.text == value) return;
+      _controller.value = TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: value.length),
+      );
+    });
   }
 
   @override
   void dispose() {
+    _searchQueryWorker?.dispose();
+    _searchQueryWorker = null;
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -375,24 +388,15 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
         children: [
           SizedBox(
             width: scaleW(150),
-            height: AppTheme.metrics.kSpace32,
-            child: TextField(
+            child: AppTextField(
               controller: _controller,
               focusNode: _focusNode,
+              // 输入过程只更新关键词，实际筛选由 VM 防抖后再跑（深度搜索很重）
               onChanged: (value) => widget.viewModel.searchQuery.value = value,
-              style: Theme.of(context).textTheme.bodySmall,
-              decoration: InputDecoration(
-                hintText: widget.hintText,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.metrics.kSpace8,
-                  vertical: AppTheme.metrics.kSpace4,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: AppTheme.metrics.radius8,
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-                ),
-              ),
+              onSubmitted: (_) => widget.viewModel.applySearchQueryNow(),
+              // 尺寸与描边全部交给主题基准：这一档框高正好与旁边的
+              // DesktopHeadToolsButton（kSpace40）同高，不再自己凑数字。
+              decoration: InputDecoration(hintText: widget.hintText),
             ),
           ),
           Tooltip(
@@ -402,7 +406,7 @@ class _LibrarySearchFieldState extends State<_LibrarySearchField> {
               size: AppTheme.metrics.kSpace40,
               onTap: () {
                 _controller.clear();
-                widget.viewModel.searchQuery.value = '';
+                widget.viewModel.clearSearch();
                 widget.viewModel.isSearchActive.value = false;
               },
             ),

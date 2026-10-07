@@ -205,10 +205,9 @@ class SentryLogFilterBar extends StatelessWidget {
         width: 110,
         height: m.kSpace32,
         child: TextFormField(
-          style: theme.textTheme.bodyMedium,
+          style: AppTheme.fieldTextStyle,
           decoration: InputDecoration(
             hintText: '环境',
-            hintStyle: TextStyle(color: theme.hintColor),
             prefixIcon: DrawIcon(StrokeIcons.language, size: m.iconSize16, color: theme.hintColor),
             contentPadding: EdgeInsets.symmetric(vertical: m.kSpace4),
             filled: true,
@@ -243,10 +242,9 @@ class SentryLogFilterBar extends StatelessWidget {
       () => SizedBox(
         height: m.kSpace32,
         child: TextFormField(
-          style: theme.textTheme.bodyMedium,
+          style: AppTheme.fieldTextStyle,
           decoration: InputDecoration(
             hintText: '搜索事件...',
-            hintStyle: TextStyle(color: theme.hintColor),
             prefixIcon: Padding(
               padding: EdgeInsets.only(left: m.kSpace8, right: m.kSpace4),
               child: DrawIcon(StrokeIcons.search, size: m.iconSize18, color: theme.hintColor),

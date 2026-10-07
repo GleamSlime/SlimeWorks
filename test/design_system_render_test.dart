@@ -10,6 +10,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/widgets/app_chips.dart';
 import 'package:slime_works/core/widgets/app_card.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/core/widgets/glass_surface.dart';
 import 'package:slime_works/core/widgets/section_header.dart';
@@ -236,7 +237,7 @@ class _Gallery extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 decoration: const InputDecoration(
                   labelText: '搜索',
                   hintText: '输入关键词…',

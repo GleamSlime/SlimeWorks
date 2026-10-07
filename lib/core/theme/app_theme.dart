@@ -236,6 +236,28 @@ class AppTheme {
   static TextStyle _font(TextStyle t) =>
       t.apply(fontFamily: _fontFamily, fontFamilyFallback: _fontFamilyFallback);
 
+  /// 输入框正文的字号档：控件档 13、行高 1.4。
+  ///
+  /// 为什么只能从这里发出去：Material 3 的输入正文固定继承 `textTheme.bodyLarge`
+  /// （本项目 14 / 行高 1.7），而 `InputDecorationTheme` **没有** `style` 这一档，
+  /// 主题层根本管不到它——只有 `TextField.style` 能改。于是正文由 [AppTextField]
+  /// 统一发出这一条，主题的 hint/label 也用它，打字前后才是同一个字号。
+  ///
+  /// 字号必须走 metrics.fontSize*（含用户字号）而不是 scaleS：bodyLarge 已经被
+  /// _scaleTextTheme 乘过用户字号，scaleS 没有——字号滑杆一拉，打进去的字跟着变大、
+  /// 占位符原地不动。行高压到 1.4 是为了让 contentPadding 反推出的框高与同排按钮齐平。
+  static TextStyle get fieldTextStyle => _font(
+    TextStyle(
+      fontSize: metrics.fontSize13,
+      height: 1.4,
+      fontWeight: FontWeight.w400,
+    ),
+  );
+
+  /// 输入框的占位/标签样式：与 [fieldTextStyle] 同档，只换颜色。
+  static TextStyle _fieldLabelStyle(AppSemantic s, Color color) =>
+      fieldTextStyle.apply(color: color);
+
   static ButtonStyle _elevatedButton(Color fill, Color on) => ElevatedButton.styleFrom(
     backgroundColor: fill,
     foregroundColor: on,
@@ -431,9 +453,13 @@ class AppTheme {
         filled: true,
         fillColor: s.surfaceSunken,
         isDense: true,
-        hintStyle: _font(TextStyle(color: s.textTertiary, fontSize: scaleS(13))),
-        labelStyle: _font(TextStyle(color: s.textSecondary, fontSize: scaleS(13))),
-        floatingLabelStyle: _font(TextStyle(color: s.accentText, fontSize: scaleS(12))),
+        hintStyle: _fieldLabelStyle(s, s.textTertiary),
+        labelStyle: _fieldLabelStyle(s, s.textSecondary),
+        // 浮起的标签会被 Flutter 再乘一档 0.75 缩放矩阵，所以这里给 16：
+        // 落到边框上的实际字号才是基准的 12 一档（配 scaleS(12) 会缩成 9）。
+        floatingLabelStyle: _fieldLabelStyle(s, s.accentText).copyWith(
+          fontSize: m.fontSize16,
+        ),
         border: OutlineInputBorder(
           borderRadius: m.radiusField,
           borderSide: BorderSide(color: s.border, width: scaleW(1)),
@@ -454,9 +480,13 @@ class AppTheme {
           borderRadius: m.radiusField,
           borderSide: BorderSide(color: s.danger.color, width: scaleW(1.6)),
         ),
+        // 框高 = 上下内距 ×2 + 行高(fontSize13 × 1.4) + 两条边框 ≈ 38，
+        // 和同排按钮的自然高（kSpace10 ×2 + fontSize13 × 1.2）落在同一档。
+        // 原先这里配 kSpace10，正文却又继承 bodyLarge 的 1.7 行高，实际撑到 ~46，
+        // 输入框永远比它旁边的按钮高出一截。
         contentPadding: EdgeInsets.symmetric(
           horizontal: m.kSpace12,
-          vertical: m.kSpace10,
+          vertical: m.kSpace8,
         ),
       ),
 

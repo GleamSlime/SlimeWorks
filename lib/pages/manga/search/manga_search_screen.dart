@@ -23,6 +23,7 @@ import 'package:slime_works/pages/manga/view_models/manga_search_viewmodel.dart'
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class MangaSearchScreen extends BasePage<MangaSearchViewModel> {
   const MangaSearchScreen({super.key, this.keyword = '', this.category = ''});
@@ -274,7 +275,7 @@ class _SearchInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return AppTextField(
       controller: controller,
       focusNode: focusNode,
       decoration: InputDecoration(

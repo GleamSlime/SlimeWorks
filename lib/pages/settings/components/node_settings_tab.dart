@@ -10,6 +10,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class NodeSettingsTab extends StatefulWidget {
   const NodeSettingsTab({super.key});
@@ -256,13 +257,13 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                     ],
                   ),
                   SizedBox(height: m.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: _localNameCtrl,
                     decoration: const InputDecoration(labelText: 'API节点名'),
                     onSubmitted: (_) => _saveLocalSettings(service.localNodeEnabled.value),
                   ),
                   SizedBox(height: m.kSpace8),
-                  TextField(
+                  AppTextField(
                     controller: _localPortCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: '节点端口'),
@@ -610,17 +611,17 @@ class _NodeEditorDialogState extends State<_NodeEditorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            AppTextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: '节点名'),
             ),
             SizedBox(height: m.kSpace12),
-            TextField(
+            AppTextField(
               controller: _apiCtrl,
               decoration: const InputDecoration(labelText: '外网API', hintText: 'http://公网IP:17888'),
             ),
             SizedBox(height: m.kSpace12),
-            TextField(
+            AppTextField(
               controller: _lanApiCtrl,
               decoration: const InputDecoration(
                 labelText: '内网API（可选，优先使用）',
@@ -628,7 +629,7 @@ class _NodeEditorDialogState extends State<_NodeEditorDialog> {
               ),
             ),
             SizedBox(height: m.kSpace12),
-            TextField(
+            AppTextField(
               controller: _authCodeCtrl,
               obscureText: true,
               style: const TextStyle(fontFamily: 'monospace'),

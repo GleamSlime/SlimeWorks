@@ -19,6 +19,7 @@ import 'package:slime_works/view_models/game_library/game_library_detail_viewmod
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class GameDetailScreen extends BasePage<GameLibraryDetailViewModel> {
   const GameDetailScreen({super.key, required this.gameId});
@@ -862,7 +863,7 @@ class _GameDetailScreenState
         Row(
           children: <Widget>[
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 controller: _nameController,
                 decoration: InputDecoration(
                   labelText: '游戏名',
@@ -876,7 +877,7 @@ class _GameDetailScreenState
             ),
             SizedBox(width: AppTheme.metrics.kSpace12),
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 controller: _companyController,
                 decoration: InputDecoration(
                   labelText: '开发商',
@@ -894,7 +895,7 @@ class _GameDetailScreenState
         Row(
           children: <Widget>[
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 controller: _ratingController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
@@ -909,7 +910,7 @@ class _GameDetailScreenState
             ),
             SizedBox(width: AppTheme.metrics.kSpace12),
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 controller: _releaseController,
                 decoration: InputDecoration(
                   labelText: '发售日期',
@@ -925,7 +926,7 @@ class _GameDetailScreenState
           ],
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
-        TextField(
+        AppTextField(
           controller: _pathController,
           decoration: InputDecoration(
             labelText: '启动路径',
@@ -965,7 +966,7 @@ class _GameDetailScreenState
           },
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
-        TextField(
+        AppTextField(
           controller: _summaryController,
           minLines: 4,
           maxLines: 8,
@@ -1822,7 +1823,7 @@ class _GameDetailScreenState
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         SizedBox(height: AppTheme.metrics.kSpace16),
-        TextField(
+        AppTextField(
           controller: _chapterController,
           decoration: InputDecoration(
             labelText: '当前章节',
@@ -1835,7 +1836,7 @@ class _GameDetailScreenState
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
-        TextField(
+        AppTextField(
           controller: _routeController,
           decoration: InputDecoration(
             labelText: '当前路线',
@@ -1848,7 +1849,7 @@ class _GameDetailScreenState
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
-        TextField(
+        AppTextField(
           controller: _noteController,
           minLines: 4,
           maxLines: 10,

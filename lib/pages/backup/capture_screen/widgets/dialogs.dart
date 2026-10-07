@@ -2,6 +2,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 显示密码输入对话框
 Future<String?> showPasswordDialog(BuildContext context) async {
@@ -25,7 +26,7 @@ Future<String?> showPasswordDialog(BuildContext context) async {
             ),
           ),
           SizedBox(height: AppTheme.metrics.kSpace16),
-          TextField(
+          AppTextField(
             controller: passwordController,
             obscureText: true,
             autofocus: true,
@@ -120,7 +121,7 @@ Future<String?> showEditTaskNameDialog(BuildContext context, String currentName)
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('修改录制名称'),
-      content: TextField(
+      content: AppTextField(
         controller: controller,
         decoration: const InputDecoration(labelText: '录制名称', border: OutlineInputBorder()),
         autofocus: true,

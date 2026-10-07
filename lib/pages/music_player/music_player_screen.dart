@@ -20,6 +20,7 @@ import 'package:slime_works/pages/music_player/components/immersive_player_scree
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 侧边栏宽度
 ///
@@ -231,7 +232,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
             children: [
               // 搜索
               Expanded(
-                child: TextField(
+                child: AppTextField(
                   onChanged: (v) => viewModel.searchQuery.value = v,
                   decoration: const InputDecoration(
                     hintText: '搜索歌曲...',
@@ -424,7 +425,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('重命名'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '名称'),
         ),
@@ -450,7 +451,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('新建播放列表'),
-        content: TextField(
+        content: AppTextField(
           controller: nameController,
           decoration: const InputDecoration(hintText: '播放列表名称'),
         ),
@@ -509,7 +510,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                   style: AppTextStyles.caption(ctx),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace12),
-                TextField(
+                AppTextField(
                   controller: urlController,
                   decoration: const InputDecoration(
                     labelText: 'ASMR 链接',

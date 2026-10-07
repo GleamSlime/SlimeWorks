@@ -170,7 +170,7 @@ mixin PictureScreenDialogs
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Expanded(
-                        child: TextField(
+                        child: AppTextField(
                           controller: controller,
                           autofocus: true,
                           decoration: const InputDecoration(
@@ -303,7 +303,7 @@ mixin PictureScreenDialogs
                     ),
                   if (!inFolder && viewModel.enabledRemoteNodes.isNotEmpty)
                     SizedBox(height: appMetrics.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: controller,
                     autofocus: true,
                     decoration: const InputDecoration(hintText: '输入文件夹名称'),
@@ -368,7 +368,7 @@ mixin PictureScreenDialogs
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
+                    AppTextField(
                       controller: nameCtrl,
                       autofocus: true,
                       decoration: const InputDecoration(labelText: '文件夹名称', hintText: '例：我的收藏'),
@@ -447,7 +447,7 @@ mixin PictureScreenDialogs
                     SizedBox(height: appMetrics.kSpace12),
                     _KeywordInputList(keywords: keywords, onChanged: () => setState(() {})),
                     SizedBox(height: appMetrics.kSpace8),
-                    TextField(
+                    AppTextField(
                       controller: patternCtrl,
                       decoration: InputDecoration(
                         labelText: '正则匹配规则（可选）',
@@ -492,7 +492,7 @@ mixin PictureScreenDialogs
       builder: (context) {
         return AlertDialog(
           title: const Text('重命名智能文件夹'),
-          content: TextField(
+          content: AppTextField(
             controller: ctrl,
             autofocus: true,
             decoration: const InputDecoration(hintText: '新名称'),
@@ -534,7 +534,7 @@ mixin PictureScreenDialogs
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
+                    AppTextField(
                       controller: nameCtrl,
                       autofocus: true,
                       decoration: const InputDecoration(labelText: '文件夹名称'),
@@ -593,7 +593,7 @@ mixin PictureScreenDialogs
                     SizedBox(height: appMetrics.kSpace12),
                     _KeywordInputList(keywords: keywords, onChanged: () => setState(() {})),
                     SizedBox(height: appMetrics.kSpace8),
-                    TextField(
+                    AppTextField(
                       controller: patternCtrl,
                       decoration: InputDecoration(
                         labelText: '正则匹配规则（可选）',
@@ -737,7 +737,7 @@ mixin PictureScreenDialogs
       builder: (context) {
         return AlertDialog(
           title: const Text('重命名集合'),
-          content: TextField(
+          content: AppTextField(
             controller: controller,
             autofocus: true,
             decoration: const InputDecoration(hintText: '输入新的集合名称'),
@@ -768,7 +768,7 @@ mixin PictureScreenDialogs
       builder: (context) {
         return AlertDialog(
           title: const Text('重命名文件夹'),
-          content: TextField(
+          content: AppTextField(
             controller: controller,
             autofocus: true,
             decoration: const InputDecoration(hintText: '输入新的文件夹名称'),
@@ -1178,7 +1178,7 @@ class _KeywordInputListState extends State<_KeywordInputList> {
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 controller: _newKeywordCtrl,
                 decoration: InputDecoration(
                   isDense: true,

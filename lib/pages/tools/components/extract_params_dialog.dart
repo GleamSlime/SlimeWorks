@@ -9,6 +9,7 @@ import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/pages/tools/components/extract_card.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class ExtractParamsDialog extends StatefulWidget {
   const ExtractParamsDialog({super.key});
@@ -264,7 +265,7 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   Widget _buildPasswordInput() {
     final service = getIt.get<ExtractService>();
 
-    return TextField(
+    return AppTextField(
       decoration: InputDecoration(
         hintText: '输入解压密码（可选）',
         suffixIcon: PopupMenuButton<String>(

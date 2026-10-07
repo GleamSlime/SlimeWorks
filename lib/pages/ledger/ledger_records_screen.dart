@@ -13,6 +13,7 @@ import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
 import 'package:slime_works/pages/ledger/components/ledger_tx_editor.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_records_viewmodel.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 全部流水：多维筛选 + 月/日两级分组 + 列表与日历双页型 + 触底续读。
 ///
@@ -427,10 +428,9 @@ class _FilterBar extends StatelessWidget {
         ],
       ),
     );
-    final searchField = TextField(
+    final searchField = AppTextField(
       controller: search,
       onSubmitted: onSearch,
-      style: AppTextStyles.body(context),
       decoration: InputDecoration(
         isDense: true,
         hintText: '搜商户/备注',

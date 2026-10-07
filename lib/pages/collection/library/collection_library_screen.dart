@@ -23,6 +23,7 @@ import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class CollectionLibraryScreen extends BasePage<NovelLibraryViewModel> {
   const CollectionLibraryScreen({super.key});
@@ -504,7 +505,7 @@ class _CollectionLibraryScreenState
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
+                        child: AppTextField(
                           controller: keywordCtrl,
                           decoration: const InputDecoration(
                             labelText: '关键词',
@@ -515,7 +516,7 @@ class _CollectionLibraryScreenState
                       ),
                       SizedBox(width: AppTheme.metrics.kSpace8),
                       Expanded(
-                        child: TextField(
+                        child: AppTextField(
                           controller: tagCtrl,
                           decoration: const InputDecoration(
                             labelText: '标签（留空同关键词）',
@@ -632,7 +633,7 @@ class _CollectionLibraryScreenState
       useRootNavigator: true,
       builder: (dlgCtx) => AlertDialog(
         title: Text(inFolder ? '新建子文件夹' : '新建文件夹'),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
           decoration: InputDecoration(

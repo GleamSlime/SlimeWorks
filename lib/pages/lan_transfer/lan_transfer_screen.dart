@@ -12,6 +12,7 @@ import 'package:slime_works/view_models/lan_transfer_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 局域网互传页面
 class LanTransferScreen extends BasePage<LanTransferViewModel> {
@@ -287,7 +288,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                 ),
               ),
               SizedBox(height: m.kSpace16),
-              TextField(
+              AppTextField(
                 controller: controller,
                 maxLength: 12,
                 decoration: InputDecoration(

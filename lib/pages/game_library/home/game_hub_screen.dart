@@ -15,6 +15,7 @@ import 'package:slime_works/view_models/game_library/game_library_stats_viewmode
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class GameHubScreen extends StatefulWidget {
   const GameHubScreen({super.key});
@@ -523,7 +524,7 @@ class _CategoriesTab extends StatelessWidget {
             children: [
               SizedBox(
                 width: 220,
-                child: TextField(
+                child: AppTextField(
                   decoration: const InputDecoration(
                     hintText: '搜索分类',
                     prefixIcon: DrawIcon(StrokeIcons.search),
@@ -1127,11 +1128,11 @@ Future<void> _showCreateDialog(BuildContext context, GameLibraryCategoriesViewMo
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            TextField(
+            AppTextField(
               controller: nameController,
               decoration: const InputDecoration(labelText: '分类名'),
             ),
-            TextField(
+            AppTextField(
               controller: emojiController,
               decoration: const InputDecoration(labelText: 'Emoji'),
             ),
@@ -1172,11 +1173,11 @@ Future<void> _showEditDialog(
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            TextField(
+            AppTextField(
               controller: nameController,
               decoration: const InputDecoration(labelText: '分类名'),
             ),
-            TextField(
+            AppTextField(
               controller: emojiController,
               decoration: const InputDecoration(labelText: 'Emoji'),
             ),

@@ -15,6 +15,7 @@ import 'package:flutter/services.dart'
         TextInputType;
 
 import '../kit.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 9. One-time code — 四格验证码：填满先呼吸一遍，对了融成胶囊，错了抖散
 ///
@@ -441,7 +442,7 @@ class _Case09OneTimeCodeState extends State<Case09OneTimeCode> with SingleTicker
                     opacity: 0,
                     child: Material(
                       type: MaterialType.transparency,
-                      child: TextField(
+                      child: AppTextField(
                         focusNode: _fieldFocus,
                         controller: _editor,
                         maxLines: 1,

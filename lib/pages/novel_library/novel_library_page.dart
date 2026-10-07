@@ -12,6 +12,7 @@ import 'package:slime_works/pages/novel_library/components/novel_card.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 书籍库页面
 class NovelLibraryPage extends StatelessWidget {
@@ -298,7 +299,7 @@ class NovelLibraryPage extends StatelessWidget {
                             Row(
                               children: [
                                 Expanded(
-                                  child: TextField(
+                                  child: AppTextField(
                                     onChanged: (value) {
                                       controller.searchQuery.value = value;
                                       // 按名字搜索时实时更新

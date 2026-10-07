@@ -146,6 +146,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
 
                 TextFormField(
                   controller: _emailController,
+                  style: AppTheme.fieldTextStyle,
                   decoration: const InputDecoration(
                     labelText: '邮箱 / 账号',
                     prefixIcon: DrawIcon(StrokeIcons.personOutline),
@@ -158,6 +159,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
 
                 TextFormField(
                   controller: _passwordController,
+                  style: AppTheme.fieldTextStyle,
                   decoration: InputDecoration(
                     labelText: '密码',
                     prefixIcon: DrawIcon(StrokeIcons.lockOutline),
@@ -174,6 +176,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
 
                 TextFormField(
                   controller: _proxyController,
+                  style: AppTheme.fieldTextStyle,
                   decoration: const InputDecoration(
                     labelText: '代理地址（可选）',
                     hintText: '如: http://127.0.0.1:7890',

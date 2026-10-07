@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../kit.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 1. Search — 胶囊搜索框：先压一下，再弹簧展开
 ///
@@ -290,7 +291,7 @@ class _Case01SearchState extends State<Case01Search> {
                         opacity: 0,
                         child: Material(
                           type: MaterialType.transparency,
-                          child: TextField(
+                          child: AppTextField(
                             focusNode: _fieldFocus,
                             controller: _editor,
                             maxLines: 1,

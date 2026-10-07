@@ -6,6 +6,7 @@ import 'package:slime_works/core/services/asr/asr_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 资源库设置 —— 语音识别字幕分区
 ///
@@ -285,7 +286,7 @@ class AsrSubtitleSection extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
+                  AppTextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
                       labelText: '名称',
@@ -293,7 +294,7 @@ class AsrSubtitleSection extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: m.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: urlCtrl,
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
@@ -303,7 +304,7 @@ class AsrSubtitleSection extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: m.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: modelCtrl,
                     decoration: const InputDecoration(
                       labelText: '模型名',
@@ -311,7 +312,7 @@ class AsrSubtitleSection extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: m.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: keyCtrl,
                     obscureText: true,
                     decoration: const InputDecoration(labelText: 'API Key（可选）'),
@@ -575,7 +576,7 @@ class AsrSubtitleSection extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
+                  AppTextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
                       labelText: '名称',
@@ -583,7 +584,7 @@ class AsrSubtitleSection extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: m.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: urlCtrl,
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
@@ -593,7 +594,7 @@ class AsrSubtitleSection extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: m.kSpace12),
-                  TextField(
+                  AppTextField(
                     controller: keyCtrl,
                     decoration: const InputDecoration(
                       labelText: 'API Key（可选）',

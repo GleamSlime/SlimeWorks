@@ -7,6 +7,7 @@ import 'package:slime_works/src/rust/api/http_bridge.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 const Loggers _logger = Loggers(name: 'HTTP桥测试');
 
 
@@ -315,7 +316,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
               border: Border.all(color: Theme.of(context).colorScheme.outline),
               borderRadius: AppTheme.metrics.radius4,
             ),
-            child: TextField(
+            child: AppTextField(
               controller: _paramsController,
               maxLines: null,
               expands: true,

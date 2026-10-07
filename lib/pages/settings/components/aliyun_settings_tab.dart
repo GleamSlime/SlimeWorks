@@ -10,6 +10,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class AliyunSettingsTab extends StatefulWidget {
   const AliyunSettingsTab({super.key});
@@ -226,7 +227,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                     ],
                   ),
                   SizedBox(height: m.kSpace8),
-                  TextField(
+                  AppTextField(
                     controller: _accessKeyIdCtrl,
                     decoration: InputDecoration(
                       hintText: 'LTAI5t...',
@@ -239,7 +240,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                         icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16),
                       ),
                     ),
-                    style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+                    style: const TextStyle(fontFamily: 'monospace'),
                     onChanged: (v) async {
                       await service.setAccessKeyId(v);
                       await service.updateConfig();
@@ -279,7 +280,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                     ],
                   ),
                   SizedBox(height: m.kSpace8),
-                  TextField(
+                  AppTextField(
                     controller: _accessKeySecretCtrl,
                     obscureText: _obscureSecret,
                     decoration: InputDecoration(
@@ -293,7 +294,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                         icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16),
                       ),
                     ),
-                    style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+                    style: const TextStyle(fontFamily: 'monospace'),
                     onChanged: (v) async {
                       await service.setAccessKeySecret(v);
                       await service.updateConfig();

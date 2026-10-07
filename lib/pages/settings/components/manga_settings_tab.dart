@@ -6,6 +6,7 @@ import 'package:slime_works/pages/manga/components/manga_login_dialog.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 const String _kDefaultCdnIp = '104.18.227.172';
 
@@ -213,7 +214,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                           child: Row(
                             children: [
                               Expanded(
-                                child: TextField(
+                                child: AppTextField(
                                   controller: _customIpCtrl,
                                   decoration: const InputDecoration(
                                     labelText: 'CDN IP 地址',
@@ -245,7 +246,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: TextField(
+                                    child: AppTextField(
                                       controller: _relayAddrCtrl,
                                       decoration: const InputDecoration(
                                         labelText: 'PC 节点地址',
@@ -304,7 +305,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
+                      child: AppTextField(
                         controller: _proxyCtrl,
                         decoration: const InputDecoration(
                           labelText: '代理地址',

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../kit.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 11 号 Command bar —— 一条输入框 + 一颗"从右端长出来"的发送钮
 ///
@@ -253,7 +254,7 @@ class _Case11CommandBarState extends State<Case11CommandBar> with SingleTickerPr
                           opacity: 0,
                           child: Material(
                             type: MaterialType.transparency,
-                            child: TextField(
+                            child: AppTextField(
                               focusNode: _fieldNode,
                               controller: _editor,
                               maxLines: 1,

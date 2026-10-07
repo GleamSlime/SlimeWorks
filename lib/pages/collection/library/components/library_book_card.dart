@@ -16,6 +16,7 @@ import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class LibraryBookCard extends StatefulWidget {
   final NovelMetadata metadata;
@@ -155,7 +156,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
       context: context,
       builder: (ctx2) => AlertDialog(
         title: const Text('重命名书籍'),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(hintText: '输入新的书名'),

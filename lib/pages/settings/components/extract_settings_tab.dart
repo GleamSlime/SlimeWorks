@@ -7,6 +7,7 @@ import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class ExtractSettingsTab extends StatelessWidget {
   const ExtractSettingsTab({super.key});
@@ -333,13 +334,13 @@ class ExtractSettingsTab extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              AppTextField(
                 controller: passwordCtrl,
                 decoration: const InputDecoration(hintText: '输入密码', labelText: '密码'),
                 obscureText: true,
               ),
               SizedBox(height: m.kSpace12),
-              TextField(
+              AppTextField(
                 controller: remarkCtrl,
                 decoration: const InputDecoration(hintText: '输入备注（可选）', labelText: '备注'),
               ),
@@ -374,7 +375,7 @@ class ExtractSettingsTab extends StatelessWidget {
         title: const Text('编辑备注'),
         content: SizedBox(
           width: 360,
-          child: TextField(
+          child: AppTextField(
             controller: remarkCtrl,
             decoration: const InputDecoration(hintText: '输入备注', labelText: '备注'),
           ),

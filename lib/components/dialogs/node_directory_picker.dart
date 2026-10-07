@@ -3,6 +3,7 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 节点目录浏览器弹窗。
 ///
@@ -91,7 +92,7 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(hintText: '名称'),

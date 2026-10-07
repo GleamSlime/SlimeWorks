@@ -13,6 +13,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/aliyun_ddns_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class AliyunDdnsScreen extends StatefulWidget {
   const AliyunDdnsScreen({super.key});
@@ -520,7 +521,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                AppTextField(
                   controller: domainNameCtrl,
                   onTap: () {
                     domainNameCtrl.selection = TextSelection(
@@ -538,7 +539,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
+                      child: AppTextField(
                         controller: rrCtrl,
                         onTap: () {
                           rrCtrl.selection = TextSelection(

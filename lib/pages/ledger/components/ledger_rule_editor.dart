@@ -7,6 +7,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/ledger/components/ledger_shared.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 import 'package:slime_works/view_models/ledger/ledger_settings_viewmodel.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 邮箱规则编辑器：连接参数 + 匹配条件 + 模板 + 收取时机。
 ///
@@ -374,7 +375,7 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
                     LedgerField(
                       label: '邮箱口令 / 应用专用密码',
                       hint: _isNew ? null : '留空表示沿用已保存的那一份',
-                      child: TextField(
+                      child: AppTextField(
                         controller: _password,
                         obscureText: !_passwordVisible,
                         // 口令不参与任何自动填充与回显
@@ -553,7 +554,7 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
                         child: LedgerField(
                           label: '贴一段账单 HTML 验证模板',
                           hint: '不发邮件、不落库，只跑解析引擎',
-                          child: TextField(
+                          child: AppTextField(
                             controller: _sampleHtml,
                             minLines: 4,
                             maxLines: 8,

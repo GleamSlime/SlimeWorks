@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:slime_works/core/services/ledger_stub_store.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 import 'package:slime_works/pages/ledger/components/ledger_tx_editor.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
 
@@ -86,12 +87,12 @@ Future<void> _pickNth(WidgetTester tester, String label, int index) async {
 }
 
 Future<void> _typeAmount(WidgetTester tester, String value) async {
-  await tester.enterText(find.byType(TextField).first, value);
+  await tester.enterText(find.bySubtype<TextField>().first, value);
   await tester.pumpAndSettle();
 }
 
 Future<void> _typeMerchant(WidgetTester tester, String value) async {
-  await tester.enterText(find.widgetWithText(TextField, '商户 / 说明'), value);
+  await tester.enterText(find.widgetWithText(AppTextField, '商户 / 说明'), value);
   await tester.pumpAndSettle();
 }
 
@@ -264,7 +265,7 @@ void main() {
       expect(find.text('这笔的标签'), findsOneWidget);
       expect(find.textContaining('标签是演示数据'), findsOneWidget);
 
-      await tester.enterText(find.widgetWithText(TextField, '新建标签名'), '测试新建标签');
+      await tester.enterText(find.widgetWithText(AppTextField, '新建标签名'), '测试新建标签');
       await tester.tap(find.text('新建'));
       await tester.pumpAndSettle();
 

@@ -15,6 +15,7 @@ import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 const Loggers _logger = Loggers(name: '屏蔽词');
 
 // ==================== 数据模型 ====================
@@ -335,7 +336,7 @@ class _WordListTab extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                child: AppTextField(
                   controller: inputController,
                   decoration: InputDecoration(
                     hintText: hintText,

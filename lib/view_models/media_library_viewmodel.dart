@@ -145,8 +145,23 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 远程节点缩略图生成进度（各节点合计 completed/total），null 表示无任务。
   final remoteThumbProgress = Rxn<(int, int)>();
 
-  /// 库内搜索关键词（非空时列表仅展示匹配项，直到手动清除）。
+  /// 库内搜索关键词（输入框实时值；筛选一律看 [appliedSearchQuery]）。
   final searchQuery = ''.obs;
+
+  /// 实际参与筛选的搜索词：输入停下 [_kSearchDebounce] 才跟上。
+  /// 深度搜索要 BFS 全部子孙文件夹、逐集合扫文件名，远程集合还会发 HTTP 取条目，
+  /// 每敲一键就跑一遍会把界面卡死。
+  final appliedSearchQuery = ''.obs;
+
+  /// 搜索输入防抖窗口。
+  static const _kSearchDebounce = Duration(milliseconds: 280);
+
+  /// 搜索防抖计时器：每次输入重排，停手才把词落到 [appliedSearchQuery]。
+  Timer? _searchDebounceTimer;
+
+  /// 各浏览层收起的搜索词栈：元素 = (收起时所在的层级 folderId, 词)。
+  /// 搜索是为了找到它，下钻就该看全量；回到原层才把词还给搜索框与筛选。
+  final _stashedBrowseSearch = <(String? level, String query)>[];
 
   /// 搜索框是否展开。
   final isSearchActive = false.obs;
@@ -160,8 +175,56 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 正在异步加载条目路径的远程集合 ID。
   final _remoteItemPathsLoading = <String>{};
 
+  /// 深度搜索待预热的远程集合队列（保序去重）：一轮扫出的需求先攒着，
+  /// 再由 [_pumpRemoteItemPaths] 限速消费，不就地各发一个请求。
+  final _remotePathQueue = <String>{};
+
+  /// 条目路径拉取失败的远程集合：同一次搜索内不再重试。
+  /// 没有这份负缓存，失败集合每次重算都会被重新排队，表现为「一直在重复搜索」。
+  final _remoteItemPathsFailed = <String>{};
+
+  /// 预热流水线是否在跑（同一时刻只允许一条）。
+  bool _remotePathPumping = false;
+
+  /// 远程条目路径预热的并发上限。
+  /// 节点同时只能跑有限个 get_media_collection_items，齐发会成片 503 再各自重试。
+  static const _kRemotePathConcurrency = 4;
+
   /// 搜索结果版本号（远程条目路径加载完成后自增以触发重建）。
   final _searchVersion = 0.obs;
+
+  /// 深度搜索结果刷新窗口：窗口内的分批到货合并为窗口末尾一次重建。
+  static const _kSearchNotifyThrottle = Duration(milliseconds: 600);
+
+  /// 搜索版本号合并通知定时器。
+  Timer? _searchNotifyTimer;
+
+  /// 刷新窗口是否开着。
+  bool _searchNotifyWindowOpen = false;
+
+  /// 窗口期内是否还有未通知的到货。
+  bool _searchNotifyDirty = false;
+
+  /// 请求刷新深度搜索结果。
+  ///
+  /// 远程条目路径是分批到货的，每批都独立 ++ 会让整个浏览网格各重算一次
+  /// （BFS 全部子孙文件夹 + 扫全部集合的资源名）。首批立刻推一次让命中早点露面，
+  /// 之后的到货并进 600ms 窗口一次推完。
+  void _notifySearchChanged() {
+    if (_searchNotifyWindowOpen) {
+      _searchNotifyDirty = true;
+      return;
+    }
+    _searchVersion.value += 1;
+    _searchNotifyWindowOpen = true;
+    _searchNotifyTimer = Timer(_kSearchNotifyThrottle, () {
+      _searchNotifyWindowOpen = false;
+      _searchNotifyTimer = null;
+      if (!_searchNotifyDirty || isClosed) return;
+      _searchNotifyDirty = false;
+      _searchVersion.value += 1;
+    });
+  }
 
   final currentFolderId = RxnString();
   final currentCollectionId = RxnString();
@@ -380,7 +443,12 @@ class MediaLibraryViewModel extends BaseViewModel {
   void _bindVisibleInvalidation() {
     _visibleInvalidationWorkers ??= [
       ever<String?>(currentFolderId, (_) => _invalidateVisible()),
-      ever<String>(searchQuery, (_) => _invalidateVisible()),
+      ever<String>(searchQuery, (value) => _scheduleSearchApply(value)),
+      ever<String>(appliedSearchQuery, (_) {
+        // 换了查询词就重开一轮预热：上一轮失败的集合值得再试（503 多是瞬时过载）
+        _resetRemotePathSession();
+        _invalidateVisible();
+      }),
       ever<String>(similarSearchQuery, (_) => _invalidateVisible()),
       ever<CollectionSortOrder>(
         collectionSortOrder,
@@ -567,6 +635,10 @@ class MediaLibraryViewModel extends BaseViewModel {
     _thumbCompleteTimer = null;
     _coverNotifyTimer?.cancel();
     _coverNotifyTimer = null;
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = null;
+    _searchNotifyTimer?.cancel();
+    _searchNotifyTimer = null;
     super.onClose();
   }
 
@@ -587,8 +659,8 @@ class MediaLibraryViewModel extends BaseViewModel {
   List<media_api.MediaItem> get sortedCurrentItems {
     // \u8bfb\u53d6 itemSortOrder.value \u4ee5\u6ce8\u518c\u54cd\u5e94\u5f0f\u4f9d\u8d56
     final order = itemSortOrder.value;
-    // 搜索激活时：按文件名模糊过滤资源列表
-    final searchQueryText = searchQuery.value.trim().toLowerCase();
+    // 搜索激活时：按文件名模糊过滤资源列表（取防抖后的生效词）
+    final searchQueryText = appliedSearchQuery.value.trim().toLowerCase();
     var items = [...currentItems];
     if (searchQueryText.isNotEmpty) {
       items = items

@@ -59,6 +59,8 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
       '[Scroll] enterCollection: saved browse offset to _savedBrowseScrollOffset=$_savedBrowseScrollOffset, _browseScrollOffsets[${currentFolderId.value}]=${_browseScrollOffsets[currentFolderId.value]}',
     );
     currentItems.clear();
+    // 搜索词只筛集合卡片，进内容就该看全量：先收起来，退出时再恢复
+    _stashBrowseSearchForDetail(atLevel: currentFolderId.value);
     isLoadingItems.value = true;
     currentCollectionId.value = collectionId;
     exitSelection();
@@ -85,7 +87,9 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
     );
   }
 
-  void exitCollection() {
+  /// 退出集合内容回到浏览层。[restoreBrowseSearch] = false 供 [enterFolder] 用：
+  /// 那里正在换层，搜索词该按层级判定决定收起还是恢复，而不是无条件翻出来。
+  void exitCollection({bool restoreBrowseSearch = true}) {
     final collectionId = currentCollectionId.value;
     _logger.info(
       '[Scroll] exitCollection START: collectionId=$collectionId, savedScrollOffset=${savedScrollOffset.value}, _savedBrowseScrollOffset=$_savedBrowseScrollOffset',
@@ -104,6 +108,8 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
     );
     currentCollectionId.value = null;
     currentItems.clear();
+    // 回到浏览层：若正是收起搜索词的那一层，把结果原样还回来
+    if (restoreBrowseSearch) _restoreBrowseSearchForLevel(currentFolderId.value);
     exitSelection();
     _logger.info('[Scroll] exitCollection END');
   }
@@ -114,6 +120,7 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
     _currentFolderCoverKeys.clear();
     // Snapshot scroll position for the current browse level before navigating into folder
     _browseScrollOffsets[currentFolderId.value] = savedScrollOffset.value;
+    final fromLevel = currentFolderId.value;
     currentFolderId.value = folderId;
     // Debug: show what custom order (if any) will be applied for this folder
     final orderKey = folderId;
@@ -121,8 +128,14 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
     _logger.info(
       'enterFolder: folderId=$folderId, savedOrder=${savedOrder == null ? "NONE" : savedOrder.join(",")}',
     );
-    exitCollection();
+    exitCollection(restoreBrowseSearch: false);
     exitSelection();
+    // 搜索词属于录入它的那一层：面包屑跳回该层就把结果翻出来，
+    // 其余情况（下钻进子层）收起它——不然按名字命中而点进来的文件夹，
+    // 会因为子项不含该词而显示成一片空白。
+    if (!_restoreBrowseSearchForLevel(folderId)) {
+      _stashBrowseSearchForDetail(atLevel: fromLevel);
+    }
   }
 
   void exitFolder() {

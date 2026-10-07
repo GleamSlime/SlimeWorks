@@ -27,6 +27,7 @@ import 'package:slime_works/view_models/media_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/pages/collection/picture/components/picture_action_bar.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 part 'picture_screen_dialogs.dart';
 
@@ -66,6 +67,14 @@ class _CollectionPictureScreenState
 
   Worker? _scrollRestoreWorker;
 
+  /// 正文按键层（Ctrl+A / Delete / ESC）的宿主节点。
+  ///
+  /// 必须显式持有并主动收回焦点：点搜索结果里的卡片时，搜索框会因 TapRegion 判定
+  /// 「点到外面」而释放焦点，primary focus 退回最近的 FocusScopeNode。页面里的
+  /// Focus 都挂在这个 scope 下面，按键派发只从 primary focus 往上走，于是 ESC
+  /// 谁都送不到——表现就是「从搜索结果进集合/文件夹后 ESC 没反应，普通列表进的却正常」。
+  final FocusNode _bodyFocusNode = FocusNode();
+
   // ── 导航包装方法（同时设置动画方向） ─────────────────────────────────────
 
   /// 导航时重建 [_scrollController]，并同步保存当前滚动位置到 viewModel。
@@ -97,6 +106,8 @@ class _CollectionPictureScreenState
     setState(() => _navForward = true);
     _replaceScrollController();
     viewModel.enterFolder(id);
+    // 焦点收回正文，ESC 才有地方送（见 _bodyFocusNode 注释）
+    _bodyFocusNode.requestFocus();
   }
 
   void _exitFolder() {
@@ -115,6 +126,8 @@ class _CollectionPictureScreenState
     );
     setState(() => _navForward = true);
     viewModel.enterCollection(id);
+    // 同上：从搜索结果点进来时焦点多半刚被搜索框释放，不收回来 ESC 就是死键
+    _bodyFocusNode.requestFocus();
     _logger.info('[Scroll] _enterCollection END');
   }
 
@@ -204,8 +217,39 @@ class _CollectionPictureScreenState
       viewModel.savedScrollOffset.value = _scrollController.offset;
     }
     _scrollController.dispose();
+    _bodyFocusNode.dispose();
     super.dispose();
   }
+
+  /// ESC 逐级返回：退出多选 → 退出集合 → 退出文件夹 → 交回上层。
+  ///
+  /// 为什么要单独一层挂在 chrome 控件上：工具栏和面包屑走 ScreenChrome 的 AppBar 槽，
+  /// 与正文里那层 Focus 是兄弟而不是后代。焦点一旦落进搜索框或工具栏按钮，ESC 就再也
+  /// 回不到正文，而 app 层的 DefaultTextEditingShortcuts 把 Escape 绑成「什么都不做并
+  /// 停止冒泡」——于是从搜索结果点进集合后按 ESC 毫无反应。这一层拦住它。
+  KeyEventResult _onEscapeKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.escape) {
+      return KeyEventResult.ignored;
+    }
+    if (viewModel.isSelecting.value) {
+      viewModel.exitSelection();
+      return KeyEventResult.handled;
+    }
+    if (viewModel.isInDetail) {
+      _exitCollection();
+      return KeyEventResult.handled;
+    }
+    if (viewModel.currentFolderId.value != null) {
+      _exitFolder();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// 给顶部 chrome 控件套 ESC 拦截层；不抢焦点，null 原样返回。
+  Widget? _escLayer(Widget? child) => child == null
+      ? null
+      : Focus(canRequestFocus: false, onKeyEvent: _onEscapeKey, child: child);
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
     final isMobile = PlatformUtil.isMobile || getIt<DesktopScreenProvider>().isMobile.value;
@@ -242,22 +286,24 @@ class _CollectionPictureScreenState
       final showBack = inDetail || viewModel.currentFolderId.value != null;
       return ScreenChromeData(
         // title: inDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
-        titleWidget: toolbar,
-        leading: showBack
-            ? SizedBox(
-                width: AppTheme.metrics.kSpace48,
-                child: IconButton(
-                  icon: DrawIcon(StrokeIcons.arrowBack),
-                  onPressed: () {
-                    if (inDetail) {
-                      _exitCollection();
-                    } else {
-                      _exitFolder();
-                    }
-                  },
-                ),
-              )
-            : null,
+        titleWidget: _escLayer(toolbar),
+        leading: _escLayer(
+          showBack
+              ? SizedBox(
+                  width: AppTheme.metrics.kSpace48,
+                  child: IconButton(
+                    icon: DrawIcon(StrokeIcons.arrowBack),
+                    onPressed: () {
+                      if (inDetail) {
+                        _exitCollection();
+                      } else {
+                        _exitFolder();
+                      }
+                    },
+                  ),
+                )
+              : null,
+        ),
         toolbarHeight: AppTheme.metrics.kSpace48,
         // toolbar: toolbar,
       );
@@ -266,19 +312,21 @@ class _CollectionPictureScreenState
     // 桌面端：leading 显示操作栏（面包屑/统计/排序），toolbar 显示图书馆快捷按钮
     return ScreenChromeData(
       title: viewModel.isInDetail ? viewModel.currentCollectionTitle : viewModel.currentBrowseTitle,
-      leading: PictureActionBar(
-        viewModel: viewModel,
-        isViewerActive: _viewerActive,
-        detailColumnCount: _detailColumnCount,
-        onColumnDecrement: () => setState(() => _detailColumnCount--),
-        onColumnIncrement: () => setState(() => _detailColumnCount++),
-        onExitCollection: _exitCollection,
-        onExitFolder: _exitFolder,
-        onExitToRoot: _exitToRoot,
-        onEnterFolder: _enterFolder,
+      leading: _escLayer(
+        PictureActionBar(
+          viewModel: viewModel,
+          isViewerActive: _viewerActive,
+          detailColumnCount: _detailColumnCount,
+          onColumnDecrement: () => setState(() => _detailColumnCount--),
+          onColumnIncrement: () => setState(() => _detailColumnCount++),
+          onExitCollection: _exitCollection,
+          onExitFolder: _exitFolder,
+          onExitToRoot: _exitToRoot,
+          onEnterFolder: _enterFolder,
+        ),
       ),
       toolbarHeight: AppTheme.metrics.kSpace48,
-      toolbar: toolbar,
+      toolbar: _escLayer(toolbar),
     );
   }
 
@@ -362,26 +410,15 @@ class _CollectionPictureScreenState
         child: ScreenChrome(
           data: _buildScreenChromeData(context),
           child: Focus(
+            focusNode: _bodyFocusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
               if (event is! KeyDownEvent) {
                 return KeyEventResult.ignored;
               }
-              // ESC：优先退出多选；否则逐级返回上一级（集合 → 文件夹 → 根目录）
-              if (event.logicalKey == LogicalKeyboardKey.escape) {
-                if (viewModel.isSelecting.value) {
-                  viewModel.exitSelection();
-                  return KeyEventResult.handled;
-                }
-                if (viewModel.isInDetail) {
-                  _exitCollection();
-                  return KeyEventResult.handled;
-                }
-                if (viewModel.currentFolderId.value != null) {
-                  _exitFolder();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
+              // ESC：与顶部 chrome 共用同一套逐级返回逻辑（见 _onEscapeKey）
+              if (_onEscapeKey(node, event) == KeyEventResult.handled) {
+                return KeyEventResult.handled;
               }
               if (viewModel.isInDetail) {
                 return KeyEventResult.ignored;

@@ -7,6 +7,7 @@ import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class LibraryBookInfoDialog extends StatefulWidget {
   final NovelMetadata metadata;
@@ -187,16 +188,12 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
   Widget _editField(String label, TextEditingController ctrl, {int maxLines = 1}) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace6),
-      child: TextField(
+      child: AppTextField(
         controller: ctrl,
         maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          border: const OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace10, vertical: AppTheme.metrics.kSpace8),
-        ),
-        style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
+        // 字号、内距、描边、圆角都由主题的 inputDecorationTheme 统一给，
+        // 这里再写一遍就是第二个基准（历史上正是这样凑出几十种输入框的）。
+        decoration: InputDecoration(labelText: label),
       ),
     );
   }

@@ -486,8 +486,8 @@ extension MediaLibraryBrowseExt on MediaLibraryViewModel {
     if (similar.isNotEmpty) {
       return _similarSearchItems(similar);
     }
-    // 搜索激活时：深度搜索当前层级并仅展示匹配项
-    final query = searchQuery.value.trim().toLowerCase();
+    // 搜索激活时：深度搜索当前层级并仅展示匹配项（用防抖后的生效词，输入途中不重跑）
+    final query = appliedSearchQuery.value.trim().toLowerCase();
     if (query.isNotEmpty) {
       return _deepSearchItems(query);
     }

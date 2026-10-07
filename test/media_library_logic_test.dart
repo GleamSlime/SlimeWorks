@@ -32,6 +32,47 @@ class _StubNodeSettingsService extends NodeSettingsService {
   List<Map<String, dynamic>> collectionItemsPayload = <Map<String, dynamic>>[];
   ProgressCallback? lastProgressCallback;
 
+  /// 条目路径请求轨迹：用于断言预热只发一次、不重复打节点。
+  final List<String> itemPathRequestedIds = <String>[];
+
+  /// 让这些集合的条目路径请求失败（模拟节点 503）。
+  final Set<String> itemPathFailingIds = <String>{};
+
+  /// 在飞的请求数与其峰值：限速流水线不该让峰值超过并发上限。
+  int itemPathInFlight = 0;
+  int itemPathPeakInFlight = 0;
+
+  /// 每个请求完成前要等待的窗口；非零时才能拉开并发观测。
+  Duration itemPathLatency = Duration.zero;
+
+  /// 按集合返回不同条目（默认所有集合共用 [collectionItemsPayload]）。
+  Map<String, List<Map<String, dynamic>>>? itemPathPayloadById;
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchNodeMediaCollectionItems({
+    required String nodeId,
+    required String collectionId,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    lastProgressCallback = onReceiveProgress;
+    itemPathRequestedIds.add(collectionId);
+    itemPathInFlight++;
+    if (itemPathInFlight > itemPathPeakInFlight) {
+      itemPathPeakInFlight = itemPathInFlight;
+    }
+    try {
+      if (itemPathLatency > Duration.zero) {
+        await Future<void>.delayed(itemPathLatency);
+      }
+      if (itemPathFailingIds.contains(collectionId)) {
+        throw StateError('节点繁忙');
+      }
+      return itemPathPayloadById?[collectionId] ?? collectionItemsPayload;
+    } finally {
+      itemPathInFlight--;
+    }
+  }
+
   @override
   Future<List<Map<String, dynamic>>> fetchNodeMediaFolders(
     NodeEndpoint node,
@@ -51,16 +92,6 @@ class _StubNodeSettingsService extends NodeSettingsService {
     NodeEndpoint node,
   ) async {
     return smartFoldersPayload;
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchNodeMediaCollectionItems({
-    required String nodeId,
-    required String collectionId,
-    ProgressCallback? onReceiveProgress,
-  }) async {
-    lastProgressCallback = onReceiveProgress;
-    return collectionItemsPayload;
   }
 }
 
@@ -86,6 +117,12 @@ media_api.MediaCollection col(
     createdAt: createdAt,
     updatedAt: updatedAt,
   );
+}
+
+/// 写入搜索词并立刻生效：搜索用例关心的是筛选结果本身，不该等防抖窗口。
+void typeSearch(MediaLibraryViewModel vm, String value) {
+  vm.searchQuery.value = value;
+  vm.applySearchQueryNow();
 }
 
 media_api.MediaFolder folder(
@@ -359,7 +396,177 @@ void main() {
     });
   });
 
+  // ── 搜索输入防抖 ──────────────────────────────────────────────────────────
+
+  group('搜索输入防抖', () {
+    test('输入途中不落词，停手超过防抖窗口才交给深度搜索', () async {
+      vm.collections.assignAll([
+        col('a', title: '同人', folderId: null),
+        col('b', title: '其他', folderId: null),
+      ]);
+      vm.searchQuery.value = '同人';
+      expect(vm.appliedSearchQuery.value, '', reason: '刚敲下就该等一会，不立刻搜');
+      expect(vm.visibleItems.map((i) => i.id), unorderedEquals(['a', 'b']));
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(vm.appliedSearchQuery.value, '同人');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['a']);
+    });
+
+    test('连续输入只应用最后一次，中途的查询词被重新排期', () async {
+      vm.searchQuery.value = '咖';
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      vm.searchQuery.value = '咖啡';
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(vm.appliedSearchQuery.value, '', reason: '第一个窗口未到点就被重排');
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(vm.appliedSearchQuery.value, '咖啡');
+    });
+
+    test('清空立即生效；回车跳过防抖窗口', () async {
+      vm.searchQuery.value = '咖啡';
+      vm.applySearchQueryNow();
+      expect(vm.appliedSearchQuery.value, '咖啡');
+
+      vm.searchQuery.value = '';
+      expect(vm.appliedSearchQuery.value, '', reason: '删完字不该再等一个窗口');
+    });
+
+    test('相似查找会同步清掉待落词的搜索输入', () async {
+      vm.searchQuery.value = '咖啡';
+      vm.startSimilarSearch(col('a', title: '同人'));
+      expect(vm.searchQuery.value, '');
+      expect(vm.appliedSearchQuery.value, '');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(vm.appliedSearchQuery.value, '', reason: '过期定时器不能再把旧词写回去');
+      expect(vm.similarSearchQuery.value, '同人');
+    });
+  });
+
+  // ── 进入集合时收起浏览层搜索词 ────────────────────────────────────────────
+
+  group('集合内容不受浏览搜索词筛选', () {
+    test('搜索命中集合后进入集合，资源列表展示全量', () async {
+      vm.collections.assignAll([col('c1', title: '同人', folderId: null)]);
+      typeSearch(vm, '同人');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['c1']);
+
+      await vm.enterCollection('c1');
+      vm.currentItems.assignAll([
+        item('p1', title: 'holiday.jpg', collectionId: 'c1'),
+        item('p2', title: '其他.jpg', collectionId: 'c1'),
+      ]);
+      expect(vm.appliedSearchQuery.value, isEmpty, reason: '搜索词该让位给集合内容');
+      expect(vm.sortedCurrentItems.map((i) => i.id).toSet(), {'p1', 'p2'});
+
+      // 集合内重新输入，照常按文件名筛
+      typeSearch(vm, 'holiday');
+      expect(vm.sortedCurrentItems.map((i) => i.id).toList(), ['p1']);
+
+      // 退出集合：搜索词与搜索结果一起回来
+      vm.exitCollection();
+      expect(vm.searchQuery.value, '同人');
+      expect(vm.appliedSearchQuery.value, '同人');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['c1']);
+    });
+
+    test('没搜索时进出集合不改动搜索态', () async {
+      vm.collections.assignAll([col('c1', folderId: null)]);
+      await vm.enterCollection('c1');
+      expect(vm.searchQuery.value, isEmpty);
+      vm.exitCollection();
+      expect(vm.appliedSearchQuery.value, isEmpty);
+      expect(vm.searchQuery.value, isEmpty);
+    });
+
+    test('集合内清除只丢文件名筛选，不丢暂存的浏览层搜索词', () async {
+      typeSearch(vm, '同人');
+      await vm.enterCollection('c1');
+      typeSearch(vm, 'holiday');
+      vm.clearSearch();
+      expect(vm.appliedSearchQuery.value, isEmpty);
+      vm.exitCollection();
+      expect(vm.appliedSearchQuery.value, '同人');
+    });
+
+    test('相似查找走清除搜索，不与普通搜索叠加', () {
+      typeSearch(vm, '咖啡');
+      vm.startSimilarSearch(col('x', title: '夏日'));
+      expect(vm.appliedSearchQuery.value, isEmpty);
+      expect(vm.similarSearchQuery.value, '夏日');
+    });
+
+    test('搜索命中的文件夹点进去看到全部子项，不再被筛成空白', () {
+      vm.folders.assignAll([folder('f1', name: '夏日旅行')]);
+      vm.collections.assignAll([
+        col('c1', title: '第一晚', folderId: 'f1'),
+        col('c2', title: '海边', folderId: 'f1'),
+      ]);
+      typeSearch(vm, '夏日');
+      // 命中靠的是文件夹名，其子集合标题都不含该词
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['f1']);
+
+      vm.enterFolder('f1');
+      expect(vm.appliedSearchQuery.value, isEmpty, reason: '搜索词该让位给文件夹内容');
+      expect(vm.visibleItems.map((i) => i.id).toSet(), {'c1', 'c2'});
+
+      // 返回上一层：搜索词与搜索结果一起回来
+      vm.exitFolder();
+      expect(vm.searchQuery.value, '夏日');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['f1']);
+    });
+
+    test('连续下钻只在收起那一层恢复，中间层保持全量', () {
+      vm.folders.assignAll([
+        folder('f1', name: '夏日旅行'),
+        folder('f2', name: '第一天', parentId: 'f1'),
+      ]);
+      vm.collections.assignAll([
+        col('c1', title: '早餐', folderId: 'f1'),
+        col('c2', title: '车票', folderId: 'f2'),
+      ]);
+      typeSearch(vm, '夏日');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['f1']);
+
+      vm.enterFolder('f1');
+      expect(vm.visibleItems.map((i) => i.id).toSet(), {'c1', 'f2'});
+      vm.enterFolder('f2');
+      expect(vm.appliedSearchQuery.value, isEmpty);
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['c2']);
+
+      // 回到中间层 f1 仍看全量，搜索词要等到回到它录入的根层才露面
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'f1');
+      expect(vm.appliedSearchQuery.value, isEmpty);
+      expect(vm.visibleItems.map((i) => i.id).toSet(), {'c1', 'f2'});
+
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, isNull);
+      expect(vm.appliedSearchQuery.value, '夏日');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['f1']);
+    });
+
+    test('面包屑跳回搜索录入层：结果当场回来', () {
+      vm.folders.assignAll([
+        folder('f1', name: '夏日旅行'),
+        folder('f2', name: '第一天', parentId: 'f1'),
+      ]);
+      typeSearch(vm, '夏日');
+      vm.enterFolder('f1');
+      vm.enterFolder('f2');
+      expect(vm.appliedSearchQuery.value, isEmpty);
+
+      // 面包屑直接跳回根层（id 传 null 走的是 exitToRoot，这里模拟点击祖先层级）
+      vm.exitToRoot();
+      expect(vm.appliedSearchQuery.value, '夏日');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['f1']);
+    });
+  });
+
   // ── 智能文件夹 ID 解析与导航上下文 ────────────────────────────────────────
+
+
 
   group('智能文件夹 ID 与导航', () {
     test('isSmartFolder / isRemoteSmartFolder / remoteSmartFolderNodeId', () {
@@ -567,9 +774,9 @@ void main() {
     });
 
     test('searchQuery 非空时按标题（忽略大小写）过滤', () {
-      vm.searchQuery.value = 'PAGE2';
+      typeSearch(vm, 'PAGE2');
       expect(vm.sortedCurrentItems.map((i) => i.id).toList(), ['p2']);
-      vm.searchQuery.value = '';
+      typeSearch(vm, '');
       expect(vm.sortedCurrentItems.length, 3);
     });
   });
@@ -588,17 +795,17 @@ void main() {
       ]);
       vm.currentFolderId.value = null;
 
-      vm.searchQuery.value = 'holiday';
+      typeSearch(vm, 'holiday');
       final byFolder = vm.visibleItems;
       expect(byFolder.map((i) => i.id).toList(), ['f1']);
 
-      vm.searchQuery.value = 'christmas';
+      typeSearch(vm, 'christmas');
       expect(vm.visibleItems.map((i) => i.id).toList(), ['c1']);
 
       // 子孙文件夹内的集合也在搜索范围内
-      vm.searchQuery.value = '日常';
+      typeSearch(vm, '日常');
       expect(vm.visibleItems.map((i) => i.id).toList(), ['c2']);
-      vm.searchQuery.value = '';
+      typeSearch(vm, '');
     });
 
     test('远程集合按资源文件名匹配（路径缓存异步补齐，Windows 分隔符兼容）', () async {
@@ -611,7 +818,7 @@ void main() {
         {'id': 'i1', 'file_path': 'C:\\pics\\Holiday2.jpg'},
       ];
       vm.currentFolderId.value = null;
-      vm.searchQuery.value = 'holiday2';
+      typeSearch(vm, 'holiday2');
 
       // 第一轮：路径未加载，文件名命中不了
       final round1 = vm.visibleItems;
@@ -624,6 +831,84 @@ void main() {
         round2.where((i) => i.id == 'remote-media:node-a:rc1').length,
         1,
       );
+    });
+
+    test('远程条目预热限速：在飞请求不超并发上限，每个集合只请求一次', () async {
+      await mountNodeAndRefresh(
+        collections: [
+          for (var i = 0; i < 10; i++)
+            {'id': 'rc$i', 'title': '无关标题$i', 'folder_path': '/node/rc$i'},
+        ],
+      );
+      nodeService
+        ..itemPathLatency = const Duration(milliseconds: 10)
+        ..collectionItemsPayload = [
+          {'id': 'i1', 'file_path': 'C:\\pics\\nothing.jpg'},
+        ];
+      vm.currentFolderId.value = null;
+      typeSearch(vm, 'needle');
+
+      // 深度搜索扫到 10 个远程集合都不命中，各自需要条目路径
+      expect(vm.visibleItems, isEmpty);
+      // 预热途中网格会因首批到货重算（真实场景里就是不断重建的 UI），
+      // 已在队列/在飞/已成缓存的集合都不该被重新排队
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      vm.collectionSortOrder.value = CollectionSortOrder.nameDesc;
+      expect(vm.visibleItems, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      // 齐发会把节点打到 503：同时在飞的不该超过并发上限（当前实现为 4）
+      expect(nodeService.itemPathPeakInFlight, lessThanOrEqualTo(4));
+      // 重算途中不该把同一个集合反复排队
+      expect(nodeService.itemPathRequestedIds.toSet().length, 10);
+      expect(nodeService.itemPathRequestedIds.length, 10);
+    });
+
+    test('预热失败的集合本轮不再重试（负缓存挡住重排队）', () async {
+      await mountNodeAndRefresh(
+        collections: [
+          {'id': 'rcbad', 'title': '无关标题', 'folder_path': '/node/rcbad'},
+        ],
+      );
+      nodeService.itemPathFailingIds.add('rcbad');
+      vm.currentFolderId.value = null;
+      typeSearch(vm, 'needle');
+
+      expect(vm.visibleItems, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // 同一次搜索内反复重算浏览网格（换排序口径即丢派生缓存），失败集合不该再打节点
+      vm.collectionSortOrder.value = CollectionSortOrder.nameDesc;
+      expect(vm.visibleItems, isEmpty);
+      vm.collectionSortOrder.value = CollectionSortOrder.dateUpdated;
+      expect(vm.visibleItems, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(nodeService.itemPathRequestedIds, ['rcbad']);
+
+      // 换新查询词算新一轮：瞬时的节点过载值得再试一次
+      typeSearch(vm, 'needle2');
+      expect(vm.visibleItems, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(nodeService.itemPathRequestedIds, ['rcbad', 'rcbad']);
+    });
+
+    test('退出搜索后停止预热：队列丢掉，不再继续打节点', () async {
+      await mountNodeAndRefresh(
+        collections: [
+          for (var i = 0; i < 10; i++)
+            {'id': 'rc$i', 'title': '无关标题$i', 'folder_path': '/node/rc$i'},
+        ],
+      );
+      nodeService.itemPathLatency = const Duration(milliseconds: 20);
+      vm.currentFolderId.value = null;
+      typeSearch(vm, 'needle');
+      expect(vm.visibleItems, isEmpty);
+
+      // 首批已在飞，此时收起搜索词（进集合看内容也走这一步）
+      typeSearch(vm, '');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(nodeService.itemPathRequestedIds.length, lessThanOrEqualTo(4));
     });
   });
 
@@ -649,9 +934,10 @@ void main() {
     });
 
     test('startSimilarSearch 与 searchQuery 互斥', () {
-      vm.searchQuery.value = 'abc';
+      typeSearch(vm, 'abc');
       vm.startSimilarSearch(col('x', title: '夏日 旅行'));
       expect(vm.searchQuery.value, isEmpty);
+      expect(vm.appliedSearchQuery.value, isEmpty);
       expect(vm.isSearchActive.value, isFalse);
       expect(vm.similarSearchQuery.value, '夏日 旅行');
       vm.clearSimilarSearch();

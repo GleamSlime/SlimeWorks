@@ -12,6 +12,7 @@ import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class LibraryFolderCard extends StatefulWidget {
   final NovelFolder folder;
@@ -139,7 +140,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
       context: ctx,
       builder: (dlgCtx) => AlertDialog(
         title: const Text('重命名文件夹'),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(hintText: '请输入文件夹名称', border: OutlineInputBorder()),
@@ -378,7 +379,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: appMetrics.kSpace8),
                       child: _isEditing
-                          ? TextField(
+                          ? AppTextField(
                               controller: _editController,
                               focusNode: _editFocusNode,
                               textAlign: TextAlign.center,

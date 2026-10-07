@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:path_drawing/path_drawing.dart';
 
 import '../kit.dart';
+import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 3 号表单浮层：长到 192 的面板外面再套一圈 4px 灰框，交完表整张卡换掉
 ///
@@ -469,7 +470,7 @@ class _Case03PopoverFormState extends State<Case03PopoverForm> with SingleTicker
                                     opacity: 0,
                                     child: Material(
                                       type: MaterialType.transparency,
-                                      child: TextField(
+                                      child: AppTextField(
                                         focusNode: _fieldFocus,
                                         controller: _editor,
                                         maxLines: null,
