@@ -1146,8 +1146,9 @@ class NodeSettingsService extends GetxService {
       nodeConnectivity[nodeId] = true;
       nodeConnectivityError[nodeId] = '';
     } on DioException catch (e) {
-      _logger.error('归档上传失败: $nodeId | $zipPath', error: e);
-      rethrow;
+      final business = _nodeBusinessError(e);
+      _logger.error('归档上传失败: $nodeId | $zipPath', error: business ?? e);
+      throw business ?? e;
     }
   }
 
@@ -1186,8 +1187,9 @@ class NodeSettingsService extends GetxService {
       }
       throw Exception((body['error'] ?? '上传失败').toString());
     } on DioException catch (e) {
-      _logger.error('媒体上传失败: $nodeId | $filename', error: e);
-      rethrow;
+      final business = _nodeBusinessError(e);
+      _logger.error('媒体上传失败: $nodeId | $filename', error: business ?? e);
+      throw business ?? e;
     }
   }
 
@@ -1490,8 +1492,12 @@ class NodeSettingsService extends GetxService {
       }
     }
 
-    final error = lastError ?? Exception('节点请求失败');
-    nodeConnectivityError[node.id] = _isUnauthorizedError(error) ? '授权码错误，请核对节点授权码' : error.toString();
+    final rawError = lastError ?? Exception('节点请求失败');
+    // 5xx 业务失败在传输层只是 DioException：出口处换成节点原文，日志与提示才能说清原因
+    final error = rawError is DioException
+        ? (_nodeBusinessError(rawError) ?? rawError)
+        : rawError;
+    nodeConnectivityError[node.id] = _isUnauthorizedError(rawError) ? '授权码错误，请核对节点授权码' : error.toString();
     _logger.error(
       '节点请求失败: ${node.name} $action | URLs=${candidateUrls.join(' , ')}',
       error: error,
@@ -1502,11 +1508,11 @@ class NodeSettingsService extends GetxService {
     // 单个 action 超时不等于节点不可用：一上来就把整节点标成离线，会让下一次离线复探
     // 把它当成待恢复节点多刷一轮全库（实测在启动预热那一轮就这么白刷了一次）。
     final isNetworkTimeout =
-        error is DioException &&
-        (error.type == DioExceptionType.connectionTimeout ||
-            error.type == DioExceptionType.connectionError ||
-            error.type == DioExceptionType.receiveTimeout ||
-            error.type == DioExceptionType.sendTimeout);
+        rawError is DioException &&
+        (rawError.type == DioExceptionType.connectionTimeout ||
+            rawError.type == DioExceptionType.connectionError ||
+            rawError.type == DioExceptionType.receiveTimeout ||
+            rawError.type == DioExceptionType.sendTimeout);
     if (isNetworkTimeout && !_circuitBreakedNodes.contains(node.id)) {
       final probeTrace = TimingTrace('失败后快速探测', scope: node.name);
       final probeOk = await _quickProbeNode(node);
@@ -1605,6 +1611,28 @@ class NodeSettingsService extends GetxService {
   bool _isNodeBusyError(DioException error) {
     final status = error.response?.statusCode;
     return status == 503 || status == 429;
+  }
+
+  /// 从 HTTP 失败的响应体里还原节点写给用户的 error 文案；不是这种形状返回 null。
+  ///
+  /// 节点把业务失败写成 HTTP 5xx + `{"success":false,"error":"…"}`，而 Dio 默认的
+  /// validateStatus 会先把这类响应抛成 DioException，文案就丢在响应体里没人看：
+  /// 日志只剩一句「status code of 500」，调用方按节点文案做的判断（比如远程导入
+  /// 时认「该文件夹已导入」做去重）也永远不会命中，用户只能看到「请检查磁盘」。
+  ///
+  /// 只处理 5xx：401 的授权码判定、503/429 的「节点忙」背压重试与熔断判定读的都是
+  /// DioException 的状态码语义，那些路径保持原样。
+  Exception? _nodeBusinessError(DioException e) {
+    final response = e.response;
+    final status = response?.statusCode;
+    if (status == null || status < 500 || status == HttpStatus.serviceUnavailable) {
+      return null;
+    }
+    final data = response!.data;
+    if (data is! Map) return null;
+    final message = data['error']?.toString().trim();
+    if (message == null || message.isEmpty) return null;
+    return NodeBusinessException(status, message);
   }
 
   String _baseUrlFromNodeCallUrl(String url) {
@@ -1853,6 +1881,24 @@ class NodeSettingsService extends GetxService {
     }
     return null;
   }
+}
+
+/// 节点业务失败异常：HTTP 状态是 5xx/4xx，但响应体里带着节点写给用户的错误文案。
+///
+/// 之所以不复用 DioException：Dio 的默认 validateStatus 会在读到业务文案之前先抛出
+/// 一大段「status code of 500 …」的样板文本，调用方想按文案判断（例如远程导入时认
+/// 「该文件夹已导入」做去重）根本无从下手。这个类型只带节点原文与状态码。
+class NodeBusinessException implements Exception {
+  const NodeBusinessException(this.statusCode, this.message);
+
+  /// 节点回应的 HTTP 状态码。
+  final int statusCode;
+
+  /// 节点响应体里的 error 字段原文。
+  final String message;
+
+  @override
+  String toString() => '节点返回失败(HTTP $statusCode): $message';
 }
 
 /// 节点连通性探测结果：区分"不在线"和"在线但授权码不对"。

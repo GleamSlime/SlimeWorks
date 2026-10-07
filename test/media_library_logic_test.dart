@@ -8,6 +8,8 @@
 //   buildNodeMediaUrl / enabledRemoteNodes 等纯逻辑仍用真实实现。
 // - 任何会触达 media_api（FRB）的调用都被 VM 自身的 try/catch 吞掉，
 //   个别用例专门验证"FFI 不可用时错误被兜住"。
+import 'dart:io';
+
 import 'package:dio/dio.dart' show ProgressCallback;
 import 'package:flutter_test/flutter_test.dart';
 // assignAll 等 Rx 集合扩展由 get 包提供（VM 内部同样依赖该扩展）
@@ -1769,6 +1771,40 @@ void main() {
   });
 
   // ── 排序枚举 label ─────────────────────────────────────────────────────────
+
+  // ── 远程拖拽上传：空目录预判 ──────────────────────────────────────────────
+
+  group('dirHasAnyFile', () {
+    Future<String> tempDir() async =>
+        (await Directory.systemTemp.createTemp('sw_upload_probe_')).path;
+
+    test('空目录与只有空子目录的目录都算「没有文件」', () async {
+      final empty = await tempDir();
+      addTearDown(() => Directory(empty).deleteSync(recursive: true));
+      expect(await vm.dirHasAnyFile(empty), isFalse);
+
+      // Telegram 里已被清空的相册常剩一层空分卷目录：上传过去只会让节点报个看不懂的错
+      final subOnly = await tempDir();
+      addTearDown(() => Directory(subOnly).deleteSync(recursive: true));
+      await Directory('$subOnly${Platform.pathSeparator}sub').create();
+      expect(await vm.dirHasAnyFile(subOnly), isFalse);
+    });
+
+    test('深处的文件也算「有文件」', () async {
+      final withFile = await tempDir();
+      addTearDown(() => Directory(withFile).deleteSync(recursive: true));
+      final deep = Directory('$withFile${Platform.pathSeparator}a${Platform.pathSeparator}b');
+      await deep.create(recursive: true);
+      await File('${deep.path}${Platform.pathSeparator}1.jpg').writeAsBytes(<int>[1]);
+
+      expect(await vm.dirHasAnyFile(withFile), isTrue);
+    });
+
+    test('目录读不到时不武断判空：交给原有失败分支去报告', () async {
+      final missing = '${Directory.systemTemp.path}${Platform.pathSeparator}sw_no_such_dir_xyz';
+      expect(await vm.dirHasAnyFile(missing), isTrue);
+    });
+  });
 
   group('排序枚举', () {
     test('MediaItemSortOrder / CollectionSortOrder 每个成员都有非空中文 label', () {

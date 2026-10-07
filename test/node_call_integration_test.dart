@@ -128,6 +128,41 @@ void main() {
       expect(service.nodeConnectivityError['node-a'], contains('集合不存在'));
     });
 
+    test('节点把业务失败写成 HTTP 500 时也要还原 error 文案', () async {
+      // 真实节点（node_server）对业务失败回的是 500 + {"success":false,"error":"…"}，
+      // 而 Dio 的默认 validateStatus 会先把这种响应抛成 DioException：文案一旦丢在
+      // 响应体里，日志就只剩「status code of 500」，调用方按文案做的「已导入」去重
+      // 也永远命中，用户只能看到一句没根据的「请检查磁盘空间」。
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      server.responder = (req) => req.action == 'import_media_folder'
+          ? FakeNodeReply(
+              statusCode: HttpStatus.internalServerError,
+              json: <String, dynamic>{
+                'success': false,
+                'error': '该文件夹已导入: /Volumes/T22/图/图集/空相册',
+              },
+            )
+          : FakeNodeReply.successData(<String, dynamic>{});
+
+      Object? caught;
+      try {
+        await service.callNodeAction(
+          nodeId: 'node-a',
+          action: 'import_media_folder',
+          params: <String, dynamic>{'folder_path': '/Volumes/T22/图/图集/空相册'},
+        );
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught, isNotNull);
+      expect(caught, isNot(isA<DioException>()));
+      expect(caught.toString(), contains('该文件夹已导入'));
+      expect(service.nodeConnectivityError['node-a'], contains('该文件夹已导入'));
+      expect(service.isNodeCircuitBreaked('node-a'), isFalse);
+    });
+
     test('fetchNodeNovels 复用同一条链路并把 data 转成 List<Map>', () async {
       final service = await createService();
       final node = mountNode(service, apiBaseUrl: server.baseUrl);

@@ -782,6 +782,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     int fail = 0;
     int skippedDuplicate = 0;
     int noValidMedia = 0;
+    // 最后一次失败的原文：全失败时把它写进提示，替掉「请检查磁盘空间」这种瞎猜
+    String? lastFailure;
+    // 本地就是空目录、压根没上传的（节点无从报错，得由客户端说清楚）
+    final emptyDirs = <String>[];
     int index = 0;
     for (final dir in dirPaths) {
       index++;
@@ -789,6 +793,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final stage = '$dirName ($index/${dirPaths.length})';
       String? zipPath;
       try {
+        // 空目录在本地就挡掉：上传过去一个文件都没有，节点导入直接报错，
+        // 客户端只能回一句「请检查磁盘空间」——实测 Telegram 里已清空的相册就是这样被误诊的。
+        if (!await dirHasAnyFile(dir)) {
+          emptyDirs.add(dirName);
+          _logger.info('[拖拽] 远程目录为空，跳过上传: $dir');
+          continue;
+        }
         scanStatusText.value = '打包: $stage';
         zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir, entryRoot: dirName);
 
@@ -830,6 +841,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           _logger.info('[拖拽] 远程目录已导入，跳过: $dir');
         } else {
           fail++;
+          lastFailure = errorMsg;
           _logger.error('[拖拽] 远程导入失败: $dir => $e');
         }
       } finally {
@@ -846,16 +858,25 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
 
     final skippedMsg = skippedDuplicate > 0 ? '（$skippedDuplicate 个已导入跳过）' : '';
+    final emptyMsg = emptyDirs.isNotEmpty ? '，${emptyDirs.length} 个空文件夹未上传' : '';
     if (success > 0 && fail == 0) {
-      showSnack('成功', '已上传并导入 $success 个文件夹$skippedMsg');
+      showSnack('成功', '已上传并导入 $success 个文件夹$skippedMsg$emptyMsg');
     } else if (success > 0) {
-      showSnack('部分完成', '成功 $success 个，失败 $fail 个$skippedMsg');
+      showSnack('部分完成', '成功 $success 个，失败 $fail 个$skippedMsg$emptyMsg');
     } else if (skippedDuplicate > 0) {
-      showSnack('提示', '$skippedDuplicate 个文件夹已导入，无需重复操作');
+      showSnack('提示', '$skippedDuplicate 个文件夹已导入，无需重复操作$emptyMsg');
     } else if (noValidMedia > 0) {
-      showSnack('提示', '已上传 $noValidMedia 个目录，但未发现有效媒体文件');
+      showSnack('提示', '已上传 $noValidMedia 个目录，但未发现有效媒体文件$emptyMsg');
+    } else if (emptyDirs.isNotEmpty) {
+      final names = emptyDirs.length <= 2 ? emptyDirs.join('、') : '${emptyDirs.length} 个文件夹';
+      showSnack('提示', '$names 是空目录，没有可上传的文件');
     } else {
-      showSnack('失败', '上传导入失败，请检查节点连接与磁盘空间');
+      // 节点原文优先：它说的是这次导入真正的死因，比笼统的「检查磁盘空间」有用得多
+      final reason = lastFailure;
+      final brief = reason == null
+          ? ''
+          : (reason.length > 120 ? '${reason.substring(0, 120)}…' : reason);
+      showSnack('失败', brief.isEmpty ? '上传导入失败' : '上传导入失败$brief');
     }
   }
 
@@ -914,6 +935,21 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     } catch (_) {
       // 临时文件删不掉交给系统清理，不打断导入流程
     }
+  }
+
+  /// 目录里是否至少有一个文件（深处的也算，找到一个就返回）。
+  ///
+  /// 读不动目录（权限、坏链接）时按「有内容」处理，让原有的失败分支去报告，
+  /// 不在这里替用户武断地判定「这个文件夹是空的」。
+  Future<bool> dirHasAnyFile(String dir) async {
+    try {
+      await for (final entity in Directory(dir).list(recursive: true, followLinks: false)) {
+        if (entity is File) return true;
+      }
+    } catch (_) {
+      return true;
+    }
+    return false;
   }
 
   /// 从相册/文件系统选取媒体，上传到当前远程集合。

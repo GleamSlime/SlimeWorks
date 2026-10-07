@@ -96,6 +96,9 @@ class _MediaItemTileState extends State<MediaItemTile> {
   // 缩略图请求后台继续生成；超时后临时切原图，生成完成再切回缩略图。
   bool _coverFallbackActive = false;
   bool _coverThumbReady = false;
+
+  /// 预取缩略图失败（节点忙回 503、原图已丢等）：与「成功但还没解码完」区分开。
+  bool _coverPrecacheFailed = false;
   Timer? _coverFallbackTimer;
 
   @override
@@ -138,6 +141,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
         oldWidget.coverFallbackSource != widget.coverFallbackSource) {
       _coverFallbackActive = false;
       _coverThumbReady = false;
+      _coverPrecacheFailed = false;
       _coverFallbackTimer?.cancel();
       _coverFallbackTimer = null;
       WidgetsBinding.instance.addPostFrameCallback((_) => _prepareCoverFallback());
@@ -161,22 +165,30 @@ class _MediaItemTileState extends State<MediaItemTile> {
       return;
     }
     _coverThumbReady = false;
-    // 后台预取缩略图（不阻塞 UI），完成后切回缩略图
-    precacheImage(NetworkImage(src), context)
-        .then((_) {
-          _coverFallbackTimer?.cancel();
-          if (!mounted) return;
-          setState(() {
-            _coverThumbReady = true;
-            _coverFallbackActive = false;
-          });
-        })
-        .catchError((_) {
-          // 缩略图生成失败：直接改用原图兜底
-          _coverFallbackTimer?.cancel();
-          if (!mounted) return;
-          setState(() => _coverFallbackActive = true);
-        });
+    _coverPrecacheFailed = false;
+    // 后台预取缩略图（不阻塞 UI），完成后切回缩略图。
+    // onError 必须显式给：不传时 precacheImage 会把加载失败上报给 FlutterError，
+    // 节点并发打满回 503 时整屏卡片各报一条，日志全是这类噪声；而它一旦给了，
+    // 失败的 Future 也会正常完成，所以成功分支要靠 _coverPrecacheFailed 挡掉。
+    precacheImage(
+      NetworkImage(src),
+      context,
+      onError: (_, _) {
+        // 缩略图生成失败：直接改用原图兜底
+        _coverPrecacheFailed = true;
+        _coverFallbackTimer?.cancel();
+        if (!mounted) return;
+        setState(() => _coverFallbackActive = true);
+      },
+    ).then((_) {
+      if (_coverPrecacheFailed) return;
+      _coverFallbackTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _coverThumbReady = true;
+        _coverFallbackActive = false;
+      });
+    });
     // 2s 未就绪则临时采用原图
     _coverFallbackTimer?.cancel();
     _coverFallbackTimer = Timer(const Duration(seconds: 2), () {

@@ -131,6 +131,26 @@ void main() {
       );
     });
 
+    test('HTTP 500 + 业务错误体：抛出的是节点原文而不是 DioException', () async {
+      // 上传端点失败同样回 5xx + {"success":false,"error":"…"}（解压失败、落盘失败等）
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      server.responder = (req) => FakeNodeReply(
+        statusCode: HttpStatus.internalServerError,
+        json: <String, dynamic>{'success': false, 'error': '解压失败: 归档损坏'},
+      );
+      final zipPath = '${tempDir.path}/d.zip';
+      await File(zipPath).writeAsBytes(Uint8List.fromList(<int>[1, 2, 3, 4]));
+
+      await expectLater(
+        service.uploadArchiveToNode(nodeId: 'node-a', zipPath: zipPath, destDir: '/dest'),
+        throwsA(
+          isA<Exception>()
+              .having((e) => e.toString(), 'message', contains('解压失败: 归档损坏')),
+        ),
+      );
+    });
+
     test('熔断且节点仍不可达时上传前即抛，reset 后恢复可上传', () async {
       final service = await createService();
       mountNode(service, apiBaseUrl: server.baseUrl);
