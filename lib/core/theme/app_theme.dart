@@ -551,13 +551,16 @@ class AppTheme {
         // M3 下菜单项文字走 labelTextStyle，textStyle 只参与旧渲染路径；两处都写，
         // 免得一改 useMaterial3 就发现菜单字号又飘回 SDK 默认值。
         // 字族由 _font 统一补，见其注释。
+        // 字号必须走 metrics 而不是裸 scaleS：右键菜单挂在资源卡上，卡片标题是
+        // metrics.fontSize13（含用户字号），这里用 scaleS(13) 的话字号滑杆一拉，
+        // 菜单文字就比它服务的那张卡小一圈。行高同理是下限，不会挤。
         textStyle: _font(TextStyle(
-          fontSize: scaleS(13),
+          fontSize: m.fontSize13,
           color: s.textPrimary,
         )),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => _font(TextStyle(
-            fontSize: scaleS(13),
+            fontSize: m.fontSize13,
             fontWeight: FontWeight.w500,
             height: 1.25,
             color: states.contains(WidgetState.disabled)

@@ -2755,6 +2755,8 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
 /// 删除集合内所有媒体文件的物理文件，返回已删除的文件数量。
 /// 资源清完后顺带清理该集合目录树内的 `.SlimeWorks` 缓存目录，集合目录因此变空时
 /// 连目录一起删（只删集合目录自身，不碰上级目录）。
+/// 条目记录刻意留在库里（集合仍是目录册），但聚合表的 live 体积/条数会重算成
+/// 「磁盘上还剩多少」，读路径据此展示。
 pub fn delete_collection_local_files(collection_id: String) -> Result<usize, String> {
     let items = get_media_collection_items(collection_id.clone())?;
     let mut deleted_count = 0;
@@ -2780,7 +2782,55 @@ pub fn delete_collection_local_files(collection_id: String) -> Result<usize, Str
     // 即使一个文件都没删到（DB 有记录但文件早已被外部清掉）也要走目录清理，
     // 否则残留的空集合目录和 .SlimeWorks 永远没人收。
     cleanup_collection_physical_dirs(&collection_id);
+    // 文件已经不在了，聚合表里的记录体积却还停在删除前：节点的
+    // `list_media_collections` 只查这张表填 total_size/item_count，
+    // 不在这儿收尾，远程客户端删完文件返回上一级看到的仍是旧体积。
+    if let Err(error) = refresh_collection_live_stats(&collection_id) {
+        sw_warn!("[delete_collection_local_files] 现存体积回写失败: {}", error);
+    }
     Ok(deleted_count)
+}
+
+/// 重算单个集合「磁盘上仍然存在」的体积与条数并回写聚合表。
+///
+/// 全库那趟 stat（`get_all_collection_live_stats`）只有客户端进媒体库时才会跑，
+/// 纯当节点用的机器可能一辈子都没跑过；而删除物理文件正是「磁盘现状变了」的
+/// 写入点，所以由它自己把 live 值写实，读路径才不用再去逐文件 stat。
+///
+/// 聚合表里还没有这个集合时补齐整行（`recorded_size` 取条目记录值合计）：
+/// 只写 live 会留下一行 recorded=0 的半行，节点从未 stat 过的集合会因此显示 0。
+fn refresh_collection_live_stats(collection_id: &str) -> Result<(), String> {
+    let items = get_media_collection_items(collection_id.to_string())?;
+    let mut recorded_size = 0u64;
+    let mut live_size = 0u64;
+    let mut live_count = 0u32;
+    for item in &items {
+        recorded_size += item.file_size;
+        // 口径与全库 stat 一致：只认普通文件，并按磁盘实际长度计
+        if let Ok(meta) = std::fs::metadata(&item.file_path) {
+            if meta.is_file() {
+                live_size += meta.len();
+                live_count += 1;
+            }
+        }
+    }
+    let existing = load_collection_aggregates().remove(collection_id);
+    let aggregate = match existing {
+        Some(current) => CollectionAggregate {
+            live_size: Some(live_size),
+            live_count: Some(live_count),
+            live_checked_at: Some(Utc::now().timestamp()),
+            ..current
+        },
+        None => CollectionAggregate {
+            collection_id: collection_id.to_string(),
+            recorded_size,
+            live_size: Some(live_size),
+            live_count: Some(live_count),
+            live_checked_at: Some(Utc::now().timestamp()),
+        },
+    };
+    persist_collection_aggregates(std::slice::from_ref(&aggregate))
 }
 
 /// 收集 `root` 目录树内**所有** `.SlimeWorks` 缓存目录（广度优先，限深限条目）。
@@ -3712,6 +3762,11 @@ mod tests {
             // edition 2021：set_var 是安全接口；只在 OnceLock 初始化闭包里调用一次，
             // 之后 HOME 永不再变化，DB 用例又全部串行，不存在反复改环境变量的竞态
             std::env::set_var("HOME", &home_path);
+            // Windows 的 app_data_base 读 %APPDATA% 而不是 HOME，只改 HOME 等于
+            // 没隔离：这行 initialize_db 会去开真实用户库（应用正在运行时直接失败，
+            // 空闲时则把用例写在用户数据上）。
+            #[cfg(windows)]
+            std::env::set_var("APPDATA", &home_path);
             initialize_db().expect("隔离 HOME 下 initialize_db 应成功");
             // initialize_db 必须幂等
             initialize_db().expect("initialize_db 应幂等");
@@ -4264,6 +4319,50 @@ mod tests {
             row_count_for_collection(item_table_name(), &collection.id),
             2
         );
+
+        // 但聚合表的现存口径必须跟着磁盘变：节点的 list_media_collections 只读这张表
+        // 填 total_size/item_count，留着删除前的旧值，远程客户端删完文件返回上一级
+        // 看到的就还是原来的文件夹体积。
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id)
+                .expect("删除后应写下聚合记录"),
+        )
+        .unwrap();
+        assert_eq!(stored.live_size, Some(0), "文件全删完，现存体积应为 0");
+        assert_eq!(stored.live_count, Some(0), "文件全删完，现存条数应为 0");
+        assert!(
+            stored.recorded_size > 0,
+            "条目记录仍在库里，recorded 口径不应被清空"
+        );
+        assert_eq!(stored.display_size(), 0, "展示口径应切到现存值");
+
+        assert!(delete_media_collection(collection.id).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 文件早已被外部删掉时（本次一个都没删到），体积口径同样要归位。
+    /// 这条路径正是远程客户端「删完节点本地文件，返回上一级体积没变」的成因：
+    /// 删除数对不上集合条数，客户端判成部分删除而不重取，节点侧也没人改写聚合表。
+    #[test]
+    fn db_delete_collection_local_files_zeroes_live_stats_when_files_already_gone() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("local_files_gone");
+        write_test_image(&root.join("a.bmp"));
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+
+        std::fs::remove_file(root.join("a.bmp")).unwrap();
+        let deleted = delete_collection_local_files(collection.id.clone()).unwrap();
+        assert_eq!(deleted, 0, "文件已不在磁盘上，不应计入删除数");
+
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id)
+                .expect("即使没删到文件也要写下聚合记录"),
+        )
+        .unwrap();
+        assert_eq!(stored.live_size, Some(0));
+        assert_eq!(stored.live_count, Some(0));
+        assert_eq!(stored.display_size(), 0, "展示体积不该再留着已消失的文件");
 
         assert!(delete_media_collection(collection.id).unwrap());
         let _ = std::fs::remove_dir_all(&root);

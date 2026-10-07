@@ -1238,7 +1238,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   /// 删除远程节点上某个集合的本地物理文件。
-  /// 若删除数 ≥ 集合资源数，则同时从库中移除集合记录并清理缓存；
+  /// 删完必须重新取一次节点元数据：体积与条数来自节点侧的聚合表，
+  /// 上一级文件夹卡汇总的正是这份数据，不重取就还是删除前的旧体积。
+  /// 若节点回报该集合已无现存资源，则同时从库中移除集合记录；
   /// 若所属文件夹因此变为空，也一并删除文件夹。
   Future<void> deleteNodeLocalFilesForCollection(String collectionId) async {
     final nodeId = getRemoteNodeId(collectionId);
@@ -1248,7 +1250,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       return;
     }
 
-    final collection = mergedCollections.firstWhereOrNull((c) => c.id == collectionId);
+    final collection = mergedCollections.firstWhereOrNull(
+      (c) => c.id == collectionId,
+    );
     final knownItemCount = collection?.itemCount.toInt() ?? 0;
     final folderId = collection?.folderId;
 
@@ -1258,16 +1262,32 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         nodeId: nodeId,
         rawCollectionId: rawId,
       );
+      // 体积与条数由节点在删除时改写进聚合表，这里必须重取一次才拿得到新值；
+      // 判空也以节点回报的现存条数为准，不再拿本地 itemCount 与删除数硬比大小
+      // （两者本就可能不一致，比不上的话会被误判成「部分删除」，于是整条刷新链都不走，
+      //  上一级文件夹的体积看着一动不动——这就是这个 bug 的成因）。
+      await refreshRemoteLibrary();
+      final stillListed = mergedCollections.firstWhereOrNull(
+        (c) => c.id == collectionId,
+      );
+      final remaining = stillListed?.itemCount.toInt() ?? 0;
+      // 旧版节点删完不改聚合表，回报的仍是删除前的条数，只能沿用删除数比对兜底
+      final cleanedByCount = deleted > 0 && deleted >= knownItemCount;
 
-      if (deleted > 0 && deleted >= knownItemCount) {
+      if (remaining == 0 || cleanedByCount) {
         // 全部文件已删，清理图片缓存
         _invalidateCollectionMediaCache(collectionId);
-        // 从节点 DB 和本地 UI 移除集合记录
-        await deleteCollection(collectionId);
+        // 节点列表已不再回报该集合时（集合记录早没了）只清本地视图，
+        // 再调 deleteCollection 会因为映射缺失而报「删除集合失败」。
+        if (stillListed != null) {
+          await deleteCollection(collectionId);
+        }
         // 检查所属文件夹是否因此变空
         if (folderId != null) {
-          final remaining = mergedCollections.where((c) => c.folderId == folderId).length;
-          if (remaining == 0) {
+          final inFolder = mergedCollections.where(
+            (c) => c.folderId == folderId,
+          ).length;
+          if (inFolder == 0) {
             await deleteFolder(folderId);
             showSnack('完成', '已删除全部文件，集合及空文件夹已移除');
           } else {
@@ -1277,7 +1297,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           showSnack('完成', '已删除全部文件，集合已从库中移除');
         }
       } else {
-        showSnack('完成', '已删除节点上 $deleted 个文件');
+        showSnack('完成', '已删除节点上 $deleted 个文件，集合还剩 $remaining 项');
       }
     } catch (e) {
       showSnack('错误', '删除节点本地文件失败: $e');
@@ -1296,7 +1316,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   /// 删除远程节点上某个文件夹内所有集合的本地物理文件。
-  /// 每个集合全部删完后自动移除集合记录；文件夹变空后自动删除文件夹。
+  /// 全部删完后统一重取一次节点元数据（体积/条数来自节点侧聚合表，不重取就是旧值），
+  /// 再把节点已无现存资源的集合移出库；文件夹变空后自动删除文件夹。
   Future<void> deleteNodeLocalFilesForFolder(String folderId) async {
     final nodeId = getRemoteFolderNodeId(folderId);
     if (nodeId == null) {
@@ -1314,33 +1335,71 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
 
     isScanning.value = true;
-    int totalDeleted = 0;
+    final deletedByCollection = <String, int>{};
     int fullyCleanedCount = 0;
-    for (final collection in folderCollections) {
-      final rawId = getRemoteRawCollectionId(collection.id);
-      if (rawId == null) continue;
-      try {
-        final deleted = await nodeSettingsService.deleteNodeCollectionLocalFiles(
-          nodeId: nodeId,
-          rawCollectionId: rawId,
+    // 删除前先记下各集合的条数：旧版节点删完不改聚合表，判空只能靠它兜底
+    final itemsBefore = {
+      for (final collection in folderCollections)
+        collection.id: collection.itemCount.toInt(),
+    };
+    try {
+      for (final collection in folderCollections) {
+        final rawId = getRemoteRawCollectionId(collection.id);
+        if (rawId == null) continue;
+        try {
+          deletedByCollection[collection.id] =
+              await nodeSettingsService.deleteNodeCollectionLocalFiles(
+                nodeId: nodeId,
+                rawCollectionId: rawId,
+              );
+        } catch (e) {
+          _logger.error('删除节点集合文件失败: ${collection.id} -> $e');
+        }
+      }
+
+      // 一次重取覆盖整批删除：现存体积/条数由节点改写，这里只负责把新值拉回来
+      await refreshRemoteLibrary();
+      for (final collection in folderCollections) {
+        final stillListed = mergedCollections.firstWhereOrNull(
+          (c) => c.id == collection.id,
         );
-        totalDeleted += deleted;
-        if (deleted > 0 && deleted >= (collection.itemCount.toInt())) {
+        if (stillListed == null) continue;
+        final deleted = deletedByCollection[collection.id] ?? 0;
+        final cleanedByCount =
+            deleted > 0 && deleted >= (itemsBefore[collection.id] ?? 0);
+        if (stillListed.itemCount == BigInt.zero || cleanedByCount) {
           _invalidateCollectionMediaCache(collection.id);
           await deleteCollection(collection.id);
           fullyCleanedCount++;
         }
-      } catch (_) {}
-    }
+      }
 
-    // 若文件夹现在已空则一并删除
-    final stillInFolder = mergedCollections.where((c) => c.folderId == folderId).length;
-    if (stillInFolder == 0) {
-      await deleteFolder(folderId);
-      showSnack('完成', '已从节点删除 $totalDeleted 个文件，文件夹已清空并移除');
-    } else {
-      showSnack('完成', '已从节点删除 $totalDeleted 个文件（$fullyCleanedCount 个集合已移除）');
+      final totalDeleted = deletedByCollection.values.fold(
+        0,
+        (sum, count) => sum + count,
+      );
+
+      // 若文件夹现在已空则一并删除
+      final remainingInFolder = mergedCollections
+          .where((c) => c.folderId == folderId)
+          .toList();
+      if (remainingInFolder.isEmpty) {
+        await deleteFolder(folderId);
+        showSnack('完成', '已从节点删除 $totalDeleted 个文件，文件夹已清空并移除');
+      } else {
+        final remainingItems = remainingInFolder.fold(
+          0,
+          (sum, c) => sum + c.itemCount.toInt(),
+        );
+        showSnack(
+          '完成',
+          remainingItems == 0
+              ? '已从节点删除 $totalDeleted 个文件（$fullyCleanedCount 个集合已移除）'
+              : '已从节点删除 $totalDeleted 个文件，还剩 $remainingItems 项',
+        );
+      }
+    } finally {
+      isScanning.value = false;
     }
-    isScanning.value = false;
   }
 }

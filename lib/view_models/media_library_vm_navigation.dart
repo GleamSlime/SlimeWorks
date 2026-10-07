@@ -121,6 +121,8 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
     // Snapshot scroll position for the current browse level before navigating into folder
     _browseScrollOffsets[currentFolderId.value] = savedScrollOffset.value;
     final fromLevel = currentFolderId.value;
+    // 记下从哪一层进来的：返回时要退的是这一层，而不是目标文件夹的物理父级
+    _folderBackLevels.add(fromLevel);
     currentFolderId.value = folderId;
     // Debug: show what custom order (if any) will be applied for this folder
     final orderKey = folderId;
@@ -147,21 +149,41 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
       exitToRoot();
       return;
     }
+    final back = _takeBackLevel();
     // 同名集合分组：返回其登记的父文件夹（null = 根目录）
     final fid = currentFolderId.value;
     if (fid != null && isDupGroup(fid)) {
-      final parent = _dupGroupParents[fid];
+      final parent = back.hasLevel ? back.level : _dupGroupParents[fid];
       _browseScrollOffsets.remove(fid);
       currentFolderId.value = parent;
       exitCollection();
       exitSelection();
       return;
     }
-    final parentId = currentFolder?.parentId;
-    _browseScrollOffsets.remove(currentFolderId.value);
+    // 优先退回来时的层级：深度搜索的结果是从整棵子树扁平捞上来的，
+    // 物理父级（父子链）往往不是用户打开结果时所在的那一层。
+    final parentId = back.hasLevel ? back.level : currentFolder?.parentId;
+    _browseScrollOffsets.remove(fid);
     currentFolderId.value = parentId;
     exitCollection();
     exitSelection();
+  }
+
+  /// 弹出「来时的层级」。栈空时 `hasLevel` 为 false，调用方退回父子链。
+  ///
+  /// 途中丢掉两类无效记录：已经身处的那一层（记录它等于原地不动，会把返回按键
+  /// 变成一次空操作）和已被删掉的层级——删文件夹时 [currentFolderId] 会被直接
+  /// 改到别处，栈里就可能留下指向不存在层级的陈旧记录。
+  ({bool hasLevel, String? level}) _takeBackLevel() {
+    while (_folderBackLevels.isNotEmpty) {
+      final candidate = _folderBackLevels.removeLast();
+      if (candidate == currentFolderId.value) continue;
+      if (candidate != null && !mergedFolders.any((f) => f.id == candidate)) {
+        continue;
+      }
+      return (hasLevel: true, level: candidate);
+    }
+    return (hasLevel: false, level: null);
   }
 
   /// 暂停封面生成：清空两个缩略图队列中未执行的任务，
@@ -184,6 +206,9 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
   void exitToRoot() {
     _coverQueue.cancelGroup(_currentFolderCoverKeys);
     _currentFolderCoverKeys.clear();
+    // 面包屑/根目录按钮是「跳到某层」而不是逐级返回，来路到这里就作废了：
+    // 留着它们，下一次返回会莫名其妙把用户拽回早已离开的分支。
+    _folderBackLevels.clear();
     _browseScrollOffsets.remove(currentFolderId.value);
     currentFolderId.value = null;
     exitCollection();

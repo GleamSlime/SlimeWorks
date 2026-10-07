@@ -48,6 +48,46 @@ class _StubNodeSettingsService extends NodeSettingsService {
   /// 按集合返回不同条目（默认所有集合共用 [collectionItemsPayload]）。
   Map<String, List<Map<String, dynamic>>>? itemPathPayloadById;
 
+  // ── 节点本地文件删除链路的桩数据 ──────────────────────────────────────────
+
+  /// deleteNodeCollectionLocalFiles 的返回值（节点实际删掉的物理文件数）。
+  int deleteLocalFilesResult = 0;
+
+  /// 删除发生之后节点重新上报的集合元数据。
+  /// 新版节点会把「磁盘上还剩多少」改写进聚合表，所以第二次取数就该是新值；
+  /// 旧版则仍是删除前的记录值。用一个布尔切换，模拟删除前后节点侧状态变了。
+  List<Map<String, dynamic>> mediaCollectionsAfterDelete =
+      const <Map<String, dynamic>>[];
+
+  final List<String> deletedLocalFileRawIds = <String>[];
+  final List<String> deletedCollectionRawIds = <String>[];
+  final List<String> deletedFolderRawIds = <String>[];
+
+  @override
+  Future<int> deleteNodeCollectionLocalFiles({
+    required String nodeId,
+    required String rawCollectionId,
+  }) async {
+    deletedLocalFileRawIds.add(rawCollectionId);
+    return deleteLocalFilesResult;
+  }
+
+  @override
+  Future<void> deleteNodeMediaCollection({
+    required String nodeId,
+    required String collectionId,
+  }) async {
+    deletedCollectionRawIds.add(collectionId);
+  }
+
+  @override
+  Future<void> deleteNodeMediaFolder({
+    required String nodeId,
+    required String folderId,
+  }) async {
+    deletedFolderRawIds.add(folderId);
+  }
+
   @override
   Future<List<Map<String, dynamic>>> fetchNodeMediaCollectionItems({
     required String nodeId,
@@ -84,7 +124,10 @@ class _StubNodeSettingsService extends NodeSettingsService {
   Future<List<Map<String, dynamic>>> fetchNodeMediaCollections(
     NodeEndpoint node,
   ) async {
-    return mediaCollectionsPayload;
+    // 删过文件之后，节点上报的就是删除后的元数据（聚合表已被改写）
+    return deletedLocalFileRawIds.isEmpty
+        ? mediaCollectionsPayload
+        : mediaCollectionsAfterDelete;
   }
 
   @override
@@ -640,18 +683,99 @@ void main() {
       expect(vm.currentChildFolders.map((f) => f.id).toList(), ['b']);
     });
 
-    test('exitFolder：智能文件夹回根；同名分组回登记父目录；普通文件夹回父级', () {
+    test('exitFolder：智能文件夹回根；无来路时退回物理父级', () {
       vm.smartFolders.assignAll([sf('smart-folder:s1')]);
       vm.currentFolderId.value = 'smart-folder:s1';
       vm.exitFolder();
       expect(vm.currentFolderId.value, isNull);
 
-      // 普通文件夹：先建立 a→b 导航，再退出 b 回 a
+      // 没走过 enterFolder（程序直接切层级）时来路栈是空的，退回父子链
       vm.folders.assignAll([folder('a'), folder('b', parentId: 'a')]);
-      vm.enterFolder('b');
-      expect(vm.currentFolderId.value, 'b');
+      vm.currentFolderId.value = 'b';
       vm.exitFolder();
       expect(vm.currentFolderId.value, 'a');
+    });
+  });
+
+  // ── 返回按钮/ESC：退回来时的层级，而不是物理上一级 ─────────────────────────
+
+  group('exitFolder 优先回到来时的层级', () {
+    test('深度搜索命中项直接打开：返回退到录入搜索词的 T22，而不是它的父级 4', () {
+      vm.folders.assignAll([
+        folder('t22', name: 'T22'),
+        folder('f1', name: '1', parentId: 't22'),
+        folder('f2', name: '2', parentId: 'f1'),
+        folder('f3', name: '3', parentId: 'f2'),
+        folder('f4', name: '4', parentId: 'f3'),
+        folder('hit', name: '结果文件夹', parentId: 'f4'),
+      ]);
+      vm.currentFolderId.value = 't22';
+      // 搜索是从整棵子树扁平摊出结果的：命中项隔着 4 层也能一步点进去
+      typeSearch(vm, '结果');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['hit']);
+
+      vm.enterFolder('hit');
+      expect(vm.currentFolderId.value, 'hit');
+      expect(vm.appliedSearchQuery.value, isEmpty);
+
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 't22', reason: '该回到用户打开结果时所在的那一层');
+      // 回到录词层，搜索词与结果一起还原
+      expect(vm.searchQuery.value, '结果');
+      expect(vm.visibleItems.map((i) => i.id).toList(), ['hit']);
+    });
+
+    test('来路已被删除：跳过失效记录，继续退到上一个有效层级', () {
+      vm.folders.assignAll([
+        folder('a'),
+        folder('b', parentId: 'a'),
+        folder('c', parentId: 'b'),
+      ]);
+      vm.currentFolderId.value = 'a';
+      vm.enterFolder('b');
+      vm.enterFolder('c');
+      // 模拟 b 在别处被删掉：栈里留下指向不存在层级的陈旧记录
+      vm.folders.removeWhere((f) => f.id == 'b');
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'a');
+    });
+
+    test('面包屑跳根后来路作废：再返回按父子链走，不会被拽回旧分支', () {
+      vm.folders.assignAll([
+        folder('a'),
+        folder('b', parentId: 'a'),
+        folder('c', parentId: 'b'),
+      ]);
+      vm.enterFolder('b');
+      vm.enterFolder('c');
+      vm.exitToRoot();
+      expect(vm.currentFolderId.value, isNull);
+
+      vm.currentFolderId.value = 'c';
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'b');
+    });
+
+    test('同名分组：有来路用来路，无来路退回登记的父目录', () {
+      vm.folders.assignAll([folder('a'), folder('b', parentId: 'a')]);
+      vm.collections.assignAll([
+        col('c1', title: '同人', folderId: 'a'),
+        col('c2', title: '同人', folderId: 'a'),
+      ]);
+      // 分组只在 a 层构建网格时才登记父目录
+      vm.currentFolderId.value = 'a';
+      expect(vm.visibleItems.map((i) => i.id), contains('dup-group:同人'));
+
+      // 无来路（程序直接切层级）：退回分组登记的父目录 a
+      vm.currentFolderId.value = 'dup-group:同人';
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'a');
+
+      // 有来路：从根目录点进分组，返回就该回根目录，而不是父目录
+      vm.currentFolderId.value = null;
+      vm.enterFolder('dup-group:同人');
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, isNull);
     });
   });
 
@@ -1520,6 +1644,127 @@ void main() {
       final stat = vm.collectionResources(c);
       expect(stat.count, 12);
       expect(stat.size, BigInt.zero);
+    });
+  });
+
+  // ── 删除节点本地文件后的体积刷新 ────────────────────────────────────────────
+  //
+  // 这个 bug 的现场：进远程节点文件夹删掉节点本地文件，返回上一级看文件夹体积，
+  // 一个字节都没变。链路里两处都会漏刷：
+  // 1) 节点只在「有人逐文件 stat」时才改聚合表，纯当节点的设备从来不 stat，
+  //    删完物理文件后 total_size 仍是条目记录值合计；
+  // 2) 客户端拿删除数与本地 itemCount 比大小判「是否删空」，节点库里条目被单条删过
+  //    就比不相等，于是判成部分删除——既不重取节点元数据，也不动任何缓存。
+  // 修复后判空以节点重报的条数为准，并且删除后必然重取一次。
+
+  group('删除节点本地文件后的父级体积', () {
+    const nodeFolder = {'id': 'nf', 'name': '节点文件夹'};
+    const nodeCollection = {
+      'id': 'nc',
+      'title': '节点集合',
+      'folder_id': 'nf',
+      'item_count': '3',
+      'total_size': '3000',
+    };
+    const otherCollection = {
+      'id': 'nc2',
+      'title': '另一个集合',
+      'folder_id': 'nf',
+      'item_count': '2',
+      'total_size': '2000',
+    };
+    const remoteFolderId = 'remote-media-folder:node-a:nf';
+    const remoteCollectionId = 'remote-media:node-a:nc';
+
+    test('节点重报为空即刷新父级体积，即使删除数小于本地记录的条数', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection],
+      );
+      expect(vm.folderSummary(remoteFolderId).size, BigInt.from(3000));
+
+      // 节点实际只删到 2 个文件（第 3 个早被外部清掉），但删完后现存条数是 0
+      nodeService
+        ..deleteLocalFilesResult = 2
+        ..mediaCollectionsAfterDelete = const [
+          {
+            'id': 'nc',
+            'title': '节点集合',
+            'folder_id': 'nf',
+            'item_count': '0',
+            'total_size': '0',
+          },
+        ];
+
+      await vm.deleteNodeLocalFilesForCollection(remoteCollectionId);
+
+      expect(
+        nodeService.deletedCollectionRawIds,
+        ['nc'],
+        reason: '删空后集合记录应一并移除',
+      );
+      final summary = vm.folderSummary(remoteFolderId);
+      expect(summary.size, BigInt.zero, reason: '父级体积不该还留着已消失的文件');
+      expect(summary.resources, 0);
+    });
+
+    test('节点仍有现存资源时按剩余体积刷新，且不移除集合记录', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection],
+      );
+
+      nodeService
+        ..deleteLocalFilesResult = 1
+        ..mediaCollectionsAfterDelete = const [
+          {
+            'id': 'nc',
+            'title': '节点集合',
+            'folder_id': 'nf',
+            'item_count': '2',
+            'total_size': '2000',
+          },
+        ];
+
+      await vm.deleteNodeLocalFilesForCollection(remoteCollectionId);
+
+      expect(nodeService.deletedCollectionRawIds, isEmpty);
+      expect(vm.folderSummary(remoteFolderId).size, BigInt.from(2000));
+      expect(vm.folderSummary(remoteFolderId).resources, 2);
+    });
+
+    test('文件夹级删除：逐集合删完后体积汇总同步下降', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection, otherCollection],
+      );
+      expect(vm.folderSummary(remoteFolderId).size, BigInt.from(5000));
+
+      // 两个集合都删空：节点重报的体积/条数一并归零
+      nodeService
+        ..deleteLocalFilesResult = 3
+        ..mediaCollectionsAfterDelete = const [
+          {
+            'id': 'nc',
+            'title': '节点集合',
+            'folder_id': 'nf',
+            'item_count': '0',
+            'total_size': '0',
+          },
+          {
+            'id': 'nc2',
+            'title': '另一个集合',
+            'folder_id': 'nf',
+            'item_count': '0',
+            'total_size': '0',
+          },
+        ];
+
+      await vm.deleteNodeLocalFilesForFolder(remoteFolderId);
+
+      expect(nodeService.deletedLocalFileRawIds.toSet(), {'nc', 'nc2'});
+      expect(nodeService.deletedCollectionRawIds.toSet(), {'nc', 'nc2'});
+      expect(vm.folderSummary(remoteFolderId).size, BigInt.zero);
     });
   });
 

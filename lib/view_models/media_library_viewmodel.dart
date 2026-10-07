@@ -163,6 +163,13 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 搜索是为了找到它，下钻就该看全量；回到原层才把词还给搜索框与筛选。
   final _stashedBrowseSearch = <(String? level, String query)>[];
 
+  /// 浏览层「来路」栈：每次进文件夹都记下离开时的层级，返回按钮与 ESC 据此回退。
+  ///
+  /// 为什么不直接用父子链：深度搜索把整棵子树的命中扁平摊在当前层，点开的结果文件夹
+  /// 物理父级往往不是用户所在层级——在 T22 搜到 T22/1/2/3/4/结果文件夹，按父子链返回
+  /// 只会退到 4，而用户要的是退回自己打开结果的那一层。
+  final _folderBackLevels = <String?>[];
+
   /// 搜索框是否展开。
   final isSearchActive = false.obs;
 

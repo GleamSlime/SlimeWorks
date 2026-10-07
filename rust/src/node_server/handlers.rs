@@ -330,14 +330,12 @@ pub async fn dispatch_action(
 
         "delete_collection_local_files" => {
             let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
-            let items = media_api::get_media_collection_items(collection_id).unwrap_or_default();
-            let mut deleted_count = 0;
-            for item in items {
-                if fs::remove_file(&item.file_path).is_ok() {
-                    deleted_count += 1;
-                }
-            }
-            Ok(json!({"deleted": deleted_count}))
+            // 复用本机 FFI 那套实现：除了删物理文件，它还会收掉目录树内的 .SlimeWorks
+            // 缓存目录、清空后的集合目录，并把聚合表里这条集合的现存体积/条数改写掉。
+            // 少了最后一步，客户端删完文件返回上一级看到的仍是删除前的旧体积。
+            let deleted = media_api::delete_collection_local_files(collection_id)
+                .map_err(|e| format!("删除集合本地文件失败: {}", e))?;
+            Ok(json!({"deleted": deleted}))
         }
 
         // ── 目录扫描 ─────────────────────────────────────────────────────────
